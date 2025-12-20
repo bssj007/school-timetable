@@ -3,6 +3,7 @@
  * Cloudflare Pages Function - 부산성지고등학교 전용 컴시간알리미 API
  * 
  * Target: http://comci.net:4082/36179?NzM2MjlfOTMzNDJfMF8x (Verified Golden URL)
+ * Encoding: UTF-8 (Verified)
  */
 
 const GOLDEN_URL = "http://comci.net:4082/36179?NzM2MjlfOTMzNDJfMF8x";
@@ -14,7 +15,8 @@ const PROXIES = [
 
 async function decodeResponse(response: Response): Promise<string> {
     const buffer = await response.arrayBuffer();
-    const decoder = new TextDecoder('euc-kr');
+    // Server sends UTF-8 (Verified by test)
+    const decoder = new TextDecoder('utf-8');
     let text = decoder.decode(buffer);
     return text.replace(/\0/g, '');
 }
@@ -33,7 +35,6 @@ async function fetchWithProxy(targetUrl: string) {
                 'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
             };
 
-            // console.log(`Fetching (${isDirect ? 'Direct' : 'Proxy'}): ${fullUrl}`);
             const response = await fetch(fullUrl, { headers });
 
             if (response.ok) return response;
@@ -81,7 +82,6 @@ async function getBusanSeongjiTimetable(grade: number, classNum: number) {
     }
 
     // Step 2: Parse Timetable Data
-    // (Reusing the robust parsing logic)
     let subjectProp = "";
     let teacherProp = "";
     let timedataProp = "";
@@ -108,6 +108,11 @@ async function getBusanSeongjiTimetable(grade: number, classNum: number) {
     // Fallbacks
     if (!subjectProp || !teacherProp) {
         const stringArrays = Object.values(rawData).filter(v => Array.isArray(v) && typeof v[0] === 'string') as string[][];
+        // Sort by length generally works, but let's be smarter.
+        // Subjects usually match keys like "자료...긴"
+        // Teachers match keys like "자료..."
+
+        // If not found by keyword, fallback to length heuristics
         stringArrays.sort((a, b) => b.length - a.length);
         if (!subjectProp && stringArrays.length > 0) subjectProp = Object.keys(rawData).find(key => rawData[key] === stringArrays[0]) || "";
         if (!teacherProp && stringArrays.length > 1) teacherProp = Object.keys(rawData).find(key => rawData[key] === stringArrays[1]) || "";
@@ -126,10 +131,10 @@ async function getBusanSeongjiTimetable(grade: number, classNum: number) {
     const teachers = rawData[teacherProp] || [];
     const subjects = rawData[subjectProp] || [];
     const data = rawData[timedataProp];
-    const timeInfo = rawData["요일별시수"]; // This might be missing or named differently
+    const timeInfo = rawData["요일별시수"];
 
     if (!data || !data[grade] || !data[grade][classNum]) {
-        throw new Error(`데이터가 없습니다 (Grade: ${grade}, Class: ${classNum}). 학년/반 정보를 확인해주세요.`);
+        throw new Error(`데이터가 없습니다 (Grade: ${grade}, Class: ${classNum}).`);
     }
 
     const classData = data[grade][classNum];
@@ -153,6 +158,7 @@ async function getBusanSeongjiTimetable(grade: number, classNum: number) {
                 subjectIdx = parseInt(strCode.substring(2));
             }
 
+            // Clean up subject name (remove trailing underscore if any)
             const subject = subjects[subjectIdx] ? subjects[subjectIdx].replace(/_/g, "") : "";
             const teacher = teachers[teacherIdx] || "";
 
