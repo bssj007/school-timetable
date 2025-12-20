@@ -2,11 +2,13 @@
 /**
  * Cloudflare Pages Function - 부산성지고등학교 전용 컴시간알리미 API
  * 
- * Target: http://comci.net:4082/36179?NzM2MjlfOTMzNDJfMF8x (Verified Golden URL)
+ * Target: http://comci.net:4082/36179?... (Dynamic Grade Param)
  * Encoding: UTF-8
  */
 
-const GOLDEN_URL = "http://comci.net:4082/36179?NzM2MjlfOTMzNDJfMF8x";
+const BASE_ID = "36179";
+// Prefix derived from user-provided URLs: 73629_93342_0_{grade}
+const BASE_PARAM_PREFIX = "73629_93342_0_";
 
 const PROXIES = [
     '',
@@ -26,10 +28,12 @@ async function fetchWithProxy(targetUrl: string) {
         try {
             const fullUrl = proxy ? `${proxy}${encodeURIComponent(targetUrl)}` : targetUrl;
             const headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': 'http://comci.kr/',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
+                'Accept': '*/*',
+                'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+                // 'Host': 'comci.net:4082', // Managed by Cloudflare/Fetch
+                'Referer': 'http://comci.net:4082/st',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+                'X-Requested-With': 'XMLHttpRequest'
             };
             const response = await fetch(fullUrl, { headers });
             if (response.ok) return response;
@@ -46,8 +50,8 @@ export const onRequest = async (context: any) => {
 
     try {
         if (type === 'timetable') {
-            const grade = parseInt(url.searchParams.get('grade') || '0');
-            const classNum = parseInt(url.searchParams.get('classNum') || '0');
+            const grade = parseInt(url.searchParams.get('grade') || '1');
+            const classNum = parseInt(url.searchParams.get('classNum') || '1');
             return await getBusanSeongjiTimetable(grade, classNum);
         }
         return new Response('Invalid type', { status: 400 });
@@ -60,45 +64,48 @@ export const onRequest = async (context: any) => {
 }
 
 async function getBusanSeongjiTimetable(grade: number, classNum: number) {
-    // 1. Fetch
-    const response = await fetchWithProxy(GOLDEN_URL);
+    // 1. Construct URL (Dynamic Grade)
+    const param = `${BASE_PARAM_PREFIX}${grade}`;
+    const b64 = btoa(param);
+    const targetUrl = `http://comci.net:4082/${BASE_ID}?${b64}`;
+
+    // 2. Fetch
+    const response = await fetchWithProxy(targetUrl);
     const text = await decodeResponse(response);
     const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf("}") + 1);
     const rawData = JSON.parse(jsonString);
 
-    // 2. Identify Keys
+    // 3. Identify Keys
     let subjectProp = "";
     let teacherProp = "";
     let timedataProp = "";
 
     const keys = Object.keys(rawData);
 
-    // Find Teacher Key: Array of strings, contains names ending with '*'
+    // Teacher Key: Ends with '*'
     teacherProp = keys.find(k =>
         Array.isArray(rawData[k]) &&
         rawData[k].some((s: any) => typeof s === 'string' && s.endsWith('*'))
     ) || "";
 
-    // Find Subject Key (Keyword Search - Robust)
-    const keywords = ["국어", "수학", "영어", "한국사", "통합사회", "통합과학", "체육", "음악", "미술", "진로"];
+    // Subject Key: Keyword Search
+    const keywords = ["국어", "수학", "영어", "한국사", "통합사회", "통합과학", "체육", "음악", "미술", "진로", "운동", "독서", "문학"];
     subjectProp = keys.find(k => {
         const val = rawData[k];
         if (!Array.isArray(val)) return false;
-        // Check deeper
         for (let i = 0; i < Math.min(val.length, 100); i++) {
             if (typeof val[i] === 'string' && keywords.some(kw => val[i].includes(kw))) return true;
         }
         return false;
     }) || "";
 
-    // Fallback if keyword fails (Back to heuristic)
     if (!subjectProp) {
         const stringArrays = keys.filter(k => k !== teacherProp && Array.isArray(rawData[k]) && typeof rawData[k][0] === 'string');
         stringArrays.sort((a, b) => rawData[b].length - rawData[a].length);
         if (stringArrays.length > 0) subjectProp = stringArrays[0];
     }
 
-    // Find Data Key: 3D array val[grade][class] exists
+    // Data Key: val[grade][class] exists
     timedataProp = keys.find(k => {
         const val = rawData[k];
         return Array.isArray(val) && val[grade] && val[grade][classNum] && Array.isArray(val[grade][classNum]);
@@ -107,33 +114,33 @@ async function getBusanSeongjiTimetable(grade: number, classNum: number) {
     const teachers = rawData[teacherProp] || [];
     const subjects = rawData[subjectProp] || [];
     const data = rawData[timedataProp];
-    // Time info is usually short array e.g. [0, 7, 7, 7, 7, 7]
-    const timeInfoProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].length === 8 && typeof rawData[k][1] === 'number'); // "요일별시수" logic
+    const timeInfoProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].length === 8 && typeof rawData[k][1] === 'number');
     const timeInfo = timeInfoProp ? rawData[timeInfoProp] : null;
 
     if (!data || !data[grade] || !data[grade][classNum]) {
-        throw new Error(`데이터가 없습니다 (Grade: ${grade}, Class: ${classNum}).`);
+        throw new Error(`데이터 없음 (${grade}학년 ${classNum}반)`);
     }
 
     const classData = data[grade][classNum];
     const result: any[] = [];
 
     for (let weekday = 1; weekday <= 5; weekday++) {
-        // timeInfo structure might be val[grade][weekday]
-        // If not found, default to 7
         let dayHours = 7;
         if (timeInfo && timeInfo[grade]) {
             dayHours = timeInfo[grade][weekday];
         }
 
-        for (let period = 1; period <= dayHours; period++) {
+        // Ensure we don't go out of bounds if dayHours is larger than actual array
+        const maxPeriod = classData[weekday].length - 1;
+        const loopLimit = Math.min(dayHours, maxPeriod);
+
+        for (let period = 1; period <= loopLimit; period++) {
             const code = classData[weekday][period];
             if (!code) continue;
 
             let teacherIdx = 0;
             let subjectIdx = 0;
 
-            // Parsing Logic
             if (code < 1000) {
                 teacherIdx = Math.floor(code / 100);
                 subjectIdx = code % 100;
