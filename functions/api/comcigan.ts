@@ -4,13 +4,13 @@
  * 
  * Flow:
  * 1. Connect to /st to get Dynamic Prefix
- * 2. Search School "부산성지고" using Prefix to get REAL School Code
- * 3. Fetch Timetable using REAL School Code
+ * 2. Try School Search / Fallback to Static Code
+ * 3. Fetch Timetable
  */
 
 const BASE_URL = "http://comci.net:4082";
-// "부산성지고" EUC-KR Hex String
-const SEARCH_HEX = "%BA%CE%BB%EA%BC%BA%C1%F6%B0%ED";
+const SEARCH_HEX = "%BA%CE%BB%EA%BC%BA%C1%F6%B0%ED"; // 부산성지고 EUC-KR Hex
+const FALLBACK_CODE2 = "93342"; // Known correct code for Busan Seongji
 
 const HEADERS: any = {
     'Accept': '*/*',
@@ -35,16 +35,11 @@ async function fetchWithProxy(targetUrl: string, headers: any = HEADERS, isEucKr
     let lastError;
     for (const proxy of PROXIES) {
         try {
-            // Do not use encodeURIComponent for full URL if it already contains params
-            // But for proxies, we usually need to encode targetUrl.
-            // For direct connection, just use targetUrl.
             const fullUrl = proxy ? `${proxy}${encodeURIComponent(targetUrl)}` : targetUrl;
-
             const res = await fetch(fullUrl, { headers });
             if (res.ok) {
                 if (isEucKr) return await decodeEucKr(res);
                 const buf = await res.arrayBuffer();
-                // Try UTF-8 first
                 const txt = new TextDecoder('utf-8').decode(buf);
                 return txt.replace(/\0/g, '');
             }
@@ -59,37 +54,37 @@ async function getPrefix() {
     const html = await fetchWithProxy(`${BASE_URL}/st`, HEADERS, true);
     const match = html.match(/sc_data\('([^']+)'/);
     if (!match) throw new Error("Failed to extract sc_data prefix");
-    return match[1]; // e.g. "73629_"
+    return match[1];
 }
 
 async function getSchoolCode(prefix: string) {
-    // Construct URL manually to avoid double encoding issues in URL object
-    // But fetch() constructor parses it.
-    const searchUrl = `${BASE_URL}/${prefix}${SEARCH_HEX}`;
+    try {
+        const searchUrl = `${BASE_URL}/${prefix}${SEARCH_HEX}`;
+        const jsonText = await fetchWithProxy(searchUrl, HEADERS, false);
 
-    // Search result is usually UTF-8 JSON.
-    const jsonText = await fetchWithProxy(searchUrl, HEADERS, false);
+        if (jsonText.trim() === '.' || jsonText.trim().length === 0) {
+            throw new Error("Empty search response");
+        }
 
-    // Check if empty
-    if (jsonText.trim() === '.' || jsonText.trim().length === 0) {
-        throw new Error("School search failed (Empty response). Encoding mismatch?");
+        const jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
+        const data = JSON.parse(jsonString);
+
+        const schools = data["학교검색"] || [];
+        const target = schools.find((s: any) => s[2] === "부산성지고");
+
+        if (!target) throw new Error("School not found in search result");
+
+        return {
+            code1: target[3],
+            code2: target[4]
+        };
+    } catch (e) {
+        console.warn("School search failed, using fallback:", e);
+        return {
+            code1: "36179",
+            code2: FALLBACK_CODE2
+        };
     }
-
-    const jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
-    const data = JSON.parse(jsonString);
-
-    // data["학교검색"] = [[Region, Name, Code1, Code2], ...]
-    const schools = data["학교검색"] || [];
-    const target = schools.find((s: any) => s[2] === "부산성지고"); // Name at index 2?
-
-    if (!target) {
-        throw new Error(`부산성지고를 찾을 수 없습니다. 검색결과: ${schools.length}건`);
-    }
-
-    return {
-        code1: target[3], // 36179
-        code2: target[4]  // 93342 (Dynamic Code)
-    };
 }
 
 export const onRequest = async (context: any) => {
@@ -112,23 +107,17 @@ export const onRequest = async (context: any) => {
 }
 
 async function getTimetable(grade: number, classNum: number) {
-    // 1. Get Prefix
     const prefix = await getPrefix();
-
-    // 2. Get Real School Code
     const { code1, code2 } = await getSchoolCode(prefix);
 
-    // 3. Construct URL
     const param = `${prefix}${code2}_0_${grade}`;
     const b64 = btoa(param);
     const targetUrl = `${BASE_URL}/${code1}?${b64}`;
 
-    // 4. Fetch Data
     const jsonText = await fetchWithProxy(targetUrl, HEADERS, false);
     const jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
     const rawData = JSON.parse(jsonString);
 
-    // 5. Parse
     const keys = Object.keys(rawData);
     const teacherProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].some((s: any) => typeof s === 'string' && s.endsWith('*'))) || "";
 
@@ -153,7 +142,7 @@ async function getTimetable(grade: number, classNum: number) {
         return Array.isArray(val) && val[grade] && val[grade][classNum] && Array.isArray(val[grade][classNum]);
     }) || "";
 
-    if (!timedataProp) throw new Error(`데이터 키 찾기 실패`);
+    if (!timedataProp) throw new Error("Data key not found");
 
     const teachers = rawData[teacherProp] || [];
     const subjects = rawData[subjectProp] || [];
@@ -162,7 +151,7 @@ async function getTimetable(grade: number, classNum: number) {
     const timeInfo = timeInfoProp ? rawData[timeInfoProp] : null;
 
     if (!data || !data[grade] || !data[grade][classNum]) {
-        throw new Error(`데이터 없음 (${grade}학년 ${classNum}반)`);
+        throw new Error(`Data not found for G${grade}-C${classNum}`);
     }
 
     const classData = data[grade][classNum];
