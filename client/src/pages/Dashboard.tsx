@@ -1,4 +1,5 @@
-import { trpc } from "@/lib/trpc";
+
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,14 +16,28 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+// 타입 정의
+interface TimetableItem {
+  weekday: number;
+  classTime: number;
+  subject: string;
+  teacher: string;
+}
+
+interface AssessmentItem {
+  id: number;
+  title: string;
+  subject: string;
+  description: string;
+  dueDate: string; // ISO string
+  isDone: number;
+  // UI 매핑용 (DB에는 없음)
+  assessmentDate?: string;
+  classTime?: string;
+}
 
 export default function Dashboard() {
-  const { data: timetableData, isLoading: timetableLoading, refetch: refetchTimetable } = trpc.timetable.get.useQuery();
-  const { data: assessments, isLoading: assessmentLoading } = trpc.assessment.list.useQuery();
-  const createMutation = trpc.assessment.create.useMutation();
-  const deleteMutation = trpc.assessment.delete.useMutation();
-  const fetchTimetableMutation = trpc.timetable.fetchFromComcigan.useMutation();
-  const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
 
   const [formData, setFormData] = useState({
     assessmentDate: "",
@@ -39,7 +54,81 @@ export default function Dashboard() {
   });
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isFetchingTimetable, setIsFetchingTimetable] = useState(false);
 
+  // 1. 시간표 조회 (로컬 스토리지 + API 캐시)
+  const { data: timetableData, isLoading: timetableLoading, refetch: refetchTimetable } = useQuery({
+    queryKey: ['timetable'],
+    queryFn: async () => {
+      // 로컬 스토리지 우선 확인
+      const cached = localStorage.getItem('cached_timetable');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          // API 응답 구조: { data: [...] }
+          if (parsed.data && Array.isArray(parsed.data)) return parsed.data as TimetableItem[];
+          if (Array.isArray(parsed)) return parsed as TimetableItem[];
+        } catch (e) {
+          console.error('Failed to parse cached timetable', e);
+        }
+      }
+      return [] as TimetableItem[];
+    }
+  });
+
+  // 2. 수행평가 목록 조회 (D1 API)
+  const { data: assessments, isLoading: assessmentLoading } = useQuery({
+    queryKey: ['assessments'],
+    queryFn: async () => {
+      try {
+        const res = await fetch('/api/assessment');
+        if (!res.ok) {
+          if (res.status === 404) return [];
+          throw new Error(`API Error: ${res.status}`);
+        }
+        return await res.json() as AssessmentItem[];
+      } catch (e) {
+        console.warn('Failed to fetch assessments:', e);
+        return [] as AssessmentItem[];
+      }
+    }
+  });
+
+  // 3. 수행평가 추가 (D1 API)
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch('/api/assessment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: data.content, // content를 title로 사용
+          subject: data.subject,
+          description: "",
+          dueDate: data.assessmentDate,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to create');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assessments'] });
+      toast.success("수행평가가 등록되었습니다");
+    },
+    onError: () => toast.error("등록 실패")
+  });
+
+  // 4. 수행평가 삭제 (D1 API)
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/assessment?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assessments'] });
+      toast.success("삭제되었습니다");
+    }
+  });
 
   // 시간표에서 고유한 과목 목록 추출 (창체, 채플 제외)
   const uniqueSubjects = useMemo(() => {
@@ -47,7 +136,7 @@ export default function Dashboard() {
     const subjects = new Set<string>();
     const excludedSubjects = ["창체", "채플"];
 
-    timetableData.forEach((item: any) => {
+    timetableData.forEach((item) => {
       if (item.subject && typeof item.subject === "string" && !excludedSubjects.includes(item.subject)) {
         subjects.add(item.subject);
       }
@@ -72,19 +161,15 @@ export default function Dashboard() {
         classTime: "",
         weekday: "",
       });
-      await utils.assessment.list.invalidate();
     } catch (error) {
       console.error("수행평가 생성 실패:", error);
     }
   };
 
   const handleDelete = async (id: number) => {
+    if (!confirm("정말 삭제하시겠습니까?")) return;
     try {
-      console.log('handleDelete called with id:', id);
-      const result = await deleteMutation.mutateAsync(id);
-      console.log('Delete result:', result);
-      await utils.assessment.list.invalidate();
-      console.log('Invalidated assessment list');
+      await deleteMutation.mutateAsync(id);
     } catch (error) {
       console.error("수행평가 삭제 실패:", error);
     }
@@ -92,29 +177,25 @@ export default function Dashboard() {
 
   const handleFetchTimetable = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsFetchingTimetable(true);
     try {
       toast.loading("시간표를 가져오는 중...");
 
       // Cloudflare Pages Functions 호출
-      const response = await fetch(`/api/comcigan?type=timetable&schoolCode=${7530560}&grade=${timetableFormData.grade}&classNum=${timetableFormData.classNum}`);
-      // 학교 검색 로직은 생략 (일단 성지고 코드 하드코딩 또는 추가 로직 필요)
-
-      if (!response.ok) throw new Error("시간표 가져오기 실패");
+      // 성지고 코드: 7530560
+      const response = await fetch(`/api/comcigan?type=timetable&schoolCode=7530560&grade=${timetableFormData.grade}&classNum=${timetableFormData.classNum}`);
 
       const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "시간표 가져오기 실패");
+      }
 
       // 로컬 스토리지에 저장 (DB 대신)
       localStorage.setItem('cached_timetable', JSON.stringify(result));
 
-      // 결과 처리 (기존 로직과 호환성 유지)
-      // const result = await fetchTimetableMutation.mutateAsync({
-      //   schoolName: timetableFormData.schoolName,
-      //   grade: parseInt(timetableFormData.grade),
-      //   classNum: parseInt(timetableFormData.classNum),
-      // });
-
       toast.dismiss();
-      toast.success(result.message || "시간표를 성공적으로 가져왔습니다!");
+      toast.success("시간표를 성공적으로 가져왔습니다!");
 
       // 시간표 데이터 새로고침
       await refetchTimetable();
@@ -125,16 +206,17 @@ export default function Dashboard() {
       toast.dismiss();
       toast.error(error instanceof Error ? error.message : "시간표 가져오기 실패");
       console.error("시간표 가져오기 실패:", error);
+    } finally {
+      setIsFetchingTimetable(false);
     }
   };
 
-
   // 요일별로 시간표 데이터를 그룹화
   const weekdayNames = ["월", "화", "수", "목", "금"];
-  const timetableByDay: Record<number, any[]> = {};
+  const timetableByDay: Record<number, TimetableItem[]> = {};
 
   if (timetableData && Array.isArray(timetableData)) {
-    timetableData.forEach((item: any) => {
+    timetableData.forEach((item) => {
       if (!timetableByDay[item.weekday]) {
         timetableByDay[item.weekday] = [];
       }
@@ -142,17 +224,23 @@ export default function Dashboard() {
     });
   }
 
-  // 수행평가 데이터를 날짜와 교시로 인덱싱
-  const assessmentMap: Record<string, typeof assessments> = {};
-  if (assessments) {
-    assessments.forEach((assessment) => {
-      const key = `${assessment.assessmentDate}-${assessment.classTime || ""}`;
-      if (!assessmentMap[key]) {
-        assessmentMap[key] = [];
-      }
-      assessmentMap[key].push(assessment);
-    });
-  }
+  // 수행평가 데이터를 날짜 매핑 (UI 표시용 로직 개선 필요)
+  // 여기서는 간단히 날짜가 일치하면 표시하도록 함
+  // 실제로는 시간표와 매핑하려면 요일/교시 정보가 필요하지만, D1 스키마에는 날짜만 있음.
+  // 따라서 캘린더나 목록 형태로 보여주는 것이 적절함.
+  // 현재 UI 구조상 시간표 셀에 표시하려면 날짜 계산이 필요.
+  // (일단 기존 로직 유지하되, 날짜가 있으면 표시)
+
+  const assessmentMap: Record<string, AssessmentItem[]> = {};
+  /*
+    TODO: 날짜 -> 요일/교시 매핑 로직이 필요함.
+    현재는 D1 스키마에 classTime이 없으므로, 정확한 시간표 셀에 매핑하기 어려움.
+    따라서 시간표 셀에는 '과목'이 일치하면 표시하거나, 별도 목록으로 보여줘야 함.
+    여기서는 '과목' 기준으로 매핑을 시도하거나, 날짜가 이번주에 해당하면 표시하는 로직 필요.
+    
+    일단 기존 로직(날짜 문자열 직접 비교)은 작동하지 않을 수 있음.
+    임시로 과목명 매핑을 사용하거나, 별도 렌더링.
+  */
 
   const isLoading = timetableLoading || assessmentLoading;
 
@@ -232,9 +320,9 @@ export default function Dashboard() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={fetchTimetableMutation.isPending}
+                disabled={isFetchingTimetable}
               >
-                {fetchTimetableMutation.isPending ? (
+                {isFetchingTimetable ? (
                   <>
                     <Loader2 className="animate-spin mr-2 h-4 w-4" />
                     가져오는 중...
@@ -257,56 +345,57 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse">
+                <table className="w-full border-collapse">
                   <thead>
-                    <tr className="border-b-2 border-gray-300 bg-gray-50">
-                      <th className="px-3 py-3 text-left font-bold text-gray-700 w-16">교시</th>
+                    <tr>
+                      <th className="border p-2 bg-gray-50 w-16">교시</th>
                       {weekdayNames.map((day) => (
-                        <th key={day} className="px-3 py-3 text-center font-bold text-gray-700">
-                          {day}요일
+                        <th key={day} className="border p-2 bg-gray-50">
+                          {day}
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {[1, 2, 3, 4, 5, 6, 7].map((classTime) => (
-                      <tr key={classTime} className="border-b border-gray-200 hover:bg-gray-50">
-                        <td className="px-3 py-3 font-bold text-gray-700 bg-gray-50 text-center">
+                    {Array.from({ length: 7 }, (_, i) => i + 1).map((classTime) => (
+                      <tr key={classTime}>
+                        <td className="border p-2 text-center font-medium bg-gray-50">
                           {classTime}
                         </td>
-                        {weekdayNames.map((day, dayIndex) => {
-                          const item = timetableByDay[dayIndex]?.find(
-                            (t: any) => t.classTime === classTime
-                          );
-                          const assessmentKey = `${new Date().toISOString().split('T')[0]}-${classTime}`;
-                          const dayAssessments = assessmentMap[assessmentKey] || [];
+                        {Array.from({ length: 5 }, (_, i) => i + 1).map((weekday) => {
+                          const dayItems = timetableByDay[weekday] || [];
+                          const item = dayItems.find((t) => t.classTime === classTime);
 
-                          // 시간표의 과목과 수행평가 과목이 일치하는지 확인
-                          const matchingAssessment = item && dayAssessments.find(
-                            (a) => a.subject === item.subject
-                          );
-                          const hasAssessment = matchingAssessment !== undefined;
+                          // 현재는 시간표 셀에 직접 수행평가를 표시하는 로직이 복잡하여
+                          // 과목이 일치하는 수행평가가 있으면 표시하도록 함
+                          const relatedAssessment = assessments && assessments.length > 0
+                            ? assessments.find(a =>
+                              item && a.subject === item.subject && !a.isDone
+                            )
+                            : null;
 
                           return (
                             <td
-                              key={`${dayIndex}-${classTime}`}
-                              className={`px-3 py-3 text-center border-r border-gray-200 ${hasAssessment ? "bg-blue-50" : ""
+                              key={weekday}
+                              className={`border p-2 text-center h-24 relative hover:bg-gray-50 transition-colors ${relatedAssessment ? "bg-blue-50/50" : ""
                                 }`}
                             >
                               {item ? (
-                                <div className="space-y-1">
-                                  <div className={`font-bold ${hasAssessment ? "text-blue-700" : "text-gray-800"
-                                    }`}>
+                                <div>
+                                  <div className="font-bold text-gray-900">
                                     {item.subject}
                                   </div>
-                                  {hasAssessment ? (
-                                    <div className="text-xs text-blue-600">수행평가</div>
-                                  ) : (
-                                    <div className="text-xs text-gray-600">{item.teacher}</div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {item.teacher}
+                                  </div>
+                                  {relatedAssessment && (
+                                    <div className="mt-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full inline-block truncate max-w-full">
+                                      평가 있음
+                                    </div>
                                   )}
                                 </div>
                               ) : (
-                                <div className="text-gray-300">-</div>
+                                <span className="text-gray-300">-</span>
                               )}
                             </td>
                           );
@@ -320,20 +409,16 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* 오른쪽: 수행평가 추가 및 목록 */}
-        <div className="space-y-4">
-          {/* 수행평가 추가 폼 */}
-          <Card>
+        {/* 오른쪽: 수행평가 관리 */}
+        <div>
+          <Card className="mb-8">
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                수행평가 추가
-              </CardTitle>
+              <CardTitle>수행평가 추가</CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-3">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium mb-1">날짜</label>
+                  <label className="block text-sm font-medium mb-1">날짜</label>
                   <Input
                     type="date"
                     value={formData.assessmentDate}
@@ -341,19 +426,17 @@ export default function Dashboard() {
                       setFormData({ ...formData, assessmentDate: e.target.value })
                     }
                     required
-                    className="text-sm"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-xs font-medium mb-1">과목</label>
+                  <label className="block text-sm font-medium mb-1">과목</label>
                   <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     value={formData.subject}
                     onChange={(e) =>
                       setFormData({ ...formData, subject: e.target.value })
                     }
                     required
-                    className="w-full px-2 py-2 border rounded-md text-sm"
                   >
                     <option value="">과목 선택</option>
                     {uniqueSubjects.map((subject) => (
@@ -363,120 +446,67 @@ export default function Dashboard() {
                     ))}
                   </select>
                 </div>
-
                 <div>
-                  <label className="block text-xs font-medium mb-1">내용</label>
+                  <label className="block text-sm font-medium mb-1">내용</label>
                   <Textarea
-                    placeholder="내용 입력"
                     value={formData.content}
                     onChange={(e) =>
                       setFormData({ ...formData, content: e.target.value })
                     }
+                    placeholder="수행평가 내용 입력"
                     required
-                    className="text-sm resize-none"
-                    rows={3}
                   />
                 </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs font-medium mb-1">교시</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="8"
-                      placeholder="1-8"
-                      value={formData.classTime}
-                      onChange={(e) =>
-                        setFormData({ ...formData, classTime: e.target.value })
-                      }
-                      className="text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium mb-1">요일</label>
-                    <select
-                      value={formData.weekday}
-                      onChange={(e) =>
-                        setFormData({ ...formData, weekday: e.target.value })
-                      }
-                      className="w-full px-2 py-2 border rounded-md text-sm"
-                    >
-                      <option value="">선택</option>
-                      <option value="0">월</option>
-                      <option value="1">화</option>
-                      <option value="2">수</option>
-                      <option value="3">목</option>
-                      <option value="4">금</option>
-                    </select>
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full text-sm"
-                  disabled={createMutation.isPending}
-                  size="sm"
-                >
-                  {createMutation.isPending ? (
-                    <>
-                      <Loader2 className="animate-spin mr-1 h-3 w-3" />
-                      추가 중...
-                    </>
-                  ) : (
-                    "추가"
-                  )}
+                <Button type="submit" className="w-full">
+                  <Plus className="mr-2 h-4 w-4" />
+                  추가하기
                 </Button>
               </form>
             </CardContent>
           </Card>
 
-          {/* 수행평가 목록 */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">수행평가 목록</CardTitle>
+              <CardTitle>수행평가 목록</CardTitle>
             </CardHeader>
             <CardContent>
-              {assessments && assessments.length > 0 ? (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {assessments.map((assessment) => (
+              <div className="space-y-4">
+                {assessments && assessments.length > 0 ? (
+                  assessments.map((assessment) => (
                     <div
                       key={assessment.id}
-                      className="p-2 border rounded-lg hover:bg-gray-50 text-sm"
+                      className="flex items-start justify-between p-4 border rounded-lg hover:shadow-sm transition-shadow bg-white"
                     >
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-bold text-gray-800 truncate">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-lg text-gray-900">
                             {assessment.subject}
-                          </div>
-                          <div className="text-xs text-gray-600 mt-1">
-                            {assessment.assessmentDate}
-                          </div>
-                          <div className="text-xs text-gray-700 mt-1 line-clamp-2">
-                            {assessment.content}
-                          </div>
+                          </span>
+                          <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+                            {assessment.dueDate}
+                          </span>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            console.log('Deleting assessment:', assessment.id);
-                            handleDelete(assessment.id);
-                          }}
-                          disabled={deleteMutation.isPending}
-                          className="h-6 w-6 p-0 flex-shrink-0"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        <p className="text-gray-700">{assessment.title}</p>
+                        {assessment.description && (
+                          <p className="text-gray-500 text-sm mt-1">{assessment.description}</p>
+                        )}
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                        onClick={() => handleDelete(assessment.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-center text-gray-500 text-sm py-4">
-                  등록된 수행평가가 없습니다.
-                </p>
-              )}
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    등록된 수행평가가 없습니다.
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
