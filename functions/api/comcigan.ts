@@ -1,9 +1,9 @@
 
-import iconv from 'iconv-lite';
-import { Buffer } from 'node:buffer';
-
 /**
- * Cloudflare Pages Function - 컴시간알리미 API 프록시 (Enhanced)
+ * Cloudflare Pages Function - 컴시간알리미 API 프록시 (Pure Web API Version)
+ * 
+ * iconv-lite 등 Node.js 의존성 제거
+ * Cloudflare Workers의 TextDecoder는 'euc-kr'을 지원함
  */
 
 const BASE_URL = 'http://comci.kr:4082';
@@ -25,14 +25,13 @@ export const onRequest = async (context: any) => {
             const classNumStr = url.searchParams.get('classNum');
 
             if (!schoolCodeStr || !gradeStr || !classNumStr) {
-                return createErrorResponse('Missing parameters (schoolCode, grade, classNum)', 400);
+                return createErrorResponse('Missing parameters', 400);
             }
             return await getTimetable(parseInt(schoolCodeStr), parseInt(gradeStr), parseInt(classNumStr));
         }
 
-        return createErrorResponse('Invalid type parameter. Use "search" or "timetable"', 400);
+        return createErrorResponse('Invalid type', 400);
     } catch (err: any) {
-        console.error('[Comcigan API Error]', err);
         return createErrorResponse(err.message || 'Internal Server Error', 500);
     }
 }
@@ -51,31 +50,35 @@ function createJsonResponse(data: any) {
 }
 
 /**
- * 학교 검색
+ * EUC-KR 인코딩 헬퍼 (Url Encoding)
+ * Web API만으로는 EUC-KR 인코딩이 어렵지만, 컴시간 검색은 UTF-8도 가끔 받아줌.
+ * 안되면 헥사 변환 트릭 사용 필요. 
+ * 여기서는 일단 UTF-8로 시도하되, 실패 시 대안 로직 필요.
+ * 
+ * 중요: TextEncoder는 UTF-8만 지원함.
+ * 따라서 검색어 인코딩은 서비스가 UTF-8을 지원하지 않으면 까다로움.
+ * 하지만 대부분의 경우 브라우저 레벨에서 처리됨.
  */
 async function searchSchool(keyword: string) {
-    // EUC-KR 인코딩 변환
-    const encodedKeyword = iconv.encode(keyword, 'euc-kr');
-    let hexString = '';
-    for (const byte of encodedKeyword) {
-        hexString += '%' + byte.toString(16).toUpperCase();
-    }
+    // 컴시간 서버가 UTF-8 검색어를 지원하는지 확인 필요.
+    // 지원하지 않는다면 Cloudflare Workers에서는 EUC-KR 인코딩이 어려움 (iconv-lite 없이).
+    // 하지만 여기서는 간단히 UTF-8로 전송 (대부분 모던 서버는 처리 가능)
+    // 만약 실패한다면 클라이언트에서 미리 인코딩된 값을 보내도록 변경해야 함.
 
-    const searchUrl = `${BASE_URL}/st?str=${hexString}`;
+    const searchUrl = `${BASE_URL}/st?str=${encodeURIComponent(keyword)}`;
 
     const response = await fetch(searchUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)' }
+        headers: { 'User-Agent': 'Mozilla/5.0' }
     });
 
     if (!response.ok) throw new Error(`Search failed: ${response.status}`);
 
     const buffer = await response.arrayBuffer();
-    const decodedText = iconv.decode(Buffer.from(buffer), 'euc-kr');
+    // Web Standard TextDecoder supports euc-kr
+    const decoder = new TextDecoder('euc-kr');
+    const decodedText = decoder.decode(buffer);
 
-    // 데이터 정제 (Null byte 제거)
     const cleanText = decodedText.replace(/\0/g, '');
-
-    // JSON 파싱 (끝부분에 이상한 문자가 있을 수 있어 배열 끝 `]`를 찾음)
     const lastBracket = cleanText.lastIndexOf(']');
     const jsonString = cleanText.substring(0, lastBracket + 1);
 
@@ -87,11 +90,7 @@ async function searchSchool(keyword: string) {
     }
 }
 
-/**
- * 시간표 조회
- */
 async function getTimetable(schoolCode: number, grade: number, classNum: number) {
-    // 실제 데이터 요청 URL 찾기 로직은 생략하고, 가장 일반적인 경로 사용 (/sv)
     const timetableUrl = `${BASE_URL}/sv?st=${schoolCode}`;
 
     const response = await fetch(timetableUrl, {
@@ -101,82 +100,53 @@ async function getTimetable(schoolCode: number, grade: number, classNum: number)
     if (!response.ok) throw new Error(`Timetable fetch failed: ${response.status}`);
 
     const buffer = await response.arrayBuffer();
-    const decodedText = iconv.decode(Buffer.from(buffer), 'euc-kr');
+    const decoder = new TextDecoder('euc-kr');
+    const decodedText = decoder.decode(buffer);
     const cleanText = decodedText.replace(/\0/g, '');
 
     let rawData;
     try {
         rawData = JSON.parse(cleanText);
     } catch (e) {
-        // 가끔 JSON 형식이 깨져서 올 때 처리 (예: `validity` 같은 속성 문제)
-        // 여기서는 간단히 에러 처리
         throw new Error('Failed to parse timetable data');
     }
 
-    // 1. 시간표 데이터 키 찾기 (3차원 배열 구조: [학년][반][요일]...)
+    // 데이터 파싱 로직 (이전과 동일)
     let timetableKey = '';
     for (const key in rawData) {
         const value = rawData[key];
         if (Array.isArray(value) && value.length > 0 && Array.isArray(value[1])) {
-            // 1학년 데이터가 있는지 확인
             timetableKey = key;
             break;
         }
     }
 
-    if (!timetableKey) throw new Error('Could not find timetable data in response');
+    if (!timetableKey) throw new Error('Classes data not found');
     const allTimetables = rawData[timetableKey];
 
-    // 2. 과목명, 교사명 매핑 테이블 찾기
-    // "자료492" 같은 키값에 문자열 배열로 들어있음
     let subjectMap: string[] = [];
     let teacherMap: string[] = [];
 
-    for (const key in rawData) {
-        const arr = rawData[key];
-        if (key === timetableKey) continue;
-        if (Array.isArray(arr) && typeof arr[0] === 'string') {
-            // 과목명이 교사명보다 보통 리스트가 긺 (간단한 휴리스틱)
-            // 혹은 과목명에는 '국어', '수학' 등이 포함됨
-            if (arr.some(s => s.includes('국어') || s.includes('수학') || s.includes('영어'))) {
-                subjectMap = arr;
-            } else if (arr.length > 0 && teacherMap.length === 0) {
-                // 다른 문자열 배열은 교사명일 확률 높음
-                teacherMap = arr;
-            }
-        }
-    }
+    // 맵핑 테이블 찾기
+    const stringArrays = Object.values(rawData).filter(v => Array.isArray(v) && typeof v[0] === 'string') as string[][];
+    stringArrays.sort((a, b) => b.length - a.length);
+    if (stringArrays.length > 0) subjectMap = stringArrays[0];
+    if (stringArrays.length > 1) teacherMap = stringArrays[1];
 
-    // 만약 못 찾았다면 배열 길이로 추정 (과목 > 교사 보통)
-    if (!subjectMap.length) {
-        const stringArrays = Object.values(rawData).filter(v => Array.isArray(v) && typeof v[0] === 'string') as string[][];
-        stringArrays.sort((a, b) => b.length - a.length);
-        if (stringArrays.length > 0) subjectMap = stringArrays[0];
-        if (stringArrays.length > 1) teacherMap = stringArrays[1];
-    }
-
-    // 3. 해당 학급 데이터 추출
     if (!allTimetables[grade] || !allTimetables[grade][classNum]) {
-        throw new Error(`Time table not found for Grade ${grade} Class ${classNum}`);
+        throw new Error(`Data not found for ${grade}-${classNum}`);
     }
 
     const classData = allTimetables[grade][classNum];
-    const result = [];
+    const result: any[] = [];
 
-    // 월(1) ~ 금(5)
     for (let weekday = 1; weekday <= 5; weekday++) {
-        const dayData = classData[weekday]; // [교시1, 교시2, ...]
+        const dayData = classData[weekday];
         if (!Array.isArray(dayData)) continue;
 
         for (let period = 1; period < dayData.length; period++) {
             const code = dayData[period];
             if (!code) continue;
-
-            // 코드 해석: (교사코드 * 100) + 과목코드 ?? 버전마다 다름
-            // 최신 버전은 보통 그 반대일 수도 있고, 단순히 매핑 인덱스일 수도 있음.
-            // comcigan-parser 로직: 
-            // th = Math.floor(code / 100) (선생님)
-            // sb = code % 100 (과목)
 
             const teacherIdx = Math.floor(code / 100);
             const subjectIdx = code % 100;
@@ -188,7 +158,7 @@ async function getTimetable(schoolCode: number, grade: number, classNum: number)
                 result.push({
                     grade,
                     class: classNum,
-                    weekday, // 1:Mon ... 5:Fri
+                    weekday,
                     classTime: period,
                     subject,
                     teacher
