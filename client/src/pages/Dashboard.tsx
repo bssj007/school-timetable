@@ -95,11 +95,23 @@ export default function Dashboard() {
     try {
       toast.loading("시간표를 가져오는 중...");
 
-      const result = await fetchTimetableMutation.mutateAsync({
-        schoolName: timetableFormData.schoolName,
-        grade: parseInt(timetableFormData.grade),
-        classNum: parseInt(timetableFormData.classNum),
-      });
+      // Cloudflare Pages Functions 호출
+      const response = await fetch(`/api/comcigan?type=timetable&schoolCode=${7530560}&grade=${timetableFormData.grade}&classNum=${timetableFormData.classNum}`);
+      // 학교 검색 로직은 생략 (일단 성지고 코드 하드코딩 또는 추가 로직 필요)
+
+      if (!response.ok) throw new Error("시간표 가져오기 실패");
+
+      const result = await response.json();
+
+      // 로컬 스토리지에 저장 (DB 대신)
+      localStorage.setItem('cached_timetable', JSON.stringify(result));
+
+      // 결과 처리 (기존 로직과 호환성 유지)
+      // const result = await fetchTimetableMutation.mutateAsync({
+      //   schoolName: timetableFormData.schoolName,
+      //   grade: parseInt(timetableFormData.grade),
+      //   classNum: parseInt(timetableFormData.classNum),
+      // });
 
       toast.dismiss();
       toast.success(result.message || "시간표를 성공적으로 가져왔습니다!");
