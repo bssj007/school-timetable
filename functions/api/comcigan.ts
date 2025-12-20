@@ -3,16 +3,15 @@
  * Cloudflare Pages Function - 부산성지고등학교 전용 컴시간알리미 API
  * 
  * Flow:
- * 1. Connect to /st to get dynamic prefix
- * 2. Use known School Codes (36179, 93342) + Dynamic Prefix to get Timetable
- * 3. Support Full Browser Spec Headers
+ * 1. Connect to /st to get Dynamic Prefix
+ * 2. Search School "부산성지고" using Prefix to get REAL School Code
+ * 3. Fetch Timetable using REAL School Code
  */
 
 const BASE_URL = "http://comci.net:4082";
-const SCHOOL_CODE_1 = "36179"; // 교육청 코드
-const SCHOOL_CODE_2 = "93342"; // 컴시간 코드 (Search Result)
+// "부산성지고" EUC-KR Hex String
+const SEARCH_HEX = "%BA%CE%BB%EA%BC%BA%C1%F6%B0%ED";
 
-// Headers
 const HEADERS: any = {
     'Accept': '*/*',
     'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -36,11 +35,16 @@ async function fetchWithProxy(targetUrl: string, headers: any = HEADERS, isEucKr
     let lastError;
     for (const proxy of PROXIES) {
         try {
+            // Do not use encodeURIComponent for full URL if it already contains params
+            // But for proxies, we usually need to encode targetUrl.
+            // For direct connection, just use targetUrl.
             const fullUrl = proxy ? `${proxy}${encodeURIComponent(targetUrl)}` : targetUrl;
+
             const res = await fetch(fullUrl, { headers });
             if (res.ok) {
                 if (isEucKr) return await decodeEucKr(res);
                 const buf = await res.arrayBuffer();
+                // Try UTF-8 first
                 const txt = new TextDecoder('utf-8').decode(buf);
                 return txt.replace(/\0/g, '');
             }
@@ -52,11 +56,40 @@ async function fetchWithProxy(targetUrl: string, headers: any = HEADERS, isEucKr
 }
 
 async function getPrefix() {
-    // 1. Fetch /st to get sc_data prefix
-    const html = await fetchWithProxy(`${BASE_URL}/st`, HEADERS, true); // true = EUC-KR
+    const html = await fetchWithProxy(`${BASE_URL}/st`, HEADERS, true);
     const match = html.match(/sc_data\('([^']+)'/);
     if (!match) throw new Error("Failed to extract sc_data prefix");
     return match[1]; // e.g. "73629_"
+}
+
+async function getSchoolCode(prefix: string) {
+    // Construct URL manually to avoid double encoding issues in URL object
+    // But fetch() constructor parses it.
+    const searchUrl = `${BASE_URL}/${prefix}${SEARCH_HEX}`;
+
+    // Search result is usually UTF-8 JSON.
+    const jsonText = await fetchWithProxy(searchUrl, HEADERS, false);
+
+    // Check if empty
+    if (jsonText.trim() === '.' || jsonText.trim().length === 0) {
+        throw new Error("School search failed (Empty response). Encoding mismatch?");
+    }
+
+    const jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
+    const data = JSON.parse(jsonString);
+
+    // data["학교검색"] = [[Region, Name, Code1, Code2], ...]
+    const schools = data["학교검색"] || [];
+    const target = schools.find((s: any) => s[2] === "부산성지고"); // Name at index 2?
+
+    if (!target) {
+        throw new Error(`부산성지고를 찾을 수 없습니다. 검색결과: ${schools.length}건`);
+    }
+
+    return {
+        code1: target[3], // 36179
+        code2: target[4]  // 93342 (Dynamic Code)
+    };
 }
 
 export const onRequest = async (context: any) => {
@@ -79,20 +112,23 @@ export const onRequest = async (context: any) => {
 }
 
 async function getTimetable(grade: number, classNum: number) {
-    // 1. Get Dynamic Prefix
+    // 1. Get Prefix
     const prefix = await getPrefix();
 
-    // 2. Construct URL
-    const param = `${prefix}${SCHOOL_CODE_2}_0_${grade}`;
-    const b64 = btoa(param);
-    const targetUrl = `${BASE_URL}/${SCHOOL_CODE_1}?${b64}`;
+    // 2. Get Real School Code
+    const { code1, code2 } = await getSchoolCode(prefix);
 
-    // 3. Fetch Data
+    // 3. Construct URL
+    const param = `${prefix}${code2}_0_${grade}`;
+    const b64 = btoa(param);
+    const targetUrl = `${BASE_URL}/${code1}?${b64}`;
+
+    // 4. Fetch Data
     const jsonText = await fetchWithProxy(targetUrl, HEADERS, false);
     const jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
     const rawData = JSON.parse(jsonString);
 
-    // 4. Parse
+    // 5. Parse
     const keys = Object.keys(rawData);
     const teacherProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].some((s: any) => typeof s === 'string' && s.endsWith('*'))) || "";
 
@@ -117,17 +153,16 @@ async function getTimetable(grade: number, classNum: number) {
         return Array.isArray(val) && val[grade] && val[grade][classNum] && Array.isArray(val[grade][classNum]);
     }) || "";
 
-    if (!timedataProp) throw new Error(`데이터 키를 찾을 수 없습니다. (Prefix: ${prefix})`);
+    if (!timedataProp) throw new Error(`데이터 키 찾기 실패`);
 
     const teachers = rawData[teacherProp] || [];
     const subjects = rawData[subjectProp] || [];
     const data = rawData[timedataProp];
-    // Time info optional
     const timeInfoProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].length === 8 && typeof rawData[k][1] === 'number');
     const timeInfo = timeInfoProp ? rawData[timeInfoProp] : null;
 
     if (!data || !data[grade] || !data[grade][classNum]) {
-        throw new Error(`해당 학년/반 데이터가 없습니다.`);
+        throw new Error(`데이터 없음 (${grade}학년 ${classNum}반)`);
     }
 
     const classData = data[grade][classNum];
@@ -140,9 +175,9 @@ async function getTimetable(grade: number, classNum: number) {
         }
 
         const maxPeriod = classData[weekday].length - 1;
-        const loopLimit = Math.min(dayHours, maxPeriod); // Safer loop limit
+        const loopLimit = Math.min(dayHours, maxPeriod);
 
-        for (let period = 1; period <= loopLimit; period++) { // Use loopLimit, usually 7
+        for (let period = 1; period <= loopLimit; period++) {
             const code = classData[weekday][period];
             if (!code) continue;
 
