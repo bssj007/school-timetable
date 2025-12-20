@@ -78,10 +78,10 @@ export default function Dashboard() {
 
   // 2. 수행평가 목록 조회 (D1 API)
   const { data: assessments, isLoading: assessmentLoading } = useQuery({
-    queryKey: ['assessments'],
+    queryKey: ['assessments', timetableFormData.grade, timetableFormData.classNum],
     queryFn: async () => {
       try {
-        const res = await fetch('/api/assessment');
+        const res = await fetch(`/api/assessment?grade=${timetableFormData.grade}&classNum=${timetableFormData.classNum}`);
         if (!res.ok) {
           if (res.status === 404) return [];
           throw new Error(`API Error: ${res.status}`);
@@ -105,6 +105,8 @@ export default function Dashboard() {
           subject: data.subject,
           description: "",
           dueDate: data.assessmentDate,
+          grade: parseInt(timetableFormData.grade),
+          classNum: parseInt(timetableFormData.classNum)
         }),
       });
       if (!res.ok) throw new Error('Failed to create');
