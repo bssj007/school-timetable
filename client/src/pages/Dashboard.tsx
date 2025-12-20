@@ -257,7 +257,9 @@ export default function Dashboard() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold mb-2">성지고 1-1 시간표</h1>
+          <h1 className="text-3xl font-bold mb-2">
+            부산성지고 {timetableFormData.grade}-{timetableFormData.classNum} 시간표
+          </h1>
           <p className="text-gray-600">시간표와 수행평가를 한눈에 확인하세요</p>
         </div>
 
@@ -278,16 +280,10 @@ export default function Dashboard() {
             </DialogHeader>
             <form onSubmit={handleFetchTimetable} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">학교 이름</label>
-                <Input
-                  type="text"
-                  value={timetableFormData.schoolName}
-                  onChange={(e) =>
-                    setTimetableFormData({ ...timetableFormData, schoolName: e.target.value })
-                  }
-                  placeholder="예: 성지고등학교"
-                  required
-                />
+                <label className="block text-sm font-medium mb-1">학교</label>
+                <div className="p-2 bg-gray-100 rounded-md text-gray-700 font-medium">
+                  부산성지고등학교
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
