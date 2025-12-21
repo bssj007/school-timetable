@@ -4,18 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useMemo, useEffect } from "react";
-import { Loader2, Trash2, Plus, RefreshCw } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Loader2, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useUserConfig } from "@/hooks/useUserConfig";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+// Dialog imports removed as they are no longer used
 import {
   Select,
   SelectContent,
@@ -58,40 +51,30 @@ export default function Dashboard() {
     weekday: "",
   });
 
-  // 다이얼로그 폼 데이터 (기본값은 설정된 값)
-  const [timetableFormData, setTimetableFormData] = useState({
-    grade: grade || "1",
-    classNum: classNum || "1",
-  });
-
-  // 설정이 변경되면 폼 데이터도 업데이트
-  useEffect(() => {
-    if (grade && classNum) {
-      setTimetableFormData({ grade, classNum });
-    }
-  }, [grade, classNum]);
-
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isFetchingTimetable, setIsFetchingTimetable] = useState(false);
-
-  // 1. 시간표 조회 (로컬 스토리지 + API 캐시)
-  const { data: timetableData, isLoading: timetableLoading, refetch: refetchTimetable } = useQuery({
-    queryKey: ['timetable'],
+  // 1. 시간표 조회 (자동 새로고침)
+  const { data: timetableData, isLoading: timetableLoading } = useQuery({
+    queryKey: ['timetable', grade, classNum],
     queryFn: async () => {
-      // 로컬 스토리지 우선 확인
-      const cached = localStorage.getItem('cached_timetable');
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          // API 응답 구조: { data: [...] }
-          if (parsed.data && Array.isArray(parsed.data)) return parsed.data as TimetableItem[];
-          if (Array.isArray(parsed)) return parsed as TimetableItem[];
-        } catch (e) {
-          console.error('Failed to parse cached timetable', e);
+      if (!grade || !classNum) return [];
+      try {
+        // 성지고 코드: 7530560
+        const response = await fetch(`/api/comcigan?type=timetable&schoolCode=7530560&grade=${grade}&classNum=${classNum}`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch timetable");
         }
+        const result = await response.json();
+
+        // API 응답 구조 확인
+        if (result.data && Array.isArray(result.data)) return result.data as TimetableItem[];
+        if (Array.isArray(result)) return result as TimetableItem[];
+        return [] as TimetableItem[];
+      } catch (e) {
+        console.error('Failed to fetch timetable', e);
+        return [] as TimetableItem[];
       }
-      return [] as TimetableItem[];
-    }
+    },
+    enabled: !!grade && !!classNum,
+    refetchInterval: 60 * 1000 // 1분마다 자동 갱신
   });
 
   // 2. 수행평가 목록 조회 (D1 API)
@@ -197,45 +180,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleFetchTimetable = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsFetchingTimetable(true);
-    try {
-      toast.loading("시간표를 가져오는 중...");
-
-      // Cloudflare Pages Functions 호출
-      // 성지고 코드: 7530560
-      const fetchGrade = timetableFormData.grade;
-      const fetchClass = timetableFormData.classNum;
-
-      const response = await fetch(`/api/comcigan?type=timetable&schoolCode=7530560&grade=${fetchGrade}&classNum=${fetchClass}`);
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "시간표 가져오기 실패");
-      }
-
-      // 로컬 스토리지에 저장 (DB 대신)
-      localStorage.setItem('cached_timetable', JSON.stringify(result));
-
-      toast.dismiss();
-      toast.success("시간표를 성공적으로 가져왔습니다!");
-
-      // 시간표 데이터 새로고침
-      await refetchTimetable();
-
-      // 다이얼로그 닫기
-      setIsDialogOpen(false);
-    } catch (error) {
-      toast.dismiss();
-      toast.error(error instanceof Error ? error.message : "시간표 가져오기 실패");
-      console.error("시간표 가져오기 실패:", error);
-    } finally {
-      setIsFetchingTimetable(false);
-    }
-  };
-
   // 요일별로 시간표 데이터를 그룹화
   const weekdayNames = ["월", "화", "수", "목", "금"];
   const timetableByDay: Record<number, TimetableItem[]> = {};
@@ -283,7 +227,7 @@ export default function Dashboard() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold mb-2">
-            부산성지고 {grade || timetableFormData.grade}-{classNum || timetableFormData.classNum} 시간표
+            부산성지고 {grade || '?'}-{classNum || '?'} 시간표
           </h1>
           <p className="text-gray-600">시간표와 수행평가를 한눈에 확인하세요</p>
         </div>
@@ -323,90 +267,6 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
           </div>
-
-          {/* 시간표 업데이트 버튼 */}
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <RefreshCw className="mr-2 h-4 w-4" />
-                시간표 업데이트
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>시간표 가져오기</DialogTitle>
-                <DialogDescription>
-                  컴시간알리미에서 최신 시간표를 가져옵니다.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleFetchTimetable} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">학교</label>
-                  <div className="p-2 bg-gray-100 rounded-md text-gray-700 font-medium">
-                    부산성지고등학교
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">학년</label>
-                    <Select
-                      value={timetableFormData.grade}
-                      onValueChange={(val) =>
-                        setTimetableFormData({ ...timetableFormData, grade: val })
-                      }
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="학년 선택" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[1, 2, 3].map((g) => (
-                          <SelectItem key={g} value={g.toString()}>
-                            {g}학년
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">반</label>
-                    <Select
-                      value={timetableFormData.classNum}
-                      onValueChange={(val) =>
-                        setTimetableFormData({ ...timetableFormData, classNum: val })
-                      }
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="반 선택" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map((c) => (
-                          <SelectItem key={c} value={c.toString()}>
-                            {c}반
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isFetchingTimetable}
-                >
-                  {isFetchingTimetable ? (
-                    <>
-                      <Loader2 className="animate-spin mr-2 h-4 w-4" />
-                      가져오는 중...
-                    </>
-                  ) : (
-                    "시간표 가져오기"
-                  )}
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
