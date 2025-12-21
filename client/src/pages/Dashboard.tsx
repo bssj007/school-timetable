@@ -409,15 +409,12 @@ export default function Dashboard() {
                             !a.isDone
                           );
 
-                          const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
-
                           return (
                             <td
                               key={weekdayIdx}
                               onClick={() => item && handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx])}
                               className={`border p-2 text-center h-24 relative transition-colors cursor-pointer
-                                ${cellAssessments.length > 0 ? "bg-blue-50" : ""}
-                                ${isSelected ? "ring-2 ring-blue-500 bg-blue-100" : "hover:bg-gray-100"}
+                                ${cellAssessments.length > 0 ? "bg-blue-100 border-blue-300" : "hover:bg-gray-100"}
                                 ${item ? "" : "cursor-default"}
                               `}
                             >
@@ -426,12 +423,17 @@ export default function Dashboard() {
                                   <div className="font-bold text-gray-900">{item.subject}</div>
                                   <div className="text-xs text-gray-500 mt-1">{item.teacher}</div>
                                   {cellAssessments.length > 0 && (
-                                    <div className="mt-2 flex flex-wrap gap-1 justify-center">
-                                      {cellAssessments.map(a => (
-                                        <span key={a.id} className="text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded-full">
-                                          {a.description || '수행평가'}
-                                        </span>
-                                      ))}
+                                    <div className="mt-2">
+                                      <div className="text-xs font-semibold text-blue-700">
+                                        📝 수행평가!
+                                      </div>
+                                      <div className="flex flex-wrap gap-1 justify-center mt-1">
+                                        {cellAssessments.map(a => (
+                                          <span key={a.id} className="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded-full">
+                                            {a.description || '평가'}
+                                          </span>
+                                        ))}
+                                      </div>
                                     </div>
                                   )}
                                 </div>
