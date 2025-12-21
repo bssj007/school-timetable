@@ -86,7 +86,9 @@ export default function Dashboard() {
   const [weekOffset, setWeekOffset] = useState(0);
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
   const [selectedCell, setSelectedCell] = useState<{ weekday: number, classTime: number } | null>(null);
-  const [showDialog, setShowDialog] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [viewingAssessments, setViewingAssessments] = useState<AssessmentItem[]>([]);
 
   const [formData, setFormData] = useState({
     assessmentDate: "",
@@ -97,16 +99,30 @@ export default function Dashboard() {
   });
 
   // 시간표 셀 클릭 핸들러
-  const handleCellClick = (weekdayIdx: number, classTime: number, subject: string, date: Date) => {
+  const handleCellClick = (
+    weekdayIdx: number,
+    classTime: number,
+    subject: string,
+    date: Date,
+    cellAssessments: AssessmentItem[]
+  ) => {
     setSelectedCell({ weekday: weekdayIdx, classTime });
-    setFormData({
-      assessmentDate: toDateString(date),
-      subject: subject,
-      content: "",
-      classTime: classTime.toString(),
-      round: "1",
-    });
-    setShowDialog(true); // 다이얼로그 열기
+
+    if (cellAssessments.length > 0) {
+      // 수행평가가 있으면 정보 다이얼로그 표시
+      setViewingAssessments(cellAssessments);
+      setShowViewDialog(true);
+    } else {
+      // 수행평가가 없으면 추가 다이얼로그 표시
+      setFormData({
+        assessmentDate: toDateString(date),
+        subject: subject,
+        content: "",
+        classTime: classTime.toString(),
+        round: "1",
+      });
+      setShowAddDialog(true);
+    }
   };
 
   // 1. 시간표 조회
@@ -260,7 +276,7 @@ export default function Dashboard() {
         classTime: "",
         round: "1",
       });
-      setShowDialog(false); // 다이얼로그 닫기
+      setShowAddDialog(false); // 다이얼로그 닫기
       setSelectedCell(null); // 선택 셀 해제
     } catch (error) {
       console.error("수행평가 생성 실패:", error);
@@ -427,7 +443,7 @@ export default function Dashboard() {
                           return (
                             <td
                               key={weekdayIdx}
-                              onClick={() => item && handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx])}
+                              onClick={() => item && handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx], cellAssessments)}
                               className={`border p-2 text-center h-24 relative transition-colors cursor-pointer
                                 ${cellAssessments.length > 0 ? "bg-blue-100 border-blue-300" : "hover:bg-gray-100"}
                                 ${item ? "" : "cursor-default"}
@@ -468,10 +484,13 @@ export default function Dashboard() {
         </div>
 
         {/* 수행평가 추가 다이얼로그 */}
-        <Dialog open={showDialog} onOpenChange={setShowDialog}>
-          <DialogContent className="sm:max-w-[500px]">
+        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+          <DialogContent className="sm:max-w-[500px]" aria-describedby="add-assessment-description">
             <DialogHeader>
               <DialogTitle>수행평가 추가</DialogTitle>
+              <p id="add-assessment-description" className="text-sm text-gray-500 mt-1">
+                선택한 과목에 수행평가를 추가합니다
+              </p>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -529,7 +548,7 @@ export default function Dashboard() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setShowDialog(false)} className="flex-1">
+                <Button type="button" variant="outline" onClick={() => setShowAddDialog(false)} className="flex-1">
                   취소
                 </Button>
                 <Button type="submit" className="flex-1">
@@ -538,6 +557,64 @@ export default function Dashboard() {
                 </Button>
               </div>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* 수행평가 정보 다이얼로그 */}
+        <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+          <DialogContent className="sm:max-w-[500px]" aria-describedby="view-assessment-description">
+            <DialogHeader>
+              <DialogTitle>수행평가 정보</DialogTitle>
+              <p id="view-assessment-description" className="text-sm text-gray-500 mt-1">
+                이 교시에 등록된 수행평가 목록입니다
+              </p>
+            </DialogHeader>
+            <div className="space-y-4">
+              {viewingAssessments.map((assessment) => (
+                <div
+                  key={assessment.id}
+                  className="p-4 border rounded-lg bg-gray-50"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-lg text-gray-900">
+                        {assessment.subject}
+                      </span>
+                      {assessment.description && (
+                        <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">
+                          {assessment.description}
+                        </span>
+                      )}
+                      {assessment.classTime && (
+                        <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                          {assessment.classTime}교시
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 w-8"
+                      onClick={() => {
+                        handleDelete(assessment.id);
+                        setShowViewDialog(false);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-gray-700 mb-2">{assessment.title}</p>
+                  <div className="text-xs text-gray-500">
+                    {assessment.dueDate}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={() => setShowViewDialog(false)}>
+                닫기
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
 
