@@ -29,10 +29,11 @@ interface AssessmentItem {
   title: string;
   subject: string;
   description: string;
-  dueDate: string; // ISO string
+  dueDate: string;
   isDone: number;
-  classTime?: number; // 교시 정보 추가
-  weekday?: number; // 요일 정보 추가
+  classTime?: number;
+  weekday?: number;
+  round?: number; // 차수 추가
 }
 
 // 주의 시작일 계산 (월요일 기준)
@@ -66,21 +67,33 @@ function toDateString(date: Date): string {
   return date.toISOString().split('T')[0];
 }
 
+// 날짜가 특정 주에 속하는지 확인
+function isDateInWeek(dateStr: string, weekDates: Date[]): boolean {
+  const date = new Date(dateStr);
+  const startDate = new Date(weekDates[0]);
+  startDate.setHours(0, 0, 0, 0);
+  const endDate = new Date(weekDates[4]);
+  endDate.setHours(23, 59, 59, 999);
+
+  return date >= startDate && date <= endDate;
+}
+
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const { schoolName, grade, classNum, isConfigured, setConfig } = useUserConfig();
 
-  const [weekOffset, setWeekOffset] = useState(0); // 0 = 이번 주, 1 = 다음 주, -1 = 지난 주
+  const [weekOffset, setWeekOffset] = useState(0);
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
 
   const [formData, setFormData] = useState({
     assessmentDate: "",
     subject: "",
     content: "",
-    classTime: "", // 교시 추가
+    classTime: "",
+    round: "1", // 차수 기본값
   });
 
-  // 1. 시간표 조회 (Comcigan API)
+  // 1. 시간표 조회
   const { data: timetableData, isLoading: timetableLoading, refetch: refetchTimetable } = useQuery({
     queryKey: ['timetable', schoolName, grade, classNum],
     queryFn: async () => {
@@ -116,8 +129,6 @@ export default function Dashboard() {
         throw new Error('학교, 학년, 반 정보가 필요합니다');
       }
 
-      console.log('[Dashboard] Fetching timetable:', { schoolName, grade, classNum });
-
       const res = await fetch('/api/comcigan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -129,28 +140,22 @@ export default function Dashboard() {
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
-        console.error('[Dashboard] API Error:', errorText);
-        throw new Error('시간표 가져오기 실패: ' + res.status);
+        throw new Error('시간표 가져오기 실패');
       }
 
-      const result = await res.json();
-      console.log('[Dashboard] API Response:', result);
-      return result;
+      return res.json();
     },
     onSuccess: (data) => {
-      const message = data?.message || '시간표를 성공적으로 가져왔습니다!';
-      toast.success(message);
+      toast.success(data?.message || '시간표를 성공적으로 가져왔습니다!');
       refetchTimetable();
     },
     onError: (error: Error) => {
-      console.error('[Dashboard] Mutation error:', error);
       toast.error(error.message || '시간표 가져오기 실패');
     },
   });
 
   // 3. 수행평가 목록 조회
-  const { data: assessments, isLoading: assessmentLoading } = useQuery({
+  const { data: allAssessments, isLoading: assessmentLoading } = useQuery({
     queryKey: ['assessments', grade, classNum],
     queryFn: async () => {
       if (!grade || !classNum) return [];
@@ -169,6 +174,12 @@ export default function Dashboard() {
     enabled: !!grade && !!classNum,
   });
 
+  // 현재 주에 해당하는 수행평가만 필터링
+  const assessments = useMemo(() => {
+    if (!allAssessments) return [];
+    return allAssessments.filter(a => isDateInWeek(a.dueDate, weekDates));
+  }, [allAssessments, weekDates]);
+
   // 4. 수행평가 추가
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -178,7 +189,7 @@ export default function Dashboard() {
         body: JSON.stringify({
           title: data.content,
           subject: data.subject,
-          description: "",
+          description: data.round ? `${data.round}차` : "",
           dueDate: data.assessmentDate,
           grade: parseInt(grade),
           classNum: parseInt(classNum),
@@ -225,17 +236,13 @@ export default function Dashboard() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createMutation.mutateAsync({
-        assessmentDate: formData.assessmentDate,
-        subject: formData.subject,
-        content: formData.content,
-        classTime: formData.classTime,
-      });
+      await createMutation.mutateAsync(formData);
       setFormData({
         assessmentDate: "",
         subject: "",
         content: "",
         classTime: "",
+        round: "1",
       });
     } catch (error) {
       console.error("수행평가 생성 실패:", error);
@@ -275,7 +282,6 @@ export default function Dashboard() {
     );
   }
 
-  // 주간 범위 텍스트
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
 
   return (
@@ -289,34 +295,24 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Select
-            value={grade || ""}
-            onValueChange={(val) => setConfig({ grade: val })}
-          >
+          <Select value={grade || ""} onValueChange={(val) => setConfig({ grade: val })}>
             <SelectTrigger className="w-[80px]">
               <SelectValue placeholder="학년" />
             </SelectTrigger>
             <SelectContent>
               {[1, 2, 3].map((g) => (
-                <SelectItem key={g} value={g.toString()}>
-                  {g}학년
-                </SelectItem>
+                <SelectItem key={g} value={g.toString()}>{g}학년</SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          <Select
-            value={classNum || ""}
-            onValueChange={(val) => setConfig({ classNum: val })}
-          >
+          <Select value={classNum || ""} onValueChange={(val) => setConfig({ classNum: val })}>
             <SelectTrigger className="w-[80px]">
               <SelectValue placeholder="반" />
             </SelectTrigger>
             <SelectContent>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((c) => (
-                <SelectItem key={c} value={c.toString()}>
-                  {c}반
-                </SelectItem>
+                <SelectItem key={c} value={c.toString()}>{c}반</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -346,30 +342,17 @@ export default function Dashboard() {
                 <div className="flex items-center gap-4">
                   <span>주간 시간표</span>
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setWeekOffset(weekOffset - 1)}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => setWeekOffset(weekOffset - 1)}>
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <span className="text-sm font-normal text-gray-600 min-w-[100px] text-center">
                       {weekRangeText}
                     </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setWeekOffset(weekOffset + 1)}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => setWeekOffset(weekOffset + 1)}>
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
-                {timetableData && timetableData.length === 0 && (
-                  <span className="text-sm font-normal text-gray-500">
-                    시간표가 없습니다. "시간표 불러오기" 버튼을 클릭하세요.
-                  </span>
-                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -400,33 +383,30 @@ export default function Dashboard() {
                           const currentDate = toDateString(weekDates[weekdayIdx]);
 
                           // 해당 날짜와 교시에 수행평가가 있는지 확인
-                          const relatedAssessment = assessments && assessments.length > 0
-                            ? assessments.find(a =>
-                              item &&
-                              a.subject === item.subject &&
-                              a.dueDate === currentDate &&
-                              a.classTime === classTime &&
-                              !a.isDone
-                            )
-                            : null;
+                          const cellAssessments = assessments.filter(a =>
+                            item &&
+                            a.subject === item.subject &&
+                            a.dueDate === currentDate &&
+                            a.classTime === classTime &&
+                            !a.isDone
+                          );
 
                           return (
                             <td
                               key={weekdayIdx}
-                              className={`border p-2 text-center h-24 relative hover:bg-gray-50 transition-colors ${relatedAssessment ? "bg-red-50" : ""
-                                }`}
+                              className={`border p-2 text-center h-24 relative hover:bg-gray-50 transition-colors ${cellAssessments.length > 0 ? "bg-red-50" : ""}`}
                             >
                               {item ? (
                                 <div>
-                                  <div className="font-bold text-gray-900">
-                                    {item.subject}
-                                  </div>
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    {item.teacher}
-                                  </div>
-                                  {relatedAssessment && (
-                                    <div className="mt-2 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full inline-block truncate max-w-full">
-                                      수행평가
+                                  <div className="font-bold text-gray-900">{item.subject}</div>
+                                  <div className="text-xs text-gray-500 mt-1">{item.teacher}</div>
+                                  {cellAssessments.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-1 justify-center">
+                                      {cellAssessments.map(a => (
+                                        <span key={a.id} className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full">
+                                          {a.description || '수행평가'}
+                                        </span>
+                                      ))}
                                     </div>
                                   )}
                                 </div>
@@ -458,45 +438,48 @@ export default function Dashboard() {
                   <Input
                     type="date"
                     value={formData.assessmentDate}
-                    onChange={(e) =>
-                      setFormData({ ...formData, assessmentDate: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, assessmentDate: e.target.value })}
                     required
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">과목</label>
                   <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={formData.subject}
-                    onChange={(e) =>
-                      setFormData({ ...formData, subject: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                     required
                   >
                     <option value="">과목 선택</option>
                     {uniqueSubjects.map((subject) => (
-                      <option key={subject} value={subject}>
-                        {subject}
-                      </option>
+                      <option key={subject} value={subject}>{subject}</option>
                     ))}
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">교시</label>
                   <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={formData.classTime}
-                    onChange={(e) =>
-                      setFormData({ ...formData, classTime: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, classTime: e.target.value })}
                     required
                   >
                     <option value="">교시 선택</option>
                     {Array.from({ length: 7 }, (_, i) => i + 1).map((time) => (
-                      <option key={time} value={time.toString()}>
-                        {time}교시
-                      </option>
+                      <option key={time} value={time.toString()}>{time}교시</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">차수</label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={formData.round}
+                    onChange={(e) => setFormData({ ...formData, round: e.target.value })}
+                    required
+                  >
+                    {[1, 2, 3, 4].map((r) => (
+                      <option key={r} value={r.toString()}>{r}차</option>
                     ))}
                   </select>
                 </div>
@@ -504,9 +487,7 @@ export default function Dashboard() {
                   <label className="block text-sm font-medium mb-1">내용</label>
                   <Textarea
                     value={formData.content}
-                    onChange={(e) =>
-                      setFormData({ ...formData, content: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                     placeholder="수행평가 내용 입력"
                     required
                   />
@@ -521,7 +502,7 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader>
-              <CardTitle>수행평가 목록</CardTitle>
+              <CardTitle>이번 주 수행평가 ({weekRangeText})</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -536,6 +517,11 @@ export default function Dashboard() {
                           <span className="font-semibold text-lg text-gray-900">
                             {assessment.subject}
                           </span>
+                          {assessment.description && (
+                            <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">
+                              {assessment.description}
+                            </span>
+                          )}
                           {assessment.classTime && (
                             <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
                               {assessment.classTime}교시
@@ -546,9 +532,6 @@ export default function Dashboard() {
                           </span>
                         </div>
                         <p className="text-gray-700">{assessment.title}</p>
-                        {assessment.description && (
-                          <p className="text-gray-500 text-sm mt-1">{assessment.description}</p>
-                        )}
                       </div>
                       <Button
                         variant="ghost"
@@ -562,7 +545,7 @@ export default function Dashboard() {
                   ))
                 ) : (
                   <div className="text-center py-8 text-gray-500">
-                    등록된 수행평가가 없습니다.
+                    이번 주 등록된 수행평가가 없습니다.
                   </div>
                 )}
               </div>
