@@ -84,14 +84,31 @@ export default function Dashboard() {
 
   const [weekOffset, setWeekOffset] = useState(0);
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
+  const [selectedCell, setSelectedCell] = useState<{ weekday: number, classTime: number } | null>(null);
 
   const [formData, setFormData] = useState({
     assessmentDate: "",
     subject: "",
     content: "",
     classTime: "",
-    round: "1", // 차수 기본값
+    round: "1",
   });
+
+  // 시간표 셀 클릭 핸들러
+  const handleCellClick = (weekdayIdx: number, classTime: number, subject: string, date: Date) => {
+    setSelectedCell({ weekday: weekdayIdx, classTime });
+    setFormData({
+      ...formData,
+      assessmentDate: toDateString(date),
+      subject: subject,
+      classTime: classTime.toString(),
+    });
+
+    // 수행평가 입력 폼으로 스크롤
+    setTimeout(() => {
+      document.getElementById('assessment-form')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+  };
 
   // 1. 시간표 조회
   const { data: timetableData, isLoading: timetableLoading, refetch: refetchTimetable } = useQuery({
@@ -391,10 +408,17 @@ export default function Dashboard() {
                             !a.isDone
                           );
 
+                          const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
+
                           return (
                             <td
                               key={weekdayIdx}
-                              className={`border p-2 text-center h-24 relative hover:bg-gray-50 transition-colors ${cellAssessments.length > 0 ? "bg-red-50" : ""}`}
+                              onClick={() => item && handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx])}
+                              className={`border p-2 text-center h-24 relative transition-colors cursor-pointer
+                                ${cellAssessments.length > 0 ? "bg-red-50" : ""}
+                                ${isSelected ? "ring-2 ring-blue-500 bg-blue-50" : "hover:bg-gray-100"}
+                                ${item ? "" : "cursor-default"}
+                              `}
                             >
                               {item ? (
                                 <div>
@@ -427,9 +451,12 @@ export default function Dashboard() {
 
         {/* 오른쪽: 수행평가 관리 */}
         <div>
-          <Card className="mb-8">
+          <Card className="mb-8" id="assessment-form">
             <CardHeader>
               <CardTitle>수행평가 추가</CardTitle>
+              <p className="text-sm text-gray-500 mt-1">
+                💡 시간표의 과목을 클릭하면 자동으로 입력됩니다
+              </p>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -443,32 +470,28 @@ export default function Dashboard() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">과목</label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  <label className="block text-sm font-medium mb-1">
+                    과목 {formData.subject && <span className="text-xs text-blue-600">(시간표에서 선택됨)</span>}
+                  </label>
+                  <Input
                     value={formData.subject}
-                    onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                    readOnly
+                    className="bg-gray-50"
+                    placeholder="시간표에서 과목을 클릭하세요"
                     required
-                  >
-                    <option value="">과목 선택</option>
-                    {uniqueSubjects.map((subject) => (
-                      <option key={subject} value={subject}>{subject}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">교시</label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={formData.classTime}
-                    onChange={(e) => setFormData({ ...formData, classTime: e.target.value })}
+                  <label className="block text-sm font-medium mb-1">
+                    교시 {formData.classTime && <span className="text-xs text-blue-600">(시간표에서 선택됨)</span>}
+                  </label>
+                  <Input
+                    value={formData.classTime ? `${formData.classTime}교시` : ""}
+                    readOnly
+                    className="bg-gray-50"
+                    placeholder="시간표에서 과목을 클릭하세요"
                     required
-                  >
-                    <option value="">교시 선택</option>
-                    {Array.from({ length: 7 }, (_, i) => i + 1).map((time) => (
-                      <option key={time} value={time.toString()}>{time}교시</option>
-                    ))}
-                  </select>
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">차수</label>
