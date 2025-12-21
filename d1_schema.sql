@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS performance_assessments (
   dueDate TEXT NOT NULL,
   grade INTEGER NOT NULL,
   classNum INTEGER NOT NULL,
+  classTime INTEGER,
   isDone INTEGER DEFAULT 0,
   createdAt TEXT DEFAULT (datetime('now'))
 );

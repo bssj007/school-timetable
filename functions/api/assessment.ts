@@ -31,16 +31,18 @@ export const onRequest = async (context: any) => {
         // POST: 추가
         if (request.method === 'POST') {
             const body = await request.json();
-            const { subject, title, dueDate, description, grade, classNum } = body;
+            const { subject, title, dueDate, description, grade, classNum, classTime } = body;
 
             if (!subject || !title || !dueDate || !grade || !classNum) {
                 return new Response("Missing required fields", { status: 400 });
             }
 
+            console.log('[Assessment API] Creating:', { subject, title, dueDate, grade, classNum, classTime });
+
             const result = await env.DB.prepare(
-                `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, isDone) 
-                 VALUES (?, ?, ?, ?, ?, ?, 0)`
-            ).bind(subject, title, description || '', dueDate, grade, classNum).run();
+                `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
+            ).bind(subject, title, description || '', dueDate, grade, classNum, classTime || null).run();
 
             return new Response(JSON.stringify({ success: true, result }), {
                 headers: { 'Content-Type': 'application/json' }
