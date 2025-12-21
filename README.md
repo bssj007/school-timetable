@@ -2,14 +2,30 @@
 
 실시간으로 컴시간 알리미에서 시간표 데이터를 가져와 관리하고, 수행평가를 추적하는 웹 애플리케이션
 
+## ⚠️ **중요: 데이터베이스 마이그레이션 필요!**
+
+**수행평가가 시간표에 표시되지 않는 경우**, Cloudflare D1 데이터베이스를 업데이트해야 합니다:
+
+```bash
+# Cloudflare Dashboard 접속
+# Workers & Pages > D1 > school-timetable-db > Console 탭
+
+# 다음 SQL 명령어 실행:
+ALTER TABLE performance_assessments ADD COLUMN classTime INTEGER;
+
+# 기존 데이터 삭제 (classTime이 null이므로)
+DELETE FROM performance_assessments;
+```
+
 ## ✨ 주요 기능
 
-- � **실시간 시간표 조회**: 컴시간 알리미 API와 자동 연동
+- 📅 **실시간 시간표 조회**: 컴시간 알리미 API와 자동 연동
 - 📝 **수행평가 관리**: 과목별 수행평가 일정 및 진행 상황 추적
 - 🔍 **학교 검색**: 전국 모든 학교 검색 및 시간표 조회
 - 🎯 **모든 학년/반 지원**: 1-3학년, 모든 반의 시간표 조회 가능
+- 📍 **교시별 수행평가**: 시간표에 수행평가 위치 표시
 
-## �🚀 빠른 시작
+## 🚀 빠른 시작
 
 ### 로컬 개발
 
