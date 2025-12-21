@@ -235,14 +235,18 @@ export default function Dashboard() {
           classTime: data.classTime ? parseInt(data.classTime) : null,
         }),
       });
-      if (!res.ok) throw new Error('Failed to create');
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to create');
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assessments'] });
       toast.success("수행평가가 등록되었습니다");
     },
-    onError: () => toast.error("등록 실패")
+    onError: (error) => toast.error(error.message || "등록 실패")
   });
 
   // 5. 수행평가 삭제
