@@ -69,28 +69,37 @@ export default function Dashboard() {
         throw new Error('학교, 학년, 반 정보가 필요합니다');
       }
 
+      console.log('[Dashboard] Fetching timetable:', { schoolName, grade, classNum });
+
       const res = await fetch('/api/trpc/timetable.fetchFromComcigan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          schoolName,
-          grade: parseInt(grade),
-          classNum: parseInt(classNum),
+          input: {
+            schoolName,
+            grade: parseInt(grade),
+            classNum: parseInt(classNum),
+          }
         }),
       });
 
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || '시간표 가져오기 실패');
+        const errorText = await res.text();
+        console.error('[Dashboard] API Error:', errorText);
+        throw new Error('시간표 가져오기 실패: ' + res.status);
       }
 
-      return res.json();
+      const result = await res.json();
+      console.log('[Dashboard] API Response:', result);
+      return result;
     },
     onSuccess: (data) => {
-      toast.success(data.result?.data?.message || '시간표를 성공적으로 가져왔습니다!');
+      const message = data?.result?.data?.message || '시간표를 성공적으로 가져왔습니다!';
+      toast.success(message);
       refetchTimetable();
     },
     onError: (error: Error) => {
+      console.error('[Dashboard] Mutation error:', error);
       toast.error(error.message || '시간표 가져오기 실패');
     },
   });

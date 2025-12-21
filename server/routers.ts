@@ -25,7 +25,7 @@ export const appRouter = router({
     }),
 
     // 컴시간알리미에서 시간표 가져오기
-    fetchFromComcigan: protectedProcedure
+    fetchFromComcigan: publicProcedure
       .input((val: unknown) => {
         if (typeof val !== "object" || val === null) throw new Error("Invalid input");
         const obj = val as Record<string, unknown>;
@@ -37,12 +37,16 @@ export const appRouter = router({
       })
       .mutation(async ({ input }) => {
         try {
+          console.log('[Router] Fetching from Comcigan:', input);
+
           // 컴시간알리미에서 데이터 가져오기
           const timetableData = await fetchTimetableFromComcigan(
             input.schoolName,
             input.grade,
             input.classNum
           );
+
+          console.log('[Router] Fetched data count:', timetableData.length);
 
           // 데이터베이스에 저장
           await saveTimetableData(timetableData);
