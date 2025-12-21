@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState, useMemo } from "react";
 import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
@@ -85,6 +86,7 @@ export default function Dashboard() {
   const [weekOffset, setWeekOffset] = useState(0);
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
   const [selectedCell, setSelectedCell] = useState<{ weekday: number, classTime: number } | null>(null);
+  const [showDialog, setShowDialog] = useState(false);
 
   const [formData, setFormData] = useState({
     assessmentDate: "",
@@ -98,16 +100,13 @@ export default function Dashboard() {
   const handleCellClick = (weekdayIdx: number, classTime: number, subject: string, date: Date) => {
     setSelectedCell({ weekday: weekdayIdx, classTime });
     setFormData({
-      ...formData,
       assessmentDate: toDateString(date),
       subject: subject,
+      content: "",
       classTime: classTime.toString(),
+      round: "1",
     });
-
-    // 수행평가 입력 폼으로 스크롤
-    setTimeout(() => {
-      document.getElementById('assessment-form')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 100);
+    setShowDialog(true); // 다이얼로그 열기
   };
 
   // 1. 시간표 조회
@@ -261,6 +260,8 @@ export default function Dashboard() {
         classTime: "",
         round: "1",
       });
+      setShowDialog(false); // 다이얼로그 닫기
+      setSelectedCell(null); // 선택 셀 해제
     } catch (error) {
       console.error("수행평가 생성 실패:", error);
     }
@@ -350,9 +351,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* 왼쪽: 시간표 */}
-        <div className="lg:col-span-2">
+      <div>
+        {/* 시간표 */}
+        <div>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
@@ -415,8 +416,8 @@ export default function Dashboard() {
                               key={weekdayIdx}
                               onClick={() => item && handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx])}
                               className={`border p-2 text-center h-24 relative transition-colors cursor-pointer
-                                ${cellAssessments.length > 0 ? "bg-red-50" : ""}
-                                ${isSelected ? "ring-2 ring-blue-500 bg-blue-50" : "hover:bg-gray-100"}
+                                ${cellAssessments.length > 0 ? "bg-blue-50" : ""}
+                                ${isSelected ? "ring-2 ring-blue-500 bg-blue-100" : "hover:bg-gray-100"}
                                 ${item ? "" : "cursor-default"}
                               `}
                             >
@@ -427,7 +428,7 @@ export default function Dashboard() {
                                   {cellAssessments.length > 0 && (
                                     <div className="mt-2 flex flex-wrap gap-1 justify-center">
                                       {cellAssessments.map(a => (
-                                        <span key={a.id} className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full">
+                                        <span key={a.id} className="text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded-full">
                                           {a.description || '수행평가'}
                                         </span>
                                       ))}
@@ -449,47 +450,20 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* 오른쪽: 수행평가 관리 */}
-        <div>
-          <Card className="mb-8" id="assessment-form">
-            <CardHeader>
-              <CardTitle>수행평가 추가</CardTitle>
-              <p className="text-sm text-gray-500 mt-1">
-                💡 시간표의 과목을 클릭하면 자동으로 입력됩니다
-              </p>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+        {/* 수행평가 추가 다이얼로그 */}
+        <Dialog open={showDialog} onOpenChange={setShowDialog}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>수행평가 추가</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">날짜</label>
                   <Input
                     type="date"
                     value={formData.assessmentDate}
                     onChange={(e) => setFormData({ ...formData, assessmentDate: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    과목 {formData.subject && <span className="text-xs text-blue-600">(시간표에서 선택됨)</span>}
-                  </label>
-                  <Input
-                    value={formData.subject}
-                    readOnly
-                    className="bg-gray-50"
-                    placeholder="시간표에서 과목을 클릭하세요"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    교시 {formData.classTime && <span className="text-xs text-blue-600">(시간표에서 선택됨)</span>}
-                  </label>
-                  <Input
-                    value={formData.classTime ? `${formData.classTime}교시` : ""}
-                    readOnly
-                    className="bg-gray-50"
-                    placeholder="시간표에서 과목을 클릭하세요"
                     required
                   />
                 </div>
@@ -506,75 +480,106 @@ export default function Dashboard() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">내용</label>
-                  <Textarea
-                    value={formData.content}
-                    onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                    placeholder="수행평가 내용 입력"
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full">
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  과목
+                </label>
+                <Input
+                  value={formData.subject}
+                  readOnly
+                  className="bg-gray-100"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  교시
+                </label>
+                <Input
+                  value={formData.classTime ? `${formData.classTime}교시` : ""}
+                  readOnly
+                  className="bg-gray-100"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">내용</label>
+                <Textarea
+                  value={formData.content}
+                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                  placeholder="수행평가 내용 입력"
+                  required
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setShowDialog(false)} className="flex-1">
+                  취소
+                </Button>
+                <Button type="submit" className="flex-1">
                   <Plus className="mr-2 h-4 w-4" />
                   추가하기
                 </Button>
-              </form>
-            </CardContent>
-          </Card>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>이번 주 수행평가 ({weekRangeText})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {assessments && assessments.length > 0 ? (
-                  assessments.map((assessment) => (
-                    <div
-                      key={assessment.id}
-                      className="flex items-start justify-between p-4 border rounded-lg hover:shadow-sm transition-shadow bg-white"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-lg text-gray-900">
-                            {assessment.subject}
+        {/* 수행평가 목록 */}
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle>이번 주 수행평가 ({weekRangeText})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {assessments && assessments.length > 0 ? (
+                assessments.map((assessment) => (
+                  <div
+                    key={assessment.id}
+                    className="flex flex-col p-4 border rounded-lg hover:shadow-md transition-shadow bg-white"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-lg text-gray-900">
+                          {assessment.subject}
+                        </span>
+                        {assessment.description && (
+                          <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">
+                            {assessment.description}
                           </span>
-                          {assessment.description && (
-                            <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">
-                              {assessment.description}
-                            </span>
-                          )}
-                          {assessment.classTime && (
-                            <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
-                              {assessment.classTime}교시
-                            </span>
-                          )}
-                          <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
-                            {assessment.dueDate}
-                          </span>
-                        </div>
-                        <p className="text-gray-700">{assessment.title}</p>
+                        )}
                       </div>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                        className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 w-8"
                         onClick={() => handleDelete(assessment.id)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    이번 주 등록된 수행평가가 없습니다.
+                    <p className="text-gray-700 mb-2">{assessment.title}</p>
+                    <div className="flex items-center gap-2 mt-auto">
+                      {assessment.classTime && (
+                        <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                          {assessment.classTime}교시
+                        </span>
+                      )}
+                      <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+                        {assessment.dueDate}
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                ))
+              ) : (
+                <div className="col-span-full text-center py-12 text-gray-500">
+                  이번 주 등록된 수행평가가 없습니다.
+                  <br />
+                  <span className="text-sm">시간표에서 과목을 클릭하여 추가하세요.</span>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
