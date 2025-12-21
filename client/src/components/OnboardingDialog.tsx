@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useUserConfig } from "@/hooks/useUserConfig";
+import { useUserConfig } from "@/contexts/UserConfigContext";
 
 export default function OnboardingDialog() {
     const { isConfigured, setConfig } = useUserConfig();

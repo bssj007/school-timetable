@@ -7,7 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Dashboard from "./pages/Dashboard";
 import Navigation from "./components/Navigation";
 import OnboardingDialog from "./components/OnboardingDialog";
-import { UserConfigProvider } from "@/hooks/useUserConfig";
+import { UserConfigProvider } from "@/contexts/UserConfigContext";
 
 function Router() {
   return (

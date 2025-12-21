@@ -43,10 +43,9 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     const isConfigured = !!(config.grade && config.classNum);
 
     return (
-        <UserConfigContext.Provider value= {{ grade: config.grade, classNum: config.classNum, setConfig, isConfigured }
-}>
-    { children }
-    </UserConfigContext.Provider>
+        <UserConfigContext.Provider value={{ grade: config.grade, classNum: config.classNum, setConfig, isConfigured }}>
+            {children}
+        </UserConfigContext.Provider>
     );
 }
 

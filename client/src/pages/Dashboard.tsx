@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo } from "react";
 import { Loader2, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { useUserConfig } from "@/hooks/useUserConfig";
+import { useUserConfig } from "@/contexts/UserConfigContext";
 // Dialog imports removed as they are no longer used
 import {
   Select,
