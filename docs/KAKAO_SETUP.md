@@ -124,13 +124,32 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE performance_assessments ADD COLUMN userId INTEGER;
 ```
 
-### Cloudflare Workers Cron 활성화
-```
-Cloudflare Dashboard > Workers & Pages > school-timetable > Triggers
+### Cloudflare Pages Cron 활성화
 
-Cron Triggers:
-- Schedule: 0 0 * * * (매일 UTC 0시 = KST 9시)
-- Status: Enabled ✓
+⚠️ **중요**: Cloudflare Pages는 wrangler.toml에서 cron 설정을 지원하지 않습니다.
+대신 직접 Dashboard에서 설정해야 합니다:
+
+```
+1. Cloudflare Dashboard 접속
+   https://dash.cloudflare.com
+
+2. Workers & Pages > school-timetable 선택
+
+3. Settings > Functions > Cron Triggers 탭
+
+4. Add Cron Trigger 클릭
+   - Cron expression: 0 0 * * *
+   - 설명: Daily assessment reminder at 9 AM KST
+   
+5. 저장
+
+참고: UTC 0시 = KST 9시
+```
+
+또는 현재는 **Cloudflare Pages에서 scheduled handlers (_scheduled.ts)를 완전히 지원하지 않습니다**.
+대안:
+- External cron service (cron-job.org, EasyCron 등) 사용
+- Cloudflare Worker로 별도 배포
 ```
 
 ---
@@ -160,7 +179,7 @@ Cron Triggers:
 ## 🔐 보안 고려사항
 
 1. **토큰 저장**
-   - Access token은 DB에 암호화 없이 저장 (주의!)
+   - Access token은 DB에 암호화 없이   저장 (주의!)
    - 프로덕션에서는 암호화 권장
 
 2. **권한 관리**
