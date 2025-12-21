@@ -326,18 +326,18 @@ export default function Dashboard() {
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold mb-2">
+          <h1 className="text-xl md:text-3xl font-bold mb-1">
             {schoolName || '학교'} {grade || '?'}-{classNum || '?'} 시간표
           </h1>
-          <p className="text-gray-600">시간표와 수행평가를 한눈에 확인하세요</p>
+          <p className="text-sm md:text-base text-gray-600">시간표와 수행평가를 한눈에 확인하세요</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <Select value={grade || ""} onValueChange={(val) => setConfig({ grade: val })}>
-            <SelectTrigger className="w-[80px]">
+            <SelectTrigger className="w-[70px] md:w-[80px] h-8 md:h-10 text-xs md:text-sm">
               <SelectValue placeholder="학년" />
             </SelectTrigger>
             <SelectContent>
@@ -348,7 +348,7 @@ export default function Dashboard() {
           </Select>
 
           <Select value={classNum || ""} onValueChange={(val) => setConfig({ classNum: val })}>
-            <SelectTrigger className="w-[80px]">
+            <SelectTrigger className="w-[70px] md:w-[80px] h-8 md:h-10 text-xs md:text-sm">
               <SelectValue placeholder="반" />
             </SelectTrigger>
             <SelectContent>
@@ -363,20 +363,21 @@ export default function Dashboard() {
             disabled={fetchFromComcigan.isPending || !schoolName}
             variant="outline"
             size="sm"
+            className="h-8 md:h-10 text-xs md:text-sm"
           >
             {fetchFromComcigan.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin mr-1 md:mr-2" />
             ) : (
-              <Download className="h-4 w-4 mr-2" />
+              <Download className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
             )}
-            시간표 불러오기
+            불러오기
           </Button>
 
           <Button
             onClick={() => window.location.href = '/api/kakao/login'}
             variant="default"
             size="sm"
-            className="bg-yellow-400 hover:bg-yellow-500 text-gray-900"
+            className="bg-yellow-400 hover:bg-yellow-500 text-gray-900 h-8 md:h-10 text-xs md:text-sm ml-auto md:ml-0"
           >
             <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 3C6.48 3 2 6.93 2 11.75c0 3.14 2.13 5.88 5.28 7.24-.22 1.02-.89 3.61-.92 3.87 0 .03-.03.17.09.23.12.07.29.04.29.04.39-.07 4.54-3.04 5.26-3.61 12 .38 12 .38 12-7.77 12-11.75C22 6.93 17.52 3 12 3z" />
@@ -413,11 +414,11 @@ export default function Dashboard() {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr>
-                      <th className="border p-2 bg-gray-50 w-16">교시</th>
+                      <th className="border p-1 md:p-2 bg-gray-50 w-12 md:w-16 text-sm font-medium">교시</th>
                       {weekdayNames.map((day, idx) => (
-                        <th key={day} className="border p-2 bg-gray-50">
-                          <div>{day}</div>
-                          <div className="text-xs text-gray-500 font-normal">
+                        <th key={day} className="border p-1 md:p-2 bg-gray-50">
+                          <div className="text-sm font-semibold">{day}</div>
+                          <div className="text-[10px] md:text-xs text-gray-500 font-normal">
                             {formatDate(weekDates[idx])}
                           </div>
                         </th>
@@ -427,7 +428,7 @@ export default function Dashboard() {
                   <tbody>
                     {Array.from({ length: 7 }, (_, i) => i + 1).map((classTime) => (
                       <tr key={classTime}>
-                        <td className="border p-2 text-center font-medium bg-gray-50">
+                        <td className="border p-1 md:p-2 text-center font-medium bg-gray-50 text-sm">
                           {classTime}
                         </td>
                         {Array.from({ length: 5 }, (_, weekdayIdx) => {
@@ -437,50 +438,35 @@ export default function Dashboard() {
 
                           // 해당 날짜와 교시에 수행평가가 있는지 확인
                           const cellAssessments = assessments ? assessments.filter(a => {
-                            const match = item &&
+                            return item &&
                               a.subject === item.subject &&
                               a.dueDate === currentDate &&
                               a.classTime === classTime &&
                               !a.isDone;
-
-                            // 디버깅 로그
-                            if (item && a.dueDate === currentDate) {
-                              console.log('[Cell Match Debug]', {
-                                currentDate,
-                                classTime,
-                                itemSubject: item.subject,
-                                aSubject: a.subject,
-                                aDueDate: a.dueDate,
-                                aClassTime: a.classTime,
-                                match
-                              });
-                            }
-
-                            return match;
                           }) : [];
 
                           return (
                             <td
                               key={weekdayIdx}
                               onClick={() => item && handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx], cellAssessments)}
-                              className={`border p-2 text-center h-24 relative transition-colors cursor-pointer
+                              className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors cursor-pointer
                                 ${cellAssessments.length > 0 ? "bg-blue-100 border-blue-300" : "hover:bg-gray-100"}
                                 ${item ? "" : "cursor-default"}
                               `}
                             >
                               {item ? (
-                                <div>
-                                  <div className="font-bold text-gray-900">{item.subject}</div>
-                                  <div className="text-xs text-gray-500 mt-1">{item.teacher}</div>
+                                <div className="flex flex-col items-center justify-center h-full">
+                                  <div className="font-bold text-gray-900 text-sm md:text-base leading-tight">{item.subject}</div>
+                                  <div className="text-[10px] md:text-xs text-gray-500 mt-0.5">{item.teacher}</div>
                                   {cellAssessments.length > 0 && (
-                                    <div className="mt-2">
-                                      <div className="text-xs font-semibold text-blue-700">
+                                    <div className="mt-1">
+                                      <div className="text-[10px] md:text-xs font-semibold text-blue-700 hidden md:block">
                                         📝 수행평가!
                                       </div>
-                                      <div className="flex flex-wrap gap-1 justify-center mt-1">
+                                      <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
                                         {cellAssessments.map(a => (
-                                          <span key={a.id} className="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded-full">
-                                            {a.description || '평가'}
+                                          <span key={a.id} className="text-[9px] md:text-[10px] bg-blue-600 text-white px-1 py-0.5 rounded-full leading-none">
+                                            {a.description && a.description.includes("차") ? a.description : '평가'}
                                           </span>
                                         ))}
                                       </div>
@@ -488,7 +474,7 @@ export default function Dashboard() {
                                   )}
                                 </div>
                               ) : (
-                                <span className="text-gray-300">-</span>
+                                <span className="text-gray-300 text-sm">-</span>
                               )}
                             </td>
                           );
