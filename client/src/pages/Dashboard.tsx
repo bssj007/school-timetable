@@ -5,10 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo } from "react";
-import { Loader2, Trash2, Plus, RefreshCw, Download } from "lucide-react";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
-import { trpc } from "@/lib/trpc";
 import {
   Select,
   SelectContent,
@@ -32,16 +31,53 @@ interface AssessmentItem {
   description: string;
   dueDate: string; // ISO string
   isDone: number;
+  classTime?: number; // 교시 정보 추가
+  weekday?: number; // 요일 정보 추가
+}
+
+// 주의 시작일 계산 (월요일 기준)
+function getMonday(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+}
+
+// 날짜 포맷팅
+function formatDate(date: Date): string {
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+// 주간 날짜 배열 생성
+function getWeekDates(weekOffset: number): Date[] {
+  const today = new Date();
+  const monday = getMonday(today);
+  monday.setDate(monday.getDate() + weekOffset * 7);
+
+  return Array.from({ length: 5 }, (_, i) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + i);
+    return date;
+  });
+}
+
+// 날짜를 YYYY-MM-DD 형식으로 변환
+function toDateString(date: Date): string {
+  return date.toISOString().split('T')[0];
 }
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const { schoolName, grade, classNum, isConfigured, setConfig } = useUserConfig();
 
+  const [weekOffset, setWeekOffset] = useState(0); // 0 = 이번 주, 1 = 다음 주, -1 = 지난 주
+  const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
+
   const [formData, setFormData] = useState({
     assessmentDate: "",
     subject: "",
     content: "",
+    classTime: "", // 교시 추가
   });
 
   // 1. 시간표 조회 (Comcigan API)
@@ -50,7 +86,6 @@ export default function Dashboard() {
     queryFn: async () => {
       if (!grade || !classNum) return [];
       try {
-        // Try to get from Comcigan API directly
         const response = await fetch(`/api/comcigan?type=timetable&grade=${grade}&classNum=${classNum}`);
         if (!response.ok) {
           console.warn('Failed to fetch from Comcigan, returning empty');
@@ -59,9 +94,7 @@ export default function Dashboard() {
         const result = await response.json();
         console.log('[Dashboard] Timetable data:', result);
 
-        // Parse the response
         if (result.data && Array.isArray(result.data)) {
-          // Convert weekday from 1-indexed to 0-indexed
           return result.data.map((item: any) => ({
             ...item,
             weekday: item.weekday - 1
@@ -76,7 +109,7 @@ export default function Dashboard() {
     enabled: !!grade && !!classNum && !!schoolName,
   });
 
-  // 2. 컴시간에서 시간표 가져오기 (Cloudflare Function API)
+  // 2. 컴시간에서 시간표 가져오기
   const fetchFromComcigan = useMutation({
     mutationFn: async () => {
       if (!schoolName || !grade || !classNum) {
@@ -148,7 +181,8 @@ export default function Dashboard() {
           description: "",
           dueDate: data.assessmentDate,
           grade: parseInt(grade),
-          classNum: parseInt(classNum)
+          classNum: parseInt(classNum),
+          classTime: data.classTime ? parseInt(data.classTime) : null,
         }),
       });
       if (!res.ok) throw new Error('Failed to create');
@@ -195,11 +229,13 @@ export default function Dashboard() {
         assessmentDate: formData.assessmentDate,
         subject: formData.subject,
         content: formData.content,
+        classTime: formData.classTime,
       });
       setFormData({
         assessmentDate: "",
         subject: "",
         content: "",
+        classTime: "",
       });
     } catch (error) {
       console.error("수행평가 생성 실패:", error);
@@ -239,6 +275,9 @@ export default function Dashboard() {
     );
   }
 
+  // 주간 범위 텍스트
+  const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
@@ -250,7 +289,6 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* 학년/반 선택 */}
           <Select
             value={grade || ""}
             onValueChange={(val) => setConfig({ grade: val })}
@@ -283,7 +321,6 @@ export default function Dashboard() {
             </SelectContent>
           </Select>
 
-          {/* 컴시간에서 시간표 가져오기 버튼 */}
           <Button
             onClick={() => fetchFromComcigan.mutate()}
             disabled={fetchFromComcigan.isPending || !schoolName}
@@ -306,10 +343,31 @@ export default function Dashboard() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>주간 시간표</span>
+                <div className="flex items-center gap-4">
+                  <span>주간 시간표</span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setWeekOffset(weekOffset - 1)}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm font-normal text-gray-600 min-w-[100px] text-center">
+                      {weekRangeText}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setWeekOffset(weekOffset + 1)}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
                 {timetableData && timetableData.length === 0 && (
                   <span className="text-sm font-normal text-gray-500">
-                    시간표가 없습니다. 오른쪽 "시간표 불러오기" 버튼을 클릭하세요.
+                    시간표가 없습니다. "시간표 불러오기" 버튼을 클릭하세요.
                   </span>
                 )}
               </CardTitle>
@@ -320,9 +378,12 @@ export default function Dashboard() {
                   <thead>
                     <tr>
                       <th className="border p-2 bg-gray-50 w-16">교시</th>
-                      {weekdayNames.map((day) => (
+                      {weekdayNames.map((day, idx) => (
                         <th key={day} className="border p-2 bg-gray-50">
-                          {day}
+                          <div>{day}</div>
+                          <div className="text-xs text-gray-500 font-normal">
+                            {formatDate(weekDates[idx])}
+                          </div>
                         </th>
                       ))}
                     </tr>
@@ -333,20 +394,26 @@ export default function Dashboard() {
                         <td className="border p-2 text-center font-medium bg-gray-50">
                           {classTime}
                         </td>
-                        {Array.from({ length: 5 }, (_, i) => i).map((weekday) => {
-                          const dayItems = timetableByDay[weekday] || [];
+                        {Array.from({ length: 5 }, (_, weekdayIdx) => {
+                          const dayItems = timetableByDay[weekdayIdx] || [];
                           const item = dayItems.find((t) => t.classTime === classTime);
+                          const currentDate = toDateString(weekDates[weekdayIdx]);
 
+                          // 해당 날짜와 교시에 수행평가가 있는지 확인
                           const relatedAssessment = assessments && assessments.length > 0
                             ? assessments.find(a =>
-                              item && a.subject === item.subject && !a.isDone
+                              item &&
+                              a.subject === item.subject &&
+                              a.dueDate === currentDate &&
+                              a.classTime === classTime &&
+                              !a.isDone
                             )
                             : null;
 
                           return (
                             <td
-                              key={weekday}
-                              className={`border p-2 text-center h-24 relative hover:bg-gray-50 transition-colors ${relatedAssessment ? "bg-blue-50/50" : ""
+                              key={weekdayIdx}
+                              className={`border p-2 text-center h-24 relative hover:bg-gray-50 transition-colors ${relatedAssessment ? "bg-red-50" : ""
                                 }`}
                             >
                               {item ? (
@@ -358,8 +425,8 @@ export default function Dashboard() {
                                     {item.teacher}
                                   </div>
                                   {relatedAssessment && (
-                                    <div className="mt-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full inline-block truncate max-w-full">
-                                      평가 있음
+                                    <div className="mt-2 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full inline-block truncate max-w-full">
+                                      수행평가
                                     </div>
                                   )}
                                 </div>
@@ -416,6 +483,24 @@ export default function Dashboard() {
                   </select>
                 </div>
                 <div>
+                  <label className="block text-sm font-medium mb-1">교시</label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={formData.classTime}
+                    onChange={(e) =>
+                      setFormData({ ...formData, classTime: e.target.value })
+                    }
+                    required
+                  >
+                    <option value="">교시 선택</option>
+                    {Array.from({ length: 7 }, (_, i) => i + 1).map((time) => (
+                      <option key={time} value={time.toString()}>
+                        {time}교시
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <label className="block text-sm font-medium mb-1">내용</label>
                   <Textarea
                     value={formData.content}
@@ -451,6 +536,11 @@ export default function Dashboard() {
                           <span className="font-semibold text-lg text-gray-900">
                             {assessment.subject}
                           </span>
+                          {assessment.classTime && (
+                            <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                              {assessment.classTime}교시
+                            </span>
+                          )}
                           <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
                             {assessment.dueDate}
                           </span>
