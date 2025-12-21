@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo, useEffect } from "react";
-import { Loader2, Trash2, Plus, RefreshCw, Settings } from "lucide-react";
+import { Loader2, Trash2, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useUserConfig } from "@/hooks/useUserConfig";
 import {
@@ -16,6 +16,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // 타입 정의
 interface TimetableItem {
@@ -282,10 +289,40 @@ export default function Dashboard() {
         </div>
 
         <div className="flex gap-2">
-          {/* 설정 변경 버튼 (임시) */}
-          <Button variant="outline" size="icon" onClick={() => setConfig({ grade: "", classNum: "" })} title="학년/반 다시 설정">
-            <Settings className="h-4 w-4" />
-          </Button>
+          {/* 학년/반 선택 (헤더에서 직접 변경) */}
+          <div className="flex items-center gap-2 mr-2">
+            <Select
+              value={grade || ""}
+              onValueChange={(val) => setConfig({ grade: val, classNum: classNum })}
+            >
+              <SelectTrigger className="w-[80px]">
+                <SelectValue placeholder="학년" />
+              </SelectTrigger>
+              <SelectContent>
+                {[1, 2, 3].map((g) => (
+                  <SelectItem key={g} value={g.toString()}>
+                    {g}학년
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={classNum || ""}
+              onValueChange={(val) => setConfig({ grade: grade, classNum: val })}
+            >
+              <SelectTrigger className="w-[80px]">
+                <SelectValue placeholder="반" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((c) => (
+                  <SelectItem key={c} value={c.toString()}>
+                    {c}반
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {/* 시간표 업데이트 버튼 */}
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -312,29 +349,45 @@ export default function Dashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">학년</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="3"
+                    <Select
                       value={timetableFormData.grade}
-                      onChange={(e) =>
-                        setTimetableFormData({ ...timetableFormData, grade: e.target.value })
+                      onValueChange={(val) =>
+                        setTimetableFormData({ ...timetableFormData, grade: val })
                       }
                       required
-                    />
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="학년 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3].map((g) => (
+                          <SelectItem key={g} value={g.toString()}>
+                            {g}학년
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">반</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="20"
+                    <Select
                       value={timetableFormData.classNum}
-                      onChange={(e) =>
-                        setTimetableFormData({ ...timetableFormData, classNum: e.target.value })
+                      onValueChange={(val) =>
+                        setTimetableFormData({ ...timetableFormData, classNum: val })
                       }
                       required
-                    />
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="반 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map((c) => (
+                          <SelectItem key={c} value={c.toString()}>
+                            {c}반
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <Button
