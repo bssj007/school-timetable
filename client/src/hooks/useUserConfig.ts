@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, createContext, useContext, ReactNode } from "react";
 
 export interface UserConfig {
     grade: string;
@@ -7,7 +7,16 @@ export interface UserConfig {
 
 const COOKIE_NAME = "school_timetable_config";
 
-export function useUserConfig() {
+interface UserConfigContextType {
+    grade: string;
+    classNum: string;
+    setConfig: (config: UserConfig) => void;
+    isConfigured: boolean;
+}
+
+const UserConfigContext = createContext<UserConfigContextType | undefined>(undefined);
+
+export function UserConfigProvider({ children }: { children: ReactNode }) {
     const [config, setConfigState] = useState<UserConfig>(() => {
         // 초기 로드 시 쿠키 확인
         if (typeof document === "undefined") return { grade: "", classNum: "" };
@@ -33,10 +42,18 @@ export function useUserConfig() {
 
     const isConfigured = !!(config.grade && config.classNum);
 
-    return {
-        grade: config.grade,
-        classNum: config.classNum,
-        setConfig,
-        isConfigured,
-    };
+    return (
+        <UserConfigContext.Provider value= {{ grade: config.grade, classNum: config.classNum, setConfig, isConfigured }
+}>
+    { children }
+    </UserConfigContext.Provider>
+    );
+}
+
+export function useUserConfig() {
+    const context = useContext(UserConfigContext);
+    if (context === undefined) {
+        throw new Error("useUserConfig must be used within a UserConfigProvider");
+    }
+    return context;
 }

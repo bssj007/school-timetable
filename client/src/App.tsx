@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Dashboard from "./pages/Dashboard";
 import Navigation from "./components/Navigation";
 import OnboardingDialog from "./components/OnboardingDialog";
+import { UserConfigProvider } from "./hooks/useUserConfig";
 
 function Router() {
   return (
@@ -22,12 +23,14 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
-        <TooltipProvider>
-          <Toaster />
-          <Navigation />
-          <OnboardingDialog />
-          <Router />
-        </TooltipProvider>
+        <UserConfigProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Navigation />
+            <OnboardingDialog />
+            <Router />
+          </TooltipProvider>
+        </UserConfigProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
