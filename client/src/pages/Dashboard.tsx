@@ -40,30 +40,25 @@ interface AssessmentItem {
 export default function Dashboard() {
   const queryClient = useQueryClient();
 
+
+  const { grade, classNum, isConfigured, setConfig } = useUserConfig();
+
   const [formData, setFormData] = useState({
     assessmentDate: "",
     subject: "",
     content: "",
     classTime: "",
     weekday: "",
-    const { grade, classNum, isConfigured, setConfig } = useUserConfig();
+  });
 
-    const [formData, setFormData] = useState({
-      assessmentDate: "",
-      subject: "",
-      content: "",
-      classTime: "",
-      weekday: "",
-    });
+  // 다이얼로그 폼 데이터 (기본값은 설정된 값)
+  const [timetableFormData, setTimetableFormData] = useState({
+    grade: grade || "1",
+    classNum: classNum || "1",
+  });
 
-    // 다이얼로그 폼 데이터 (기본값은 설정된 값)
-    const [timetableFormData, setTimetableFormData] = useState({
-      grade: grade || "1",
-      classNum: classNum || "1",
-    });
-
-    // 설정이 변경되면 폼 데이터도 업데이트
-    useEffect(() => {
+  // 설정이 변경되면 폼 데이터도 업데이트
+  useEffect(() => {
     if (grade && classNum) {
       setTimetableFormData({ grade, classNum });
     }
@@ -122,7 +117,7 @@ export default function Dashboard() {
           subject: data.subject,
           description: "",
           dueDate: data.assessmentDate,
-          dueDate: data.assessmentDate,
+
           grade: parseInt(grade),
           classNum: parseInt(classNum)
         }),
@@ -295,68 +290,71 @@ export default function Dashboard() {
           {/* 시간표 업데이트 버튼 */}
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              시간표 업데이트
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>시간표 가져오기</DialogTitle>
-              <DialogDescription>
-                컴시간알리미에서 최신 시간표를 가져옵니다.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleFetchTimetable} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">학교</label>
-                <div className="p-2 bg-gray-100 rounded-md text-gray-700 font-medium">
-                  부산성지고등학교
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">학년</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="3"
-                    value={timetableFormData.grade}
-                    onChange={(e) =>
-                      setTimetableFormData({ ...timetableFormData, grade: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">반</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="20"
-                    value={timetableFormData.classNum}
-                    onChange={(e) =>
-                      setTimetableFormData({ ...timetableFormData, classNum: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-              </div>
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isFetchingTimetable}
-              >
-                {isFetchingTimetable ? (
-                  <>
-                    <Loader2 className="animate-spin mr-2 h-4 w-4" />
-                    가져오는 중...
-                  </>
-                ) : (
-                  "시간표 가져오기"
-                )}
+              <Button variant="outline">
+                <RefreshCw className="mr-2 h-4 w-4" />
+                시간표 업데이트
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>시간표 가져오기</DialogTitle>
+                <DialogDescription>
+                  컴시간알리미에서 최신 시간표를 가져옵니다.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleFetchTimetable} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">학교</label>
+                  <div className="p-2 bg-gray-100 rounded-md text-gray-700 font-medium">
+                    부산성지고등학교
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">학년</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="3"
+                      value={timetableFormData.grade}
+                      onChange={(e) =>
+                        setTimetableFormData({ ...timetableFormData, grade: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">반</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={timetableFormData.classNum}
+                      onChange={(e) =>
+                        setTimetableFormData({ ...timetableFormData, classNum: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isFetchingTimetable}
+                >
+                  {isFetchingTimetable ? (
+                    <>
+                      <Loader2 className="animate-spin mr-2 h-4 w-4" />
+                      가져오는 중...
+                    </>
+                  ) : (
+                    "시간표 가져오기"
+                  )}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
