@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useMemo } from "react";
-import { Loader2, Trash2, Plus } from "lucide-react";
+import { Loader2, Trash2, Plus, RefreshCw, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
-// Dialog imports removed as they are no longer used
+import { trpc } from "@/lib/trpc";
 import {
   Select,
   SelectContent,
@@ -32,52 +32,70 @@ interface AssessmentItem {
   description: string;
   dueDate: string; // ISO string
   isDone: number;
-  // UI 매핑용 (DB에는 없음)
-  assessmentDate?: string;
-  classTime?: string;
 }
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
-
-
-  const { grade, classNum, isConfigured, setConfig } = useUserConfig();
+  const { schoolName, grade, classNum, isConfigured, setConfig } = useUserConfig();
 
   const [formData, setFormData] = useState({
     assessmentDate: "",
     subject: "",
     content: "",
-    classTime: "",
-    weekday: "",
   });
 
-  // 1. 시간표 조회 (자동 새로고침)
-  const { data: timetableData, isLoading: timetableLoading } = useQuery({
+  // 1. 시간표 조회 (tRPC)
+  const { data: timetableData, isLoading: timetableLoading, refetch: refetchTimetable } = useQuery({
     queryKey: ['timetable', grade, classNum],
     queryFn: async () => {
       if (!grade || !classNum) return [];
       try {
-        // 성지고 코드: 7530560
-        const response = await fetch(`/api/comcigan?type=timetable&schoolCode=7530560&grade=${grade}&classNum=${classNum}`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch timetable");
-        }
+        const response = await fetch(`/api/trpc/timetable.get`);
+        if (!response.ok) throw new Error("Failed to fetch timetable");
         const result = await response.json();
-
-        // API 응답 구조 확인
-        if (result.data && Array.isArray(result.data)) return result.data as TimetableItem[];
-        if (Array.isArray(result)) return result as TimetableItem[];
-        return [] as TimetableItem[];
+        return (result.result?.data || []) as TimetableItem[];
       } catch (e) {
         console.error('Failed to fetch timetable', e);
         return [] as TimetableItem[];
       }
     },
     enabled: !!grade && !!classNum,
-    refetchInterval: 60 * 1000 // 1분마다 자동 갱신
   });
 
-  // 2. 수행평가 목록 조회 (D1 API)
+  // 2. 컴시간에서 시간표 가져오기 (tRPC mutation)
+  const fetchFromComcigan = useMutation({
+    mutationFn: async () => {
+      if (!schoolName || !grade || !classNum) {
+        throw new Error('학교, 학년, 반 정보가 필요합니다');
+      }
+
+      const res = await fetch('/api/trpc/timetable.fetchFromComcigan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schoolName,
+          grade: parseInt(grade),
+          classNum: parseInt(classNum),
+        }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || '시간표 가져오기 실패');
+      }
+
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast.success(data.result?.data?.message || '시간표를 성공적으로 가져왔습니다!');
+      refetchTimetable();
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || '시간표 가져오기 실패');
+    },
+  });
+
+  // 3. 수행평가 목록 조회
   const { data: assessments, isLoading: assessmentLoading } = useQuery({
     queryKey: ['assessments', grade, classNum],
     queryFn: async () => {
@@ -93,21 +111,21 @@ export default function Dashboard() {
         console.warn('Failed to fetch assessments:', e);
         return [] as AssessmentItem[];
       }
-    }
+    },
+    enabled: !!grade && !!classNum,
   });
 
-  // 3. 수행평가 추가 (D1 API)
+  // 4. 수행평가 추가
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch('/api/assessment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: data.content, // content를 title로 사용
+          title: data.content,
           subject: data.subject,
           description: "",
           dueDate: data.assessmentDate,
-
           grade: parseInt(grade),
           classNum: parseInt(classNum)
         }),
@@ -122,7 +140,7 @@ export default function Dashboard() {
     onError: () => toast.error("등록 실패")
   });
 
-  // 4. 수행평가 삭제 (D1 API)
+  // 5. 수행평가 삭제
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await fetch(`/api/assessment?id=${id}`, { method: 'DELETE' });
@@ -135,7 +153,7 @@ export default function Dashboard() {
     }
   });
 
-  // 시간표에서 고유한 과목 목록 추출 (창체, 채플 제외)
+  // 시간표에서 고유한 과목 목록 추출
   const uniqueSubjects = useMemo(() => {
     if (!timetableData || !Array.isArray(timetableData)) return [];
     const subjects = new Set<string>();
@@ -156,15 +174,11 @@ export default function Dashboard() {
         assessmentDate: formData.assessmentDate,
         subject: formData.subject,
         content: formData.content,
-        classTime: formData.classTime ? parseInt(formData.classTime) : undefined,
-        weekday: formData.weekday ? parseInt(formData.weekday) : undefined,
       });
       setFormData({
         assessmentDate: "",
         subject: "",
         content: "",
-        classTime: "",
-        weekday: "",
       });
     } catch (error) {
       console.error("수행평가 생성 실패:", error);
@@ -193,24 +207,6 @@ export default function Dashboard() {
     });
   }
 
-  // 수행평가 데이터를 날짜 매핑 (UI 표시용 로직 개선 필요)
-  // 여기서는 간단히 날짜가 일치하면 표시하도록 함
-  // 실제로는 시간표와 매핑하려면 요일/교시 정보가 필요하지만, D1 스키마에는 날짜만 있음.
-  // 따라서 캘린더나 목록 형태로 보여주는 것이 적절함.
-  // 현재 UI 구조상 시간표 셀에 표시하려면 날짜 계산이 필요.
-  // (일단 기존 로직 유지하되, 날짜가 있으면 표시)
-
-  const assessmentMap: Record<string, AssessmentItem[]> = {};
-  /*
-    TODO: 날짜 -> 요일/교시 매핑 로직이 필요함.
-    현재는 D1 스키마에 classTime이 없으므로, 정확한 시간표 셀에 매핑하기 어려움.
-    따라서 시간표 셀에는 '과목'이 일치하면 표시하거나, 별도 목록으로 보여줘야 함.
-    여기서는 '과목' 기준으로 매핑을 시도하거나, 날짜가 이번주에 해당하면 표시하는 로직 필요.
-    
-    일단 기존 로직(날짜 문자열 직접 비교)은 작동하지 않을 수 있음.
-    임시로 과목명 매핑을 사용하거나, 별도 렌더링.
-  */
-
   const isLoading = timetableLoading || assessmentLoading;
 
   if (isLoading) {
@@ -227,46 +223,59 @@ export default function Dashboard() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold mb-2">
-            부산성지고 {grade || '?'}-{classNum || '?'} 시간표
+            {schoolName || '학교'} {grade || '?'}-{classNum || '?'} 시간표
           </h1>
           <p className="text-gray-600">시간표와 수행평가를 한눈에 확인하세요</p>
         </div>
 
-        <div className="flex gap-2">
-          {/* 학년/반 선택 (헤더에서 직접 변경) */}
-          <div className="flex items-center gap-2 mr-2">
-            <Select
-              value={grade || ""}
-              onValueChange={(val) => setConfig({ grade: val, classNum: classNum })}
-            >
-              <SelectTrigger className="w-[80px]">
-                <SelectValue placeholder="학년" />
-              </SelectTrigger>
-              <SelectContent>
-                {[1, 2, 3].map((g) => (
-                  <SelectItem key={g} value={g.toString()}>
-                    {g}학년
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="flex items-center gap-2">
+          {/* 학년/반 선택 */}
+          <Select
+            value={grade || ""}
+            onValueChange={(val) => setConfig({ grade: val })}
+          >
+            <SelectTrigger className="w-[80px]">
+              <SelectValue placeholder="학년" />
+            </SelectTrigger>
+            <SelectContent>
+              {[1, 2, 3].map((g) => (
+                <SelectItem key={g} value={g.toString()}>
+                  {g}학년
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-            <Select
-              value={classNum || ""}
-              onValueChange={(val) => setConfig({ grade: grade, classNum: val })}
-            >
-              <SelectTrigger className="w-[80px]">
-                <SelectValue placeholder="반" />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((c) => (
-                  <SelectItem key={c} value={c.toString()}>
-                    {c}반
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Select
+            value={classNum || ""}
+            onValueChange={(val) => setConfig({ classNum: val })}
+          >
+            <SelectTrigger className="w-[80px]">
+              <SelectValue placeholder="반" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((c) => (
+                <SelectItem key={c} value={c.toString()}>
+                  {c}반
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* 컴시간에서 시간표 가져오기 버튼 */}
+          <Button
+            onClick={() => fetchFromComcigan.mutate()}
+            disabled={fetchFromComcigan.isPending || !schoolName}
+            variant="outline"
+            size="sm"
+          >
+            {fetchFromComcigan.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
+            시간표 불러오기
+          </Button>
         </div>
       </div>
 
@@ -275,7 +284,14 @@ export default function Dashboard() {
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>주간 시간표</CardTitle>
+              <CardTitle className="flex items-center justify-between">
+                <span>주간 시간표</span>
+                {timetableData && timetableData.length === 0 && (
+                  <span className="text-sm font-normal text-gray-500">
+                    시간표가 없습니다. 오른쪽 "시간표 불러오기" 버튼을 클릭하세요.
+                  </span>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -296,12 +312,10 @@ export default function Dashboard() {
                         <td className="border p-2 text-center font-medium bg-gray-50">
                           {classTime}
                         </td>
-                        {Array.from({ length: 5 }, (_, i) => i + 1).map((weekday) => {
+                        {Array.from({ length: 5 }, (_, i) => i).map((weekday) => {
                           const dayItems = timetableByDay[weekday] || [];
                           const item = dayItems.find((t) => t.classTime === classTime);
 
-                          // 현재는 시간표 셀에 직접 수행평가를 표시하는 로직이 복잡하여
-                          // 과목이 일치하는 수행평가가 있으면 표시하도록 함
                           const relatedAssessment = assessments && assessments.length > 0
                             ? assessments.find(a =>
                               item && a.subject === item.subject && !a.isDone

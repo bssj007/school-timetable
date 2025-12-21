@@ -1,6 +1,7 @@
 import { useState, createContext, useContext, ReactNode } from "react";
 
 export interface UserConfig {
+    schoolName: string;
     grade: string;
     classNum: string;
 }
@@ -8,9 +9,10 @@ export interface UserConfig {
 const COOKIE_NAME = "school_timetable_config";
 
 interface UserConfigContextType {
+    schoolName: string;
     grade: string;
     classNum: string;
-    setConfig: (config: UserConfig) => void;
+    setConfig: (config: Partial<UserConfig>) => void;
     isConfigured: boolean;
 }
 
@@ -19,7 +21,7 @@ const UserConfigContext = createContext<UserConfigContextType | undefined>(undef
 export function UserConfigProvider({ children }: { children: ReactNode }) {
     const [config, setConfigState] = useState<UserConfig>(() => {
         // 초기 로드 시 쿠키 확인
-        if (typeof document === "undefined") return { grade: "", classNum: "" };
+        if (typeof document === "undefined") return { schoolName: "", grade: "", classNum: "" };
 
         const match = document.cookie.match(new RegExp('(^| )' + COOKIE_NAME + '=([^;]+)'));
         if (match) {
@@ -29,21 +31,28 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
                 console.error("Failed to parse config cookie", e);
             }
         }
-        return { grade: "", classNum: "" };
+        return { schoolName: "", grade: "", classNum: "" };
     });
 
-    const setConfig = (newConfig: UserConfig) => {
-        setConfigState(newConfig);
+    const setConfig = (newConfig: Partial<UserConfig>) => {
+        const updated = { ...config, ...newConfig };
+        setConfigState(updated);
         // 쿠키 저장 (만료 1년)
         const expires = new Date();
         expires.setFullYear(expires.getFullYear() + 1);
-        document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(newConfig))}; expires=${expires.toUTCString()}; path=/`;
+        document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(updated))}; expires=${expires.toUTCString()}; path=/`;
     };
 
-    const isConfigured = !!(config.grade && config.classNum);
+    const isConfigured = !!(config.schoolName && config.grade && config.classNum);
 
     return (
-        <UserConfigContext.Provider value={{ grade: config.grade, classNum: config.classNum, setConfig, isConfigured }}>
+        <UserConfigContext.Provider value={{
+            schoolName: config.schoolName,
+            grade: config.grade,
+            classNum: config.classNum,
+            setConfig,
+            isConfigured
+        }}>
             {children}
         </UserConfigContext.Provider>
     );
