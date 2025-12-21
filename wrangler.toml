@@ -7,3 +7,7 @@ pages_build_output_dir = "dist/public"
 binding = "DB"
 database_name = "school-timetable-db"
 database_id = "b35d2ce4-8ba8-4b6f-92fc-b0c94b9519ce"
+
+# Cron 트리거 - 매일 아침 9시 (KST = UTC+9, 따라서 UTC 0시)
+[triggers]
+crons = ["0 0 * * *"]  # 매일 UTC 0시 = KST 9시
