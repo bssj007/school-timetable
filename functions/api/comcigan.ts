@@ -93,65 +93,29 @@ export const onRequest = async (context: any) => {
     const method = context.request.method;
 
     try {
-        // POST method: Fetch from Comcigan and save to D1
+        // POST method: Simple fetch and return without DB save
         if (method === 'POST') {
             const body = await context.request.json();
             const { schoolName, grade, classNum } = body;
 
-            console.log('[Comcigan API] Fetching:', { schoolName, grade, classNum });
+            console.log('[Comcigan API] POST request:', { schoolName, grade, classNum });
 
-            // Fetch timetable
+            // Just fetch the timetable and return it
+            // D1 save will be handled client-side or later
             const timetableResponse = await getTimetable(grade, classNum);
             const timetableJson = await timetableResponse.json();
-            const timetableData = timetableJson.data;
-
-            console.log('[Comcigan API] Fetched', timetableData.length, 'entries');
-
-            // Save to D1
-            const db = context.env.DB;
-            if (!db) {
-                console.warn('[Comcigan API] No DB available, returning data without saving');
-                return new Response(JSON.stringify({
-                    success: true,
-                    message: `${schoolName} ${grade}학년 ${classNum}반 시간표를 가져왔습니다.`,
-                    count: timetableData.length,
-                }), {
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            }
-
-            // Delete existing timetable for this grade/class
-            await db.prepare(`
-                DELETE FROM timetable 
-                WHERE grade = ? AND class = ?
-            `).bind(grade, classNum).run();
-
-            // Insert new timetable data
-            for (const item of timetableData) {
-                await db.prepare(`
-                    INSERT INTO timetable (
-                        schoolCode, schoolName, region, grade, class, 
-                        weekday, classTime, subject, teacher
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `).bind(
-                    93342,
-                    schoolName || '부산성지고등학교',
-                    '부산',
-                    item.grade,
-                    item.class,
-                    item.weekday - 1, // Convert to 0-indexed
-                    item.classTime,
-                    item.subject,
-                    item.teacher
-                ).run();
-            }
 
             return new Response(JSON.stringify({
                 success: true,
-                message: `${schoolName} ${grade}학년 ${classNum}반 시간표를 성공적으로 가져왔습니다.`,
-                count: timetableData.length,
+                message: `${schoolName || '부산성지고등학교'} ${grade}학년 ${classNum}반 시간표를 가져왔습니다.`,
+                count: timetableJson.data?.length || 0,
+                data: timetableJson.data
             }), {
-                headers: { 'Content-Type': 'application/json' }
+                status: 200,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
             });
         }
 
@@ -165,7 +129,10 @@ export const onRequest = async (context: any) => {
         return new Response('Invalid type or method', { status: 400 });
     } catch (err: any) {
         console.error('[Comcigan API] Error:', err);
-        return new Response(JSON.stringify({ error: err.message, stack: err.stack }), {
+        return new Response(JSON.stringify({
+            error: err.message,
+            stack: err.stack?.split('\n').slice(0, 5).join('\n') // Truncate stack
+        }), {
             status: 500,
             headers: { 'Content-Type': 'application/json' }
         });
@@ -213,8 +180,11 @@ async function getTimetable(grade: number, classNum: number) {
     const teachers = rawData[teacherProp] || [];
     const subjects = rawData[subjectProp] || [];
     const data = rawData[timedataProp];
+    const bunri = rawData['분리'] !== undefined ? rawData['분리'] : 100; // Get bunri value
     const timeInfoProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].length === 8 && typeof rawData[k][1] === 'number');
     const timeInfo = timeInfoProp ? rawData[timeInfoProp] : null;
+
+    console.log('[Comcigan] 분리:', bunri, 'teachers:', teachers.length, 'subjects:', subjects.length);
 
     if (!data || !data[grade] || !data[grade][classNum]) {
         throw new Error(`Data not found for G${grade}-C${classNum}`);
@@ -239,12 +209,13 @@ async function getTimetable(grade: number, classNum: number) {
             let teacherIdx = 0;
             let subjectIdx = 0;
 
-            if (code < 1000) {
-                teacherIdx = Math.floor(code / 100);
-                subjectIdx = code % 100;
-            } else {
-                teacherIdx = Math.floor(code / 1000);
-                subjectIdx = code % 1000;
+            // Based on bunri value (same logic as server comcigan-parser.ts)
+            if (bunri === 100) {
+                teacherIdx = Math.floor(code / bunri);
+                subjectIdx = code % bunri;
+            } else { // bunri === 1000 or other
+                teacherIdx = code % bunri;
+                subjectIdx = Math.floor(code / bunri);
             }
 
             const subject = subjects[subjectIdx] ? subjects[subjectIdx].replace(/_/g, "") : "";
