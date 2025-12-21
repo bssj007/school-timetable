@@ -105,3 +105,14 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
+
+# Test and debug files
+test_*.ts
+test_*.mjs
+test_*.js
+check_*.ts
+debug_*.js
+debug_*.json
+timetable_*.json
+timetable_*.txt
+temp_parser/
