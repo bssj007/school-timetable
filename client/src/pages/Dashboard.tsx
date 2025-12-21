@@ -209,7 +209,14 @@ export default function Dashboard() {
   // 현재 주에 해당하는 수행평가만 필터링
   const assessments = useMemo(() => {
     if (!allAssessments) return [];
-    return allAssessments.filter(a => isDateInWeek(a.dueDate, weekDates));
+    const filtered = allAssessments.filter(a => isDateInWeek(a.dueDate, weekDates));
+    console.log('[Assessments Filter]', {
+      weekRange: `${toDateString(weekDates[0])} ~ ${toDateString(weekDates[4])}`,
+      totalAssessments: allAssessments.length,
+      filteredAssessments: filtered.length,
+      filtered: filtered.map(a => ({ subject: a.subject, date: a.dueDate, classTime: a.classTime }))
+    });
+    return filtered;
   }, [allAssessments, weekDates]);
 
   // 4. 수행평가 추가
