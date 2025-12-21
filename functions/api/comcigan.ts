@@ -90,15 +90,81 @@ async function getSchoolCode(prefix: string) {
 export const onRequest = async (context: any) => {
     const url = new URL(context.request.url);
     const type = url.searchParams.get('type');
+    const method = context.request.method;
 
     try {
+        // POST method: Fetch from Comcigan and save to D1
+        if (method === 'POST') {
+            const body = await context.request.json();
+            const { schoolName, grade, classNum } = body;
+
+            console.log('[Comcigan API] Fetching:', { schoolName, grade, classNum });
+
+            // Fetch timetable
+            const timetableResponse = await getTimetable(grade, classNum);
+            const timetableJson = await timetableResponse.json();
+            const timetableData = timetableJson.data;
+
+            console.log('[Comcigan API] Fetched', timetableData.length, 'entries');
+
+            // Save to D1
+            const db = context.env.DB;
+            if (!db) {
+                console.warn('[Comcigan API] No DB available, returning data without saving');
+                return new Response(JSON.stringify({
+                    success: true,
+                    message: `${schoolName} ${grade}학년 ${classNum}반 시간표를 가져왔습니다.`,
+                    count: timetableData.length,
+                }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+
+            // Delete existing timetable for this grade/class
+            await db.prepare(`
+                DELETE FROM timetable 
+                WHERE grade = ? AND class = ?
+            `).bind(grade, classNum).run();
+
+            // Insert new timetable data
+            for (const item of timetableData) {
+                await db.prepare(`
+                    INSERT INTO timetable (
+                        schoolCode, schoolName, region, grade, class, 
+                        weekday, classTime, subject, teacher
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `).bind(
+                    93342,
+                    schoolName || '부산성지고등학교',
+                    '부산',
+                    item.grade,
+                    item.class,
+                    item.weekday - 1, // Convert to 0-indexed
+                    item.classTime,
+                    item.subject,
+                    item.teacher
+                ).run();
+            }
+
+            return new Response(JSON.stringify({
+                success: true,
+                message: `${schoolName} ${grade}학년 ${classNum}반 시간표를 성공적으로 가져왔습니다.`,
+                count: timetableData.length,
+            }), {
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        // GET method: Return timetable
         if (type === 'timetable') {
             const grade = parseInt(url.searchParams.get('grade') || '1');
             const classNum = parseInt(url.searchParams.get('classNum') || '1');
             return await getTimetable(grade, classNum);
         }
-        return new Response('Invalid type', { status: 400 });
+
+        return new Response('Invalid type or method', { status: 400 });
     } catch (err: any) {
+        console.error('[Comcigan API] Error:', err);
         return new Response(JSON.stringify({ error: err.message, stack: err.stack }), {
             status: 500,
             headers: { 'Content-Type': 'application/json' }

@@ -62,7 +62,7 @@ export default function Dashboard() {
     enabled: !!grade && !!classNum,
   });
 
-  // 2. 컴시간에서 시간표 가져오기 (tRPC mutation)
+  // 2. 컴시간에서 시간표 가져오기 (Cloudflare Function API)
   const fetchFromComcigan = useMutation({
     mutationFn: async () => {
       if (!schoolName || !grade || !classNum) {
@@ -71,15 +71,13 @@ export default function Dashboard() {
 
       console.log('[Dashboard] Fetching timetable:', { schoolName, grade, classNum });
 
-      const res = await fetch('/api/trpc/timetable.fetchFromComcigan', {
+      const res = await fetch('/api/comcigan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          input: {
-            schoolName,
-            grade: parseInt(grade),
-            classNum: parseInt(classNum),
-          }
+          schoolName,
+          grade: parseInt(grade),
+          classNum: parseInt(classNum),
         }),
       });
 
@@ -94,7 +92,7 @@ export default function Dashboard() {
       return result;
     },
     onSuccess: (data) => {
-      const message = data?.result?.data?.message || '시간표를 성공적으로 가져왔습니다!';
+      const message = data?.message || '시간표를 성공적으로 가져왔습니다!';
       toast.success(message);
       refetchTimetable();
     },
