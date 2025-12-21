@@ -1,30 +1,140 @@
-# 🏫 학교 시간표 & 수행평가 관리
+# 🏫 학교 시간표 위키
 
-학교 시간표를 관리하고 수행평가를 추적하는 웹 애플리케이션
+실시간으로 컴시간 알리미에서 시간표 데이터를 가져와 관리하고, 수행평가를 추적하는 웹 애플리케이션
 
-## 🚀 빠른 시작
+## ✨ 주요 기능
+
+- � **실시간 시간표 조회**: 컴시간 알리미 API와 자동 연동
+- 📝 **수행평가 관리**: 과목별 수행평가 일정 및 진행 상황 추적
+- 🔍 **학교 검색**: 전국 모든 학교 검색 및 시간표 조회
+- 🎯 **모든 학년/반 지원**: 1-3학년, 모든 반의 시간표 조회 가능
+
+## �🚀 빠른 시작
+
+### 로컬 개발
 
 ```bash
 # 1. 패키지 설치
 npm install
 
-# 2. 환경 변수 설정 (.env)
-DATABASE_URL=mysql://root:password@localhost:3306/school_timetable
-JWT_SECRET=your_secret_key
-
-# 3. 데이터베이스 마이그레이션
-npm run db:push
-
-# 4. 개발 서버 실행
+# 2. 개발 서버 실행 (D1 로컬 DB 자동 생성)
 npm run dev
+
+# 3. 브라우저에서 http://localhost:5173 접속
+```
+
+### Cloudflare Pages 배포
+
+```bash
+# 1. 빌드
+npm run build
+
+# 2. Wrangler로 배포
+npx wrangler pages deploy dist/public --project-name=school-timetable
+
+# 또는 GitHub 연동 자동 배포
+git push origin main
 ```
 
 ## 📦 기술 스택
 
-- React 19 + TypeScript + Vite
-- Node.js + Express + tRPC
-- MySQL + Drizzle ORM
+### Frontend
+- **React 19** + **TypeScript** + **Vite**
+- **TailwindCSS** + **shadcn/ui**
+- **Wouter** (라우팅)
+- **tRPC** (타입 안전 API)
+
+### Backend
+- **Cloudflare Pages Functions**
+- **Cloudflare D1** (SQLite 기반)
+- **Drizzle ORM**
+- **컴시간 알리미 API** (실시간 시간표)
+
+### 배포
+- **Cloudflare Pages** (글로벌 CDN)
+- **Cloudflare D1** (엣지 데이터베이스)
+
+## 🔧 환경 변수
+
+로컬 개발 시 `.env` 파일이 필요하지 않습니다. Cloudflare D1이 자동으로 설정됩니다.
+
+## 📖 API 문서
+
+### 컴시간 API 통합
+
+이 프로젝트는 컴시간 알리미에서 실시간으로 시간표를 가져옵니다:
+
+```typescript
+import { fetchTimetableFromComcigan } from './server/comcigan-parser';
+
+// 학교 시간표 가져오기
+const timetable = await fetchTimetableFromComcigan(
+  '부산성지고등학교',
+  1,  // 학년
+  1   // 반
+);
+```
+
+**특징:**
+- ✅ 자동으로 영구링크 감지
+- ✅ EUC-KR/UTF-8 인코딩 자동 처리
+- ✅ 과목-교사 정확한 매칭
+- ✅ 모든 학년/반 지원
+
+## �️ 프로젝트 구조
+
+```
+school_timetable_wiki/
+├── client/              # React 프론트엔드
+│   └── src/
+│       ├── pages/       # 페이지 컴포넌트
+│       └── components/  # 재사용 컴포넌트
+├── server/              # 백엔드 로직
+│   ├── comcigan-parser.ts  # 컴시간 API 파서
+│   ├── comcigan.ts         # API export
+│   └── _core/              # Express + tRPC 서버
+├── functions/           # Cloudflare Functions
+│   └── api/
+├── drizzle/            # DB 스키마 및 마이그레이션
+└── dist/               # 빌드 출력
+    └── public/         # 배포용 정적 파일
+```
+
+## 🛠️ 개발 명령어
+
+```bash
+# 개발 서버 (HMR)
+npm run dev
+
+# 프로덕션 빌드
+npm run build
+
+# 타입 체크
+npm run check
+
+# 코드 포맷팅
+npm run format
+
+# 테스트
+npm run test
+
+# DB 마이그레이션
+npm run db:push
+```
+
+## 🌐 배포 URL
+
+- **Production**: `https://school-timetable.pages.dev`
+- **Preview**: 각 PR마다 자동 생성
 
 ## 📝 라이선스
 
-MIT
+MIT License
+
+## 🤝 기여
+
+이슈와 PR을 환영합니다!
+
+## 📞 문의
+
+문제가 있거나 기능 요청이 있으시면 Issues를 통해 알려주세요.
