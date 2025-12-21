@@ -44,22 +44,36 @@ export default function Dashboard() {
     content: "",
   });
 
-  // 1. 시간표 조회 (tRPC)
+  // 1. 시간표 조회 (Comcigan API)
   const { data: timetableData, isLoading: timetableLoading, refetch: refetchTimetable } = useQuery({
-    queryKey: ['timetable', grade, classNum],
+    queryKey: ['timetable', schoolName, grade, classNum],
     queryFn: async () => {
       if (!grade || !classNum) return [];
       try {
-        const response = await fetch(`/api/trpc/timetable.get`);
-        if (!response.ok) throw new Error("Failed to fetch timetable");
+        // Try to get from Comcigan API directly
+        const response = await fetch(`/api/comcigan?type=timetable&grade=${grade}&classNum=${classNum}`);
+        if (!response.ok) {
+          console.warn('Failed to fetch from Comcigan, returning empty');
+          return [];
+        }
         const result = await response.json();
-        return (result.result?.data || []) as TimetableItem[];
+        console.log('[Dashboard] Timetable data:', result);
+
+        // Parse the response
+        if (result.data && Array.isArray(result.data)) {
+          // Convert weekday from 1-indexed to 0-indexed
+          return result.data.map((item: any) => ({
+            ...item,
+            weekday: item.weekday - 1
+          })) as TimetableItem[];
+        }
+        return [] as TimetableItem[];
       } catch (e) {
         console.error('Failed to fetch timetable', e);
         return [] as TimetableItem[];
       }
     },
-    enabled: !!grade && !!classNum,
+    enabled: !!grade && !!classNum && !!schoolName,
   });
 
   // 2. 컴시간에서 시간표 가져오기 (Cloudflare Function API)
