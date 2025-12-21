@@ -12,7 +12,7 @@ export const onRequest = async (context: any) => {
 
     // 로그인 시작
     if (path === '/api/kakao/login') {
-        const redirectUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_REST_API_KEY}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=talk_message,friends`;
+        const redirectUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_REST_API_KEY}&redirect_uri=${REDIRECT_URI}&response_type=code`;
 
         return new Response(null, {
             status: 302,
