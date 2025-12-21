@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Dashboard from "./pages/Dashboard";
 import Navigation from "./components/Navigation";
+import OnboardingDialog from "./components/OnboardingDialog";
 
 function Router() {
   return (
@@ -24,6 +25,7 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <Navigation />
+          <OnboardingDialog />
           <Router />
         </TooltipProvider>
       </ThemeProvider>

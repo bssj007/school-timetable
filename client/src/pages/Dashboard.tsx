@@ -4,9 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useMemo } from "react";
-import { Loader2, Trash2, Plus, RefreshCw } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Loader2, Trash2, Plus, RefreshCw, Settings } from "lucide-react";
 import { toast } from "sonner";
+import { useUserConfig } from "@/hooks/useUserConfig";
 import {
   Dialog,
   DialogContent,
@@ -45,13 +46,28 @@ export default function Dashboard() {
     content: "",
     classTime: "",
     weekday: "",
-  });
+    const { grade, classNum, isConfigured, setConfig } = useUserConfig();
 
-  const [timetableFormData, setTimetableFormData] = useState({
-    schoolName: "성지고등학교",
-    grade: "1",
-    classNum: "1",
-  });
+    const [formData, setFormData] = useState({
+      assessmentDate: "",
+      subject: "",
+      content: "",
+      classTime: "",
+      weekday: "",
+    });
+
+    // 다이얼로그 폼 데이터 (기본값은 설정된 값)
+    const [timetableFormData, setTimetableFormData] = useState({
+      grade: grade || "1",
+      classNum: classNum || "1",
+    });
+
+    // 설정이 변경되면 폼 데이터도 업데이트
+    useEffect(() => {
+    if (grade && classNum) {
+      setTimetableFormData({ grade, classNum });
+    }
+  }, [grade, classNum]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isFetchingTimetable, setIsFetchingTimetable] = useState(false);
@@ -78,10 +94,11 @@ export default function Dashboard() {
 
   // 2. 수행평가 목록 조회 (D1 API)
   const { data: assessments, isLoading: assessmentLoading } = useQuery({
-    queryKey: ['assessments', timetableFormData.grade, timetableFormData.classNum],
+    queryKey: ['assessments', grade, classNum],
     queryFn: async () => {
+      if (!grade || !classNum) return [];
       try {
-        const res = await fetch(`/api/assessment?grade=${timetableFormData.grade}&classNum=${timetableFormData.classNum}`);
+        const res = await fetch(`/api/assessment?grade=${grade}&classNum=${classNum}`);
         if (!res.ok) {
           if (res.status === 404) return [];
           throw new Error(`API Error: ${res.status}`);
@@ -105,8 +122,9 @@ export default function Dashboard() {
           subject: data.subject,
           description: "",
           dueDate: data.assessmentDate,
-          grade: parseInt(timetableFormData.grade),
-          classNum: parseInt(timetableFormData.classNum)
+          dueDate: data.assessmentDate,
+          grade: parseInt(grade),
+          classNum: parseInt(classNum)
         }),
       });
       if (!res.ok) throw new Error('Failed to create');
@@ -185,7 +203,10 @@ export default function Dashboard() {
 
       // Cloudflare Pages Functions 호출
       // 성지고 코드: 7530560
-      const response = await fetch(`/api/comcigan?type=timetable&schoolCode=7530560&grade=${timetableFormData.grade}&classNum=${timetableFormData.classNum}`);
+      const fetchGrade = timetableFormData.grade;
+      const fetchClass = timetableFormData.classNum;
+
+      const response = await fetch(`/api/comcigan?type=timetable&schoolCode=7530560&grade=${fetchGrade}&classNum=${fetchClass}`);
 
       const result = await response.json();
 
@@ -260,16 +281,20 @@ export default function Dashboard() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold mb-2">
-            부산성지고 {timetableFormData.grade}-{timetableFormData.classNum} 시간표
+            부산성지고 {grade || timetableFormData.grade}-{classNum || timetableFormData.classNum} 시간표
           </h1>
           <p className="text-gray-600">시간표와 수행평가를 한눈에 확인하세요</p>
         </div>
 
-        {/* 시간표 업데이트 버튼 */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="gap-2">
-              <RefreshCw className="h-4 w-4" />
+        <div className="flex gap-2">
+          {/* 설정 변경 버튼 (임시) */}
+          <Button variant="outline" size="icon" onClick={() => setConfig({ grade: "", classNum: "" })} title="학년/반 다시 설정">
+            <Settings className="h-4 w-4" />
+          </Button>
+
+          {/* 시간표 업데이트 버튼 */}
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
               시간표 업데이트
             </Button>
           </DialogTrigger>
