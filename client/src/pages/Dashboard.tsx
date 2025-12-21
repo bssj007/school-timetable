@@ -401,13 +401,28 @@ export default function Dashboard() {
                           const currentDate = toDateString(weekDates[weekdayIdx]);
 
                           // 해당 날짜와 교시에 수행평가가 있는지 확인
-                          const cellAssessments = assessments.filter(a =>
-                            item &&
-                            a.subject === item.subject &&
-                            a.dueDate === currentDate &&
-                            a.classTime === classTime &&
-                            !a.isDone
-                          );
+                          const cellAssessments = assessments ? assessments.filter(a => {
+                            const match = item &&
+                              a.subject === item.subject &&
+                              a.dueDate === currentDate &&
+                              a.classTime === classTime &&
+                              !a.isDone;
+
+                            // 디버깅 로그
+                            if (item && a.dueDate === currentDate) {
+                              console.log('[Cell Match Debug]', {
+                                currentDate,
+                                classTime,
+                                itemSubject: item.subject,
+                                aSubject: a.subject,
+                                aDueDate: a.dueDate,
+                                aClassTime: a.classTime,
+                                match
+                              });
+                            }
+
+                            return match;
+                          }) : [];
 
                           return (
                             <td
