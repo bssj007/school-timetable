@@ -406,7 +406,12 @@ export default function Dashboard() {
                     <span className="text-sm font-normal text-gray-600 min-w-[100px] text-center">
                       {weekRangeText}
                     </span>
-                    <Button variant="outline" size="sm" onClick={() => setWeekOffset(weekOffset + 1)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setWeekOffset(weekOffset + 1)}
+                      disabled={weekOffset >= 0}
+                    >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
@@ -440,6 +445,10 @@ export default function Dashboard() {
                           const item = dayItems.find((t) => t.classTime === classTime);
                           const currentDate = toDateString(weekDates[weekdayIdx]);
 
+                          // 오늘 날짜인지 확인
+                          const today = new Date();
+                          const isToday = toDateString(today) === currentDate;
+
                           // 해당 날짜와 교시에 수행평가가 있는지 확인
                           const cellAssessments = assessments ? assessments.filter(a => {
                             return item &&
@@ -449,27 +458,31 @@ export default function Dashboard() {
                               !a.isDone;
                           }) : [];
 
+                          // 배경색 결정: 수행평가가 있으면 파란색, 없고 오늘이면 연한 붉은색, 그 외는 기본
+                          const bgColor = cellAssessments.length > 0
+                            ? "bg-blue-100 border-blue-300"
+                            : isToday
+                              ? "bg-red-50 hover:bg-red-100"
+                              : "hover:bg-gray-100";
+
                           return (
                             <td
                               key={weekdayIdx}
                               onClick={() => item && handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx], cellAssessments)}
-                              className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors cursor-pointer
-                                ${cellAssessments.length > 0 ? "bg-blue-100 border-blue-300" : "hover:bg-gray-100"}
+                              className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors cursor-pointer overflow-hidden
+                                ${bgColor}
                                 ${item ? "" : "cursor-default"}
                               `}
                             >
                               {item ? (
-                                <div className="flex flex-col items-center justify-center h-full">
-                                  <div className="font-bold text-gray-900 text-sm md:text-base leading-tight">{item.subject}</div>
-                                  <div className="text-[10px] md:text-xs text-gray-500 mt-0.5">{item.teacher}</div>
+                                <div className="flex flex-col items-center justify-center h-full min-h-0">
+                                  <div className="font-bold text-gray-900 text-sm md:text-base leading-tight truncate w-full">{item.subject}</div>
+                                  <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full">{item.teacher}</div>
                                   {cellAssessments.length > 0 && (
-                                    <div className="mt-1">
-                                      <div className="text-[10px] md:text-xs font-semibold text-blue-700 hidden md:block">
-                                        📝 수행평가!
-                                      </div>
-                                      <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
+                                    <div className="mt-0.5 flex-shrink-0">
+                                      <div className="flex flex-wrap gap-0.5 justify-center">
                                         {cellAssessments.map(a => (
-                                          <span key={a.id} className="text-[9px] md:text-[10px] bg-blue-600 text-white px-1 py-0.5 rounded-full leading-none">
+                                          <span key={a.id} className="text-[9px] md:text-[10px] bg-blue-600 text-white px-1 py-0.5 rounded-full leading-none whitespace-nowrap">
                                             {a.description && a.description.includes("차") ? a.description : '평가'}
                                           </span>
                                         ))}
