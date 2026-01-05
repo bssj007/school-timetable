@@ -333,15 +333,14 @@ export default function Dashboard() {
     <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
-          <h1 className="text-xl md:text-3xl font-bold mb-1">
-            {schoolName || '학교'} {grade || '?'}-{classNum || '?'} 시간표
+          <h1 className="text-xl md:text-3xl font-bold">
+            {grade || '?'}-{classNum || '?'} 시간표
           </h1>
-          <p className="text-sm md:text-base text-gray-600">시간표와 수행평가를 한눈에 확인하세요</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <Select value={grade || ""} onValueChange={(val) => setConfig({ grade: val })}>
-            <SelectTrigger className="w-[70px] md:w-[80px] h-8 md:h-10 text-xs md:text-sm">
+            <SelectTrigger className="w-[80px] md:w-[90px] h-8 md:h-10 text-xs md:text-sm">
               <SelectValue placeholder="학년" />
             </SelectTrigger>
             <SelectContent>
@@ -352,7 +351,7 @@ export default function Dashboard() {
           </Select>
 
           <Select value={classNum || ""} onValueChange={(val) => setConfig({ classNum: val })}>
-            <SelectTrigger className="w-[70px] md:w-[80px] h-8 md:h-10 text-xs md:text-sm">
+            <SelectTrigger className="w-[80px] md:w-[90px] h-8 md:h-10 text-xs md:text-sm">
               <SelectValue placeholder="반" />
             </SelectTrigger>
             <SelectContent>
@@ -396,33 +395,30 @@ export default function Dashboard() {
         <div>
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <span>주간 시간표</span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setWeekOffset(weekOffset - 1)}
-                      disabled={weekOffset === 0}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm font-normal text-gray-600 min-w-[100px] text-center">
-                      {weekRangeText}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setWeekOffset(weekOffset + 1)}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                    <span className="text-xs text-gray-500 ml-1">
-                      {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
-                    </span>
-                  </div>
+              <CardTitle className="flex flex-col items-center gap-1">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setWeekOffset(weekOffset - 1)}
+                    disabled={weekOffset === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm font-normal text-gray-600 min-w-[100px] text-center">
+                    {weekRangeText}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setWeekOffset(weekOffset + 1)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
+                <span className="text-xs text-gray-500">
+                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent>
