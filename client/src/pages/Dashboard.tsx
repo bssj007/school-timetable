@@ -394,7 +394,7 @@ export default function Dashboard() {
         {/* 시간표 */}
         <div>
           <Card>
-            <CardHeader>
+            <CardHeader className="py-3 md:py-4">
               <CardTitle className="flex flex-col items-center gap-1">
                 <div className="flex items-center gap-2">
                   <Button
