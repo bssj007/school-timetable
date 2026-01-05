@@ -393,8 +393,8 @@ export default function Dashboard() {
       <div>
         {/* 시간표 */}
         <div>
-          <Card>
-            <CardHeader className="py-1.5 md:py-2">
+          <Card className="py-2 gap-2">
+            <CardHeader className="py-0 px-4">
               <CardTitle className="flex flex-col items-center gap-1">
                 <div className="flex items-center gap-2">
                   <Button
@@ -421,7 +421,7 @@ export default function Dashboard() {
                 </span>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-2 pb-2">
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse table-fixed">
                   <thead>
