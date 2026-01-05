@@ -418,6 +418,9 @@ export default function Dashboard() {
                     >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
+                    <span className="text-xs text-gray-500 ml-1">
+                      {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
+                    </span>
                   </div>
                 </div>
               </CardTitle>
@@ -427,9 +430,9 @@ export default function Dashboard() {
                 <table className="w-full border-collapse table-fixed">
                   <thead>
                     <tr>
-                      <th className="border p-1 md:p-2 bg-gray-50 w-12 md:w-16 text-sm font-medium">교시</th>
+                      <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
                       {weekdayNames.map((day, idx) => (
-                        <th key={day} className="border p-1 md:p-2 bg-gray-50" style={{ width: '18%' }}>
+                        <th key={day} className="border p-1 md:p-2 bg-gray-50">
                           <div className="text-sm font-semibold">{day}</div>
                           <div className="text-[10px] md:text-xs text-gray-500 font-normal">
                             {formatDate(weekDates[idx])}
@@ -441,7 +444,7 @@ export default function Dashboard() {
                   <tbody>
                     {Array.from({ length: 7 }, (_, i) => i + 1).map((classTime) => (
                       <tr key={classTime}>
-                        <td className="border p-1 md:p-2 text-center font-medium bg-gray-50 text-sm">
+                        <td className="border p-1 md:p-2 text-center font-medium bg-gray-50 text-sm w-8 md:w-10">
                           {classTime}
                         </td>
                         {Array.from({ length: 5 }, (_, weekdayIdx) => {
