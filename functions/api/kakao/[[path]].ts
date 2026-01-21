@@ -85,5 +85,5 @@ export const onRequest = async (context: any) => {
         }
     }
 
-    return new Response('Not found', { status: 404 });
+    return new Response(`Not found: ${path}. Expected /api/kakao/callback`, { status: 404 });
 }
