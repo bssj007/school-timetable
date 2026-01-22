@@ -376,23 +376,11 @@ export default function Dashboard() {
             불러오기
           </Button>
 
-          {kakaoUser ? (
+          {kakaoUser && (
             <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-100 h-8 md:h-10 text-xs md:text-sm ml-auto md:ml-0">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
               카카오 알림 활성
             </div>
-          ) : (
-            <Button
-              onClick={() => window.location.href = '/api/kakao/login'}
-              variant="default"
-              size="sm"
-              className="bg-yellow-400 hover:bg-yellow-500 text-gray-900 h-8 md:h-10 text-xs md:text-sm ml-auto md:ml-0"
-            >
-              <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 3C6.48 3 2 6.93 2 11.75c0 3.14 2.13 5.88 5.28 7.24-.22 1.02-.89 3.61-.92 3.87 0 .03-.03.17.09.23.12.07.29.04.29.04.39-.07 4.54-3.04 5.26-3.61 12 .38 12 .38 12-7.77 12-11.75C22 6.93 17.52 3 12 3z" />
-              </svg>
-              카카오 알림 연동
-            </Button>
           )}
         </div>
       </div>

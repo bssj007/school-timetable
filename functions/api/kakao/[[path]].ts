@@ -53,12 +53,17 @@ export const onRequest = async (context: any) => {
             }
 
             const userInfo: any = await userInfoResponse.json();
+            // 닉네임 위치가 다를 수 있음 (properties 또는 kakao_account.profile)
+            const nickname = userInfo.properties?.nickname || userInfo.kakao_account?.profile?.nickname || '사용자';
+            const profileImage = userInfo.properties?.profile_image || userInfo.kakao_account?.profile?.profile_image_url;
+            const thumbnailImage = userInfo.properties?.thumbnail_image || userInfo.kakao_account?.profile?.thumbnail_image_url;
+
             return new Response(JSON.stringify({
                 loggedIn: true,
                 id: userInfo.id,
-                nickname: userInfo.properties?.nickname,
-                profileImage: userInfo.properties?.profile_image,
-                thumbnailImage: userInfo.properties?.thumbnail_image
+                nickname: nickname,
+                profileImage: profileImage,
+                thumbnailImage: thumbnailImage
             }), {
                 headers: { 'Content-Type': 'application/json' }
             });
@@ -68,6 +73,16 @@ export const onRequest = async (context: any) => {
                 headers: { 'Content-Type': 'application/json' }
             });
         }
+    }
+
+    // 로그아웃
+    if (path === '/api/kakao/logout') {
+        return new Response(JSON.stringify({ success: true }), {
+            headers: {
+                'Content-Type': 'application/json',
+                'Set-Cookie': 'kakao_token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0'
+            }
+        });
     }
 
     return new Response(`Not found: ${path}.`, { status: 404 });
