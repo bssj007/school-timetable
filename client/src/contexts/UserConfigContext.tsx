@@ -1,9 +1,17 @@
-import { useState, createContext, useContext, ReactNode } from "react";
+import { useState, createContext, useContext, ReactNode, useEffect } from "react";
 
 export interface UserConfig {
     schoolName: string;
     grade: string;
     classNum: string;
+}
+
+export interface KakaoUser {
+    id: number;
+    nickname: string;
+    profileImage: string;
+    thumbnailImage: string;
+    loggedIn: boolean;
 }
 
 const COOKIE_NAME = "school_timetable_config";
@@ -14,6 +22,8 @@ interface UserConfigContextType {
     classNum: string;
     setConfig: (config: Partial<UserConfig>) => void;
     isConfigured: boolean;
+    kakaoUser: KakaoUser | null;
+    refreshKakaoUser: () => Promise<void>;
 }
 
 const UserConfigContext = createContext<UserConfigContextType | undefined>(undefined);
@@ -34,6 +44,28 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
         return { schoolName: "", grade: "", classNum: "" };
     });
 
+    const [kakaoUser, setKakaoUser] = useState<KakaoUser | null>(null);
+
+    const refreshKakaoUser = async () => {
+        try {
+            const response = await fetch('/api/kakao/me');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.loggedIn) {
+                    setKakaoUser(data);
+                } else {
+                    setKakaoUser(null);
+                }
+            }
+        } catch (error) {
+            console.error("Failed to fetch kakao user", error);
+        }
+    };
+
+    useEffect(() => {
+        refreshKakaoUser();
+    }, []);
+
     const setConfig = (newConfig: Partial<UserConfig>) => {
         const updated = { ...config, ...newConfig };
         setConfigState(updated);
@@ -51,7 +83,9 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
             grade: config.grade,
             classNum: config.classNum,
             setConfig,
-            isConfigured
+            isConfigured,
+            kakaoUser,
+            refreshKakaoUser
         }}>
             {children}
         </UserConfigContext.Provider>

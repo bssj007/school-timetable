@@ -23,5 +23,52 @@ export const onRequest = async (context: any) => {
         });
     }
 
+    // 사용자 정보 조회
+    if (path === '/api/kakao/me') {
+        const cookieHeader = request.headers.get('Cookie') || '';
+        const cookies = Object.fromEntries(
+            cookieHeader.split(';')
+                .map(c => c.trim().split('='))
+                .filter(p => p.length === 2)
+        );
+        const token = cookies['kakao_token'];
+
+        if (!token) {
+            return new Response(JSON.stringify({ loggedIn: false }), {
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        try {
+            const userInfoResponse = await fetch('https://kapi.kakao.com/v2/user/me', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!userInfoResponse.ok) {
+                return new Response(JSON.stringify({ loggedIn: false, error: 'Token might be expired' }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+
+            const userInfo: any = await userInfoResponse.json();
+            return new Response(JSON.stringify({
+                loggedIn: true,
+                id: userInfo.id,
+                nickname: userInfo.properties?.nickname,
+                profileImage: userInfo.properties?.profile_image,
+                thumbnailImage: userInfo.properties?.thumbnail_image
+            }), {
+                headers: { 'Content-Type': 'application/json' }
+            });
+        } catch (error) {
+            return new Response(JSON.stringify({ loggedIn: false, error: 'Internal server error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+    }
+
     return new Response(`Not found: ${path}.`, { status: 404 });
 }
