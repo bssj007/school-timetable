@@ -15,22 +15,27 @@ https://developers.kakao.com/console 접속
 
 1. 내 애플리케이션 > school-timetable 선택
 2. 플랫폼 설정 > Web 플랫폼 추가
-   - 사이트 도메인: https://school-timetable.pages.dev
+   - 사이트 도메인: 
+     https://school-timetable.pages.dev
+     (필요시 프리뷰 도메인도 추가: https://school-timetable-8ln.pages.dev 등)
 
 3. Redirect URI 설정:
-   https://school-timetable.pages.dev/api/kakao/callback
+   https://school-timetable.pages.dev/callback
+   
+   ⚠️ 프리뷰 환경 테스트를 위해서는 해당 도메인의 콜백도 추가해야 합니다:
+   https://school-timetable-8ln.pages.dev/callback
+```
 
-4. 동의항목 설정:
+### 4. 동의항목 설정:
    - 카카오톡 메시지 전송: 필수 동의
    - 친구 목록 조회: 선택 동의
 
-5. 비즈니스 설정 > 메시지 템플릿 등록 (선택)
-```
+### 5. 비즈니스 설정 > 메시지 템플릿 등록 (선택)
 
 ### 2. REST API 키 확인
 ```
 현재 사용 중인 키: bad8ca2530fb7a47eaf2e14ba1d2bb94
-위치: functions/api/kakao/[[path]].ts
+위치: functions/api/kakao/[[path]].ts 및 functions/callback.ts
 ```
 
 ---
@@ -93,16 +98,17 @@ https://developers.kakao.com/console 접속
    SELECT * FROM users WHERE notificationEnabled = 1;
    ```
 
-### 토큰 만료 시
-```
-- 카카오 access token은 6시간 유효
-- refresh token으로 자동 갱신 필요
-- 현재는 수동 재로그인 필요
-```
+### Redirect URI 오류 (404 Not Found)
+- `https://.../callback` 경로가 존재하지 않는 것처럼 보이는 경우, `functions/callback.ts` 파일이 배포되었는지 확인하세요.
+- Kakao Developers Console에 해당 도메인의 Redirect URI가 등록되어 있는지 확인하세요.
 
 ---
 
 ## 🚀 배포 체크리스트
+
+### Cloudflare Pages Functions
+- `functions/api/kakao/[[path]].ts`: 로그인 시작 (Redirect URI 생성)
+- `functions/callback.ts`: 로그인 콜백 처리 (토큰 발급)
 
 ### Cloudflare D1 마이그레이션
 ```sql
@@ -119,82 +125,4 @@ CREATE TABLE IF NOT EXISTS users (
   createdAt TEXT DEFAULT (datetime('now')),
   updatedAt TEXT DEFAULT (datetime('now'))
 );
-
--- 2. performance_assessments에 userId 추가
-ALTER TABLE performance_assessments ADD COLUMN userId INTEGER;
 ```
-
-### Cloudflare Pages Cron 활성화
-
-⚠️ **중요**: Cloudflare Pages는 wrangler.toml에서 cron 설정을 지원하지 않습니다.
-대신 직접 Dashboard에서 설정해야 합니다:
-
-```
-1. Cloudflare Dashboard 접속
-   https://dash.cloudflare.com
-
-2. Workers & Pages > school-timetable 선택
-
-3. Settings > Functions > Cron Triggers 탭
-
-4. Add Cron Trigger 클릭
-   - Cron expression: 0 0 * * *
-   - 설명: Daily assessment reminder at 9 AM KST
-   
-5. 저장
-
-참고: UTC 0시 = KST 9시
-```
-
-또는 현재는 **Cloudflare Pages에서 scheduled handlers (_scheduled.ts)를 완전히 지원하지 않습니다**.
-대안:
-- External cron service (cron-job.org, EasyCron 등) 사용
-- Cloudflare Worker로 별도 배포
-```
-
----
-
-## 📊 시스템 흐름도
-
-```
-[사용자]
-   ↓
-[카카오 로그인] → OAuth 인증
-   ↓
-[토큰 저장] → D1 Database (users 테이블)
-   ↓
-[수행평가 등록] → performance_assessments 테이블 (userId 포함)
-   ↓
-[매일 오전 9시] → Cloudflare Cron Trigger
-   ↓
-[내일 수행평가 조회] → SQL Query
-   ↓
-[카카오 메시지 전송] → Kakao API
-   ↓
-[사용자 카카오톡 수신] 💬
-```
-
----
-
-## 🔐 보안 고려사항
-
-1. **토큰 저장**
-   - Access token은 DB에 암호화 없이   저장 (주의!)
-   - 프로덕션에서는 암호화 권장
-
-2. **권한 관리**
-   - 사용자는 자신의 수행평가만 조회
-   - userId로 데이터 격리
-
-3. **토큰 갱신**
-   - Refresh token 활용 필요
-   - 만료 시 자동 재발급 로직 추가 예정
-
----
-
-## 📚 참고 자료
-
-- [Kakao Developers 문서](https://developers.kakao.com/docs)
-- [Kakao 메시지 API](https://developers.kakao.com/docs/latest/ko/message/rest-api)
-- [Cloudflare Workers Cron](https://developers.cloudflare.com/workers/configuration/cron-triggers/)
-- [Cloudflare D1](https://developers.cloudflare.com/d1/)
