@@ -29,16 +29,20 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     // 여기서 DB 조회를 한 번 더 수행함.
 
     // 차단 여부 확인 (IP)
-    const blockedIp = await env.DB.prepare(
-        "SELECT id FROM blocked_users WHERE identifier = ? AND type = 'IP'"
-    ).bind(ip).first();
+    try {
+        const blockedIp = await env.DB.prepare(
+            "SELECT id FROM blocked_users WHERE identifier = ? AND type = 'IP'"
+        ).bind(ip).first();
 
-    if (blockedIp) {
-        return new Response("Access Denied (IP Blocked)", { status: 403 });
+        if (blockedIp) {
+            return new Response("Access Denied (IP Blocked)", { status: 403 });
+        }
+    } catch (err) {
+        // 테이블이 없거나 DB 오류 발생 시, 사이트 마비를 막기 위해 통과시킴
+        console.error("Middleware Block Check Error:", err);
     }
 
     // 로그 기록 (비동기로 수행하여 응답 지연 최소화 - waitUntil 사용)
-    // Cloudflare Pages Functions에서는 context.waitUntil을 사용
     const logRequest = async () => {
         try {
             await env.DB.prepare(
