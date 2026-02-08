@@ -13,19 +13,18 @@ export default function Admin() {
 
     const checkPasswordMutation = useMutation({
         mutationFn: async (password: string) => {
-            const res = await fetch("/api/trpc/admin.checkPassword", {
+            const res = await fetch("/api/admin", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ json: { password } }),
+                body: JSON.stringify({ password }),
             });
 
             const data = await res.json();
 
-            // tRPC response structure: { result: { data: { success: boolean, message?: string } } }
-            if (data.result?.data?.success) {
+            if (res.ok && data.success) {
                 return true;
             } else {
-                throw new Error(data.result?.data?.message || "Invalid password");
+                throw new Error(data.message || data.error || "Invalid password");
             }
         },
         onSuccess: () => {
