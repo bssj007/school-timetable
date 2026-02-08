@@ -51,11 +51,19 @@ router.post("/", async (req, res) => {
     // We can also check headers if behind proxy
     const ip = (req.headers['cf-connecting-ip'] as string) || req.ip || '127.0.0.1';
 
+    console.log('[Assessment POST] IP:', ip, 'Headers:', {
+        'cf-connecting-ip': req.headers['cf-connecting-ip'],
+        'x-forwarded-for': req.headers['x-forwarded-for'],
+        'req.ip': req.ip
+    });
+
     try {
         const result = await db.execute(sql`
             INSERT INTO performanceAssessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, lastModifiedIp)
             VALUES (${subject}, ${title}, ${description || ''}, ${dueDate}, ${grade}, ${classNum}, ${classTime || null}, 0, ${ip})
         `);
+
+        console.log('[Assessment POST] Insert successful, IP saved:', ip);
         res.json({ success: true, result });
 
         // Log access
