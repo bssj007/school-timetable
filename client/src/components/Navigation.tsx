@@ -27,6 +27,11 @@ export default function Navigation() {
           </Link>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <Link href="/admin">
+              <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-xs font-normal">
+                관리사무소
+              </Button>
+            </Link>
             {kakaoUser ? (
               <div className="flex items-center gap-2 sm:gap-3 bg-gray-50 pr-1 pl-3 py-1 rounded-full border border-gray-100">
                 <div className="hidden sm:flex flex-col items-end">

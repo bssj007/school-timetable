@@ -138,6 +138,62 @@ export const appRouter = router({
         return deletePerformanceAssessment(id);
       }),
   }),
+
+  admin: router({
+    checkPassword: publicProcedure
+      .input((val: unknown) => {
+        if (typeof val !== "object" || val === null) throw new Error("Invalid input");
+        const obj = val as Record<string, unknown>;
+        return String(obj.password);
+      })
+      .mutation(async ({ input: password }) => {
+        try {
+          // Read password from file
+          // Assuming the server is running from the root of the project or server directory.
+          // Let's try to resolve the path relative to this file or process.cwd()
+          // Given the structure, server/adminPW exists.
+          
+          const fs = await import('fs/promises');
+          const path = await import('path');
+          
+          // Construct path to adminPW. 
+          // If we are in server/routers.ts, and adminPW is in server/adminPW.
+          // process.cwd() usually points to the root in typical setups, or server if cd'd in.
+          // Let's try an absolute path logic or relative to __dirname equivalents if possible, 
+          // but for now let's assume standard execution from project root and file is at server/adminPW
+          // Or if running from server folder.
+          
+          // Let's try to find it. 
+          let passwordFilePool = ['server/adminPW', 'adminPW']; 
+          let currentPassword = '';
+          
+          for (const filePath of passwordFilePool) {
+             try {
+                const content = await fs.readFile(filePath, 'utf-8');
+                currentPassword = content.trim();
+                break;
+             } catch (e) {
+                // ignore
+             }
+          }
+          
+          if (!currentPassword) {
+             // Fallback or error
+             console.error("Could not read adminPW file");
+             return { success: false, message: "Server configuration error" };
+          }
+
+          if (password === currentPassword) {
+            return { success: true };
+          } else {
+            return { success: false, message: "Incorrect password" };
+          }
+        } catch (error) {
+          console.error("Admin password check error", error);
+          return { success: false, message: "Error verifying password" };
+        }
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
