@@ -3,19 +3,9 @@ import { useUserConfig } from "@/contexts/UserConfigContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
-import { useEffect, useState } from "react";
 
 export default function Navigation() {
   const { kakaoUser, refreshKakaoUser } = useUserConfig();
-  const [userIp, setUserIp] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Fetch user's IP address
-    fetch('/api/my-ip')
-      .then(res => res.json())
-      .then(data => setUserIp(data.ip))
-      .catch(() => setUserIp(null));
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -35,13 +25,6 @@ export default function Navigation() {
             <span className="text-blue-600">성지고</span>
             <span className="hidden xs:inline text-gray-900"> 수행평가 공유 플랫폼</span>
           </Link>
-
-          {userIp && (
-            <div className="hidden md:flex items-center gap-2 text-xs text-gray-500 font-mono bg-gray-50 px-3 py-1 rounded-full border border-gray-200">
-              <span className="text-gray-400">내 IP:</span>
-              <span className="font-bold text-gray-700">{userIp}</span>
-            </div>
-          )}
 
           <div className="flex items-center gap-2 sm:gap-3">
             {kakaoUser ? (

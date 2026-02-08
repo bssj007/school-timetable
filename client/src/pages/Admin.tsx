@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,16 @@ export default function Admin() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
+    const [userIp, setUserIp] = useState<string | null>(null);
     const queryClient = useQueryClient();
+
+    // Fetch user IP
+    useEffect(() => {
+        fetch('/api/my-ip')
+            .then(res => res.json())
+            .then(data => setUserIp(data.ip))
+            .catch(() => setUserIp(null));
+    }, []);
 
     // --- Authentication ---
     const checkPasswordMutation = useMutation({
@@ -202,9 +211,17 @@ export default function Admin() {
 
     return (
         <div className="container max-w-6xl mx-auto px-4 py-8">
-            <div className="flex items-center gap-3 mb-8">
-                <Settings className="h-8 w-8 text-gray-700" />
-                <h1 className="text-3xl font-bold">관리사무소</h1>
+            <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                    <Settings className="h-8 w-8 text-gray-700" />
+                    <h1 className="text-3xl font-bold">관리사무소</h1>
+                </div>
+                {userIp && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 font-mono bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
+                        <span className="text-gray-400">현재 IP:</span>
+                        <span className="font-bold text-gray-700">{userIp}</span>
+                    </div>
+                )}
             </div>
 
             <Tabs defaultValue="assessments" className="w-full">

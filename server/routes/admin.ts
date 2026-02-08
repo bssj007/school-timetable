@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { sql, eq, desc } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { adminPassword } from "../adminPW";
 
@@ -15,35 +15,40 @@ router.use((req, res, next) => {
     next();
 });
 
-// GET /users: Get active users and blocked users
-router.get("/users", async (req, res) => {
+// GET /assessments: Get all assessments for admin view
+router.get("/assessments", async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(500).json({ error: "DB Unavailable" });
 
     try {
-        // 1. Recent Logs
-        // Native MySQL query for logs
-        const [logs] = await db.execute(sql`
-      SELECT 
-        ip, 
-        kakaoId, 
-        kakaoNickname, 
-        COUNT(*) as requestCount, 
-        SUM(CASE WHEN method IN ('POST', 'DELETE') THEN 1 ELSE 0 END) as modificationCount,
-        MAX(accessedAt) as lastAccess 
-      FROM access_logs 
-      WHERE accessedAt > DATE_SUB(NOW(), INTERVAL 1 DAY)
-      GROUP BY ip
-      ORDER BY lastAccess DESC
-    `);
+        const [results] = await db.execute(sql`
+            SELECT * FROM performanceAssessments 
+            ORDER BY grade ASC, classNum ASC, dueDate ASC
+        `);
+        res.json(results);
+    } catch (err: any) {
+        console.error("[Admin Assessments] Query failed:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
-        // 2. Blocked Users
-        const [blocked] = await db.execute(sql`SELECT * FROM blocked_users ORDER BY createdAt DESC`);
+// DELETE /assessments: Bulk delete assessments
+router.delete("/assessments", async (req, res) => {
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: "DB Unavailable" });
 
-        res.json({
-            activeUsers: logs,
-            blockedUsers: blocked
-        });
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "Invalid IDs" });
+    }
+
+    try {
+        // Build WHERE IN clause
+        const placeholders = ids.map(() => '?').join(',');
+        await db.execute(sql.raw(`DELETE FROM performanceAssessments WHERE id IN (${placeholders})`, ids));
+
+        res.json({ success: true, count: ids.length });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
@@ -58,7 +63,6 @@ router.post("/users", async (req, res) => {
 
     try {
         // Check if existing
-        // Note: mysql2 execute returns [rows, fields]
         const [existing]: any = await db.execute(sql`SELECT id FROM blocked_users WHERE identifier = ${identifier} AND type = ${type}`);
 
         if (existing && existing.length > 0) {
@@ -86,6 +90,37 @@ router.delete("/users", async (req, res) => {
     }
 });
 
+// GET /users: Get active users and blocked users
+router.get("/users", async (req, res) => {
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: "DB Unavailable" });
+
+    try {
+        const [logs] = await db.execute(sql`
+      SELECT 
+        ip, 
+        kakaoId, 
+        kakaoNickname, 
+        COUNT(*) as requestCount, 
+        SUM(CASE WHEN method IN ('POST', 'DELETE') THEN 1 ELSE 0 END) as modificationCount,
+        MAX(accessedAt) as lastAccess 
+      FROM access_logs 
+      WHERE accessedAt > DATE_SUB(NOW(), INTERVAL 1 DAY)
+      GROUP BY ip
+      ORDER BY lastAccess DESC
+    `);
+
+        const [blocked] = await db.execute(sql`SELECT * FROM blocked_users ORDER BY createdAt DESC`);
+
+        res.json({
+            activeUsers: logs,
+            blockedUsers: blocked
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /users/notify: Send KakaoTalk notification
 router.post("/users/notify", async (req, res) => {
     const { ip, kakaoId, message } = req.body;
@@ -95,11 +130,8 @@ router.post("/users/notify", async (req, res) => {
     }
 
     try {
-        // TODO: Implement actual KakaoTalk API integration
-        // For now, just log the notification attempt
         console.log(`[KakaoTalk Notification] IP: ${ip}, KakaoID: ${kakaoId}, Message: ${message}`);
 
-        // Placeholder response
         res.json({
             success: true,
             message: "Notification sent (placeholder - implement KakaoTalk API)"
