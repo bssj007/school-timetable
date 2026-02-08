@@ -4,11 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Lock, Settings } from "lucide-react";
+import { Lock, Settings, Eye, EyeOff } from "lucide-react";
 
 export default function Admin() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
 
     const checkPasswordMutation = useMutation({
         mutationFn: async (password: string) => {
@@ -57,13 +58,32 @@ export default function Admin() {
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleLogin} className="space-y-4">
-                            <Input
-                                type="password"
-                                placeholder="암호"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                autoFocus
-                            />
+                            <div className="relative">
+                                <Input
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="암호"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    autoFocus
+                                    className="pr-10"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                >
+                                    {showPassword ? (
+                                        <EyeOff className="h-4 w-4 text-gray-500" />
+                                    ) : (
+                                        <Eye className="h-4 w-4 text-gray-500" />
+                                    )}
+                                    <span className="sr-only">
+                                        {showPassword ? "암호 숨기기" : "암호 보기"}
+                                    </span>
+                                </Button>
+                            </div>
                             <Button
                                 type="submit"
                                 className="w-full"
