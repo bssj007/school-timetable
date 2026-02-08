@@ -53,10 +53,12 @@ export const onRequest = async (context: any) => {
                 }
             }
 
+            const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+
             const result = await env.DB.prepare(
-                `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
-            ).bind(subject, title, description || '', dueDate, grade, classNum, classTime || null).run();
+                `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, lastModifiedIp) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
+            ).bind(subject, title, description || '', dueDate, grade, classNum, classTime || null, ip).run();
 
             return new Response(JSON.stringify({ success: true, result }), {
                 headers: { 'Content-Type': 'application/json' }

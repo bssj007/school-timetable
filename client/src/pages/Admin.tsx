@@ -259,6 +259,7 @@ export default function Admin() {
                                             <TableHead>과목</TableHead>
                                             <TableHead>제목</TableHead>
                                             <TableHead className="w-[120px]">마감일</TableHead>
+                                            <TableHead className="w-[120px]">수정 IP</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -281,6 +282,9 @@ export default function Admin() {
                                                 <TableCell>{assessment.subject}</TableCell>
                                                 <TableCell>{assessment.title}</TableCell>
                                                 <TableCell>{assessment.dueDate}</TableCell>
+                                                <TableCell className="text-xs font-mono text-gray-500">
+                                                    {assessment.lastModifiedIp || '-'}
+                                                </TableCell>
                                             </TableRow>
                                         ))}
                                         {(!assessments || assessments.length === 0) && (
@@ -313,6 +317,7 @@ export default function Admin() {
                                             <TableRow>
                                                 <TableHead>IP 주소</TableHead>
                                                 <TableHead>카카오 계정</TableHead>
+                                                <TableHead>수정 횟수</TableHead>
                                                 <TableHead>마지막 접속</TableHead>
                                                 <TableHead className="w-[100px]">관리</TableHead>
                                             </TableRow>
@@ -330,6 +335,15 @@ export default function Admin() {
                                                                 </div>
                                                             ) : (
                                                                 <span className="text-gray-400">-</span>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {user.modificationCount > 0 ? (
+                                                                <Badge variant="secondary" className="font-mono">
+                                                                    {user.modificationCount}회
+                                                                </Badge>
+                                                            ) : (
+                                                                <span className="text-gray-400 text-xs">-</span>
                                                             )}
                                                         </TableCell>
                                                         <TableCell>{new Date(user.lastAccess).toLocaleString()}</TableCell>

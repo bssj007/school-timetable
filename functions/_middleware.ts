@@ -46,8 +46,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const logRequest = async () => {
         try {
             await env.DB.prepare(
-                "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint) VALUES (?, ?, ?, ?)"
-            ).bind(ip, null, null, url.pathname).run();
+                "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method) VALUES (?, ?, ?, ?, ?)"
+            ).bind(ip, null, null, url.pathname, request.method).run();
         } catch (e) {
             console.error("Failed to log access:", e);
         }

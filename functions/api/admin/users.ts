@@ -18,7 +18,13 @@ export const onRequest = async (context: any) => {
             // 1. Get recent access logs (e.g., last 24 hours, grouped by IP/User)
             // SQLite D1 specific syntax for date
             const recentLogs = await env.DB.prepare(
-                `SELECT ip, kakaoId, kakaoNickname, COUNT(*) as requestCount, MAX(accessedAt) as lastAccess 
+                `SELECT 
+                    ip, 
+                    kakaoId, 
+                    kakaoNickname, 
+                    COUNT(*) as requestCount, 
+                    SUM(CASE WHEN method IN ('POST', 'DELETE') THEN 1 ELSE 0 END) as modificationCount,
+                    MAX(accessedAt) as lastAccess 
                  FROM access_logs 
                  WHERE accessedAt > datetime('now', '-1 day')
                  GROUP BY ip
