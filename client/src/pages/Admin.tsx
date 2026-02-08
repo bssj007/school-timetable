@@ -319,6 +319,7 @@ export default function Admin() {
                                                 <TableHead>카카오 계정</TableHead>
                                                 <TableHead>수정 횟수</TableHead>
                                                 <TableHead>마지막 접속</TableHead>
+                                                <TableHead className="w-[100px]">알림</TableHead>
                                                 <TableHead className="w-[100px]">관리</TableHead>
                                             </TableRow>
                                         </TableHeader>
@@ -347,6 +348,46 @@ export default function Admin() {
                                                             )}
                                                         </TableCell>
                                                         <TableCell>{new Date(user.lastAccess).toLocaleString()}</TableCell>
+                                                        <TableCell>
+                                                            {user.kakaoId ? (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    className="text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+                                                                    onClick={async () => {
+                                                                        const message = prompt("전송할 메시지를 입력하세요:");
+                                                                        if (!message) return;
+
+                                                                        try {
+                                                                            const response = await fetch('/api/admin/users/notify', {
+                                                                                method: 'POST',
+                                                                                headers: {
+                                                                                    'Content-Type': 'application/json',
+                                                                                    'X-Admin-Password': password
+                                                                                },
+                                                                                body: JSON.stringify({
+                                                                                    ip: user.ip,
+                                                                                    kakaoId: user.kakaoId,
+                                                                                    message
+                                                                                })
+                                                                            });
+                                                                            const data = await response.json();
+                                                                            if (data.success) {
+                                                                                alert('알림이 전송되었습니다 (개발중)');
+                                                                            } else {
+                                                                                alert('알림 전송에 실패했습니다: ' + data.error);
+                                                                            }
+                                                                        } catch (error) {
+                                                                            alert('알림 전송 중 오류가 발생했습니다.');
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    📱 알림
+                                                                </Button>
+                                                            ) : (
+                                                                <span className="text-gray-400 text-xs">-</span>
+                                                            )}
+                                                        </TableCell>
                                                         <TableCell>
                                                             {isBlocked ? (
                                                                 <Badge variant="destructive">차단됨</Badge>

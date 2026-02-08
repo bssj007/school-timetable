@@ -86,4 +86,27 @@ router.delete("/users", async (req, res) => {
     }
 });
 
+// POST /users/notify: Send KakaoTalk notification
+router.post("/users/notify", async (req, res) => {
+    const { ip, kakaoId, message } = req.body;
+
+    if (!message) {
+        return res.status(400).json({ error: "Message is required" });
+    }
+
+    try {
+        // TODO: Implement actual KakaoTalk API integration
+        // For now, just log the notification attempt
+        console.log(`[KakaoTalk Notification] IP: ${ip}, KakaoID: ${kakaoId}, Message: ${message}`);
+
+        // Placeholder response
+        res.json({
+            success: true,
+            message: "Notification sent (placeholder - implement KakaoTalk API)"
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export const adminRouter = router;
