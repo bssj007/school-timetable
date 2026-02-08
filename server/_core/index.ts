@@ -10,6 +10,7 @@ import { serveStatic, setupVite } from "./vite";
 import { runMigrations } from "./migrate";
 import { adminRouter } from "../routes/admin";
 import { assessmentRouter } from "../routes/assessment";
+import { myIpRouter } from "../routes/my-ip";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -43,6 +44,7 @@ async function startServer() {
   // Custom API Routes (Local Dev Emulation)
   app.use("/api/admin", adminRouter);
   app.use("/api/assessment", assessmentRouter);
+  app.use("/api/my-ip", myIpRouter);
 
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
