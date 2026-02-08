@@ -53,7 +53,7 @@ export const onRequest = async (context: any) => {
                 }
             }
 
-            const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+            const ip = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
 
             try {
                 // Try inserting with lastModifiedIp (New Schema)

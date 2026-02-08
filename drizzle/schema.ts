@@ -53,15 +53,36 @@ export type InsertTimetable = typeof timetables.$inferInsert;
  */
 export const performanceAssessments = mysqlTable("performanceAssessments", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(), // 작성자 ID
-  assessmentDate: varchar("assessmentDate", { length: 10 }).notNull(), // 수행평가 날짜 (YYYY-MM-DD)
-  subject: varchar("subject", { length: 100 }).notNull(), // 과목명
-  content: text("content").notNull(), // 수행평가 내용
-  classTime: int("classTime"), // 교시 (선택사항)
-  weekday: int("weekday"), // 요일 (선택사항)
+  subject: varchar("subject", { length: 100 }).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  dueDate: varchar("dueDate", { length: 20 }).notNull(), // YYYY-MM-DD
+  grade: int("grade").notNull(),
+  classNum: int("classNum").notNull(),
+  classTime: int("classTime"),
+  isDone: int("isDone").default(0),
+  lastModifiedIp: varchar("lastModifiedIp", { length: 45 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type PerformanceAssessment = typeof performanceAssessments.$inferSelect;
 export type InsertPerformanceAssessment = typeof performanceAssessments.$inferInsert;
+
+export const blockedUsers = mysqlTable("blockedUsers", {
+  id: int("id").autoincrement().primaryKey(),
+  identifier: varchar("identifier", { length: 255 }).notNull(), // IP or KakaoID
+  type: mysqlEnum("type", ["IP", "KakaoID"]).notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const accessLogs = mysqlTable("accessLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  ip: varchar("ip", { length: 45 }).notNull(),
+  kakaoId: varchar("kakaoId", { length: 255 }),
+  kakaoNickname: varchar("kakaoNickname", { length: 255 }),
+  endpoint: varchar("endpoint", { length: 255 }).notNull(),
+  method: varchar("method", { length: 10 }),
+  accessedAt: timestamp("accessedAt").defaultNow().notNull(),
+});

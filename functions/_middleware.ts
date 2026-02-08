@@ -12,7 +12,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
 
     // 1. IP 가져오기
-    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    // 로컬 환경에서는 CF-Connecting-IP 헤더가 없을 수 있으므로 127.0.0.1로 대체
+    const ip = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
 
     // 2. 카카오 사용자 정보 (쿠키에서 추출 시도)
     // 간단하게 구현: 쿠키 파싱
