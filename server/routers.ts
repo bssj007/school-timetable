@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { getTimetableData, getPerformanceAssessments, createPerformanceAssessment, updatePerformanceAssessment, deletePerformanceAssessment, saveTimetableData } from "../server/db";
 import { fetchTimetableFromComcigan, searchSchools } from "./comcigan";
+import { adminPassword } from "./adminPW";
 
 export const appRouter = router({
   system: systemRouter,
@@ -147,10 +148,7 @@ export const appRouter = router({
         return String(obj.password);
       })
       .mutation(async ({ input: password }) => {
-        // Cloudflare Pages/Workers environment does not support 'fs' module at runtime.
-        // We import the password from a typescript file which gets bundled.
-        const { adminPassword } = await import("./adminPW");
-
+        // Cloudflare Pages/Workers environment check
         if (password === adminPassword) {
           return { success: true };
         } else {
