@@ -55,10 +55,29 @@ export const onRequest = async (context: any) => {
 
             const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
 
-            const result = await env.DB.prepare(
-                `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, lastModifiedIp) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
-            ).bind(subject, title, description || '', dueDate, grade, classNum, classTime || null, ip).run();
+            try {
+                // Try inserting with lastModifiedIp (New Schema)
+                const result = await env.DB.prepare(
+                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, lastModifiedIp) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
+                ).bind(subject, title, description || '', dueDate, grade, classNum, classTime || null, ip).run();
+
+                return new Response(JSON.stringify({ success: true, result }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            } catch (insertError: any) {
+                console.error("[Assessment API] Insert with IP failed, fallback to old schema:", insertError.message);
+
+                // Fallback: Insert without lastModifiedIp (Old Schema)
+                const result = await env.DB.prepare(
+                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
+                ).bind(subject, title, description || '', dueDate, grade, classNum, classTime || null).run();
+
+                return new Response(JSON.stringify({ success: true, result, warning: "IP not saved due to schema mismatch" }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
 
             return new Response(JSON.stringify({ success: true, result }), {
                 headers: { 'Content-Type': 'application/json' }

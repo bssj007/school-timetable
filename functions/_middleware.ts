@@ -45,9 +45,21 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     // 로그 기록 (비동기로 수행하여 응답 지연 최소화 - waitUntil 사용)
     const logRequest = async () => {
         try {
-            await env.DB.prepare(
-                "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method) VALUES (?, ?, ?, ?, ?)"
-            ).bind(ip, null, null, url.pathname, request.method).run();
+            try {
+                // Try logging with method (New Schema)
+                await env.DB.prepare(
+                    "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method) VALUES (?, ?, ?, ?, ?)"
+                ).bind(ip, null, null, url.pathname, request.method).run();
+            } catch (logErr: any) {
+                // Fallback: Log without method (Old Schema)
+                try {
+                    await env.DB.prepare(
+                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint) VALUES (?, ?, ?, ?)"
+                    ).bind(ip, null, null, url.pathname).run();
+                } catch (fallbackErr) {
+                    console.error("Failed to log access (fallback):", fallbackErr);
+                }
+            }
         } catch (e) {
             console.error("Failed to log access:", e);
         }
