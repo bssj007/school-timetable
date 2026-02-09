@@ -355,7 +355,7 @@ export default function Dashboard() {
               value={grade}
               onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
             >
-              <SelectTrigger className="w-[70px] h-10 bg-white">
+              <SelectTrigger className="w-[90px] h-10 bg-white">
                 <SelectValue placeholder="학년" />
               </SelectTrigger>
               <SelectContent>
@@ -366,18 +366,21 @@ export default function Dashboard() {
             </Select>
 
             <div className="flex items-center gap-1">
-              <Input
-                type="text"
-                inputMode="numeric"
-                className="w-[50px] h-10 text-center bg-white px-1"
+              <Select
                 value={classNum}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/[^0-9]/g, "");
-                  setConfig({ grade, classNum: val, studentNumber });
-                }}
-                maxLength={2}
-              />
-              <span className="font-bold">반</span>
+                onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
+              >
+                <SelectTrigger className="w-[80px] h-10 bg-white">
+                  <SelectValue placeholder="반" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
+                    <SelectItem key={num} value={num.toString()}>
+                      {num}반
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex items-center gap-1">
