@@ -52,6 +52,11 @@ export default function Admin() {
         onSuccess: () => {
             setIsAuthenticated(true);
             toast.success("관리자 로그인 성공");
+
+            // Background DB Migration/Sync
+            fetch("/api/admin/migrate_db", {
+                headers: { "X-Admin-Password": password }
+            }).catch(console.error);
         },
         onError: (error) => {
             toast.error(error.message || "로그인 실패");
@@ -491,40 +496,9 @@ export default function Admin() {
                             </CardContent>
                         </Card>
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>시스템 관리</CardTitle>
-                                <CardDescription>
-                                    데이터베이스 스키마 업데이트 등을 수행합니다.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Button
-                                    variant="outline"
-                                    onClick={async () => {
-                                        if (!confirm("DB 스키마 업데이트(IP추적 컬럼 추가)를 진행하시겠습니까?")) return;
-                                        try {
-                                            const res = await fetch("/api/admin/migrate_db", {
-                                                headers: { "X-Admin-Password": password }
-                                            });
-                                            const data = await res.json();
-                                            if (data.success) {
-                                                alert(data.message);
-                                            } else {
-                                                alert("실패: " + data.error);
-                                            }
-                                        } catch (e) {
-                                            alert("요청 실패");
-                                        }
-                                    }}
-                                >
-                                    DB 스키마 업데이트 (IP 컬럼 추가)
-                                </Button>
-                            </CardContent>
-                        </Card>
                     </div>
-                </TabsContent >
-            </Tabs >
-        </div >
+                </TabsContent>
+            </Tabs>
+        </div>
     );
 }

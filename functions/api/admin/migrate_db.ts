@@ -13,26 +13,68 @@ export const onRequest = async (context: any) => {
         return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500 });
     }
 
+    const results = [];
+
     try {
-        // Attempt to add the column
-        // We use a try-catch block to handle the case where the column might already exist
+        // 1. performance_assessments: Add lastModifiedIp
         try {
             await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN lastModifiedIp TEXT").run();
-            return new Response(JSON.stringify({ success: true, message: "Migration applied: Added lastModifiedIp column." }), {
-                headers: { 'Content-Type': 'application/json' }
-            });
+            results.push("Added lastModifiedIp to performance_assessments");
         } catch (e: any) {
-            // Check for duplicate column error
-            // SQLite error for duplicate column usually contains "duplicate column name"
             if (e.message.includes("duplicate column name")) {
-                return new Response(JSON.stringify({ success: true, message: "Column lastModifiedIp already exists." }), {
-                    headers: { 'Content-Type': 'application/json' }
-                });
+                // results.push("lastModifiedIp already exists");
+            } else {
+                results.push(`Error adding lastModifiedIp: ${e.message}`);
             }
-            throw e;
         }
 
+        // 2. Create blocked_users table
+        try {
+            await env.DB.prepare(`
+                CREATE TABLE IF NOT EXISTS blocked_users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    identifier TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    reason TEXT,
+                    createdAt TEXT DEFAULT (datetime('now'))
+                )
+            `).run();
+            results.push("Checked/Created blocked_users table");
+        } catch (e: any) {
+            results.push(`Error creating blocked_users: ${e.message}`);
+        }
+
+        // 3. Create access_logs table
+        try {
+            await env.DB.prepare(`
+                CREATE TABLE IF NOT EXISTS access_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ip TEXT,
+                    kakaoId TEXT,
+                    kakaoNickname TEXT,
+                    endpoint TEXT NOT NULL,
+                    method TEXT,
+                    accessedAt TEXT DEFAULT (datetime('now'))
+                )
+            `).run();
+            results.push("Checked/Created access_logs table");
+        } catch (e: any) {
+            results.push(`Error creating access_logs: ${e.message}`);
+        }
+
+        // 4. access_logs: Add method column (if missing from old schema)
+        try {
+            await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN method TEXT").run();
+            results.push("Added method to access_logs");
+        } catch (e: any) {
+            // Ignore duplicate column error
+        }
+
+        return new Response(JSON.stringify({ success: true, results }), {
+            headers: { 'Content-Type': 'application/json' }
+        });
+
     } catch (err: any) {
-        return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+        return new Response(JSON.stringify({ error: err.message, results }), { status: 500 });
     }
 }
