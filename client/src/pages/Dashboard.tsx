@@ -90,6 +90,14 @@ export default function Dashboard() {
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [viewingAssessments, setViewingAssessments] = useState<AssessmentItem[]>([]);
 
+  const [formData, setFormData] = useState({
+    assessmentDate: "",
+    subject: "",
+    content: "",
+    classTime: "",
+    round: "1",
+  });
+
   // 1. 시간표 조회 -> Moved down
   // 시간표 셀 클릭 핸들러
   const handleCellClick = (
