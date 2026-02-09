@@ -32,6 +32,7 @@ export default function Admin() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [userIp, setUserIp] = useState<string | null>(null);
+    const [timeRange, setTimeRange] = useState("24h");
     const queryClient = useQueryClient();
 
     useEffect(() => {
@@ -119,9 +120,9 @@ export default function Admin() {
 
     // --- User Management ---
     const { data: userData } = useQuery({
-        queryKey: ["admin", "users"],
+        queryKey: ["admin", "users", timeRange],
         queryFn: async () => {
-            const res = await fetch("/api/admin/users", {
+            const res = await fetch(`/api/admin/users?range=${timeRange}`, {
                 headers: { "X-Admin-Password": password },
             });
             if (!res.ok) throw new Error("Failed to fetch users");
