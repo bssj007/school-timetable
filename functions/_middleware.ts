@@ -15,19 +15,33 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     // 로컬 환경에서는 CF-Connecting-IP 헤더가 없을 수 있으므로 127.0.0.1로 대체
     const ip = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
 
-    // 2. 카카오 사용자 정보 (쿠키에서 추출 시도)
-    // 간단하게 구현: 쿠키 파싱
-    const cookie = request.headers.get('Cookie') || '';
+    // 2. 카카오 사용자 정보 (쿠키에서 추출)
+    const cookieHeader = request.headers.get('Cookie') || '';
     let kakaoId = null;
     let kakaoNickname = null;
 
-    // 실제로는 세션을 검증해야 하지만, 여기서는 로그 목적이므로
-    // 클라이언트가 보내는 정보나 토큰을 신뢰하지 않고, 
-    // 서버 사이드 세션 로직을 재구현하기 복잡하므로
-    // 쿠키에 있는 세션 ID를 통해 DB에서 조회하는 것이 정확함.
-    // 하지만 미들웨어 오버헤드를 줄이기 위해, 일단 IP 위주로 차단하고
-    // 카카오 ID 차단은 로그인/API 요청 시 별도로 처리하거나
-    // 여기서 DB 조회를 한 번 더 수행함.
+    if (cookieHeader) {
+        const cookies = Object.fromEntries(
+            cookieHeader.split(';')
+                .map((c: string) => c.trim().split('='))
+                .filter((p: string[]) => p.length === 2)
+        );
+
+        if (cookies['kakao_id']) {
+            kakaoId = cookies['kakao_id'];
+        }
+
+        if (cookies['kakao_nickname']) {
+            try {
+                kakaoNickname = decodeURIComponent(cookies['kakao_nickname']);
+            } catch (e) {
+                kakaoNickname = cookies['kakao_nickname'];
+            }
+        }
+    }
+
+    // 3. User-Agent 가져오기
+    const userAgent = (request.headers.get('User-Agent') || '').substring(0, 500); // Too long UA safety
 
     // 차단 여부 확인 (IP)
     try {
@@ -47,10 +61,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const logRequest = async () => {
         try {
             try {
-                // Try logging with method (New Schema)
+                // Try logging with method & userAgent (New Schema)
                 await env.DB.prepare(
-                    "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method) VALUES (?, ?, ?, ?, ?)"
-                ).bind(ip, null, null, url.pathname, request.method).run();
+                    "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent) VALUES (?, ?, ?, ?, ?, ?)"
+                ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent).run();
             } catch (e: any) {
                 const errorMsg = e.message || "";
 
@@ -66,6 +80,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                             kakaoNickname TEXT,
                             endpoint TEXT NOT NULL,
                             method TEXT,
+                            userAgent TEXT,
                             accessedAt TEXT DEFAULT (datetime('now'))
                         )
                     `).run();
@@ -83,22 +98,25 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
                         // Retry Log Insert
                         await env.DB.prepare(
-                            "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method) VALUES (?, ?, ?, ?, ?)"
-                        ).bind(ip, null, null, url.pathname, request.method).run();
+                            "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent) VALUES (?, ?, ?, ?, ?, ?)"
+                        ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent).run();
 
                     } catch (creationErr) {
                         console.error("Failed to create tables and retry log:", creationErr);
                     }
                 }
-                // Case 2: Column "method" missing -> Fallback
-                else if (errorMsg.includes("no column named method") || errorMsg.includes("has no column")) {
+                // Case 2: Column "method" or "userAgent" missing -> Fallback & Auto-Migration
+                else if (errorMsg.includes("no column") || errorMsg.includes("has no column")) {
                     try {
-                        await env.DB.prepare(
-                            "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint) VALUES (?, ?, ?, ?)"
-                        ).bind(ip, null, null, url.pathname).run();
-
-                        // Try to auto-fix schema for next time
+                        // Attempt to add missing columns safely
                         await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN method TEXT").run().catch(() => { });
+                        await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN userAgent TEXT").run().catch(() => { });
+
+                        // Retry Insert
+                        await env.DB.prepare(
+                            "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent) VALUES (?, ?, ?, ?, ?, ?)"
+                        ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent).run();
+
                     } catch (fallbackErr) {
                         console.error("Failed to log access (fallback):", fallbackErr);
                     }

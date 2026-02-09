@@ -10,11 +10,14 @@ import Navigation from "./components/Navigation";
 import OnboardingDialog from "./components/OnboardingDialog";
 import { UserConfigProvider } from "@/contexts/UserConfigContext";
 
+import FactoryReset from "./pages/FactoryReset";
+
 function Router() {
   return (
     <Switch>
       <Route path={"/"} component={Dashboard} />
       <Route path={"/admin"} component={Admin} />
+      <Route path={"/admin/factory-reset"} component={FactoryReset} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

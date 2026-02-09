@@ -84,5 +84,6 @@ export const accessLogs = mysqlTable("accessLogs", {
   kakaoNickname: varchar("kakaoNickname", { length: 255 }),
   endpoint: varchar("endpoint", { length: 255 }).notNull(),
   method: varchar("method", { length: 10 }),
+  userAgent: text("userAgent"),
   accessedAt: timestamp("accessedAt").defaultNow().notNull(),
 });

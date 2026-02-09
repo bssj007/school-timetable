@@ -15,30 +15,71 @@ export const onRequest = async (context: any) => {
 
     try {
         if (request.method === 'GET') {
-            // 1. Get recent access logs (e.g., last 24 hours, grouped by IP/User)
-            // SQLite D1 specific syntax for date
-            const recentLogs = await env.DB.prepare(
-                `SELECT 
-                    ip, 
-                    kakaoId, 
-                    kakaoNickname, 
-                    COUNT(*) as requestCount, 
-                    SUM(CASE WHEN method IN ('POST', 'DELETE') THEN 1 ELSE 0 END) as modificationCount,
-                    MAX(accessedAt) as lastAccess 
+            // 1. Fetch Raw Logs (Last 24h)
+            // We fetch individual rows to aggregate properly in code + match IPProfile structure
+            const { results: logs } = await env.DB.prepare(
+                `SELECT ip, kakaoId, kakaoNickname, method, accessedAt 
                  FROM access_logs 
-                 WHERE accessedAt > datetime('now', '-1 day')
-                 GROUP BY ip
-                 ORDER BY lastAccess DESC`
+                 WHERE accessedAt > datetime('now', '-1 day') 
+                 ORDER BY accessedAt DESC`
             ).all();
 
-            // 2. Get currently blocked users
-            const blockedUsers = await env.DB.prepare(
+            // 2. Fetch Blocked Users
+            const { results: blockedUsers } = await env.DB.prepare(
                 "SELECT * FROM blocked_users ORDER BY createdAt DESC"
             ).all();
 
+            // 3. Aggregate in Memory
+            const profileMap = new Map<string, any>();
+
+            // Helper to check block status (IP only for now in this view)
+            const getBlockStatus = (ip: string) => {
+                return blockedUsers.find((b: any) => b.identifier === ip && b.type === 'IP');
+            };
+
+            for (const log of (logs as any[])) {
+                if (!log.ip) continue;
+
+                if (!profileMap.has(log.ip)) {
+                    const blockEntry = getBlockStatus(log.ip);
+                    profileMap.set(log.ip, {
+                        ip: log.ip,
+                        kakaoAccounts: [],
+                        isBlocked: !!blockEntry,
+                        blockReason: blockEntry?.reason || null,
+                        blockId: blockEntry?.id,
+                        modificationCount: 0,
+                        lastAccess: log.accessedAt, // First one is latest due to DESC sort
+                        assessments: [], // Empty for lightweight list
+                        logs: [],        // Empty for lightweight list
+                        detailsLoaded: false
+                    });
+                }
+
+                const profile = profileMap.get(log.ip);
+
+                // Track Modification (Crude count based on method)
+                if (['POST', 'DELETE'].includes(log.method)) {
+                    profile.modificationCount++;
+                }
+
+                // Track Kakao Account (Unique)
+                if (log.kakaoId && log.kakaoNickname) {
+                    const exists = profile.kakaoAccounts.some((k: any) => k.kakaoId === log.kakaoId);
+                    if (!exists) {
+                        profile.kakaoAccounts.push({
+                            kakaoId: log.kakaoId,
+                            kakaoNickname: log.kakaoNickname
+                        });
+                    }
+                }
+            }
+
+            const activeUsers = Array.from(profileMap.values());
+
             return new Response(JSON.stringify({
-                activeUsers: recentLogs.results,
-                blockedUsers: blockedUsers.results
+                activeUsers, // shape: IPProfile[]
+                blockedUsers // shape: BlockedUser[]
             }), {
                 headers: { 'Content-Type': 'application/json' }
             });

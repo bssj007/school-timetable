@@ -59,13 +59,19 @@ export const onRequest = async (context: any) => {
         //     nickname: userInfo.properties?.nickname || '사용자'
         // };
 
+        const nickname = userInfo.properties?.nickname || userInfo.kakao_account?.profile?.nickname || '사용자';
+
+        // Prepare headers with multiple cookies
+        const headers = new Headers();
+        headers.set('Location', `/?kakao=success&kakaoId=${userInfo.id}`);
+        headers.append('Set-Cookie', `kakao_token=${tokenData.access_token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=21600`);
+        headers.append('Set-Cookie', `kakao_id=${userInfo.id}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=21600`);
+        headers.append('Set-Cookie', `kakao_nickname=${encodeURIComponent(nickname)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=21600`);
+
         // 클라이언트로 리다이렉트 (토큰 전달)
         return new Response(null, {
             status: 302,
-            headers: {
-                'Location': `/?kakao=success&kakaoId=${userInfo.id}`,
-                'Set-Cookie': `kakao_token=${tokenData.access_token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=21600`
-            }
+            headers: headers
         });
 
     } catch (error: any) {

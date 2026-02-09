@@ -19,13 +19,38 @@ export const onRequest = async (context: any) => {
             const grade = url.searchParams.get('grade') || '1';
             const classNum = url.searchParams.get('classNum') || '1';
 
-            const { results } = await env.DB.prepare(
-                "SELECT * FROM performance_assessments WHERE grade = ? AND classNum = ? ORDER BY dueDate ASC, id DESC"
-            ).bind(grade, classNum).all();
+            try {
+                const { results } = await env.DB.prepare(
+                    "SELECT * FROM performance_assessments WHERE grade = ? AND classNum = ? ORDER BY dueDate ASC, id DESC"
+                ).bind(grade, classNum).all();
 
-            return new Response(JSON.stringify(results), {
-                headers: { 'Content-Type': 'application/json' }
-            });
+                return new Response(JSON.stringify(results), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            } catch (e: any) {
+                if (e.message && e.message.includes("no such table")) {
+                    // Table missing? Create it and return empty list
+                    await env.DB.prepare(`
+                        CREATE TABLE IF NOT EXISTS performance_assessments (
+                          id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          subject TEXT NOT NULL,
+                          title TEXT NOT NULL,
+                          description TEXT,
+                          dueDate TEXT NOT NULL,
+                          grade INTEGER NOT NULL,
+                          classNum INTEGER NOT NULL,
+                          classTime INTEGER,
+                          isDone INTEGER DEFAULT 0,
+                          createdAt TEXT DEFAULT (datetime('now')),
+                          lastModifiedIp TEXT
+                        )
+                    `).run();
+                    return new Response(JSON.stringify([]), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+                throw e;
+            }
         }
 
         // POST: 추가
@@ -66,6 +91,37 @@ export const onRequest = async (context: any) => {
                     headers: { 'Content-Type': 'application/json' }
                 });
             } catch (insertError: any) {
+                const errorMsg = insertError.message || "";
+
+                if (errorMsg.includes("no such table")) {
+                    // Table missing -> Create and Retry
+                    await env.DB.prepare(`
+                        CREATE TABLE IF NOT EXISTS performance_assessments (
+                          id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          subject TEXT NOT NULL,
+                          title TEXT NOT NULL,
+                          description TEXT,
+                          dueDate TEXT NOT NULL,
+                          grade INTEGER NOT NULL,
+                          classNum INTEGER NOT NULL,
+                          classTime INTEGER,
+                          isDone INTEGER DEFAULT 0,
+                          createdAt TEXT DEFAULT (datetime('now')),
+                          lastModifiedIp TEXT
+                        )
+                    `).run();
+
+                    // Retry
+                    const result = await env.DB.prepare(
+                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, lastModifiedIp) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
+                    ).bind(subject, title, description || '', dueDate, grade, classNum, classTime || null, ip).run();
+
+                    return new Response(JSON.stringify({ success: true, result }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
                 console.error("[Assessment API] Insert with IP failed, fallback to old schema:", insertError.message);
 
                 // Fallback: Insert without lastModifiedIp (Old Schema)
@@ -78,32 +134,44 @@ export const onRequest = async (context: any) => {
                     headers: { 'Content-Type': 'application/json' }
                 });
             }
+            console.error("[Assessment API] Insert with IP failed, fallback to old schema:", insertError.message);
 
-            return new Response(JSON.stringify({ success: true, result }), {
+            // Fallback: Insert without lastModifiedIp (Old Schema)
+            const result = await env.DB.prepare(
+                `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
+            ).bind(subject, title, description || '', dueDate, grade, classNum, classTime || null).run();
+
+            return new Response(JSON.stringify({ success: true, result, warning: "IP not saved due to schema mismatch" }), {
                 headers: { 'Content-Type': 'application/json' }
             });
         }
+
+        return new Response(JSON.stringify({ success: true, result }), {
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
 
         // DELETE: 삭제 (보안상 좋지 않지만 일단 ID로 삭제)
         if (request.method === 'DELETE') {
-            const id = url.searchParams.get('id');
-            if (!id) return new Response('Missing ID', { status: 400 });
+        const id = url.searchParams.get('id');
+        if (!id) return new Response('Missing ID', { status: 400 });
 
-            await env.DB.prepare(
-                "DELETE FROM performance_assessments WHERE id = ?"
-            ).bind(id).run();
+        await env.DB.prepare(
+            "DELETE FROM performance_assessments WHERE id = ?"
+        ).bind(id).run();
 
-            return new Response(JSON.stringify({ success: true }), {
-                headers: { 'Content-Type': 'application/json' }
-            });
-        }
-
-        // PUT: 완료 여부 토글 (Optional, if needed)
-        // ...
-
-        return new Response('Method not allowed', { status: 405 });
-
-    } catch (err: any) {
-        return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+        return new Response(JSON.stringify({ success: true }), {
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
+
+    // PUT: 완료 여부 토글 (Optional, if needed)
+    // ...
+
+    return new Response('Method not allowed', { status: 405 });
+
+} catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+}
 }
