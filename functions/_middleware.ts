@@ -60,19 +60,18 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     // 로그 기록 (비동기로 수행하여 응답 지연 최소화 - waitUntil 사용)
     const logRequest = async () => {
         try {
-            try {
-                // Try logging with method & userAgent (New Schema)
-                await env.DB.prepare(
-                    "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent) VALUES (?, ?, ?, ?, ?, ?)"
-                ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent).run();
-            } catch (e: any) {
-                const errorMsg = e.message || "";
+            // Try logging with method & userAgent (New Schema)
+            await env.DB.prepare(
+                "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent) VALUES (?, ?, ?, ?, ?, ?)"
+            ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent).run();
+        } catch (e: any) {
+            const errorMsg = e.message || "";
 
-                // Case 1: Table does not exist -> Create and Retry
-                if (errorMsg.includes("no such table")) {
-                    try {
-                        // Create access_logs table
-                        await env.DB.prepare(`
+            // Case 1: Table does not exist -> Create and Retry
+            if (errorMsg.includes("no such table")) {
+                try {
+                    // Create access_logs table
+                    await env.DB.prepare(`
                         CREATE TABLE IF NOT EXISTS access_logs (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             ip TEXT,
@@ -85,8 +84,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                         )
                     `).run();
 
-                        // Create blocked_users table (just in case)
-                        await env.DB.prepare(`
+                    // Create blocked_users table (just in case)
+                    await env.DB.prepare(`
                         CREATE TABLE IF NOT EXISTS blocked_users (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             identifier TEXT NOT NULL,
@@ -96,38 +95,38 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                         )
                     `).run();
 
-                        // Retry Log Insert
-                        await env.DB.prepare(
-                            "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent) VALUES (?, ?, ?, ?, ?, ?)"
-                        ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent).run();
+                    // Retry Log Insert
+                    await env.DB.prepare(
+                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent) VALUES (?, ?, ?, ?, ?, ?)"
+                    ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent).run();
 
-                    } catch (creationErr) {
-                        console.error("Failed to create tables and retry log:", creationErr);
-                    }
-                }
-                // Case 2: Column "method" or "userAgent" missing -> Fallback & Auto-Migration
-                else if (errorMsg.includes("no column") || errorMsg.includes("has no column")) {
-                    try {
-                        // Attempt to add missing columns safely
-                        await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN method TEXT").run().catch(() => { });
-                        await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN userAgent TEXT").run().catch(() => { });
-
-                        // Retry Insert
-                        await env.DB.prepare(
-                            "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent) VALUES (?, ?, ?, ?, ?, ?)"
-                        ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent).run();
-
-                    } catch (fallbackErr) {
-                        console.error("Failed to log access (fallback):", fallbackErr);
-                    }
-                }
-                else {
-                    console.error("Failed to log access:", e);
+                } catch (creationErr) {
+                    console.error("Failed to create tables and retry log:", creationErr);
                 }
             }
-        };
+            // Case 2: Column "method" or "userAgent" missing -> Fallback & Auto-Migration
+            else if (errorMsg.includes("no column") || errorMsg.includes("has no column")) {
+                try {
+                    // Attempt to add missing columns safely
+                    await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN method TEXT").run().catch(() => { });
+                    await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN userAgent TEXT").run().catch(() => { });
 
-        context.waitUntil(logRequest());
+                    // Retry Insert
+                    await env.DB.prepare(
+                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent) VALUES (?, ?, ?, ?, ?, ?)"
+                    ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent).run();
 
-        return next();
+                } catch (fallbackErr) {
+                    console.error("Failed to log access (fallback):", fallbackErr);
+                }
+            }
+            else {
+                console.error("Failed to log access:", e);
+            }
+        }
     };
+
+    context.waitUntil(logRequest());
+
+    return next();
+};
