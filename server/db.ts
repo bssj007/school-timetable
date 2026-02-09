@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, timetables, InsertTimetable, performanceAssessments, InsertPerformanceAssessment } from "../drizzle/schema";
+import { InsertUser, users, performanceAssessments, InsertPerformanceAssessment } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,61 +89,7 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// 시간표 데이터 조회 함수
-export async function getTimetableData(grade: number, classNum: number) {
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get timetable: database not available");
-    return [];
-  }
 
-  try {
-    const result = await db
-      .select()
-      .from(timetables)
-      .where(
-        and(
-          eq(timetables.grade, grade),
-          eq(timetables.class, classNum)
-        )
-      );
-    return result;
-  } catch (error) {
-    console.error("[Database] Failed to get timetable:", error);
-    return [];
-  }
-}
-
-// 시간표 데이터 저장 함수
-export async function saveTimetableData(data: InsertTimetable[]) {
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot save timetable: database not available");
-    return;
-  }
-
-  try {
-    // 기존 데이터 삭제
-    if (data.length > 0) {
-      const first = data[0];
-      await db
-        .delete(timetables)
-        .where(
-          and(
-            eq(timetables.grade, first.grade),
-            eq(timetables.class, first.class)
-          )
-        );
-    }
-    // 새 데이터 삽입
-    if (data.length > 0) {
-      await db.insert(timetables).values(data);
-    }
-  } catch (error) {
-    console.error("[Database] Failed to save timetable:", error);
-    throw error;
-  }
-}
 
 // 수행평가 데이터 조회 함수
 export async function getPerformanceAssessments(userId: number) {

@@ -17,12 +17,14 @@ export const onRequestPost = async (context: any) => {
             return new Response(JSON.stringify({ error: "Database not configured" }), { status: 500 });
         }
 
-        // 2. Drop Tables
+        // 2. Drop Tables (Factory Reset)
+        await env.DB.prepare("DROP TABLE IF EXISTS users").run();
         await env.DB.prepare("DROP TABLE IF EXISTS performance_assessments").run();
         await env.DB.prepare("DROP TABLE IF EXISTS access_logs").run();
-        // Keep blocked_users? Or delete them too? "Factory Reset" implies everything.
         await env.DB.prepare("DROP TABLE IF EXISTS blocked_users").run();
-        await env.DB.prepare("DROP TABLE IF EXISTS system_settings").run(); // Also drop settings
+        await env.DB.prepare("DROP TABLE IF EXISTS system_settings").run();
+        await env.DB.prepare("DROP TABLE IF EXISTS kakao_tokens").run();
+        await env.DB.prepare("DROP TABLE IF EXISTS timetables").run(); // Legacy cleanup
 
         return new Response(JSON.stringify({ success: true, message: "Database reset complete" }), {
             headers: { "Content-Type": "application/json" }

@@ -73,14 +73,14 @@ export default function FactoryReset() {
 
                 <div className="space-y-6">
                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-900 uppercase tracking-wider">Confirmation Message</label>
-                        <div className="py-2 text-base font-bold text-black select-all text-center bg-gray-50 rounded border border-gray-200">
+                        <div className="py-3 text-base font-bold text-black select-all text-center bg-gray-50 border border-gray-200 rounded-none">
+                            {/* Target Phrase Display */}
                             {TARGET_PHRASE}
                         </div>
                         <Input
                             value={confirmation}
                             onChange={(e) => setConfirmation(e.target.value)}
-                            className="font-bold text-center border-2 border-gray-300 focus:border-red-500 rounded-md py-6 text-lg placeholder:text-gray-400 focus-visible:ring-0"
+                            className="font-bold text-center border-2 border-gray-300 focus:border-red-500 rounded-none py-6 text-lg placeholder:text-gray-400 focus-visible:ring-0"
                             placeholder="위 문구를 그대로 입력하세요"
                         />
                     </div>
@@ -89,14 +89,14 @@ export default function FactoryReset() {
                 <div className="flex gap-4 pt-4">
                     <Button
                         variant="outline"
-                        className="flex-1 h-12 text-base font-medium border-2 hover:bg-gray-50"
+                        className="flex-1 h-12 text-base font-medium border-2 hover:bg-gray-50 rounded-none"
                         onClick={() => setLocation("/admin")}
                     >
                         취소
                     </Button>
                     <Button
                         variant="destructive"
-                        className="flex-1 h-12 text-base font-bold bg-red-600 hover:bg-red-700 shadow-md transform hover:scale-[1.02] transition-all"
+                        className="flex-1 h-12 text-base font-bold bg-red-600 hover:bg-red-700 shadow-md transform hover:scale-[1.02] transition-all rounded-none"
                         disabled={confirmation !== TARGET_PHRASE || isLoading}
                         onClick={handleReset}
                     >

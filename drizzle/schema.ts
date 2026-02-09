@@ -26,32 +26,27 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
- * 시간표 데이터 테이블
- * 컴시간알리미 API에서 가져온 시간표 정보를 저장합니다.
+ * 시스템 설정 테이블
+ * 관리자 설정을 저장합니다.
  */
-export const timetables = mysqlTable("timetables", {
-  id: int("id").autoincrement().primaryKey(),
-  schoolCode: int("schoolCode").notNull(), // 학교 코드
-  schoolName: varchar("schoolName", { length: 255 }).notNull(), // 학교 이름
-  region: varchar("region", { length: 100 }).notNull(), // 지역
-  grade: int("grade").notNull(), // 학년
-  class: int("class").notNull(), // 반
-  weekday: int("weekday").notNull(), // 요일 (0: 월 ~ 4: 금)
-  classTime: int("classTime").notNull(), // 교시
-  teacher: varchar("teacher", { length: 100 }), // 선생님 이름
-  subject: varchar("subject", { length: 100 }), // 과목명
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const systemSettings = mysqlTable("system_settings", {
+  key: varchar("key", { length: 50 }).primaryKey(),
+  value: text("value"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
-export type Timetable = typeof timetables.$inferSelect;
-export type InsertTimetable = typeof timetables.$inferInsert;
+export type SystemSetting = typeof systemSettings.$inferSelect;
+export type InsertSystemSetting = typeof systemSettings.$inferInsert;
 
 /**
  * 수행평가 데이터 테이블
  * 사용자가 입력한 수행평가 정보를 저장합니다.
  */
-export const performanceAssessments = mysqlTable("performanceAssessments", {
+/**
+ * 수행평가 데이터 테이블
+ * 사용자가 입력한 수행평가 정보를 저장합니다.
+ */
+export const performanceAssessments = mysqlTable("performance_assessments", {
   id: int("id").autoincrement().primaryKey(),
   subject: varchar("subject", { length: 100 }).notNull(),
   title: varchar("title", { length: 255 }).notNull(),
@@ -69,7 +64,7 @@ export const performanceAssessments = mysqlTable("performanceAssessments", {
 export type PerformanceAssessment = typeof performanceAssessments.$inferSelect;
 export type InsertPerformanceAssessment = typeof performanceAssessments.$inferInsert;
 
-export const blockedUsers = mysqlTable("blockedUsers", {
+export const blockedUsers = mysqlTable("blocked_users", {
   id: int("id").autoincrement().primaryKey(),
   identifier: varchar("identifier", { length: 255 }).notNull(), // IP or KakaoID
   type: mysqlEnum("type", ["IP", "KakaoID"]).notNull(),
@@ -77,7 +72,7 @@ export const blockedUsers = mysqlTable("blockedUsers", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export const accessLogs = mysqlTable("accessLogs", {
+export const accessLogs = mysqlTable("access_logs", {
   id: int("id").autoincrement().primaryKey(),
   ip: varchar("ip", { length: 45 }).notNull(),
   kakaoId: varchar("kakaoId", { length: 255 }),
@@ -88,10 +83,10 @@ export const accessLogs = mysqlTable("accessLogs", {
   accessedAt: timestamp("accessedAt").defaultNow().notNull(),
 });
 
-export const kakaoTokens = mysqlTable("kakaoTokens", {
+export const kakaoTokens = mysqlTable("kakao_tokens", {
   id: int("id").autoincrement().primaryKey(),
   kakaoId: varchar("kakaoId", { length: 255 }).notNull().unique(),
-  accessToken: varchar("accessToken", { length: 255 }).notNull(),
-  refreshToken: varchar("refreshToken", { length: 255 }),
+  accessToken: text("accessToken").notNull(),
+  refreshToken: text("refreshToken"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

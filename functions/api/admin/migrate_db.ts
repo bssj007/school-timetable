@@ -16,27 +16,63 @@ export const onRequest = async (context: any) => {
     const results = [];
 
     try {
-        // 1. performance_assessments: Add lastModifiedIp
+        // 1. users Table (Core Auth)
         try {
-            await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN lastModifiedIp TEXT").run();
-            results.push("Added lastModifiedIp to performance_assessments");
+            await env.DB.prepare(`
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    openId VARCHAR(64) NOT NULL UNIQUE,
+                    name TEXT,
+                    email VARCHAR(320),
+                    loginMethod VARCHAR(64),
+                    role TEXT NOT NULL DEFAULT 'user', -- mysqlEnum shim
+                    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    lastSignedIn TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                )
+            `).run();
+            results.push("Checked/Created users table");
         } catch (e: any) {
-            if (e.message.includes("duplicate column name")) {
-                // results.push("lastModifiedIp already exists");
-            } else {
-                results.push(`Error adding lastModifiedIp: ${e.message}`);
-            }
+            results.push(`Error creating users: ${e.message}`);
         }
 
-        // 2. Create blocked_users table
+        // 2. performance_assessments Table
+        try {
+            await env.DB.prepare(`
+                CREATE TABLE IF NOT EXISTS performance_assessments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    subject VARCHAR(100) NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    dueDate VARCHAR(20) NOT NULL,
+                    grade INTEGER NOT NULL,
+                    classNum INTEGER NOT NULL,
+                    classTime INTEGER,
+                    isDone INTEGER DEFAULT 0,
+                    lastModifiedIp VARCHAR(45),
+                    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                )
+            `).run();
+            // ensure lastModifiedIp exists (migration support)
+            try {
+                await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN lastModifiedIp TEXT").run();
+            } catch (e) { }
+
+            results.push("Checked/Created performance_assessments table");
+        } catch (e: any) {
+            results.push(`Error creating performance_assessments: ${e.message}`);
+        }
+
+        // 3. blocked_users Table
         try {
             await env.DB.prepare(`
                 CREATE TABLE IF NOT EXISTS blocked_users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    identifier TEXT NOT NULL,
+                    identifier VARCHAR(255) NOT NULL,
                     type TEXT NOT NULL,
                     reason TEXT,
-                    createdAt TEXT DEFAULT (datetime('now'))
+                    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
                 )
             `).run();
             results.push("Checked/Created blocked_users table");
@@ -44,32 +80,38 @@ export const onRequest = async (context: any) => {
             results.push(`Error creating blocked_users: ${e.message}`);
         }
 
-        // 3. Create access_logs table
+        // 4. access_logs Table
         try {
             await env.DB.prepare(`
                 CREATE TABLE IF NOT EXISTS access_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    ip TEXT,
-                    kakaoId TEXT,
-                    kakaoNickname TEXT,
-                    endpoint TEXT NOT NULL,
-                    method TEXT,
-                    accessedAt TEXT DEFAULT (datetime('now'))
+                    ip VARCHAR(45) NOT NULL,
+                    kakaoId VARCHAR(255),
+                    kakaoNickname VARCHAR(255),
+                    endpoint VARCHAR(255) NOT NULL,
+                    method VARCHAR(10),
+                    userAgent TEXT,
+                    accessedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
                 )
             `).run();
+            // ensure method exists (migration support)
+            try {
+                await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN method TEXT").run();
+            } catch (e) { }
+
             results.push("Checked/Created access_logs table");
         } catch (e: any) {
             results.push(`Error creating access_logs: ${e.message}`);
         }
 
-        // 4. Create kakao_tokens table
+        // 5. kakao_tokens Table
         try {
             await env.DB.prepare(`
                 CREATE TABLE IF NOT EXISTS kakao_tokens (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     kakaoId VARCHAR(255) NOT NULL UNIQUE,
-                    accessToken VARCHAR(255) NOT NULL,
-                    refreshToken VARCHAR(255),
+                    accessToken TEXT NOT NULL,
+                    refreshToken TEXT,
                     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
                 )
             `).run();
@@ -78,12 +120,18 @@ export const onRequest = async (context: any) => {
             results.push(`Error creating kakao_tokens: ${e.message}`);
         }
 
-        // 5. access_logs: Add method column (if missing from old schema)
+        // 6. system_settings Table
         try {
-            await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN method TEXT").run();
-            results.push("Added method to access_logs");
+            await env.DB.prepare(`
+                CREATE TABLE IF NOT EXISTS system_settings (
+                    key VARCHAR(50) PRIMARY KEY,
+                    value TEXT,
+                    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                )
+            `).run();
+            results.push("Checked/Created system_settings table");
         } catch (e: any) {
-            // Ignore duplicate column error
+            results.push(`Error creating system_settings: ${e.message}`);
         }
 
         return new Response(JSON.stringify({ success: true, results }), {

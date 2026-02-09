@@ -248,21 +248,23 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
 
                     <TabsContent value="manual" className="flex-1 min-h-0 flex gap-6 mt-0">
                         {/* Sidebar: Table List (Only shown in Manual Mode) */}
-                        <Card className="w-1/4 h-full flex flex-col flex-none">
-                            <CardHeader className="py-4">
-                                <CardTitle className="text-lg flex items-center gap-2">
+                        <Card className="w-1/4 h-full flex flex-col flex-none border-0 shadow-none bg-transparent">
+                            <div className="flex items-center justify-between py-4 px-1">
+                                <h3 className="text-lg font-bold flex items-center gap-2">
                                     <Database className="w-4 h-4" /> 테이블 목록
-                                </CardTitle>
-                                <Button variant="ghost" size="sm" onClick={fetchTables}><RefreshCw className="w-3 h-3" /></Button>
-                            </CardHeader>
+                                </h3>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => fetchTables(false)}>
+                                    <RefreshCw className="w-3 h-3" />
+                                </Button>
+                            </div>
                             <CardContent className="flex-1 min-h-0 p-0">
-                                <ScrollArea className="h-full">
-                                    <div className="flex flex-col p-2 gap-1">
+                                <ScrollArea className="h-full border rounded-md bg-white">
+                                    <div className="flex flex-col p-1 gap-1">
                                         {tables.map(t => (
                                             <Button
                                                 key={t}
                                                 variant={activeTable === t ? "secondary" : "ghost"}
-                                                className="justify-start font-mono text-sm"
+                                                className="justify-start font-mono text-sm h-8 px-2"
                                                 onClick={() => handleTableClick(t)}
                                             >
                                                 {t}
@@ -275,21 +277,21 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
 
                         {/* Existing SQL Editor & Results */}
                         <div className="flex-1 flex flex-col gap-4 min-w-0">
-                            <Card className="flex-none">
-                                <CardHeader className="py-3 px-4 bg-gray-50 border-b">
+                            <Card className="flex-none bg-gray-50 border shadow-sm">
+                                <CardHeader className="py-3 px-4 border-b border-gray-100">
                                     <CardTitle className="text-sm font-mono text-gray-500">SQL Editor</CardTitle>
                                 </CardHeader>
                                 <CardContent className="p-4">
                                     <Textarea
                                         value={sql}
                                         onChange={(e) => setSql(e.target.value)}
-                                        className="font-mono text-sm min-h-[100px] mb-2"
+                                        className="font-mono text-sm min-h-[100px] mb-2 bg-white resize-none focus-visible:ring-1"
                                         placeholder="SELECT * FROM users..."
                                     />
                                     <div className="flex justify-between items-center">
                                         <div className="text-xs text-red-500 font-bold">{error}</div>
                                         <div className="flex gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => setSql("")}>지우기</Button>
+                                            <Button variant="outline" size="sm" onClick={() => setSql("")} className="bg-white">지우기</Button>
                                             <Button size="sm" onClick={() => runQuery(sql)} disabled={isLoading}>
                                                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
                                                 Run Query
@@ -355,9 +357,9 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 <div className="flex items-center justify-between space-x-2">
-                                    <Label htmlFor="auto-delete" className="flex flex-col space-y-1">
+                                    <Label htmlFor="auto-delete" className="flex flex-col space-y-1 items-start text-left">
                                         <span>자동 삭제 기능 사용</span>
-                                        <span className="font-normal text-xs text-gray-500">이 기능을 켜면 아래 설정에 따라 데이터가 주기적으로 삭제됩니다.</span>
+                                        <span className="font-normal text-xs text-gray-500 text-left">이 기능을 켜면 아래 설정에 따라 데이터가 주기적으로 삭제됩니다.</span>
                                     </Label>
                                     <Switch
                                         id="auto-delete"
@@ -368,7 +370,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
 
                                 <div className="space-y-6 border-l-2 border-gray-100 pl-6 ml-2">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <div className="space-y-2">
+                                        <div className="space-y-2 flex flex-col items-start text-left">
                                             <Label htmlFor="retention-assessments">수행평가 보관 기간 (일)</Label>
                                             <Input
                                                 id="retention-assessments"
@@ -378,7 +380,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                                 disabled={!settings.auto_delete_enabled}
                                             />
                                         </div>
-                                        <div className="space-y-2">
+                                        <div className="space-y-2 flex flex-col items-start text-left">
                                             <Label htmlFor="retention-logs">접속 기록 보관 기간 (일)</Label>
                                             <Input
                                                 id="retention-logs"
@@ -391,9 +393,9 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                     </div>
 
                                     <div className="flex items-center justify-between space-x-2 pt-2">
-                                        <Label htmlFor="delete-past" className="flex flex-col space-y-1">
+                                        <Label htmlFor="delete-past" className="flex flex-col space-y-1 items-start text-left">
                                             <span>이미 지난 수행평가 삭제</span>
-                                            <span className="font-normal text-xs text-gray-500">마감일(Due Date)이 지난 항목을 즉시 삭제 대상에 포함합니다.</span>
+                                            <span className="font-normal text-xs text-gray-500 text-left">마감일(Due Date)이 지난 항목을 즉시 삭제 대상에 포함합니다.</span>
                                         </Label>
                                         <Switch
                                             id="delete-past"
