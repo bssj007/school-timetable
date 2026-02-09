@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS performance_assessments (
   classNum INTEGER NOT NULL,
   classTime INTEGER,
   isDone INTEGER DEFAULT 0,
+  lastModifiedIp TEXT,
   createdAt TEXT DEFAULT (datetime('now')),
   FOREIGN KEY (userId) REFERENCES users(id)
 );
