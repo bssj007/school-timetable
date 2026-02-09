@@ -147,31 +147,27 @@ export const onRequest = async (context: any) => {
             });
         }
 
-        return new Response(JSON.stringify({ success: true, result }), {
-            headers: { 'Content-Type': 'application/json' }
-        });
-    }
 
         // DELETE: 삭제 (보안상 좋지 않지만 일단 ID로 삭제)
         if (request.method === 'DELETE') {
-        const id = url.searchParams.get('id');
-        if (!id) return new Response('Missing ID', { status: 400 });
+            const id = url.searchParams.get('id');
+            if (!id) return new Response('Missing ID', { status: 400 });
 
-        await env.DB.prepare(
-            "DELETE FROM performance_assessments WHERE id = ?"
-        ).bind(id).run();
+            await env.DB.prepare(
+                "DELETE FROM performance_assessments WHERE id = ?"
+            ).bind(id).run();
 
-        return new Response(JSON.stringify({ success: true }), {
-            headers: { 'Content-Type': 'application/json' }
-        });
+            return new Response(JSON.stringify({ success: true }), {
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        // PUT: 완료 여부 토글 (Optional, if needed)
+        // ...
+
+        return new Response('Method not allowed', { status: 405 });
+
+    } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500 });
     }
-
-    // PUT: 완료 여부 토글 (Optional, if needed)
-    // ...
-
-    return new Response('Method not allowed', { status: 405 });
-
-} catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
-}
 }
