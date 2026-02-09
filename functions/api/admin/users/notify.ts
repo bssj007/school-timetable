@@ -1,4 +1,4 @@
-import { adminPassword } from "../../../../../server/adminPW";
+import { adminPassword } from "../../../../server/adminPW";
 
 export const onRequestPost = async (context: any) => {
     const { request, env } = context;
