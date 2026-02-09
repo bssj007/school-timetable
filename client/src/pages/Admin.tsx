@@ -236,7 +236,6 @@ export default function Admin() {
                 </Card>
             </div>
         );
-        );
     }
 
     return (
