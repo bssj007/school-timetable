@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
@@ -92,12 +92,23 @@ export default function Dashboard() {
 
   const [localId, setLocalId] = useState("");
 
+  const prevConfig = useRef({ grade, classNum, studentNumber });
+
   useEffect(() => {
     if (grade && classNum && studentNumber) {
-      const numStr = parseInt(studentNumber).toString().padStart(2, '0');
-      setLocalId(`${grade}${classNum}${numStr}`);
+      const { grade: prevGrade, classNum: prevClassNum, studentNumber: prevStudentNumber } = prevConfig.current;
+      const hasChanged = grade !== prevGrade || classNum !== prevClassNum || studentNumber !== prevStudentNumber;
+
+      // Update ref
+      prevConfig.current = { grade, classNum, studentNumber };
+
+      // Only update localId if config actually changed or it's the initial load (empty)
+      if (hasChanged || localId === "") {
+        const numStr = parseInt(studentNumber).toString().padStart(2, '0');
+        setLocalId(`${grade}${classNum}${numStr}`);
+      }
     }
-  }, [grade, classNum, studentNumber]);
+  }, [grade, classNum, studentNumber, localId]);
 
   const handleStudentIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/[^0-9]/g, "");

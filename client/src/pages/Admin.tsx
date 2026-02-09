@@ -43,13 +43,8 @@ export default function Admin() {
     }, []);
 
     // --- Authentication ---
-    useEffect(() => {
-        const storedPassword = sessionStorage.getItem("adminPassword");
-        if (storedPassword) {
-            setPassword(storedPassword);
-            checkPasswordMutation.mutate(storedPassword);
-        }
-    }, []);
+    // --- Authentication ---
+    // Password persistence removed for security
 
     const checkPasswordMutation = useMutation({
         mutationFn: async (password: string) => {
@@ -69,7 +64,6 @@ export default function Admin() {
         },
         onSuccess: () => {
             setIsAuthenticated(true);
-            sessionStorage.setItem("adminPassword", password); // Save to session
             toast.success("관리자 로그인 성공");
 
             // Background DB Migration/Sync
@@ -79,7 +73,6 @@ export default function Admin() {
         },
         onError: (error) => {
             toast.error(error.message || "로그인 실패");
-            sessionStorage.removeItem("adminPassword");
             setPassword("");
         },
     });
