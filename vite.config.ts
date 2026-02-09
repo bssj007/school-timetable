@@ -31,8 +31,10 @@ export default defineConfig({
       },
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom', 'wouter'],
-          ui: ['@radix-ui/react-dialog', '@radix-ui/react-slot', 'lucide-react'],
+          vendor: ['react', 'react-dom', 'wouter', '@tanstack/react-query', 'framer-motion'],
+          ui: ['@radix-ui/react-dialog', '@radix-ui/react-slot', 'lucide-react', 'sonner', 'class-variance-authority', 'clsx', 'tailwind-merge'],
+          utils: ['date-fns', 'zod'],
+          charts: ['recharts'],
         }
       }
     }
