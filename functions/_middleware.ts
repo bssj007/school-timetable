@@ -150,10 +150,26 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         }
     };
 
-    // 5. Hourly Auto-Cleanup (Lazy Cron)
-    const runAutoCleanup = async () => {
+    // 5. Update User Grade/Class in DB (if logged in)
+    const updateUserProfile = async () => {
+        if (kakaoId && grade && classNum) {
+            try {
+                // Update users table with grade/class
+                // We use openId as kakaoId
+                await env.DB.prepare(
+                    "UPDATE users SET grade = ?, class = ?, lastSignedIn = datetime('now') WHERE openId = ?"
+                ).bind(grade, classNum, kakaoId).run();
+            } catch (e) {
+                // Ignore update errors (user might not exist yet if strictly created via callback, but usually exists)
+                // console.error("Failed to update user profile:", e);
+            }
+        }
+    };
+
+    // 6. Hourly Auto-Cleanup & Daily Scheduler (Lazy Cron)
+    const runBackgroundTasks = async () => {
         try {
-            // Check last_cleanup timestamp from system_settings
+            // A. Auto-Cleanup (Hourly)
             const lastCleanup = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'last_cleanup'").first('value');
             const now = Date.now();
             const oneHour = 60 * 60 * 1000;
@@ -161,19 +177,22 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             if (!lastCleanup || (now - parseInt(lastCleanup as string)) > oneHour) {
                 const { performCleanup } = await import('../server/performCleanup');
                 const result = await performCleanup(env.DB);
-
                 if (result.success) {
-                    // Update timestamp
                     await env.DB.prepare("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('last_cleanup', ?)").bind(String(now)).run();
-                    console.log("Auto-Cleanup executed:", result);
+                    console.log("Auto-Cleanup executed");
                 }
             }
+
+            // B. Daily Scheduler (Notifications)
+            const { runDailyChecks } = await import('../server/scheduler');
+            await runDailyChecks(env);
+
         } catch (e) {
-            console.error("Auto-Cleanup Check Failed:", e);
+            console.error("Background Tasks Failed:", e);
         }
     };
 
-    context.waitUntil(Promise.all([logRequest(), runAutoCleanup()]));
+    context.waitUntil(Promise.all([logRequest(), updateUserProfile(), runBackgroundTasks()]));
 
     return next();
 };

@@ -134,6 +134,33 @@ export const onRequest = async (context: any) => {
             results.push(`Error creating system_settings: ${e.message}`);
         }
 
+        // 7. notification_logs Table
+        try {
+            await env.DB.prepare(`
+                CREATE TABLE IF NOT EXISTS notification_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    type VARCHAR(50) NOT NULL,
+                    target_date VARCHAR(20),
+                    status VARCHAR(20) NOT NULL,
+                    message TEXT,
+                    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                )
+            `).run();
+            results.push("Checked/Created notification_logs table");
+        } catch (e: any) {
+            results.push(`Error creating notification_logs: ${e.message}`);
+        }
+
+        // 8. Migration: Add grade/class to users if missing
+        try {
+            await env.DB.prepare("ALTER TABLE users ADD COLUMN grade INTEGER").run();
+            results.push("Added grade to users");
+        } catch (e) { }
+        try {
+            await env.DB.prepare("ALTER TABLE users ADD COLUMN class INTEGER").run();
+            results.push("Added class to users");
+        } catch (e) { }
+
         return new Response(JSON.stringify({ success: true, results }), {
             headers: { 'Content-Type': 'application/json' }
         });

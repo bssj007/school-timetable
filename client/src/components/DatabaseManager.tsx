@@ -249,7 +249,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                     <TabsContent value="manual" className="flex-1 min-h-0 flex gap-6 mt-0">
                         {/* Sidebar: Table List (Only shown in Manual Mode) */}
                         <Card className="w-1/4 h-full flex flex-col flex-none border-0 shadow-none bg-transparent">
-                            <div className="flex items-center justify-between py-4 px-1">
+                            <div className="flex items-center justify-between py-1 px-1 mb-1">
                                 <h3 className="text-lg font-bold flex items-center gap-2">
                                     <Database className="w-4 h-4" /> 테이블 목록
                                 </h3>
@@ -278,7 +278,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                         {/* Existing SQL Editor & Results */}
                         <div className="flex-1 flex flex-col gap-4 min-w-0">
                             <Card className="flex-none bg-gray-50 border shadow-sm">
-                                <CardHeader className="py-3 px-4 border-b border-gray-100">
+                                <CardHeader className="py-2 px-4 border-b border-gray-100">
                                     <CardTitle className="text-sm font-mono text-gray-500">SQL Editor</CardTitle>
                                 </CardHeader>
                                 <CardContent className="p-4">
