@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Lock, Settings, Eye, EyeOff, Trash2, Ban, ShieldCheck, TriangleAlert, ChevronDown, ChevronRight } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import IPProfileViewer from "@/components/IPProfileViewer";
 import DatabaseManager from "@/components/DatabaseManager";
 import { IPProfile } from "@/types";
@@ -34,6 +35,60 @@ export default function Admin() {
     const [userIp, setUserIp] = useState<string | null>(null);
     const [timeRange, setTimeRange] = useState("24h");
     const queryClient = useQueryClient();
+
+    // Factory Reset State
+    const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+    const [resetConfirmation, setResetConfirmation] = useState("");
+    const [isResetting, setIsResetting] = useState(false);
+    const TARGET_PHRASE = "햇빛이 선명하게 나뭇잎을 핥고 있었다";
+
+    const handleFactoryReset = async () => {
+        if (resetConfirmation !== TARGET_PHRASE) {
+            toast.error("확인 문구가 일치하지 않습니다.");
+            return;
+        }
+
+        if (!confirm("정말로 모든 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
+            return;
+        }
+
+        setIsResetting(true);
+
+        try {
+            const res = await fetch("/api/admin/reset_db", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": password
+                },
+                body: JSON.stringify({ confirmation: resetConfirmation })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || "Reset failed");
+            }
+
+            toast.success("초기화 완료. 메인 페이지로 이동합니다.");
+
+            // Clear Cookies
+            document.cookie.split(";").forEach((c) => {
+                document.cookie = c
+                    .replace(/^ +/, "")
+                    .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
+
+            // Redirect
+            setTimeout(() => {
+                window.location.href = "/";
+            }, 1000);
+
+        } catch (error: any) {
+            toast.error(error.message);
+            setIsResetting(false);
+        }
+    };
 
     useEffect(() => {
         fetch('/api/my-ip')
@@ -241,7 +296,8 @@ export default function Admin() {
                         variant="destructive"
                         size="sm"
                         className="ml-4"
-                        onClick={() => window.location.href = "/admin/factory-reset"}
+                        className="ml-4"
+                        onClick={() => setIsResetDialogOpen(true)}
                     >
                         <TriangleAlert className="h-4 w-4 mr-2" />
                         DB 초기화
@@ -639,6 +695,46 @@ export default function Admin() {
                 onClose={() => setSelectedProfile(null)}
                 adminPassword={password}
             />
+
+            {/* Factory Reset Dialog */}
+            <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="text-red-600 font-bold flex items-center gap-2">
+                            <TriangleAlert className="h-5 w-5" />
+                            데이터베이스 초기화
+                        </DialogTitle>
+                        <DialogDescription>
+                            모든 데이터가 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
+                            <br />
+                            확인을 위해 아래 문구를 정확히 입력하세요:
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        <div className="p-3 bg-gray-50 border rounded-md text-center font-bold text-sm select-all">
+                            {TARGET_PHRASE}
+                        </div>
+                        <Input
+                            value={resetConfirmation}
+                            onChange={(e) => setResetConfirmation(e.target.value)}
+                            placeholder="위 문구를 입력하세요"
+                            className="text-center"
+                        />
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsResetDialogOpen(false)}>취소</Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleFactoryReset}
+                            disabled={resetConfirmation !== TARGET_PHRASE || isResetting}
+                        >
+                            {isResetting ? "초기화 중..." : "초기화 실행"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

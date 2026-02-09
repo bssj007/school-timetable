@@ -47,13 +47,27 @@ export const onRequestPost = async (context: any) => {
                 },
                 body: new URLSearchParams({
                     template_object: JSON.stringify({
-                        object_type: 'text',
-                        text: `[관리자 알림]\n${message}`,
-                        link: {
-                            web_url: 'https://school-timetable.pages.dev',
-                            mobile_web_url: 'https://school-timetable.pages.dev',
+                        object_type: 'feed',
+                        content: {
+                            title: '📢 관리자 알림',
+                            description: message,
+                            image_url: 'https://school-timetable.pages.dev/android-chrome-192x192.png',
+                            image_width: 640,
+                            image_height: 640,
+                            link: {
+                                web_url: 'https://school-timetable.pages.dev',
+                                mobile_web_url: 'https://school-timetable.pages.dev',
+                            },
                         },
-                        button_title: '바로가기'
+                        buttons: [
+                            {
+                                title: '바로가기',
+                                link: {
+                                    web_url: 'https://school-timetable.pages.dev',
+                                    mobile_web_url: 'https://school-timetable.pages.dev',
+                                },
+                            },
+                        ],
                     })
                 })
             });

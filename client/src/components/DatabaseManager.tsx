@@ -258,7 +258,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                 </Button>
                             </div>
                             <CardContent className="flex-1 min-h-0 p-0">
-                                <ScrollArea className="h-full border rounded-md bg-white">
+                                <ScrollArea className="h-full">
                                     <div className="flex flex-col p-1 gap-1">
                                         {tables.map(t => (
                                             <Button
