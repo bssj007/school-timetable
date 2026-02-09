@@ -4,6 +4,7 @@ export interface UserConfig {
     schoolName: string;
     grade: string;
     classNum: string;
+    studentNumber: string;
 }
 
 export interface KakaoUser {
@@ -20,6 +21,7 @@ interface UserConfigContextType {
     schoolName: string;
     grade: string;
     classNum: string;
+    studentNumber: string;
     setConfig: (config: Partial<UserConfig>) => void;
     isConfigured: boolean;
     kakaoUser: KakaoUser | null;
@@ -31,7 +33,7 @@ const UserConfigContext = createContext<UserConfigContextType | undefined>(undef
 export function UserConfigProvider({ children }: { children: ReactNode }) {
     const [config, setConfigState] = useState<UserConfig>(() => {
         // 초기 로드 시 쿠키 확인
-        if (typeof document === "undefined") return { schoolName: "", grade: "", classNum: "" };
+        if (typeof document === "undefined") return { schoolName: "", grade: "", classNum: "", studentNumber: "" };
 
         const match = document.cookie.match(new RegExp('(^| )' + COOKIE_NAME + '=([^;]+)'));
         if (match) {
@@ -41,7 +43,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
                 console.error("Failed to parse config cookie", e);
             }
         }
-        return { schoolName: "", grade: "", classNum: "" };
+        return { schoolName: "", grade: "", classNum: "", studentNumber: "" };
     });
 
     const [kakaoUser, setKakaoUser] = useState<KakaoUser | null>(null);
@@ -75,13 +77,19 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
         document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(updated))}; expires=${expires.toUTCString()}; path=/`;
     };
 
-    const isConfigured = !!(config.schoolName && config.grade && config.classNum);
+    const isConfigured = !!(
+        config.schoolName &&
+        config.grade &&
+        config.classNum &&
+        (config.grade === "1" ? true : !!config.studentNumber)
+    );
 
     return (
         <UserConfigContext.Provider value={{
             schoolName: config.schoolName,
             grade: config.grade,
             classNum: config.classNum,
+            studentNumber: config.studentNumber || "",
             setConfig,
             isConfigured,
             kakaoUser,

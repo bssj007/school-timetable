@@ -43,6 +43,14 @@ export default function Admin() {
     }, []);
 
     // --- Authentication ---
+    useEffect(() => {
+        const storedPassword = sessionStorage.getItem("adminPassword");
+        if (storedPassword) {
+            setPassword(storedPassword);
+            checkPasswordMutation.mutate(storedPassword);
+        }
+    }, []);
+
     const checkPasswordMutation = useMutation({
         mutationFn: async (password: string) => {
             const res = await fetch("/api/admin", {
@@ -61,6 +69,7 @@ export default function Admin() {
         },
         onSuccess: () => {
             setIsAuthenticated(true);
+            sessionStorage.setItem("adminPassword", password); // Save to session
             toast.success("관리자 로그인 성공");
 
             // Background DB Migration/Sync
@@ -70,6 +79,7 @@ export default function Admin() {
         },
         onError: (error) => {
             toast.error(error.message || "로그인 실패");
+            sessionStorage.removeItem("adminPassword");
             setPassword("");
         },
     });
@@ -173,11 +183,10 @@ export default function Admin() {
         onError: () => toast.error("해제 실패"),
     });
 
-
     if (!isAuthenticated) {
         return (
-            <div className="container max-w-md mx-auto px-4 py-20">
-                <Card>
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+                <Card className="w-full max-w-md shadow-lg">
                     <CardHeader>
                         <CardTitle className="text-2xl text-center flex items-center justify-center gap-2">
                             <Lock className="h-6 w-6" />
@@ -226,6 +235,7 @@ export default function Admin() {
                     </CardContent>
                 </Card>
             </div>
+        );
         );
     }
 
@@ -409,7 +419,7 @@ export default function Admin() {
                                             <TableCell>
                                                 {user.grade && user.classNum ? (
                                                     <Badge variant="outline" className="font-mono text-green-600 border-green-200 bg-green-50">
-                                                        {user.grade}-{user.classNum}
+                                                        {user.grade}-{user.classNum}{user.studentNumber ? `-${user.studentNumber}` : ''}
                                                     </Badge>
                                                 ) : (
                                                     <span className="text-gray-300 text-xs">-</span>
@@ -507,7 +517,7 @@ export default function Admin() {
                                                     <TableHeader>
                                                         <TableRow>
                                                             <TableHead>IP 주소</TableHead>
-                                                            <TableHead className="w-[80px]">학년/반</TableHead>
+                                                            <TableHead className="w-[100px]">학년/반/번호</TableHead>
                                                             <TableHead>카카오 계정</TableHead>
                                                             <TableHead>수정 횟수</TableHead>
                                                             <TableHead>마지막 접속</TableHead>

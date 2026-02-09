@@ -18,7 +18,7 @@ export const onRequest = async (context: any) => {
             const url = new URL(request.url);
             const range = url.searchParams.get('range') || '24h'; // '24h' | '7d' | 'all'
 
-            let query = `SELECT ip, kakaoId, kakaoNickname, method, endpoint, userAgent, grade, classNum, accessedAt 
+            let query = `SELECT ip, kakaoId, kakaoNickname, method, endpoint, userAgent, grade, classNum, studentNumber, accessedAt 
                          FROM access_logs `;
 
             if (range === '24h') {
@@ -63,6 +63,7 @@ export const onRequest = async (context: any) => {
                         recentUserAgents: new Set(), // Use Set for uniqueness
                         grade: log.grade || null,
                         classNum: log.classNum || null,
+                        studentNumber: log.studentNumber || null,
                         assessments: [], // Empty for lightweight list
                         logs: [],        // Empty for lightweight list
                         detailsLoaded: false
@@ -71,9 +72,10 @@ export const onRequest = async (context: any) => {
 
                 const profile = profileMap.get(log.ip);
 
-                // Capture Grade/Class if missing (find first non-null in history)
+                // Capture Grade/Class/StudentNumber if missing (find first non-null in history)
                 if (!profile.grade && log.grade) profile.grade = log.grade;
                 if (!profile.classNum && log.classNum) profile.classNum = log.classNum;
+                if (!profile.studentNumber && log.studentNumber) profile.studentNumber = log.studentNumber;
 
                 // Track Modification (Strict: Only POST/DELETE on /api/assessment)
                 if (['POST', 'DELETE'].includes(log.method) && log.endpoint?.startsWith('/api/assessment')) {

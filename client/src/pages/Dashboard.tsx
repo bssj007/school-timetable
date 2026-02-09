@@ -371,6 +371,16 @@ export default function Dashboard() {
             </SelectContent>
           </Select>
 
+          {grade !== "1" && (
+            <Input
+              type="number"
+              placeholder="번호"
+              className="w-[70px] md:w-[80px] h-8 md:h-10 text-xs md:text-sm"
+              value={useUserConfig().studentNumber || ""}
+              onChange={(e) => setConfig({ studentNumber: e.target.value })}
+            />
+          )}
+
           <Button
             onClick={() => fetchFromComcigan.mutate()}
             disabled={fetchFromComcigan.isPending || !schoolName}
@@ -438,7 +448,7 @@ export default function Dashboard() {
                         const isPast = currentDate < todayStr;
 
                         return (
-                          <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-40" : ""}`}>
+                          <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70" : ""}`}>
                             <div className="text-sm font-semibold">{day}</div>
                             <div className="text-[10px] md:text-xs text-gray-500 font-normal">
                               {formatDate(weekDates[idx])}
@@ -482,7 +492,7 @@ export default function Dashboard() {
                               : "hover:bg-gray-100";
 
                           // 과거 날짜 스타일
-                          const pastStyle = isPast ? "opacity-40 bg-gray-50 text-gray-400" : "";
+                          const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400" : "";
 
                           return (
                             <td

@@ -14,6 +14,7 @@ export interface IPProfile {
     recentUserAgents: string[];
     grade?: string | null;
     classNum?: string | null;
+    studentNumber?: string | null;
 
     // --- Detailed History (Empty in List View, Populated in Detail View) ---
     assessments: { id: number, subject: string, title: string, createdAt: string, grade: number, classNum: number }[];

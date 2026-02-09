@@ -64,6 +64,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     // 4. Grade & Class info (from school_timetable_config cookie)
     let grade = null;
     let classNum = null;
+    let studentNumber = null;
     if (cookieHeader) {
         const match = cookieHeader.match(/school_timetable_config=([^;]+)/);
         if (match) {
@@ -71,6 +72,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 const config = JSON.parse(decodeURIComponent(match[1]));
                 if (config.grade) grade = config.grade;
                 if (config.classNum) classNum = config.classNum;
+                if (config.studentNumber) studentNumber = config.studentNumber;
             } catch (e) {
                 // Ignore parse error
             }
@@ -80,10 +82,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     // 로그 기록 (비동기로 수행하여 응답 지연 최소화 - waitUntil 사용)
     const logRequest = async () => {
         try {
-            // Try logging with method & userAgent & grade & classNum (New Schema)
+            // Try logging with method & userAgent & grade & classNum & studentNumber (New Schema)
             await env.DB.prepare(
-                "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent, grade, classNum) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-            ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent, grade, classNum).run();
+                "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent, grade, classNum, studentNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent, grade, classNum, studentNumber).run();
         } catch (e: any) {
             const errorMsg = e.message || "";
 
@@ -102,6 +104,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                             userAgent TEXT,
                             grade TEXT,
                             classNum TEXT,
+                            studentNumber TEXT,
                             accessedAt TEXT DEFAULT (datetime('now'))
                         )
                     `).run();
@@ -119,8 +122,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
                     // Retry Log Insert
                     await env.DB.prepare(
-                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent, grade, classNum) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-                    ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent, grade, classNum).run();
+                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent, grade, classNum, studentNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent, grade, classNum, studentNumber).run();
 
                 } catch (creationErr) {
                     console.error("Failed to create tables and retry log:", creationErr);
@@ -134,11 +137,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                     await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN userAgent TEXT").run().catch(() => { });
                     await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN grade TEXT").run().catch(() => { });
                     await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN classNum TEXT").run().catch(() => { });
+                    await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN studentNumber TEXT").run().catch(() => { });
 
                     // Retry Insert
                     await env.DB.prepare(
-                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent, grade, classNum) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-                    ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent, grade, classNum).run();
+                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent, grade, classNum, studentNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent, grade, classNum, studentNumber).run();
 
                 } catch (fallbackErr) {
                     console.error("Failed to log access (fallback):", fallbackErr);
@@ -154,11 +158,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const updateUserProfile = async () => {
         if (kakaoId && grade && classNum) {
             try {
-                // Update users table with grade/class
+                // Update users table with grade/class/studentNumber
                 // We use openId as kakaoId
                 await env.DB.prepare(
-                    "UPDATE users SET grade = ?, class = ?, lastSignedIn = datetime('now') WHERE openId = ?"
-                ).bind(grade, classNum, kakaoId).run();
+                    "UPDATE users SET grade = ?, class = ?, studentNumber = ?, lastSignedIn = datetime('now') WHERE openId = ?"
+                ).bind(grade, classNum, studentNumber, kakaoId).run();
             } catch (e) {
                 // Ignore update errors (user might not exist yet if strictly created via callback, but usually exists)
                 // console.error("Failed to update user profile:", e);

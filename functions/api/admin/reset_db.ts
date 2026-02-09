@@ -13,6 +13,12 @@ export const onRequestPost = async (context: any) => {
             return new Response(JSON.stringify({ error: "Invalid confirmation phrase" }), { status: 401 });
         }
 
+        // 1. Auth Check (Added)
+        const password = request.headers.get("X-Admin-Password");
+        if (password !== adminPassword) {
+            return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+        }
+
         if (!env.DB) {
             return new Response(JSON.stringify({ error: "Database not configured" }), { status: 500 });
         }

@@ -10,13 +10,25 @@ import { toast } from "sonner";
 export default function FactoryReset() {
     const [, setLocation] = useLocation();
     const [confirmation, setConfirmation] = useState("");
+    const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+
+    // Load password from session if available
+    useState(() => {
+        const stored = sessionStorage.getItem("adminPassword");
+        if (stored) setPassword(stored);
+    });
 
     const TARGET_PHRASE = "햇빛이 선명하게 나뭇잎을 핥고 있었다";
 
     const handleReset = async () => {
         if (confirmation !== TARGET_PHRASE) {
             toast.error("확인 문구가 일치하지 않습니다.");
+            return;
+        }
+
+        if (!password) {
+            toast.error("관리자 암호가 필요합니다.");
             return;
         }
 
@@ -31,6 +43,7 @@ export default function FactoryReset() {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
+                    "X-Admin-Password": password
                 },
                 body: JSON.stringify({ confirmation })
             });
@@ -84,6 +97,19 @@ export default function FactoryReset() {
                             placeholder="위 문구를 그대로 입력하세요"
                         />
                     </div>
+
+                    {/* Password Input (Only if not already in session, or just always show for safety/confirmation?) 
+                        Let's show it so they know what password is being used, or allow changing it.
+                    */}
+                    <div className="space-y-2">
+                        <Input
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="text-center border-gray-300 rounded-none"
+                            placeholder="관리자 암호 입력"
+                        />
+                    </div>
                 </div>
 
                 <div className="flex gap-4 pt-4">
@@ -97,7 +123,7 @@ export default function FactoryReset() {
                     <Button
                         variant="destructive"
                         className="flex-1 h-12 text-base font-bold bg-red-600 hover:bg-red-700 shadow-md transform hover:scale-[1.02] transition-all rounded-none"
-                        disabled={confirmation !== TARGET_PHRASE || isLoading}
+                        disabled={confirmation !== TARGET_PHRASE || !password || isLoading}
                         onClick={handleReset}
                     >
                         {isLoading ? (

@@ -160,6 +160,16 @@ export const onRequest = async (context: any) => {
             await env.DB.prepare("ALTER TABLE users ADD COLUMN class INTEGER").run();
             results.push("Added class to users");
         } catch (e) { }
+        try {
+            await env.DB.prepare("ALTER TABLE users ADD COLUMN studentNumber INTEGER").run();
+            results.push("Added studentNumber to users");
+        } catch (e) { }
+
+        // 9. Migration: Add studentNumber to access_logs
+        try {
+            await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN studentNumber TEXT").run();
+            results.push("Added studentNumber to access_logs");
+        } catch (e) { }
 
         return new Response(JSON.stringify({ success: true, results }), {
             headers: { 'Content-Type': 'application/json' }

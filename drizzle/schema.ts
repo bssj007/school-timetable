@@ -19,6 +19,7 @@ export const users = mysqlTable("users", {
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   grade: int("grade"),
   class: int("class"),
+  studentNumber: int("studentNumber"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -82,6 +83,9 @@ export const accessLogs = mysqlTable("access_logs", {
   endpoint: varchar("endpoint", { length: 255 }).notNull(),
   method: varchar("method", { length: 10 }),
   userAgent: text("userAgent"),
+  grade: varchar("grade", { length: 10 }),
+  classNum: varchar("classNum", { length: 10 }),
+  studentNumber: varchar("studentNumber", { length: 10 }),
   accessedAt: timestamp("accessedAt").defaultNow().notNull(),
 });
 
