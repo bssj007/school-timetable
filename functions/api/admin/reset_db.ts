@@ -29,7 +29,7 @@ export const onRequestPost = async (context: any) => {
         await env.DB.prepare("DROP TABLE IF EXISTS access_logs").run();
         await env.DB.prepare("DROP TABLE IF EXISTS blocked_users").run();
         await env.DB.prepare("DROP TABLE IF EXISTS system_settings").run();
-        await env.DB.prepare("DROP TABLE IF EXISTS kakao_tokens").run();
+        // await env.DB.prepare("DROP TABLE IF EXISTS kakao_tokens").run(); // Preserve Kakao tokens
         await env.DB.prepare("DROP TABLE IF EXISTS timetables").run(); // Legacy cleanup
 
         return new Response(JSON.stringify({ success: true, message: "Database reset complete" }), {

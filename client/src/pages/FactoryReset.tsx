@@ -16,7 +16,13 @@ export default function FactoryReset() {
     // Load password from session if available
     useState(() => {
         const stored = sessionStorage.getItem("adminPassword");
-        if (stored) setPassword(stored);
+        if (stored) {
+            setPassword(stored);
+        } else {
+            // Redirect to admin login if not authenticated
+            toast.error("관리자 로그인이 필요합니다.");
+            setTimeout(() => setLocation("/admin"), 100);
+        }
     });
 
     const TARGET_PHRASE = "햇빛이 선명하게 나뭇잎을 핥고 있었다";
@@ -28,7 +34,8 @@ export default function FactoryReset() {
         }
 
         if (!password) {
-            toast.error("관리자 암호가 필요합니다.");
+            toast.error("관리자 세션이 만료되었습니다. 다시 로그인해주세요.");
+            setLocation("/admin");
             return;
         }
 
@@ -95,19 +102,6 @@ export default function FactoryReset() {
                             onChange={(e) => setConfirmation(e.target.value)}
                             className="font-bold text-center border-2 border-gray-300 focus:border-red-500 rounded-none py-6 text-lg placeholder:text-gray-400 focus-visible:ring-0"
                             placeholder="위 문구를 그대로 입력하세요"
-                        />
-                    </div>
-
-                    {/* Password Input (Only if not already in session, or just always show for safety/confirmation?) 
-                        Let's show it so they know what password is being used, or allow changing it.
-                    */}
-                    <div className="space-y-2">
-                        <Input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="text-center border-gray-300 rounded-none"
-                            placeholder="관리자 암호 입력"
                         />
                     </div>
                 </div>

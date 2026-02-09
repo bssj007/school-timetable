@@ -349,55 +349,54 @@ export default function Dashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <Select value={grade || ""} onValueChange={(val) => setConfig({ grade: val })}>
-            <SelectTrigger className="w-[80px] md:w-[90px] h-8 md:h-10 text-xs md:text-sm">
-              <SelectValue placeholder="학년" />
-            </SelectTrigger>
-            <SelectContent>
-              {[1, 2, 3].map((g) => (
-                <SelectItem key={g} value={g.toString()}>{g}학년</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Input
+            type="text"
+            inputMode="numeric"
+            maxLength={4}
+            value={(() => {
+              if (!grade || !classNum) return "";
+              const num = useUserConfig().studentNumber;
+              // studentNumber가 없으면 '00', 있으면 1자리는 '0X', 2자리는 'XX'
+              const numStr = num ? parseInt(num).toString().padStart(2, '0') : "00";
+              return `${grade}${classNum}${numStr}`;
+            })()}
+            onChange={(e) => {
+              const val = e.target.value.replace(/[^0-9]/g, "");
+              if (val.length === 4) {
+                const newGrade = val[0];
+                const newClass = val[1];
+                const newNum = parseInt(val.substring(2)).toString();
 
-          <Select value={classNum || ""} onValueChange={(val) => setConfig({ classNum: val })}>
-            <SelectTrigger className="w-[80px] md:w-[90px] h-8 md:h-10 text-xs md:text-sm">
-              <SelectValue placeholder="반" />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((c) => (
-                <SelectItem key={c} value={c.toString()}>{c}반</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {grade !== "1" && (
-            <Input
-              type="number"
-              placeholder="번호"
-              className="w-[70px] md:w-[80px] h-8 md:h-10 text-xs md:text-sm"
-              value={useUserConfig().studentNumber || ""}
-              onChange={(e) => setConfig({ studentNumber: e.target.value })}
-            />
-          )}
+                if (parseInt(newGrade) >= 1 && parseInt(newGrade) <= 3 && parseInt(newClass) >= 1) {
+                  setConfig({
+                    grade: newGrade,
+                    classNum: newClass,
+                    studentNumber: newNum
+                  });
+                }
+              }
+            }}
+            className="w-[140px] h-10 text-center font-bold text-lg tracking-widest bg-white"
+            placeholder="학번(4자리)"
+          />
 
           <Button
             onClick={() => fetchFromComcigan.mutate()}
             disabled={fetchFromComcigan.isPending || !schoolName}
             variant="outline"
             size="sm"
-            className="h-8 md:h-10 text-xs md:text-sm"
+            className="h-10 text-sm"
           >
             {fetchFromComcigan.isPending ? (
-              <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin mr-1 md:mr-2" />
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : (
-              <Download className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+              <Download className="h-4 w-4 mr-2" />
             )}
             불러오기
           </Button>
 
           {kakaoUser && (
-            <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-100 h-8 md:h-10 text-xs md:text-sm ml-auto md:ml-0">
+            <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-100 h-10 text-sm ml-auto md:ml-0">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
               카카오 알림 활성
             </div>

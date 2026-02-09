@@ -6,18 +6,29 @@ import { useUserConfig } from "@/contexts/UserConfigContext";
 
 export default function OnboardingDialog() {
     const { isConfigured, setConfig } = useUserConfig();
-    const [formData, setFormData] = useState({ grade: "", classNum: "" });
+    const [studentId, setStudentId] = useState("");
 
     const isOpen = !isConfigured;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (formData.grade && formData.classNum) {
-            setConfig({
-                schoolName: "부산성지고등학교",
-                grade: formData.grade,
-                classNum: formData.classNum
-            });
+
+        if (studentId.length === 4) {
+            const grade = studentId[0];
+            const classNum = studentId[1];
+            // 0으로 시작하는 번호 처리 (05 -> 5)
+            const studentNumber = parseInt(studentId.substring(2)).toString();
+
+            if (parseInt(grade) >= 1 && parseInt(grade) <= 3 && parseInt(classNum) >= 1) {
+                setConfig({
+                    schoolName: "부산성지고등학교",
+                    grade,
+                    classNum,
+                    studentNumber
+                });
+            } else {
+                alert("올바른 학번 형식이 아닙니다. (예: 1102)");
+            }
         }
     };
 
@@ -25,47 +36,36 @@ export default function OnboardingDialog() {
         <Dialog open={isOpen}>
             <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => e.preventDefault()}>
                 <DialogHeader>
-                    <DialogTitle>학년/반 설정</DialogTitle>
+                    <DialogTitle>학번 입력</DialogTitle>
                     <DialogDescription>
-                        부산성지고등학교 시간표를 확인하기 위해 학년과 반을 설정해주세요.
-                        <br />
-                        이 정보는 브라우저에 저장되어 다음 방문 시 유지됩니다.
+                        부산성지고등학교 시간표를 확인하기 위해 학번을 입력해주세요.<br />
+                        4자리 숫자로 입력해주세요.
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label htmlFor="grade" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                                학년
-                            </label>
-                            <Input
-                                id="grade"
-                                type="number"
-                                min="1"
-                                max="3"
-                                placeholder="1"
-                                value={formData.grade}
-                                onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
-                                required
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label htmlFor="classNum" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                                반
-                            </label>
-                            <Input
-                                id="classNum"
-                                type="number"
-                                min="1"
-                                max="20"
-                                placeholder="1"
-                                value={formData.classNum}
-                                onChange={(e) => setFormData({ ...formData, classNum: e.target.value })}
-                                required
-                            />
-                        </div>
+                    <div className="space-y-2">
+                        <label htmlFor="studentId" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                            학번 (4자리)
+                        </label>
+                        <Input
+                            id="studentId"
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={4}
+                            pattern="\d{4}"
+                            placeholder="예시) 1102 (1학년 1반 02번)"
+                            value={studentId}
+                            onChange={(e) => {
+                                const val = e.target.value.replace(/[^0-9]/g, "");
+                                if (val.length <= 4) setStudentId(val);
+                            }}
+                            className="font-bold text-center text-lg tracking-widest placeholder:font-normal placeholder:tracking-normal placeholder:text-sm"
+                            required
+                            autoFocus
+                        />
                     </div>
-                    <Button type="submit" className="w-full">
+
+                    <Button type="submit" className="w-full" disabled={studentId.length !== 4}>
                         설정 저장
                     </Button>
                 </form>
