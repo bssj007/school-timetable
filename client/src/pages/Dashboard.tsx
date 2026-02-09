@@ -90,75 +90,7 @@ export default function Dashboard() {
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [viewingAssessments, setViewingAssessments] = useState<AssessmentItem[]>([]);
 
-  const [localId, setLocalId] = useState("");
-
-  const prevConfig = useRef({ grade, classNum, studentNumber });
-
-  useEffect(() => {
-    if (grade && classNum && studentNumber) {
-      const { grade: prevGrade, classNum: prevClassNum, studentNumber: prevStudentNumber } = prevConfig.current;
-      const hasChanged = grade !== prevGrade || classNum !== prevClassNum || studentNumber !== prevStudentNumber;
-
-      // Update ref
-      prevConfig.current = { grade, classNum, studentNumber };
-
-      // Only update localId if config actually changed or it's the initial load (empty)
-      if (hasChanged || localId === "") {
-        const numStr = parseInt(studentNumber).toString().padStart(2, '0');
-        setLocalId(`${grade}${classNum}${numStr}`);
-      }
-    }
-  }, [grade, classNum, studentNumber]);
-
-  const handleStudentIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/[^0-9]/g, "");
-    if (val.length > 4) return;
-
-    setLocalId(val);
-
-    if (val.length === 4) {
-      const newGrade = val[0];
-      const newClass = val[1];
-      const newNum = parseInt(val.substring(2)).toString();
-
-      if (parseInt(newGrade) >= 1 && parseInt(newGrade) <= 3 && parseInt(newClass) !== 0) {
-        setConfig({
-          grade: newGrade,
-          classNum: newClass,
-          studentNumber: newNum
-        });
-        // Remove focus after successful update to indicate completion?
-        // e.target.blur(); // Optional: might be annoying if they want to edit again immediately
-      } else {
-        toast.error("존재하지 않는 학번입니다.");
-        // We don't revert immediately here to allow correction, 
-        // but blur will handle it if they leave it invalid.
-      }
-    }
-  };
-
-  const handleInputFocus = () => {
-    setLocalId("");
-  };
-
-  const handleInputBlur = () => {
-    // If incomplete or invalid when blurred, revert to current config
-    if (localId.length !== 4) {
-      if (grade && classNum && studentNumber) {
-        const numStr = parseInt(studentNumber).toString().padStart(2, '0');
-        setLocalId(`${grade}${classNum}${numStr}`);
-      }
-    }
-  };
-
-  const [formData, setFormData] = useState({
-    assessmentDate: "",
-    subject: "",
-    content: "",
-    classTime: "",
-    round: "1",
-  });
-
+  // 1. 시간표 조회 -> Moved down
   // 시간표 셀 클릭 핸들러
   const handleCellClick = (
     weekdayIdx: number,
@@ -410,17 +342,51 @@ export default function Dashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <Input
-            type="text"
-            inputMode="numeric"
-            maxLength={4}
-            value={localId}
-            onChange={handleStudentIdChange}
-            onFocus={handleInputFocus}
-            onBlur={handleInputBlur}
-            className="w-[140px] h-10 text-center font-bold text-lg tracking-widest bg-white placeholder:text-gray-300 placeholder:font-normal placeholder:text-sm placeholder:tracking-normal"
-            placeholder="학번 입력"
-          />
+          <div className="flex items-center gap-2">
+            <Select
+              value={grade}
+              onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
+            >
+              <SelectTrigger className="w-[70px] h-10 bg-white">
+                <SelectValue placeholder="학년" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1학년</SelectItem>
+                <SelectItem value="2">2학년</SelectItem>
+                <SelectItem value="3">3학년</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="flex items-center gap-1">
+              <Input
+                type="text"
+                inputMode="numeric"
+                className="w-[50px] h-10 text-center bg-white px-1"
+                value={classNum}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, "");
+                  setConfig({ grade, classNum: val, studentNumber });
+                }}
+                maxLength={2}
+              />
+              <span className="font-bold">반</span>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Input
+                type="text"
+                inputMode="numeric"
+                className="w-[50px] h-10 text-center bg-white px-1"
+                value={studentNumber}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, "");
+                  setConfig({ grade, classNum, studentNumber: val });
+                }}
+                maxLength={2}
+              />
+              <span className="font-bold">번</span>
+            </div>
+          </div>
 
           <Button
             onClick={() => fetchFromComcigan.mutate()}
