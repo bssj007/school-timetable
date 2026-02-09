@@ -62,7 +62,23 @@ export const onRequest = async (context: any) => {
             results.push(`Error creating access_logs: ${e.message}`);
         }
 
-        // 4. access_logs: Add method column (if missing from old schema)
+        // 4. Create kakao_tokens table
+        try {
+            await env.DB.prepare(`
+                CREATE TABLE IF NOT EXISTS kakao_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    kakaoId VARCHAR(255) NOT NULL UNIQUE,
+                    accessToken VARCHAR(255) NOT NULL,
+                    refreshToken VARCHAR(255),
+                    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                )
+            `).run();
+            results.push("Checked/Created kakao_tokens table");
+        } catch (e: any) {
+            results.push(`Error creating kakao_tokens: ${e.message}`);
+        }
+
+        // 5. access_logs: Add method column (if missing from old schema)
         try {
             await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN method TEXT").run();
             results.push("Added method to access_logs");

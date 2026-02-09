@@ -36,7 +36,18 @@ export async function performCleanup(db: any) {
         deletedAssessments = assessmentResult.meta.changes;
 
         // 2. Cleanup Logs
-        const logResult = await db.prepare(`DELETE FROM access_logs WHERE accessedAt < datetime('now', '-${retentionDaysLogs} days')`).run();
+        // Rule: Delete logs older than retention period, ONLY IF the user (IP) has not accessed recently.
+        // If a user has accessed within the retention period, keep ALL their logs (reset retention).
+        const logQuery = `
+            DELETE FROM access_logs 
+            WHERE accessedAt < datetime('now', '-${retentionDaysLogs} days')
+            AND ip NOT IN (
+                SELECT DISTINCT ip 
+                FROM access_logs 
+                WHERE accessedAt >= datetime('now', '-${retentionDaysLogs} days')
+            )
+        `;
+        const logResult = await db.prepare(logQuery).run();
         deletedLogs = logResult.meta.changes;
 
         return {

@@ -51,13 +51,24 @@ export const onRequest = async (context: any) => {
         const userInfo = await userInfoResponse.json();
         console.log('User info:', userInfo);
 
-        // DB에 저장 (간단히 세션 쿠키로 전달)
-        // const userData = {
-        //     kakaoId: userInfo.id,
-        //     accessToken: tokenData.access_token,
-        //     refreshToken: tokenData.refresh_token,
-        //     nickname: userInfo.properties?.nickname || '사용자'
-        // };
+        // DB에 토큰 저장 (Upsert)
+        try {
+            await env.DB.prepare(
+                `INSERT INTO kakao_tokens (kakaoId, accessToken, refreshToken, updatedAt) 
+                 VALUES (?, ?, ?, datetime('now'))
+                 ON CONFLICT(kakaoId) DO UPDATE SET 
+                 accessToken = excluded.accessToken,
+                 refreshToken = excluded.refreshToken,
+                 updatedAt = datetime('now')`
+            ).bind(
+                userInfo.id.toString(),
+                tokenData.access_token,
+                tokenData.refresh_token || null
+            ).run();
+        } catch (dbError) {
+            console.error('Failed to store Kakao token:', dbError);
+            // Continue even if DB save fails, to allow login to proceed
+        }
 
         const nickname = userInfo.properties?.nickname || userInfo.kakao_account?.profile?.nickname || '사용자';
 

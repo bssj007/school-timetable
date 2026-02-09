@@ -87,3 +87,11 @@ export const accessLogs = mysqlTable("accessLogs", {
   userAgent: text("userAgent"),
   accessedAt: timestamp("accessedAt").defaultNow().notNull(),
 });
+
+export const kakaoTokens = mysqlTable("kakaoTokens", {
+  id: int("id").autoincrement().primaryKey(),
+  kakaoId: varchar("kakaoId", { length: 255 }).notNull().unique(),
+  accessToken: varchar("accessToken", { length: 255 }).notNull(),
+  refreshToken: varchar("refreshToken", { length: 255 }),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
