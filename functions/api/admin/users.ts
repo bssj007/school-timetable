@@ -64,12 +64,12 @@ export const onRequest = async (context: any) => {
                 }
 
                 // Track Kakao Account (Unique)
-                if (log.kakaoId && log.kakaoNickname) {
+                if (log.kakaoId) {
                     const exists = profile.kakaoAccounts.some((k: any) => k.kakaoId === log.kakaoId);
                     if (!exists) {
                         profile.kakaoAccounts.push({
                             kakaoId: log.kakaoId,
-                            kakaoNickname: log.kakaoNickname
+                            kakaoNickname: log.kakaoNickname || '(알 수 없음)'
                         });
                     }
                 }

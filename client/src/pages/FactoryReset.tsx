@@ -77,83 +77,61 @@ export default function FactoryReset() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
-            <Card className="w-full max-w-md border-red-200 shadow-xl">
-                <CardHeader className="bg-red-100/50 pb-4">
-                    <div className="flex items-center gap-2 text-red-600 mb-2">
-                        <TriangleAlert className="h-6 w-6" />
-                        <CardTitle className="text-xl">데이터베이스 초기화 (Factory Reset)</CardTitle>
-                    </div>
-                    <CardDescription className="text-red-700 font-medium">
-                        이 작업은 모든 데이터를 영구적으로 삭제합니다.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6 pt-6">
-                    <div className="space-y-4 text-sm text-gray-600 bg-white p-4 rounded-lg border border-red-100">
-                        <p>
-                            <strong>초기화 대상:</strong>
-                        </p>
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>모든 수행평가 데이터</li>
-                            <li>모든 사용자 접속 로그</li>
-                            <li>모든 차단된 사용자</li>
-                            <li>현재 브라우저의 모든 쿠키 및 로그인 정보</li>
-                        </ul>
-                        <p className="text-xs text-gray-500 mt-2">
-                            * 관리자 비밀번호는 초기화되지 않습니다.
-                        </p>
-                    </div>
+        <div className="min-h-screen flex flex-col items-center justify-center bg-white p-4">
+            <div className="w-full max-w-sm space-y-8">
+                <div className="text-center space-y-2">
+                    <h1 className="text-2xl font-bold text-red-600">데이터베이스 초기화</h1>
+                    <p className="text-gray-500 text-sm">
+                        모든 데이터가 영구적으로 삭제됩니다.
+                    </p>
+                </div>
 
+                <div className="space-y-4">
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">관리자 비밀번호 확인</label>
+                        <label className="text-xs font-mono text-gray-500 uppercase">Admin Password</label>
                         <Input
                             type="password"
-                            placeholder="Admin Password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="bg-white"
+                            className="font-mono border-0 border-b border-gray-200 rounded-none px-0 focus-visible:ring-0 focus-visible:border-red-500 transition-colors bg-transparent placeholder:text-gray-300"
+                            placeholder="비밀번호 입력"
                         />
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">
-                            아래 문구를 정확히 입력하세요:
-                        </label>
-                        <div className="p-2 bg-gray-100 rounded text-sm font-mono text-center select-all">
+                        <label className="text-xs font-mono text-gray-500 uppercase">Confirmation Message</label>
+                        <div className="py-2 text-sm font-bold text-gray-800 select-all text-center">
                             {TARGET_PHRASE}
                         </div>
                         <Input
                             value={confirmation}
                             onChange={(e) => setConfirmation(e.target.value)}
-                            placeholder="여기에 문구를 입력하세요"
-                            className="bg-white"
+                            className="font-mono border-0 border-b border-gray-200 rounded-none px-0 focus-visible:ring-0 focus-visible:border-red-500 transition-colors bg-transparent placeholder:text-gray-300"
+                            placeholder="위 문구를 그대로 입력하세요"
                         />
                     </div>
+                </div>
 
-                    <div className="flex gap-2">
-                        <Button
-                            variant="outline"
-                            className="w-full"
-                            onClick={() => setLocation("/admin")}
-                        >
-                            취소
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            className="w-full font-bold"
-                            disabled={confirmation !== TARGET_PHRASE || !password || isLoading}
-                            onClick={handleReset}
-                        >
-                            {isLoading ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    초기화 중...
-                                </>
-                            ) : "초기화 실행"}
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
+                <div className="flex gap-4 pt-4">
+                    <Button
+                        variant="ghost"
+                        className="flex-1 text-gray-400 hover:text-gray-600 hover:bg-transparent"
+                        onClick={() => setLocation("/admin")}
+                    >
+                        취소
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        className="flex-1 rounded-none bg-red-600 hover:bg-red-700"
+                        disabled={confirmation !== TARGET_PHRASE || !password || isLoading}
+                        onClick={handleReset}
+                    >
+                        {isLoading ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : "초기화"}
+                    </Button>
+                </div>
+            </div>
         </div>
     );
 }

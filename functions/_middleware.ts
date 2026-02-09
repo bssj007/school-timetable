@@ -21,11 +21,15 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     let kakaoNickname = null;
 
     if (cookieHeader) {
-        const cookies = Object.fromEntries(
-            cookieHeader.split(';')
-                .map((c: string) => c.trim().split('='))
-                .filter((p: string[]) => p.length === 2)
-        );
+        const cookies: Record<string, string> = {};
+        cookieHeader.split(';').forEach(cookie => {
+            const parts = cookie.split('=');
+            if (parts.length >= 2) {
+                const key = parts[0].trim();
+                const value = parts.slice(1).join('='); // Re-join rest of the parts
+                cookies[key] = value;
+            }
+        });
 
         if (cookies['kakao_id']) {
             kakaoId = cookies['kakao_id'];
