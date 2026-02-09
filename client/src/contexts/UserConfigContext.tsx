@@ -81,7 +81,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
         config.schoolName &&
         config.grade &&
         config.classNum &&
-        (config.grade === "1" ? true : !!config.studentNumber)
+        config.studentNumber
     );
 
     return (

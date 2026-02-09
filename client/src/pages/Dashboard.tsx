@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
@@ -349,36 +349,57 @@ export default function Dashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <Input
-            type="text"
-            inputMode="numeric"
-            maxLength={4}
-            value={(() => {
-              if (!grade || !classNum) return "";
-              const num = useUserConfig().studentNumber;
-              // studentNumber가 없으면 '00', 있으면 1자리는 '0X', 2자리는 'XX'
-              const numStr = num ? parseInt(num).toString().padStart(2, '0') : "00";
-              return `${grade}${classNum}${numStr}`;
-            })()}
-            onChange={(e) => {
+          {(() => {
+            const { grade, classNum, studentNumber } = useUserConfig();
+            const [localId, setLocalId] = useState("");
+
+            useEffect(() => {
+              if (grade && classNum && studentNumber) {
+                const numStr = parseInt(studentNumber).toString().padStart(2, '0');
+                setLocalId(`${grade}${classNum}${numStr}`);
+              }
+            }, [grade, classNum, studentNumber]);
+
+            const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
               const val = e.target.value.replace(/[^0-9]/g, "");
+              if (val.length > 4) return;
+
+              setLocalId(val);
+
               if (val.length === 4) {
                 const newGrade = val[0];
                 const newClass = val[1];
                 const newNum = parseInt(val.substring(2)).toString();
 
-                if (parseInt(newGrade) >= 1 && parseInt(newGrade) <= 3 && parseInt(newClass) >= 1) {
+                if (parseInt(newGrade) >= 1 && parseInt(newGrade) <= 3 && parseInt(newClass) !== 0) {
                   setConfig({
                     grade: newGrade,
                     classNum: newClass,
                     studentNumber: newNum
                   });
+                } else {
+                  toast.error("존재하지 않는 학번입니다.");
+                  // Revert to current config
+                  if (grade && classNum && studentNumber) {
+                    const numStr = parseInt(studentNumber).toString().padStart(2, '0');
+                    setLocalId(`${grade}${classNum}${numStr}`);
+                  }
                 }
               }
-            }}
-            className="w-[140px] h-10 text-center font-bold text-lg tracking-widest bg-white"
-            placeholder="학번(4자리)"
-          />
+            };
+
+            return (
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={localId}
+                onChange={handleChange}
+                className="w-[140px] h-10 text-center font-bold text-lg tracking-widest bg-white"
+                placeholder="학번(4자리)"
+              />
+            );
+          })()}
 
           <Button
             onClick={() => fetchFromComcigan.mutate()}
