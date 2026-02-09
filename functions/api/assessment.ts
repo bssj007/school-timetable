@@ -134,19 +134,7 @@ export const onRequest = async (context: any) => {
                     headers: { 'Content-Type': 'application/json' }
                 });
             }
-            console.error("[Assessment API] Insert with IP failed, fallback to old schema:", insertError.message);
-
-            // Fallback: Insert without lastModifiedIp (Old Schema)
-            const result = await env.DB.prepare(
-                `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
-            ).bind(subject, title, description || '', dueDate, grade, classNum, classTime || null).run();
-
-            return new Response(JSON.stringify({ success: true, result, warning: "IP not saved due to schema mismatch" }), {
-                headers: { 'Content-Type': 'application/json' }
-            });
         }
-
 
         // DELETE: 삭제 (보안상 좋지 않지만 일단 ID로 삭제)
         if (request.method === 'DELETE') {
