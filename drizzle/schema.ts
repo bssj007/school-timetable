@@ -92,3 +92,12 @@ export const kakaoTokens = mysqlTable("kakao_tokens", {
   refreshToken: text("refreshToken"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+
+export const notificationLogs = mysqlTable("notification_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  type: varchar("type", { length: 50 }).notNull(), // 'DAILY_REMINDER', 'NEW_ASSESSMENT'
+  targetDate: varchar("target_date", { length: 20 }), // YYYY-MM-DD
+  status: varchar("status", { length: 20 }).notNull(), // 'SUCCESS', 'FAILED'
+  message: text("message"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
