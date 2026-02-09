@@ -81,7 +81,7 @@ function isDateInWeek(dateStr: string, weekDates: Date[]): boolean {
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
-  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser } = useUserConfig();
+  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber } = useUserConfig();
 
   const [weekOffset, setWeekOffset] = useState(0);
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
