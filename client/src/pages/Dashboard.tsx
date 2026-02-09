@@ -90,6 +90,43 @@ export default function Dashboard() {
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [viewingAssessments, setViewingAssessments] = useState<AssessmentItem[]>([]);
 
+  const [localId, setLocalId] = useState("");
+
+  useEffect(() => {
+    if (grade && classNum && studentNumber) {
+      const numStr = parseInt(studentNumber).toString().padStart(2, '0');
+      setLocalId(`${grade}${classNum}${numStr}`);
+    }
+  }, [grade, classNum, studentNumber]);
+
+  const handleStudentIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.replace(/[^0-9]/g, "");
+    if (val.length > 4) return;
+
+    setLocalId(val);
+
+    if (val.length === 4) {
+      const newGrade = val[0];
+      const newClass = val[1];
+      const newNum = parseInt(val.substring(2)).toString();
+
+      if (parseInt(newGrade) >= 1 && parseInt(newGrade) <= 3 && parseInt(newClass) !== 0) {
+        setConfig({
+          grade: newGrade,
+          classNum: newClass,
+          studentNumber: newNum
+        });
+      } else {
+        toast.error("존재하지 않는 학번입니다.");
+        // Revert to current config
+        if (grade && classNum && studentNumber) {
+          const numStr = parseInt(studentNumber).toString().padStart(2, '0');
+          setLocalId(`${grade}${classNum}${numStr}`);
+        }
+      }
+    }
+  };
+
   const [formData, setFormData] = useState({
     assessmentDate: "",
     subject: "",
@@ -349,57 +386,15 @@ export default function Dashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          {(() => {
-            const { grade, classNum, studentNumber } = useUserConfig();
-            const [localId, setLocalId] = useState("");
-
-            useEffect(() => {
-              if (grade && classNum && studentNumber) {
-                const numStr = parseInt(studentNumber).toString().padStart(2, '0');
-                setLocalId(`${grade}${classNum}${numStr}`);
-              }
-            }, [grade, classNum, studentNumber]);
-
-            const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-              const val = e.target.value.replace(/[^0-9]/g, "");
-              if (val.length > 4) return;
-
-              setLocalId(val);
-
-              if (val.length === 4) {
-                const newGrade = val[0];
-                const newClass = val[1];
-                const newNum = parseInt(val.substring(2)).toString();
-
-                if (parseInt(newGrade) >= 1 && parseInt(newGrade) <= 3 && parseInt(newClass) !== 0) {
-                  setConfig({
-                    grade: newGrade,
-                    classNum: newClass,
-                    studentNumber: newNum
-                  });
-                } else {
-                  toast.error("존재하지 않는 학번입니다.");
-                  // Revert to current config
-                  if (grade && classNum && studentNumber) {
-                    const numStr = parseInt(studentNumber).toString().padStart(2, '0');
-                    setLocalId(`${grade}${classNum}${numStr}`);
-                  }
-                }
-              }
-            };
-
-            return (
-              <Input
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                value={localId}
-                onChange={handleChange}
-                className="w-[140px] h-10 text-center font-bold text-lg tracking-widest bg-white"
-                placeholder="학번(4자리)"
-              />
-            );
-          })()}
+          <Input
+            type="text"
+            inputMode="numeric"
+            maxLength={4}
+            value={localId}
+            onChange={handleStudentIdChange}
+            className="w-[140px] h-10 text-center font-bold text-lg tracking-widest bg-white"
+            placeholder="학번(4자리)"
+          />
 
           <Button
             onClick={() => fetchFromComcigan.mutate()}

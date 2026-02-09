@@ -34,7 +34,7 @@ export default function OnboardingDialog() {
 
     return (
         <Dialog open={isOpen}>
-            <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => e.preventDefault()}>
+            <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => e.preventDefault()} showCloseButton={false}>
                 <DialogHeader>
                     <DialogTitle>학번 입력</DialogTitle>
                     <DialogDescription>
