@@ -108,7 +108,7 @@ export default function Dashboard() {
         setLocalId(`${grade}${classNum}${numStr}`);
       }
     }
-  }, [grade, classNum, studentNumber, localId]);
+  }, [grade, classNum, studentNumber]);
 
   const handleStudentIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/[^0-9]/g, "");
@@ -127,13 +127,26 @@ export default function Dashboard() {
           classNum: newClass,
           studentNumber: newNum
         });
+        // Remove focus after successful update to indicate completion?
+        // e.target.blur(); // Optional: might be annoying if they want to edit again immediately
       } else {
         toast.error("존재하지 않는 학번입니다.");
-        // Revert to current config
-        if (grade && classNum && studentNumber) {
-          const numStr = parseInt(studentNumber).toString().padStart(2, '0');
-          setLocalId(`${grade}${classNum}${numStr}`);
-        }
+        // We don't revert immediately here to allow correction, 
+        // but blur will handle it if they leave it invalid.
+      }
+    }
+  };
+
+  const handleInputFocus = () => {
+    setLocalId("");
+  };
+
+  const handleInputBlur = () => {
+    // If incomplete or invalid when blurred, revert to current config
+    if (localId.length !== 4) {
+      if (grade && classNum && studentNumber) {
+        const numStr = parseInt(studentNumber).toString().padStart(2, '0');
+        setLocalId(`${grade}${classNum}${numStr}`);
       }
     }
   };
@@ -403,8 +416,10 @@ export default function Dashboard() {
             maxLength={4}
             value={localId}
             onChange={handleStudentIdChange}
-            className="w-[140px] h-10 text-center font-bold text-lg tracking-widest bg-white"
-            placeholder="학번(4자리)"
+            onFocus={handleInputFocus}
+            onBlur={handleInputBlur}
+            className="w-[140px] h-10 text-center font-bold text-lg tracking-widest bg-white placeholder:text-gray-300 placeholder:font-normal placeholder:text-sm placeholder:tracking-normal"
+            placeholder="학번 입력"
           />
 
           <Button
