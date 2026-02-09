@@ -384,35 +384,23 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-1">
-              <Input
-                type="text"
-                inputMode="numeric"
-                className="w-[50px] h-10 text-center bg-white px-1"
+              <Select
                 value={studentNumber}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/[^0-9]/g, "");
-                  setConfig({ grade, classNum, studentNumber: val });
-                }}
-                maxLength={2}
-              />
-              <span className="font-bold">번</span>
+                onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
+              >
+                <SelectTrigger className="w-[80px] h-10 bg-white">
+                  <SelectValue placeholder="번호" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
+                    <SelectItem key={num} value={num.toString()}>
+                      {num}번
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
-
-          <Button
-            onClick={() => fetchFromComcigan.mutate()}
-            disabled={fetchFromComcigan.isPending || !schoolName}
-            variant="outline"
-            size="sm"
-            className="h-10 text-sm"
-          >
-            {fetchFromComcigan.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <Download className="h-4 w-4 mr-2" />
-            )}
-            불러오기
-          </Button>
 
           {kakaoUser && (
             <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-100 h-10 text-sm ml-auto md:ml-0">
