@@ -51,22 +51,65 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 await env.DB.prepare(
                     "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method) VALUES (?, ?, ?, ?, ?)"
                 ).bind(ip, null, null, url.pathname, request.method).run();
-            } catch (logErr: any) {
-                // Fallback: Log without method (Old Schema)
-                try {
-                    await env.DB.prepare(
-                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint) VALUES (?, ?, ?, ?)"
-                    ).bind(ip, null, null, url.pathname).run();
-                } catch (fallbackErr) {
-                    console.error("Failed to log access (fallback):", fallbackErr);
+            } catch (e: any) {
+                const errorMsg = e.message || "";
+
+                // Case 1: Table does not exist -> Create and Retry
+                if (errorMsg.includes("no such table")) {
+                    try {
+                        // Create access_logs table
+                        await env.DB.prepare(`
+                        CREATE TABLE IF NOT EXISTS access_logs (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            ip TEXT,
+                            kakaoId TEXT,
+                            kakaoNickname TEXT,
+                            endpoint TEXT NOT NULL,
+                            method TEXT,
+                            accessedAt TEXT DEFAULT (datetime('now'))
+                        )
+                    `).run();
+
+                        // Create blocked_users table (just in case)
+                        await env.DB.prepare(`
+                        CREATE TABLE IF NOT EXISTS blocked_users (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            identifier TEXT NOT NULL,
+                            type TEXT NOT NULL,
+                            reason TEXT,
+                            createdAt TEXT DEFAULT (datetime('now'))
+                        )
+                    `).run();
+
+                        // Retry Log Insert
+                        await env.DB.prepare(
+                            "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method) VALUES (?, ?, ?, ?, ?)"
+                        ).bind(ip, null, null, url.pathname, request.method).run();
+
+                    } catch (creationErr) {
+                        console.error("Failed to create tables and retry log:", creationErr);
+                    }
+                }
+                // Case 2: Column "method" missing -> Fallback
+                else if (errorMsg.includes("no column named method") || errorMsg.includes("has no column")) {
+                    try {
+                        await env.DB.prepare(
+                            "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint) VALUES (?, ?, ?, ?)"
+                        ).bind(ip, null, null, url.pathname).run();
+
+                        // Try to auto-fix schema for next time
+                        await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN method TEXT").run().catch(() => { });
+                    } catch (fallbackErr) {
+                        console.error("Failed to log access (fallback):", fallbackErr);
+                    }
+                }
+                else {
+                    console.error("Failed to log access:", e);
                 }
             }
-        } catch (e) {
-            console.error("Failed to log access:", e);
-        }
+        };
+
+        context.waitUntil(logRequest());
+
+        return next();
     };
-
-    context.waitUntil(logRequest());
-
-    return next();
-};
