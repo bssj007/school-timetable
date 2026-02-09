@@ -134,7 +134,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                             <div className="bg-yellow-50 p-4 rounded-lg flex flex-col gap-1 border border-yellow-100">
                                 <span className="text-xs text-yellow-700 font-bold flex items-center gap-1"><User className="w-3 h-3" /> 카카오 계정</span>
                                 <div className="flex flex-wrap gap-1">
-                                    {data.kakaoAccounts?.length > 0 ? data.kakaoAccounts.map((k, i) => (
+                                    {data.kakaoAccounts?.length > 0 ? data.kakaoAccounts.map((k: { kakaoId: string; kakaoNickname: string }, i: number) => (
                                         <Badge key={i} variant="secondary" className="text-xs">{k.kakaoNickname}</Badge>
                                     )) : <span className="text-xs text-gray-400">-</span>}
                                 </div>
@@ -151,7 +151,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                 <ScrollArea className="h-[300px] p-4">
                                     {data.detailsLoaded ? (
                                         data.assessments?.length > 0 ? (
-                                            data.assessments.map((a, i) => (
+                                            data.assessments.map((a: any, i: number) => (
                                                 <div key={i} className="mb-2 pb-2 border-b last:border-0">
                                                     <div className="font-bold text-sm">[{a.grade}-{a.classNum}] {a.subject}</div>
                                                     <div className="text-xs text-gray-600">{a.title}</div>
@@ -166,7 +166,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                 <ScrollArea className="h-[300px] p-4">
                                     {data.detailsLoaded ? (
                                         data.logs?.length > 0 ? (
-                                            data.logs.map((l, i) => (
+                                            data.logs.map((l: any, i: number) => (
                                                 <div key={i} className="flex justify-between text-xs py-1 border-b">
                                                     <div className="flex gap-2"><Badge variant="outline" className="h-5">{l.method}</Badge> <span className="truncate max-w-[200px]">{l.endpoint}</span></div>
                                                     <span className="text-gray-400">{new Date(l.accessedAt).toLocaleTimeString()}</span>
@@ -181,7 +181,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                     {data.detailsLoaded ? (
                                         data.recentUserAgents?.length > 0 ? (
                                             <div className="flex flex-col gap-2">
-                                                {data.recentUserAgents.map((ua, i) => {
+                                                {data.recentUserAgents.map((ua: string, i: number) => {
                                                     const { os, browser, raw } = parseUserAgent(ua);
                                                     return (
                                                         <div key={i} className="flex items-center gap-3 p-2 bg-gray-50 rounded border">
