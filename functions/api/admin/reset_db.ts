@@ -1,12 +1,12 @@
 
-import { adminPasswords } from "../../../server/adminPW";
+import { adminPassword } from "../../../server/adminPW";
 
 export const onRequestPost = async (context: any) => {
     const { request, env } = context;
 
     // 1. Password Check
     const password = request.headers.get("X-Admin-Password");
-    if (!adminPasswords.includes(password)) {
+    if (password !== adminPassword) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
 
