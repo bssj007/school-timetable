@@ -150,7 +150,30 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         }
     };
 
-    context.waitUntil(logRequest());
+    // 5. Hourly Auto-Cleanup (Lazy Cron)
+    const runAutoCleanup = async () => {
+        try {
+            // Check last_cleanup timestamp from system_settings
+            const lastCleanup = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'last_cleanup'").first('value');
+            const now = Date.now();
+            const oneHour = 60 * 60 * 1000;
+
+            if (!lastCleanup || (now - parseInt(lastCleanup as string)) > oneHour) {
+                const { performCleanup } = await import('../server/performCleanup');
+                const result = await performCleanup(env.DB);
+
+                if (result.success) {
+                    // Update timestamp
+                    await env.DB.prepare("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('last_cleanup', ?)").bind(String(now)).run();
+                    console.log("Auto-Cleanup executed:", result);
+                }
+            }
+        } catch (e) {
+            console.error("Auto-Cleanup Check Failed:", e);
+        }
+    };
+
+    context.waitUntil(Promise.all([logRequest(), runAutoCleanup()]));
 
     return next();
 };

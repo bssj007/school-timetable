@@ -33,7 +33,7 @@ function App() {
         <UserConfigProvider>
           <TooltipProvider>
             <Toaster />
-            {location !== "/admin" && <Navigation />}
+            {location !== "/admin" && location !== "/admin/factory-reset" && <Navigation />}
             <OnboardingDialog />
             <Router />
           </TooltipProvider>

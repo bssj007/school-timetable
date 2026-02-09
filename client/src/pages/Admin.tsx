@@ -95,6 +95,7 @@ export default function Admin() {
             return res.json();
         },
         enabled: isAuthenticated,
+        refetchInterval: 5000,
     });
 
     const deleteAssessmentsMutation = useMutation({
@@ -129,6 +130,7 @@ export default function Admin() {
             return res.json() as Promise<{ activeUsers: any[], blockedUsers: any[] }>;
         },
         enabled: isAuthenticated,
+        refetchInterval: 5000,
     });
 
     const blockUserMutation = useMutation({
@@ -232,7 +234,7 @@ export default function Admin() {
             <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-3">
                     <Settings className="h-8 w-8 text-gray-700" />
-                    <h1 className="text-3xl font-bold">관리사무소 <span className="text-sm font-normal text-gray-500">(v1.1)</span></h1>
+                    <h1 className="text-3xl font-bold">관리사무소</h1>
                     <Button
                         variant="destructive"
                         size="sm"

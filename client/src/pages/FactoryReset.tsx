@@ -11,27 +11,12 @@ export default function FactoryReset() {
     const [, setLocation] = useLocation();
     const [confirmation, setConfirmation] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-    const [password, setPassword] = useState("");
-
-    // Simple Admin Check (In a real app, use context or verify token, 
-    // but here we just ask for password again or rely on session if we had one.
-    // Given the design, we'll ask for the Admin Password again to be safe 
-    // OR we can assume they passed it via state if we routed from Admin.
-    // For safety, let's include a password field if we don't have a better way, 
-    // OR just rely on the user knowing it since they are here.
-    // Let's prompt for password to be ultra-safe.)
 
     const TARGET_PHRASE = "햇빛이 선명하게 나뭇잎을 핥고 있었다";
 
     const handleReset = async () => {
         if (confirmation !== TARGET_PHRASE) {
             toast.error("확인 문구가 일치하지 않습니다.");
-            return;
-        }
-
-        if (!password) {
-            toast.error("관리자 비밀번호를 입력해주세요.");
             return;
         }
 
@@ -46,8 +31,8 @@ export default function FactoryReset() {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "X-Admin-Password": password
-                }
+                },
+                body: JSON.stringify({ confirmation })
             });
 
             const data = await res.json();
@@ -80,33 +65,22 @@ export default function FactoryReset() {
         <div className="min-h-screen flex flex-col items-center justify-center bg-white p-4">
             <div className="w-full max-w-sm space-y-8">
                 <div className="text-center space-y-2">
-                    <h1 className="text-2xl font-bold text-red-600">데이터베이스 초기화</h1>
-                    <p className="text-gray-500 text-sm">
+                    <h1 className="text-3xl font-black text-red-600">데이터베이스 초기화</h1>
+                    <p className="text-gray-900 font-medium">
                         모든 데이터가 영구적으로 삭제됩니다.
                     </p>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-6">
                     <div className="space-y-2">
-                        <label className="text-xs font-mono text-gray-500 uppercase">Admin Password</label>
-                        <Input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="font-mono border-0 border-b border-gray-200 rounded-none px-0 focus-visible:ring-0 focus-visible:border-red-500 transition-colors bg-transparent placeholder:text-gray-300"
-                            placeholder="비밀번호 입력"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-xs font-mono text-gray-500 uppercase">Confirmation Message</label>
-                        <div className="py-2 text-sm font-bold text-gray-800 select-all text-center">
+                        <label className="text-xs font-bold text-gray-900 uppercase tracking-wider">Confirmation Message</label>
+                        <div className="py-2 text-base font-bold text-black select-all text-center bg-gray-50 rounded border border-gray-200">
                             {TARGET_PHRASE}
                         </div>
                         <Input
                             value={confirmation}
                             onChange={(e) => setConfirmation(e.target.value)}
-                            className="font-mono border-0 border-b border-gray-200 rounded-none px-0 focus-visible:ring-0 focus-visible:border-red-500 transition-colors bg-transparent placeholder:text-gray-300"
+                            className="font-bold text-center border-2 border-gray-300 focus:border-red-500 rounded-md py-6 text-lg placeholder:text-gray-400 focus-visible:ring-0"
                             placeholder="위 문구를 그대로 입력하세요"
                         />
                     </div>
@@ -114,21 +88,21 @@ export default function FactoryReset() {
 
                 <div className="flex gap-4 pt-4">
                     <Button
-                        variant="ghost"
-                        className="flex-1 text-gray-400 hover:text-gray-600 hover:bg-transparent"
+                        variant="outline"
+                        className="flex-1 h-12 text-base font-medium border-2 hover:bg-gray-50"
                         onClick={() => setLocation("/admin")}
                     >
                         취소
                     </Button>
                     <Button
                         variant="destructive"
-                        className="flex-1 rounded-none bg-red-600 hover:bg-red-700"
-                        disabled={confirmation !== TARGET_PHRASE || !password || isLoading}
+                        className="flex-1 h-12 text-base font-bold bg-red-600 hover:bg-red-700 shadow-md transform hover:scale-[1.02] transition-all"
+                        disabled={confirmation !== TARGET_PHRASE || isLoading}
                         onClick={handleReset}
                     >
                         {isLoading ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : "초기화"}
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        ) : "초기화 실행"}
                     </Button>
                 </div>
             </div>

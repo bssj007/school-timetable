@@ -42,9 +42,60 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
     // Initial Load: List Tables
     useEffect(() => {
         fetchTables();
+        fetchSettings();
     }, []);
 
-    const fetchTables = async () => {
+    // Auto-Refresh Effect
+    useEffect(() => {
+        const interval = setInterval(() => {
+            fetchTables(true);
+            fetchSettings(true);
+        }, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // Auto-Save Effect (Debounced)
+    useEffect(() => {
+        // Skip initial load
+        if (isSettingsLoading) return;
+
+        const timer = setTimeout(() => {
+            saveSettings(settings);
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [settings]);
+
+    const updateSetting = (key: string, value: any) => {
+        setSettings(prev => ({ ...prev, [key]: value }));
+    };
+
+    const saveSettings = async (currentSettings: any) => {
+        if (!currentSettings) return; // Guard
+        // Don't set global loading state for auto-save to avoid flickering
+        // setIsSettingsLoading(true); 
+        try {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({
+                    auto_delete_enabled: String(currentSettings.auto_delete_enabled),
+                    retention_days_assessments: String(currentSettings.retention_days_assessments),
+                    retention_days_logs: String(currentSettings.retention_days_logs),
+                    delete_past_assessments: String(currentSettings.delete_past_assessments)
+                })
+            });
+            if (!res.ok) {
+                console.error("Failed to auto-save settings");
+            }
+        } catch (e) {
+            console.error("Error auto-saving settings", e);
+        } finally {
+            // setIsSettingsLoading(false);
+        }
+    };
+
+    const fetchTables = async (background = false) => {
         try {
             const res = await fetch("/api/admin/database", {
                 method: "POST",
@@ -57,7 +108,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                 setTables(data.tables.filter((t: string) => !t.startsWith('_') && t !== 'sqlite_sequence'));
             }
         } catch (e) {
-            toast.error("테이블 목록을 불러오지 못했습니다.");
+            if (!background) toast.error("테이블 목록을 불러오지 못했습니다.");
         }
     };
 
@@ -131,10 +182,8 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                 return;
             }
 
-            // Simple SQL construction (be careful with quotes for strings, but bind params are better if api supported them directly via array. 
-            // Since our simple API expects a raw SQL string, we need to manually escape/quote for now.
-            // WARNING: This is basic param replacement for specific types.
-
+            // Simple SQL construction (be careful with quotes for strings)
+            // Note: This is a basic implementation. Ideally, the API would support bind parameters purely.
             const setClause = updates.map((u, i) => {
                 const val = values[i];
                 const formattedVal = val === null ? "NULL" : (typeof val === 'string' ? `'${val.replace(/'/g, "''")}'` : val);
@@ -143,8 +192,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
 
             const updateSql = `UPDATE ${activeTable} SET ${setClause} WHERE id = ${editingRow.id}`;
 
-            // Execute locally to see in editor? No, run directly.
-            const result = await runQuery(updateSql, true); // true = quiet mode (don't clear results yet)
+            const result = await runQuery(updateSql, true); // rue = quiet mode (don't clear results)
 
             if (result && result.success) {
                 toast.success("수정되었습니다.");
@@ -161,8 +209,8 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
         }
     };
 
-    const fetchSettings = async () => {
-        setIsSettingsLoading(true);
+    const fetchSettings = async (background = false) => {
+        if (!background) setIsSettingsLoading(true);
         try {
             const res = await fetch("/api/admin/settings", {
                 headers: { "X-Admin-Password": adminPassword }
@@ -170,107 +218,24 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
             if (res.ok) {
                 const data = await res.json();
                 setSettings({
-                    auto_delete_enabled: data.auto_delete_enabled === 'true',
+                    // Default to TRUE if key is missing, specifically for auto-delete and delete-past
+                    auto_delete_enabled: data.auto_delete_enabled !== 'false',
                     retention_days_assessments: data.retention_days_assessments || '30',
                     retention_days_logs: data.retention_days_logs || '30',
-                    delete_past_assessments: data.delete_past_assessments === 'true'
+                    delete_past_assessments: data.delete_past_assessments !== 'false'
                 });
             }
         } catch (e) {
-            console.error("Failed to fetch settings", e);
+            if (!background) console.error("Failed to fetch settings", e);
         } finally {
-            setIsSettingsLoading(false);
+            if (!background) setIsSettingsLoading(false);
         }
     };
-
-    const saveSettings = async () => {
-        setIsSettingsLoading(true);
-        try {
-            const res = await fetch("/api/admin/settings", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
-                body: JSON.stringify({
-                    auto_delete_enabled: String(settings.auto_delete_enabled),
-                    retention_days_assessments: String(settings.retention_days_assessments),
-                    retention_days_logs: String(settings.retention_days_logs),
-                    delete_past_assessments: String(settings.delete_past_assessments)
-                })
-            });
-            if (res.ok) {
-                toast.success("설정이 저장되었습니다.");
-            } else {
-                toast.error("설정 저장 실패");
-            }
-        } catch (e) {
-            toast.error("오류가 발생했습니다.");
-        } finally {
-            setIsSettingsLoading(false);
-        }
-    };
-
-    const runCleanup = async () => {
-        if (!confirm("지금 즉시 정리 작업을 수행하시겠습니까?")) return;
-        setIsCleanupRunning(true);
-        try {
-            // Ensure settings are saved first/used? 
-            // The API reads from DB, so we should save first if changed, but for now let's assume user saved.
-            // Or we could pass current state to cleanup, but API reads from DB.
-            // Let's warn user if they haven't saved? 
-            // Actually, the API reads from DB. So we must relying on saved settings.
-
-            const res = await fetch("/api/admin/cleanup", {
-                method: "POST",
-                headers: { "X-Admin-Password": adminPassword }
-            });
-            const data = await res.json();
-            if (res.ok) {
-                toast.success(`정리 완료: 수행평가 ${data.deleted.assessments}건, 로그 ${data.deleted.logs}건`);
-            } else {
-                toast.error(data.message || "정리 실패");
-            }
-        } catch (e) {
-            toast.error("요청 중 오류 발생");
-        } finally {
-            setIsCleanupRunning(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchSettings();
-    }, []);
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-[700px]">
-            {/* Sidebar: Table List */}
-            <Card className="md:col-span-1 h-full flex flex-col">
-                <CardHeader className="py-4">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                        <Database className="w-4 h-4" /> 테이블 목록
-                    </CardTitle>
-                    <Button variant="ghost" size="sm" onClick={fetchTables}><RefreshCw className="w-3 h-3" /></Button>
-                </CardHeader>
-                <CardContent className="flex-1 min-h-0 p-0">
-                    <ScrollArea className="h-full">
-                        <div className="flex flex-col p-2 gap-1">
-                            {tables.map(t => (
-                                <Button
-                                    key={t}
-                                    variant={activeTable === t ? "secondary" : "ghost"}
-                                    className="justify-start font-mono text-sm"
-                                    onClick={() => handleTableClick(t)}
-                                >
-                                    {t}
-                                </Button>
-                            ))}
-                        </div>
-                    </ScrollArea>
-                </CardContent>
-            </Card>
-
-
-
+        <div className="h-[700px] flex flex-col">
             {/* Main Content Area with Tabs */}
-            <div className="md:col-span-3 h-full">
+            <div className="flex-1 min-h-0">
                 <Tabs defaultValue="manual" className="h-full flex flex-col">
                     <TabsList className="mb-4 w-full justify-start">
                         <TabsTrigger value="manual" className="flex items-center gap-2">
@@ -281,75 +246,103 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                         </TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="manual" className="flex-1 min-h-0 flex flex-col gap-4 mt-0">
-                        {/* Existing SQL Editor & Results */}
-                        <Card className="flex-none">
-                            <CardHeader className="py-3 px-4 bg-gray-50 border-b">
-                                <CardTitle className="text-sm font-mono text-gray-500">SQL Editor</CardTitle>
+                    <TabsContent value="manual" className="flex-1 min-h-0 flex gap-6 mt-0">
+                        {/* Sidebar: Table List (Only shown in Manual Mode) */}
+                        <Card className="w-1/4 h-full flex flex-col flex-none">
+                            <CardHeader className="py-4">
+                                <CardTitle className="text-lg flex items-center gap-2">
+                                    <Database className="w-4 h-4" /> 테이블 목록
+                                </CardTitle>
+                                <Button variant="ghost" size="sm" onClick={fetchTables}><RefreshCw className="w-3 h-3" /></Button>
                             </CardHeader>
-                            <CardContent className="p-4">
-                                <Textarea
-                                    value={sql}
-                                    onChange={(e) => setSql(e.target.value)}
-                                    className="font-mono text-sm min-h-[100px] mb-2"
-                                    placeholder="SELECT * FROM users..."
-                                />
-                                <div className="flex justify-between items-center">
-                                    <div className="text-xs text-red-500 font-bold">{error}</div>
-                                    <div className="flex gap-2">
-                                        <Button variant="outline" size="sm" onClick={() => setSql("")}>지우기</Button>
-                                        <Button size="sm" onClick={() => runQuery(sql)} disabled={isLoading}>
-                                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
-                                            Run Query
-                                        </Button>
+                            <CardContent className="flex-1 min-h-0 p-0">
+                                <ScrollArea className="h-full">
+                                    <div className="flex flex-col p-2 gap-1">
+                                        {tables.map(t => (
+                                            <Button
+                                                key={t}
+                                                variant={activeTable === t ? "secondary" : "ghost"}
+                                                className="justify-start font-mono text-sm"
+                                                onClick={() => handleTableClick(t)}
+                                            >
+                                                {t}
+                                            </Button>
+                                        ))}
                                     </div>
-                                </div>
+                                </ScrollArea>
                             </CardContent>
                         </Card>
 
-                        <Card className="flex-1 min-h-0 flex flex-col">
-                            <CardContent className="flex-1 min-h-0 p-0">
-                                {results.length > 0 ? (
-                                    <ScrollArea className="h-full w-full">
-                                        <div className="p-0">
-                                            <Table>
-                                                <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
-                                                    <TableRow>
-                                                        <TableHead className="w-[50px] text-center">Action</TableHead>
-                                                        {Object.keys(results[0]).map(key => (
-                                                            <TableHead key={key} className="whitespace-nowrap font-bold">{key}</TableHead>
-                                                        ))}
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {results.map((row, i) => (
-                                                        <TableRow key={i}>
-                                                            <TableCell className="text-center p-1">
-                                                                {row.id && (
-                                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditClick(row)}>
-                                                                        <Edit className="h-3 w-3" />
-                                                                    </Button>
-                                                                )}
-                                                            </TableCell>
-                                                            {Object.values(row).map((val: any, j) => (
-                                                                <TableCell key={j} className="whitespace-nowrap max-w-[200px] truncate text-xs font-mono">
-                                                                    {typeof val === 'object' ? JSON.stringify(val) : String(val)}
-                                                                </TableCell>
+                        {/* Existing SQL Editor & Results */}
+                        <div className="flex-1 flex flex-col gap-4 min-w-0">
+                            <Card className="flex-none">
+                                <CardHeader className="py-3 px-4 bg-gray-50 border-b">
+                                    <CardTitle className="text-sm font-mono text-gray-500">SQL Editor</CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-4">
+                                    <Textarea
+                                        value={sql}
+                                        onChange={(e) => setSql(e.target.value)}
+                                        className="font-mono text-sm min-h-[100px] mb-2"
+                                        placeholder="SELECT * FROM users..."
+                                    />
+                                    <div className="flex justify-between items-center">
+                                        <div className="text-xs text-red-500 font-bold">{error}</div>
+                                        <div className="flex gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => setSql("")}>지우기</Button>
+                                            <Button size="sm" onClick={() => runQuery(sql)} disabled={isLoading}>
+                                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
+                                                Run Query
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="flex-1 min-h-0 flex flex-col">
+                                <CardContent className="flex-1 min-h-0 p-0">
+                                    {results.length > 0 ? (
+                                        <ScrollArea className="h-full w-full">
+                                            <div className="p-0">
+                                                <Table>
+                                                    <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
+                                                        <TableRow>
+                                                            <TableHead className="w-[50px] text-center">Action</TableHead>
+                                                            {Object.keys(results[0]).map(key => (
+                                                                <TableHead key={key} className="whitespace-nowrap font-bold">{key}</TableHead>
                                                             ))}
                                                         </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {results.map((row, i) => (
+                                                            <TableRow key={i}>
+                                                                <TableCell className="text-center p-1">
+                                                                    {row.id && (
+                                                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditClick(row)}>
+                                                                            <Edit className="h-3 w-3" />
+                                                                        </Button>
+                                                                    )}
+                                                                </TableCell>
+                                                                {Object.values(row).map((val: any, j) => (
+                                                                    <TableCell key={j} className="whitespace-nowrap max-w-[200px] truncate text-xs font-mono">
+                                                                        {typeof val === 'object' ? JSON.stringify(val) : String(val)}
+                                                                    </TableCell>
+                                                                ))}
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
+                                            <ScrollBar orientation="horizontal" />
+                                        </ScrollArea>
+                                    ) : (
+                                        <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                                            데이터가 없습니다. SQL을 실행하세요.
                                         </div>
-                                        <ScrollBar orientation="horizontal" />
-                                    </ScrollArea>
-                                ) : (
-                                    <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-                                        데이터가 없습니다. SQL을 실행하세요.
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
                     </TabsContent>
 
                     <TabsContent value="auto" className="flex-1 mt-0">
@@ -357,7 +350,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                             <CardHeader>
                                 <CardTitle>데이터 자동 삭제 설정</CardTitle>
                                 <CardDescription>
-                                    오래된 데이터를 자동으로 정리하여 DB 용량을 확보합니다.
+                                    오래된 데이터를 자동으로 정리하여 DB 용량을 확보합니다. (매 1시간마다 실행됨)
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-6">
@@ -369,19 +362,19 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                     <Switch
                                         id="auto-delete"
                                         checked={settings.auto_delete_enabled}
-                                        onCheckedChange={(checked) => setSettings({ ...settings, auto_delete_enabled: checked })}
+                                        onCheckedChange={(checked) => updateSetting('auto_delete_enabled', checked)}
                                     />
                                 </div>
 
-                                <div className="space-y-4 border-l-2 border-gray-100 pl-4 ml-2">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-6 border-l-2 border-gray-100 pl-6 ml-2">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                         <div className="space-y-2">
                                             <Label htmlFor="retention-assessments">수행평가 보관 기간 (일)</Label>
                                             <Input
                                                 id="retention-assessments"
                                                 type="number"
                                                 value={settings.retention_days_assessments}
-                                                onChange={(e) => setSettings({ ...settings, retention_days_assessments: e.target.value })}
+                                                onChange={(e) => updateSetting('retention_days_assessments', e.target.value)}
                                                 disabled={!settings.auto_delete_enabled}
                                             />
                                         </div>
@@ -391,7 +384,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                                 id="retention-logs"
                                                 type="number"
                                                 value={settings.retention_days_logs}
-                                                onChange={(e) => setSettings({ ...settings, retention_days_logs: e.target.value })}
+                                                onChange={(e) => updateSetting('retention_days_logs', e.target.value)}
                                                 disabled={!settings.auto_delete_enabled}
                                             />
                                         </div>
@@ -405,25 +398,14 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                         <Switch
                                             id="delete-past"
                                             checked={settings.delete_past_assessments}
-                                            onCheckedChange={(checked) => setSettings({ ...settings, delete_past_assessments: checked })}
+                                            onCheckedChange={(checked) => updateSetting('delete_past_assessments', checked)}
                                             disabled={!settings.auto_delete_enabled}
                                         />
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-4 pt-4 border-t">
-                                    <Button onClick={saveSettings} disabled={isSettingsLoading}>
-                                        {isSettingsLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                                        <Save className="w-4 h-4 mr-2" />
-                                        설정 저장
-                                    </Button>
-
-                                    <div className="flex-1 text-right">
-                                        <Button variant="destructive" onClick={runCleanup} disabled={isCleanupRunning || !settings.auto_delete_enabled}>
-                                            {isCleanupRunning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlayCircle className="w-4 h-4 mr-2" />}
-                                            지금 정리 실행
-                                        </Button>
-                                    </div>
+                                <div className="flex items-center justify-end text-xs text-gray-400 pt-4">
+                                    {isSettingsLoading ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> 저장 중...</> : <><Save className="w-3 h-3 mr-1" /> 설정이 자동으로 저장됩니다.</>}
                                 </div>
                             </CardContent>
                         </Card>
