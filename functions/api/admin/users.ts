@@ -18,7 +18,7 @@ export const onRequest = async (context: any) => {
             // 1. Fetch Raw Logs (Last 24h)
             // We fetch individual rows to aggregate properly in code + match IPProfile structure
             const { results: logs } = await env.DB.prepare(
-                `SELECT ip, kakaoId, kakaoNickname, method, accessedAt 
+                `SELECT ip, kakaoId, kakaoNickname, method, endpoint, userAgent, grade, classNum, accessedAt 
                  FROM access_logs 
                  WHERE accessedAt > datetime('now', '-1 day') 
                  ORDER BY accessedAt DESC`
@@ -50,6 +50,9 @@ export const onRequest = async (context: any) => {
                         blockId: blockEntry?.id,
                         modificationCount: 0,
                         lastAccess: log.accessedAt, // First one is latest due to DESC sort
+                        recentUserAgents: new Set(), // Use Set for uniqueness
+                        grade: log.grade || null,
+                        classNum: log.classNum || null,
                         assessments: [], // Empty for lightweight list
                         logs: [],        // Empty for lightweight list
                         detailsLoaded: false
@@ -58,9 +61,18 @@ export const onRequest = async (context: any) => {
 
                 const profile = profileMap.get(log.ip);
 
-                // Track Modification (Crude count based on method)
-                if (['POST', 'DELETE'].includes(log.method)) {
+                // Capture Grade/Class if missing (find first non-null in history)
+                if (!profile.grade && log.grade) profile.grade = log.grade;
+                if (!profile.classNum && log.classNum) profile.classNum = log.classNum;
+
+                // Track Modification (Strict: Only POST/DELETE on /api/assessment)
+                if (['POST', 'DELETE'].includes(log.method) && log.endpoint?.startsWith('/api/assessment')) {
                     profile.modificationCount++;
+                }
+
+                // Track User Agent
+                if (log.userAgent) {
+                    profile.recentUserAgents.add(log.userAgent);
                 }
 
                 // Track Kakao Account (Unique)
@@ -75,7 +87,10 @@ export const onRequest = async (context: any) => {
                 }
             }
 
-            const activeUsers = Array.from(profileMap.values());
+            const activeUsers = Array.from(profileMap.values()).map((profile: any) => ({
+                ...profile,
+                recentUserAgents: Array.from(profile.recentUserAgents)
+            }));
 
             return new Response(JSON.stringify({
                 activeUsers, // shape: IPProfile[]

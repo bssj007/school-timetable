@@ -61,13 +61,29 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         console.error("Middleware Block Check Error:", err);
     }
 
+    // 4. Grade & Class info (from school_timetable_config cookie)
+    let grade = null;
+    let classNum = null;
+    if (cookieHeader) {
+        const match = cookieHeader.match(/school_timetable_config=([^;]+)/);
+        if (match) {
+            try {
+                const config = JSON.parse(decodeURIComponent(match[1]));
+                if (config.grade) grade = config.grade;
+                if (config.classNum) classNum = config.classNum;
+            } catch (e) {
+                // Ignore parse error
+            }
+        }
+    }
+
     // 로그 기록 (비동기로 수행하여 응답 지연 최소화 - waitUntil 사용)
     const logRequest = async () => {
         try {
-            // Try logging with method & userAgent (New Schema)
+            // Try logging with method & userAgent & grade & classNum (New Schema)
             await env.DB.prepare(
-                "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent) VALUES (?, ?, ?, ?, ?, ?)"
-            ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent).run();
+                "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent, grade, classNum) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent, grade, classNum).run();
         } catch (e: any) {
             const errorMsg = e.message || "";
 
@@ -84,6 +100,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                             endpoint TEXT NOT NULL,
                             method TEXT,
                             userAgent TEXT,
+                            grade TEXT,
+                            classNum TEXT,
                             accessedAt TEXT DEFAULT (datetime('now'))
                         )
                     `).run();
@@ -101,24 +119,26 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
                     // Retry Log Insert
                     await env.DB.prepare(
-                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent) VALUES (?, ?, ?, ?, ?, ?)"
-                    ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent).run();
+                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent, grade, classNum) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                    ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent, grade, classNum).run();
 
                 } catch (creationErr) {
                     console.error("Failed to create tables and retry log:", creationErr);
                 }
             }
-            // Case 2: Column "method" or "userAgent" missing -> Fallback & Auto-Migration
+            // Case 2: Column missing -> Fallback & Auto-Migration
             else if (errorMsg.includes("no column") || errorMsg.includes("has no column")) {
                 try {
                     // Attempt to add missing columns safely
                     await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN method TEXT").run().catch(() => { });
                     await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN userAgent TEXT").run().catch(() => { });
+                    await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN grade TEXT").run().catch(() => { });
+                    await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN classNum TEXT").run().catch(() => { });
 
                     // Retry Insert
                     await env.DB.prepare(
-                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent) VALUES (?, ?, ?, ?, ?, ?)"
-                    ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent).run();
+                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent, grade, classNum) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                    ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent, grade, classNum).run();
 
                 } catch (fallbackErr) {
                     console.error("Failed to log access (fallback):", fallbackErr);

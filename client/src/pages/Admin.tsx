@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Lock, Settings, Eye, EyeOff, Trash2, Ban, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Lock, Settings, Eye, EyeOff, Trash2, Ban, ShieldCheck, TriangleAlert, ChevronDown, ChevronRight } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import IPProfileViewer from "@/components/IPProfileViewer";
 import DatabaseManager from "@/components/DatabaseManager";
@@ -75,6 +75,7 @@ export default function Admin() {
     const [selectedAssessments, setSelectedAssessments] = useState<number[]>([]);
     const [selectedProfile, setSelectedProfile] = useState<IPProfile | null>(null);
     const [selectedIp, setSelectedIp] = useState<string | null>(null);
+    const [isOthersExpanded, setIsOthersExpanded] = useState(false);
 
     const { data: assessments } = useQuery({
         queryKey: ["admin", "assessments"],
@@ -244,8 +245,8 @@ export default function Admin() {
 
             <Tabs defaultValue="assessments" className="w-full">
                 <TabsList className="grid w-full grid-cols-3 mb-8">
-                    <TabsTrigger value="assessments">수행평가 데이터 일괄관리</TabsTrigger>
-                    <TabsTrigger value="users">인파 관리 (차단)</TabsTrigger>
+                    <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
+                    <TabsTrigger value="users">사용자 관리</TabsTrigger>
                     <TabsTrigger
                         value="database"
                         className="data-[state=active]:bg-green-100 data-[state=active]:text-green-800"
@@ -354,118 +355,186 @@ export default function Admin() {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <div className="rounded-md border">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>IP 주소</TableHead>
-                                                <TableHead>카카오 계정</TableHead>
-                                                <TableHead>수정 횟수</TableHead>
-                                                <TableHead>마지막 접속</TableHead>
-                                                <TableHead className="w-[100px]">알림</TableHead>
-                                                <TableHead className="w-[100px]">관리</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {userData?.activeUsers?.map((user: IPProfile, idx: number) => {
-                                                return (
-                                                    <TableRow key={idx}>
-                                                        <TableCell className="font-mono">
-                                                            <Button
-                                                                variant="link"
-                                                                className="p-0 h-auto font-mono text-blue-600 hover:text-blue-800 underline decoration-dotted"
-                                                                onClick={() => setSelectedProfile(user)}
-                                                            >
-                                                                {user.ip}
-                                                            </Button>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
-                                                                <div className="flex flex-col gap-1">
-                                                                    {user.kakaoAccounts.map((k, i) => (
-                                                                        <span key={i} className="font-bold text-xs">{k.kakaoNickname}</span>
-                                                                    ))}
-                                                                </div>
-                                                            ) : (
-                                                                <span className="text-gray-400">-</span>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {user.modificationCount > 0 ? (
-                                                                <Badge variant="secondary" className="font-mono">
-                                                                    {user.modificationCount}회
-                                                                </Badge>
-                                                            ) : (
-                                                                <span className="text-gray-400 text-xs">-</span>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>{user.lastAccess ? new Date(user.lastAccess).toLocaleString() : '-'}</TableCell>
-                                                        <TableCell>
-                                                            {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    className="text-blue-500 hover:text-blue-600 hover:bg-blue-50"
-                                                                    onClick={async () => {
-                                                                        const message = prompt("전송할 메시지를 입력하세요:");
-                                                                        if (!message) return;
-                                                                        const targetKakaoId = user.kakaoAccounts[0].kakaoId;
+                                {(() => {
+                                    // Helper to classify users
+                                    const isKnownUser = (user: IPProfile) => {
+                                        // 1. Check User Agent
+                                        if (!user.recentUserAgents || user.recentUserAgents.length === 0) return false;
+                                        const knownKeywords = ['Mozilla', 'Chrome', 'Safari', 'Firefox', 'Edge', 'Opera', 'Whale', 'Kakao', 'iPhone', 'Android'];
+                                        const hasKnownUA = user.recentUserAgents.some(ua => knownKeywords.some(keyword => ua.includes(keyword)));
 
-                                                                        try {
-                                                                            const response = await fetch('/api/admin/users/notify', {
-                                                                                method: 'POST',
-                                                                                headers: {
-                                                                                    'Content-Type': 'application/json',
-                                                                                    'X-Admin-Password': password
-                                                                                },
-                                                                                body: JSON.stringify({
-                                                                                    ip: user.ip,
-                                                                                    kakaoId: targetKakaoId,
-                                                                                    message
-                                                                                })
-                                                                            });
-                                                                            const data = await response.json();
-                                                                            if (data.success) {
-                                                                                alert('알림이 전송되었습니다 (개발중)');
-                                                                            } else {
-                                                                                alert('알림 전송에 실패했습니다: ' + data.error);
-                                                                            }
-                                                                        } catch (error) {
-                                                                            alert('알림 전송 중 오류가 발생했습니다.');
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    📱 알림
-                                                                </Button>
-                                                            ) : (
-                                                                <span className="text-gray-400 text-xs">-</span>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {user.isBlocked ? (
-                                                                <Badge variant="destructive">차단됨</Badge>
-                                                            ) : (
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                                                                    onClick={() => {
-                                                                        if (confirm(`IP ${user.ip}를 차단하시겠습니까?`)) {
-                                                                            blockUserMutation.mutate({ identifier: user.ip, type: 'IP' });
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    <Ban className="h-4 w-4 mr-1" />
-                                                                    차단
-                                                                </Button>
-                                                            )}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                )
-                                            })}
-                                        </TableBody>
-                                    </Table>
-                                </div>
+                                        // 2. Check Grade/Class (Must be present)
+                                        const hasInfo = !!(user.grade && user.classNum);
+
+                                        return hasKnownUA && hasInfo;
+                                    };
+
+                                    const activeUsers = userData?.activeUsers || [];
+                                    const knownUsers = activeUsers.filter(isKnownUser);
+                                    const unknownUsers = activeUsers.filter((u: any) => !isKnownUser(u));
+
+                                    const UserRow = ({ user }: { user: IPProfile }) => (
+                                        <TableRow key={user.ip}>
+                                            <TableCell className="font-mono">
+                                                <Button
+                                                    variant="link"
+                                                    className="p-0 h-auto font-mono text-blue-600 hover:text-blue-800 underline decoration-dotted"
+                                                    onClick={() => setSelectedProfile(user)}
+                                                >
+                                                    {user.ip}
+                                                </Button>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-col gap-1">
+                                                    {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
+                                                        user.kakaoAccounts.map((k, i) => (
+                                                            <span key={i} className="font-bold text-xs">{k.kakaoNickname}</span>
+                                                        ))
+                                                    ) : (
+                                                        <span className="text-gray-400 text-xs">-</span>
+                                                    )}
+                                                    {user.grade && user.classNum && (
+                                                        <span className="text-xs text-green-600 font-medium">
+                                                            {user.grade}학년 {user.classNum}반
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                {user.modificationCount > 0 ? (
+                                                    <Badge variant="secondary" className="font-mono">
+                                                        {user.modificationCount}회
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-gray-400 text-xs">-</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>{user.lastAccess ? new Date(user.lastAccess).toLocaleString() : '-'}</TableCell>
+                                            <TableCell>
+                                                {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+                                                        onClick={async () => {
+                                                            const message = prompt("전송할 메시지를 입력하세요:");
+                                                            if (!message) return;
+                                                            const targetKakaoId = user.kakaoAccounts[0].kakaoId;
+
+                                                            try {
+                                                                const response = await fetch('/api/admin/users/notify', {
+                                                                    method: 'POST',
+                                                                    headers: {
+                                                                        'Content-Type': 'application/json',
+                                                                        'X-Admin-Password': password
+                                                                    },
+                                                                    body: JSON.stringify({
+                                                                        ip: user.ip,
+                                                                        kakaoId: targetKakaoId,
+                                                                        message
+                                                                    })
+                                                                });
+                                                                const data = await response.json();
+                                                                if (data.success) {
+                                                                    alert('알림이 전송되었습니다 (개발중)');
+                                                                } else {
+                                                                    alert('알림 전송에 실패했습니다: ' + data.error);
+                                                                }
+                                                            } catch (error) {
+                                                                alert('알림 전송 중 오류가 발생했습니다.');
+                                                            }
+                                                        }}
+                                                    >
+                                                        📱 알림
+                                                    </Button>
+                                                ) : (
+                                                    <span className="text-gray-400 text-xs">-</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                {user.isBlocked ? (
+                                                    <Badge variant="destructive">차단됨</Badge>
+                                                ) : (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                                        onClick={() => {
+                                                            if (confirm(`IP ${user.ip}를 차단하시겠습니까?`)) {
+                                                                blockUserMutation.mutate({ identifier: user.ip, type: 'IP' });
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Ban className="h-4 w-4 mr-1" />
+                                                        차단
+                                                    </Button>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+
+                                    return (
+                                        <div className="space-y-6">
+                                            {/* Known Users */}
+                                            <div className="rounded-md border">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>IP 주소</TableHead>
+                                                            <TableHead>카카오 계정</TableHead>
+                                                            <TableHead>수정 횟수</TableHead>
+                                                            <TableHead>마지막 접속</TableHead>
+                                                            <TableHead className="w-[100px]">알림</TableHead>
+                                                            <TableHead className="w-[100px]">관리</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {knownUsers.map((user: IPProfile, idx: number) => (
+                                                            <UserRow key={idx} user={user} />
+                                                        ))}
+                                                        {knownUsers.length === 0 && (
+                                                            <TableRow>
+                                                                <TableCell colSpan={6} className="h-24 text-center text-gray-500">
+                                                                    일반 접속 기록이 없습니다.
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        )}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
+
+                                            {/* Unknown/Others Section */}
+                                            {unknownUsers.length > 0 && (
+                                                <div className="border rounded-md overflow-hidden">
+                                                    <div
+                                                        className="flex items-center justify-between p-4 bg-gray-100 cursor-pointer hover:bg-gray-200 transition-colors"
+                                                        onClick={() => setIsOthersExpanded(!isOthersExpanded)}
+                                                    >
+                                                        <div className="flex items-center gap-2 font-semibold text-gray-700">
+                                                            {isOthersExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                                                            기타 접속 ({unknownUsers.length})
+                                                        </div>
+                                                        <span className="text-xs text-gray-500">
+                                                            확인되지 않은 브라우저나 Unknown 환경
+                                                        </span>
+                                                    </div>
+
+                                                    {isOthersExpanded && (
+                                                        <div className="bg-gray-50 border-t">
+                                                            <Table>
+                                                                <TableBody>
+                                                                    {unknownUsers.map((user: IPProfile, idx: number) => (
+                                                                        <UserRow key={idx} user={user} />
+                                                                    ))}
+                                                                </TableBody>
+                                                            </Table>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </CardContent>
                         </Card>
 

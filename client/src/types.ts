@@ -12,6 +12,8 @@ export interface IPProfile {
     modificationCount: number;
     lastAccess: string | null; // ISO Date string
     recentUserAgents: string[];
+    grade?: string | null;
+    classNum?: string | null;
 
     // --- Detailed History (Empty in List View, Populated in Detail View) ---
     assessments: { id: number, subject: string, title: string, createdAt: string, grade: number, classNum: number }[];
