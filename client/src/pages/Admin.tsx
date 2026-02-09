@@ -19,6 +19,13 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 export default function Admin() {
     const [password, setPassword] = useState("");
@@ -347,9 +354,21 @@ export default function Admin() {
                 <TabsContent value="users">
                     {/* ... existing users content ... */}
                     <div className="grid gap-6">
+                        <div className="flex justify-end">
+                            <Select value={timeRange} onValueChange={(value: any) => setTimeRange(value)}>
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="기간 선택" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="24h">최근 24시간</SelectItem>
+                                    <SelectItem value="7d">최근 1주일</SelectItem>
+                                    <SelectItem value="all">전체 기록</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                         <Card>
                             <CardHeader>
-                                <CardTitle>활성 사용자 (최근 24시간)</CardTitle>
+                                <CardTitle>활성 사용자 ({timeRange === '24h' ? '최근 24시간' : timeRange === '7d' ? '최근 1주일' : '전체 기록'})</CardTitle>
                                 <CardDescription>
                                     최근 접속한 IP 및 카카오 계정 목록입니다.
                                 </CardDescription>
@@ -385,6 +404,15 @@ export default function Admin() {
                                                 </Button>
                                             </TableCell>
                                             <TableCell>
+                                                {user.grade && user.classNum ? (
+                                                    <Badge variant="outline" className="font-mono text-green-600 border-green-200 bg-green-50">
+                                                        {user.grade}-{user.classNum}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-gray-300 text-xs">-</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
                                                 <div className="flex flex-col gap-1">
                                                     {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
                                                         user.kakaoAccounts.map((k, i) => (
@@ -392,11 +420,6 @@ export default function Admin() {
                                                         ))
                                                     ) : (
                                                         <span className="text-gray-400 text-xs">-</span>
-                                                    )}
-                                                    {user.grade && user.classNum && (
-                                                        <span className="text-xs text-green-600 font-medium">
-                                                            {user.grade}학년 {user.classNum}반
-                                                        </span>
                                                     )}
                                                 </div>
                                             </TableCell>
@@ -481,6 +504,7 @@ export default function Admin() {
                                                     <TableHeader>
                                                         <TableRow>
                                                             <TableHead>IP 주소</TableHead>
+                                                            <TableHead className="w-[80px]">학년/반</TableHead>
                                                             <TableHead>카카오 계정</TableHead>
                                                             <TableHead>수정 횟수</TableHead>
                                                             <TableHead>마지막 접속</TableHead>
@@ -494,7 +518,7 @@ export default function Admin() {
                                                         ))}
                                                         {knownUsers.length === 0 && (
                                                             <TableRow>
-                                                                <TableCell colSpan={6} className="h-24 text-center text-gray-500">
+                                                                <TableCell colSpan={7} className="h-24 text-center text-gray-500">
                                                                     일반 접속 기록이 없습니다.
                                                                 </TableCell>
                                                             </TableRow>
@@ -515,7 +539,7 @@ export default function Admin() {
                                                             기타 접속 ({unknownUsers.length})
                                                         </div>
                                                         <span className="text-xs text-gray-500">
-                                                            확인되지 않은 브라우저나 Unknown 환경
+                                                            학년/반 미기입 또는 브라우저 불분명
                                                         </span>
                                                     </div>
 

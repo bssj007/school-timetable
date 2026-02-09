@@ -7,7 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Loader2, Play, Database, RefreshCw, Trash2, Edit, Save } from "lucide-react";
+import { Loader2, Play, Database, RefreshCw, Trash2, Edit, Save, Settings, PlayCircle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
 interface DatabaseManagerProps {
@@ -26,6 +28,16 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
     const [editingRow, setEditingRow] = useState<any | null>(null);
     const [editValues, setEditValues] = useState<any>({});
     const [isSaving, setIsSaving] = useState(false);
+
+    // Settings State
+    const [settings, setSettings] = useState({
+        auto_delete_enabled: false,
+        retention_days_assessments: '30',
+        retention_days_logs: '30',
+        delete_past_assessments: false
+    });
+    const [isSettingsLoading, setIsSettingsLoading] = useState(false);
+    const [isCleanupRunning, setIsCleanupRunning] = useState(false);
 
     // Initial Load: List Tables
     useEffect(() => {
@@ -149,6 +161,84 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
         }
     };
 
+    const fetchSettings = async () => {
+        setIsSettingsLoading(true);
+        try {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setSettings({
+                    auto_delete_enabled: data.auto_delete_enabled === 'true',
+                    retention_days_assessments: data.retention_days_assessments || '30',
+                    retention_days_logs: data.retention_days_logs || '30',
+                    delete_past_assessments: data.delete_past_assessments === 'true'
+                });
+            }
+        } catch (e) {
+            console.error("Failed to fetch settings", e);
+        } finally {
+            setIsSettingsLoading(false);
+        }
+    };
+
+    const saveSettings = async () => {
+        setIsSettingsLoading(true);
+        try {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({
+                    auto_delete_enabled: String(settings.auto_delete_enabled),
+                    retention_days_assessments: String(settings.retention_days_assessments),
+                    retention_days_logs: String(settings.retention_days_logs),
+                    delete_past_assessments: String(settings.delete_past_assessments)
+                })
+            });
+            if (res.ok) {
+                toast.success("설정이 저장되었습니다.");
+            } else {
+                toast.error("설정 저장 실패");
+            }
+        } catch (e) {
+            toast.error("오류가 발생했습니다.");
+        } finally {
+            setIsSettingsLoading(false);
+        }
+    };
+
+    const runCleanup = async () => {
+        if (!confirm("지금 즉시 정리 작업을 수행하시겠습니까?")) return;
+        setIsCleanupRunning(true);
+        try {
+            // Ensure settings are saved first/used? 
+            // The API reads from DB, so we should save first if changed, but for now let's assume user saved.
+            // Or we could pass current state to cleanup, but API reads from DB.
+            // Let's warn user if they haven't saved? 
+            // Actually, the API reads from DB. So we must relying on saved settings.
+
+            const res = await fetch("/api/admin/cleanup", {
+                method: "POST",
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast.success(`정리 완료: 수행평가 ${data.deleted.assessments}건, 로그 ${data.deleted.logs}건`);
+            } else {
+                toast.error(data.message || "정리 실패");
+            }
+        } catch (e) {
+            toast.error("요청 중 오류 발생");
+        } finally {
+            setIsCleanupRunning(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchSettings();
+    }, []);
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-[700px]">
             {/* Sidebar: Table List */}
@@ -177,75 +267,168 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                 </CardContent>
             </Card>
 
-            {/* Main: SQL & Results */}
-            <div className="md:col-span-3 h-full flex flex-col gap-4">
-                <Card className="flex-none">
-                    <CardHeader className="py-3 px-4 bg-gray-50 border-b">
-                        <CardTitle className="text-sm font-mono text-gray-500">SQL Editor</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4">
-                        <Textarea
-                            value={sql}
-                            onChange={(e) => setSql(e.target.value)}
-                            className="font-mono text-sm min-h-[100px] mb-2"
-                            placeholder="SELECT * FROM users..."
-                        />
-                        <div className="flex justify-between items-center">
-                            <div className="text-xs text-red-500 font-bold">{error}</div>
-                            <div className="flex gap-2">
-                                <Button variant="outline" size="sm" onClick={() => setSql("")}>지우기</Button>
-                                <Button size="sm" onClick={() => runQuery(sql)} disabled={isLoading}>
-                                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
-                                    Run Query
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
 
-                <Card className="flex-1 min-h-0 flex flex-col">
-                    <CardContent className="flex-1 min-h-0 p-0">
-                        {results.length > 0 ? (
-                            <ScrollArea className="h-full w-full">
-                                <div className="p-0">
-                                    <Table>
-                                        <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
-                                            <TableRow>
-                                                <TableHead className="w-[50px] text-center">Action</TableHead>
-                                                {Object.keys(results[0]).map(key => (
-                                                    <TableHead key={key} className="whitespace-nowrap font-bold">{key}</TableHead>
-                                                ))}
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {results.map((row, i) => (
-                                                <TableRow key={i}>
-                                                    <TableCell className="text-center p-1">
-                                                        {row.id && (
-                                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditClick(row)}>
-                                                                <Edit className="h-3 w-3" />
-                                                            </Button>
-                                                        )}
-                                                    </TableCell>
-                                                    {Object.values(row).map((val: any, j) => (
-                                                        <TableCell key={j} className="whitespace-nowrap max-w-[200px] truncate text-xs font-mono">
-                                                            {typeof val === 'object' ? JSON.stringify(val) : String(val)}
-                                                        </TableCell>
-                                                    ))}
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
+
+            {/* Main Content Area with Tabs */}
+            <div className="md:col-span-3 h-full">
+                <Tabs defaultValue="manual" className="h-full flex flex-col">
+                    <TabsList className="mb-4 w-full justify-start">
+                        <TabsTrigger value="manual" className="flex items-center gap-2">
+                            <Database className="w-4 h-4" /> 수동 관리 (Query)
+                        </TabsTrigger>
+                        <TabsTrigger value="auto" className="flex items-center gap-2">
+                            <Settings className="w-4 h-4" /> 자동 관리 (설정)
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="manual" className="flex-1 min-h-0 flex flex-col gap-4 mt-0">
+                        {/* Existing SQL Editor & Results */}
+                        <Card className="flex-none">
+                            <CardHeader className="py-3 px-4 bg-gray-50 border-b">
+                                <CardTitle className="text-sm font-mono text-gray-500">SQL Editor</CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4">
+                                <Textarea
+                                    value={sql}
+                                    onChange={(e) => setSql(e.target.value)}
+                                    className="font-mono text-sm min-h-[100px] mb-2"
+                                    placeholder="SELECT * FROM users..."
+                                />
+                                <div className="flex justify-between items-center">
+                                    <div className="text-xs text-red-500 font-bold">{error}</div>
+                                    <div className="flex gap-2">
+                                        <Button variant="outline" size="sm" onClick={() => setSql("")}>지우기</Button>
+                                        <Button size="sm" onClick={() => runQuery(sql)} disabled={isLoading}>
+                                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
+                                            Run Query
+                                        </Button>
+                                    </div>
                                 </div>
-                                <ScrollBar orientation="horizontal" />
-                            </ScrollArea>
-                        ) : (
-                            <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-                                데이터가 없습니다. SQL을 실행하세요.
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="flex-1 min-h-0 flex flex-col">
+                            <CardContent className="flex-1 min-h-0 p-0">
+                                {results.length > 0 ? (
+                                    <ScrollArea className="h-full w-full">
+                                        <div className="p-0">
+                                            <Table>
+                                                <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
+                                                    <TableRow>
+                                                        <TableHead className="w-[50px] text-center">Action</TableHead>
+                                                        {Object.keys(results[0]).map(key => (
+                                                            <TableHead key={key} className="whitespace-nowrap font-bold">{key}</TableHead>
+                                                        ))}
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {results.map((row, i) => (
+                                                        <TableRow key={i}>
+                                                            <TableCell className="text-center p-1">
+                                                                {row.id && (
+                                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditClick(row)}>
+                                                                        <Edit className="h-3 w-3" />
+                                                                    </Button>
+                                                                )}
+                                                            </TableCell>
+                                                            {Object.values(row).map((val: any, j) => (
+                                                                <TableCell key={j} className="whitespace-nowrap max-w-[200px] truncate text-xs font-mono">
+                                                                    {typeof val === 'object' ? JSON.stringify(val) : String(val)}
+                                                                </TableCell>
+                                                            ))}
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+                                        <ScrollBar orientation="horizontal" />
+                                    </ScrollArea>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                                        데이터가 없습니다. SQL을 실행하세요.
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="auto" className="flex-1 mt-0">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>데이터 자동 삭제 설정</CardTitle>
+                                <CardDescription>
+                                    오래된 데이터를 자동으로 정리하여 DB 용량을 확보합니다.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                <div className="flex items-center justify-between space-x-2">
+                                    <Label htmlFor="auto-delete" className="flex flex-col space-y-1">
+                                        <span>자동 삭제 기능 사용</span>
+                                        <span className="font-normal text-xs text-gray-500">이 기능을 켜면 아래 설정에 따라 데이터가 주기적으로 삭제됩니다.</span>
+                                    </Label>
+                                    <Switch
+                                        id="auto-delete"
+                                        checked={settings.auto_delete_enabled}
+                                        onCheckedChange={(checked) => setSettings({ ...settings, auto_delete_enabled: checked })}
+                                    />
+                                </div>
+
+                                <div className="space-y-4 border-l-2 border-gray-100 pl-4 ml-2">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="retention-assessments">수행평가 보관 기간 (일)</Label>
+                                            <Input
+                                                id="retention-assessments"
+                                                type="number"
+                                                value={settings.retention_days_assessments}
+                                                onChange={(e) => setSettings({ ...settings, retention_days_assessments: e.target.value })}
+                                                disabled={!settings.auto_delete_enabled}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="retention-logs">접속 기록 보관 기간 (일)</Label>
+                                            <Input
+                                                id="retention-logs"
+                                                type="number"
+                                                value={settings.retention_days_logs}
+                                                onChange={(e) => setSettings({ ...settings, retention_days_logs: e.target.value })}
+                                                disabled={!settings.auto_delete_enabled}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between space-x-2 pt-2">
+                                        <Label htmlFor="delete-past" className="flex flex-col space-y-1">
+                                            <span>이미 지난 수행평가 삭제</span>
+                                            <span className="font-normal text-xs text-gray-500">마감일(Due Date)이 지난 항목을 즉시 삭제 대상에 포함합니다.</span>
+                                        </Label>
+                                        <Switch
+                                            id="delete-past"
+                                            checked={settings.delete_past_assessments}
+                                            onCheckedChange={(checked) => setSettings({ ...settings, delete_past_assessments: checked })}
+                                            disabled={!settings.auto_delete_enabled}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-4 pt-4 border-t">
+                                    <Button onClick={saveSettings} disabled={isSettingsLoading}>
+                                        {isSettingsLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                        <Save className="w-4 h-4 mr-2" />
+                                        설정 저장
+                                    </Button>
+
+                                    <div className="flex-1 text-right">
+                                        <Button variant="destructive" onClick={runCleanup} disabled={isCleanupRunning || !settings.auto_delete_enabled}>
+                                            {isCleanupRunning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlayCircle className="w-4 h-4 mr-2" />}
+                                            지금 정리 실행
+                                        </Button>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
             </div>
 
             {/* Edit Dialog */}
@@ -296,6 +479,6 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     );
 }

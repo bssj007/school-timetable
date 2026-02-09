@@ -15,14 +15,24 @@ export const onRequest = async (context: any) => {
 
     try {
         if (request.method === 'GET') {
-            // 1. Fetch Raw Logs (Last 24h)
+            const url = new URL(request.url);
+            const range = url.searchParams.get('range') || '24h'; // '24h' | '7d' | 'all'
+
+            let query = `SELECT ip, kakaoId, kakaoNickname, method, endpoint, userAgent, grade, classNum, accessedAt 
+                         FROM access_logs `;
+
+            if (range === '24h') {
+                query += `WHERE accessedAt > datetime('now', '-1 day') `;
+            } else if (range === '7d') {
+                query += `WHERE accessedAt > datetime('now', '-7 days') `;
+            }
+            // 'all' -> no WHERE clause
+
+            query += `ORDER BY accessedAt DESC`;
+
+            // 1. Fetch Raw Logs
             // We fetch individual rows to aggregate properly in code + match IPProfile structure
-            const { results: logs } = await env.DB.prepare(
-                `SELECT ip, kakaoId, kakaoNickname, method, endpoint, userAgent, grade, classNum, accessedAt 
-                 FROM access_logs 
-                 WHERE accessedAt > datetime('now', '-1 day') 
-                 ORDER BY accessedAt DESC`
-            ).all();
+            const { results: logs } = await env.DB.prepare(query).all();
 
             // 2. Fetch Blocked Users
             const { results: blockedUsers } = await env.DB.prepare(

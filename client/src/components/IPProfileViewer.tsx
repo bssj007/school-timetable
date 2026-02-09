@@ -127,13 +127,19 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                 <span className="text-xs text-blue-600 font-bold flex items-center gap-1"><FileText className="w-3 h-3" /> 수정 기여</span>
                                 <span className="text-2xl font-bold">{data.modificationCount}회</span>
                             </div>
+                            <div className="bg-green-50 p-4 rounded-lg flex flex-col gap-1 border border-green-200">
+                                <span className="text-xs text-green-600 font-bold flex items-center gap-1"><User className="w-3 h-3" /> 학년 / 반</span>
+                                <span className="text-2xl font-bold">
+                                    {data.grade && data.classNum ? `${data.grade}학년 ${data.classNum}반` : <span className="text-gray-400 text-lg">-</span>}
+                                </span>
+                            </div>
                             <div className="bg-gray-50 p-4 rounded-lg flex flex-col gap-1 border border-gray-200">
                                 <span className="text-xs text-gray-500 font-bold flex items-center gap-1"><Clock className="w-3 h-3" /> 마지막 접속</span>
                                 <span className="text-sm font-mono">{data.lastAccess ? new Date(data.lastAccess).toLocaleString() : '-'}</span>
                             </div>
-                            <div className="bg-yellow-50 p-4 rounded-lg flex flex-col gap-1 border border-yellow-100">
+                            <div className="bg-yellow-50 p-4 rounded-lg flex flex-col gap-1 border border-yellow-100 md:col-span-3">
                                 <span className="text-xs text-yellow-700 font-bold flex items-center gap-1"><User className="w-3 h-3" /> 카카오 계정</span>
-                                <div className="flex flex-wrap gap-1">
+                                <div className="flex flex-wrap gap-1 mt-1">
                                     {data.kakaoAccounts?.length > 0 ? data.kakaoAccounts.map((k: { kakaoId: string; kakaoNickname: string }, i: number) => (
                                         <Badge key={i} variant="secondary" className="text-xs">{k.kakaoNickname}</Badge>
                                     )) : <span className="text-xs text-gray-400">-</span>}
