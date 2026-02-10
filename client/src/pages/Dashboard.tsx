@@ -551,7 +551,7 @@ export default function Dashboard() {
 
                           // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
                           const bgColor = cellAssessments.length > 0
-                            ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
+                            ? (isPast ? "bg-gray-100 border-gray-200" : "bg-blue-100 border-blue-300")
                             : isToday
                               ? "bg-red-50 hover:bg-red-100"
                               : "hover:bg-gray-100";
@@ -576,7 +576,7 @@ export default function Dashboard() {
                                     <div className="mt-0.5 flex-shrink-0">
                                       <div className="flex flex-wrap gap-0.5 justify-center">
                                         {cellAssessments.map(a => (
-                                          <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-300 text-gray-600" : "bg-blue-600 text-white"}`}>
+                                          <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-200 text-gray-500" : "bg-blue-600 text-white"}`}>
                                             {a.description && a.description.includes("차") ? a.description : '평가'}
                                           </span>
                                         ))}

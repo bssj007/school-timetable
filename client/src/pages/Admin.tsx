@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -290,8 +290,10 @@ export default function Admin() {
         onError: () => toast.error("저장 실패"),
     });
 
-    const handleSaveSettings = () => {
-        saveSettingsMutation.mutate(settings);
+    const handleSettingChange = (key: string, value: any) => {
+        const newSettings = { ...settings, [key]: value };
+        setSettings(newSettings);
+        saveSettingsMutation.mutate(newSettings);
     };
 
     if (!isAuthenticated) {
@@ -748,7 +750,7 @@ export default function Admin() {
                     </div>
                 </TabsContent>
 
-                <TabsContent value="settings">
+                <TabsContent value="database" className="space-y-6">
                     <Card>
                         <CardHeader>
                             <CardTitle>시스템 설정</CardTitle>
@@ -767,7 +769,7 @@ export default function Admin() {
                                 <Switch
                                     id="auto-delete"
                                     checked={settings.auto_delete_enabled}
-                                    onCheckedChange={(checked) => setSettings({ ...settings, auto_delete_enabled: checked })}
+                                    onCheckedChange={(checked) => handleSettingChange("auto_delete_enabled", checked)}
                                 />
                             </div>
 
@@ -781,7 +783,7 @@ export default function Admin() {
                                 <Switch
                                     id="hide-past"
                                     checked={settings.hide_past_assessments}
-                                    onCheckedChange={(checked) => setSettings({ ...settings, hide_past_assessments: checked })}
+                                    onCheckedChange={(checked) => handleSettingChange("hide_past_assessments", checked)}
                                 />
                             </div>
 
@@ -793,8 +795,9 @@ export default function Admin() {
                                         type="number"
                                         value={settings.retention_days_assessments}
                                         onChange={(e) => setSettings({ ...settings, retention_days_assessments: e.target.value })}
+                                        onBlur={(e) => handleSettingChange("retention_days_assessments", e.target.value)}
                                     />
-                                    <p className="text-xs text-gray-500">생성된 지 N일이 지난 수행평가를 삭제합니다.</p>
+                                    <p className="text-xs text-gray-500">생성된 지 N일이 지난 수행평가를 삭제합니다. (입력 후 포커스를 떼면 저장됩니다)</p>
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="retention-logs">로그 보관 기간 (일)</Label>
@@ -803,22 +806,16 @@ export default function Admin() {
                                         type="number"
                                         value={settings.retention_days_logs}
                                         onChange={(e) => setSettings({ ...settings, retention_days_logs: e.target.value })}
+                                        onBlur={(e) => handleSettingChange("retention_days_logs", e.target.value)}
                                     />
-                                    <p className="text-xs text-gray-500">접속한 지 N일이 지난 로그를 삭제합니다.</p>
+                                    <p className="text-xs text-gray-500">접속한 지 N일이 지난 로그를 삭제합니다. (입력 후 포커스를 떼면 저장됩니다)</p>
                                 </div>
                             </div>
 
-                            <div className="flex justify-end pt-4">
-                                <Button onClick={handleSaveSettings} disabled={saveSettingsMutation.isPending}>
-                                    <Save className="h-4 w-4 mr-2" />
-                                    {saveSettingsMutation.isPending ? "저장 중..." : "설정 저장"}
-                                </Button>
-                            </div>
+                            {/* 설정 저장 버튼 제거됨: 자동 저장됨 */}
                         </CardContent>
                     </Card>
-                </TabsContent>
 
-                <TabsContent value="database">
                     <DatabaseManager adminPassword={password} />
                 </TabsContent>
             </Tabs>
