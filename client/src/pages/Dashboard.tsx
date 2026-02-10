@@ -235,6 +235,16 @@ export default function Dashboard() {
     return filtered;
   }, [allAssessments, weekDates]);
 
+  // 5. 설정 조회 (Public)
+  const { data: settings } = useQuery({
+    queryKey: ['publicSettings'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/public');
+      if (!res.ok) return { hide_past_assessments: false };
+      return res.json();
+    }
+  });
+
   // 4. 수행평가 추가
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -832,114 +842,96 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-  // 5. 설정 조회 (Public)
-              const {data: settings } = useQuery({
-                queryKey: ['publicSettings'],
-    queryFn: async () => {
-      const res = await fetch('/api/settings/public');
-              if (!res.ok) return {hide_past_assessments: false };
-              return res.json();
-    }
-  });
 
-              // ... existing code ...
+              {assessments && assessments.filter(assessment => {
+                if (settings?.hide_past_assessments) {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  return new Date(assessment.dueDate) >= today;
+                }
+                return true;
+              }).length > 0 ? (
+                assessments
+                  .filter(assessment => {
+                    if (settings?.hide_past_assessments) {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      return new Date(assessment.dueDate) >= today;
+                    }
+                    return true;
+                  })
+                  .map((assessment) => {
+                    const diffDate = Math.ceil((new Date(assessment.dueDate).getTime() - new Date(toDateString(new Date())).getTime()) / (1000 * 60 * 60 * 24));
+                    const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
+                    const isToday = diffDate === 0;
 
-              {/* 수행평가 목록 */}
-              <Card className="mt-8">
-                <CardHeader>
-                  <CardTitle>이번 주 수행평가 ({weekRangeText})</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {assessments && assessments.filter(assessment => {
-                      if (settings?.hide_past_assessments) {
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        return new Date(assessment.dueDate) >= today;
-                      }
-                      return true;
-                    }).length > 0 ? (
-                      assessments
-                        .filter(assessment => {
-                          if (settings?.hide_past_assessments) {
-                            const today = new Date();
-                            today.setHours(0, 0, 0, 0);
-                            return new Date(assessment.dueDate) >= today;
+                    return (
+                      <div
+                        key={assessment.id}
+                        className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'bg-red-50 border-red-200' : 'bg-white'}`}
+                        onClick={() => {
+                          // Find the cell logic
+                          const targetDate = new Date(assessment.dueDate); // This might be string 'YYYY-MM-DD'
+                          // We need to find which column (weekday) and row (classTime) this corresponds to.
+                          // However, viewingAssessments are "this week's" assessments, so they should be on the screen.
+                          // But wait, the assessments list is "This Week's".
+
+                          // Let's find the weekday index.
+                          // assessment.weekday might be available if we joined it, but currently AssessmentItem has weekday optional.
+                          // Actually, we can calculate weekday from date.
+                          const aDate = new Date(assessment.dueDate);
+                          const day = aDate.getDay(); // 0(Sun) - 6(Sat). 
+                          const weekdayIdx = day === 0 ? 6 : day - 1; // 0(Mon) - 4(Fri). Adjust for Sunday (0) and Saturday (6) if needed, assuming Mon-Fri.
+
+                          // Check if weekday is valid (Mon-Fri) and classTime exists
+                          if (weekdayIdx >= 0 && weekdayIdx <= 4 && assessment.classTime) {
+                            const cellId = `cell-${weekdayIdx}-${assessment.classTime}`;
+                            const element = document.getElementById(cellId);
+                            if (element) {
+                              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              element.classList.add('highlight-cell');
+                              setTimeout(() => {
+                                element.classList.remove('highlight-cell');
+                              }, 2000);
+                            }
                           }
-                          return true;
-                        })
-                        .map((assessment) => {
-                          const diffDate = Math.ceil((new Date(assessment.dueDate).getTime() - new Date(toDateString(new Date())).getTime()) / (1000 * 60 * 60 * 24));
-                          const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
-                          const isToday = diffDate === 0;
-
-                          return (
-                            <div
-                              key={assessment.id}
-                              className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'bg-red-50 border-red-200' : 'bg-white'}`}
-                              onClick={() => {
-                                // Find the cell logic
-                                const targetDate = new Date(assessment.dueDate); // This might be string 'YYYY-MM-DD'
-                                // We need to find which column (weekday) and row (classTime) this corresponds to.
-                                // However, viewingAssessments are "this week's" assessments, so they should be on the screen.
-                                // But wait, the assessments list is "This Week's".
-
-                                // Let's find the weekday index.
-                                // assessment.weekday might be available if we joined it, but currently AssessmentItem has weekday optional.
-                                // Actually, we can calculate weekday from date.
-                                const aDate = new Date(assessment.dueDate);
-                                const day = aDate.getDay(); // 0(Sun) - 6(Sat). 
-                                const weekdayIdx = day === 0 ? 6 : day - 1; // 0(Mon) - 4(Fri). Adjust for Sunday (0) and Saturday (6) if needed, assuming Mon-Fri.
-
-                                // Check if weekday is valid (Mon-Fri) and classTime exists
-                                if (weekdayIdx >= 0 && weekdayIdx <= 4 && assessment.classTime) {
-                                  const cellId = `cell-${weekdayIdx}-${assessment.classTime}`;
-                                  const element = document.getElementById(cellId);
-                                  if (element) {
-                                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                    element.classList.add('highlight-cell');
-                                    setTimeout(() => {
-                                      element.classList.remove('highlight-cell');
-                                    }, 2000);
-                                  }
-                                }
-                              }}
-                            >
-                              <div className="flex justify-between items-start mb-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-lg text-blue-600">
-                                    {assessment.subject}
-                                  </span>
-                                  <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-                                    {assessment.description}
-                                  </span>
-                                  <span className={`text-sm font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
-                                    {dDay}
-                                  </span>
-                                </div>
-                              </div>
-                              <p className="text-gray-700 mb-2">{assessment.title}</p>
-                              <div className="flex items-center gap-2 mt-auto">
-                                <div className="flex items-center text-sm text-gray-500">
-                                  <span>{assessment.dueDate}</span>
-                                  <span className="mx-2">|</span>
-                                  <span>{assessment.classTime}교시</span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                    ) : (
-                      <div className="col-span-full text-center py-12 text-gray-500">
-                        이번 주 등록된 수행평가가 없습니다.
-                        <br />
-                        <span className="text-sm">시간표에서 과목을 클릭하여 추가하세요.</span>
+                        }}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-lg text-blue-600">
+                              {assessment.subject}
+                            </span>
+                            <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                              {assessment.description}
+                            </span>
+                            <span className={`text-sm font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
+                              {dDay}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-gray-700 mb-2">{assessment.title}</p>
+                        <div className="flex items-center gap-2 mt-auto">
+                          <div className="flex items-center text-sm text-gray-500">
+                            <span>{assessment.dueDate}</span>
+                            <span className="mx-2">|</span>
+                            <span>{assessment.classTime}교시</span>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                    );
+                  })
+              ) : (
+                <div className="col-span-full text-center py-12 text-gray-500">
+                  이번 주 등록된 수행평가가 없습니다.
+                  <br />
+                  <span className="text-sm">시간표에서 과목을 클릭하여 추가하세요.</span>
+                </div>
+              )}
             </div>
-          </div>
-          );
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 }
