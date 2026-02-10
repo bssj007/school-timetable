@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 import {
@@ -63,9 +63,12 @@ function getWeekDates(weekOffset: number): Date[] {
   });
 }
 
-// 날짜를 YYYY-MM-DD 형식으로 변환
+// 날짜를 YYYY-MM-DD 형식으로 변환 (로컬 시간 기준)
 function toDateString(date: Date): string {
-  return date.toISOString().split('T')[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 // 날짜가 특정 주에 속하는지 확인
@@ -89,6 +92,8 @@ export default function Dashboard() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [viewingAssessments, setViewingAssessments] = useState<AssessmentItem[]>([]);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingAssessment, setEditingAssessment] = useState<AssessmentItem | null>(null);
 
   const [formData, setFormData] = useState({
     assessmentDate: "",
@@ -273,6 +278,30 @@ export default function Dashboard() {
     }
   });
 
+  // 6. 수행평가 수정
+  const updateMutation = useMutation({
+    mutationFn: async (data: AssessmentItem) => {
+      const res = await fetch(`/api/assessment`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assessments'] });
+      toast.success("수행평가가 수정되었습니다");
+      setShowEditDialog(false);
+      setEditingAssessment(null);
+    },
+    onError: (error) => toast.error(error.message || "수정 실패")
+  });
+
   // 시간표에서 고유한 과목 목록 추출
   const uniqueSubjects = useMemo(() => {
     if (!timetableData || !Array.isArray(timetableData)) return [];
@@ -311,6 +340,36 @@ export default function Dashboard() {
       await deleteMutation.mutateAsync(id);
     } catch (error) {
       console.error("수행평가 삭제 실패:", error);
+    }
+  };
+
+  const handleEditClick = (assessment: AssessmentItem) => {
+    setEditingAssessment(assessment);
+    setFormData({
+      assessmentDate: assessment.dueDate,
+      subject: assessment.subject,
+      content: assessment.title,
+      classTime: assessment.classTime?.toString() || "",
+      round: assessment.round?.toString() || "1",
+    });
+    setShowViewDialog(false);
+    setShowEditDialog(true);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAssessment) return;
+
+    try {
+      await updateMutation.mutateAsync({
+        ...editingAssessment,
+        title: formData.content,
+        dueDate: formData.assessmentDate,
+        classTime: formData.classTime ? parseInt(formData.classTime) : undefined,
+        round: parseInt(formData.round || "1"),
+      });
+    } catch (error) {
+      console.error("수행평가 수정 실패:", error);
     }
   };
 
@@ -484,15 +543,15 @@ export default function Dashboard() {
                           // 해당 날짜와 교시에 수행평가가 있는지 확인
                           const cellAssessments = assessments ? assessments.filter(a => {
                             return item &&
-                              a.subject === item.subject &&
+                              a.subject.trim() === item.subject.trim() &&
                               a.dueDate === currentDate &&
                               a.classTime === classTime &&
                               !a.isDone;
                           }) : [];
 
-                          // 배경색 결정: 수행평가가 있으면 파란색, 없고 오늘이면 연한 붉은색, 그 외는 기본
+                          // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
                           const bgColor = cellAssessments.length > 0
-                            ? "bg-blue-100 border-blue-300"
+                            ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
                             : isToday
                               ? "bg-red-50 hover:bg-red-100"
                               : "hover:bg-gray-100";
@@ -617,6 +676,82 @@ export default function Dashboard() {
           </DialogContent>
         </Dialog>
 
+        {/* 수행평가 수정 다이얼로그 */}
+        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+          <DialogContent className="sm:max-w-[500px]" aria-describedby="edit-assessment-description">
+            <DialogHeader>
+              <DialogTitle>수행평가 수정</DialogTitle>
+              <p id="edit-assessment-description" className="text-sm text-gray-500 mt-1">
+                수행평가 정보를 수정합니다
+              </p>
+            </DialogHeader>
+            <form onSubmit={handleUpdate} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">날짜</label>
+                  <Input
+                    type="date"
+                    value={formData.assessmentDate}
+                    onChange={(e) => setFormData({ ...formData, assessmentDate: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">차수</label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={formData.round}
+                    onChange={(e) => setFormData({ ...formData, round: e.target.value })}
+                    required
+                  >
+                    {[1, 2, 3, 4].map((r) => (
+                      <option key={r} value={r.toString()}>{r}차</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  과목
+                </label>
+                <Input
+                  value={formData.subject}
+                  readOnly
+                  className="bg-gray-100"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  교시
+                </label>
+                <Input
+                  value={formData.classTime ? `${formData.classTime}교시` : ""}
+                  readOnly
+                  className="bg-gray-100"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">내용</label>
+                <Textarea
+                  value={formData.content}
+                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                  placeholder="수행평가 내용 입력"
+                  required
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setShowEditDialog(false)} className="flex-1">
+                  취소
+                </Button>
+                <Button type="submit" className="flex-1">
+                  수정하기
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
         {/* 수행평가 정보 다이얼로그 */}
         <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
           <DialogContent className="sm:max-w-[500px]" aria-describedby="view-assessment-description">
@@ -648,8 +783,18 @@ export default function Dashboard() {
                         </span>
                       )}
                     </div>
-                    {/* 과거 날짜가 아닐 때만 삭제 버튼 표시 */
-                      assessment.dueDate >= toDateString(new Date()) && (
+                    {/* 과거 날짜가 아닐 때만 수정/삭제 버튼 표시 */}
+                    {assessment.dueDate >= toDateString(new Date()) && (
+                      <div className="flex bg-gray-100 rounded-md">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-blue-500 hover:text-blue-600 hover:bg-blue-50 h-8 w-8"
+                          onClick={() => handleEditClick(assessment)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <div className="w-px bg-gray-200"></div>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -661,7 +806,8 @@ export default function Dashboard() {
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
-                      )
+                      </div>
+                    )
                     }
                   </div>
                   <p className="text-gray-700 mb-2">{assessment.title}</p>
@@ -687,44 +833,67 @@ export default function Dashboard() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {assessments && assessments.length > 0 ? (
-                assessments.map((assessment) => (
-                  <div
-                    key={assessment.id}
-                    className="flex flex-col p-4 border rounded-lg hover:shadow-md transition-shadow bg-white"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-lg text-gray-900">
-                          {assessment.subject}
-                        </span>
-                        {assessment.description && (
-                          <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">
+                assessments.map((assessment) => {
+                  const diffDate = Math.ceil((new Date(assessment.dueDate).getTime() - new Date(toDateString(new Date())).getTime()) / (1000 * 60 * 60 * 24));
+                  const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
+                  const isToday = diffDate === 0;
+
+                  return (
+                    <div
+                      key={assessment.id}
+                      className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'bg-red-50 border-red-200' : 'bg-white'}`}
+                      onClick={() => {
+                        // Find the cell logic
+                        const targetDate = new Date(assessment.dueDate); // This might be string 'YYYY-MM-DD'
+                        // We need to find which column (weekday) and row (classTime) this corresponds to.
+                        // However, viewingAssessments are "this week's" assessments, so they should be on the screen.
+                        // But wait, the assessments list is "This Week's".
+
+                        // Let's find the weekday index.
+                        // assessment.weekday might be available if we joined it, but currently AssessmentItem has weekday optional.
+                        // Actually, we can calculate weekday from date.
+                        const aDate = new Date(assessment.dueDate);
+                        const day = aDate.getDay(); // 0(Sun) - 6(Sat). 
+                        const weekdayIdx = day === 0 ? 6 : day - 1; // 0(Mon) - 4(Fri). Adjust for Sunday (0) and Saturday (6) if needed, assuming Mon-Fri.
+
+                        // Check if weekday is valid (Mon-Fri) and classTime exists
+                        if (weekdayIdx >= 0 && weekdayIdx <= 4 && assessment.classTime) {
+                          const cellId = `cell-${weekdayIdx}-${assessment.classTime}`;
+                          const element = document.getElementById(cellId);
+                          if (element) {
+                            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            element.classList.add('highlight-cell');
+                            setTimeout(() => {
+                              element.classList.remove('highlight-cell');
+                            }, 2000);
+                          }
+                        }
+                      }}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-lg text-blue-600">
+                            {assessment.subject}
+                          </span>
+                          <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                             {assessment.description}
                           </span>
-                        )}
+                          <span className={`text-sm font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
+                            {dDay}
+                          </span>
+                        </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 w-8"
-                        onClick={() => handleDelete(assessment.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <p className="text-gray-700 mb-2">{assessment.title}</p>
+                      <div className="flex items-center gap-2 mt-auto">
+                        <div className="flex items-center text-sm text-gray-500">
+                          <span>{assessment.dueDate}</span>
+                          <span className="mx-2">|</span>
+                          <span>{assessment.classTime}교시</span>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-gray-700 mb-2">{assessment.title}</p>
-                    <div className="flex items-center gap-2 mt-auto">
-                      {assessment.classTime && (
-                        <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
-                          {assessment.classTime}교시
-                        </span>
-                      )}
-                      <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
-                        {assessment.dueDate}
-                      </span>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="col-span-full text-center py-12 text-gray-500">
                   이번 주 등록된 수행평가가 없습니다.

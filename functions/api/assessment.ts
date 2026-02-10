@@ -150,6 +150,44 @@ export const onRequest = async (context: any) => {
             });
         }
 
+        // PATCH: 수정
+        if (request.method === 'PATCH') {
+            const body = await request.json();
+            const { id, subject, title, description, dueDate, round, classTime } = body;
+
+            if (!id) return new Response('Missing ID', { status: 400 });
+
+            // 동적 쿼리 생성
+            const updates: string[] = [];
+            const values: any[] = [];
+
+            if (subject !== undefined) { updates.push("subject = ?"); values.push(subject); }
+            if (title !== undefined) { updates.push("title = ?"); values.push(title); }
+            if (description !== undefined) { updates.push("description = ?"); values.push(description); }
+            if (dueDate !== undefined) { updates.push("dueDate = ?"); values.push(dueDate); }
+            if (classTime !== undefined) { updates.push("classTime = ?"); values.push(classTime); }
+
+            // lastModifiedIp 업데이트
+            const ip = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
+            updates.push("lastModifiedIp = ?");
+            values.push(ip);
+
+            if (updates.length === 0) {
+                return new Response(JSON.stringify({ success: true, message: "No changes detected" }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+
+            const query = `UPDATE performance_assessments SET ${updates.join(", ")} WHERE id = ?`;
+            values.push(id);
+
+            const result = await env.DB.prepare(query).bind(...values).run();
+
+            return new Response(JSON.stringify({ success: true, result }), {
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
         // PUT: 완료 여부 토글 (Optional, if needed)
         // ...
 

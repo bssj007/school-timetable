@@ -87,6 +87,16 @@ export default {
                 }
             }
 
+            // 2. 데이터베이스 정리 (Auto Cleanup)
+            try {
+                // @ts-ignore
+                const { performCleanup } = await import('../server/performCleanup');
+                const cleanupResult = await performCleanup(env.DB);
+                console.log('Database cleanup result:', cleanupResult);
+            } catch (cleanupError) {
+                console.error('Database cleanup failed:', cleanupError);
+            }
+
             console.log('Scheduled task completed successfully');
         } catch (error) {
             console.error('Scheduled task error:', error);
