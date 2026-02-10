@@ -32,9 +32,9 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
     // Settings State
     const [settings, setSettings] = useState({
         auto_delete_enabled: false,
+        hide_past_assessments: false,
         retention_days_assessments: '30',
-        retention_days_logs: '30',
-        delete_past_assessments: false
+        retention_days_logs: '30'
     });
     const [isSettingsLoading, setIsSettingsLoading] = useState(false);
     const [isCleanupRunning, setIsCleanupRunning] = useState(false);
@@ -72,26 +72,25 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
 
     const saveSettings = async (currentSettings: any) => {
         if (!currentSettings) return; // Guard
-        // Don't set global loading state for auto-save to avoid flickering
-        // setIsSettingsLoading(true); 
         try {
             const res = await fetch("/api/admin/settings", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
                 body: JSON.stringify({
                     auto_delete_enabled: String(currentSettings.auto_delete_enabled),
+                    hide_past_assessments: String(currentSettings.hide_past_assessments),
                     retention_days_assessments: String(currentSettings.retention_days_assessments),
-                    retention_days_logs: String(currentSettings.retention_days_logs),
-                    delete_past_assessments: String(currentSettings.delete_past_assessments)
+                    retention_days_logs: String(currentSettings.retention_days_logs)
                 })
             });
             if (!res.ok) {
                 console.error("Failed to auto-save settings");
+                toast.error("설정 저장 실패");
+            } else {
+                // toast.success("설정 저장됨"); // 너무 자주 뜨지 않게 주석 처리
             }
         } catch (e) {
             console.error("Error auto-saving settings", e);
-        } finally {
-            // setIsSettingsLoading(false);
         }
     };
 
@@ -403,6 +402,19 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                             />
                                         </div>
                                         <p className="text-xs text-gray-500">마감일(Due Date)이 지난 항목을 즉시 삭제 대상에 포함합니다.</p>
+                                    </div>
+                                    <div className="flex items-center justify-between space-x-2 border p-4 rounded-lg bg-gray-50 mt-4">
+                                        <div className="flex flex-col space-y-1">
+                                            <Label htmlFor="hide-past" className="font-semibold text-base">이미 끝난 수행평가 숨기기</Label>
+                                            <span className="font-normal text-sm text-gray-500">
+                                                마감일(Due Date)이 지난 수행평가를 학생들의 리스트 및 시간표에서 숨깁니다. (삭제되지 않음)
+                                            </span>
+                                        </div>
+                                        <Switch
+                                            id="hide-past"
+                                            checked={settings.hide_past_assessments}
+                                            onCheckedChange={(checked) => updateSetting('hide_past_assessments', checked)}
+                                        />
                                     </div>
                                 </div>
 
