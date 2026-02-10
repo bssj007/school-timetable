@@ -220,8 +220,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                     // Default to TRUE if key is missing, specifically for auto-delete and delete-past
                     auto_delete_enabled: data.auto_delete_enabled !== 'false',
                     retention_days_assessments: data.retention_days_assessments || '30',
-                    retention_days_logs: data.retention_days_logs || '30',
-                    delete_past_assessments: data.delete_past_assessments !== 'false'
+                    retention_days_logs: data.retention_days_logs || '30'
                 });
             }
         } catch (e) {
@@ -391,18 +390,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                         </div>
                                     </div>
 
-                                    <div className="space-y-2 pt-2">
-                                        <div className="flex items-center space-x-2">
-                                            <Label htmlFor="delete-past" className="font-semibold">이미 지난 수행평가 삭제</Label>
-                                            <Switch
-                                                id="delete-past"
-                                                checked={settings.delete_past_assessments}
-                                                onCheckedChange={(checked) => updateSetting('delete_past_assessments', checked)}
-                                                disabled={!settings.auto_delete_enabled}
-                                            />
-                                        </div>
-                                        <p className="text-xs text-gray-500">마감일(Due Date)이 지난 항목을 즉시 삭제 대상에 포함합니다.</p>
-                                    </div>
+
                                     <div className="flex items-center justify-between space-x-2 border p-4 rounded-lg bg-gray-50 mt-4">
                                         <div className="flex flex-col space-y-1">
                                             <Label htmlFor="hide-past" className="font-semibold text-base">이미 끝난 수행평가 숨기기</Label>

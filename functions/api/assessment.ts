@@ -20,16 +20,11 @@ export const onRequest = async (context: any) => {
             const classNum = url.searchParams.get('classNum') || '1';
 
             try {
-                // Check system settings for 'hide_past_assessments'
-                const { value: hidePastValue } = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'hide_past_assessments'").first() || {};
-
                 let query = "SELECT * FROM performance_assessments WHERE grade = ? AND classNum = ?";
                 const params: any[] = [grade, classNum];
 
-                if (hidePastValue === 'true') {
-                    // Use KST (+9h) to check for past assessments
-                    query += " AND dueDate >= date('now', '+9 hours')";
-                }
+                // hide_past_assessments logic moved to frontend to preserve timetable view
+
 
                 query += " ORDER BY dueDate ASC, id DESC";
 

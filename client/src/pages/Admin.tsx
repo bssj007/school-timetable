@@ -325,7 +325,6 @@ export default function Admin() {
                 <TabsList className="grid w-full grid-cols-3 mb-8">
                     <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
                     <TabsTrigger value="users">사용자 관리</TabsTrigger>
-                    <TabsTrigger value="settings">시스템 설정</TabsTrigger>
                     <TabsTrigger
                         value="database"
                         className="data-[state=active]:bg-green-100 data-[state=active]:text-green-800"

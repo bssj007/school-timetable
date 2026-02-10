@@ -19,14 +19,13 @@ export async function performCleanup(db: any) {
 
         const retentionDaysAssessments = parseInt(settings.retention_days_assessments || '30');
         const retentionDaysLogs = parseInt(settings.retention_days_logs || '30');
-        const deletePastAssessments = settings.delete_past_assessments === 'true';
+        // delete_past_assessments feature removed
 
         let deletedAssessments = 0;
         let deletedLogs = 0;
 
         // 1. Cleanup Assessments
         // Delete items created older than retention period
-        // OR (if deletePastAssessments is true) items with dueDate in the past
         // Use KST (+9 hours) for correct date comparison
         let assessmentQuery = `DELETE FROM performance_assessments WHERE createdAt < datetime('now', '+9 hours', '-${retentionDaysAssessments} days')`;
 
@@ -56,8 +55,7 @@ export async function performCleanup(db: any) {
             },
             config: {
                 retentionDaysAssessments,
-                retentionDaysLogs,
-                deletePastAssessments
+                retentionDaysLogs
             }
         };
 
