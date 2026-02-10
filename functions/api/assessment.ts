@@ -20,9 +20,20 @@ export const onRequest = async (context: any) => {
             const classNum = url.searchParams.get('classNum') || '1';
 
             try {
-                const { results } = await env.DB.prepare(
-                    "SELECT * FROM performance_assessments WHERE grade = ? AND classNum = ? ORDER BY dueDate ASC, id DESC"
-                ).bind(grade, classNum).all();
+                // Check system settings for 'hide_past_assessments'
+                const { value: hidePastValue } = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'hide_past_assessments'").first() || {};
+
+                let query = "SELECT * FROM performance_assessments WHERE grade = ? AND classNum = ?";
+                const params: any[] = [grade, classNum];
+
+                if (hidePastValue === 'true') {
+                    // Use KST (+9h) to check for past assessments
+                    query += " AND dueDate >= date('now', '+9 hours')";
+                }
+
+                query += " ORDER BY dueDate ASC, id DESC";
+
+                const { results } = await env.DB.prepare(query).bind(...params).all();
 
                 return new Response(JSON.stringify(results), {
                     headers: { 'Content-Type': 'application/json' }

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Lock, Settings, Eye, EyeOff, Trash2, Ban, ShieldCheck, TriangleAlert, ChevronDown, ChevronRight } from "lucide-react";
+import { Lock, Settings, Eye, EyeOff, Trash2, Ban, ShieldCheck, TriangleAlert, ChevronDown, ChevronRight, Save } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import IPProfileViewer from "@/components/IPProfileViewer";
@@ -26,7 +26,11 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 export default function Admin() {
     const [password, setPassword] = useState("");
@@ -228,8 +232,67 @@ export default function Admin() {
             toast.success("차단이 해제되었습니다.");
             queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
         },
+        onSuccess: () => {
+            toast.success("차단이 해제되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+        },
         onError: () => toast.error("해제 실패"),
     });
+
+    // --- System Settings ---
+    const [settings, setSettings] = useState({
+        auto_delete_enabled: false,
+        hide_past_assessments: false,
+        retention_days_assessments: "30",
+        retention_days_logs: "30"
+    });
+
+    const { data: fetchedSettings } = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": password },
+            });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        },
+        enabled: isAuthenticated,
+    });
+
+    useEffect(() => {
+        if (fetchedSettings) {
+            setSettings({
+                auto_delete_enabled: fetchedSettings.auto_delete_enabled === "true",
+                hide_past_assessments: fetchedSettings.hide_past_assessments === "true",
+                retention_days_assessments: fetchedSettings.retention_days_assessments || "30",
+                retention_days_logs: fetchedSettings.retention_days_logs || "30"
+            });
+        }
+    }, [fetchedSettings]);
+
+    const saveSettingsMutation = useMutation({
+        mutationFn: async (newSettings: any) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": password,
+                },
+                body: JSON.stringify(newSettings),
+            });
+            if (!res.ok) throw new Error("Failed to save settings");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("설정이 저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: () => toast.error("저장 실패"),
+    });
+
+    const handleSaveSettings = () => {
+        saveSettingsMutation.mutate(settings);
+    };
 
     if (!isAuthenticated) {
         return (
@@ -315,6 +378,7 @@ export default function Admin() {
                 <TabsList className="grid w-full grid-cols-3 mb-8">
                     <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
                     <TabsTrigger value="users">사용자 관리</TabsTrigger>
+                    <TabsTrigger value="settings">시스템 설정</TabsTrigger>
                     <TabsTrigger
                         value="database"
                         className="data-[state=active]:bg-green-100 data-[state=active]:text-green-800"
@@ -682,6 +746,76 @@ export default function Admin() {
                         </Card>
 
                     </div>
+                </TabsContent>
+
+                <TabsContent value="settings">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>시스템 설정</CardTitle>
+                            <CardDescription>
+                                자동 삭제 및 데이터 보관 정책을 설정합니다.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="flex items-center justify-between space-x-2 border p-4 rounded-lg bg-gray-50">
+                                <Label htmlFor="auto-delete" className="flex flex-col space-y-1">
+                                    <span className="font-semibold text-base">자동 삭제 활성화</span>
+                                    <span className="font-normal text-sm text-gray-500">
+                                        매일 아침 9시에 보관 기간이 경과한 데이터(수행평가, 로그)를 자동으로 삭제합니다.
+                                    </span>
+                                </Label>
+                                <Switch
+                                    id="auto-delete"
+                                    checked={settings.auto_delete_enabled}
+                                    onCheckedChange={(checked) => setSettings({ ...settings, auto_delete_enabled: checked })}
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-between space-x-2 border p-4 rounded-lg bg-gray-50">
+                                <Label htmlFor="hide-past" className="flex flex-col space-y-1">
+                                    <span className="font-semibold text-base">이미 끝난 수행평가 숨기기</span>
+                                    <span className="font-normal text-sm text-gray-500">
+                                        마감일(Due Date)이 지난 수행평가를 학생들의 리스트 및 시간표에서 숨깁니다. (삭제되지 않음)
+                                    </span>
+                                </Label>
+                                <Switch
+                                    id="hide-past"
+                                    checked={settings.hide_past_assessments}
+                                    onCheckedChange={(checked) => setSettings({ ...settings, hide_past_assessments: checked })}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <Label htmlFor="retention-assessments">수행평가 보관 기간 (일)</Label>
+                                    <Input
+                                        id="retention-assessments"
+                                        type="number"
+                                        value={settings.retention_days_assessments}
+                                        onChange={(e) => setSettings({ ...settings, retention_days_assessments: e.target.value })}
+                                    />
+                                    <p className="text-xs text-gray-500">생성된 지 N일이 지난 수행평가를 삭제합니다.</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="retention-logs">로그 보관 기간 (일)</Label>
+                                    <Input
+                                        id="retention-logs"
+                                        type="number"
+                                        value={settings.retention_days_logs}
+                                        onChange={(e) => setSettings({ ...settings, retention_days_logs: e.target.value })}
+                                    />
+                                    <p className="text-xs text-gray-500">접속한 지 N일이 지난 로그를 삭제합니다.</p>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end pt-4">
+                                <Button onClick={handleSaveSettings} disabled={saveSettingsMutation.isPending}>
+                                    <Save className="h-4 w-4 mr-2" />
+                                    {saveSettingsMutation.isPending ? "저장 중..." : "설정 저장"}
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </TabsContent>
 
                 <TabsContent value="database">

@@ -832,68 +832,74 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {assessments && assessments.length > 0 ? (
-                assessments.map((assessment) => {
-                  const diffDate = Math.ceil((new Date(assessment.dueDate).getTime() - new Date(toDateString(new Date())).getTime()) / (1000 * 60 * 60 * 24));
-                  const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
-                  const isToday = diffDate === 0;
+              {assessments && assessments.filter(a => new Date(a.dueDate) >= new Date(new Date().setHours(0, 0, 0, 0))).length > 0 ? (
+                assessments
+                  .filter(assessment => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    return new Date(assessment.dueDate) >= today;
+                  })
+                  .map((assessment) => {
+                    const diffDate = Math.ceil((new Date(assessment.dueDate).getTime() - new Date(toDateString(new Date())).getTime()) / (1000 * 60 * 60 * 24));
+                    const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
+                    const isToday = diffDate === 0;
 
-                  return (
-                    <div
-                      key={assessment.id}
-                      className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'bg-red-50 border-red-200' : 'bg-white'}`}
-                      onClick={() => {
-                        // Find the cell logic
-                        const targetDate = new Date(assessment.dueDate); // This might be string 'YYYY-MM-DD'
-                        // We need to find which column (weekday) and row (classTime) this corresponds to.
-                        // However, viewingAssessments are "this week's" assessments, so they should be on the screen.
-                        // But wait, the assessments list is "This Week's".
+                    return (
+                      <div
+                        key={assessment.id}
+                        className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'bg-red-50 border-red-200' : 'bg-white'}`}
+                        onClick={() => {
+                          // Find the cell logic
+                          const targetDate = new Date(assessment.dueDate); // This might be string 'YYYY-MM-DD'
+                          // We need to find which column (weekday) and row (classTime) this corresponds to.
+                          // However, viewingAssessments are "this week's" assessments, so they should be on the screen.
+                          // But wait, the assessments list is "This Week's".
 
-                        // Let's find the weekday index.
-                        // assessment.weekday might be available if we joined it, but currently AssessmentItem has weekday optional.
-                        // Actually, we can calculate weekday from date.
-                        const aDate = new Date(assessment.dueDate);
-                        const day = aDate.getDay(); // 0(Sun) - 6(Sat). 
-                        const weekdayIdx = day === 0 ? 6 : day - 1; // 0(Mon) - 4(Fri). Adjust for Sunday (0) and Saturday (6) if needed, assuming Mon-Fri.
+                          // Let's find the weekday index.
+                          // assessment.weekday might be available if we joined it, but currently AssessmentItem has weekday optional.
+                          // Actually, we can calculate weekday from date.
+                          const aDate = new Date(assessment.dueDate);
+                          const day = aDate.getDay(); // 0(Sun) - 6(Sat). 
+                          const weekdayIdx = day === 0 ? 6 : day - 1; // 0(Mon) - 4(Fri). Adjust for Sunday (0) and Saturday (6) if needed, assuming Mon-Fri.
 
-                        // Check if weekday is valid (Mon-Fri) and classTime exists
-                        if (weekdayIdx >= 0 && weekdayIdx <= 4 && assessment.classTime) {
-                          const cellId = `cell-${weekdayIdx}-${assessment.classTime}`;
-                          const element = document.getElementById(cellId);
-                          if (element) {
-                            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            element.classList.add('highlight-cell');
-                            setTimeout(() => {
-                              element.classList.remove('highlight-cell');
-                            }, 2000);
+                          // Check if weekday is valid (Mon-Fri) and classTime exists
+                          if (weekdayIdx >= 0 && weekdayIdx <= 4 && assessment.classTime) {
+                            const cellId = `cell-${weekdayIdx}-${assessment.classTime}`;
+                            const element = document.getElementById(cellId);
+                            if (element) {
+                              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              element.classList.add('highlight-cell');
+                              setTimeout(() => {
+                                element.classList.remove('highlight-cell');
+                              }, 2000);
+                            }
                           }
-                        }
-                      }}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-lg text-blue-600">
-                            {assessment.subject}
-                          </span>
-                          <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-                            {assessment.description}
-                          </span>
-                          <span className={`text-sm font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
-                            {dDay}
-                          </span>
+                        }}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-lg text-blue-600">
+                              {assessment.subject}
+                            </span>
+                            <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                              {assessment.description}
+                            </span>
+                            <span className={`text-sm font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
+                              {dDay}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-gray-700 mb-2">{assessment.title}</p>
+                        <div className="flex items-center gap-2 mt-auto">
+                          <div className="flex items-center text-sm text-gray-500">
+                            <span>{assessment.dueDate}</span>
+                            <span className="mx-2">|</span>
+                            <span>{assessment.classTime}교시</span>
+                          </div>
                         </div>
                       </div>
-                      <p className="text-gray-700 mb-2">{assessment.title}</p>
-                      <div className="flex items-center gap-2 mt-auto">
-                        <div className="flex items-center text-sm text-gray-500">
-                          <span>{assessment.dueDate}</span>
-                          <span className="mx-2">|</span>
-                          <span>{assessment.classTime}교시</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
+                    );
+                  })
               ) : (
                 <div className="col-span-full text-center py-12 text-gray-500">
                   이번 주 등록된 수행평가가 없습니다.

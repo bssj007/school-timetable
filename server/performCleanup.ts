@@ -27,10 +27,8 @@ export async function performCleanup(db: any) {
         // 1. Cleanup Assessments
         // Delete items created older than retention period
         // OR (if deletePastAssessments is true) items with dueDate in the past
-        let assessmentQuery = `DELETE FROM performance_assessments WHERE createdAt < datetime('now', '-${retentionDaysAssessments} days')`;
-        if (deletePastAssessments) {
-            assessmentQuery += ` OR dueDate < date('now')`;
-        }
+        // Use KST (+9 hours) for correct date comparison
+        let assessmentQuery = `DELETE FROM performance_assessments WHERE createdAt < datetime('now', '+9 hours', '-${retentionDaysAssessments} days')`;
 
         const assessmentResult = await db.prepare(assessmentQuery).run();
         deletedAssessments = assessmentResult.meta.changes;
@@ -40,11 +38,11 @@ export async function performCleanup(db: any) {
         // If a user has accessed within the retention period, keep ALL their logs (reset retention).
         const logQuery = `
             DELETE FROM access_logs 
-            WHERE accessedAt < datetime('now', '-${retentionDaysLogs} days')
+            WHERE accessedAt < datetime('now', '+9 hours', '-${retentionDaysLogs} days')
             AND ip NOT IN (
                 SELECT DISTINCT ip 
                 FROM access_logs 
-                WHERE accessedAt >= datetime('now', '-${retentionDaysLogs} days')
+                WHERE accessedAt >= datetime('now', '+9 hours', '-${retentionDaysLogs} days')
             )
         `;
         const logResult = await db.prepare(logQuery).run();
