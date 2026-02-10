@@ -220,6 +220,7 @@ export default function Dashboard() {
       }
     },
     enabled: !!grade && !!classNum,
+    refetchInterval: 2000,
   });
 
   // 현재 주에 해당하는 수행평가만 필터링
