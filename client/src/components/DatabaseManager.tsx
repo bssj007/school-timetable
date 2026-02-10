@@ -219,6 +219,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                 setSettings({
                     // Default to TRUE if key is missing, specifically for auto-delete and delete-past
                     auto_delete_enabled: data.auto_delete_enabled !== 'false',
+                    hide_past_assessments: data.hide_past_assessments === 'true',
                     retention_days_assessments: data.retention_days_assessments || '30',
                     retention_days_logs: data.retention_days_logs || '30'
                 });
