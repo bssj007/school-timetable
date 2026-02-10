@@ -753,9 +753,9 @@ export default function Admin() {
                 <TabsContent value="database" className="space-y-6">
                     <Card>
                         <CardHeader>
-                            <CardTitle>시스템 설정</CardTitle>
+                            <CardTitle>DB 관리</CardTitle>
                             <CardDescription>
-                                자동 삭제 및 데이터 보관 정책을 설정합니다.
+                                자동 삭제 설정 및 데이터베이스를 관리합니다.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
