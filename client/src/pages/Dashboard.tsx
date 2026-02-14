@@ -631,7 +631,8 @@ export default function Dashboard() {
                   <Input
                     type="date"
                     value={formData.assessmentDate}
-                    onChange={(e) => setFormData({ ...formData, assessmentDate: e.target.value })}
+                    readOnly
+                    className="bg-gray-100"
                     required
                   />
                 </div>
@@ -844,7 +845,7 @@ export default function Dashboard() {
         {/* 수행평가 목록 */}
         <Card className="mt-8">
           <CardHeader>
-            <CardTitle>이번 주 수행평가 ({weekRangeText})</CardTitle>
+            <CardTitle>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`} 수행평가 ({weekRangeText})</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

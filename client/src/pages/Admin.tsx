@@ -250,6 +250,26 @@ function ElectiveManager({ password }: { password: string }) {
                                                 className="max-w-[200px]"
                                             />
                                         </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-1">
+                                                <Button
+                                                    variant={item.isMovingClass ? "default" : "outline"}
+                                                    size="sm"
+                                                    className={`h-7 text-xs px-2 ${item.isMovingClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"}`}
+                                                    onClick={() => handleInputChange(index, "isMovingClass", true)}
+                                                >
+                                                    이동 O
+                                                </Button>
+                                                <Button
+                                                    variant={!item.isMovingClass ? "default" : "outline"}
+                                                    size="sm"
+                                                    className={`h-7 text-xs px-2 ${!item.isMovingClass ? "bg-red-500 hover:bg-red-600 text-white" : "text-gray-400"}`}
+                                                    onClick={() => handleInputChange(index, "isMovingClass", false)}
+                                                >
+                                                    이동 X
+                                                </Button>
+                                            </div>
+                                        </TableCell>
                                     </TableRow>
                                 ))
                             )}
