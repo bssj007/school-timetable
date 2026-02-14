@@ -29,13 +29,20 @@ export const onRequest = async (context: any) => {
                 originalTeacher TEXT NOT NULL,
                 classCode TEXT,
                 fullTeacherName TEXT,
-                updatedAt TEXT DEFAULT (datetime('now'))
+                updatedAt TEXT DEFAULT (datetime('now')),
+                isMovingClass INTEGER DEFAULT 1
             )
         `).run();
+
+        // Migration for existing tables: Attempt to add the column if it doesn't exist.
+        // SQLite doesn't support IF NOT EXISTS in ADD COLUMN easily, so we rely on catch.
+        try {
+            await env.DB.prepare("ALTER TABLE elective_config ADD COLUMN isMovingClass INTEGER DEFAULT 1").run();
+        } catch (e: any) {
+            // Ignore error if column likely already exists ("duplicate column name")
+        }
     } catch (e) {
-        console.error("Table creation failed:", e);
-        // Continue, maybe it exists? or return error?
-        // If create fails, select will likely fail too.
+        console.error("Table creation/migration failed:", e);
     }
 
     if (method === 'GET') {
@@ -60,17 +67,14 @@ export const onRequest = async (context: any) => {
     if (method === 'POST') {
         try {
             const body = await request.json();
-            const { grade, subject, originalTeacher, classCode, fullTeacherName } = body;
+            const { grade, subject, originalTeacher, classCode, fullTeacherName, isMovingClass } = body;
+
+            // Default isMovingClass to 1 (True) if not provided
+            const movingVal = isMovingClass === false ? 0 : 1;
 
             if (!grade || !subject) {
                 return new Response('Missing required fields', { status: 400 });
             }
-
-            // Upsert logic using D1/SQLite syntax (OR INSERT OR REPLACE / ON CONFLICT)
-            // D1 supports ON CONFLICT logic if unique constraint exists.
-            // We defined schema but didn't explicitly set UNIQUE constraint in the create table SQL I wrote?
-            // Wait, I didn't add a unique index on (grade, subject, originalTeacher) in the migration.
-            // So I should check existence first.
 
             const existing = await env.DB.prepare(
                 "SELECT id FROM elective_config WHERE grade = ? AND subject = ? AND originalTeacher = ?"
@@ -78,12 +82,12 @@ export const onRequest = async (context: any) => {
 
             if (existing) {
                 await env.DB.prepare(
-                    "UPDATE elective_config SET classCode = ?, fullTeacherName = ?, updatedAt = ? WHERE id = ?"
-                ).bind(classCode, fullTeacherName, new Date().toISOString(), existing.id).run();
+                    "UPDATE elective_config SET classCode = ?, fullTeacherName = ?, isMovingClass = ?, updatedAt = ? WHERE id = ?"
+                ).bind(classCode, fullTeacherName, movingVal, new Date().toISOString(), existing.id).run();
             } else {
                 await env.DB.prepare(
-                    "INSERT INTO elective_config (grade, subject, originalTeacher, classCode, fullTeacherName, updatedAt) VALUES (?, ?, ?, ?, ?, ?)"
-                ).bind(grade, subject, originalTeacher, classCode, fullTeacherName, new Date().toISOString()).run();
+                    "INSERT INTO elective_config (grade, subject, originalTeacher, classCode, fullTeacherName, isMovingClass, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)"
+                ).bind(grade, subject, originalTeacher, classCode, fullTeacherName, movingVal, new Date().toISOString()).run();
             }
 
             return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });

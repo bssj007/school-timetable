@@ -89,7 +89,8 @@ function ElectiveManager({ password }: { password: string }) {
                 return {
                     ...item,
                     classCode: saved?.classCode || "",
-                    fullTeacherName: saved?.fullTeacherName || ""
+                    fullTeacherName: saved?.fullTeacherName || "",
+                    isMovingClass: saved?.isMovingClass !== 0 // Default to true
                 };
             });
 
@@ -204,18 +205,19 @@ function ElectiveManager({ password }: { password: string }) {
                                 <TableHead className="w-[100px]">원래 선생님</TableHead>
                                 <TableHead className="w-[150px]">분반 (A/B/C...)</TableHead>
                                 <TableHead>선생님 성함 (전체)</TableHead>
+                                <TableHead className="w-[150px]">이동 수업 여부</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {isLoading ? (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="text-center h-24">
+                                    <TableCell colSpan={5} className="text-center h-24">
                                         로딩 중...
                                     </TableCell>
                                 </TableRow>
                             ) : subjects.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="text-center h-24">
+                                    <TableCell colSpan={5} className="text-center h-24">
                                         데이터가 없습니다.
                                     </TableCell>
                                 </TableRow>

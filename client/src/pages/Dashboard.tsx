@@ -511,7 +511,7 @@ export default function Dashboard() {
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
-                <span className={`text-xs ${weekOffset === 0 ? "text-red-500 font-bold" : "text-black"}`}>
+                <span className={`text-xs ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
                   {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
                 </span>
               </CardTitle>
