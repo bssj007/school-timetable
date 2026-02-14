@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
+import { Route, Switch, useLocation, Link } from "wouter";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 import {
@@ -84,7 +86,17 @@ function isDateInWeek(dateStr: string, weekDates: Date[]): boolean {
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
-  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber } = useUserConfig();
+  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, refreshKakaoUser } = useUserConfig();
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/kakao/logout');
+      await refreshKakaoUser();
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
 
   const [weekOffset, setWeekOffset] = useState(() => {
     const today = new Date();
@@ -422,6 +434,58 @@ export default function Dashboard() {
 
   return (
     <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-2">
+      {/* New Top Bar (Replaces Navigation) */}
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-4">
+          <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
+            <span className="text-blue-600">수행 일정공유</span>
+          </Link>
+          <Link href="/admin">
+            <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-xs font-normal">
+              관리사무소
+            </Button>
+          </Link>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {kakaoUser ? (
+            <div className="flex items-center gap-2 sm:gap-3 bg-gray-50 pr-1 pl-3 py-1 rounded-full border border-gray-100">
+              <div className="hidden sm:flex flex-col items-end">
+                <span className="text-[10px] text-gray-400 font-medium leading-none mb-1">카카오 연동됨</span>
+                <span className="text-sm font-bold text-gray-800 leading-none">{kakaoUser.nickname}</span>
+              </div>
+              <Avatar className="h-8 w-8 border-2 border-white shadow-sm">
+                <AvatarImage src={kakaoUser.thumbnailImage} alt={kakaoUser.nickname} />
+                <AvatarFallback className="bg-blue-100 text-blue-600 text-xs font-bold">
+                  {kakaoUser.nickname ? kakaoUser.nickname.substring(0, 1) : 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full"
+                onClick={handleLogout}
+                title="로그아웃"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="default"
+              size="sm"
+              className="bg-yellow-400 hover:bg-yellow-500 text-gray-900 h-9 rounded-full px-4 font-bold text-xs"
+              onClick={() => window.location.href = '/api/kakao/login'}
+            >
+              <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 3C6.48 3 2 6.93 2 11.75c0 3.14 2.13 5.88 5.28 7.24-.22 1.02-.89 3.61-.92 3.87 0 .03-.17.09.23.12.07.29.04.29.04.39-.07 4.54-3.04 5.26-3.61 12 .38 12 .38 12-7.77 12-11.75C22 6.93 17.52 3 12 3z" />
+              </svg>
+              카카오 연동
+            </Button>
+          )}
+        </div>
+      </div>
+
       <div className="flex flex-row justify-between items-center gap-2 md:gap-4 mb-6 md:hidden">
         <div>
           <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">
@@ -492,93 +556,22 @@ export default function Dashboard() {
       </div>
 
       {/* Desktop Header (Outside Card) */}
-      <div className="hidden md:grid grid-cols-3 items-center gap-2 mb-2">
-        {/* Desktop Title */}
-        <div className="flex justify-start">
-          <h1 className="text-xl md:text-2xl font-bold whitespace-nowrap">
-            {grade || '?'}-{classNum || '?'} 시간표
-          </h1>
-        </div>
 
-        {/* Desktop Week Navigation */}
-        <div className="flex flex-col items-center justify-center gap-1">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setWeekOffset(weekOffset - 1)}
-              disabled={weekOffset === 0}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm font-normal text-gray-600 min-w-[100px] text-center">
-              {weekRangeText}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setWeekOffset(weekOffset + 1)}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-          <span className={`text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
-            {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
-          </span>
-        </div>
-
-        {/* Desktop Selectors */}
-        <div className="flex justify-end items-center gap-2">
-          <div className="flex items-center gap-1 md:gap-2">
-            <Select
-              value={grade}
-              onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
-            >
-              <SelectTrigger className="w-[90px] h-10 bg-white px-2 text-sm">
-                <SelectValue placeholder="학년" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">1학년</SelectItem>
-                <SelectItem value="2">2학년</SelectItem>
-                <SelectItem value="3">3학년</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <div className="flex items-center gap-1">
-              <Select
-                value={classNum}
-                onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
-              >
-                <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm">
-                  <SelectValue placeholder="반" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[...Array(12)].map((_, i) => (
-                    <SelectItem key={i + 1} value={(i + 1).toString()}>
-                      {i + 1}반
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          {kakaoUser && (
-            <div className="hidden md:flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-100 h-10 text-sm">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="font-semibold">{kakaoUser.nickname}</span>
-            </div>
-          )}
-        </div>
-      </div>
 
       <div>
         {/* 시간표 Card */}
         <div>
           <Card className="py-2 gap-2">
-            {/* Mobile Only Header */}
-            <CardHeader className="py-0 px-4 md:hidden">
+            <CardHeader className="flex flex-row items-center justify-between py-4 px-6 relative">
+              {/* Desktop Title */}
+              <div className="hidden md:block">
+                <h1 className="text-2xl font-bold whitespace-nowrap">
+                  {grade || '?'}-{classNum || '?'} 시간표
+                </h1>
+              </div>
+
               {/* Week Navigation */}
-              <div className="flex flex-col items-center justify-center gap-1">
+              <div className="flex flex-col items-center justify-center gap-1 w-full md:w-auto md:absolute md:left-1/2 md:-translate-x-1/2">
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
@@ -602,13 +595,62 @@ export default function Dashboard() {
                 <span className={`text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
                   {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
                 </span>
+                {kakaoUser && (
+                  <div className="md:hidden flex items-center justify-center gap-2 bg-green-50 text-green-700 px-3 py-1 mt-2 rounded-md border border-green-100 text-sm">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    <span className="font-semibold">{kakaoUser.nickname}</span>
+                  </div>
+                )}
               </div>
-              {kakaoUser && (
-                <div className="flex items-center justify-center gap-2 bg-green-50 text-green-700 px-3 py-1 mt-2 rounded-md border border-green-100 text-sm">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  <span className="font-semibold">{kakaoUser.nickname}</span>
-                </div>
-              )}
+
+              {/* Desktop Selectors */}
+              <div className="hidden md:flex items-center gap-2">
+                <Select
+                  value={grade}
+                  onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
+                >
+                  <SelectTrigger className="w-[90px] h-10 bg-white px-2 text-sm">
+                    <SelectValue placeholder="학년" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1학년</SelectItem>
+                    <SelectItem value="2">2학년</SelectItem>
+                    <SelectItem value="3">3학년</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={classNum}
+                  onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
+                >
+                  <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm">
+                    <SelectValue placeholder="반" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((num) => (
+                      <SelectItem key={num} value={num.toString()}>
+                        {num}반
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={studentNumber}
+                  onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
+                >
+                  <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm">
+                    <SelectValue placeholder="번호" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
+                      <SelectItem key={num} value={num.toString()}>
+                        {num}번
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </CardHeader>
             <CardContent className="px-2 pb-2">
               <div className="overflow-x-auto">
