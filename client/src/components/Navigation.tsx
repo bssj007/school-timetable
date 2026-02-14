@@ -62,11 +62,7 @@ export default function Navigation() {
                 카카오 연동
               </Button>
             )}
-            <Link href="/admin">
-              <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-xs font-normal">
-                관리사무소
-              </Button>
-            </Link>
+
           </div>
         </div>
       </div>
