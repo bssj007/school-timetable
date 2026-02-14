@@ -482,10 +482,7 @@ export default function Admin() {
             toast.success("차단이 해제되었습니다.");
             queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
         },
-        onSuccess: () => {
-            toast.success("차단이 해제되었습니다.");
-            queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-        },
+
         onError: () => toast.error("해제 실패"),
     });
 
@@ -556,7 +553,7 @@ export default function Admin() {
                         variant="destructive"
                         size="sm"
                         className="ml-4"
-                        className="ml-4"
+
                         onClick={() => setIsResetDialogOpen(true)}
                     >
                         <TriangleAlert className="h-4 w-4 mr-2" />

@@ -421,7 +421,7 @@ export default function Dashboard() {
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
 
   return (
-    <div className="container max-w-5xl mx-auto px-2 md:px-4 py-2 md:py-2">
+    <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-2">
       <div className="flex flex-row justify-between items-center gap-2 md:gap-4 mb-6 md:hidden">
         <div>
           <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">
