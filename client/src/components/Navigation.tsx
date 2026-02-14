@@ -22,7 +22,7 @@ export default function Navigation() {
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center h-16">
           <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
-            <span className="text-blue-600">성지고</span>
+            <span className="text-blue-600">수행 일정공유</span>
             <span className="hidden xs:inline text-gray-900"> 수행평가 공유 플랫폼</span>
           </Link>
 
