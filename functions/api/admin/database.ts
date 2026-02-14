@@ -26,7 +26,7 @@ export const onRequest = async (context: any) => {
         if (action === "list_tables") {
             // SQLite specific query to list tables
             const { results } = await env.DB.prepare(
-                "SELECT name FROM sqlite_schema WHERE type ='table' AND name NOT LIKE 'sqlite_%';"
+                "SELECT name FROM sqlite_schema WHERE type ='table' AND name != '_cf_KV';"
             ).all();
             const tables = results.map((r: any) => r.name);
             return new Response(JSON.stringify({ tables }), { headers: { "Content-Type": "application/json" } });

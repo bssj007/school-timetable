@@ -19,6 +19,25 @@ export const onRequest = async (context: any) => {
         return new Response(JSON.stringify({ error: 'Database not configured' }), { status: 500 });
     }
 
+    // Ensure table exists (Lazy Migration for reliability)
+    try {
+        await env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS elective_config (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                grade INTEGER NOT NULL,
+                subject TEXT NOT NULL,
+                originalTeacher TEXT NOT NULL,
+                classCode TEXT,
+                fullTeacherName TEXT,
+                updatedAt TEXT DEFAULT (datetime('now'))
+            )
+        `).run();
+    } catch (e) {
+        console.error("Table creation failed:", e);
+        // Continue, maybe it exists? or return error?
+        // If create fails, select will likely fail too.
+    }
+
     if (method === 'GET') {
         const url = new URL(request.url);
         const grade = parseInt(url.searchParams.get('grade') || '0');
