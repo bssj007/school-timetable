@@ -17,6 +17,7 @@ const HEADERS: any = {
     'X-Requested-With': 'XMLHttpRequest'
 };
 const SEARCH_HEX = "%BA%CE%BB%EA%BC%BA%C1%F6%B0%ED"; // 부산성지고
+const FALLBACK_CODE2 = "93342";
 const PROXIES = [
     '',
     'https://corsproxy.io/?'
