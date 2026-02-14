@@ -86,7 +86,11 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber } = useUserConfig();
 
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [weekOffset, setWeekOffset] = useState(() => {
+    const today = new Date();
+    const day = today.getDay();
+    return (day === 0 || day === 6) ? 1 : 0;
+  });
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
   const [selectedCell, setSelectedCell] = useState<{ weekday: number, classTime: number } | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
