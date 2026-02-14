@@ -152,7 +152,7 @@ export default function Dashboard() {
 
         // 수행평가가 없으면 추가 다이얼로그 표시
         setFormData({
-          assessmentDate: "", // 날짜 기본 선택 안 함
+          assessmentDate: cellDateStr,
           subject: subject,
           content: "",
           classTime: classTime.toString(),
@@ -434,8 +434,8 @@ export default function Dashboard() {
 
   return (
     <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-2">
-      {/* New Top Bar (Replaces Navigation) */}
-      <div className="flex justify-between items-center mb-4">
+      {/* New Top Bar (Replaces Navigation on Desktop) */}
+      <div className="hidden md:flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
           <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
             <span className="text-blue-600">수행 일정공유</span>
@@ -718,10 +718,14 @@ export default function Dashboard() {
                           return (
                             <td
                               key={weekdayIdx}
-                              onClick={() => item && handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx], cellAssessments)}
-                              className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors cursor-pointer overflow-hidden
+                              onClick={() => {
+                                if (item && (!isPast || cellAssessments.length > 0)) {
+                                  handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx], cellAssessments);
+                                }
+                              }}
+                              className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors overflow-hidden
                                 ${bgColor} ${pastStyle} ${selectionStyle}
-                                ${item ? "" : "cursor-default"}
+                                ${item && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
                             >
                               {item ? (
@@ -775,7 +779,8 @@ export default function Dashboard() {
                   <Input
                     type="date"
                     value={formData.assessmentDate}
-                    onChange={(e) => setFormData({ ...formData, assessmentDate: e.target.value })}
+                    readOnly
+                    className="bg-gray-100"
                     required
                   />
                 </div>
@@ -858,7 +863,8 @@ export default function Dashboard() {
                   <Input
                     type="date"
                     value={formData.assessmentDate}
-                    onChange={(e) => setFormData({ ...formData, assessmentDate: e.target.value })}
+                    readOnly
+                    className="bg-gray-100"
                     required
                   />
                 </div>

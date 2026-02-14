@@ -33,7 +33,11 @@ function App() {
         <UserConfigProvider>
           <TooltipProvider>
             <Toaster />
-            {location !== "/" && location !== "/admin" && location !== "/admin/factory-reset" && <Navigation />}
+            {location !== "/admin" && location !== "/admin/factory-reset" && (
+              <div className={location === "/" ? "md:hidden" : ""}>
+                <Navigation />
+              </div>
+            )}
             <OnboardingDialog />
             <Router />
           </TooltipProvider>
