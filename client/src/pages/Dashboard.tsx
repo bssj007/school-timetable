@@ -148,7 +148,7 @@ export default function Dashboard() {
         });
         setShowAddDialog(true);
       }
-    }, 150);
+    }, 300);
   };
 
   // 1. 시간표 조회
@@ -422,7 +422,7 @@ export default function Dashboard() {
 
   return (
     <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-8">
-      <div className="flex flex-row justify-between items-center gap-2 md:gap-4 mb-6">
+      <div className="flex flex-row justify-between items-center gap-2 md:gap-4 mb-6 md:hidden">
         <div>
           <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">
             {grade || '?'}-{classNum || '?'} 시간표
@@ -435,7 +435,7 @@ export default function Dashboard() {
               value={grade}
               onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
             >
-              <SelectTrigger className="w-[65px] md:w-[90px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm">
+              <SelectTrigger className="w-[80px] md:w-[90px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm">
                 <SelectValue placeholder="학년" />
               </SelectTrigger>
               <SelectContent>
@@ -450,7 +450,7 @@ export default function Dashboard() {
                 value={classNum}
                 onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
               >
-                <SelectTrigger className="w-[60px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm">
+                <SelectTrigger className="w-[70px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm">
                   <SelectValue placeholder="반" />
                 </SelectTrigger>
                 <SelectContent>
@@ -468,7 +468,7 @@ export default function Dashboard() {
                 value={studentNumber}
                 onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
               >
-                <SelectTrigger className="w-[60px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm">
+                <SelectTrigger className="w-[70px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm">
                   <SelectValue placeholder="번호" />
                 </SelectTrigger>
                 <SelectContent>
@@ -496,31 +496,103 @@ export default function Dashboard() {
         <div>
           <Card className="py-2 gap-2">
             <CardHeader className="py-0 px-4">
-              <CardTitle className="flex flex-col items-center gap-1">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setWeekOffset(weekOffset - 1)}
-                    disabled={weekOffset === 0}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="text-sm font-normal text-gray-600 min-w-[100px] text-center">
-                    {weekRangeText}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setWeekOffset(weekOffset + 1)}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 relative">
+                {/* Desktop Title */}
+                <div className="hidden md:block">
+                  <h1 className="text-xl md:text-2xl font-bold whitespace-nowrap">
+                    {grade || '?'}-{classNum || '?'} 시간표
+                  </h1>
                 </div>
-                <span className={`text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
-                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
-                </span>
-              </CardTitle>
+
+                {/* Week Navigation */}
+                <CardTitle className="flex flex-col items-center gap-1 md:absolute md:left-1/2 md:-translate-x-1/2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setWeekOffset(weekOffset - 1)}
+                      disabled={weekOffset === 0}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm font-normal text-gray-600 min-w-[100px] text-center">
+                      {weekRangeText}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setWeekOffset(weekOffset + 1)}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <span className={`text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
+                    {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
+                  </span>
+                </CardTitle>
+
+                {/* Desktop Selectors */}
+                <div className="hidden md:flex items-center gap-2">
+                  <div className="flex items-center gap-1 md:gap-2">
+                    <Select
+                      value={grade}
+                      onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
+                    >
+                      <SelectTrigger className="w-[90px] h-10 bg-white px-2 text-sm">
+                        <SelectValue placeholder="학년" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1학년</SelectItem>
+                        <SelectItem value="2">2학년</SelectItem>
+                        <SelectItem value="3">3학년</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <div className="flex items-center gap-1">
+                      <Select
+                        value={classNum}
+                        onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
+                      >
+                        <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm">
+                          <SelectValue placeholder="반" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
+                            <SelectItem key={num} value={num.toString()}>
+                              {num}반
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <Select
+                        value={studentNumber}
+                        onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
+                      >
+                        <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm">
+                          <SelectValue placeholder="번호" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
+                            <SelectItem key={num} value={num.toString()}>
+                              {num}번
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {kakaoUser && (
+                    <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-100 h-10 text-sm ml-auto md:ml-0">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                      카카오 알림 활성
+                    </div>
+                  )}
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="px-2 pb-2">
               <div className="overflow-x-auto">
@@ -626,7 +698,10 @@ export default function Dashboard() {
         </div>
 
         {/* 수행평가 추가 다이얼로그 */}
-        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <Dialog open={showAddDialog} onOpenChange={(open) => {
+          setShowAddDialog(open);
+          if (!open) setSelectedCell(null);
+        }}>
           <DialogContent className="sm:max-w-[500px]" aria-describedby="add-assessment-description">
             <DialogHeader>
               <DialogTitle>수행평가 추가</DialogTitle>
@@ -688,7 +763,6 @@ export default function Dashboard() {
                   placeholder="수행평가 내용 입력"
                   required
                   rows={3}
-                  autoFocus
                 />
               </div>
               <div className="flex gap-2">
@@ -705,7 +779,10 @@ export default function Dashboard() {
         </Dialog>
 
         {/* 수행평가 수정 다이얼로그 */}
-        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <Dialog open={showEditDialog} onOpenChange={(open) => {
+          setShowEditDialog(open);
+          if (!open) setSelectedCell(null);
+        }}>
           <DialogContent className="sm:max-w-[500px]" aria-describedby="edit-assessment-description">
             <DialogHeader>
               <DialogTitle>수행평가 수정</DialogTitle>
@@ -782,7 +859,10 @@ export default function Dashboard() {
         </Dialog>
 
         {/* 수행평가 정보 다이얼로그 */}
-        <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+        <Dialog open={showViewDialog} onOpenChange={(open) => {
+          setShowViewDialog(open);
+          if (!open) setSelectedCell(null);
+        }}>
           <DialogContent className="sm:max-w-[500px]" aria-describedby="view-assessment-description">
             <DialogHeader>
               <DialogTitle>수행평가 정보</DialogTitle>
