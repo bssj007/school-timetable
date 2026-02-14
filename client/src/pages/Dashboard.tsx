@@ -421,7 +421,7 @@ export default function Dashboard() {
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
 
   return (
-    <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-8">
+    <div className="container max-w-5xl mx-auto px-2 md:px-4 py-2 md:py-2">
       <div className="flex flex-row justify-between items-center gap-2 md:gap-4 mb-6 md:hidden">
         <div>
           <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">
@@ -496,16 +496,16 @@ export default function Dashboard() {
         <div>
           <Card className="py-2 gap-2">
             <CardHeader className="py-0 px-4">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 relative">
+              <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-2">
                 {/* Desktop Title */}
-                <div className="hidden md:block">
+                <div className="hidden md:flex justify-start">
                   <h1 className="text-xl md:text-2xl font-bold whitespace-nowrap">
                     {grade || '?'}-{classNum || '?'} 시간표
                   </h1>
                 </div>
 
                 {/* Week Navigation */}
-                <CardTitle className="flex flex-col items-center gap-1 md:absolute md:left-1/2 md:-translate-x-1/2">
+                <div className="flex flex-col items-center justify-center gap-1">
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
@@ -529,10 +529,10 @@ export default function Dashboard() {
                   <span className={`text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
                     {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
                   </span>
-                </CardTitle>
+                </div>
 
                 {/* Desktop Selectors */}
-                <div className="hidden md:flex items-center gap-2">
+                <div className="hidden md:flex justify-end items-center gap-2">
                   <div className="flex items-center gap-1 md:gap-2">
                     <Select
                       value={grade}

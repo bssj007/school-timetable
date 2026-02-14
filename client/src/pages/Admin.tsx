@@ -104,7 +104,7 @@ function ElectiveManager({ password }: { password: string }) {
         }
     };
 
-    const handleInputChange = (index: number, field: string, value: string) => {
+    const handleInputChange = (index: number, field: string, value: string | boolean) => {
         const newSubjects = [...subjects];
         newSubjects[index] = { ...newSubjects[index], [field]: value };
         setSubjects(newSubjects);
@@ -131,7 +131,8 @@ function ElectiveManager({ password }: { password: string }) {
                             subject: item.subject,
                             originalTeacher: item.teacher || "", // Ensure string
                             classCode: item.classCode,
-                            fullTeacherName: item.fullTeacherName
+                            fullTeacherName: item.fullTeacherName,
+                            isMovingClass: item.isMovingClass
                         })
                     });
                     if (!res.ok) throw new Error(`Save failed: ${res.status}`);
