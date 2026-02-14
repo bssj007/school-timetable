@@ -498,7 +498,7 @@ export default function Dashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 justify-end">
-          <div className="flex items-center gap-1 md:gap-2">
+          <div className="flex items-center gap-[6px] md:gap-2">
             <Select
               value={grade}
               onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
