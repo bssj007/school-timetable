@@ -116,33 +116,39 @@ export default function Dashboard() {
     date: Date,
     cellAssessments: AssessmentItem[]
   ) => {
-    const todayStr = toDateString(new Date());
+    const today = new Date();
+    const todayStr = toDateString(today);
     const cellDateStr = toDateString(date);
     const isPast = cellDateStr < todayStr;
 
+    // 선택 효과를 위해 상태 설정
     setSelectedCell({ weekday: weekdayIdx, classTime });
 
-    if (cellAssessments.length > 0) {
-      // 수행평가가 있으면 정보 다이얼로그 표시 (과거 내역도 조회는 가능)
-      setViewingAssessments(cellAssessments);
-      setShowViewDialog(true);
-    } else {
-      // 과거 날짜는 추가 불가
-      if (isPast) {
-        toast.error("지나간 날짜에는 수행평가를 추가할 수 없습니다.");
-        return;
-      }
+    // 시각적 피드백을 위해 약간의 지연 후 다이얼로그 오픈
+    setTimeout(() => {
+      if (cellAssessments.length > 0) {
+        // 수행평가가 있으면 정보 다이얼로그 표시 (과거 내역도 조회는 가능)
+        setViewingAssessments(cellAssessments);
+        setShowViewDialog(true);
+      } else {
+        // 과거 날짜는 추가 불가
+        if (isPast) {
+          toast.error("지나간 날짜에는 수행평가를 추가할 수 없습니다.");
+          setSelectedCell(null);
+          return;
+        }
 
-      // 수행평가가 없으면 추가 다이얼로그 표시
-      setFormData({
-        assessmentDate: toDateString(date),
-        subject: subject,
-        content: "",
-        classTime: classTime.toString(),
-        round: "1",
-      });
-      setShowAddDialog(true);
-    }
+        // 수행평가가 없으면 추가 다이얼로그 표시
+        setFormData({
+          assessmentDate: toDateString(date),
+          subject: subject,
+          content: "",
+          classTime: classTime.toString(),
+          round: "1",
+        });
+        setShowAddDialog(true);
+      }
+    }, 150);
   };
 
   // 1. 시간표 조회
@@ -416,20 +422,20 @@ export default function Dashboard() {
 
   return (
     <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      <div className="flex flex-row justify-between items-center gap-2 md:gap-4 mb-6">
         <div>
-          <h1 className="text-xl md:text-3xl font-bold">
+          <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">
             {grade || '?'}-{classNum || '?'} 시간표
           </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 justify-end">
+          <div className="flex items-center gap-1 md:gap-2">
             <Select
               value={grade}
               onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
             >
-              <SelectTrigger className="w-[90px] h-10 bg-white">
+              <SelectTrigger className="w-[65px] md:w-[90px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm">
                 <SelectValue placeholder="학년" />
               </SelectTrigger>
               <SelectContent>
@@ -444,7 +450,7 @@ export default function Dashboard() {
                 value={classNum}
                 onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
               >
-                <SelectTrigger className="w-[80px] h-10 bg-white">
+                <SelectTrigger className="w-[60px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm">
                   <SelectValue placeholder="반" />
                 </SelectTrigger>
                 <SelectContent>
@@ -462,7 +468,7 @@ export default function Dashboard() {
                 value={studentNumber}
                 onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
               >
-                <SelectTrigger className="w-[80px] h-10 bg-white">
+                <SelectTrigger className="w-[60px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm">
                   <SelectValue placeholder="번호" />
                 </SelectTrigger>
                 <SelectContent>
@@ -570,17 +576,18 @@ export default function Dashboard() {
                             ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
                             : isToday
                               ? "bg-red-50 hover:bg-red-100"
-                              : "hover:bg-gray-100";
+                              : "bg-yellow-50 hover:bg-yellow-100";
 
-                          // 과거 날짜 스타일
-                          const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400" : "";
+                          // 선택된 셀 스타일
+                          const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
+                          const selectionStyle = isSelected ? "ring-2 ring-blue-500 ring-inset z-10" : "";
 
                           return (
                             <td
                               key={weekdayIdx}
                               onClick={() => item && handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx], cellAssessments)}
                               className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors cursor-pointer overflow-hidden
-                                ${bgColor} ${pastStyle}
+                                ${bgColor} ${pastStyle} ${selectionStyle}
                                 ${item ? "" : "cursor-default"}
                               `}
                             >
@@ -678,6 +685,7 @@ export default function Dashboard() {
                   placeholder="수행평가 내용 입력"
                   required
                   rows={3}
+                  autoFocus
                 />
               </div>
               <div className="flex gap-2">
@@ -709,7 +717,8 @@ export default function Dashboard() {
                   <Input
                     type="date"
                     value={formData.assessmentDate}
-                    onChange={(e) => setFormData({ ...formData, assessmentDate: e.target.value })}
+                    readOnly
+                    className="bg-gray-100"
                     required
                   />
                 </div>
