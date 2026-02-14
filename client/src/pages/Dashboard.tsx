@@ -434,6 +434,14 @@ export default function Dashboard() {
 
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
 
+  const gradeColors: Record<string, string> = {
+    "1": "#a6ff00",
+    "2": "#00ffcc",
+    "3": "#fa32f0",
+  };
+  const currentGradeColor = grade ? gradeColors[grade] : undefined;
+  const selectorStyle = currentGradeColor ? { borderColor: currentGradeColor, borderWidth: '2px' } : {};
+
   return (
     <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-2">
       {/* New Top Bar (Replaces Navigation on Desktop) */}
@@ -495,7 +503,7 @@ export default function Dashboard() {
               value={grade}
               onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
             >
-              <SelectTrigger className="w-[80px] md:w-[90px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm">
+              <SelectTrigger className="w-[80px] md:w-[90px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm" style={selectorStyle}>
                 <SelectValue placeholder="학년" />
               </SelectTrigger>
               <SelectContent>
@@ -510,7 +518,7 @@ export default function Dashboard() {
                 value={classNum}
                 onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
               >
-                <SelectTrigger className="w-[70px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm">
+                <SelectTrigger className="w-[70px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm" style={selectorStyle}>
                   <SelectValue placeholder="반" />
                 </SelectTrigger>
                 <SelectContent>
@@ -528,7 +536,7 @@ export default function Dashboard() {
                 value={studentNumber}
                 onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
               >
-                <SelectTrigger className="w-[70px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm">
+                <SelectTrigger className="w-[70px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm" style={selectorStyle}>
                   <SelectValue placeholder="번호" />
                 </SelectTrigger>
                 <SelectContent>
@@ -605,7 +613,7 @@ export default function Dashboard() {
                   value={grade}
                   onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
                 >
-                  <SelectTrigger className="w-[90px] h-10 bg-white px-2 text-sm">
+                  <SelectTrigger className="w-[90px] h-10 bg-white px-2 text-sm" style={selectorStyle}>
                     <SelectValue placeholder="학년" />
                   </SelectTrigger>
                   <SelectContent>
@@ -619,7 +627,7 @@ export default function Dashboard() {
                   value={classNum}
                   onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
                 >
-                  <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm">
+                  <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm" style={selectorStyle}>
                     <SelectValue placeholder="반" />
                   </SelectTrigger>
                   <SelectContent>
@@ -635,7 +643,7 @@ export default function Dashboard() {
                   value={studentNumber}
                   onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
                 >
-                  <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm">
+                  <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm" style={selectorStyle}>
                     <SelectValue placeholder="번호" />
                   </SelectTrigger>
                   <SelectContent>
