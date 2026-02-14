@@ -578,6 +578,9 @@ export default function Dashboard() {
                               ? "bg-red-50 hover:bg-red-100"
                               : "bg-yellow-50 hover:bg-yellow-100";
 
+                          // 과거 날짜 스타일
+                          const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400" : "";
+
                           // 선택된 셀 스타일
                           const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
                           const selectionStyle = isSelected ? "ring-2 ring-blue-500 ring-inset z-10" : "";
