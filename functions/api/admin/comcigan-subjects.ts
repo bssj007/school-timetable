@@ -17,7 +17,10 @@ const HEADERS: any = {
     'X-Requested-With': 'XMLHttpRequest'
 };
 const SEARCH_HEX = "%BA%CE%BB%EA%BC%BA%C1%F6%B0%ED"; // 부산성지고
-const FALLBACK_CODE2 = "93342";
+const PROXIES = [
+    '',
+    'https://corsproxy.io/?'
+];
 
 async function decodeEucKr(response: Response): Promise<string> {
     const buffer = await response.arrayBuffer();
@@ -26,29 +29,22 @@ async function decodeEucKr(response: Response): Promise<string> {
 }
 
 async function fetchWithProxy(targetUrl: string, headers: any = HEADERS, isEucKr: boolean = false) {
-    // Direct fetch first
-    try {
-        const res = await fetch(targetUrl, { headers });
-        if (res.ok) {
-            if (isEucKr) return await decodeEucKr(res);
-            const buf = await res.arrayBuffer();
-            const txt = new TextDecoder('utf-8').decode(buf);
-            return txt.replace(/\0/g, '');
+    let lastError;
+    for (const proxy of PROXIES) {
+        try {
+            const fullUrl = proxy ? `${proxy}${encodeURIComponent(targetUrl)}` : targetUrl;
+            const res = await fetch(fullUrl, { headers });
+            if (res.ok) {
+                if (isEucKr) return await decodeEucKr(res);
+                const buf = await res.arrayBuffer();
+                const txt = new TextDecoder('utf-8').decode(buf);
+                return txt.replace(/\0/g, '');
+            }
+        } catch (e) {
+            lastError = e;
         }
-    } catch (e) {
-        // Fallback to proxy if needed (omitted for brevity unless required)
     }
-    // Simple proxy fallback
-    const proxy = 'https://corsproxy.io/?';
-    const fullUrl = `${proxy}${encodeURIComponent(targetUrl)}`;
-    const res = await fetch(fullUrl, { headers });
-    if (res.ok) {
-        if (isEucKr) return await decodeEucKr(res);
-        const buf = await res.arrayBuffer();
-        const txt = new TextDecoder('utf-8').decode(buf);
-        return txt.replace(/\0/g, '');
-    }
-    throw new Error('Fetch failed');
+    throw lastError || new Error('Connection failed');
 }
 
 async function getPrefix() {
@@ -59,18 +55,33 @@ async function getPrefix() {
 }
 
 async function getSchoolCode(prefix: string) {
-    // Use fallback for speed/stability if search fails or just use fallback directly if stable
-    // duplicating minimal search logic
     try {
         const searchUrl = `${BASE_URL}/${prefix}${SEARCH_HEX}`;
         const jsonText = await fetchWithProxy(searchUrl, HEADERS, false);
-        if (jsonText.trim() === '.' || jsonText.trim().length === 0) throw new Error("Empty");
+
+        if (jsonText.trim() === '.' || jsonText.trim().length === 0) {
+            throw new Error("Empty search response");
+        }
+
         const jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
         const data = JSON.parse(jsonString);
-        const target = (data["학교검색"] || []).find((s: any) => s[2] === "부산성지고");
-        if (target) return { code1: target[3], code2: target[4] };
-    } catch (e) { }
-    return { code1: "36179", code2: FALLBACK_CODE2 };
+
+        const schools = data["학교검색"] || [];
+        const target = schools.find((s: any) => s[2] === "부산성지고");
+
+        if (!target) throw new Error("School not found in search result");
+
+        return {
+            code1: target[3],
+            code2: target[4]
+        };
+    } catch (e) {
+        console.warn("School search failed, using fallback:", e);
+        return {
+            code1: "36179",
+            code2: FALLBACK_CODE2
+        };
+    }
 }
 
 export const onRequest = async (context: any) => {

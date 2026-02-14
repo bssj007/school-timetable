@@ -56,15 +56,38 @@ function ElectiveManager({ password }: { password: string }) {
     const fetchData = async () => {
         setIsLoading(true);
         try {
+            console.log("Fetching data for grade", selectedGrade);
+
             // 1. Fetch Comcigan Subjects
-            const comciganRes = await fetch(`/api/admin/comcigan-subjects?grade=${selectedGrade}`);
-            const comciganData = await comciganRes.json();
+            let comciganData = [];
+            try {
+                const comciganRes = await fetch(`/api/admin/comcigan-subjects?grade=${selectedGrade}`);
+                if (!comciganRes.ok) throw new Error(`Comcigan Fetch Failed: ${comciganRes.status}`);
+                comciganData = await comciganRes.json();
+                if (!Array.isArray(comciganData)) throw new Error("Comcigan data is not an array");
+            } catch (e: any) {
+                console.error("Comcigan Error:", e);
+                toast.error(`컴시간 데이터 로드 실패: ${e.message}`);
+                // Don't return, try to load saved configs anyway? 
+                // No, we need subjects to display anything.
+                // But maybe we can display saved configs even if comcigan fails? 
+                // The current UI relies on merging.
+                throw e;
+            }
 
             // 2. Fetch Saved Configs
-            const configRes = await fetch(`/api/admin/electives?grade=${selectedGrade}`, {
-                headers: { "X-Admin-Password": password }
-            });
-            const configData = await configRes.json();
+            let configData = [];
+            try {
+                const configRes = await fetch(`/api/admin/electives?grade=${selectedGrade}`, {
+                    headers: { "X-Admin-Password": password }
+                });
+                if (!configRes.ok) throw new Error(`Config Fetch Failed: ${configRes.status}`);
+                configData = await configRes.json();
+            } catch (e: any) {
+                console.error("Config Error:", e);
+                toast.error(`설정 데이터 로드 실패: ${e.message}`);
+                // We can proceed with empty config
+            }
 
             // 3. Merge
             const merged = comciganData.map((item: any) => {
@@ -78,8 +101,8 @@ function ElectiveManager({ password }: { password: string }) {
 
             setSubjects(merged);
             setOriginalSubjects(JSON.parse(JSON.stringify(merged)));
-        } catch (error) {
-            toast.error("데이터를 불러오는데 실패했습니다.");
+        } catch (error: any) {
+            toast.error(`데이터 로드 중 치명적 오류: ${error.message}`);
             console.error(error);
         } finally {
             setIsLoading(false);
