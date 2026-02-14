@@ -440,11 +440,7 @@ export default function Dashboard() {
           <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
             <span className="text-blue-600">수행 일정공유</span>
           </Link>
-          <Link href="/admin">
-            <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-xs font-normal">
-              관리사무소
-            </Button>
-          </Link>
+
         </div>
 
         <div className="flex items-center gap-2">
@@ -477,9 +473,7 @@ export default function Dashboard() {
               className="bg-yellow-400 hover:bg-yellow-500 text-gray-900 h-9 rounded-full px-4 font-bold text-xs"
               onClick={() => window.location.href = '/api/kakao/login'}
             >
-              <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 3C6.48 3 2 6.93 2 11.75c0 3.14 2.13 5.88 5.28 7.24-.22 1.02-.89 3.61-.92 3.87 0 .03-.17.09.23.12.07.29.04.29.04.39-.07 4.54-3.04 5.26-3.61 12 .38 12 .38 12-7.77 12-11.75C22 6.93 17.52 3 12 3z" />
-              </svg>
+              <img src="https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png" alt="Kakao" className="h-4 w-4 mr-2" />
               카카오 연동
             </Button>
           )}
@@ -561,8 +555,8 @@ export default function Dashboard() {
       <div>
         {/* 시간표 Card */}
         <div>
-          <Card className="py-2 gap-2">
-            <CardHeader className="flex flex-row items-center justify-between py-4 px-6 relative">
+          <Card className="py-1 gap-1 md:py-2 md:gap-2">
+            <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-6 relative">
               {/* Desktop Title */}
               <div className="hidden md:block">
                 <h1 className="text-2xl font-bold whitespace-nowrap">
@@ -581,7 +575,7 @@ export default function Dashboard() {
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <span className="text-sm font-normal text-gray-600 min-w-[100px] text-center">
+                  <span className="text-xs md:text-sm font-normal text-gray-600 min-w-[80px] md:min-w-[100px] text-center">
                     {weekRangeText}
                   </span>
                   <Button
@@ -592,7 +586,7 @@ export default function Dashboard() {
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
-                <span className={`text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
+                <span className={`text-base md:text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
                   {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
                 </span>
                 {kakaoUser && (
@@ -652,7 +646,7 @@ export default function Dashboard() {
                 </Select>
               </div>
             </CardHeader>
-            <CardContent className="px-2 pb-2">
+            <CardContent className="px-1 pb-1 md:px-2 md:pb-2">
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse table-fixed">
                   <thead>
@@ -780,7 +774,8 @@ export default function Dashboard() {
                     type="date"
                     value={formData.assessmentDate}
                     readOnly
-                    className="bg-gray-100"
+                    tabIndex={-1}
+                    className="bg-gray-100 focus:ring-0"
                     required
                   />
                 </div>
@@ -805,7 +800,8 @@ export default function Dashboard() {
                 <Input
                   value={formData.subject}
                   readOnly
-                  className="bg-gray-100"
+                  tabIndex={-1}
+                  className="bg-gray-100 focus:ring-0"
                 />
               </div>
               <div>
@@ -815,7 +811,8 @@ export default function Dashboard() {
                 <Input
                   value={formData.classTime ? `${formData.classTime}교시` : ""}
                   readOnly
-                  className="bg-gray-100"
+                  tabIndex={-1}
+                  className="bg-gray-100 focus:ring-0"
                 />
               </div>
               <div>
@@ -864,7 +861,8 @@ export default function Dashboard() {
                     type="date"
                     value={formData.assessmentDate}
                     readOnly
-                    className="bg-gray-100"
+                    tabIndex={-1}
+                    className="bg-gray-100 focus:ring-0"
                     required
                   />
                 </div>
@@ -889,7 +887,8 @@ export default function Dashboard() {
                 <Input
                   value={formData.subject}
                   readOnly
-                  className="bg-gray-100"
+                  tabIndex={-1}
+                  className="bg-gray-100 focus:ring-0"
                 />
               </div>
               <div>
@@ -899,7 +898,8 @@ export default function Dashboard() {
                 <Input
                   value={formData.classTime ? `${formData.classTime}교시` : ""}
                   readOnly
-                  className="bg-gray-100"
+                  tabIndex={-1}
+                  className="bg-gray-100 focus:ring-0"
                 />
               </div>
               <div>
@@ -1097,6 +1097,15 @@ export default function Dashboard() {
           </CardContent>
         </Card >
       </div >
+
+
+      <div className="mt-24 mb-8 text-center">
+        <Link href="/admin">
+          <Button variant="ghost" size="sm" className="text-gray-300 hover:text-gray-500 hover:bg-transparent text-[10px] font-normal h-auto p-0">
+            관리사무소
+          </Button>
+        </Link>
+      </div>
     </div >
   );
 }
