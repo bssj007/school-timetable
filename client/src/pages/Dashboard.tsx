@@ -140,7 +140,7 @@ export default function Dashboard() {
 
         // 수행평가가 없으면 추가 다이얼로그 표시
         setFormData({
-          assessmentDate: toDateString(date),
+          assessmentDate: "", // 날짜 기본 선택 안 함
           subject: subject,
           content: "",
           classTime: classTime.toString(),
@@ -148,7 +148,7 @@ export default function Dashboard() {
         });
         setShowAddDialog(true);
       }
-    }, 300);
+    }, 150);
   };
 
   // 1. 시간표 조회
@@ -491,108 +491,124 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Desktop Header (Outside Card) */}
+      <div className="hidden md:grid grid-cols-3 items-center gap-2 mb-2">
+        {/* Desktop Title */}
+        <div className="flex justify-start">
+          <h1 className="text-xl md:text-2xl font-bold whitespace-nowrap">
+            {grade || '?'}-{classNum || '?'} 시간표
+          </h1>
+        </div>
+
+        {/* Desktop Week Navigation */}
+        <div className="flex flex-col items-center justify-center gap-1">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setWeekOffset(weekOffset - 1)}
+              disabled={weekOffset === 0}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-normal text-gray-600 min-w-[100px] text-center">
+              {weekRangeText}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setWeekOffset(weekOffset + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <span className={`text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
+            {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
+          </span>
+        </div>
+
+        {/* Desktop Selectors */}
+        <div className="flex justify-end items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2">
+            <Select
+              value={grade}
+              onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
+            >
+              <SelectTrigger className="w-[90px] h-10 bg-white px-2 text-sm">
+                <SelectValue placeholder="학년" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1학년</SelectItem>
+                <SelectItem value="2">2학년</SelectItem>
+                <SelectItem value="3">3학년</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="flex items-center gap-1">
+              <Select
+                value={classNum}
+                onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
+              >
+                <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm">
+                  <SelectValue placeholder="반" />
+                </SelectTrigger>
+                <SelectContent>
+                  {[...Array(12)].map((_, i) => (
+                    <SelectItem key={i + 1} value={(i + 1).toString()}>
+                      {i + 1}반
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {kakaoUser && (
+            <div className="hidden md:flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-100 h-10 text-sm">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <span className="font-semibold">{kakaoUser.nickname}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div>
-        {/* 시간표 */}
+        {/* 시간표 Card */}
         <div>
           <Card className="py-2 gap-2">
-            <CardHeader className="py-0 px-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-2">
-                {/* Desktop Title */}
-                <div className="hidden md:flex justify-start">
-                  <h1 className="text-xl md:text-2xl font-bold whitespace-nowrap">
-                    {grade || '?'}-{classNum || '?'} 시간표
-                  </h1>
-                </div>
-
-                {/* Week Navigation */}
-                <div className="flex flex-col items-center justify-center gap-1">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setWeekOffset(weekOffset - 1)}
-                      disabled={weekOffset === 0}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm font-normal text-gray-600 min-w-[100px] text-center">
-                      {weekRangeText}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setWeekOffset(weekOffset + 1)}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <span className={`text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
-                    {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
+            {/* Mobile Only Header */}
+            <CardHeader className="py-0 px-4 md:hidden">
+              {/* Week Navigation */}
+              <div className="flex flex-col items-center justify-center gap-1">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setWeekOffset(weekOffset - 1)}
+                    disabled={weekOffset === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm font-normal text-gray-600 min-w-[100px] text-center">
+                    {weekRangeText}
                   </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setWeekOffset(weekOffset + 1)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
-
-                {/* Desktop Selectors */}
-                <div className="hidden md:flex justify-end items-center gap-2">
-                  <div className="flex items-center gap-1 md:gap-2">
-                    <Select
-                      value={grade}
-                      onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
-                    >
-                      <SelectTrigger className="w-[90px] h-10 bg-white px-2 text-sm">
-                        <SelectValue placeholder="학년" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">1학년</SelectItem>
-                        <SelectItem value="2">2학년</SelectItem>
-                        <SelectItem value="3">3학년</SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    <div className="flex items-center gap-1">
-                      <Select
-                        value={classNum}
-                        onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
-                      >
-                        <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm">
-                          <SelectValue placeholder="반" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
-                            <SelectItem key={num} value={num.toString()}>
-                              {num}반
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <Select
-                        value={studentNumber}
-                        onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
-                      >
-                        <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm">
-                          <SelectValue placeholder="번호" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
-                            <SelectItem key={num} value={num.toString()}>
-                              {num}번
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {kakaoUser && (
-                    <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-100 h-10 text-sm ml-auto md:ml-0">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                      카카오 알림 활성
-                    </div>
-                  )}
-                </div>
+                <span className={`text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
+                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
+                </span>
               </div>
+              {kakaoUser && (
+                <div className="flex items-center justify-center gap-2 bg-green-50 text-green-700 px-3 py-1 mt-2 rounded-md border border-green-100 text-sm">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="font-semibold">{kakaoUser.nickname}</span>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="px-2 pb-2">
               <div className="overflow-x-auto">
@@ -694,14 +710,15 @@ export default function Dashboard() {
                 </table>
               </div>
             </CardContent>
-          </Card>
-        </div>
+          </Card >
+        </div >
 
         {/* 수행평가 추가 다이얼로그 */}
-        <Dialog open={showAddDialog} onOpenChange={(open) => {
+        < Dialog open={showAddDialog} onOpenChange={(open) => {
           setShowAddDialog(open);
           if (!open) setSelectedCell(null);
-        }}>
+        }
+        }>
           <DialogContent className="sm:max-w-[500px]" aria-describedby="add-assessment-description">
             <DialogHeader>
               <DialogTitle>수행평가 추가</DialogTitle>
@@ -716,8 +733,7 @@ export default function Dashboard() {
                   <Input
                     type="date"
                     value={formData.assessmentDate}
-                    readOnly
-                    className="bg-gray-100"
+                    onChange={(e) => setFormData({ ...formData, assessmentDate: e.target.value })}
                     required
                   />
                 </div>
@@ -766,7 +782,10 @@ export default function Dashboard() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setShowAddDialog(false)} className="flex-1">
+                <Button type="button" variant="outline" onClick={() => {
+                  setShowAddDialog(false);
+                  setSelectedCell(null);
+                }} className="flex-1">
                   취소
                 </Button>
                 <Button type="submit" className="flex-1">
@@ -776,10 +795,10 @@ export default function Dashboard() {
               </div>
             </form>
           </DialogContent>
-        </Dialog>
+        </Dialog >
 
         {/* 수행평가 수정 다이얼로그 */}
-        <Dialog open={showEditDialog} onOpenChange={(open) => {
+        < Dialog open={showEditDialog} onOpenChange={(open) => {
           setShowEditDialog(open);
           if (!open) setSelectedCell(null);
         }}>
@@ -797,8 +816,7 @@ export default function Dashboard() {
                   <Input
                     type="date"
                     value={formData.assessmentDate}
-                    readOnly
-                    className="bg-gray-100"
+                    onChange={(e) => setFormData({ ...formData, assessmentDate: e.target.value })}
                     required
                   />
                 </div>
@@ -847,7 +865,10 @@ export default function Dashboard() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setShowEditDialog(false)} className="flex-1">
+                <Button type="button" variant="outline" onClick={() => {
+                  setShowEditDialog(false);
+                  setSelectedCell(null);
+                }} className="flex-1">
                   취소
                 </Button>
                 <Button type="submit" className="flex-1">
@@ -856,10 +877,10 @@ export default function Dashboard() {
               </div>
             </form>
           </DialogContent>
-        </Dialog>
+        </Dialog >
 
         {/* 수행평가 정보 다이얼로그 */}
-        <Dialog open={showViewDialog} onOpenChange={(open) => {
+        < Dialog open={showViewDialog} onOpenChange={(open) => {
           setShowViewDialog(open);
           if (!open) setSelectedCell(null);
         }}>
@@ -927,15 +948,18 @@ export default function Dashboard() {
               ))}
             </div>
             <div className="flex justify-end">
-              <Button variant="outline" onClick={() => setShowViewDialog(false)}>
+              <Button variant="outline" onClick={() => {
+                setShowViewDialog(false);
+                setSelectedCell(null);
+              }}>
                 닫기
               </Button>
             </div>
           </DialogContent>
-        </Dialog>
+        </Dialog >
 
         {/* 수행평가 목록 */}
-        <Card className="mt-8">
+        < Card className="mt-8" >
           <CardHeader>
             <CardTitle>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`} 수행평가 ({weekRangeText})</CardTitle>
           </CardHeader>
@@ -1023,8 +1047,8 @@ export default function Dashboard() {
               )}
             </div>
           </CardContent>
-        </Card>
-      </div>
-    </div>
+        </Card >
+      </div >
+    </div >
   );
 }
