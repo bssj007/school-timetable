@@ -105,3 +105,16 @@ export const notificationLogs = mysqlTable("notification_logs", {
   message: text("message"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+export const electiveConfig = mysqlTable("elective_config", {
+  id: int("id").autoincrement().primaryKey(),
+  grade: int("grade").notNull(),
+  subject: varchar("subject", { length: 100 }).notNull(),
+  originalTeacher: varchar("originalTeacher", { length: 100 }).notNull(),
+  classCode: varchar("classCode", { length: 10 }), // A, B, C...
+  fullTeacherName: varchar("fullTeacherName", { length: 100 }),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ElectiveConfig = typeof electiveConfig.$inferSelect;
+export type InsertElectiveConfig = typeof electiveConfig.$inferInsert;

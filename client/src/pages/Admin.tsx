@@ -32,6 +32,215 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
+
+import { BookOpen } from "lucide-react";
+
+function ElectiveManager({ password }: { password: string }) {
+    const [selectedGrade, setSelectedGrade] = useState<number>(2);
+    const [subjects, setSubjects] = useState<any[]>([]);
+    const [originalSubjects, setOriginalSubjects] = useState<any[]>([]); // To track changes
+    const [isLoading, setIsLoading] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Filtered lists
+    const [filteredSubjects, setFilteredSubjects] = useState<any[]>([]);
+
+    useEffect(() => {
+        fetchData();
+    }, [selectedGrade]);
+
+    useEffect(() => {
+        setFilteredSubjects(subjects);
+    }, [subjects]);
+
+    const fetchData = async () => {
+        setIsLoading(true);
+        try {
+            // 1. Fetch Comcigan Subjects
+            const comciganRes = await fetch(`/api/admin/comcigan-subjects?grade=${selectedGrade}`);
+            const comciganData = await comciganRes.json();
+
+            // 2. Fetch Saved Configs
+            const configRes = await fetch(`/api/admin/electives?grade=${selectedGrade}`, {
+                headers: { "X-Admin-Password": password }
+            });
+            const configData = await configRes.json();
+
+            // 3. Merge
+            const merged = comciganData.map((item: any) => {
+                const saved = configData.find((c: any) => c.subject === item.subject && c.originalTeacher === item.teacher);
+                return {
+                    ...item,
+                    classCode: saved?.classCode || "",
+                    fullTeacherName: saved?.fullTeacherName || ""
+                };
+            });
+
+            setSubjects(merged);
+            setOriginalSubjects(JSON.parse(JSON.stringify(merged)));
+        } catch (error) {
+            toast.error("데이터를 불러오는데 실패했습니다.");
+            console.error(error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleInputChange = (index: number, field: string, value: string) => {
+        const newSubjects = [...subjects];
+        newSubjects[index] = { ...newSubjects[index], [field]: value };
+        setSubjects(newSubjects);
+    };
+
+    const hasChanges = JSON.stringify(subjects) !== JSON.stringify(originalSubjects);
+
+    const handleSave = async () => {
+        if (!hasChanges) return;
+        setIsSaving(true);
+        try {
+            // Save each changed item
+            const promises = subjects.map(async (item, index) => {
+                const original = originalSubjects[index];
+                if (JSON.stringify(item) !== JSON.stringify(original)) {
+                    await fetch("/api/admin/electives", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-Admin-Password": password
+                        },
+                        body: JSON.stringify({
+                            grade: selectedGrade,
+                            subject: item.subject,
+                            originalTeacher: item.teacher,
+                            classCode: item.classCode,
+                            fullTeacherName: item.fullTeacherName
+                        })
+                    });
+                }
+            });
+
+            await Promise.all(promises);
+            toast.success("저장되었습니다.");
+            setOriginalSubjects(JSON.parse(JSON.stringify(subjects)));
+        } catch (error) {
+            toast.error("저장 중 오류가 발생했습니다.");
+            console.error(error);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleCancel = () => {
+        setSubjects(JSON.parse(JSON.stringify(originalSubjects)));
+    };
+
+    return (
+        <div className="flex gap-6 h-[600px]">
+            {/* Sidebar */}
+            <div className="w-48 flex flex-col gap-2 p-2 border-r">
+                <Button
+                    variant={selectedGrade === 2 ? "default" : "ghost"}
+                    className="justify-start"
+                    onClick={() => setSelectedGrade(2)}
+                >
+                    2학년
+                </Button>
+                <Button
+                    variant={selectedGrade === 3 ? "default" : "ghost"}
+                    className="justify-start"
+                    onClick={() => setSelectedGrade(3)}
+                >
+                    3학년
+                </Button>
+            </div>
+
+            {/* Main Content */}
+            <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+                <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                        <BookOpen className="w-5 h-5" />
+                        {selectedGrade}학년 선택과목 목록
+                    </h3>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            disabled={!hasChanges || isSaving}
+                            onClick={handleCancel}
+                        >
+                            취소
+                        </Button>
+                        <Button
+                            disabled={!hasChanges || isSaving}
+                            onClick={handleSave}
+                        >
+                            {isSaving ? "저장 중..." : "확인 및 저장하기"}
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-auto border rounded-md">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-[150px]">과목명</TableHead>
+                                <TableHead className="w-[100px]">원래 선생님</TableHead>
+                                <TableHead className="w-[150px]">분반 (A/B/C...)</TableHead>
+                                <TableHead>선생님 성함 (전체)</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading ? (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="text-center h-24">
+                                        로딩 중...
+                                    </TableCell>
+                                </TableRow>
+                            ) : filteredSubjects.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="text-center h-24">
+                                        데이터가 없습니다.
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                filteredSubjects.map((item, index) => (
+                                    <TableRow key={`${item.subject}-${item.teacher}`}>
+                                        <TableCell className="font-medium">{item.subject}</TableCell>
+                                        <TableCell className="text-gray-500">{item.teacher}</TableCell>
+                                        <TableCell>
+                                            <Select
+                                                value={item.classCode}
+                                                onValueChange={(value) => handleInputChange(index, "classCode", value)}
+                                            >
+                                                <SelectTrigger className="w-[100px]">
+                                                    <SelectValue placeholder="선택" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="none">-</SelectItem>
+                                                    {["A", "B", "C", "D", "E", "F", "G"].map((code) => (
+                                                        <SelectItem key={code} value={code}>{code}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Input
+                                                value={item.fullTeacherName}
+                                                onChange={(e) => handleInputChange(index, "fullTeacherName", e.target.value)}
+                                                placeholder="선생님 성함 입력"
+                                                className="max-w-[200px]"
+                                            />
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function Admin() {
     const [password, setPassword] = useState("");
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -322,9 +531,10 @@ export default function Admin() {
             </div>
 
             <Tabs defaultValue="assessments" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 mb-8">
+                <TabsList className="grid w-full grid-cols-4 mb-8">
                     <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
                     <TabsTrigger value="users">사용자 관리</TabsTrigger>
+                    <TabsTrigger value="electives">선택과목</TabsTrigger>
                     <TabsTrigger
                         value="database"
                         className="data-[state=active]:bg-green-100 data-[state=active]:text-green-800"
@@ -692,6 +902,20 @@ export default function Admin() {
                         </Card>
 
                     </div>
+                </TabsContent>
+
+                <TabsContent value="electives" className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>선택과목 관리</CardTitle>
+                            <CardDescription>
+                                2, 3학년 선택과목의 반 코드(A, B, C...)와 선생님 성함을 관리합니다.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ElectiveManager password={password} />
+                        </CardContent>
+                    </Card>
                 </TabsContent>
 
                 <TabsContent value="database" className="space-y-6">
