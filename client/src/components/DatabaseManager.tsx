@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Loader2, Play, Database, RefreshCw, Trash2, Edit, Save, Settings, PlayCircle } from "lucide-react";
+import { Loader2, Play, Database, RefreshCw, Trash2, Edit, Save, Settings, PlayCircle, ChevronDown } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
@@ -23,6 +23,11 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
     const [results, setResults] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Filter tables
+    const [showOthers, setShowOthers] = useState(false);
+    const mainTables = tables.filter(t => !t.startsWith('_') && t !== 'sqlite_sequence');
+    const otherTables = tables.filter(t => t.startsWith('_') || t === 'sqlite_sequence');
 
     // Edit State
     const [editingRow, setEditingRow] = useState<any | null>(null);
@@ -103,8 +108,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
             });
             const data = await res.json();
             if (data.tables) {
-                // Filter out internal tables (starting with _)
-                setTables(data.tables.filter((t: string) => !t.startsWith('_') && t !== 'sqlite_sequence'));
+                setTables(data.tables);
             }
         } catch (e) {
             if (!background) toast.error("테이블 목록을 불러오지 못했습니다.");
@@ -259,7 +263,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                             <CardContent className="flex-1 min-h-0 p-0">
                                 <ScrollArea className="h-full">
                                     <div className="flex flex-col p-1 gap-1">
-                                        {tables.map(t => (
+                                        {mainTables.map(t => (
                                             <Button
                                                 key={t}
                                                 variant={activeTable === t ? "secondary" : "ghost"}
@@ -269,6 +273,34 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                                 {t}
                                             </Button>
                                         ))}
+
+                                        {otherTables.length > 0 && (
+                                            <div className="pt-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="w-full justify-between text-xs text-gray-500 h-6 px-2 hover:bg-gray-100"
+                                                    onClick={() => setShowOthers(!showOthers)}
+                                                >
+                                                    <span>기타 ({otherTables.length})</span>
+                                                    <ChevronDown className={`w-3 h-3 transition-transform ${showOthers ? 'rotate-180' : ''}`} />
+                                                </Button>
+                                                {showOthers && (
+                                                    <div className="flex flex-col gap-1 mt-1 pl-2 border-l-2 border-gray-100 ml-1">
+                                                        {otherTables.map(t => (
+                                                            <Button
+                                                                key={t}
+                                                                variant={activeTable === t ? "secondary" : "ghost"}
+                                                                className="justify-start font-mono text-xs h-7 px-2 w-full text-gray-500"
+                                                                onClick={() => handleTableClick(t)}
+                                                            >
+                                                                {t}
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </ScrollArea>
                             </CardContent>

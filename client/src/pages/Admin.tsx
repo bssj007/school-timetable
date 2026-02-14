@@ -42,16 +42,10 @@ function ElectiveManager({ password }: { password: string }) {
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Filtered lists
-    const [filteredSubjects, setFilteredSubjects] = useState<any[]>([]);
 
     useEffect(() => {
         fetchData();
     }, [selectedGrade]);
-
-    useEffect(() => {
-        setFilteredSubjects(subjects);
-    }, [subjects]);
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -125,7 +119,7 @@ function ElectiveManager({ password }: { password: string }) {
             const promises = subjects.map(async (item, index) => {
                 const original = originalSubjects[index];
                 if (JSON.stringify(item) !== JSON.stringify(original)) {
-                    await fetch("/api/admin/electives", {
+                    const res = await fetch("/api/admin/electives", {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -134,11 +128,12 @@ function ElectiveManager({ password }: { password: string }) {
                         body: JSON.stringify({
                             grade: selectedGrade,
                             subject: item.subject,
-                            originalTeacher: item.teacher,
+                            originalTeacher: item.teacher || "", // Ensure string
                             classCode: item.classCode,
                             fullTeacherName: item.fullTeacherName
                         })
                     });
+                    if (!res.ok) throw new Error(`Save failed: ${res.status}`);
                 }
             });
 
@@ -218,14 +213,14 @@ function ElectiveManager({ password }: { password: string }) {
                                         로딩 중...
                                     </TableCell>
                                 </TableRow>
-                            ) : filteredSubjects.length === 0 ? (
+                            ) : subjects.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={4} className="text-center h-24">
                                         데이터가 없습니다.
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredSubjects.map((item, index) => (
+                                subjects.map((item, index) => (
                                     <TableRow key={`${item.subject}-${item.teacher}`}>
                                         <TableCell className="font-medium">{item.subject}</TableCell>
                                         <TableCell className="text-gray-500">{item.teacher}</TableCell>
@@ -954,7 +949,10 @@ export default function Admin() {
             />
 
             {/* Factory Reset Dialog */}
-            <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+            <Dialog open={isResetDialogOpen} onOpenChange={(open) => {
+                setIsResetDialogOpen(open);
+                if (!open) setResetConfirmation("");
+            }}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle className="text-red-600 font-bold flex items-center gap-2">

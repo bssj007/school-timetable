@@ -43,7 +43,7 @@ export const onRequest = async (context: any) => {
             const body = await request.json();
             const { grade, subject, originalTeacher, classCode, fullTeacherName } = body;
 
-            if (!grade || !subject || !originalTeacher) {
+            if (!grade || !subject) {
                 return new Response('Missing required fields', { status: 400 });
             }
 

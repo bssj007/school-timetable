@@ -63,10 +63,20 @@ export const onRequest = async (context: any) => {
         ).bind(targetIp).all();
         const recentUserAgents = uas?.map((r: any) => r.userAgent) || [];
 
+        // H. Grade/Class Info (Best Guess from Access Logs)
+        const gradeClassResult = await env.DB.prepare(
+            "SELECT grade, classNum FROM access_logs WHERE ip = ? AND grade IS NOT NULL AND classNum IS NOT NULL ORDER BY accessedAt DESC LIMIT 1"
+        ).bind(targetIp).first();
+        const grade = gradeClassResult?.grade;
+        const classNum = gradeClassResult?.classNum;
+
         // 3. Construct Response (Matching IPProfile interface)
         const responseData = {
             ip: targetIp,
             kakaoAccounts: kakaoAccounts || [],
+
+            grade,
+            classNum,
 
             isBlocked: !!blockEntry,
             blockReason: blockEntry?.reason || null,
