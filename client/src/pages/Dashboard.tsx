@@ -308,6 +308,7 @@ export default function Dashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assessments'] });
       toast.success("삭제되었습니다");
+      setSelectedCell(null);
     }
   });
 
@@ -331,6 +332,7 @@ export default function Dashboard() {
       toast.success("수행평가가 수정되었습니다");
       setShowEditDialog(false);
       setEditingAssessment(null);
+      setSelectedCell(null);
     },
     onError: (error) => toast.error(error.message || "수정 실패")
   });
@@ -575,7 +577,7 @@ export default function Dashboard() {
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <span className="text-xs md:text-sm font-normal text-gray-600 min-w-[80px] md:min-w-[100px] text-center">
+                  <span className="text-sm md:text-sm font-normal text-gray-600 min-w-[80px] md:min-w-[100px] text-center">
                     {weekRangeText}
                   </span>
                   <Button
@@ -586,7 +588,7 @@ export default function Dashboard() {
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
-                <span className={`text-base md:text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
+                <span className={`text-lg md:text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
                   {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
                 </span>
                 {kakaoUser && (
@@ -1099,9 +1101,9 @@ export default function Dashboard() {
       </div >
 
 
-      <div className="mt-24 mb-8 text-center">
+      <div className="mt-2 flex justify-end">
         <Link href="/admin">
-          <Button variant="ghost" size="sm" className="text-gray-300 hover:text-gray-500 hover:bg-transparent text-[10px] font-normal h-auto p-0">
+          <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-transparent text-xs font-normal h-auto p-0">
             관리사무소
           </Button>
         </Link>
