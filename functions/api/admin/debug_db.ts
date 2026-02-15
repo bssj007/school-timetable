@@ -10,7 +10,13 @@ export const onRequest = async (context: any) => {
             try {
                 const count = await env.DB.prepare(`SELECT COUNT(*) as c FROM ${table}`).first('c');
                 const sample = await env.DB.prepare(`SELECT * FROM ${table} LIMIT 5`).all();
-                stats[table] = { count, sample: sample.results };
+                const schema = await env.DB.prepare(`PRAGMA table_info(${table})`).all();
+
+                stats[table] = {
+                    count,
+                    columns: schema.results.map((c: any) => c.name),
+                    sample: sample.results
+                };
             } catch (e: any) {
                 stats[table] = { error: e.message };
             }
