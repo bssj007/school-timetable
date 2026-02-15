@@ -236,7 +236,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
     };
 
     return (
-        <div className="h-[700px] flex flex-col">
+        <div className="h-[calc(100vh-200px)] min-h-[600px] md:h-[700px] flex flex-col">
             {/* Main Content Area with Tabs */}
             <div className="flex-1 min-h-0">
                 <Tabs defaultValue="manual" className="h-full flex flex-col">
@@ -249,9 +249,9 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                         </TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="manual" className="flex-1 min-h-0 flex gap-4 mt-0">
+                    <TabsContent value="manual" className="flex-1 min-h-0 flex flex-col md:flex-row gap-4 mt-0">
                         {/* Sidebar: Table List (Only shown in Manual Mode) */}
-                        <Card className="w-1/4 h-full flex flex-col flex-none border-0 shadow-none bg-transparent">
+                        <Card className="w-full md:w-1/4 h-48 md:h-full flex flex-col flex-none border-0 shadow-none bg-transparent">
                             <div className="flex items-center justify-between py-1 px-1 mb-0">
                                 <h3 className="text-sm font-semibold flex items-center gap-2 text-gray-700">
                                     <Database className="w-3 h-3" /> 테이블 목록

@@ -545,10 +545,10 @@ export default function Admin() {
 
     return (
         <div className="container max-w-6xl mx-auto px-4 py-8">
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-8 gap-4">
                 <div className="flex items-center gap-3">
-                    <Settings className="h-8 w-8 text-gray-700" />
-                    <h1 className="text-3xl font-bold">관리사무소</h1>
+                    <Settings className="h-6 w-6 md:h-8 md:w-8 text-gray-700" />
+                    <h1 className="text-2xl md:text-3xl font-bold">관리사무소</h1>
                     <Button
                         variant="destructive"
                         size="sm"
@@ -557,11 +557,12 @@ export default function Admin() {
                         onClick={() => setIsResetDialogOpen(true)}
                     >
                         <TriangleAlert className="h-4 w-4 mr-2" />
-                        DB 초기화
+                        <span className="hidden md:inline">DB 초기화</span>
+                        <span className="md:hidden">초기화</span>
                     </Button>
                 </div>
                 {userIp && (
-                    <div className="flex items-center gap-2 text-sm text-gray-500 font-mono bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
+                    <div className="self-end md:self-auto flex items-center gap-2 text-xs md:text-sm text-gray-500 font-mono bg-gray-50 px-3 py-1.5 md:px-4 md:py-2 rounded-lg border border-gray-200">
                         <span className="text-gray-400">현재 IP:</span>
                         <span className="font-bold text-gray-700">{userIp}</span>
                     </div>
@@ -569,7 +570,7 @@ export default function Admin() {
             </div>
 
             <Tabs defaultValue="assessments" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 mb-8">
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-8 h-auto">
                     <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
                     <TabsTrigger value="users">사용자 관리</TabsTrigger>
                     <TabsTrigger value="electives">선택과목</TabsTrigger>

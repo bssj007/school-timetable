@@ -24,9 +24,10 @@ export const onRequest = async (context: any) => {
 
         // 2. Action Dispatch
         if (action === "list_tables") {
-            // SQLite specific query to list tables
+            // SQLite specific query to list tables (and views)
+            // We select ALL tables including internal ones (which might be useful for debugging)
             const { results } = await env.DB.prepare(
-                "SELECT name FROM sqlite_schema WHERE type ='table' AND name != '_cf_KV';"
+                "SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') ORDER BY name;"
             ).all();
             const tables = results.map((r: any) => r.name);
             return new Response(JSON.stringify({ tables }), { headers: { "Content-Type": "application/json" } });
