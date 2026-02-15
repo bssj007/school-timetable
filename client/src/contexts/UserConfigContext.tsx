@@ -68,6 +68,18 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         refreshKakaoUser();
+        // Check server-side dismissal status
+        fetch('/api/dismiss-instruction')
+            .then(res => res.json())
+            .then(data => {
+                if (data.dismissed) {
+                    setConfigState(prev => {
+                        if (prev.instructionDismissedV2) return prev; // Already true
+                        return { ...prev, instructionDismissedV2: true };
+                    });
+                }
+            })
+            .catch(err => console.error("Failed to fetch instruction status", err));
     }, []);
 
     const setConfig = (newConfig: Partial<UserConfig>) => {
@@ -77,6 +89,11 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
         const expires = new Date();
         expires.setFullYear(expires.getFullYear() + 1);
         document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(updated))}; expires=${expires.toUTCString()}; path=/`;
+
+        // If dismissing instruction, sync to server
+        if (newConfig.instructionDismissedV2) {
+            fetch('/api/dismiss-instruction', { method: 'POST' }).catch(err => console.error(err));
+        }
     };
 
     const isConfigured = !!(

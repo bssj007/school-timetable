@@ -251,7 +251,13 @@ export const onRequest = async (context: any) => {
             results.push(`Error creating ip_profiles: ${e.message}`);
         }
 
-        // 11. cleanup users table (Optional: remove if explicitly requested, otherwise leave for safety)
+        // 11. Migration: Add instructionDismissed to ip_profiles
+        try {
+            await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN instructionDismissed INTEGER DEFAULT 0").run();
+            results.push("Added instructionDismissed to ip_profiles");
+        } catch (e) { }
+
+        // 12. cleanup users table (Optional: remove if explicitly requested, otherwise leave for safety)
         // User requested: "user 테이블이 쓰이지 않을 경우 제거한다."
         try {
             await env.DB.prepare("DROP TABLE IF EXISTS users").run();
