@@ -568,7 +568,7 @@ export default function Dashboard() {
         {/* 시간표 Card */}
         <div>
           <Card className="py-1 gap-1 md:py-2 md:gap-2">
-            <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-6 relative">
+            <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
               {/* Desktop Title */}
               <div className="hidden md:block">
                 <h1 className="text-2xl font-bold whitespace-nowrap">
