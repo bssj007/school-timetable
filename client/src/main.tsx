@@ -52,6 +52,24 @@ const trpcClient = trpc.createClient({
   ],
 });
 
+// AUTO-MIGRATION TRIGGER (Temporary Fix for Dev)
+// This ensures the DB schema is updated to v5 (4-digit ID) without manual button clicks.
+(async () => {
+  try {
+    const hasRun = localStorage.getItem('v5_migration_auto_run');
+    if (!hasRun) {
+      console.log("Triggering Auto-Migration v5...");
+      await fetch('/api/admin/migrate_db', {
+        headers: { 'X-Admin-Password': 'yourmom69' }
+      });
+      localStorage.setItem('v5_migration_auto_run', 'true');
+      console.log("Auto-Migration v5 Triggered.");
+    }
+  } catch (e) {
+    console.error("Auto-Migration Failed:", e);
+  }
+})();
+
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>
     <QueryClientProvider client={queryClient}>
