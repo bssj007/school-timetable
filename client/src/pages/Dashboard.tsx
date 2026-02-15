@@ -1118,6 +1118,24 @@ export default function Dashboard() {
           </Button>
         </Link>
       </div>
+
+      {/* Instruction Notification */}
+      {isConfigured && !useUserConfig().instructionDismissed && (
+        <div className="fixed bottom-4 right-4 z-50 bg-white dark:bg-gray-800 border border-orange-200 shadow-lg rounded-lg p-4 max-w-sm animate-in slide-in-from-bottom-2 fade-in duration-300">
+          <div className="flex flex-col gap-3">
+            <p className="text-orange-600 dark:text-orange-400 font-bold text-sm leading-relaxed">
+              표의 칸을 클릭해서 수행평가를 추가하십쇼
+            </p>
+            <Button
+              size="sm"
+              className="bg-orange-500 hover:bg-orange-600 text-white border-none w-full"
+              onClick={() => setConfig({ instructionDismissed: true })}
+            >
+              확인
+            </Button>
+          </div>
+        </div>
+      )}
     </div >
   );
 }

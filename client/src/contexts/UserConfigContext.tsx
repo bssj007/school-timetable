@@ -5,6 +5,7 @@ export interface UserConfig {
     grade: string;
     classNum: string;
     studentNumber: string;
+    instructionDismissed?: boolean;
 }
 
 export interface KakaoUser {
@@ -22,6 +23,7 @@ interface UserConfigContextType {
     grade: string;
     classNum: string;
     studentNumber: string;
+    instructionDismissed: boolean;
     setConfig: (config: Partial<UserConfig>) => void;
     isConfigured: boolean;
     kakaoUser: KakaoUser | null;
@@ -33,7 +35,7 @@ const UserConfigContext = createContext<UserConfigContextType | undefined>(undef
 export function UserConfigProvider({ children }: { children: ReactNode }) {
     const [config, setConfigState] = useState<UserConfig>(() => {
         // 초기 로드 시 쿠키 확인
-        if (typeof document === "undefined") return { schoolName: "", grade: "", classNum: "", studentNumber: "" };
+        if (typeof document === "undefined") return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissed: false };
 
         const match = document.cookie.match(new RegExp('(^| )' + COOKIE_NAME + '=([^;]+)'));
         if (match) {
@@ -43,7 +45,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
                 console.error("Failed to parse config cookie", e);
             }
         }
-        return { schoolName: "", grade: "", classNum: "", studentNumber: "" };
+        return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissed: false };
     });
 
     const [kakaoUser, setKakaoUser] = useState<KakaoUser | null>(null);
@@ -90,6 +92,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
             grade: config.grade,
             classNum: config.classNum,
             studentNumber: config.studentNumber || "",
+            instructionDismissed: !!config.instructionDismissed,
             setConfig,
             isConfigured,
             kakaoUser,
