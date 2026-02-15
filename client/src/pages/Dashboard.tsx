@@ -1123,12 +1123,15 @@ export default function Dashboard() {
       {isConfigured && !useUserConfig().instructionDismissedV2 && (
         <div className="fixed bottom-4 right-4 z-50 bg-white dark:bg-gray-800 border border-orange-200 shadow-lg rounded-lg p-6 md:p-8 max-w-[90vw] md:max-w-xl animate-in slide-in-from-bottom-2 fade-in duration-300">
           <div className="flex flex-col gap-4 md:gap-6">
-            <p className="font-bold text-base md:text-xl leading-relaxed bg-gradient-to-r from-red-600 via-orange-500 via-yellow-400 via-green-500 via-blue-600 to-purple-600 bg-clip-text text-transparent">
+            <p
+              className="font-bold text-base md:text-xl leading-relaxed bg-clip-text text-transparent"
+              style={{ backgroundImage: 'linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet)' }}
+            >
               표의 칸을 클릭해서 수행평가를 추가하십쇼
             </p>
             <Button
               size="lg"
-              className="bg-orange-500 hover:bg-orange-600 text-white border-none w-full text-lg md:text-xl py-6 md:py-8 font-['Gungsuh',_serif]"
+              className="bg-orange-500 hover:bg-orange-600 text-white border-none w-full text-lg md:text-xl py-3 md:py-4 font-['Gungsuh',_serif]"
               onClick={() => setConfig({ instructionDismissedV2: true })}
             >
               이해함
