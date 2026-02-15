@@ -39,18 +39,61 @@ export async function runMigrations() {
 
         // 3. Add access_logs table
         await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS access_logs (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        ip VARCHAR(45),
-        kakaoId VARCHAR(255),
-        kakaoNickname VARCHAR(255),
-        endpoint VARCHAR(255),
-        method VARCHAR(10),
-        accessedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+            CREATE TABLE IF NOT EXISTS access_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                ip VARCHAR(45),
+                kakaoId VARCHAR(255),
+                kakaoNickname VARCHAR(255),
+                endpoint VARCHAR(255),
+                method VARCHAR(10),
+                userAgent VARCHAR(500),
+                grade INT,
+                classNum INT,
+                studentNumber INT,
+                accessedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
 
-        console.log("[Migration] Schema check completed.");
+        // Add columns if they don't exist (migrations for existing tables)
+        try {
+            await db.execute(sql`ALTER TABLE access_logs ADD COLUMN grade INT`);
+        } catch (e) { }
+        try {
+            await db.execute(sql`ALTER TABLE access_logs ADD COLUMN classNum INT`);
+        } catch (e) { }
+        try {
+            await db.execute(sql`ALTER TABLE access_logs ADD COLUMN studentNumber INT`);
+        } catch (e) { }
+
+
+        // 4. Student Profiles (Simplified 4-digit ID)
+        await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS student_profiles (
+                student_id INT PRIMARY KEY,
+                electives TEXT,
+                updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        `);
+
+        // 5. IP Profiles
+        await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS ip_profiles (
+                ip VARCHAR(45) PRIMARY KEY,
+                student_id INT,
+                kakaoId VARCHAR(255),
+                kakaoNickname VARCHAR(255),
+                lastAccess TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                modificationCount INT DEFAULT 0,
+                userAgent VARCHAR(500),
+                instructionDismissed BOOLEAN DEFAULT FALSE,
+                FOREIGN KEY (student_id) REFERENCES student_profiles(student_id) ON DELETE SET NULL
+            )
+        `);
+
+        // Drop legacy table
+        // await db.execute(sql`DROP TABLE IF EXISTS users`); // Optional: keep for safety or drop
+
+        console.log("[Migration] Schema setup completed.");
 
     } catch (error) {
         console.error("[Migration] Fatal error during migration:", error);

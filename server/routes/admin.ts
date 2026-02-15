@@ -90,30 +90,71 @@ router.delete("/users", async (req, res) => {
     }
 });
 
-// GET /users: Get active users and blocked users
+// POST /migrate_db: Manual Trigger
+router.all("/migrate_db", async (req, res) => {
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: "DB Unavailable" });
+
+    try {
+        console.log("[Admin] Force Migration Triggered");
+
+        // Force Drop for simplified schema
+        await db.execute(sql`DROP TABLE IF EXISTS ip_profiles`);
+        await db.execute(sql`DROP TABLE IF EXISTS student_profiles`); // Constraint might require dropping ip_profiles first
+
+        const { runMigrations } = await import("../_core/migrate");
+        await runMigrations();
+
+        res.json({ success: true, message: "Migration (v5) completed." });
+    } catch (err: any) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /users: Get active users (from ip_profiles) and blocked users
 router.get("/users", async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(500).json({ error: "DB Unavailable" });
 
     try {
-        const [logs] = await db.execute(sql`
-      SELECT 
-        ip, 
-        kakaoId, 
-        kakaoNickname, 
-        COUNT(*) as requestCount, 
-        SUM(CASE WHEN method IN ('POST', 'DELETE') THEN 1 ELSE 0 END) as modificationCount,
-        MAX(accessedAt) as lastAccess 
-      FROM access_logs 
-      WHERE accessedAt > DATE_SUB(NOW(), INTERVAL 1 DAY)
-      GROUP BY ip
-      ORDER BY lastAccess DESC
-    `);
+        const [profiles]: any = await db.execute(sql`
+            SELECT 
+                ip, 
+                student_id,
+                kakaoId, 
+                kakaoNickname, 
+                lastAccess, 
+                modificationCount, 
+                instructionDismissed
+            FROM ip_profiles 
+            ORDER BY lastAccess DESC
+            LIMIT 100
+        `);
+
+        // Parse student_id to Grade/Class/Num for frontend compatibility
+        const parsedProfiles = profiles.map((p: any) => {
+            let grade = null, classNum = null, studentNumber = null;
+            if (p.student_id) {
+                const s = p.student_id.toString();
+                if (s.length === 4) {
+                    grade = parseInt(s[0]);
+                    classNum = parseInt(s[1]);
+                    studentNumber = parseInt(s.substring(2));
+                }
+            }
+            return {
+                ...p,
+                grade,
+                classNum,
+                studentNumber
+            };
+        });
 
         const [blocked] = await db.execute(sql`SELECT * FROM blocked_users ORDER BY createdAt DESC`);
 
         res.json({
-            activeUsers: logs,
+            activeUsers: parsedProfiles,
             blockedUsers: blocked
         });
     } catch (err: any) {
@@ -121,7 +162,6 @@ router.get("/users", async (req, res) => {
     }
 });
 
-// POST /users/notify: Send KakaoTalk notification
 router.post("/users/notify", async (req, res) => {
     const { ip, kakaoId, message } = req.body;
 
@@ -131,7 +171,6 @@ router.post("/users/notify", async (req, res) => {
 
     try {
         console.log(`[KakaoTalk Notification] IP: ${ip}, KakaoID: ${kakaoId}, Message: ${message}`);
-
         res.json({
             success: true,
             message: "Notification sent (placeholder - implement KakaoTalk API)"
