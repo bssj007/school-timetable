@@ -171,6 +171,95 @@ export const onRequest = async (context: any) => {
             results.push("Added studentNumber to access_logs");
         } catch (e) { }
 
+        // 9. student_profiles Table
+        try {
+            await env.DB.prepare(`
+                CREATE TABLE IF NOT EXISTS student_profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    grade INTEGER NOT NULL,
+                    classNum INTEGER NOT NULL,
+                    studentNumber INTEGER,
+                    electives TEXT,
+                    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    UNIQUE(grade, classNum, studentNumber)
+                )
+            `).run();
+            // Populate from access_logs
+            try {
+                await env.DB.prepare(`
+                    INSERT OR IGNORE INTO student_profiles (grade, classNum, studentNumber)
+                    SELECT DISTINCT grade, classNum, studentNumber
+                    FROM access_logs
+                    WHERE grade IS NOT NULL AND classNum IS NOT NULL
+                `).run();
+            } catch (e) { }
+
+            results.push("Checked/Created student_profiles table");
+        } catch (e: any) {
+            results.push(`Error creating student_profiles: ${e.message}`);
+        }
+
+        // 10. ip_profiles Table
+        try {
+            await env.DB.prepare(`
+                CREATE TABLE IF NOT EXISTS ip_profiles (
+                    ip VARCHAR(45) PRIMARY KEY,
+                    student_profile_id INTEGER,
+                    kakaoId VARCHAR(255),
+                    kakaoNickname VARCHAR(255),
+                    lastAccess TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    modificationCount INTEGER DEFAULT 0,
+                    userAgent TEXT,
+                    FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
+                )
+            `).run();
+
+            // Populate from access_logs (Basic info)
+            try {
+                await env.DB.prepare(`
+                    INSERT OR IGNORE INTO ip_profiles (ip, lastAccess, userAgent, kakaoId, kakaoNickname)
+                    SELECT ip, MAX(accessedAt), userAgent, kakaoId, kakaoNickname
+                    FROM access_logs
+                    GROUP BY ip
+                `).run();
+            } catch (e) { }
+
+            // Link to student_profiles
+            try {
+                await env.DB.prepare(`
+                    UPDATE ip_profiles
+                    SET student_profile_id = (
+                        SELECT sp.id
+                        FROM student_profiles sp
+                        JOIN (
+                            SELECT ip, grade, classNum, studentNumber
+                            FROM access_logs al
+                            WHERE al.ip = ip_profiles.ip 
+                            AND al.grade IS NOT NULL 
+                            AND al.classNum IS NOT NULL
+                            ORDER BY al.accessedAt DESC
+                            LIMIT 1
+                        ) recent_log ON sp.grade = recent_log.grade 
+                                    AND sp.classNum = recent_log.classNum 
+                                    AND (sp.studentNumber = recent_log.studentNumber OR (sp.studentNumber IS NULL AND recent_log.studentNumber IS NULL))
+                    )
+                 `).run();
+            } catch (e) { }
+
+            results.push("Checked/Created ip_profiles table");
+        } catch (e: any) {
+            results.push(`Error creating ip_profiles: ${e.message}`);
+        }
+
+        // 11. cleanup users table (Optional: remove if explicitly requested, otherwise leave for safety)
+        // User requested: "user 테이블이 쓰이지 않을 경우 제거한다."
+        try {
+            await env.DB.prepare("DROP TABLE IF EXISTS users").run();
+            results.push("Dropped users table (Refactored to student/ip profiles)");
+        } catch (e: any) {
+            results.push(`Error dropping users table: ${e.message}`);
+        }
+
         return new Response(JSON.stringify({ success: true, results }), {
             headers: { 'Content-Type': 'application/json' }
         });

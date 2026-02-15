@@ -155,19 +155,19 @@ function ElectiveManager({ password }: { password: string }) {
     };
 
     return (
-        <div className="flex gap-6 h-[600px]">
+        <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
             {/* Sidebar */}
-            <div className="w-48 flex flex-col gap-2 p-2 border-r">
+            <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
                 <Button
                     variant={selectedGrade === 2 ? "default" : "ghost"}
-                    className="justify-start"
+                    className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
                     onClick={() => setSelectedGrade(2)}
                 >
                     2학년
                 </Button>
                 <Button
                     variant={selectedGrade === 3 ? "default" : "ghost"}
-                    className="justify-start"
+                    className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
                     onClick={() => setSelectedGrade(3)}
                 >
                     3학년

@@ -18,95 +18,80 @@ export const onRequest = async (context: any) => {
             const url = new URL(request.url);
             const range = url.searchParams.get('range') || '24h'; // '24h' | '7d' | 'all'
 
-            let query = `SELECT ip, kakaoId, kakaoNickname, method, endpoint, userAgent, grade, classNum, studentNumber, accessedAt 
-                         FROM access_logs `;
+
+
+            // 1. Fetch Profiles (Joined with Student Info)
+            let query = `
+                SELECT 
+                    ip_profiles.ip, 
+                    ip_profiles.kakaoId, 
+                    ip_profiles.kakaoNickname, 
+                    ip_profiles.lastAccess, 
+                    ip_profiles.modificationCount, 
+                    ip_profiles.userAgent,
+                    ip_profiles.isBlocked,
+                    ip_profiles.blockReason,
+                    student_profiles.grade, 
+                    student_profiles.classNum, 
+                    student_profiles.studentNumber
+                FROM ip_profiles
+                LEFT JOIN student_profiles ON ip_profiles.student_profile_id = student_profiles.id
+            `;
 
             if (range === '24h') {
-                query += `WHERE accessedAt > datetime('now', '-1 day') `;
+                query += `WHERE lastAccess > datetime('now', '-1 day') `;
             } else if (range === '7d') {
-                query += `WHERE accessedAt > datetime('now', '-7 days') `;
+                query += `WHERE lastAccess > datetime('now', '-7 days') `;
             }
             // 'all' -> no WHERE clause
 
-            query += `ORDER BY accessedAt DESC`;
+            query += `ORDER BY lastAccess DESC`;
 
-            // 1. Fetch Raw Logs
-            // We fetch individual rows to aggregate properly in code + match IPProfile structure
-            const { results: logs } = await env.DB.prepare(query).all();
+            const { results: profiles } = await env.DB.prepare(query).all();
 
-            // 2. Fetch Blocked Users
+            // 2. Fetch Blocked Users (for redundancy check or other types)
             const { results: blockedUsers } = await env.DB.prepare(
                 "SELECT * FROM blocked_users ORDER BY createdAt DESC"
             ).all();
 
-            // 3. Aggregate in Memory
-            const profileMap = new Map<string, any>();
+            // 3. Transform to IPProfile format
+            const activeUsers = profiles.map((p: any) => ({
+                ip: p.ip,
+                kakaoAccounts: p.kakaoId ? [{ kakaoId: p.kakaoId, kakaoNickname: p.kakaoNickname || '(알 수 없음)' }] : [],
+                isBlocked: !!p.isBlocked, // Logic in middleware/db should ideally sync this, but for now specific block table is source of truth?
+                // Actually blocked_users table is the source of truth for blocking.
+                // We should check against blockedUsers list.
+                // The ip_profiles table has isBlocked column? No, I defined it in migration?
+                // Wait, I did NOT define isBlocked in ip_profiles in migration. I defined:
+                // ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent
+                // So I need to join with blocked_users or check it here.
 
-            // Helper to check block status (IP only for now in this view)
-            const getBlockStatus = (ip: string) => {
-                return blockedUsers.find((b: any) => b.identifier === ip && b.type === 'IP');
-            };
+                // Let's re-check blocked status here
+                // We'll calculate isBlocked from blockedUsers list
 
-            for (const log of (logs as any[])) {
-                if (!log.ip) continue;
-
-                if (!profileMap.has(log.ip)) {
-                    const blockEntry = getBlockStatus(log.ip);
-                    profileMap.set(log.ip, {
-                        ip: log.ip,
-                        kakaoAccounts: [],
-                        isBlocked: !!blockEntry,
-                        blockReason: blockEntry?.reason || null,
-                        blockId: blockEntry?.id,
-                        modificationCount: 0,
-                        lastAccess: log.accessedAt, // First one is latest due to DESC sort
-                        recentUserAgents: new Set(), // Use Set for uniqueness
-                        grade: log.grade || null,
-                        classNum: log.classNum || null,
-                        studentNumber: log.studentNumber || null,
-                        assessments: [], // Empty for lightweight list
-                        logs: [],        // Empty for lightweight list
-                        detailsLoaded: false
-                    });
+                blockReason: null, // Will be filled below
+                modificationCount: p.modificationCount || 0,
+                lastAccess: p.lastAccess,
+                recentUserAgents: p.userAgent ? [p.userAgent] : [],
+                grade: p.grade || null,
+                classNum: p.classNum || null,
+                studentNumber: p.studentNumber || null,
+                assessments: [],
+                logs: [],
+                detailsLoaded: false
+            })).map((profile: any) => {
+                const blockEntry = blockedUsers.find((b: any) => b.identifier === profile.ip && b.type === 'IP');
+                if (blockEntry) {
+                    profile.isBlocked = true;
+                    profile.blockReason = blockEntry.reason;
+                    profile.blockId = blockEntry.id;
                 }
-
-                const profile = profileMap.get(log.ip);
-
-                // Capture Grade/Class/StudentNumber if missing (find first non-null in history)
-                if (!profile.grade && log.grade) profile.grade = log.grade;
-                if (!profile.classNum && log.classNum) profile.classNum = log.classNum;
-                if (!profile.studentNumber && log.studentNumber) profile.studentNumber = log.studentNumber;
-
-                // Track Modification (Strict: Only POST/DELETE on /api/assessment)
-                if (['POST', 'DELETE'].includes(log.method) && log.endpoint?.startsWith('/api/assessment')) {
-                    profile.modificationCount++;
-                }
-
-                // Track User Agent
-                if (log.userAgent) {
-                    profile.recentUserAgents.add(log.userAgent);
-                }
-
-                // Track Kakao Account (Unique)
-                if (log.kakaoId) {
-                    const exists = profile.kakaoAccounts.some((k: any) => k.kakaoId === log.kakaoId);
-                    if (!exists) {
-                        profile.kakaoAccounts.push({
-                            kakaoId: log.kakaoId,
-                            kakaoNickname: log.kakaoNickname || '(알 수 없음)'
-                        });
-                    }
-                }
-            }
-
-            const activeUsers = Array.from(profileMap.values()).map((profile: any) => ({
-                ...profile,
-                recentUserAgents: Array.from(profile.recentUserAgents)
-            }));
+                return profile;
+            });
 
             return new Response(JSON.stringify({
-                activeUsers, // shape: IPProfile[]
-                blockedUsers // shape: BlockedUser[]
+                activeUsers,
+                blockedUsers
             }), {
                 headers: { 'Content-Type': 'application/json' }
             });

@@ -79,94 +79,95 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         }
     }
 
-    // 로그 기록 (비동기로 수행하여 응답 지연 최소화 - waitUntil 사용)
-    const logRequest = async () => {
+    // 로그 기록 및 프로필 업데이트 (비동기로 수행)
+    const logAndUpdateProfile = async () => {
         try {
-            // Try logging with method & userAgent & grade & classNum & studentNumber (New Schema)
-            await env.DB.prepare(
-                "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent, grade, classNum, studentNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent, grade, classNum, studentNumber).run();
-        } catch (e: any) {
-            const errorMsg = e.message || "";
-
-            // Case 1: Table does not exist -> Create and Retry
-            if (errorMsg.includes("no such table")) {
-                try {
-                    // Create access_logs table
-                    await env.DB.prepare(`
-                        CREATE TABLE IF NOT EXISTS access_logs (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            ip TEXT,
-                            kakaoId TEXT,
-                            kakaoNickname TEXT,
-                            endpoint TEXT NOT NULL,
-                            method TEXT,
-                            userAgent TEXT,
-                            grade TEXT,
-                            classNum TEXT,
-                            studentNumber TEXT,
-                            accessedAt TEXT DEFAULT (datetime('now'))
-                        )
-                    `).run();
-
-                    // Create blocked_users table (just in case)
-                    await env.DB.prepare(`
-                        CREATE TABLE IF NOT EXISTS blocked_users (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            identifier TEXT NOT NULL,
-                            type TEXT NOT NULL,
-                            reason TEXT,
-                            createdAt TEXT DEFAULT (datetime('now'))
-                        )
-                    `).run();
-
-                    // Retry Log Insert
-                    await env.DB.prepare(
-                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent, grade, classNum, studentNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                    ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent, grade, classNum, studentNumber).run();
-
-                } catch (creationErr) {
-                    console.error("Failed to create tables and retry log:", creationErr);
-                }
-            }
-            // Case 2: Column missing -> Fallback & Auto-Migration
-            else if (errorMsg.includes("no column") || errorMsg.includes("has no column")) {
-                try {
-                    // Attempt to add missing columns safely
-                    await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN method TEXT").run().catch(() => { });
-                    await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN userAgent TEXT").run().catch(() => { });
-                    await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN grade TEXT").run().catch(() => { });
-                    await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN classNum TEXT").run().catch(() => { });
-                    await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN studentNumber TEXT").run().catch(() => { });
-
-                    // Retry Insert
-                    await env.DB.prepare(
-                        "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent, grade, classNum, studentNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                    ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent, grade, classNum, studentNumber).run();
-
-                } catch (fallbackErr) {
-                    console.error("Failed to log access (fallback):", fallbackErr);
-                }
-            }
-            else {
-                console.error("Failed to log access:", e);
-            }
-        }
-    };
-
-    // 5. Update User Grade/Class in DB (if logged in)
-    const updateUserProfile = async () => {
-        if (kakaoId && grade && classNum) {
+            // 1. Log Access (Keep for history)
             try {
-                // Update users table with grade/class/studentNumber
-                // We use openId as kakaoId
                 await env.DB.prepare(
-                    "UPDATE users SET grade = ?, class = ?, studentNumber = ?, lastSignedIn = datetime('now') WHERE openId = ?"
-                ).bind(grade, classNum, studentNumber, kakaoId).run();
+                    "INSERT INTO access_logs (ip, kakaoId, kakaoNickname, endpoint, method, userAgent, grade, classNum, studentNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                ).bind(ip, kakaoId, kakaoNickname, url.pathname, request.method, userAgent, grade, classNum, studentNumber).run();
             } catch (e) {
-                // Ignore update errors (user might not exist yet if strictly created via callback, but usually exists)
-                // console.error("Failed to update user profile:", e);
+                // Table might not exist yet, ignore or handle
             }
+
+            // 2. Update Student Profile (if info exists)
+            let studentProfileId = null;
+            if (grade && classNum) {
+                try {
+                    // Start with basic insert
+                    const stmt = `
+                        INSERT INTO student_profiles (grade, classNum, studentNumber, updatedAt) 
+                        VALUES (?, ?, ?, datetime('now'))
+                        ON CONFLICT(grade, classNum, studentNumber) 
+                        DO UPDATE SET updatedAt = datetime('now')
+                        RETURNING id
+                    `;
+                    // D1 might not support RETURNING with ON CONFLICT DO UPDATE perfectly in all versions or via prepare wrapper depending on client,
+                    // but let's try. If not, we select.
+                    // Note: SQLite supports RETURNING since 3.35.0. Cloudflare D1 should support it.
+                    let result = await env.DB.prepare(stmt).bind(grade, classNum, studentNumber).first();
+
+                    if (!result) {
+                        // If it existed and nothing changed? No, UPDATE happens so RETURNING should work.
+                        // But if sqlite version is old or binding issue.
+                        // Fallback: Select ID
+                        result = await env.DB.prepare(
+                            "SELECT id FROM student_profiles WHERE grade = ? AND classNum = ? AND (studentNumber = ? OR studentNumber IS NULL)"
+                        ).bind(grade, classNum, studentNumber).first();
+                    }
+                    if (result) studentProfileId = result.id;
+
+                } catch (e: any) {
+                    // Use Fallback if INSERT...RETURNING fails or table missing
+                    if (e.message?.includes("no such table")) {
+                        // Table missing, skip profile update
+                    }
+                }
+            }
+
+            // 3. Update IP Profile
+            try {
+                // We need to upsert.
+                // If studentProfileId is available, update it. If not, keep existing or null.
+                // We also maintain modification count.
+
+                // First check if exists
+                const existing = await env.DB.prepare("SELECT modificationCount FROM ip_profiles WHERE ip = ?").bind(ip).first();
+
+                let modCount = existing ? (existing.modificationCount as number) : 0;
+                if (['POST', 'DELETE'].includes(request.method) && url.pathname.startsWith('/api/assessment')) {
+                    modCount++;
+                }
+
+                // Construct Upsert Query
+                let query = `
+                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent)
+                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?)
+                    ON CONFLICT(ip) DO UPDATE SET
+                        lastAccess = datetime('now'),
+                        userAgent = excluded.userAgent,
+                        modificationCount = ?,
+                        kakaoId = COALESCE(excluded.kakaoId, ip_profiles.kakaoId),
+                        kakaoNickname = COALESCE(excluded.kakaoNickname, ip_profiles.kakaoNickname)
+                `;
+
+                const binds: any[] = [ip, studentProfileId, kakaoId, kakaoNickname, modCount, userAgent, modCount];
+
+                // If we found a new student profile, update the link.
+                if (studentProfileId) {
+                    query += `, student_profile_id = ?`;
+                    binds.push(studentProfileId);
+                }
+
+                await env.DB.prepare(query).bind(...binds).run();
+
+            } catch (e) {
+                // Ignore if table missing
+            }
+
+        } catch (e) {
+            console.error("Log/Profile Update Failed:", e);
         }
     };
 
@@ -196,7 +197,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         }
     };
 
-    context.waitUntil(Promise.all([logRequest(), updateUserProfile(), runBackgroundTasks()]));
+    context.waitUntil(Promise.all([logAndUpdateProfile(), runBackgroundTasks()]));
 
     return next();
 };
