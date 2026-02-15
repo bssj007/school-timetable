@@ -21,8 +21,9 @@ const HEADERS: any = {
 };
 
 const PROXIES = [
-    '',
-    'https://corsproxy.io/?'
+    '', // Direct connection
+    'https://corsproxy.io/?',
+    'https://api.allorigins.win/raw?url='
 ];
 
 async function decodeEucKr(response: Response): Promise<string> {
@@ -31,23 +32,48 @@ async function decodeEucKr(response: Response): Promise<string> {
     return decoder.decode(buffer);
 }
 
+async function fetchWithTimeout(url: string, options: any = {}, timeout = 5000): Promise<Response> {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(id);
+        return response;
+    } catch (e) {
+        clearTimeout(id);
+        throw e;
+    }
+}
+
 async function fetchWithProxy(targetUrl: string, headers: any = HEADERS, isEucKr: boolean = false) {
     let lastError;
+
+    // Try each proxy in order
     for (const proxy of PROXIES) {
         try {
             const fullUrl = proxy ? `${proxy}${encodeURIComponent(targetUrl)}` : targetUrl;
-            const res = await fetch(fullUrl, { headers });
+            console.log(`[Comcigan] Attempting fetch with proxy: ${proxy || 'DIRECT'} -> ${fullUrl}`);
+
+            const res = await fetchWithTimeout(fullUrl, { headers }, 5000); // 5s timeout
+
             if (res.ok) {
                 if (isEucKr) return await decodeEucKr(res);
                 const buf = await res.arrayBuffer();
                 const txt = new TextDecoder('utf-8').decode(buf);
                 return txt.replace(/\0/g, '');
             }
-        } catch (e) {
+            console.warn(`[Comcigan] Proxy ${proxy || 'DIRECT'} failed with status: ${res.status}`);
+        } catch (e: any) {
+            console.warn(`[Comcigan] Proxy ${proxy || 'DIRECT'} error: ${e.message}`);
             lastError = e;
         }
     }
-    throw lastError || new Error('Connection failed');
+
+    console.error('[Comcigan] All proxies failed. Last error:', lastError);
+    throw lastError || new Error('All connection attempts failed');
 }
 
 async function getPrefix() {

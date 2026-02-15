@@ -190,6 +190,8 @@ export default function Dashboard() {
       }
     },
     enabled: !!grade && !!classNum && !!schoolName,
+    retry: true, // 무한 재시도
+    retryDelay: 3000, // 3초 간격
   });
 
   // 2. 컴시간에서 시간표 가져오기
@@ -576,7 +578,7 @@ export default function Dashboard() {
 
               {/* Week Navigation */}
               <div className="flex flex-col items-center justify-center gap-1 w-full md:w-auto md:absolute md:left-1/2 md:-translate-x-1/2">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 md:gap-1">
                   <Button
                     variant="outline"
                     size="sm"
@@ -585,7 +587,7 @@ export default function Dashboard() {
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <span className="text-sm md:text-sm font-normal text-gray-600 min-w-[80px] md:min-w-[100px] text-center">
+                  <span className="text-sm md:text-sm font-normal text-gray-600 min-w-[80px] md:min-w-[90px] text-center">
                     {weekRangeText}
                   </span>
                   <Button
