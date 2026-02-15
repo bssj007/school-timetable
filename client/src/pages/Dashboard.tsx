@@ -1120,16 +1120,16 @@ export default function Dashboard() {
       </div>
 
       {/* Instruction Notification */}
-      {isConfigured && !useUserConfig().instructionDismissed && (
-        <div className="fixed bottom-4 right-4 z-50 bg-white dark:bg-gray-800 border border-orange-200 shadow-lg rounded-lg p-4 md:p-6 max-w-sm md:max-w-md animate-in slide-in-from-bottom-2 fade-in duration-300">
-          <div className="flex flex-col gap-3 md:gap-5">
-            <p className="font-bold text-sm md:text-lg leading-relaxed bg-gradient-to-r from-red-500 via-yellow-500 via-green-500 via-blue-500 to-purple-500 bg-clip-text text-transparent">
+      {isConfigured && !useUserConfig().instructionDismissedV2 && (
+        <div className="fixed bottom-4 right-4 z-50 bg-white dark:bg-gray-800 border border-orange-200 shadow-lg rounded-lg p-6 md:p-8 max-w-[90vw] md:max-w-xl animate-in slide-in-from-bottom-2 fade-in duration-300">
+          <div className="flex flex-col gap-4 md:gap-6">
+            <p className="font-bold text-base md:text-xl leading-relaxed bg-gradient-to-r from-red-600 via-orange-500 via-yellow-400 via-green-500 via-blue-600 to-purple-600 bg-clip-text text-transparent">
               표의 칸을 클릭해서 수행평가를 추가하십쇼
             </p>
             <Button
-              size="sm"
-              className="bg-orange-500 hover:bg-orange-600 text-white border-none w-full md:text-base md:py-5"
-              onClick={() => setConfig({ instructionDismissed: true })}
+              size="lg"
+              className="bg-orange-500 hover:bg-orange-600 text-white border-none w-full text-lg md:text-xl py-6 md:py-8 font-['Gungsuh',_serif]"
+              onClick={() => setConfig({ instructionDismissedV2: true })}
             >
               이해함
             </Button>

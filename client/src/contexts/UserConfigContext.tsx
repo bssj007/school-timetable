@@ -5,7 +5,7 @@ export interface UserConfig {
     grade: string;
     classNum: string;
     studentNumber: string;
-    instructionDismissed?: boolean;
+    instructionDismissedV2?: boolean;
 }
 
 export interface KakaoUser {
@@ -23,7 +23,7 @@ interface UserConfigContextType {
     grade: string;
     classNum: string;
     studentNumber: string;
-    instructionDismissed: boolean;
+    instructionDismissedV2: boolean;
     setConfig: (config: Partial<UserConfig>) => void;
     isConfigured: boolean;
     kakaoUser: KakaoUser | null;
@@ -35,7 +35,7 @@ const UserConfigContext = createContext<UserConfigContextType | undefined>(undef
 export function UserConfigProvider({ children }: { children: ReactNode }) {
     const [config, setConfigState] = useState<UserConfig>(() => {
         // 초기 로드 시 쿠키 확인
-        if (typeof document === "undefined") return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissed: false };
+        if (typeof document === "undefined") return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissedV2: false };
 
         const match = document.cookie.match(new RegExp('(^| )' + COOKIE_NAME + '=([^;]+)'));
         if (match) {
@@ -45,7 +45,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
                 console.error("Failed to parse config cookie", e);
             }
         }
-        return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissed: false };
+        return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissedV2: false };
     });
 
     const [kakaoUser, setKakaoUser] = useState<KakaoUser | null>(null);
@@ -92,7 +92,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
             grade: config.grade,
             classNum: config.classNum,
             studentNumber: config.studentNumber || "",
-            instructionDismissed: !!config.instructionDismissed,
+            instructionDismissedV2: !!config.instructionDismissedV2,
             setConfig,
             isConfigured,
             kakaoUser,
