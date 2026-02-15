@@ -18,24 +18,18 @@ export const onRequest = async (context: any) => {
             const url = new URL(request.url);
             const range = url.searchParams.get('range') || '24h'; // '24h' | '7d' | 'all'
 
-
-
-            // 1. Fetch Profiles (Joined with Student Info)
+            // 1. Fetch Profiles
             let query = `
                 SELECT 
-                    ip_profiles.ip, 
-                    ip_profiles.kakaoId, 
-                    ip_profiles.kakaoNickname, 
-                    ip_profiles.lastAccess, 
-                    ip_profiles.modificationCount, 
-                    ip_profiles.userAgent,
-                    ip_profiles.isBlocked,
-                    ip_profiles.blockReason,
-                    student_profiles.grade, 
-                    student_profiles.classNum, 
-                    student_profiles.studentNumber
+                    ip, 
+                    kakaoId, 
+                    kakaoNickname, 
+                    lastAccess, 
+                    modificationCount, 
+                    userAgent,
+                    instructionDismissed, 
+                    student_id
                 FROM ip_profiles
-                LEFT JOIN student_profiles ON ip_profiles.student_profile_id = student_profiles.id
             `;
 
             if (range === '24h') {
@@ -49,37 +43,49 @@ export const onRequest = async (context: any) => {
 
             const { results: profiles } = await env.DB.prepare(query).all();
 
-            // 2. Fetch Blocked Users (for redundancy check or other types)
+            // 2. Fetch Blocked Users
             const { results: blockedUsers } = await env.DB.prepare(
                 "SELECT * FROM blocked_users ORDER BY createdAt DESC"
             ).all();
 
             // 3. Transform to IPProfile format
-            const activeUsers = profiles.map((p: any) => ({
-                ip: p.ip,
-                kakaoAccounts: p.kakaoId ? [{ kakaoId: p.kakaoId, kakaoNickname: p.kakaoNickname || '(알 수 없음)' }] : [],
-                isBlocked: !!p.isBlocked, // Logic in middleware/db should ideally sync this, but for now specific block table is source of truth?
-                // Actually blocked_users table is the source of truth for blocking.
-                // We should check against blockedUsers list.
-                // The ip_profiles table has isBlocked column? No, I defined it in migration?
-                // Wait, I did NOT define isBlocked in ip_profiles in migration. I defined:
-                // ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent
-                // So I need to join with blocked_users or check it here.
+            const activeUsers = profiles.map((p: any) => {
+                let grade = null;
+                let classNum = null;
+                let studentNumber = null;
 
-                // Let's re-check blocked status here
-                // We'll calculate isBlocked from blockedUsers list
+                if (p.student_id) {
+                    const sStr = p.student_id.toString();
+                    if (sStr.length >= 4) {
+                        grade = parseInt(sStr[0]);
+                        // Handling for potential 5-digit cases or standard 4-digit
+                        if (sStr.length === 5) {
+                            classNum = parseInt(sStr.substring(1, 3));
+                            studentNumber = parseInt(sStr.substring(3));
+                        } else {
+                            classNum = parseInt(sStr[1]);
+                            studentNumber = parseInt(sStr.substring(2));
+                        }
+                    }
+                }
 
-                blockReason: null, // Will be filled below
-                modificationCount: p.modificationCount || 0,
-                lastAccess: p.lastAccess,
-                recentUserAgents: p.userAgent ? [p.userAgent] : [],
-                grade: p.grade || null,
-                classNum: p.classNum || null,
-                studentNumber: p.studentNumber || null,
-                assessments: [],
-                logs: [],
-                detailsLoaded: false
-            })).map((profile: any) => {
+                const profile = {
+                    ip: p.ip,
+                    kakaoAccounts: p.kakaoId ? [{ kakaoId: p.kakaoId, kakaoNickname: p.kakaoNickname || '(알 수 없음)' }] : [],
+                    isBlocked: false,
+                    blockReason: null,
+                    modificationCount: p.modificationCount || 0,
+                    lastAccess: p.lastAccess,
+                    recentUserAgents: p.userAgent ? [p.userAgent] : [],
+                    grade: grade,
+                    classNum: classNum,
+                    studentNumber: studentNumber,
+                    instructionDismissed: !!p.instructionDismissed,
+                    assessments: [],
+                    logs: [],
+                    detailsLoaded: false
+                };
+
                 const blockEntry = blockedUsers.find((b: any) => b.identifier === profile.ip && b.type === 'IP');
                 if (blockEntry) {
                     profile.isBlocked = true;
