@@ -35,51 +35,62 @@ export const onRequest = async (context: any) => {
                     "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%'"
                 ).all();
 
-                let tablesToDrop = allTables.map((r: any) => r.name);
+                let remainingTables = allTables.map((r: any) => r.name);
+                const executedSteps: string[] = [];
 
-                // STRICT SORTING: Children -> Parents
-                // 1. Tables known to have Foreign Keys (MUST drop first)
-                const TIER_1_CHILDREN = ['ip_profiles', 'cookie_profiles', 'performance_assessments', 'access_logs'];
-                // 2. Tables that are Parents (MUST drop last)
-                const TIER_3_PARENTS = ['student_profiles', 'subjects'];
-                // 3. Everything else (TIER 2)
+                // Brute-force Retry Loop to handle Dependency Graph automatically
+                // Children will drop successfully first. Parents will fail initially, then succeed in next pass.
+                let pass = 1;
+                const MAX_PASSES = 10; // Prevent infinite loop
 
-                tablesToDrop.sort((a: string, b: string) => {
-                    const aTier = TIER_1_CHILDREN.includes(a) ? 1 : (TIER_3_PARENTS.includes(a) ? 3 : 2);
-                    const bTier = TIER_1_CHILDREN.includes(b) ? 1 : (TIER_3_PARENTS.includes(b) ? 3 : 2);
-                    return aTier - bTier;
-                });
+                while (remainingTables.length > 0 && pass <= MAX_PASSES) {
+                    const nextRemaining: string[] = [];
+                    let droppedInThisPass = 0;
 
-                // SEQUENTIAL EXECUTION (No Batch) for strict ordering assurance
-                const executedSteps = [];
+                    for (const t of remainingTables) {
+                        try {
+                            // Attempt Drop
+                            // Using batch to ensure PRAGMA foreign_keys = OFF is applied tightly (best effort)
+                            await env.DB.batch([
+                                env.DB.prepare("PRAGMA foreign_keys = OFF"),
+                                env.DB.prepare(`DROP TABLE IF EXISTS "${t}"`)
+                            ]);
 
-                // Force FK OFF
-                try {
-                    await env.DB.prepare("PRAGMA foreign_keys = OFF").run();
-                } catch (e) {
-                    console.warn("Pragma OFF failed", e);
+                            executedSteps.push(`Pass ${pass}: Dropped ${t}`);
+                            droppedInThisPass++;
+
+                            // Clean sequence if successful
+                            if (sequenceTableExists) {
+                                try {
+                                    await env.DB.prepare(`DELETE FROM sqlite_sequence WHERE name = '${t}'`).run();
+                                } catch (ignore) { }
+                            }
+
+                        } catch (e: any) {
+                            // If it's a constraint error, we'll try again next pass
+                            // If it's another error, we might be stuck, but we'll retry anyway
+                            console.warn(`Pass ${pass}: Check/Drop failed for ${t}`, e);
+                            nextRemaining.push(t);
+                        }
+                    }
+
+                    if (droppedInThisPass === 0 && nextRemaining.length > 0) {
+                        // Deadlock or Persistent Error
+                        executedSteps.push(`CRITICAL: Stuck on tables: ${nextRemaining.join(', ')}`);
+                        // Force break to allow reporting
+                        break;
+                    }
+
+                    remainingTables = nextRemaining;
+                    pass++;
                 }
 
-                for (const t of tablesToDrop) {
-                    try {
-                        // CRITICAL FIX: Use batch to ensure PRAGMA applies to the DROP command in the same execution context
-                        await env.DB.batch([
-                            env.DB.prepare("PRAGMA foreign_keys = OFF"),
-                            env.DB.prepare(`DROP TABLE IF EXISTS "${t}"`)
-                        ]);
-
-                        executedSteps.push(`Dropped ${t}`);
-
-                        // Clean sequence
-                        if (sequenceTableExists) {
-                            try {
-                                await env.DB.prepare(`DELETE FROM sqlite_sequence WHERE name = '${t}'`).run();
-                            } catch (ignore) { }
-                        }
-                    } catch (dropError: any) {
-                        console.error(`Failed to drop ${t}:`, dropError);
-                        executedSteps.push(`FAILED ${t}: ${dropError.message}`);
-                    }
+                if (remainingTables.length > 0) {
+                    return new Response(JSON.stringify({
+                        success: false,
+                        message: `Reset incomplete. Could not drop: ${remainingTables.join(', ')}`,
+                        details: executedSteps
+                    }), { status: 500, headers: { 'Content-Type': 'application/json' } });
                 }
 
                 // Try to turn FK back ON
@@ -89,7 +100,7 @@ export const onRequest = async (context: any) => {
 
                 return new Response(JSON.stringify({
                     success: true,
-                    message: `Dropped all tables (Sequential Mode). System will auto-recreate them.`,
+                    message: `Dropped all tables (Required ${pass - 1} passes).`,
                     details: executedSteps
                 }), {
                     headers: { 'Content-Type': 'application/json' }
