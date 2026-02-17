@@ -45,7 +45,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
     const [isSettingsLoading, setIsSettingsLoading] = useState(false);
     const [isCleanupRunning, setIsCleanupRunning] = useState(false);
 
-    const [isCleanupRunning, setIsCleanupRunning] = useState(false);
+
 
     // Search State
     const [searchQuery, setSearchQuery] = useState("");
