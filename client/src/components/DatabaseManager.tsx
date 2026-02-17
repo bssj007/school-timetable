@@ -162,7 +162,16 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
     };
 
     const handleSaveEdit = async () => {
-        if (!activeTable || !editingRow || !editingRow.id) return;
+        if (!activeTable || !editingRow) return;
+
+        // Determine PK
+        const pkField = editingRow.id ? 'id' : (editingRow.ip ? 'ip' : null);
+        const pkValue = pkField ? editingRow[pkField] : null;
+
+        if (!pkField || !pkValue) {
+            toast.error("Primary Key를 찾을 수 없어 수정할 수 없습니다.");
+            return;
+        }
 
         setIsSaving(true);
         try {
@@ -171,7 +180,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
             const values = [];
 
             for (const key in editValues) {
-                if (key === 'id') continue; // Don't update ID
+                if (key === pkField) continue; // Don't update PK
                 if (editValues[key] !== editingRow[key]) {
                     updates.push(`${key} = ?`);
                     values.push(editValues[key]);
@@ -193,9 +202,12 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                 return `${u.split('=')[0]} = ${formattedVal}`;
             }).join(", ");
 
-            const updateSql = `UPDATE ${activeTable} SET ${setClause} WHERE id = ${editingRow.id}`;
+            // Formatting PK Value (String needs quotes)
+            const formattedPkValue = typeof pkValue === 'string' ? `'${pkValue}'` : pkValue;
 
-            const result = await runQuery(updateSql, true); // rue = quiet mode (don't clear results)
+            const updateSql = `UPDATE ${activeTable} SET ${setClause} WHERE ${pkField} = ${formattedPkValue}`;
+
+            const result = await runQuery(updateSql, true); // true = quiet mode (don't clear results)
 
             if (result && result.success) {
                 toast.success("수정되었습니다.");
@@ -204,9 +216,9 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                 runQuery(`SELECT * FROM ${activeTable} LIMIT 100`, false);
             }
 
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            toast.error("수정 중 오류 발생");
+            toast.error("수정 중 오류 발생: " + e.message);
         } finally {
             setIsSaving(false);
         }
@@ -310,11 +322,22 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                         <Card className="w-full md:w-1/4 h-48 md:h-full flex flex-col flex-none border-0 shadow-none bg-transparent">
                             <div className="flex items-center justify-between py-1 px-1 mb-0">
                                 <h3 className="text-sm font-semibold flex items-center gap-2 text-gray-700">
-                                    <Database className="w-3 h-3" /> 테이블 목록
+                                    <Database className="w-3 h-3" /> 목록
                                 </h3>
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => fetchTables(false)}>
-                                    <RefreshCw className="w-3 h-3" />
-                                </Button>
+                                <div className="flex gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                        onClick={() => handleTruncateTable('ALL')}
+                                        title="전체 데이터 삭제 (주의!)"
+                                    >
+                                        <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => fetchTables(false)}>
+                                        <RefreshCw className="w-3 h-3" />
+                                    </Button>
+                                </div>
                             </div>
                             <CardContent className="flex-1 min-h-0 p-0">
                                 <ScrollArea className="h-full">
@@ -419,7 +442,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                                         {results.map((row, i) => (
                                                             <TableRow key={i}>
                                                                 <TableCell className="text-center p-1">
-                                                                    {row.id && (
+                                                                    {(row.id || row.ip) && (
                                                                         <div className="flex gap-1">
                                                                             <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500 hover:text-blue-700" onClick={() => handleEditClick(row)}>
                                                                                 <Edit className="h-3 w-3" />
@@ -528,7 +551,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                     <DialogHeader>
                         <DialogTitle>데이터 수정 ({activeTable})</DialogTitle>
                         <DialogDescription>
-                            ID: {editingRow?.id}
+                            {editingRow?.id ? `ID: ${editingRow.id}` : (editingRow?.ip ? `IP: ${editingRow.ip}` : 'Unknown PK')}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">

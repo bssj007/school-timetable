@@ -702,10 +702,7 @@ export default function Admin() {
                                         const knownKeywords = ['Mozilla', 'Chrome', 'Safari', 'Firefox', 'Edge', 'Opera', 'Whale', 'Kakao', 'iPhone', 'Android'];
                                         const hasKnownUA = user.recentUserAgents.some(ua => knownKeywords.some(keyword => ua.includes(keyword)));
 
-                                        // 2. Check Grade/Class (Must be present)
-                                        const hasInfo = !!(user.grade && user.classNum);
-
-                                        return hasKnownUA && hasInfo;
+                                        return hasKnownUA;
                                     };
 
                                     const activeUsers = userData?.activeUsers || [];

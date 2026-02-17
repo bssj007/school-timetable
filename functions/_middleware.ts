@@ -15,23 +15,9 @@ export const onRequest = async (context: any) => {
     // we can append to response headers if it's new.
 
     const cookies = request.headers.get('Cookie') || '';
-    let clientId: string | null = null;
-    let newClientDetails = false;
 
-    if (cookies) {
-        const clientMatch = cookies.match(new RegExp('(^| )school_client_id=([^;]+)'));
-        if (clientMatch) {
-            clientId = decodeURIComponent(clientMatch[2]);
-        }
-    }
-
-    if (!clientId) {
-        clientId = crypto.randomUUID();
-        newClientDetails = true;
-    }
-
-    // Pass Client ID to downstream functions (if they access it via context.data)
-    context.data = { ...context.data, clientId };
+    // Pass Context
+    context.data = { ...context.data };
 
     // Async task for Logging & Profile Update
     const logTrace = async () => {
@@ -66,11 +52,11 @@ export const onRequest = async (context: any) => {
                 }
             }
 
-            // 1. Insert Log (with Auto-Migration for client_id and Table Creation)
+            // 1. Insert Log (with Auto-Migration for Table Creation)
             const insertLog = async () => {
                 await env.DB.prepare(
-                    "INSERT INTO access_logs (ip, userAgent, method, endpoint, status, grade, classNum, studentNumber, kakaoId, kakaoNickname, client_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                ).bind(ip, userAgent, request.method, url.pathname, response.status, grade, classNum, studentNumber, kakaoId, kakaoNickname, clientId).run();
+                    "INSERT INTO access_logs (ip, userAgent, method, endpoint, status, grade, classNum, studentNumber, kakaoId, kakaoNickname) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                ).bind(ip, userAgent, request.method, url.pathname, response.status, grade, classNum, studentNumber, kakaoId, kakaoNickname).run();
             };
 
             try {
@@ -94,7 +80,6 @@ export const onRequest = async (context: any) => {
                                 studentNumber INTEGER,
                                 kakaoId TEXT,
                                 kakaoNickname TEXT,
-                                client_id TEXT,
                                 accessedAt TEXT DEFAULT (datetime('now'))
                             )
                         `).run();
@@ -102,14 +87,9 @@ export const onRequest = async (context: any) => {
                     } catch (createError) {
                         console.error("[Middleware] Create access_logs Failed:", createError);
                     }
-                } else if (e.message && (e.message.includes("no such column") || e.message.includes("client_id"))) {
-                    console.log("[Middleware] Adding client_id column to access_logs");
-                    try {
-                        await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN client_id TEXT").run();
-                        await insertLog();
-                    } catch (migrationError) {
-                        console.error("[Middleware] Migration Failed for access_logs:", migrationError);
-                    }
+                } else if (e.message && e.message.includes("no such column")) {
+                    // Ignore column errors for now or handle specific migrations if needed
+                    console.warn("[Middleware] Column mismatch in access_logs", e);
                 } else {
                     console.error("[Middleware] Log Insert Failed:", e);
                 }
@@ -263,9 +243,8 @@ export const onRequest = async (context: any) => {
     context.waitUntil(Promise.all([logTrace(), runBackgroundTasks()]));
 
     // Set Cookie if new
-    if (newClientDetails) {
-        response.headers.append('Set-Cookie', `school_client_id=${clientId}; Path=/; Max-Age=31536000; SameSite=Lax; Secure; HttpOnly`);
-    }
+    // Cookie setting removed as per user request
+    // if (newClientDetails) ...
 
     return response;
 };

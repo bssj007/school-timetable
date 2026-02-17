@@ -19,27 +19,32 @@ export const onRequest = async (context: any) => {
             const range = url.searchParams.get('range') || '24h'; // '24h' | '7d' | 'all'
 
             // 1. Fetch Profiles
+            // 1. Fetch Profiles with Student Info
             let query = `
                 SELECT 
-                    ip, 
-                    student_profile_id, 
-                    kakaoId, 
-                    kakaoNickname, 
-                    lastAccess, 
-                    modificationCount, 
-                    userAgent,
-                    instructionDismissed
+                    ip_profiles.ip, 
+                    ip_profiles.student_profile_id, 
+                    ip_profiles.kakaoId, 
+                    ip_profiles.kakaoNickname, 
+                    ip_profiles.lastAccess, 
+                    ip_profiles.modificationCount, 
+                    ip_profiles.userAgent,
+                    ip_profiles.instructionDismissed,
+                    student_profiles.grade,
+                    student_profiles.classNum,
+                    student_profiles.studentNumber
                 FROM ip_profiles
+                LEFT JOIN student_profiles ON ip_profiles.student_profile_id = student_profiles.id
             `;
 
             if (range === '24h') {
-                query += `WHERE lastAccess > datetime('now', '-1 day') `;
+                query += `WHERE ip_profiles.lastAccess > datetime('now', '-1 day') `;
             } else if (range === '7d') {
-                query += `WHERE lastAccess > datetime('now', '-7 days') `;
+                query += `WHERE ip_profiles.lastAccess > datetime('now', '-7 days') `;
             }
             // 'all' -> no WHERE clause
 
-            query += `ORDER BY lastAccess DESC`;
+            query += `ORDER BY ip_profiles.lastAccess DESC`;
 
             const { results: profiles } = await env.DB.prepare(query).all();
 
@@ -80,9 +85,9 @@ export const onRequest = async (context: any) => {
                     modificationCount: p.modificationCount || 0,
                     lastAccess: p.lastAccess,
                     recentUserAgents: p.userAgent ? [p.userAgent] : [],
-                    grade: null, // Joined later if needed
-                    classNum: null,
-                    studentNumber: null,
+                    grade: p.grade,
+                    classNum: p.classNum,
+                    studentNumber: p.studentNumber,
                     instructionDismissed: !!p.instructionDismissed,
                     assessments: [],
                     logs: [],

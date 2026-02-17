@@ -25,11 +25,37 @@ export const onRequest = async (context: any) => {
 
         // White-list tables to prevent SQL injection or deletion of system tables
         const ALLOWED_TABLES = ['access_logs', 'student_profiles', 'ip_profiles', 'blocked_users', 'assessments', 'subjects', 'timetables'];
-        if (!ALLOWED_TABLES.includes(tableName)) {
+        if (tableName !== 'ALL' && !ALLOWED_TABLES.includes(tableName)) {
             return new Response(JSON.stringify({ error: "Invalid table name" }), { status: 400 });
         }
 
         try {
+            if (tableName === 'ALL') {
+                // Truncate ALL Allowed Tables
+                const tablesToTruncate = ALLOWED_TABLES.filter(t => t !== 'ALL');
+
+                // Construct Batch
+                const batchStatements = [
+                    env.DB.prepare("PRAGMA foreign_keys = OFF")
+                ];
+
+                for (const t of tablesToTruncate) {
+                    batchStatements.push(env.DB.prepare(`DELETE FROM ${t}`));
+                    // Reset Sequence
+                    if (t !== 'ip_profiles' && t !== 'student_profiles') {
+                        batchStatements.push(env.DB.prepare(`DELETE FROM sqlite_sequence WHERE name = '${t}'`));
+                    }
+                }
+
+                batchStatements.push(env.DB.prepare("PRAGMA foreign_keys = ON"));
+
+                await env.DB.batch(batchStatements);
+
+                return new Response(JSON.stringify({ success: true, message: `Truncated all tables` }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+
             if (id) {
                 // Delete Specific Row
                 // Note: ip_profiles uses 'ip' as PK, others use 'id'.
@@ -42,7 +68,12 @@ export const onRequest = async (context: any) => {
                 });
             } else {
                 // Truncate Table
-                await env.DB.prepare(`DELETE FROM ${tableName}`).run();
+                // We use batch to temporarily disable foreign keys for this operation
+                await env.DB.batch([
+                    env.DB.prepare("PRAGMA foreign_keys = OFF"),
+                    env.DB.prepare(`DELETE FROM ${tableName}`),
+                    env.DB.prepare("PRAGMA foreign_keys = ON")
+                ]);
 
                 // Reset Auto-Increment if applicable
                 if (tableName !== 'ip_profiles' && tableName !== 'student_profiles') {
