@@ -63,7 +63,6 @@ export const onRequest = async (context: any) => {
             ).bind(
                 userInfo.id.toString(),
                 tokenData.access_token,
-                tokenData.refresh_token || null,
                 tokenData.refresh_token || null
             ).run();
         } catch (dbError) {
