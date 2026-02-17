@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Lock, Settings, Eye, EyeOff, Trash2, Ban, ShieldCheck, TriangleAlert, ChevronDown, ChevronRight, Save } from "lucide-react";
+import { Lock, Settings, Eye, EyeOff, Trash2, Ban, ShieldCheck, TriangleAlert, ChevronDown, ChevronRight, Save, Calendar } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import IPProfileViewer from "@/components/IPProfileViewer";
@@ -24,8 +24,6 @@ import {
     Select,
     SelectContent,
     SelectItem,
-    SelectTrigger,
-    SelectValue,
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
@@ -117,7 +115,7 @@ function ElectiveManager({ password }: { password: string }) {
         setIsSaving(true);
         try {
             // Save each changed item
-            const promises = subjects.map(async (item, index) => {
+            const promises = subjects.map(async (item: any, index: number) => {
                 const original = originalSubjects[index];
                 if (JSON.stringify(item) !== JSON.stringify(original)) {
                     const res = await fetch("/api/admin/electives", {
@@ -223,14 +221,14 @@ function ElectiveManager({ password }: { password: string }) {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                subjects.map((item, index) => (
+                                subjects.map((item: any, index: number) => (
                                     <TableRow key={`${item.subject}-${item.teacher}`}>
                                         <TableCell className="font-medium">{item.subject}</TableCell>
                                         <TableCell className="text-gray-500">{item.teacher}</TableCell>
                                         <TableCell>
                                             <Select
                                                 value={item.classCode}
-                                                onValueChange={(value) => handleInputChange(index, "classCode", value)}
+                                                onValueChange={(value: string) => handleInputChange(index, "classCode", value)}
                                             >
                                                 <SelectTrigger className="w-[100px]">
                                                     <SelectValue placeholder="선택" />
@@ -246,7 +244,7 @@ function ElectiveManager({ password }: { password: string }) {
                                         <TableCell>
                                             <Input
                                                 value={item.fullTeacherName}
-                                                onChange={(e) => handleInputChange(index, "fullTeacherName", e.target.value)}
+                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(index, "fullTeacherName", e.target.value)}
                                                 placeholder="선생님 성함 입력"
                                                 className="max-w-[200px]"
                                             />
@@ -380,7 +378,7 @@ export default function Admin() {
                 headers: { "X-Admin-Password": password }
             }).catch(console.error);
         },
-        onError: (error) => {
+        onError: (error: Error) => {
             toast.error(error.message || "로그인 실패");
             setPassword("");
         },
@@ -754,42 +752,85 @@ export default function Admin() {
                                             </TableCell>
                                             <TableCell>{user.lastAccess ? new Date(user.lastAccess).toLocaleString() : '-'}</TableCell>
                                             <TableCell>
+                                                ) : (
+                                                <span className="text-gray-400 text-xs">-</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
                                                 {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="text-blue-500 hover:text-blue-600 hover:bg-blue-50"
-                                                        onClick={async () => {
-                                                            const message = prompt("전송할 메시지를 입력하세요:");
-                                                            if (!message) return;
-                                                            const targetKakaoId = user.kakaoAccounts[0].kakaoId;
+                                                    <div className="flex gap-2">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="text-purple-500 hover:text-purple-600 hover:bg-purple-50"
+                                                            onClick={async () => {
+                                                                if (!confirm("이 사용자에게 '수행평가 알림' 캘린더 일정을 등록하시겠습니까?\n(1분 후 시작, 10분간 지속, 즉시 알림)")) return;
 
-                                                            try {
-                                                                const response = await fetch('/api/admin/users/notify', {
-                                                                    method: 'POST',
-                                                                    headers: {
-                                                                        'Content-Type': 'application/json',
-                                                                        'X-Admin-Password': password
-                                                                    },
-                                                                    body: JSON.stringify({
-                                                                        ip: user.ip,
-                                                                        kakaoId: targetKakaoId,
-                                                                        message
-                                                                    })
-                                                                });
-                                                                const data = await response.json();
-                                                                if (data.success) {
-                                                                    alert('알림이 전송되었습니다 (개발중)');
-                                                                } else {
-                                                                    alert('알림 전송에 실패했습니다: ' + data.error);
+                                                                const targetKakaoId = user.kakaoAccounts![0].kakaoId;
+                                                                try {
+                                                                    const response = await fetch('/api/admin/users/calendar', {
+                                                                        method: 'POST',
+                                                                        headers: {
+                                                                            'Content-Type': 'application/json',
+                                                                            'X-Admin-Password': password
+                                                                        },
+                                                                        body: JSON.stringify({
+                                                                            kakaoId: targetKakaoId,
+                                                                            title: "🔔 수행평가 확인 알림",
+                                                                            description: "관리자가 보낸 수행평가 확인 알림입니다."
+                                                                        })
+                                                                    });
+                                                                    const data = await response.json();
+                                                                    if (response.ok && data.success) {
+                                                                        alert('캘린더 일정이 등록되었습니다. (카카오톡 알림 발송됨)');
+                                                                    } else {
+                                                                        alert('실패: ' + (data.error || JSON.stringify(data)));
+                                                                    }
+                                                                } catch (error) {
+                                                                    alert('오류 발생');
+                                                                    console.error(error);
                                                                 }
-                                                            } catch (error) {
-                                                                alert('알림 전송 중 오류가 발생했습니다.');
-                                                            }
-                                                        }}
-                                                    >
-                                                        📱 알림
-                                                    </Button>
+                                                            }}
+                                                        >
+                                                            <Calendar className="h-4 w-4 mr-1" />
+                                                            캘린더
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+                                                            onClick={async () => {
+                                                                const message = prompt("전송할 메시지를 입력하세요:");
+                                                                if (!message) return;
+                                                                const targetKakaoId = user.kakaoAccounts![0].kakaoId;
+
+                                                                try {
+                                                                    const response = await fetch('/api/admin/users/notify', {
+                                                                        method: 'POST',
+                                                                        headers: {
+                                                                            'Content-Type': 'application/json',
+                                                                            'X-Admin-Password': password
+                                                                        },
+                                                                        body: JSON.stringify({
+                                                                            ip: user.ip,
+                                                                            kakaoId: targetKakaoId,
+                                                                            message
+                                                                        })
+                                                                    });
+                                                                    const data = await response.json();
+                                                                    if (data.success) {
+                                                                        alert('알림이 전송되었습니다 (개발중)');
+                                                                    } else {
+                                                                        alert('알림 전송에 실패했습니다: ' + data.error);
+                                                                    }
+                                                                } catch (error) {
+                                                                    alert('알림 전송 중 오류가 발생했습니다.');
+                                                                }
+                                                            }}
+                                                        >
+                                                            📱 알림
+                                                        </Button>
+                                                    </div>
                                                 ) : (
                                                     <span className="text-gray-400 text-xs">-</span>
                                                 )}

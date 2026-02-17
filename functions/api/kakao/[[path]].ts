@@ -13,7 +13,7 @@ export const onRequest = async (context: any) => {
 
     // 로그인 시작
     if (path === '/api/kakao/login') {
-        const redirectUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_REST_API_KEY}&redirect_uri=${REDIRECT_URI}&response_type=code`;
+        const redirectUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_REST_API_KEY}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=talk_message,talk_calendar`;
 
         return new Response(null, {
             status: 302,
@@ -28,8 +28,8 @@ export const onRequest = async (context: any) => {
         const cookieHeader = request.headers.get('Cookie') || '';
         const cookies = Object.fromEntries(
             cookieHeader.split(';')
-                .map(c => c.trim().split('='))
-                .filter(p => p.length === 2)
+                .map((c: string) => c.trim().split('='))
+                .filter((p: string[]) => p.length === 2)
         );
         const token = cookies['kakao_token'];
 
