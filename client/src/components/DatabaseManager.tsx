@@ -45,6 +45,17 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
     const [isSettingsLoading, setIsSettingsLoading] = useState(false);
     const [isCleanupRunning, setIsCleanupRunning] = useState(false);
 
+    // Confirmation Dialog State
+    const [confirmDialog, setConfirmDialog] = useState<{
+        open: boolean;
+        title: string;
+        message: string;
+        verificationText: string;
+        onConfirm: () => Promise<void>;
+        isDanger?: boolean;
+    }>({ open: false, title: "", message: "", verificationText: "", onConfirm: async () => { } });
+    const [confirmInput, setConfirmInput] = useState("");
+
 
 
     // Search State
@@ -268,57 +279,65 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
         }
     };
 
-    const handleTruncateTable = async (tableName: string) => {
-        const userInput = prompt(`정말로 [${tableName}] 테이블의 모든 데이터를 삭제하시겠습니까?\n확인을 위해 'DELETE'를 입력하세요.`);
-        if (userInput !== 'DELETE') {
-            if (userInput) toast.error("입력값이 일치하지 않아 취소되었습니다.");
-            return;
-        }
+    const handleTruncateTable = (tableName: string) => {
+        setConfirmInput("");
+        setConfirmDialog({
+            open: true,
+            title: "테이블 데이터 초기화",
+            message: `정말로 [${tableName}] 테이블의 모든 데이터를 삭제하시겠습니까?\n확인을 위해 'DELETE'를 입력하세요.`,
+            verificationText: "DELETE",
+            isDanger: true,
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`/api/admin/database?table=${tableName}`, {
+                        method: "DELETE", // No ID = Truncate
+                        headers: { "X-Admin-Password": adminPassword }
+                    });
+                    const data = await res.json();
 
-        try {
-            const res = await fetch(`/api/admin/database?table=${tableName}`, {
-                method: "DELETE", // No ID = Truncate
-                headers: { "X-Admin-Password": adminPassword }
-            });
-            const data = await res.json();
-
-            if (res.ok && data.success) {
-                toast.success("테이블이 초기화되었습니다.");
-                if (activeTable === tableName) {
-                    runQuery(`SELECT * FROM ${activeTable} LIMIT 100`, false);
+                    if (res.ok && data.success) {
+                        toast.success("테이블이 초기화되었습니다.");
+                        if (activeTable === tableName) {
+                            runQuery(`SELECT * FROM ${activeTable} LIMIT 100`, false);
+                        }
+                    } else {
+                        toast.error("초기화 실패: " + data.error);
+                    }
+                } catch (e: any) {
+                    toast.error("초기화 중 오류 발생: " + e.message);
                 }
-            } else {
-                toast.error("초기화 실패: " + data.error);
             }
-        } catch (e: any) {
-            toast.error("초기화 중 오류 발생: " + e.message);
-        }
+        });
     };
 
-    const handleDropTable = async (tableName: string) => {
-        const userInput = prompt(`🔥 위험: [${tableName}] 테이블을 완전히 삭제(DROP)하시겠습니까?\n테이블 구조와 데이터가 모두 사라집니다.\n확인을 위해 'DROP'을 입력하세요.`);
-        if (userInput !== 'DROP') {
-            if (userInput) toast.error("입력값이 일치하지 않아 취소되었습니다.");
-            return;
-        }
+    const handleDropTable = (tableName: string) => {
+        setConfirmInput("");
+        setConfirmDialog({
+            open: true,
+            title: "테이블 완전 삭제 (DROP)",
+            message: `🔥 위험: [${tableName}] 테이블을 완전히 삭제(DROP)하시겠습니까?\n테이블 구조와 데이터가 모두 사라집니다.\n확인을 위해 'DROP'을 입력하세요.`,
+            verificationText: "DROP",
+            isDanger: true,
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`/api/admin/database?table=${tableName}&mode=drop`, {
+                        method: "DELETE",
+                        headers: { "X-Admin-Password": adminPassword }
+                    });
+                    const data = await res.json();
 
-        try {
-            const res = await fetch(`/api/admin/database?table=${tableName}&mode=drop`, {
-                method: "DELETE",
-                headers: { "X-Admin-Password": adminPassword }
-            });
-            const data = await res.json();
-
-            if (res.ok && data.success) {
-                toast.success(`[${tableName}] 테이블이 삭제되었습니다.`);
-                fetchTables();
-                if (activeTable === tableName) setActiveTable(null);
-            } else {
-                toast.error("삭제 실패: " + data.error);
+                    if (res.ok && data.success) {
+                        toast.success(`[${tableName}] 테이블이 삭제되었습니다.`);
+                        fetchTables();
+                        if (activeTable === tableName) setActiveTable(null);
+                    } else {
+                        toast.error("삭제 실패: " + data.error);
+                    }
+                } catch (e: any) {
+                    toast.error("삭제 중 오류 발생: " + e.message);
+                }
             }
-        } catch (e: any) {
-            toast.error("삭제 중 오류 발생: " + e.message);
-        }
+        });
     };
 
     const fetchSettings = async (background = false) => {
@@ -660,6 +679,39 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                         <Button onClick={handleSaveEdit} disabled={isSaving}>
                             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             저장
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Confirmation Dialog */}
+            <Dialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog(prev => ({ ...prev, open: false }))}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className={confirmDialog.isDanger ? "text-red-600" : ""}>{confirmDialog.title}</DialogTitle>
+                        <DialogDescription className="whitespace-pre-wrap select-none pt-2">
+                            {confirmDialog.message}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input
+                            value={confirmInput}
+                            onChange={(e) => setConfirmInput(e.target.value)}
+                            placeholder={`${confirmDialog.verificationText} 입력`}
+                            className="font-mono"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}>취소</Button>
+                        <Button
+                            variant={confirmDialog.isDanger ? "destructive" : "default"}
+                            disabled={confirmInput !== confirmDialog.verificationText}
+                            onClick={async () => {
+                                await confirmDialog.onConfirm();
+                                setConfirmDialog(prev => ({ ...prev, open: false }));
+                            }}
+                        >
+                            확인
                         </Button>
                     </DialogFooter>
                 </DialogContent>

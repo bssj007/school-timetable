@@ -73,11 +73,19 @@ export const onRequest = async (context: any) => {
         const nickname = userInfo.properties?.nickname || userInfo.kakao_account?.profile?.nickname || '사용자';
 
         // Prepare headers with multiple cookies
+        // Prepare headers with multiple cookies
         const headers = new Headers();
         headers.set('Location', `/?kakao=success&kakaoId=${userInfo.id}`);
         headers.append('Set-Cookie', `kakao_token=${tokenData.access_token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=21600`);
-        headers.append('Set-Cookie', `kakao_id=${userInfo.id}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=21600`);
-        headers.append('Set-Cookie', `kakao_nickname=${encodeURIComponent(nickname)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=21600`);
+
+        // _middleware.ts에서 사용하는 kakao_user_data 쿠키 설정 (JSON string)
+        const userData = {
+            id: userInfo.id,
+            nickname: nickname,
+            profileImage: userInfo.properties?.profile_image || userInfo.kakao_account?.profile?.profile_image_url,
+            thumbnailImage: userInfo.properties?.thumbnail_image || userInfo.kakao_account?.profile?.thumbnail_image_url
+        };
+        headers.append('Set-Cookie', `kakao_user_data=${encodeURIComponent(JSON.stringify(userData))}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=21600`);
 
         // 클라이언트로 리다이렉트 (토큰 전달)
         return new Response(null, {

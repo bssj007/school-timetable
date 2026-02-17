@@ -31,27 +31,40 @@ export const onRequest = async (context: any) => {
             // Check if sqlite_sequence exists (to safely reset auto-increments)
             const sequenceTableExists = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'").first();
 
-            // Defined for Global Reset only
-            // Order is important for FK constraints: Delete children first!
-            const ALLOWED_TABLES = [
-                'access_logs',
-                'blocked_users',
-                'ip_profiles',
-                'cookie_profiles',
-                'performance_assessments', // Corrected name
-                'student_profiles',
-                // Removed zombie tables: 'timetables', 'subjects'
-            ];
-
             if (tableName === 'ALL') {
-                // Drop ALL Allowed Tables & Re-hydrate
+                // 1. Get ALL current tables
+                const { results: allTables } = await env.DB.prepare(
+                    "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                ).all();
+
+                let tablesToDrop = allTables.map((r: any) => r.name);
+
+                // Sort: Dependent Tables (Children) FIRST, Parent Tables LAST
+                // This prevents FK errors if PRAGMA foreign_keys = OFF fails in D1 batch
+                const FIRST_DROP = ['ip_profiles', 'cookie_profiles', 'performance_assessments', 'access_logs', 'blocked_users', 'timetables'];
+                const LAST_DROP = ['student_profiles', 'subjects'];
+
+                tablesToDrop.sort((a: string, b: string) => {
+                    const aFirst = FIRST_DROP.includes(a);
+                    const bFirst = FIRST_DROP.includes(b);
+                    const aLast = LAST_DROP.includes(a);
+                    const bLast = LAST_DROP.includes(b);
+
+                    if (aFirst && !bFirst) return -1;
+                    if (!aFirst && bFirst) return 1;
+                    if (aLast && !bLast) return 1;
+                    if (!aLast && bLast) return -1;
+                    return 0;
+                });
+
+                // Construct Batch
                 const batchStatements = [
                     env.DB.prepare("PRAGMA foreign_keys = OFF")
                 ];
 
                 // 1. Drop Tables
-                for (const t of ALLOWED_TABLES) {
-                    batchStatements.push(env.DB.prepare(`DROP TABLE IF EXISTS ${t}`));
+                for (const t of tablesToDrop) {
+                    batchStatements.push(env.DB.prepare(`DROP TABLE IF EXISTS "${t}"`));
                     // Also clear sequence
                     if (sequenceTableExists) {
                         batchStatements.push(env.DB.prepare(`DELETE FROM sqlite_sequence WHERE name = '${t}'`));
@@ -76,6 +89,7 @@ export const onRequest = async (context: any) => {
                 // Note: ip_profiles uses 'ip' as PK, others use 'id'.
                 let pkColumn = 'id';
                 if (tableName === 'ip_profiles') pkColumn = 'ip';
+                if (tableName === 'student_profiles') pkColumn = 'studentNumber';
 
                 await env.DB.prepare(`DELETE FROM ${tableName} WHERE ${pkColumn} = ?`).bind(id).run();
                 return new Response(JSON.stringify({ success: true, message: `Deleted row ${id} from ${tableName}` }), {

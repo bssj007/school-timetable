@@ -20,21 +20,21 @@ export const onRequest = async (context: any) => {
 
             // 1. Fetch Profiles
             // 1. Fetch Profiles with Student Info and Dynamic Modification Count
+            // 1. Fetch Profiles with Student Info and Dynamic Modification Count
+            // NEW SCHEMA: Link via studentNumber
             let query = `
                 SELECT 
                     ip_profiles.ip, 
-                    ip_profiles.student_profile_id, 
+                    ip_profiles.studentNumber as studentNumberKey, -- Use key from linking
                     ip_profiles.kakaoId, 
                     ip_profiles.kakaoNickname, 
                     ip_profiles.lastAccess, 
                     (SELECT COUNT(*) FROM performance_assessments WHERE lastModifiedIp = ip_profiles.ip) as modificationCount,
                     ip_profiles.userAgent,
                     ip_profiles.instructionDismissed,
-                    student_profiles.grade,
-                    student_profiles.classNum,
-                    student_profiles.studentNumber
+                    student_profiles.studentNumber as profileStudentNumber -- Verification
                 FROM ip_profiles
-                LEFT JOIN student_profiles ON ip_profiles.student_profile_id = student_profiles.id
+                LEFT JOIN student_profiles ON ip_profiles.studentNumber = student_profiles.studentNumber
             `;
 
             if (range === '24h') {
@@ -76,6 +76,27 @@ export const onRequest = async (context: any) => {
 
             // 3. Transform to Profile format
             const activeUsers = profiles.map((p: any) => {
+                const sn = p.studentNumberKey || p.profileStudentNumber;
+                let parsedGrade = null;
+                let parsedClass = null;
+                let parsedNumber = null;
+
+                if (sn) {
+                    const sStr = sn.toString();
+                    if (sStr.length >= 4) {
+                        // Logic: G + Class(Variable) + NN(2)
+                        // Last 2 are always Number
+                        parsedNumber = parseInt(sStr.slice(-2));
+                        // First 1 is Grade
+                        parsedGrade = parseInt(sStr.slice(0, 1));
+                        // Anything in between is Class
+                        const classStr = sStr.slice(1, -2);
+                        if (classStr.length > 0) {
+                            parsedClass = parseInt(classStr);
+                        }
+                    }
+                }
+
                 const profile = {
                     clientId: p.ip, // Use IP as Client ID
                     ip: p.ip,
@@ -85,9 +106,9 @@ export const onRequest = async (context: any) => {
                     modificationCount: p.modificationCount || 0,
                     lastAccess: p.lastAccess,
                     recentUserAgents: p.userAgent ? [p.userAgent] : [],
-                    grade: p.grade,
-                    classNum: p.classNum,
-                    studentNumber: p.studentNumber,
+                    grade: parsedGrade,
+                    classNum: parsedClass,
+                    studentNumber: parsedNumber,
                     instructionDismissed: !!p.instructionDismissed,
                     assessments: [],
                     logs: [],

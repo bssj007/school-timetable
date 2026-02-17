@@ -189,11 +189,62 @@ export const onRequest = async (context: any) => {
             const query = `UPDATE performance_assessments SET ${updates.join(", ")} WHERE id = ?`;
             values.push(id);
 
-            const result = await env.DB.prepare(query).bind(...values).run();
+            try {
+                const result = await env.DB.prepare(query).bind(...values).run();
+                return new Response(JSON.stringify({ success: true, result }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            } catch (updateError: any) {
+                const errorMsg = updateError.message || "";
 
-            return new Response(JSON.stringify({ success: true, result }), {
-                headers: { 'Content-Type': 'application/json' }
-            });
+                // Auto-Heal: Missing Column 'lastModifiedIp'
+                if (errorMsg.includes("no such column") && errorMsg.includes("lastModifiedIp")) {
+                    console.log("[Assessment API] 'lastModifiedIp' column missing in PATCH. Attempting to add it.");
+                    try {
+                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN lastModifiedIp TEXT").run();
+
+                        // Retry Update
+                        const retryResult = await env.DB.prepare(query).bind(...values).run();
+                        return new Response(JSON.stringify({ success: true, result: retryResult }), {
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    } catch (alterError) {
+                        console.error("[Assessment API] Auto-heal failed:", alterError);
+                        // Fallback: Update without IP
+                        const fallbackUpdates = updates.filter(u => !u.includes("lastModifiedIp"));
+                        const fallbackValues = values.slice(0, -2).concat(values.slice(-1)); // Remove IP from values (second to last), keep ID (last)
+                        // Wait, values structure: [val1, val2, ..., IP, ID]
+                        // We need to remove IP. IP is at index (values.length - 2).
+
+                        // Safer way to verify fallback construction:
+                        // Reconstruct query/values omitting IP
+                        const fbUpdates: string[] = [];
+                        const fbValues: any[] = [];
+
+                        if (subject !== undefined) { fbUpdates.push("subject = ?"); fbValues.push(subject); }
+                        if (title !== undefined) { fbUpdates.push("title = ?"); fbValues.push(title); }
+                        if (description !== undefined) { fbUpdates.push("description = ?"); fbValues.push(description); }
+                        if (dueDate !== undefined) { fbUpdates.push("dueDate = ?"); fbValues.push(dueDate); }
+                        if (classTime !== undefined) { fbUpdates.push("classTime = ?"); fbValues.push(classTime); }
+                        // Skip lastModifiedIp
+
+                        if (fbUpdates.length === 0) {
+                            return new Response(JSON.stringify({ success: true, message: "No changes detected (Fallback)" }), {
+                                headers: { 'Content-Type': 'application/json' }
+                            });
+                        }
+
+                        const fbQuery = `UPDATE performance_assessments SET ${fbUpdates.join(", ")} WHERE id = ?`;
+                        fbValues.push(id);
+
+                        const fallbackResult = await env.DB.prepare(fbQuery).bind(...fbValues).run();
+                        return new Response(JSON.stringify({ success: true, result: fallbackResult, warning: "IP not saved due to schema error" }), {
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    }
+                }
+                throw updateError;
+            }
         }
 
         // PUT: 완료 여부 토글 (Optional, if needed)

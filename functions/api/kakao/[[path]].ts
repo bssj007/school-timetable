@@ -77,11 +77,13 @@ export const onRequest = async (context: any) => {
 
     // 로그아웃
     if (path === '/api/kakao/logout') {
+        const headers = new Headers();
+        headers.append('Content-Type', 'application/json');
+        headers.append('Set-Cookie', 'kakao_token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0');
+        headers.append('Set-Cookie', 'kakao_user_data=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0');
+
         return new Response(JSON.stringify({ success: true }), {
-            headers: {
-                'Content-Type': 'application/json',
-                'Set-Cookie': 'kakao_token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0'
-            }
+            headers: headers
         });
     }
 
