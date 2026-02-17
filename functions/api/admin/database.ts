@@ -30,78 +30,63 @@ export const onRequest = async (context: any) => {
 
             if (tableName === 'ALL') {
                 // 1. Get ALL current tables
-                // Filter out sqlite_*, _cf_*, d1_*, and any other internal system tables
+                // Filter out sqlite_*, _cf_*, d1_*, and any other internal system tables (like _cf_KV which causes SQLITE_AUTH)
                 const { results: allTables } = await env.DB.prepare(
                     "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%'"
                 ).all();
 
-                let remainingTables = allTables.map((r: any) => r.name);
+                const tablesToDrop = allTables.map((r: any) => r.name);
                 const executedSteps: string[] = [];
 
-                // Brute-force Retry Loop to handle Dependency Graph automatically
-                // Children will drop successfully first. Parents will fail initially, then succeed in next pass.
-                let pass = 1;
-                const MAX_PASSES = 10; // Prevent infinite loop
-
-                while (remainingTables.length > 0 && pass <= MAX_PASSES) {
-                    const nextRemaining: string[] = [];
-                    let droppedInThisPass = 0;
-
-                    for (const t of remainingTables) {
-                        try {
-                            // Attempt Drop
-                            // Using batch to ensure PRAGMA foreign_keys = OFF is applied tightly (best effort)
-                            await env.DB.batch([
-                                env.DB.prepare("PRAGMA foreign_keys = OFF"),
-                                env.DB.prepare(`DROP TABLE IF EXISTS "${t}"`)
-                            ]);
-
-                            executedSteps.push(`Pass ${pass}: Dropped ${t}`);
-                            droppedInThisPass++;
-
-                            // Clean sequence if successful
-                            if (sequenceTableExists) {
-                                try {
-                                    await env.DB.prepare(`DELETE FROM sqlite_sequence WHERE name = '${t}'`).run();
-                                } catch (ignore) { }
-                            }
-
-                        } catch (e: any) {
-                            // If it's a constraint error, we'll try again next pass
-                            // If it's another error, we might be stuck, but we'll retry anyway
-                            console.warn(`Pass ${pass}: Check/Drop failed for ${t}`, e);
-                            nextRemaining.push(t);
-                        }
-                    }
-
-                    if (droppedInThisPass === 0 && nextRemaining.length > 0) {
-                        // Deadlock or Persistent Error
-                        executedSteps.push(`CRITICAL: Stuck on tables: ${nextRemaining.join(', ')}`);
-                        // Force break to allow reporting
-                        break;
-                    }
-
-                    remainingTables = nextRemaining;
-                    pass++;
-                }
-
-                if (remainingTables.length > 0) {
+                if (tablesToDrop.length === 0) {
                     return new Response(JSON.stringify({
-                        success: false,
-                        message: `Reset incomplete. Could not drop: ${remainingTables.join(', ')}`,
-                        details: executedSteps
-                    }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+                        success: true,
+                        message: `Database is already empty.`,
+                        details: []
+                    }), { headers: { 'Content-Type': 'application/json' } });
                 }
 
-                // Try to turn FK back ON
+                // STRATEGY: Single Massive Batch with Deferred Foreign Keys
+                // D1 runs batch() in an implicit transaction. 
+                // By setting `PRAGMA defer_foreign_keys = ON` at the start, we tell SQLite to check constraints ONLY at commit time.
+                // Since we drop ALL tables in this transaction, at commit time the database is empty, so no constraints can be violated.
+
+                const batchStatements = [];
+
+                // 1. Defer Foreign Keys
+                batchStatements.push(env.DB.prepare("PRAGMA defer_foreign_keys = ON"));
+
+                // 2. Drop Tables
+                for (const t of tablesToDrop) {
+                    batchStatements.push(env.DB.prepare(`DROP TABLE IF EXISTS "${t}"`));
+                    executedSteps.push(`Duplicate step for batch: Drop ${t}`); // Log intent
+
+                    if (sequenceTableExists) {
+                        try {
+                            batchStatements.push(env.DB.prepare(`DELETE FROM sqlite_sequence WHERE name = '${t}'`));
+                        } catch (ignore) { }
+                    }
+                }
+
+                // 3. Restore Foreign Keys (Explicitly, though commit ends txn)
+                // batchStatements.push(env.DB.prepare("PRAGMA defer_foreign_keys = OFF")); 
+                // (Optional, but good practice if connection reused? D1 is HTTP based so likely fresh, but let's be safe)
+
                 try {
-                    await env.DB.prepare("PRAGMA foreign_keys = ON").run();
-                } catch (e) { }
+                    await env.DB.batch(batchStatements);
+                } catch (batchError: any) {
+                    // Fallback: If batch fails (e.g. too large?), we might fallback to the "Brute Force" method or report error?
+                    console.error("Batch Drop Failed:", batchError);
+                    return new Response(JSON.stringify({
+                        error: `Batch Reset Failed: ${batchError.message}`,
+                        hint: "Provide this error to developer. It might be a foreign key issue despite deferral."
+                    }), { status: 500 });
+                }
 
                 return new Response(JSON.stringify({
                     success: true,
-                    message: `Dropped all tables (Required ${pass - 1} passes).`,
-                    details: executedSteps
+                    message: `Dropped ${tablesToDrop.length} tables (Single Batch Defer Mode).`,
+                    details: tablesToDrop.map(t => `Dropped ${t}`)
                 }), {
                     headers: { 'Content-Type': 'application/json' }
                 });
