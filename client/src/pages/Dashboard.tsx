@@ -724,6 +724,7 @@ export default function Dashboard() {
                           return (
                             <td
                               key={weekdayIdx}
+                              id={`cell-${weekdayIdx}-${classTime}`}
                               onClick={() => {
                                 if (item && (!isPast || cellAssessments.length > 0)) {
                                   handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx], cellAssessments);
