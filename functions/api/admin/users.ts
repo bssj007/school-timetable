@@ -48,9 +48,30 @@ export const onRequest = async (context: any) => {
             const { results: profiles } = await env.DB.prepare(query).all();
 
             // 2. Fetch Blocked Users
-            const { results: blockedUsers } = await env.DB.prepare(
-                "SELECT * FROM blocked_users ORDER BY createdAt DESC"
-            ).all();
+            let blockedUsers: any[] = [];
+            try {
+                const { results } = await env.DB.prepare(
+                    "SELECT * FROM blocked_users ORDER BY createdAt DESC"
+                ).all();
+                blockedUsers = results;
+            } catch (e: any) {
+                if (e.message && e.message.includes("no such table")) {
+                    // Create table if missing
+                    await env.DB.prepare(`
+                        CREATE TABLE IF NOT EXISTS blocked_users (
+                          id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          identifier TEXT NOT NULL, 
+                          type TEXT NOT NULL,
+                          reason TEXT,
+                          createdAt TEXT DEFAULT (datetime('now'))
+                        )
+                    `).run();
+                    // Retry (will be empty, but prevents error)
+                    blockedUsers = [];
+                } else {
+                    throw e;
+                }
+            }
 
             // 3. Transform to Profile format
             const activeUsers = profiles.map((p: any) => {

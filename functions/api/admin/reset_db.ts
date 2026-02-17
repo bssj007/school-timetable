@@ -23,14 +23,17 @@ export const onRequestPost = async (context: any) => {
             return new Response(JSON.stringify({ error: "Database not configured" }), { status: 500 });
         }
 
-        // 2. Drop Tables (Factory Reset)
-        await env.DB.prepare("DROP TABLE IF EXISTS users").run();
-        await env.DB.prepare("DROP TABLE IF EXISTS performance_assessments").run();
-        await env.DB.prepare("DROP TABLE IF EXISTS access_logs").run();
-        await env.DB.prepare("DROP TABLE IF EXISTS blocked_users").run();
-        await env.DB.prepare("DROP TABLE IF EXISTS system_settings").run();
-        // await env.DB.prepare("DROP TABLE IF EXISTS kakao_tokens").run(); // Preserve Kakao tokens
-        await env.DB.prepare("DROP TABLE IF EXISTS timetables").run(); // Legacy cleanup
+        // 2. Drop Tables (Dynamic Factory Reset)
+        // Fetch all table names
+        const { results } = await env.DB.prepare(
+            "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != '_cf_KV'"
+        ).all();
+
+        // Drop each table
+        for (const row of results) {
+            const tableName = row.name;
+            await env.DB.prepare(`DROP TABLE IF EXISTS "${tableName}"`).run();
+        }
 
         return new Response(JSON.stringify({ success: true, message: "Database reset complete" }), {
             headers: { "Content-Type": "application/json" }

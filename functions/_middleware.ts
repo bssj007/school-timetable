@@ -66,20 +66,47 @@ export const onRequest = async (context: any) => {
                 }
             }
 
-            // 1. Insert Log (with Auto-Migration for client_id)
-            try {
+            // 1. Insert Log (with Auto-Migration for client_id and Table Creation)
+            const insertLog = async () => {
                 await env.DB.prepare(
                     "INSERT INTO access_logs (ip, userAgent, method, endpoint, status, grade, classNum, studentNumber, kakaoId, kakaoNickname, client_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 ).bind(ip, userAgent, request.method, url.pathname, response.status, grade, classNum, studentNumber, kakaoId, kakaoNickname, clientId).run();
+            };
+
+            try {
+                await insertLog();
             } catch (e: any) {
-                if (e.message && (e.message.includes("no such column") || e.message.includes("client_id"))) {
+                // Auto-Migration: Table missing or Column missing
+                if (e.message && e.message.includes("no such table")) {
+                    console.log("[Middleware] Creating access_logs table");
+                    try {
+                        // Create table with ALL current columns
+                        await env.DB.prepare(`
+                            CREATE TABLE IF NOT EXISTS access_logs (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                ip TEXT NOT NULL,
+                                userAgent TEXT,
+                                method TEXT,
+                                endpoint TEXT,
+                                status INTEGER,
+                                grade INTEGER,
+                                classNum INTEGER,
+                                studentNumber INTEGER,
+                                kakaoId TEXT,
+                                kakaoNickname TEXT,
+                                client_id TEXT,
+                                accessedAt TEXT DEFAULT (datetime('now'))
+                            )
+                        `).run();
+                        await insertLog();
+                    } catch (createError) {
+                        console.error("[Middleware] Create access_logs Failed:", createError);
+                    }
+                } else if (e.message && (e.message.includes("no such column") || e.message.includes("client_id"))) {
                     console.log("[Middleware] Adding client_id column to access_logs");
                     try {
                         await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN client_id TEXT").run();
-                        // Retry
-                        await env.DB.prepare(
-                            "INSERT INTO access_logs (ip, userAgent, method, endpoint, status, grade, classNum, studentNumber, kakaoId, kakaoNickname, client_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                        ).bind(ip, userAgent, request.method, url.pathname, response.status, grade, classNum, studentNumber, kakaoId, kakaoNickname, clientId).run();
+                        await insertLog();
                     } catch (migrationError) {
                         console.error("[Middleware] Migration Failed for access_logs:", migrationError);
                     }
@@ -102,14 +129,43 @@ export const onRequest = async (context: any) => {
                         studentId = parseInt(idStr);
 
                         await env.DB.prepare(`
-                            INSERT INTO student_profiles (student_id, updatedAt, grade, classNum, studentNumber) 
+                            INSERT INTO student_profiles (id, updatedAt, grade, classNum, studentNumber) 
                             VALUES (?, datetime('now'), ?, ?, ?)
-                            ON CONFLICT(student_id) 
+                            ON CONFLICT(id) 
                             DO UPDATE SET updatedAt = datetime('now')
                         `).bind(studentId, g, c, n).run();
                     }
-                } catch (e) {
-                    // Ignore errors for student_profiles (assumed existing or irrelevant)
+                } catch (e: any) {
+                    if (e.message && e.message.includes("no such table")) {
+                        console.log("[Middleware] Creating student_profiles table");
+                        try {
+                            await env.DB.prepare(`
+                                CREATE TABLE IF NOT EXISTS student_profiles (
+                                    id INTEGER PRIMARY KEY,
+                                    grade INTEGER NOT NULL,
+                                    classNum INTEGER NOT NULL,
+                                    studentNumber INTEGER,
+                                    electives TEXT,
+                                    updatedAt TEXT DEFAULT (datetime('now')),
+                                    UNIQUE(grade, classNum, studentNumber)
+                                )
+                            `).run();
+                            // Retry Insert
+                            if (studentId) {
+                                const g = parseInt(grade);
+                                const c = parseInt(classNum);
+                                const n = parseInt(studentNumber);
+                                await env.DB.prepare(`
+                                    INSERT INTO student_profiles (id, updatedAt, grade, classNum, studentNumber) 
+                                    VALUES (?, datetime('now'), ?, ?, ?)
+                                    ON CONFLICT(id) 
+                                    DO UPDATE SET updatedAt = datetime('now')
+                                `).bind(studentId, g, c, n).run();
+                            }
+                        } catch (createError) {
+                            console.error("[Middleware] Create student_profiles Failed:", createError);
+                        }
+                    }
                 }
             }
 
