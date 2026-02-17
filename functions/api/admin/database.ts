@@ -18,6 +18,7 @@ export const onRequest = async (context: any) => {
         const url = new URL(request.url);
         const tableName = url.searchParams.get('table');
         const id = url.searchParams.get('id');
+        const mode = url.searchParams.get('mode'); // 'truncate' (default) or 'drop'
 
         if (!tableName) {
             return new Response(JSON.stringify({ error: "Table name is required" }), { status: 400 });
@@ -35,7 +36,7 @@ export const onRequest = async (context: any) => {
 
             if (tableName === 'ALL') {
                 // Truncate ALL Allowed Tables
-                const tablesToTruncate = ALLOWED_TABLES.filter(t => t !== 'ALL');
+                const tablesToTruncate = ALLOWED_TABLES; // Use predefined list for safety
 
                 // Construct Batch
                 const batchStatements = [
@@ -69,8 +70,14 @@ export const onRequest = async (context: any) => {
                 return new Response(JSON.stringify({ success: true, message: `Deleted row ${id} from ${tableName}` }), {
                     headers: { 'Content-Type': 'application/json' }
                 });
+            } else if (mode === 'drop') {
+                // DROP TABLE
+                await env.DB.prepare(`DROP TABLE IF EXISTS ${tableName}`).run();
+                return new Response(JSON.stringify({ success: true, message: `Dropped table ${tableName}` }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
             } else {
-                // Truncate Table
+                // Truncate Table (Default)
                 // We use batch to temporarily disable foreign keys for this operation
                 await env.DB.batch([
                     env.DB.prepare("PRAGMA foreign_keys = OFF"),

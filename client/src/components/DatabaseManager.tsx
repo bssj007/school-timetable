@@ -295,6 +295,32 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
         }
     };
 
+    const handleDropTable = async (tableName: string) => {
+        const userInput = prompt(`🔥 위험: [${tableName}] 테이블을 완전히 삭제(DROP)하시겠습니까?\n테이블 구조와 데이터가 모두 사라집니다.\n확인을 위해 'DROP'을 입력하세요.`);
+        if (userInput !== 'DROP') {
+            if (userInput) toast.error("입력값이 일치하지 않아 취소되었습니다.");
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/admin/database?table=${tableName}&mode=drop`, {
+                method: "DELETE",
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                toast.success(`[${tableName}] 테이블이 삭제되었습니다.`);
+                fetchTables();
+                if (activeTable === tableName) setActiveTable(null);
+            } else {
+                toast.error("삭제 실패: " + data.error);
+            }
+        } catch (e: any) {
+            toast.error("삭제 중 오류 발생: " + e.message);
+        }
+    };
+
     const fetchSettings = async (background = false) => {
         if (!background) setIsSettingsLoading(true);
         try {
@@ -346,9 +372,9 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                         size="icon"
                                         className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50"
                                         onClick={() => handleTruncateTable('ALL')}
-                                        title="전체 데이터 삭제 (주의!)"
+                                        title="전체 데이터 초기화"
                                     >
-                                        <Trash2 className="w-3 h-3" />
+                                        <RefreshCw className="w-3 h-3" />
                                     </Button>
                                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => fetchTables(false)}>
                                         <RefreshCw className="w-3 h-3" />
@@ -373,9 +399,9 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                                     className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600 hover:bg-red-50"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        handleTruncateTable(t);
+                                                        handleDropTable(t);
                                                     }}
-                                                    title="테이블 비우기"
+                                                    title="테이블 삭제 (DROP)"
                                                 >
                                                     <Trash2 className="w-3 h-3" />
                                                 </Button>
