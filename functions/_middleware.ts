@@ -7,6 +7,7 @@ export const onRequest = async (context: any) => {
     const { request, env, next } = context;
     const url = new URL(request.url);
 
+
     // 1. Log Access (Response)
     const response = await next();
 
@@ -21,6 +22,9 @@ export const onRequest = async (context: any) => {
 
     // Async task for Logging & Profile Update
     const logTrace = async () => {
+        // SKIP for Admin APIs to verify race conditions during DB Reset
+        if (url.pathname.startsWith('/api/admin')) return;
+
         if (!env.DB) return;
 
         try {
@@ -154,6 +158,27 @@ export const onRequest = async (context: any) => {
                 if (!success) targetStudentNumber = null;
             }
 
+            // Helper: Retry Operation with Backoff
+            const retryOperation = async (fn: () => Promise<void>, retries = 3, delay = 50) => {
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        await fn();
+                        return true;
+                    } catch (e: any) {
+                        if (i === retries - 1) throw e; // Final attempt failed
+                        // Check if error is worth retrying (Lock or FK)
+                        if (e.message && (e.message.includes("database is locked") || e.message.includes("FOREIGN KEY"))) {
+                            console.warn(`[Middleware] Retry ${i + 1}/${retries} failed: ${e.message}. Retrying in ${delay}ms...`);
+                            await new Promise(res => setTimeout(res, delay));
+                            delay *= 2; // Exponential backoff
+                        } else {
+                            throw e; // Non-retryable error
+                        }
+                    }
+                }
+                return false;
+            };
+
             // 3. Update IP Profile (Link to studentNumber)
             const updateIpProfile = async () => {
                 // Check if IP profile exists
@@ -192,13 +217,16 @@ export const onRequest = async (context: any) => {
                     ).run();
                 };
 
+                // Logic with Retry
                 try {
-                    await executeLink(targetStudentNumber);
+                    // Attempt 1: Try linking with Retry Logic
+                    await retryOperation(async () => {
+                        await executeLink(targetStudentNumber);
+                    });
                 } catch (e: any) {
                     // CRITICAL FIX: Graceful Fallback for Foreign Key Violation
-                    // If student_profiles entry is missing, the linking will fail. 
                     if (targetStudentNumber !== null && (e.message && (e.message.includes("FOREIGN KEY") || e.message.includes("constraint")))) {
-                        console.warn(`[Middleware] FK Violation for student ${targetStudentNumber}. Attempting repair...`);
+                        console.warn(`[Middleware] FK Violation for student ${targetStudentNumber} after retries. Attempting repair...`);
 
                         // REPAIR STRATEGY: Try to create the student profile again
                         const repairSuccess = await ensureStudentProfile(targetStudentNumber);
@@ -206,17 +234,24 @@ export const onRequest = async (context: any) => {
                         if (repairSuccess) {
                             try {
                                 console.log(`[Middleware] Repair successful. Retrying link...`);
+                                // Retry link one last time
                                 await executeLink(targetStudentNumber);
                                 return; // Success!
                             } catch (retryError) {
-                                console.warn(`[Middleware] Link retry failed after repair.`);
+                                console.warn(`[Middleware] Link retry failed even after repair.`);
                             }
                         }
 
                         console.warn(`[Middleware] Fallback to NULL link.`);
                         await executeLink(null);
+                    } else if (e.message && e.message.includes("database is locked")) {
+                        // Even after retries, if locked, we might want to fallback or just log
+                        console.error("[Middleware] Database Locked. Skipping profile update to prevent blocking.");
+                        // Dropping the update is better than crashing or hanging indefinitely?
+                        // Ideally we fallback to NULL but that also requires DB write.
+                        // So we just give up.
                     } else {
-                        throw e; // Re-throw (will be caught by outer try-catch for auto-migration)
+                        throw e;
                     }
                 }
             };
