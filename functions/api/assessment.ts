@@ -7,6 +7,8 @@
 export const onRequest = async (context: any) => {
     const { request, env } = context;
     const url = new URL(request.url);
+    // 5. Client ID from Context
+    const clientId = (context.data as any).clientId;
 
     // DB 바인딩 확인
     if (!env.DB) {

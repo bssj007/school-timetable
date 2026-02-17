@@ -21,6 +21,7 @@ export const onRequest = async (context: any) => {
             // 1. Fetch Profiles
             let query = `
                 SELECT 
+                    client_id,
                     ip, 
                     kakaoId, 
                     kakaoNickname, 
@@ -28,8 +29,11 @@ export const onRequest = async (context: any) => {
                     modificationCount, 
                     userAgent,
                     instructionDismissed, 
-                    student_id
-                FROM ip_profiles
+                    student_profile_id,
+                    grade,
+                    classNum,
+                    studentNumber
+                FROM cookie_profiles
             `;
 
             if (range === '24h') {
@@ -48,28 +52,10 @@ export const onRequest = async (context: any) => {
                 "SELECT * FROM blocked_users ORDER BY createdAt DESC"
             ).all();
 
-            // 3. Transform to IPProfile format
+            // 3. Transform to Profile format
             const activeUsers = profiles.map((p: any) => {
-                let grade = null;
-                let classNum = null;
-                let studentNumber = null;
-
-                if (p.student_id) {
-                    const sStr = p.student_id.toString();
-                    if (sStr.length >= 4) {
-                        grade = parseInt(sStr[0]);
-                        // Handling for potential 5-digit cases or standard 4-digit
-                        if (sStr.length === 5) {
-                            classNum = parseInt(sStr.substring(1, 3));
-                            studentNumber = parseInt(sStr.substring(3));
-                        } else {
-                            classNum = parseInt(sStr[1]);
-                            studentNumber = parseInt(sStr.substring(2));
-                        }
-                    }
-                }
-
                 const profile = {
+                    clientId: p.client_id,
                     ip: p.ip,
                     kakaoAccounts: p.kakaoId ? [{ kakaoId: p.kakaoId, kakaoNickname: p.kakaoNickname || '(알 수 없음)' }] : [],
                     isBlocked: false,
@@ -77,16 +63,17 @@ export const onRequest = async (context: any) => {
                     modificationCount: p.modificationCount || 0,
                     lastAccess: p.lastAccess,
                     recentUserAgents: p.userAgent ? [p.userAgent] : [],
-                    grade: grade,
-                    classNum: classNum,
-                    studentNumber: studentNumber,
+                    grade: p.grade,
+                    classNum: p.classNum,
+                    studentNumber: p.studentNumber,
                     instructionDismissed: !!p.instructionDismissed,
                     assessments: [],
                     logs: [],
-                    detailsLoaded: false
+                    detailsLoaded: false,
+                    blockId: null as number | null
                 };
 
-                const blockEntry = blockedUsers.find((b: any) => b.identifier === profile.ip && b.type === 'IP');
+                const blockEntry = blockedUsers.find((b: any) => (b.identifier === profile.clientId || b.identifier === profile.ip) && (b.type === 'CLIENT_ID' || b.type === 'IP'));
                 if (blockEntry) {
                     profile.isBlocked = true;
                     profile.blockReason = blockEntry.reason;
