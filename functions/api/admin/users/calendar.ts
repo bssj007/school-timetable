@@ -40,10 +40,19 @@ export const onRequestPost = async (context: any) => {
         // 4. Create Event Function
         async function createCalendarEvent(token: string) {
             try {
-                // Start 1 minute from now to ensure it's "future" but immediate
+                // Start at the NEXT 5-minute interval to satisfy "minimum unit of start_at is 5 minutes"
                 const now = new Date();
-                const start = new Date(now.getTime() + 60 * 1000); // +1 min
-                const end = new Date(now.getTime() + 11 * 60 * 1000); // +11 mins (10 min duration)
+                const remainder = 5 - (now.getMinutes() % 5);
+                // Add remainder minutes, and zero out seconds/milliseconds to be clean
+                const start = new Date(now.getTime() + remainder * 60 * 1000);
+                start.setSeconds(0, 0);
+
+                if (start.getTime() <= now.getTime()) {
+                    // If for some reason equal (shouldn't be with reminder logic unless remainder was 0 and we were exact), add 5 mins
+                    start.setMinutes(start.getMinutes() + 5);
+                }
+
+                const end = new Date(start.getTime() + 10 * 60 * 1000); // 10 min duration
 
                 // Format to ISO string (UTC) is standard, Kakao usually accepts it or requires 'YYYY-MM-DDTHH:mm:ss' in Access Token User's timezone
                 // Best to use simple ISO string and hope API handles it, or use `start_at`

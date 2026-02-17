@@ -50,11 +50,9 @@ export const onRequestPost = async (context: any) => {
                 const taskData = new URLSearchParams();
                 taskData.append('task', JSON.stringify({
                     title: title,
-                    description: description,
-                    // Tasks might not need start/end time in the same way, or use 'due_date'
                 }));
 
-                const response = await fetch('https://kapi.kakao.com/v2/api/calendar/create/task', {
+                const response = await fetch('https://kapi.kakao.com/v1/api/calendar/create/task', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
