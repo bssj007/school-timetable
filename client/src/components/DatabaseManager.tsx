@@ -374,7 +374,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                         onClick={() => handleTruncateTable('ALL')}
                                         title="전체 데이터 초기화"
                                     >
-                                        <RefreshCw className="w-3 h-3" />
+                                        <Trash2 className="w-3 h-3" />
                                     </Button>
                                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => fetchTables(false)}>
                                         <RefreshCw className="w-3 h-3" />

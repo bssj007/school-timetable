@@ -3,7 +3,7 @@ export const onRequest = async (context: any) => {
     if (!env.DB) return new Response("No DB", { status: 500 });
 
     try {
-        const tables = ["access_logs", "student_profiles", "users", "blocked_users", "cookie_profiles"];
+        const tables = ["access_logs", "student_profiles", "users", "blocked_users"];
         const stats: any = {};
 
         for (const table of tables) {

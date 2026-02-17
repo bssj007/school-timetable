@@ -32,30 +32,41 @@ export const onRequest = async (context: any) => {
             const sequenceTableExists = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'").first();
 
             // Defined for Global Reset only
-            const ALLOWED_TABLES = ['access_logs', 'student_profiles', 'ip_profiles', 'blocked_users', 'assessments', 'subjects', 'timetables'];
+            // Order is important for FK constraints: Delete children first!
+            const ALLOWED_TABLES = [
+                'access_logs',
+                'blocked_users',
+                'ip_profiles',
+                'cookie_profiles',
+                'performance_assessments', // Corrected name
+                'student_profiles',
+                // Removed zombie tables: 'timetables', 'subjects'
+            ];
 
             if (tableName === 'ALL') {
-                // Truncate ALL Allowed Tables
-                const tablesToTruncate = ALLOWED_TABLES; // Use predefined list for safety
-
-                // Construct Batch
+                // Drop ALL Allowed Tables & Re-hydrate
                 const batchStatements = [
                     env.DB.prepare("PRAGMA foreign_keys = OFF")
                 ];
 
-                for (const t of tablesToTruncate) {
-                    batchStatements.push(env.DB.prepare(`DELETE FROM ${t}`));
-                    // Reset Sequence (Only if table exists)
-                    if (sequenceTableExists && t !== 'ip_profiles' && t !== 'student_profiles') {
+                // 1. Drop Tables
+                for (const t of ALLOWED_TABLES) {
+                    batchStatements.push(env.DB.prepare(`DROP TABLE IF EXISTS ${t}`));
+                    // Also clear sequence
+                    if (sequenceTableExists) {
                         batchStatements.push(env.DB.prepare(`DELETE FROM sqlite_sequence WHERE name = '${t}'`));
                     }
                 }
+
+                // 2. Re-hydrate Schemas (Create Tables) -> REMOVED per user request
+                // The system is designed to be "Zero-Config" / "Anti-Fragile".
+                // Each API endpoint (middleware, assessment, etc.) is responsible for creating its own tables if missing.
 
                 batchStatements.push(env.DB.prepare("PRAGMA foreign_keys = ON"));
 
                 await env.DB.batch(batchStatements);
 
-                return new Response(JSON.stringify({ success: true, message: `Truncated all tables` }), {
+                return new Response(JSON.stringify({ success: true, message: `Dropped all tables. System will auto-recreate them as needed.` }), {
                     headers: { 'Content-Type': 'application/json' }
                 });
             }
