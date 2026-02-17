@@ -751,11 +751,7 @@ export default function Admin() {
                                                 )}
                                             </TableCell>
                                             <TableCell>{user.lastAccess ? new Date(user.lastAccess).toLocaleString() : '-'}</TableCell>
-                                            <TableCell>
-                                                ) : (
-                                                <span className="text-gray-400 text-xs">-</span>
-                                                )}
-                                            </TableCell>
+
                                             <TableCell>
                                                 {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
                                                     <div className="flex gap-2">
