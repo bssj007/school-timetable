@@ -39,30 +39,33 @@ export const onRequest = async (context: any) => {
 
                 let tablesToDrop = allTables.map((r: any) => r.name);
 
-                // Sort: Dependent Tables (Children) FIRST, Parent Tables LAST
-                // This prevents FK errors if PRAGMA foreign_keys = OFF fails in D1 batch
-                const FIRST_DROP = ['ip_profiles', 'cookie_profiles', 'performance_assessments', 'access_logs', 'blocked_users', 'timetables'];
-                const LAST_DROP = ['student_profiles', 'subjects'];
+                // STRICT SORTING: Children -> Parents
+                // 1. Tables known to have Foreign Keys (MUST drop first)
+                const TIER_1_CHILDREN = ['ip_profiles', 'cookie_profiles'];
+                // 2. Tables that are Parents (MUST drop last)
+                const TIER_3_PARENTS = ['student_profiles'];
+                // 3. Everything else (TIER 2)
 
                 tablesToDrop.sort((a: string, b: string) => {
-                    const aFirst = FIRST_DROP.includes(a);
-                    const bFirst = FIRST_DROP.includes(b);
-                    const aLast = LAST_DROP.includes(a);
-                    const bLast = LAST_DROP.includes(b);
-
-                    if (aFirst && !bFirst) return -1;
-                    if (!aFirst && bFirst) return 1;
-                    if (aLast && !bLast) return 1;
-                    if (!aLast && bLast) return -1;
-                    return 0;
+                    const aTier = TIER_1_CHILDREN.includes(a) ? 1 : (TIER_3_PARENTS.includes(a) ? 3 : 2);
+                    const bTier = TIER_1_CHILDREN.includes(b) ? 1 : (TIER_3_PARENTS.includes(b) ? 3 : 2);
+                    return aTier - bTier;
                 });
 
+                // Execute PRAGMA separately to ensure it applies (best effort)
+                try {
+                    await env.DB.prepare("PRAGMA foreign_keys = OFF").run();
+                } catch (e) {
+                    console.warn("PRAGMA foreign_keys = OFF failed (might be ignored)", e);
+                }
+
                 // Construct Batch
+                // Re-add PRAGMA inside batch just in case it's session-scoped per batch
                 const batchStatements = [
                     env.DB.prepare("PRAGMA foreign_keys = OFF")
                 ];
 
-                // 1. Drop Tables
+                // 1. Drop Tables in Order
                 for (const t of tablesToDrop) {
                     batchStatements.push(env.DB.prepare(`DROP TABLE IF EXISTS "${t}"`));
                     // Also clear sequence
@@ -71,9 +74,7 @@ export const onRequest = async (context: any) => {
                     }
                 }
 
-                // 2. Re-hydrate Schemas (Create Tables) -> REMOVED per user request
-                // The system is designed to be "Zero-Config" / "Anti-Fragile".
-                // Each API endpoint (middleware, assessment, etc.) is responsible for creating its own tables if missing.
+                // 2. Re-hydrate Schemas -> REMOVED
 
                 batchStatements.push(env.DB.prepare("PRAGMA foreign_keys = ON"));
 

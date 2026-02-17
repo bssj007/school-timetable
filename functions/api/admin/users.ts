@@ -46,7 +46,35 @@ export const onRequest = async (context: any) => {
 
             query += `ORDER BY ip_profiles.lastAccess DESC`;
 
-            const { results: profiles } = await env.DB.prepare(query).all();
+            let profiles = [];
+            try {
+                const { results } = await env.DB.prepare(query).all();
+                profiles = results;
+            } catch (e: any) {
+                if (e.message && e.message.includes("no such table") && e.message.includes("performance_assessments")) {
+                    // Auto-create table if missing (to fix subquery error)
+                    await env.DB.prepare(`
+                        CREATE TABLE IF NOT EXISTS performance_assessments (
+                          id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          subject TEXT NOT NULL,
+                          title TEXT NOT NULL,
+                          description TEXT,
+                          dueDate TEXT NOT NULL,
+                          grade INTEGER NOT NULL,
+                          classNum INTEGER NOT NULL,
+                          classTime INTEGER,
+                          isDone INTEGER DEFAULT 0,
+                          createdAt TEXT DEFAULT (datetime('now')),
+                          lastModifiedIp TEXT
+                        )
+                    `).run();
+                    // Retry
+                    const { results } = await env.DB.prepare(query).all();
+                    profiles = results;
+                } else {
+                    throw e;
+                }
+            }
 
             // 2. Fetch Blocked Users
             let blockedUsers: any[] = [];
