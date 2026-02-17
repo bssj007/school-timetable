@@ -128,7 +128,8 @@ export const onRequestPost = async (context: any) => {
     }
 
     if (!response.ok) {
-        return new Response(JSON.stringify({ error: "Kakao API Error", details: result }), { status: response.status });
+        const errorDetail = result.msg || result.error_description || JSON.stringify(result);
+        return new Response(JSON.stringify({ error: `Kakao API Error: ${errorDetail}`, details: result }), { status: response.status });
     }
 
     return new Response(JSON.stringify({ success: true, result }), { status: 200 });

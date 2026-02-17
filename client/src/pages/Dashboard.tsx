@@ -247,15 +247,32 @@ export default function Dashboard() {
     refetchInterval: 2000,
   });
 
-  // 현재 주에 해당하는 수행평가만 필터링
+  // 현재 주에 해당하는 수행평가만 필터링 및 정렬
   const assessments = useMemo(() => {
     if (!allAssessments) return [];
+
+    // 1. Filter by Week
     const filtered = allAssessments.filter(a => isDateInWeek(a.dueDate, weekDates));
-    console.log('[Assessments Filter]', {
+
+    // 2. Sort: Date ASC -> Period (classTime) ASC
+    filtered.sort((a, b) => {
+      // Date Comparison
+      const dateA = new Date(a.dueDate).getTime();
+      const dateB = new Date(b.dueDate).getTime();
+      if (dateA !== dateB) return dateA - dateB;
+
+      // Period Comparison (If same date)
+      // Treat null/undefined classTime as larger (end of list)
+      const periodA = a.classTime || 99;
+      const periodB = b.classTime || 99;
+      return periodA - periodB;
+    });
+
+    console.log('[Assessments Filter & Sort]', {
       weekRange: `${toDateString(weekDates[0])} ~ ${toDateString(weekDates[4])}`,
       totalAssessments: allAssessments.length,
       filteredAssessments: filtered.length,
-      filtered: filtered.map(a => ({ subject: a.subject, date: a.dueDate, classTime: a.classTime }))
+      sorted: filtered.map(a => ({ subject: a.subject, date: a.dueDate, classTime: a.classTime }))
     });
     return filtered;
   }, [allAssessments, weekDates]);
