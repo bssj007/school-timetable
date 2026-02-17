@@ -24,26 +24,24 @@ export const onRequest = async (context: any) => {
             return new Response(JSON.stringify({ error: "Table name is required" }), { status: 400 });
         }
 
-        // White-list restriction removed to allow deleting/truncating any table
-        // const ALLOWED_TABLES = ...
-
         try {
             // Check if sqlite_sequence exists (to safely reset auto-increments)
-            const sequenceTableExists = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'").first();
+            const sequenceTableExists = await env.DB.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='sqlite_sequence'").first();
 
             if (tableName === 'ALL') {
                 // 1. Get ALL current tables
+                // Filter out sqlite_*, _cf_*, d1_*, and any other internal system tables
                 const { results: allTables } = await env.DB.prepare(
-                    "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                    "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%'"
                 ).all();
 
                 let tablesToDrop = allTables.map((r: any) => r.name);
 
                 // STRICT SORTING: Children -> Parents
                 // 1. Tables known to have Foreign Keys (MUST drop first)
-                const TIER_1_CHILDREN = ['ip_profiles', 'cookie_profiles'];
+                const TIER_1_CHILDREN = ['ip_profiles', 'cookie_profiles', 'performance_assessments', 'access_logs'];
                 // 2. Tables that are Parents (MUST drop last)
-                const TIER_3_PARENTS = ['student_profiles'];
+                const TIER_3_PARENTS = ['student_profiles', 'subjects'];
                 // 3. Everything else (TIER 2)
 
                 tablesToDrop.sort((a: string, b: string) => {
@@ -52,35 +50,46 @@ export const onRequest = async (context: any) => {
                     return aTier - bTier;
                 });
 
-                // Execute PRAGMA separately to ensure it applies (best effort)
+                // SEQUENTIAL EXECUTION (No Batch) for strict ordering assurance
+                const executedSteps = [];
+
+                // Force FK OFF
                 try {
                     await env.DB.prepare("PRAGMA foreign_keys = OFF").run();
                 } catch (e) {
-                    console.warn("PRAGMA foreign_keys = OFF failed (might be ignored)", e);
+                    console.warn("Pragma OFF failed", e);
                 }
 
-                // Construct Batch
-                // Re-add PRAGMA inside batch just in case it's session-scoped per batch
-                const batchStatements = [
-                    env.DB.prepare("PRAGMA foreign_keys = OFF")
-                ];
-
-                // 1. Drop Tables in Order
                 for (const t of tablesToDrop) {
-                    batchStatements.push(env.DB.prepare(`DROP TABLE IF EXISTS "${t}"`));
-                    // Also clear sequence
-                    if (sequenceTableExists) {
-                        batchStatements.push(env.DB.prepare(`DELETE FROM sqlite_sequence WHERE name = '${t}'`));
+                    try {
+                        // Re-run Pragma before each drop just in case
+                        await env.DB.prepare("PRAGMA foreign_keys = OFF").run();
+
+                        await env.DB.prepare(`DROP TABLE IF EXISTS "${t}"`).run();
+                        executedSteps.push(`Dropped ${t}`);
+
+                        // Clean sequence
+                        if (sequenceTableExists) {
+                            try {
+                                await env.DB.prepare(`DELETE FROM sqlite_sequence WHERE name = '${t}'`).run();
+                            } catch (ignore) { }
+                        }
+                    } catch (dropError: any) {
+                        console.error(`Failed to drop ${t}:`, dropError);
+                        executedSteps.push(`FAILED ${t}: ${dropError.message}`);
                     }
                 }
 
-                // 2. Re-hydrate Schemas -> REMOVED
+                // Try to turn FK back ON
+                try {
+                    await env.DB.prepare("PRAGMA foreign_keys = ON").run();
+                } catch (e) { }
 
-                batchStatements.push(env.DB.prepare("PRAGMA foreign_keys = ON"));
-
-                await env.DB.batch(batchStatements);
-
-                return new Response(JSON.stringify({ success: true, message: `Dropped all tables. System will auto-recreate them as needed.` }), {
+                return new Response(JSON.stringify({
+                    success: true,
+                    message: `Dropped all tables (Sequential Mode). System will auto-recreate them.`,
+                    details: executedSteps
+                }), {
                     headers: { 'Content-Type': 'application/json' }
                 });
             }
