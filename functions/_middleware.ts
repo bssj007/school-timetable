@@ -96,58 +96,23 @@ export const onRequest = async (context: any) => {
             }
 
 
-            // 2. Dynamic Profile Creation (student_profiles)
+            // 2. Dynamic Profile Creation Helper
             // NEW SCHEMA: Use 4-digit studentNumber as PK (e.g. 1101, 3524)
-            // This replaces the old auto-increment ID and separates grade/class logic
-            let targetStudentNumber: number | null = null;
-
-            if (grade && classNum && studentNumber) {
+            const ensureStudentProfile = async (sNum: number) => {
                 try {
-                    const g = parseInt(grade);
-                    const c = parseInt(classNum);
-                    const n = parseInt(studentNumber);
-
-                    if (!isNaN(g) && !isNaN(c) && !isNaN(n)) {
-                        // Construct 4-digit ID: G C NN (e.g. 1 1 01 -> 1101)
-                        // Note: ClassNum can be 2 digits (10~15), so we need 1-2-05 format?
-                        // User request: "1st digit is grade, second digit is classrum 3rd and 4th digit is personal number"
-                        // Wait, if class is 10, 11, 12, this format (G C NN) might break if C is single digit in concept but double in reality.
-                        // However, assuming standard Korean high school:
-                        // Grade: 1-3
-                        // Class: 1-15 (usually)
-                        // If class is 2 digits, "second digit is classrum" breaks. 
-                        // Let's assume the user implies a standard 4 digit format like: G C NN is NOT enough for class > 9.
-                        // Standard format is usually G CC NN (5 digits) or just sequential.
-                        // BUT User said: "1st digit is grade, second digit is classrum 3rd and 4th digit is personal number"
-                        // This implies class is 1-9 only? Or maybe hex? 
-                        // Let's look at the user request again: "1st digit is grade, second digit is classrum 3rd and 4th digit is personal number"
-                        // Use existing logic: `const idStr = ${g}${c}${n.toString().padStart(2, '0')}` was used before.
-                        // If class is 12, it becomes 11201 (5 digits).
-                        // If the user insists on 4 digits, class must be < 10.
-                        // "Abolish ID, grade, classnum... 4 digit studentNumber contains both grade, classrum and student profile"
-
-                        // Let's stick to the generated ID logic but treat it as the "studentNumber" PK.
-                        // If it goes above 4 digits (e.g. Class 12), so be it. It's an Integer.
-
-                        const idStr = `${g}${c}${n.toString().padStart(2, '0')}`;
-                        targetStudentNumber = parseInt(idStr);
-
-                        // Upsert Student Profile
-                        // We do NOT store grade/class anymore. catch-all content column remains.
-                        await env.DB.prepare(`
-                            INSERT INTO student_profiles (studentNumber, lastModified) 
-                            VALUES (?, datetime('now'))
-                            ON CONFLICT(studentNumber) 
-                            DO UPDATE SET lastModified = datetime('now')
-                        `).bind(targetStudentNumber).run();
-                    }
+                    // Upsert Student Profile
+                    await env.DB.prepare(`
+                        INSERT INTO student_profiles (studentNumber, lastModified) 
+                        VALUES (?, datetime('now'))
+                        ON CONFLICT(studentNumber) 
+                        DO UPDATE SET lastModified = datetime('now')
+                    `).bind(sNum).run();
+                    return true;
                 } catch (e: any) {
                     console.error("[Middleware] Student Profile Upsert Failed:", e);
-
                     if (e.message && e.message.includes("no such table")) {
                         console.log("[Middleware] Creating student_profiles table (New Schema)");
                         try {
-                            // NEW SCHEMA
                             await env.DB.prepare(`
                                 CREATE TABLE IF NOT EXISTS student_profiles (
                                     studentNumber INTEGER PRIMARY KEY,
@@ -155,24 +120,38 @@ export const onRequest = async (context: any) => {
                                     lastModified TEXT
                                 )
                             `).run();
-
                             // Retry Insert
-                            if (targetStudentNumber) {
-                                await env.DB.prepare(`
-                                    INSERT INTO student_profiles (studentNumber, lastModified) 
-                                    VALUES (?, datetime('now'))
-                                    ON CONFLICT(studentNumber) 
-                                    DO UPDATE SET lastModified = datetime('now')
-                                `).bind(targetStudentNumber).run();
-                            }
+                            await env.DB.prepare(`
+                                INSERT INTO student_profiles (studentNumber, lastModified) 
+                                VALUES (?, datetime('now'))
+                                ON CONFLICT(studentNumber) 
+                                DO UPDATE SET lastModified = datetime('now')
+                            `).bind(sNum).run();
+                            return true;
                         } catch (createError) {
                             console.error("[Middleware] Create student_profiles Failed:", createError);
-                            targetStudentNumber = null;
                         }
-                    } else {
-                        targetStudentNumber = null;
                     }
+                    return false;
                 }
+            };
+
+            // Calculate Target ID
+            let targetStudentNumber: number | null = null;
+            if (grade && classNum && studentNumber) {
+                const g = parseInt(grade);
+                const c = parseInt(classNum);
+                const n = parseInt(studentNumber);
+                if (!isNaN(g) && !isNaN(c) && !isNaN(n)) {
+                    const idStr = `${g}${c}${n.toString().padStart(2, '0')}`;
+                    targetStudentNumber = parseInt(idStr);
+                }
+            }
+
+            // Execute Step 2
+            if (targetStudentNumber !== null) {
+                const success = await ensureStudentProfile(targetStudentNumber);
+                if (!success) targetStudentNumber = null;
             }
 
             // 3. Update IP Profile (Link to studentNumber)
@@ -180,29 +159,13 @@ export const onRequest = async (context: any) => {
                 // Check if IP profile exists
                 // We want to update: studentNumber (link), kakaoInfo, userAgent, lastAccess
 
-                let query = `
-                    INSERT INTO ip_profiles (ip, studentNumber, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent)
-                    VALUES (?, ?, ?, ?, datetime('now'), 0, ?)
-                    ON CONFLICT(ip) DO UPDATE SET
-                        lastAccess = datetime('now'),
-                        userAgent = excluded.userAgent,
-                        studentNumber = excluded.studentNumber,
-                        kakaoId = COALESCE(excluded.kakaoId, ip_profiles.kakaoId),
-                        kakaoNickname = COALESCE(excluded.kakaoNickname, ip_profiles.kakaoNickname)
-                `;
-
-                // If existing, we might want to increment editCount only on specific actions, 
-                // but simpler to just upsert for linking.
+                // If existing, we might want to increment editCount only on specific actions.
                 // Note: editCount logic was:
                 // if (['POST', 'DELETE'].includes(request.method) && url.pathname.startsWith('/api/assessment'))
 
-                // Let's preserve editCount increment logic
-                // But we can't easily do "value + 1" in upsert if we are binding a specific value for other fields.
-                // Actually we can: modificationCount = ip_profiles.modificationCount + (CASE WHEN ? THEN 1 ELSE 0 END)
-
                 const isEditAction = (['POST', 'DELETE', 'PATCH', 'PUT'].includes(request.method) && url.pathname.startsWith('/api/assessment'));
 
-                query = `
+                const query = `
                     INSERT INTO ip_profiles (ip, studentNumber, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent)
                     VALUES (?, ?, ?, ?, datetime('now'), ?, ?)
                     ON CONFLICT(ip) DO UPDATE SET
@@ -217,15 +180,45 @@ export const onRequest = async (context: any) => {
                 const increment = isEditAction ? 1 : 0;
                 // Initial insert modificationCount is increment if it's an edit, else 0.
 
-                await env.DB.prepare(query).bind(
-                    ip,
-                    targetStudentNumber,
-                    kakaoId,
-                    kakaoNickname,
-                    increment, // Initial value
-                    userAgent,
-                    increment // Increment value for update
-                ).run();
+                const executeLink = async (sNum: number | null) => {
+                    await env.DB.prepare(query).bind(
+                        ip,
+                        sNum,
+                        kakaoId,
+                        kakaoNickname,
+                        increment, // Initial value
+                        userAgent,
+                        increment // Increment value for update
+                    ).run();
+                };
+
+                try {
+                    await executeLink(targetStudentNumber);
+                } catch (e: any) {
+                    // CRITICAL FIX: Graceful Fallback for Foreign Key Violation
+                    // If student_profiles entry is missing, the linking will fail. 
+                    if (targetStudentNumber !== null && (e.message && (e.message.includes("FOREIGN KEY") || e.message.includes("constraint")))) {
+                        console.warn(`[Middleware] FK Violation for student ${targetStudentNumber}. Attempting repair...`);
+
+                        // REPAIR STRATEGY: Try to create the student profile again
+                        const repairSuccess = await ensureStudentProfile(targetStudentNumber);
+
+                        if (repairSuccess) {
+                            try {
+                                console.log(`[Middleware] Repair successful. Retrying link...`);
+                                await executeLink(targetStudentNumber);
+                                return; // Success!
+                            } catch (retryError) {
+                                console.warn(`[Middleware] Link retry failed after repair.`);
+                            }
+                        }
+
+                        console.warn(`[Middleware] Fallback to NULL link.`);
+                        await executeLink(null);
+                    } else {
+                        throw e; // Re-throw (will be caught by outer try-catch for auto-migration)
+                    }
+                }
             };
 
             try {
