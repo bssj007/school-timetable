@@ -212,6 +212,62 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
         }
     };
 
+    const handleDeleteRow = async (row: any) => {
+        if (!confirm("정말로 이 항목을 삭제하시겠습니까?")) return;
+
+        // Determine PK
+        const pk = row.id || row.ip;
+        if (!pk) {
+            toast.error("삭제할 수 없는 항목입니다 (ID 없음).");
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/admin/database?table=${activeTable}&id=${pk}`, {
+                method: "DELETE",
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                toast.success("삭제되었습니다.");
+                // Refresh
+                runQuery(`SELECT * FROM ${activeTable} LIMIT 100`, true); // quiet refresh
+            } else {
+                toast.error("삭제 실패: " + data.error);
+            }
+        } catch (e: any) {
+            toast.error("삭제 중 오류 발생: " + e.message);
+        }
+    };
+
+    const handleTruncateTable = async (tableName: string) => {
+        const userInput = prompt(`정말로 [${tableName}] 테이블의 모든 데이터를 삭제하시겠습니까?\n확인을 위해 'DELETE'를 입력하세요.`);
+        if (userInput !== 'DELETE') {
+            if (userInput) toast.error("입력값이 일치하지 않아 취소되었습니다.");
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/admin/database?table=${tableName}`, {
+                method: "DELETE", // No ID = Truncate
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                toast.success("테이블이 초기화되었습니다.");
+                if (activeTable === tableName) {
+                    runQuery(`SELECT * FROM ${activeTable} LIMIT 100`, false);
+                }
+            } else {
+                toast.error("초기화 실패: " + data.error);
+            }
+        } catch (e: any) {
+            toast.error("초기화 중 오류 발생: " + e.message);
+        }
+    };
+
     const fetchSettings = async (background = false) => {
         if (!background) setIsSettingsLoading(true);
         try {
@@ -264,14 +320,27 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                 <ScrollArea className="h-full">
                                     <div className="flex flex-col p-1 gap-1">
                                         {mainTables.map(t => (
-                                            <Button
-                                                key={t}
-                                                variant={activeTable === t ? "secondary" : "ghost"}
-                                                className="justify-start font-mono text-xs h-7 px-2 w-full"
-                                                onClick={() => handleTableClick(t)}
-                                            >
-                                                {t}
-                                            </Button>
+                                            <div key={t} className="flex items-center gap-1 w-full group">
+                                                <Button
+                                                    variant={activeTable === t ? "secondary" : "ghost"}
+                                                    className="justify-start font-mono text-xs h-7 px-2 flex-1 overflow-hidden text-ellipsis"
+                                                    onClick={() => handleTableClick(t)}
+                                                >
+                                                    {t}
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600 hover:bg-red-50"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleTruncateTable(t);
+                                                    }}
+                                                    title="테이블 비우기"
+                                                >
+                                                    <Trash2 className="w-3 h-3" />
+                                                </Button>
+                                            </div>
                                         ))}
 
                                         {otherTables.length > 0 && (
@@ -351,9 +420,14 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                                             <TableRow key={i}>
                                                                 <TableCell className="text-center p-1">
                                                                     {row.id && (
-                                                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditClick(row)}>
-                                                                            <Edit className="h-3 w-3" />
-                                                                        </Button>
+                                                                        <div className="flex gap-1">
+                                                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500 hover:text-blue-700" onClick={() => handleEditClick(row)}>
+                                                                                <Edit className="h-3 w-3" />
+                                                                            </Button>
+                                                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-700" onClick={() => handleDeleteRow(row)}>
+                                                                                <Trash2 className="h-3 w-3" />
+                                                                            </Button>
+                                                                        </div>
                                                                     )}
                                                                 </TableCell>
                                                                 {Object.values(row).map((val: any, j) => (

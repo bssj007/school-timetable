@@ -125,17 +125,33 @@ export const onRequest = async (context: any) => {
                     const n = parseInt(studentNumber);
 
                     if (!isNaN(g) && !isNaN(c) && !isNaN(n)) {
-                        const idStr = `${g}${c}${n.toString().padStart(2, '0')}`;
-                        studentId = parseInt(idStr);
+                        // 1. Check for valid existing profile first (handles legacy IDs)
+                        const existing = await env.DB.prepare("SELECT id FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?").bind(g, c, n).first();
 
-                        await env.DB.prepare(`
-                            INSERT INTO student_profiles (id, updatedAt, grade, classNum, studentNumber) 
-                            VALUES (?, datetime('now'), ?, ?, ?)
-                            ON CONFLICT(id) 
-                            DO UPDATE SET updatedAt = datetime('now')
-                        `).bind(studentId, g, c, n).run();
+                        if (existing) {
+                            studentId = existing.id as number;
+                            // Update timestamp
+                            await env.DB.prepare("UPDATE student_profiles SET updatedAt = datetime('now') WHERE id = ?").bind(studentId).run();
+                        } else {
+                            // 2. Create New (Deterministic ID)
+                            const idStr = `${g}${c}${n.toString().padStart(2, '0')}`;
+                            studentId = parseInt(idStr);
+
+                            await env.DB.prepare(`
+                                INSERT INTO student_profiles (id, updatedAt, grade, classNum, studentNumber) 
+                                VALUES (?, datetime('now'), ?, ?, ?)
+                                ON CONFLICT(id) 
+                                DO UPDATE SET updatedAt = datetime('now')
+                            `).bind(studentId, g, c, n).run();
+                        }
                     }
                 } catch (e: any) {
+                    console.error("[Middleware] Student Profile Creation Failed:", e);
+
+                    // IF student profile creation failed, we MUST NOT try to link it in cookie_profiles
+                    // otherwise we get a FOREIGN KEY constraint failure.
+                    // However, if the error is "no such table", we handle it and retry.
+
                     if (e.message && e.message.includes("no such table")) {
                         console.log("[Middleware] Creating student_profiles table");
                         try {
@@ -150,6 +166,7 @@ export const onRequest = async (context: any) => {
                                     UNIQUE(grade, classNum, studentNumber)
                                 )
                             `).run();
+
                             // Retry Insert
                             if (studentId) {
                                 const g = parseInt(grade);
@@ -163,15 +180,20 @@ export const onRequest = async (context: any) => {
                                 `).bind(studentId, g, c, n).run();
                             }
                         } catch (createError) {
-                            console.error("[Middleware] Create student_profiles Failed:", createError);
+                            console.error("[Middleware] Create student_profiles Failed (Retry):", createError);
+                            studentId = null; // Fallback: Don't link if retry fails
                         }
+                    } else {
+                        // Other error (e.g. Constraint violation not handling ID?)
+                        // If we can't ensure the student profile exists, we shouldn't link to it.
+                        studentId = null;
                     }
                 }
             }
 
-            // 3. Update Cookie Profile (with Auto-Creation)
-            const updateCookieProfile = async () => {
-                const existing = await env.DB.prepare("SELECT modificationCount FROM cookie_profiles WHERE client_id = ?").bind(clientId).first();
+            // 3. Update IP Profile (Back to IP-based tracking)
+            const updateIpProfile = async () => {
+                const existing = await env.DB.prepare("SELECT modificationCount FROM ip_profiles WHERE ip = ?").bind(ip).first();
                 let modCount = existing ? (existing.modificationCount as number) : 0;
 
                 if (['POST', 'DELETE'].includes(request.method) && url.pathname.startsWith('/api/assessment')) {
@@ -179,21 +201,17 @@ export const onRequest = async (context: any) => {
                 }
 
                 let query = `
-                    INSERT INTO cookie_profiles (client_id, ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent, grade, classNum, studentNumber)
-                    VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?)
-                    ON CONFLICT(client_id) DO UPDATE SET
+                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent)
+                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?)
+                    ON CONFLICT(ip) DO UPDATE SET
                         lastAccess = datetime('now'),
-                        ip = excluded.ip,
                         userAgent = excluded.userAgent,
                         modificationCount = ?,
-                        kakaoId = COALESCE(excluded.kakaoId, cookie_profiles.kakaoId),
-                        kakaoNickname = COALESCE(excluded.kakaoNickname, cookie_profiles.kakaoNickname),
-                        grade = COALESCE(excluded.grade, cookie_profiles.grade),
-                        classNum = COALESCE(excluded.classNum, cookie_profiles.classNum),
-                        studentNumber = COALESCE(excluded.studentNumber, cookie_profiles.studentNumber)
+                        kakaoId = COALESCE(excluded.kakaoId, ip_profiles.kakaoId),
+                        kakaoNickname = COALESCE(excluded.kakaoNickname, ip_profiles.kakaoNickname)
                 `;
 
-                const binds: any[] = [clientId, ip, studentId, kakaoId, kakaoNickname, modCount, userAgent, grade, classNum, studentNumber, modCount];
+                const binds: any[] = [ip, studentId, kakaoId, kakaoNickname, modCount, userAgent, modCount];
 
                 if (studentId) {
                     query += `, student_profile_id = ?`;
@@ -204,14 +222,14 @@ export const onRequest = async (context: any) => {
             };
 
             try {
-                await updateCookieProfile();
+                await updateIpProfile();
             } catch (e: any) {
                 if (e.message && e.message.includes("no such table")) {
-                    console.log("[Middleware] Creating cookie_profiles table");
+                    console.log("[Middleware] Creating ip_profiles table");
                     try {
                         await env.DB.prepare(`
-                            CREATE TABLE IF NOT EXISTS cookie_profiles (
-                                client_id TEXT PRIMARY KEY,
+                            CREATE TABLE IF NOT EXISTS ip_profiles (
+                                ip TEXT PRIMARY KEY,
                                 student_profile_id INTEGER,
                                 kakaoId TEXT,
                                 kakaoNickname TEXT,
@@ -219,20 +237,16 @@ export const onRequest = async (context: any) => {
                                 modificationCount INTEGER DEFAULT 0,
                                 userAgent TEXT,
                                 instructionDismissed INTEGER DEFAULT 0,
-                                ip TEXT,
-                                grade INTEGER,
-                                classNum INTEGER,
-                                studentNumber INTEGER,
                                 FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
                             )
                         `).run();
                         // Retry update
-                        await updateCookieProfile();
+                        await updateIpProfile();
                     } catch (migrationError) {
-                        console.error("[Middleware] Migration Failed for cookie_profiles:", migrationError);
+                        console.error("[Middleware] Migration Failed for ip_profiles:", migrationError);
                     }
                 } else {
-                    console.error("Cookie Profile Update Error", e);
+                    console.error("IP Profile Update Error", e);
                 }
             }
 

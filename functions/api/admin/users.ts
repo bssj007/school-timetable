@@ -21,19 +21,15 @@ export const onRequest = async (context: any) => {
             // 1. Fetch Profiles
             let query = `
                 SELECT 
-                    client_id,
                     ip, 
+                    student_profile_id, 
                     kakaoId, 
                     kakaoNickname, 
                     lastAccess, 
                     modificationCount, 
                     userAgent,
-                    instructionDismissed, 
-                    student_profile_id,
-                    grade,
-                    classNum,
-                    studentNumber
-                FROM cookie_profiles
+                    instructionDismissed
+                FROM ip_profiles
             `;
 
             if (range === '24h') {
@@ -76,7 +72,7 @@ export const onRequest = async (context: any) => {
             // 3. Transform to Profile format
             const activeUsers = profiles.map((p: any) => {
                 const profile = {
-                    clientId: p.client_id,
+                    clientId: p.ip, // Use IP as Client ID
                     ip: p.ip,
                     kakaoAccounts: p.kakaoId ? [{ kakaoId: p.kakaoId, kakaoNickname: p.kakaoNickname || '(알 수 없음)' }] : [],
                     isBlocked: false,
@@ -84,9 +80,9 @@ export const onRequest = async (context: any) => {
                     modificationCount: p.modificationCount || 0,
                     lastAccess: p.lastAccess,
                     recentUserAgents: p.userAgent ? [p.userAgent] : [],
-                    grade: p.grade,
-                    classNum: p.classNum,
-                    studentNumber: p.studentNumber,
+                    grade: null, // Joined later if needed
+                    classNum: null,
+                    studentNumber: null,
                     instructionDismissed: !!p.instructionDismissed,
                     assessments: [],
                     logs: [],

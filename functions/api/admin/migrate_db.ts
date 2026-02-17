@@ -34,54 +34,31 @@ export const onRequest = async (context: any) => {
 
         // 9. student_profiles Table
         try {
-            // FORCE RESET for Schema Change (Simpilified 4-digit ID)
+            // FORCE RESET for Schema Change
             await env.DB.prepare("DROP TABLE IF EXISTS student_profiles").run();
-            // Drop ip_profiles too because of FK
+            // Drop deprecated ip_profiles
             await env.DB.prepare("DROP TABLE IF EXISTS ip_profiles").run();
 
             await env.DB.prepare(`
                 CREATE TABLE IF NOT EXISTS student_profiles (
-                    student_id INTEGER PRIMARY KEY, -- 4-digit ID (e.g., 1102)
+                    id INTEGER PRIMARY KEY,
+                    grade INTEGER NOT NULL,
+                    classNum INTEGER NOT NULL,
+                    studentNumber INTEGER,
                     electives TEXT,
-                    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                    updatedAt TEXT DEFAULT (datetime('now')),
+                    UNIQUE(grade, classNum, studentNumber)
                 )
             `).run();
 
-            results.push("Checked/Created student_profiles table (Simplified)");
+            results.push("Checked/Created student_profiles table (Updated Schema)");
         } catch (e: any) {
             results.push(`Error creating student_profiles: ${e.message}`);
         }
 
-        // 10. ip_profiles Table
-        try {
-            await env.DB.prepare(`
-                CREATE TABLE IF NOT EXISTS ip_profiles (
-                    ip VARCHAR(45) PRIMARY KEY,
-                    student_id INTEGER,
-                    kakaoId VARCHAR(255),
-                    kakaoNickname VARCHAR(255),
-                    lastAccess TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                    modificationCount INTEGER DEFAULT 0,
-                    userAgent TEXT,
-                    instructionDismissed INTEGER DEFAULT 0,
-                    FOREIGN KEY (student_id) REFERENCES student_profiles(student_id)
-                )
-            `).run();
-
-            // Populate from access_logs (Basic info only)
-            try {
-                await env.DB.prepare(`
-                    INSERT OR IGNORE INTO ip_profiles (ip, lastAccess, userAgent, kakaoId, kakaoNickname)
-                    SELECT ip, MAX(accessedAt), userAgent, kakaoId, kakaoNickname
-                    FROM access_logs
-                    GROUP BY ip
-                `).run();
-            } catch (e) { }
-
-            results.push("Checked/Created ip_profiles table (Simplified)");
-        } catch (e: any) {
-            results.push(`Error creating ip_profiles: ${e.message}`);
-        }
+        // 10. ip_profiles Table (DEPRECATED)
+        // Logic removed to prevent dynamic creation as requested.
+        results.push("Skipped ip_profiles (Deprecated)");
 
         return new Response(JSON.stringify({ success: true, results }), {
             headers: { 'Content-Type': 'application/json' }

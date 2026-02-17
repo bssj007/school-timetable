@@ -21,46 +21,17 @@ CREATE TABLE IF NOT EXISTS ip_profiles (
     FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
 );
 
--- 3. Populate student_profiles from access_logs
-INSERT OR IGNORE INTO student_profiles (grade, classNum, studentNumber)
-SELECT DISTINCT grade, classNum, studentNumber
-FROM access_logs
-WHERE grade IS NOT NULL AND classNum IS NOT NULL;
+-- 3. Populate student_profiles (REMOVED for Dynamic Creation)
+-- INSERT OR IGNORE INTO student_profiles ...
 
--- 4. Populate ip_profiles from access_logs (Basic info only)
-INSERT OR IGNORE INTO ip_profiles (ip, lastAccess, userAgent, kakaoId, kakaoNickname)
-SELECT ip, MAX(accessedAt), userAgent, kakaoId, kakaoNickname
-FROM access_logs
-GROUP BY ip;
+-- 4. Populate ip_profiles (REMOVED for Dynamic Creation)
+-- INSERT OR IGNORE INTO ip_profiles ...
 
--- 5. Link ip_profiles to student_profiles based on most recent log with student info
--- This uses a subquery to find the latest valid student info for each IP
-UPDATE ip_profiles
-SET student_profile_id = (
-    SELECT sp.id
-    FROM student_profiles sp
-    JOIN (
-        SELECT ip, grade, classNum, studentNumber
-        FROM access_logs al
-        WHERE al.ip = ip_profiles.ip 
-          AND al.grade IS NOT NULL 
-          AND al.classNum IS NOT NULL
-        ORDER BY al.accessedAt DESC
-        LIMIT 1
-    ) recent_log ON sp.grade = recent_log.grade 
-                 AND sp.classNum = recent_log.classNum 
-                 AND (sp.studentNumber = recent_log.studentNumber OR (sp.studentNumber IS NULL AND recent_log.studentNumber IS NULL))
-);
+-- 5. Link ip_profiles (REMOVED)
+-- UPDATE ip_profiles ...
 
--- 6. Calculate Modification Count (POST/DELETE on /api/assessment)
-UPDATE ip_profiles
-SET modificationCount = (
-    SELECT COUNT(*)
-    FROM access_logs
-    WHERE access_logs.ip = ip_profiles.ip
-      AND (method = 'POST' OR method = 'DELETE')
-      AND endpoint LIKE '/api/assessment%'
-);
+-- 6. Calculate Modification Count (REMOVED)
+-- UPDATE ip_profiles ...
 
 -- 7. Drop users table as requested
 DROP TABLE IF EXISTS users;

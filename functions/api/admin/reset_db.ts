@@ -24,6 +24,10 @@ export const onRequestPost = async (context: any) => {
         }
 
         // 2. Drop Tables (Dynamic Factory Reset)
+
+        // Disable Foreign Keys to allow dropping tables in any order
+        await env.DB.prepare("PRAGMA foreign_keys = OFF").run();
+
         // Fetch all table names
         const { results } = await env.DB.prepare(
             "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != '_cf_KV'"

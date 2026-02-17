@@ -14,6 +14,54 @@ export const onRequest = async (context: any) => {
         return new Response(JSON.stringify({ error: "Database configuration missing" }), { status: 500 });
     }
 
+    if (request.method === 'DELETE') {
+        const url = new URL(request.url);
+        const tableName = url.searchParams.get('table');
+        const id = url.searchParams.get('id');
+
+        if (!tableName) {
+            return new Response(JSON.stringify({ error: "Table name is required" }), { status: 400 });
+        }
+
+        // White-list tables to prevent SQL injection or deletion of system tables
+        const ALLOWED_TABLES = ['access_logs', 'student_profiles', 'ip_profiles', 'blocked_users', 'assessments', 'subjects', 'timetables'];
+        if (!ALLOWED_TABLES.includes(tableName)) {
+            return new Response(JSON.stringify({ error: "Invalid table name" }), { status: 400 });
+        }
+
+        try {
+            if (id) {
+                // Delete Specific Row
+                // Note: ip_profiles uses 'ip' as PK, others use 'id'.
+                let pkColumn = 'id';
+                if (tableName === 'ip_profiles') pkColumn = 'ip';
+
+                await env.DB.prepare(`DELETE FROM ${tableName} WHERE ${pkColumn} = ?`).bind(id).run();
+                return new Response(JSON.stringify({ success: true, message: `Deleted row ${id} from ${tableName}` }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            } else {
+                // Truncate Table
+                await env.DB.prepare(`DELETE FROM ${tableName}`).run();
+
+                // Reset Auto-Increment if applicable
+                if (tableName !== 'ip_profiles' && tableName !== 'student_profiles') {
+                    try {
+                        await env.DB.prepare(`DELETE FROM sqlite_sequence WHERE name = ?`).bind(tableName).run();
+                    } catch (e) {
+                        // Ignore if sqlite_sequence doesn't exist or other error
+                    }
+                }
+
+                return new Response(JSON.stringify({ success: true, message: `Truncated ${tableName}` }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+        } catch (err: any) {
+            return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+        }
+    }
+
     if (request.method !== "POST") {
         return new Response("Method not allowed", { status: 405 });
     }

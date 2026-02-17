@@ -75,20 +75,15 @@ export async function runMigrations() {
             )
         `);
 
-        // 5. IP Profiles
+        // 5. IP Profiles (DEPRECATED - Removed to prevent dynamic creation)
+        /*
         await db.execute(sql`
             CREATE TABLE IF NOT EXISTS ip_profiles (
                 ip VARCHAR(45) PRIMARY KEY,
-                student_id INT,
-                kakaoId VARCHAR(255),
-                kakaoNickname VARCHAR(255),
-                lastAccess TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                modificationCount INT DEFAULT 0,
-                userAgent VARCHAR(500),
-                instructionDismissed BOOLEAN DEFAULT FALSE,
-                FOREIGN KEY (student_id) REFERENCES student_profiles(student_id) ON DELETE SET NULL
+                ...
             )
         `);
+        */
 
         // Drop legacy table
         // await db.execute(sql`DROP TABLE IF EXISTS users`); // Optional: keep for safety or drop
