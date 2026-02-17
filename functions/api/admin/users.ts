@@ -19,7 +19,7 @@ export const onRequest = async (context: any) => {
             const range = url.searchParams.get('range') || '24h'; // '24h' | '7d' | 'all'
 
             // 1. Fetch Profiles
-            // 1. Fetch Profiles with Student Info
+            // 1. Fetch Profiles with Student Info and Dynamic Modification Count
             let query = `
                 SELECT 
                     ip_profiles.ip, 
@@ -27,7 +27,7 @@ export const onRequest = async (context: any) => {
                     ip_profiles.kakaoId, 
                     ip_profiles.kakaoNickname, 
                     ip_profiles.lastAccess, 
-                    ip_profiles.modificationCount, 
+                    (SELECT COUNT(*) FROM performance_assessments WHERE lastModifiedIp = ip_profiles.ip) as modificationCount,
                     ip_profiles.userAgent,
                     ip_profiles.instructionDismissed,
                     student_profiles.grade,

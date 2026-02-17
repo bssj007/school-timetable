@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Loader2, Play, Database, RefreshCw, Trash2, Edit, Save, Settings, PlayCircle, ChevronDown } from "lucide-react";
+import { Loader2, Play, Database, RefreshCw, Trash2, Edit, Save, Settings, PlayCircle, ChevronDown, Search } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
@@ -39,10 +39,24 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
         auto_delete_enabled: false,
         hide_past_assessments: false,
         retention_days_assessments: '30',
-        retention_days_logs: '30'
+        retention_days_logs: '30',
+        retention_days_others: '30'
     });
     const [isSettingsLoading, setIsSettingsLoading] = useState(false);
     const [isCleanupRunning, setIsCleanupRunning] = useState(false);
+
+    const [isCleanupRunning, setIsCleanupRunning] = useState(false);
+
+    // Search State
+    const [searchQuery, setSearchQuery] = useState("");
+
+    const filteredResults = results.filter(row => {
+        if (!searchQuery) return true;
+        const query = searchQuery.toLowerCase();
+        return Object.values(row).some(val =>
+            String(val).toLowerCase().includes(query)
+        );
+    });
 
     // Initial Load: List Tables
     useEffect(() => {
@@ -85,7 +99,8 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                     auto_delete_enabled: String(currentSettings.auto_delete_enabled),
                     hide_past_assessments: String(currentSettings.hide_past_assessments),
                     retention_days_assessments: String(currentSettings.retention_days_assessments),
-                    retention_days_logs: String(currentSettings.retention_days_logs)
+                    retention_days_logs: String(currentSettings.retention_days_logs),
+                    retention_days_others: String(currentSettings.retention_days_others)
                 })
             });
             if (!res.ok) {
@@ -293,7 +308,8 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                     auto_delete_enabled: data.auto_delete_enabled !== 'false',
                     hide_past_assessments: data.hide_past_assessments === 'true',
                     retention_days_assessments: data.retention_days_assessments || '30',
-                    retention_days_logs: data.retention_days_logs || '30'
+                    retention_days_logs: data.retention_days_logs || '30',
+                    retention_days_others: data.retention_days_others || '30'
                 });
             }
         } catch (e) {
@@ -425,6 +441,22 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                             </Card>
 
                             <Card className="flex-1 min-h-0 flex flex-col">
+                                <CardHeader className="py-2 px-3 border-b border-gray-100 min-h-[40px] flex flex-row items-center justify-between">
+                                    <div className="flex items-center gap-2 w-full max-w-sm">
+                                        <div className="relative w-full">
+                                            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400" />
+                                            <Input
+                                                placeholder="결과 내 검색..."
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                className="h-7 text-xs pl-7 w-full bg-gray-50 focus:bg-white transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="text-xs text-gray-400 font-mono ml-2 whitespace-nowrap">
+                                        {results.length > 0 ? `${filteredResults.length} / ${results.length} rows` : '0 rows'}
+                                    </div>
+                                </CardHeader>
                                 <CardContent className="flex-1 min-h-0 p-0">
                                     {results.length > 0 ? (
                                         <ScrollArea className="h-full w-full">
@@ -439,7 +471,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
-                                                        {results.map((row, i) => (
+                                                        {filteredResults.map((row, i) => (
                                                             <TableRow key={i}>
                                                                 <TableCell className="text-center p-1">
                                                                     {(row.id || row.ip) && (
@@ -517,6 +549,19 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                                 onChange={(e) => updateSetting('retention_days_logs', e.target.value)}
                                                 disabled={!settings.auto_delete_enabled}
                                             />
+                                        </div>
+                                        <div className="space-y-2 flex flex-col items-start text-left">
+                                            <Label htmlFor="retention-others">기타 사용자 보관 기간 (일)</Label>
+                                            <Input
+                                                id="retention-others"
+                                                type="number"
+                                                value={settings.retention_days_others}
+                                                onChange={(e) => updateSetting('retention_days_others', e.target.value)}
+                                                disabled={!settings.auto_delete_enabled}
+                                            />
+                                            <p className="text-[10px] text-gray-400">
+                                                * 기타 사용자: 학년/반 정보가 없거나 브라우저 정보가 불분명한 사용자 (기본 30일)
+                                            </p>
                                         </div>
                                     </div>
 

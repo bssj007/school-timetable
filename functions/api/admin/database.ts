@@ -23,13 +23,16 @@ export const onRequest = async (context: any) => {
             return new Response(JSON.stringify({ error: "Table name is required" }), { status: 400 });
         }
 
-        // White-list tables to prevent SQL injection or deletion of system tables
-        const ALLOWED_TABLES = ['access_logs', 'student_profiles', 'ip_profiles', 'blocked_users', 'assessments', 'subjects', 'timetables'];
-        if (tableName !== 'ALL' && !ALLOWED_TABLES.includes(tableName)) {
-            return new Response(JSON.stringify({ error: "Invalid table name" }), { status: 400 });
-        }
+        // White-list restriction removed to allow deleting/truncating any table
+        // const ALLOWED_TABLES = ...
 
         try {
+            // Check if sqlite_sequence exists (to safely reset auto-increments)
+            const sequenceTableExists = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'").first();
+
+            // Defined for Global Reset only
+            const ALLOWED_TABLES = ['access_logs', 'student_profiles', 'ip_profiles', 'blocked_users', 'assessments', 'subjects', 'timetables'];
+
             if (tableName === 'ALL') {
                 // Truncate ALL Allowed Tables
                 const tablesToTruncate = ALLOWED_TABLES.filter(t => t !== 'ALL');
@@ -41,8 +44,8 @@ export const onRequest = async (context: any) => {
 
                 for (const t of tablesToTruncate) {
                     batchStatements.push(env.DB.prepare(`DELETE FROM ${t}`));
-                    // Reset Sequence
-                    if (t !== 'ip_profiles' && t !== 'student_profiles') {
+                    // Reset Sequence (Only if table exists)
+                    if (sequenceTableExists && t !== 'ip_profiles' && t !== 'student_profiles') {
                         batchStatements.push(env.DB.prepare(`DELETE FROM sqlite_sequence WHERE name = '${t}'`));
                     }
                 }
@@ -76,11 +79,11 @@ export const onRequest = async (context: any) => {
                 ]);
 
                 // Reset Auto-Increment if applicable
-                if (tableName !== 'ip_profiles' && tableName !== 'student_profiles') {
+                if (sequenceTableExists && tableName !== 'ip_profiles' && tableName !== 'student_profiles') {
                     try {
                         await env.DB.prepare(`DELETE FROM sqlite_sequence WHERE name = ?`).bind(tableName).run();
                     } catch (e) {
-                        // Ignore if sqlite_sequence doesn't exist or other error
+                        // Ignore
                     }
                 }
 

@@ -19,10 +19,12 @@ export async function performCleanup(db: any) {
 
         const retentionDaysAssessments = parseInt(settings.retention_days_assessments || '30');
         const retentionDaysLogs = parseInt(settings.retention_days_logs || '30');
+        const retentionDaysOthers = parseInt(settings.retention_days_others || '30');
         // delete_past_assessments feature removed
 
         let deletedAssessments = 0;
         let deletedLogs = 0;
+        let deletedOthers = 0;
 
         // 1. Cleanup Assessments
         // Delete items created older than retention period
@@ -47,15 +49,80 @@ export async function performCleanup(db: any) {
         const logResult = await db.prepare(logQuery).run();
         deletedLogs = logResult.meta.changes;
 
+        // 3. Cleanup "Other" Users
+        // Rule: Delete ip_profiles older than retention period AND classified as "Other"
+        // "Other" = (No Student Profile OR Incomplete Student Profile) OR (Unknown User Agent)
+        // We check lastAccess.
+
+        // Define "Known User Agent" keywords (same as frontend)
+        const uaKeywords = ['Mozilla', 'Chrome', 'Safari', 'Firefox', 'Edge', 'Opera', 'Whale', 'Kakao', 'iPhone', 'Android'];
+        const uaCheckClause = uaKeywords.map(k => `userAgent NOT LIKE '%${k}%'`).join(' AND ');
+
+        const otherUserQuery = `
+            DELETE FROM ip_profiles
+            WHERE lastAccess < datetime('now', '+9 hours', '-${retentionDaysOthers} days')
+            AND (
+                student_profile_id IS NULL
+                OR (
+                    SELECT COUNT(*) FROM student_profiles 
+                    WHERE id = ip_profiles.student_profile_id 
+                    AND (grade IS NULL OR classNum IS NULL)
+                ) > 0
+            )
+            AND (
+                userAgent IS NULL 
+                OR (${uaCheckClause})
+            )
+        `;
+
+        // Note: The logic for "Other" on frontend is: 
+        // "Other" = NOT (KnownUA AND HasInfo)
+        // So "Other" = (NOT KnownUA) OR (NOT HasInfo)
+        // My query above implements: (NOT HasInfo) AND (NOT KnownUA). 
+        // Wait, strictly speaking "Other" includes "Normal PCs without Info".
+        // If I want to delete "Other", I should delete ANYONE who falls into the "Other" category.
+
+        // Correction:
+        // "Other" users are those who are NOT "Known Users".
+        // Known User = (Has Known UA) AND (Has Grade/Class Info).
+        // Therefore, Other User = (NOT Has Known UA) OR (NOT Has Grade/Class Info).
+
+        // So the query should be OR between the UA check and the Info check.
+
+        const otherUserQueryCorrected = `
+            DELETE FROM ip_profiles
+            WHERE lastAccess < datetime('now', '+9 hours', '-${retentionDaysOthers} days')
+            AND (
+                (
+                    userAgent IS NULL 
+                    OR (${uaCheckClause})
+                )
+                OR 
+                (
+                    student_profile_id IS NULL
+                    OR (
+                        SELECT COUNT(*) FROM student_profiles 
+                        WHERE id = ip_profiles.student_profile_id 
+                        AND (grade IS NULL OR classNum IS NULL)
+                    ) > 0
+                )
+            )
+        `;
+
+        const otherResult = await db.prepare(otherUserQueryCorrected).run();
+        deletedOthers = otherResult.meta.changes;
+
         return {
             success: true,
             deleted: {
                 assessments: deletedAssessments,
-                logs: deletedLogs
+                logs: deletedLogs,
+                others: deletedOthers
             },
             config: {
                 retentionDaysAssessments,
-                retentionDaysLogs
+                retentionDaysLogs,
+                retentionDaysOthers
             }
         };
 

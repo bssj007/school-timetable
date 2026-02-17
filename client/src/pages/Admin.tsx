@@ -682,13 +682,13 @@ export default function Admin() {
                                 <SelectContent>
                                     <SelectItem value="24h">최근 24시간</SelectItem>
                                     <SelectItem value="7d">최근 1주일</SelectItem>
-                                    <SelectItem value="all">전체 기록</SelectItem>
+                                    <SelectItem value="all">전체 사용자</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                         <Card>
                             <CardHeader>
-                                <CardTitle>활성 사용자 ({timeRange === '24h' ? '최근 24시간' : timeRange === '7d' ? '최근 1주일' : '전체 기록'})</CardTitle>
+                                <CardTitle>활성 사용자 ({timeRange === '24h' ? '최근 24시간' : timeRange === '7d' ? '최근 1주일' : '전체 사용자'})</CardTitle>
                                 <CardDescription>
                                     최근 접속한 IP 및 카카오 계정 목록입니다.
                                 </CardDescription>
@@ -702,7 +702,10 @@ export default function Admin() {
                                         const knownKeywords = ['Mozilla', 'Chrome', 'Safari', 'Firefox', 'Edge', 'Opera', 'Whale', 'Kakao', 'iPhone', 'Android'];
                                         const hasKnownUA = user.recentUserAgents.some(ua => knownKeywords.some(keyword => ua.includes(keyword)));
 
-                                        return hasKnownUA;
+                                        // 2. Check Grade/Class (Must be present per user request)
+                                        const hasInfo = !!(user.grade && user.classNum);
+
+                                        return hasKnownUA && hasInfo;
                                     };
 
                                     const activeUsers = userData?.activeUsers || [];
