@@ -60,6 +60,24 @@ export const onRequest = async (context: any) => {
         // Logic removed to prevent dynamic creation as requested.
         results.push("Skipped ip_profiles (Deprecated)");
 
+        // 11. kakao_tokens Table
+        try {
+            await env.DB.prepare(`
+                CREATE TABLE IF NOT EXISTS kakao_tokens (
+                    id INTEGER PRIMARY KEY,
+                    kakaoId TEXT NOT NULL UNIQUE,
+                    accessToken TEXT NOT NULL,
+                    refreshToken TEXT,
+                    updatedAt TEXT DEFAULT (datetime('now')) NOT NULL
+                )
+            `).run();
+            // Create Index
+            await env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_kakao_tokens_kakaoId ON kakao_tokens(kakaoId)`).run();
+            results.push("Checked/Created kakao_tokens table");
+        } catch (e: any) {
+            results.push(`Error creating kakao_tokens: ${e.message}`);
+        }
+
         return new Response(JSON.stringify({ success: true, results }), {
             headers: { 'Content-Type': 'application/json' }
         });

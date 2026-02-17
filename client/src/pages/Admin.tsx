@@ -780,16 +780,59 @@ export default function Admin() {
                                                                     if (response.ok && data.success) {
                                                                         alert('캘린더 일정이 등록되었습니다. (카카오톡 알림 발송됨)');
                                                                     } else {
-                                                                        alert('실패: ' + (data.error || JSON.stringify(data)));
+                                                                        const errorMessage = data.error || data.message || JSON.stringify(data);
+                                                                        const errorDetails = data.details ? `\n상세: ${JSON.stringify(data.details)}` : '';
+                                                                        alert(`실패: ${errorMessage}${errorDetails}`);
                                                                     }
-                                                                } catch (error) {
-                                                                    alert('오류 발생');
+                                                                } catch (error: any) {
+                                                                    const msg = error instanceof Error ? error.message : String(error);
+                                                                    alert(`오류 발생: ${msg}`);
                                                                     console.error(error);
                                                                 }
                                                             }}
                                                         >
                                                             <Calendar className="h-4 w-4 mr-1" />
                                                             캘린더
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+                                                            title="할 일(Task) 등록"
+                                                            onClick={async () => {
+                                                                if (!confirm("이 사용자에게 '수행평가 태스크'를 등록하시겠습니까?\n(카카오톡 톡캘린더/Jordy에서 확인 가능)")) return;
+
+                                                                const targetKakaoId = user.kakaoAccounts![0].kakaoId;
+                                                                try {
+                                                                    const response = await fetch('/api/admin/users/task', {
+                                                                        method: 'POST',
+                                                                        headers: {
+                                                                            'Content-Type': 'application/json',
+                                                                            'X-Admin-Password': password
+                                                                        },
+                                                                        body: JSON.stringify({
+                                                                            kakaoId: targetKakaoId,
+                                                                            title: "🔔 수행평가 할 일 체크",
+                                                                            description: "관리자 할 일(Task) 등록 테스트"
+                                                                        })
+                                                                    });
+                                                                    const data = await response.json();
+                                                                    if (response.ok && data.success) {
+                                                                        alert('태스크(할 일)가 등록되었습니다.');
+                                                                    } else {
+                                                                        const errorMessage = data.error || data.message || JSON.stringify(data);
+                                                                        const errorDetails = data.details ? `\n상세: ${JSON.stringify(data.details)}` : '';
+                                                                        alert(`실패: ${errorMessage}${errorDetails}`);
+                                                                    }
+                                                                } catch (error: any) {
+                                                                    const msg = error instanceof Error ? error.message : String(error);
+                                                                    alert(`오류 발생: ${msg}`);
+                                                                    console.error(error);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <CheckSquare className="h-4 w-4 mr-1" />
+                                                            태스크
                                                         </Button>
                                                         <Button
                                                             variant="outline"

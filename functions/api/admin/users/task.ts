@@ -17,7 +17,7 @@ export const onRequestPost = async (context: any) => {
         } catch (e) {
             return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400 });
         }
-        const { kakaoId, title = "📅 수행평가 알림", description = "관리자가 보낸 알림입니다." } = body;
+        const { kakaoId, title = "📅 수행평가 태스크", description = "관리자 알림" } = body;
 
         if (!kakaoId) {
             return new Response(JSON.stringify({ error: "Missing kakaoId" }), { status: 400 });
@@ -37,57 +37,46 @@ export const onRequestPost = async (context: any) => {
         let accessToken = tokenRecord.accessToken;
         const refreshToken = tokenRecord.refreshToken;
 
-        // 4. Create Event Function
-        async function createCalendarEvent(token: string) {
+        // 4. Create Task Function
+        async function createTask(token: string) {
             try {
-                // Start 1 minute from now to ensure it's "future" but immediate
-                const now = new Date();
-                const start = new Date(now.getTime() + 60 * 1000); // +1 min
-                const end = new Date(now.getTime() + 11 * 60 * 1000); // +11 mins (10 min duration)
+                // Task creation typically requires title.
+                // Using v2 API if available, or finding the standard endpoint.
+                // Based on standard Kakao API structure for tasks.
 
-                // Format to ISO string (UTC) is standard, Kakao usually accepts it or requires 'YYYY-MM-DDTHH:mm:ss' in Access Token User's timezone
-                // Best to use simple ISO string and hope API handles it, or use `start_at`
+                // Note: If v2/create/task doesn't exist, this might fail, but we'll try the standard pattern.
+                // Ref: https://kapi.kakao.com/v2/api/calendar/create/task
 
-                // NOTE: Kakao API params based on documentation
-                // title, start_at, end_at, reminders, etc.
-
-                const eventData = new URLSearchParams();
-                eventData.append('event', JSON.stringify({
+                const taskData = new URLSearchParams();
+                taskData.append('task', JSON.stringify({
                     title: title,
-                    time: {
-                        start_at: start.toISOString(),
-                        end_at: end.toISOString(),
-                        time_zone: "Asia/Seoul",
-                        all_day: false,
-                    },
                     description: description,
-                    reminders: [1], // 1 minute before start (which is basically now)
-                    color: "RED"
+                    // Tasks might not need start/end time in the same way, or use 'due_date'
                 }));
 
-                const response = await fetch('https://kapi.kakao.com/v2/api/calendar/create/event', {
+                const response = await fetch('https://kapi.kakao.com/v2/api/calendar/create/task', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
-                    body: eventData
+                    body: taskData
                 });
                 return response;
             } catch (e: any) {
-                console.error("Kakao Calendar Fetch Error:", e);
+                console.error("Kakao Task Fetch Error:", e);
                 throw e;
             }
         }
 
         let response;
         try {
-            response = await createCalendarEvent(accessToken);
+            response = await createTask(accessToken);
         } catch (e: any) {
             return new Response(JSON.stringify({ error: "Network Error sending to Kakao", details: e.message }), { status: 500 });
         }
 
-        // 5. Handle Token Expiry (401) - Similar to notify.ts
+        // 5. Handle Token Expiry
         if (response.status === 401 && refreshToken) {
             console.log("Access token expired, refreshing...");
             try {
@@ -109,7 +98,7 @@ export const onRequestPost = async (context: any) => {
                         .bind(accessToken, newRefreshToken, kakaoId).run();
 
                     // Retry
-                    response = await createCalendarEvent(accessToken);
+                    response = await createTask(accessToken);
                 }
             } catch (refreshError) {
                 console.error("Error during token refresh:", refreshError);
@@ -126,16 +115,16 @@ export const onRequestPost = async (context: any) => {
 
         if (!response.ok) {
             const errorDetail = result.msg || result.error_description || JSON.stringify(result);
-            // Special handling for missing scope
             if (JSON.stringify(result).includes("scope")) {
-                return new Response(JSON.stringify({ error: "Missing Scope: User needs 'talk_calendar' permission.", details: result }), { status: 403 });
+                return new Response(JSON.stringify({ error: "Missing Scope: User needs 'talk_calendar_task' permission.", details: result }), { status: 403 });
             }
             return new Response(JSON.stringify({ error: `Kakao API Error: ${errorDetail}`, details: result }), { status: response.status });
         }
 
         return new Response(JSON.stringify({ success: true, result }), { status: 200 });
+
     } catch (globalError: any) {
-        console.error("Global Error in calendar.ts:", globalError);
+        console.error("Global Error in task.ts:", globalError);
         return new Response(JSON.stringify({ error: "Internal Server Error", details: globalError.message }), { status: 500 });
     }
 };

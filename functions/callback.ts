@@ -58,11 +58,12 @@ export const onRequest = async (context: any) => {
                  VALUES (?, ?, ?, datetime('now'))
                  ON CONFLICT(kakaoId) DO UPDATE SET 
                  accessToken = excluded.accessToken,
-                 refreshToken = excluded.refreshToken,
+                 refreshToken = COALESCE(excluded.refreshToken, kakao_tokens.refreshToken),
                  updatedAt = datetime('now')`
             ).bind(
                 userInfo.id.toString(),
                 tokenData.access_token,
+                tokenData.refresh_token || null,
                 tokenData.refresh_token || null
             ).run();
         } catch (dbError) {
