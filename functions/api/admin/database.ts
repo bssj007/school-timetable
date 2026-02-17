@@ -62,10 +62,12 @@ export const onRequest = async (context: any) => {
 
                 for (const t of tablesToDrop) {
                     try {
-                        // Re-run Pragma before each drop just in case
-                        await env.DB.prepare("PRAGMA foreign_keys = OFF").run();
+                        // CRITICAL FIX: Use batch to ensure PRAGMA applies to the DROP command in the same execution context
+                        await env.DB.batch([
+                            env.DB.prepare("PRAGMA foreign_keys = OFF"),
+                            env.DB.prepare(`DROP TABLE IF EXISTS "${t}"`)
+                        ]);
 
-                        await env.DB.prepare(`DROP TABLE IF EXISTS "${t}"`).run();
                         executedSteps.push(`Dropped ${t}`);
 
                         // Clean sequence
