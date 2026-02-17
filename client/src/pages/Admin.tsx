@@ -800,7 +800,7 @@ export default function Admin() {
                                                             className="text-blue-500 hover:text-blue-600 hover:bg-blue-50"
                                                             title="할 일(Task) 등록"
                                                             onClick={async () => {
-                                                                if (!confirm("이 사용자에게 '수행평가 태스크'를 등록하시겠습니까?\n(카카오톡 톡캘린더/Jordy에서 확인 가능)")) return;
+                                                                if (!confirm("이 사용자에게 '수행평가 태스크'를 등록하시겠습니까?\n(내일 오전 9시 알림 설정됨)")) return;
 
                                                                 const targetKakaoId = user.kakaoAccounts![0].kakaoId;
                                                                 try {

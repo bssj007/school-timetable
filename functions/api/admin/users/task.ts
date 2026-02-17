@@ -48,8 +48,24 @@ export const onRequestPost = async (context: any) => {
                 // Ref: https://kapi.kakao.com/v2/api/calendar/create/task
 
                 const taskData = new URLSearchParams();
+                // Calculate Due Date: Tomorrow
+                const now = new Date();
+                const tomorrow = new Date(now);
+                tomorrow.setDate(now.getDate() + 1);
+
+                // Format yyyyMMdd
+                const yyyy = tomorrow.getFullYear();
+                const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+                const dd = String(tomorrow.getDate()).padStart(2, '0');
+                const dueDateStr = `${yyyy}${mm}${dd}`;
+
                 taskData.append('task', JSON.stringify({
-                    content: title, // 'title' in our app maps to 'content' in Kakao Task API
+                    content: title,
+                    due_info: {
+                        due_date: dueDateStr,
+                        time_zone: "Asia/Seoul",
+                        alarm_time: "0900" // 9:00 AM
+                    }
                 }));
 
                 const response = await fetch('https://kapi.kakao.com/v1/api/calendar/create/task', {
