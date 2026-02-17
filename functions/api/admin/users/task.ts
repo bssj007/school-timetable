@@ -49,7 +49,7 @@ export const onRequestPost = async (context: any) => {
 
                 const taskData = new URLSearchParams();
                 taskData.append('task', JSON.stringify({
-                    title: title,
+                    content: title, // 'title' in our app maps to 'content' in Kakao Task API
                 }));
 
                 const response = await fetch('https://kapi.kakao.com/v1/api/calendar/create/task', {

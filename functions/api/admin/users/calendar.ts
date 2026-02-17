@@ -40,17 +40,12 @@ export const onRequestPost = async (context: any) => {
         // 4. Create Event Function
         async function createCalendarEvent(token: string) {
             try {
-                // Start at the NEXT 5-minute interval to satisfy "minimum unit of start_at is 5 minutes"
+                // Start at the NEXT 5-minute interval + 10 minutes buffer
+                // This ensures the 5-minute reminder is in the future.
                 const now = new Date();
                 const remainder = 5 - (now.getMinutes() % 5);
-                // Add remainder minutes, and zero out seconds/milliseconds to be clean
-                const start = new Date(now.getTime() + remainder * 60 * 1000);
+                const start = new Date(now.getTime() + (remainder + 10) * 60 * 1000);
                 start.setSeconds(0, 0);
-
-                if (start.getTime() <= now.getTime()) {
-                    // If for some reason equal (shouldn't be with reminder logic unless remainder was 0 and we were exact), add 5 mins
-                    start.setMinutes(start.getMinutes() + 5);
-                }
 
                 const end = new Date(start.getTime() + 10 * 60 * 1000); // 10 min duration
 
@@ -70,7 +65,7 @@ export const onRequestPost = async (context: any) => {
                         all_day: false,
                     },
                     description: description,
-                    reminders: [1], // 1 minute before start (which is basically now)
+                    reminders: [5], // 5 minutes before start (minimum unit allowed is 5)
                     color: "RED"
                 }));
 
