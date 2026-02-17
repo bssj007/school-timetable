@@ -988,7 +988,7 @@ export default function Admin() {
                     </DialogHeader>
 
                     <div className="space-y-4 py-4">
-                        <div className="p-3 bg-gray-50 border rounded-md text-center font-bold text-sm select-all">
+                        <div className="p-3 bg-gray-50 border rounded-md text-center font-bold text-sm select-none">
                             {TARGET_PHRASE}
                         </div>
                         <Input
