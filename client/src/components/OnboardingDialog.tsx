@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,98 +6,31 @@ import { useUserConfig } from "@/contexts/UserConfigContext";
 
 export default function OnboardingDialog() {
     const { isConfigured, setConfig } = useUserConfig();
-    const [grade, setGrade] = useState("");
-    const [classNum, setClassNum] = useState("");
-    const [studentNumber, setStudentNumber] = useState("");
-
-    const classInputRef = useRef<HTMLInputElement>(null);
-    const numberInputRef = useRef<HTMLInputElement>(null);
+    const [studentId, setStudentId] = useState("");
 
     const isOpen = !isConfigured;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (grade && classNum && studentNumber) {
-            // Validate ranges
-            const g = parseInt(grade);
-            const c = parseInt(classNum);
-            const n = parseInt(studentNumber);
+        if (studentId.length === 4) {
+            const grade = studentId[0];
+            const classNum = studentId[1];
+            // 0으로 시작하는 번호 처리 (05 -> 5)
+            const studentNumber = parseInt(studentId.substring(2)).toString();
 
-            if (g >= 1 && g <= 3 && c >= 1 && n >= 1) {
+            if (parseInt(grade) >= 1 && parseInt(grade) <= 3 && parseInt(classNum) >= 1) {
                 setConfig({
                     schoolName: "부산성지고등학교",
                     grade,
                     classNum,
-                    studentNumber: n.toString() // Normalize (e.g., "05" -> "5")
+                    studentNumber
                 });
             } else {
-                alert("올바른 학년, 반, 번호를 입력해주세요.");
+                alert("올바른 학번 형식이 아닙니다. (예: 1102)");
             }
         }
     };
-
-    const handleGradeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value.replace(/[^1-3]/g, ""); // Only 1-3 allowed
-        if (val.length <= 1) {
-            setGrade(val);
-            // Clear subsequent fields
-            if (val !== grade) {
-                setClassNum("");
-                setStudentNumber("");
-            }
-            // Auto-focus next
-            if (val.length === 1) {
-                classInputRef.current?.focus();
-            }
-        }
-    };
-
-    const handleClassChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value.replace(/[^0-9]/g, "");
-        if (val.length <= 2) {
-            setClassNum(val);
-            // Clear subsequent field
-            if (val !== classNum) {
-                setStudentNumber("");
-            }
-            // Auto-focus next if 2 digits (optional, but good for speed)
-            if (val.length === 2) {
-                numberInputRef.current?.focus();
-            }
-        }
-    };
-
-    const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value.replace(/[^0-9]/g, "");
-        if (val.length <= 2) {
-            setStudentNumber(val);
-        }
-    };
-
-    const isComplete = grade.length === 1 && classNum.length >= 1 && studentNumber.length >= 1;
-
-    // Auto-save effect with debounce
-    React.useEffect(() => {
-        if (grade && classNum && studentNumber) {
-            const g = parseInt(grade);
-            const c = parseInt(classNum);
-            const n = parseInt(studentNumber);
-
-            if (g >= 1 && g <= 3 && c >= 1 && n >= 1) {
-                const timer = setTimeout(() => {
-                    setConfig({
-                        schoolName: "부산성지고등학교",
-                        grade,
-                        classNum,
-                        studentNumber: n.toString()
-                    });
-                }, 500); // 500ms debounce
-
-                return () => clearTimeout(timer);
-            }
-        }
-    }, [grade, classNum, studentNumber, setConfig]);
 
     return (
         <Dialog open={isOpen}>
@@ -106,63 +39,36 @@ export default function OnboardingDialog() {
                     <DialogTitle>학번 입력</DialogTitle>
                     <DialogDescription>
                         부산성지고등학교 시간표를 확인하기 위해 학번을 입력해주세요.<br />
-                        학년, 반, 번호를 각각 입력해주세요.
+                        4자리 숫자로 입력해주세요.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-6 pt-6">
-                    <div className="flex gap-4 justify-center">
-                        {/* Grade */}
-                        <div className="flex-1 space-y-2">
-                            <label className="text-sm font-medium leading-none text-center block">
-                                학년
-                            </label>
-                            <Input
-                                value={grade}
-                                onChange={handleGradeChange}
-                                type="text"
-                                inputMode="numeric"
-                                maxLength={1}
-                                placeholder="입력"
-                                className="font-bold text-center text-xl h-14"
-                                autoFocus
-                            />
-                        </div>
-
-                        {/* Class */}
-                        <div className="flex-1 space-y-2">
-                            <label className="text-sm font-medium leading-none text-center block">
-                                반
-                            </label>
-                            <Input
-                                ref={classInputRef}
-                                value={classNum}
-                                onChange={handleClassChange}
-                                type="text"
-                                inputMode="numeric"
-                                maxLength={2}
-                                placeholder="입력"
-                                className="font-bold text-center text-xl h-14"
-                            />
-                        </div>
-
-                        {/* Number */}
-                        <div className="flex-1 space-y-2">
-                            <label className="text-sm font-medium leading-none text-center block">
-                                번호
-                            </label>
-                            <Input
-                                ref={numberInputRef}
-                                value={studentNumber}
-                                onChange={handleNumberChange}
-                                type="text"
-                                inputMode="numeric"
-                                maxLength={2}
-                                placeholder="입력"
-                                className="font-bold text-center text-xl h-14"
-                            />
-                        </div>
+                <form onSubmit={handleSubmit} className="space-y-6 pt-6">
+                    <div className="space-y-3">
+                        <label htmlFor="studentId" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                            학번 (4자리)
+                        </label>
+                        <Input
+                            id="studentId"
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={4}
+                            pattern="\d{4}"
+                            placeholder="예시) 1102 (1학년 1반 02번)"
+                            value={studentId}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                const val = e.target.value.replace(/[^0-9]/g, "");
+                                if (val.length <= 4) setStudentId(val);
+                            }}
+                            className="font-bold text-center text-xl tracking-widest placeholder:font-normal placeholder:tracking-normal placeholder:text-sm h-14"
+                            required
+                            autoFocus
+                        />
                     </div>
-                </div>
+
+                    <Button type="submit" className="w-full h-12 text-lg" disabled={studentId.length !== 4}>
+                        설정 저장
+                    </Button>
+                </form>
             </DialogContent>
         </Dialog>
     );
