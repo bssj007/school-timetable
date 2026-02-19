@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
 import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -634,11 +634,11 @@ export default function Dashboard() {
               {(grade === "2" || grade === "3") && (
                 <Button
                   variant="ghost"
-                  size="icon"
-                  className="md:hidden mr-1 h-8 w-8 text-blue-600 shrink-0"
+                  size="sm"
+                  className="absolute left-1 top-1/2 -translate-y-1/2 md:hidden text-blue-600 font-bold text-xs px-2 h-8 z-10"
                   onClick={() => setShowElectiveDialog(true)}
                 >
-                  <Pencil className="w-5 h-5" />
+                  선택과목
                 </Button>
               )}
 

@@ -62,29 +62,40 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     try {
         const body = await request.json() as any;
+        console.log("Received save request:", body);
         const { grade, classNum, studentNumber, electives } = body;
 
         if (!grade || !classNum || !studentNumber || !electives) {
+            console.error("Missing required fields:", { grade, classNum, studentNumber, electives });
             return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400 });
         }
 
         // Upsert student_profiles
         // SQLite upsert syntax: INSERT ... ON CONFLICT ... DO UPDATE
-        await env.DB.prepare(`
-      INSERT INTO student_profiles (grade, classNum, studentNumber, electives, updatedAt)
-      VALUES (?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(grade, classNum, studentNumber) 
-      DO UPDATE SET electives = excluded.electives, updatedAt = excluded.updatedAt
-    `).bind(
-            grade,
-            classNum,
-            studentNumber,
-            JSON.stringify(electives)
-        ).run();
+        console.log("Executing DB Upsert...");
+        try {
+            await env.DB.prepare(`
+        INSERT INTO student_profiles (grade, classNum, studentNumber, electives, updatedAt)
+        VALUES (?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(grade, classNum, studentNumber) 
+        DO UPDATE SET electives = excluded.electives, updatedAt = excluded.updatedAt
+        `).bind(
+                grade,
+                classNum,
+                studentNumber,
+                JSON.stringify(electives)
+            ).run();
+            console.log("DB Upsert Success");
+        } catch (dbErr: any) {
+            console.error("DB Execution Error:", dbErr);
+            // If table doesn't exist, this will fail.
+            throw new Error(`Database error: ${dbErr.message}`);
+        }
 
         return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
 
     } catch (error: any) {
+        console.error("General Handler Error:", error);
         // @ts-ignore
         return new Response(JSON.stringify({ error: error.message || "Unknown error" }), { status: 500 });
     }

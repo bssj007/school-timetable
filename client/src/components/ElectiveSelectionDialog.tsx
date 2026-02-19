@@ -125,7 +125,10 @@ export default function ElectiveSelectionDialog({
                     electives: selections
                 })
             });
-            if (!res.ok) throw new Error("Failed to save selection");
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || "Failed to save selection");
+            }
             return res.json();
         },
         onSuccess: () => {
@@ -133,8 +136,8 @@ export default function ElectiveSelectionDialog({
             queryClient.invalidateQueries({ queryKey: ['studentProfile'] }); // Invalidate if we have such query
             onSaveSuccess();
         },
-        onError: () => {
-            toast.error("저장 실패");
+        onError: (err) => {
+            toast.error(`저장 실패: ${err.message}`);
         }
     });
 
@@ -142,9 +145,9 @@ export default function ElectiveSelectionDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={() => { }}>
-            <DialogContent className="sm:max-w-[500px] [&>button]:hidden" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+            <DialogContent className="sm:max-w-[500px] md:max-w-2xl [&>button]:hidden" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
                 <DialogHeader>
-                    <DialogTitle>선택과목 선택 ({studentNumber}번)</DialogTitle>
+                    <DialogTitle>선택과목 선택 {grade}{classNum}{studentNumber.padStart(2, '0')}</DialogTitle>
                 </DialogHeader>
 
                 <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto">
