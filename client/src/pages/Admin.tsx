@@ -222,10 +222,27 @@ function ElectiveManager({ password }: { password: string }) {
                                 </TableRow>
                             ) : (
                                 subjects.map((item: any, index: number) => {
-                                    const isDisabled = ["빈교실", "공강"].some(ex => item.subject.includes(ex));
+                                    // Check subject name for keywords (Korean & English)
+                                    const subjectKeyword = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].find(ex => item.subject.includes(ex));
+                                    // Check teacher name for "공강" (often appears as "공강*" or similar)
+                                    const teacherKeyword = ["공강"].find(ex => item.teacher.includes(ex));
+
+                                    const matchedKeyword = subjectKeyword || teacherKeyword;
+                                    const isDisabled = !!matchedKeyword;
+
                                     return (
-                                        <TableRow key={`${item.subject}-${item.teacher}`} className={isDisabled ? "opacity-50 bg-gray-50" : ""}>
-                                            <TableCell className="font-medium">{item.subject}</TableCell>
+                                        <TableRow
+                                            key={`${item.subject}-${item.teacher}`}
+                                            className={isDisabled ? "opacity-50 bg-gray-50 cursor-not-allowed" : ""}
+                                            onClick={() => {
+                                                if (isDisabled) {
+                                                    toast.error(`${matchedKeyword}은(는) 선택할 수 없습니다.`);
+                                                }
+                                            }}
+                                        >
+                                            <TableCell className="font-medium">
+                                                {item.subject}
+                                            </TableCell>
                                             <TableCell className="text-gray-500">{item.teacher}</TableCell>
                                             <TableCell>
                                                 <Select
@@ -233,7 +250,7 @@ function ElectiveManager({ password }: { password: string }) {
                                                     onValueChange={(value: string) => handleInputChange(index, "classCode", value)}
                                                     disabled={isDisabled}
                                                 >
-                                                    <SelectTrigger className="w-[100px]">
+                                                    <SelectTrigger className={`w-[100px] ${isDisabled ? "pointer-events-none" : ""}`}>
                                                         <SelectValue placeholder="선택" />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -249,7 +266,7 @@ function ElectiveManager({ password }: { password: string }) {
                                                     value={item.fullTeacherName}
                                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(index, "fullTeacherName", e.target.value)}
                                                     placeholder="선생님 성함 입력"
-                                                    className="max-w-[200px]"
+                                                    className={`max-w-[200px] ${isDisabled ? "pointer-events-none" : ""}`}
                                                     disabled={isDisabled}
                                                 />
                                             </TableCell>
@@ -258,7 +275,7 @@ function ElectiveManager({ password }: { password: string }) {
                                                     <Button
                                                         variant={item.isMovingClass ? "default" : "outline"}
                                                         size="sm"
-                                                        className={`h-7 text-xs px-2 ${item.isMovingClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"}`}
+                                                        className={`h-7 text-xs px-2 ${item.isMovingClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
                                                         onClick={() => handleInputChange(index, "isMovingClass", true)}
                                                         disabled={isDisabled}
                                                     >
@@ -267,7 +284,7 @@ function ElectiveManager({ password }: { password: string }) {
                                                     <Button
                                                         variant={!item.isMovingClass ? "default" : "outline"}
                                                         size="sm"
-                                                        className={`h-7 text-xs px-2 ${!item.isMovingClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"}`}
+                                                        className={`h-7 text-xs px-2 ${!item.isMovingClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
                                                         onClick={() => handleInputChange(index, "isMovingClass", false)}
                                                         disabled={isDisabled}
                                                     >
