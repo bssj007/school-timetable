@@ -145,7 +145,7 @@ export default function ElectiveSelectionDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={() => { }}>
-            <DialogContent className="sm:max-w-[500px] md:max-w-2xl md:min-h-[600px] md:max-h-[90vh] flex flex-col [&>button]:hidden" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+            <DialogContent className="sm:max-w-[500px] md:max-w-2xl md:min-h-[600px] md:max-h-[90vh] flex flex-col [&>button]:hidden" onPointerDownOutside={(e: any) => e.preventDefault()} onEscapeKeyDown={(e: any) => e.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle>선택과목 선택 - <span className="text-red-500">{grade}{classNum}{studentNumber.padStart(2, '0')}</span></DialogTitle>
                 </DialogHeader>

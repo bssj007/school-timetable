@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +34,7 @@ export default function OnboardingDialog() {
 
     return (
         <Dialog open={isOpen}>
-            <DialogContent className="sm:max-w-[425px] md:max-w-xl md:min-h-[400px] flex flex-col justify-center" onInteractOutside={(e) => e.preventDefault()} showCloseButton={false}>
+            <DialogContent className="sm:max-w-[425px] md:max-w-xl md:min-h-[320px] flex flex-col justify-center" onInteractOutside={(e: any) => e.preventDefault()} showCloseButton={false}>
                 <DialogHeader>
                     <DialogTitle>학번 입력</DialogTitle>
                     <DialogDescription>
@@ -42,8 +42,8 @@ export default function OnboardingDialog() {
                         4자리 숫자로 입력해주세요.
                     </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-                    <div className="space-y-2">
+                <form onSubmit={handleSubmit} className="space-y-6 pt-6">
+                    <div className="space-y-3">
                         <label htmlFor="studentId" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                             학번 (4자리)
                         </label>
@@ -55,17 +55,17 @@ export default function OnboardingDialog() {
                             pattern="\d{4}"
                             placeholder="예시) 1102 (1학년 1반 02번)"
                             value={studentId}
-                            onChange={(e) => {
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                 const val = e.target.value.replace(/[^0-9]/g, "");
                                 if (val.length <= 4) setStudentId(val);
                             }}
-                            className="font-bold text-center text-lg tracking-widest placeholder:font-normal placeholder:tracking-normal placeholder:text-sm"
+                            className="font-bold text-center text-xl tracking-widest placeholder:font-normal placeholder:tracking-normal placeholder:text-sm h-14"
                             required
                             autoFocus
                         />
                     </div>
 
-                    <Button type="submit" className="w-full" disabled={studentId.length !== 4}>
+                    <Button type="submit" className="w-full h-12 text-lg" disabled={studentId.length !== 4}>
                         설정 저장
                     </Button>
                 </form>
