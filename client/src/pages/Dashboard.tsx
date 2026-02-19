@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import ElectiveSelectionDialog from "@/components/ElectiveSelectionDialog";
 
 // 타입 정의
 interface TimetableItem {
@@ -111,9 +112,9 @@ export default function Dashboard() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<AssessmentItem | null>(null);
 
-  import ElectiveSelectionDialog from "@/components/ElectiveSelectionDialog";
 
   // ... previous imports
+
 
   // ... existing code ...
 
@@ -144,7 +145,7 @@ export default function Dashboard() {
   }, [grade, classNum, studentNumber]);
 
   // 1. 시간표 조회
-  -> Moved down
+  // 1. 시간표 조회
   // 시간표 셀 클릭 핸들러
   const handleCellClick = (
     weekdayIdx: number,
@@ -612,11 +613,34 @@ export default function Dashboard() {
           <Card className="py-1 gap-1 md:py-2 md:gap-2">
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
               {/* Desktop Title */}
-              <div className="hidden md:block">
+              <div className="hidden md:flex items-center gap-2">
                 <h1 className="text-2xl font-bold whitespace-nowrap">
                   {grade || '?'}-{classNum || '?'} 시간표
                 </h1>
+                {(grade === "2" || grade === "3") && (
+                  <Button
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700 h-8 text-xs ml-2"
+                    onClick={() => setShowElectiveDialog(true)}
+                  >
+                    <Pencil className="w-3 h-3 mr-1" />
+                    선택과목 수정
+                  </Button>
+                )}
               </div>
+
+
+              {/* Mobile Elective Edit Button */}
+              {(grade === "2" || grade === "3") && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="md:hidden mr-1 h-8 w-8 text-blue-600 shrink-0"
+                  onClick={() => setShowElectiveDialog(true)}
+                >
+                  <Pencil className="w-5 h-5" />
+                </Button>
+              )}
 
               {/* Week Navigation */}
               <div className="flex flex-col items-center justify-center gap-1 w-full md:w-auto md:absolute md:left-1/2 md:-translate-x-1/2">
