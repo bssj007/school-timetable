@@ -147,7 +147,7 @@ export default function ElectiveSelectionDialog({
         <Dialog open={isOpen} onOpenChange={() => { }}>
             <DialogContent className="sm:max-w-[500px] md:max-w-2xl [&>button]:hidden" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
                 <DialogHeader>
-                    <DialogTitle>선택과목 선택 {grade}{classNum}{studentNumber.padStart(2, '0')}</DialogTitle>
+                    <DialogTitle>선택과목 선택 - <span className="text-red-500">{grade}{classNum}{studentNumber.padStart(2, '0')}</span></DialogTitle>
                 </DialogHeader>
 
                 <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto">
