@@ -222,12 +222,11 @@ function ElectiveManager({ password }: { password: string }) {
                                 </TableRow>
                             ) : (
                                 subjects.map((item: any, index: number) => {
-                                    // Check subject name for keywords (Korean & English)
-                                    const subjectKeyword = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].find(ex => item.subject.includes(ex));
-                                    // Check teacher name for "공강" (often appears as "공강*" or similar)
-                                    const teacherKeyword = ["공강"].find(ex => item.teacher.includes(ex));
+                                    // Check subject name for keywords (Korean & English) - removed teacher check as per user request
+                                    // Also checking for potential invisible characters or whitespace
+                                    const subjectKeyword = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].find(ex => item.subject.trim().includes(ex));
 
-                                    const matchedKeyword = subjectKeyword || teacherKeyword;
+                                    const matchedKeyword = subjectKeyword;
                                     const isDisabled = !!matchedKeyword;
 
                                     return (
