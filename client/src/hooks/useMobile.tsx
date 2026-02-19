@@ -8,12 +8,12 @@ export function useIsMobile() {
   );
 
   React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
+    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px) or (hover: none)`);
     const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT || window.matchMedia("(hover: none)").matches);
     };
     mql.addEventListener("change", onChange);
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT || window.matchMedia("(hover: none)").matches);
     return () => mql.removeEventListener("change", onChange);
   }, []);
 
