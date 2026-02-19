@@ -1,8 +1,9 @@
 
-export const PROFILE_TABLES = [
+export const ALL_TABLES = [
     "cookie_profiles",
     "ip_profiles",
-    "student_profiles"
+    "student_profiles",
+    "elective_config"
 ];
 
 export const createStudentProfilesTable = `
@@ -49,20 +50,35 @@ CREATE TABLE IF NOT EXISTS cookie_profiles (
 );
 `;
 
-export async function ensureProfileTables(db: any) {
+export const createElectiveConfigTable = `
+CREATE TABLE IF NOT EXISTS elective_config (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    grade INTEGER NOT NULL,
+    subject TEXT NOT NULL,
+    originalTeacher TEXT NOT NULL,
+    classCode TEXT,
+    fullTeacherName TEXT,
+    isMovingClass INTEGER DEFAULT 0,
+    updatedAt TEXT DEFAULT (datetime('now'))
+);
+`;
+
+export async function ensureAllTables(db: any) {
     try {
         await db.prepare(createStudentProfilesTable).run();
         await db.prepare(createIpProfilesTable).run();
         await db.prepare(createCookieProfilesTable).run();
-        console.log("Profile tables ensured.");
+        await db.prepare(createElectiveConfigTable).run();
+        console.log("All tables ensured.");
     } catch (e) {
-        console.error("Error ensuring profile tables:", e);
+        console.error("Error ensuring tables:", e);
         throw e;
     }
 }
 
-export async function dropProfileTables(db: any) {
-    for (const table of PROFILE_TABLES) {
+export async function dropAllTables(db: any) {
+    for (const table of ALL_TABLES) {
         await db.prepare(`DROP TABLE IF EXISTS ${table}`).run();
     }
 }
+

@@ -1,4 +1,4 @@
-import { ensureProfileTables, dropProfileTables } from "../db_schema";
+import { ensureAllTables, dropAllTables } from "../db_schema";
 
 interface Env {
     DB: D1Database;
@@ -25,6 +25,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const type = url.searchParams.get("type");
 
     try {
+        // Proactively ensure all tables exist (optimistic check)
+        await ensureAllTables(env.DB);
+
         // 1. Fetch Student Profile
         if (type === "student") {
             const grade = url.searchParams.get("grade");
@@ -41,13 +44,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
                 ).bind(grade, classNum, studentNumber).first();
                 return new Response(JSON.stringify(profile || null), { headers: { "Content-Type": "application/json" } });
             } catch (e: any) {
-                // Handle missing table OR missing column (schema mismatch)
-                if (e.message && (e.message.includes("no such table") || e.message.includes("no column named"))) {
-                    console.log("Schema issue detected (" + e.message + "). Recreating tables...");
-                    if (e.message.includes("no column named")) {
-                        await dropProfileTables(env.DB);
-                    }
-                    await ensureProfileTables(env.DB);
+                // Handle missing column (schema mismatch only, table is already ensured)
+                if (e.message && e.message.includes("no column named")) {
+                    console.log("Schema mismatch detected (" + e.message + "). Recreating tables...");
+                    await dropAllTables(env.DB);
+                    await ensureAllTables(env.DB);
 
                     // Retry
                     const profile = await env.DB.prepare(
@@ -65,19 +66,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
             return new Response(JSON.stringify({ error: "Grade is required" }), { status: 400 });
         }
 
-        try {
-            const configs = await env.DB.prepare(
-                "SELECT * FROM elective_config WHERE grade = ? ORDER BY classCode, subject"
-            ).bind(grade).all();
-            return new Response(JSON.stringify(configs.results), { headers: { "Content-Type": "application/json" } });
-        } catch (e: any) {
-            // elective_config might also be missing.
-            // If elective_config is missing, we should probably create it too?
-            // User emphasized "Lists created as needed".
-            // Since I don't have the create script for elective_config in db_schema yet, I'll allow error for now or add it later.
-            // But strict requirement: "Script manages DB".
-            throw e;
-        }
+        const configs = await env.DB.prepare(
+            "SELECT * FROM elective_config WHERE grade = ? ORDER BY classCode, subject"
+        ).bind(grade).all();
+        return new Response(JSON.stringify(configs.results), { headers: { "Content-Type": "application/json" } });
 
     } catch (error: any) {
         return new Response(JSON.stringify({ error: error.message }), { status: 500 });
@@ -88,6 +80,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const { request, env } = context;
 
     try {
+        // Proactively ensure tables
+        await ensureAllTables(env.DB);
+
         const body = await request.json() as any;
         console.log("Received save request:", body);
         const { grade, classNum, studentNumber, electives } = body;
@@ -107,14 +102,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         try {
             await env.DB.prepare(query).bind(grade, classNum, studentNumber, JSON.stringify(electives)).run();
         } catch (dbErr: any) {
-            // Handle table missing OR column missing
-            if (dbErr.message && (dbErr.message.includes("no such table") || dbErr.message.includes("no column named"))) {
-                console.log("Schema issue detected during save (" + dbErr.message + "). Recreating tables...");
-
-                if (dbErr.message.includes("no column named")) {
-                    await dropProfileTables(env.DB);
-                }
-                await ensureProfileTables(env.DB);
+            // Handle schema mismatch (column missing)
+            if (dbErr.message && dbErr.message.includes("no column named")) {
+                console.log("Schema mismatch detected during save (" + dbErr.message + "). Recreating tables...");
+                await dropAllTables(env.DB);
+                await ensureAllTables(env.DB);
 
                 // Retry
                 await env.DB.prepare(query).bind(grade, classNum, studentNumber, JSON.stringify(electives)).run();
