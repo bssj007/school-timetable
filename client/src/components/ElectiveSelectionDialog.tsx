@@ -19,6 +19,7 @@ interface ElectiveConfig {
     subject: string;
     originalTeacher: string;
     fullTeacherName?: string;
+    isMovingClass?: number; // 0 or 1
 }
 
 interface ElectiveSelectionDialogProps {
@@ -60,8 +61,14 @@ export default function ElectiveSelectionDialog({
         const groups: Record<string, ElectiveConfig[]> = {};
 
         electiveConfigs.forEach(config => {
-            if (!groups[config.classCode]) groups[config.classCode] = [];
-            groups[config.classCode].push(config);
+            // Filter out non-moving classes (isMovingClass === 0)
+            // Default to 1 if undefined (legacy or optional)
+            const isMoving = config.isMovingClass !== 0;
+
+            if (isMoving && config.classCode) {
+                if (!groups[config.classCode]) groups[config.classCode] = [];
+                groups[config.classCode].push(config);
+            }
         });
 
         // Sort groups A, B, C...

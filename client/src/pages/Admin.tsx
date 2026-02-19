@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Lock, Settings, Eye, EyeOff, Trash2, Ban, ShieldCheck, TriangleAlert, ChevronDown, ChevronRight, Save, Calendar, CheckSquare } from "lucide-react";
+import { Lock, Eye, EyeOff, Settings, TriangleAlert, BookOpen, ChevronRight, ChevronDown, CheckSquare, Calendar, ShieldCheck, Ban, Search } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import IPProfileViewer from "@/components/IPProfileViewer";
@@ -148,9 +148,32 @@ function ElectiveManager({ password }: { password: string }) {
         }
     };
 
+    const [searchTerm, setSearchTerm] = useState("");
+
     const handleCancel = () => {
         setSubjects(JSON.parse(JSON.stringify(originalSubjects)));
     };
+
+    // Filter subjects based on search term
+    const filteredSubjects = subjects.filter((item: any) => {
+        if (!searchTerm) return true;
+        const lowerTerm = searchTerm.toLowerCase();
+
+        const subjectMatch = item.subject?.toLowerCase().includes(lowerTerm);
+        const teacherMatch = item.teacher?.toLowerCase().includes(lowerTerm);
+        const fullTeacherMatch = item.fullTeacherName?.toLowerCase().includes(lowerTerm);
+        const classCodeMatch = item.classCode?.toLowerCase().includes(lowerTerm);
+
+        // Custom check for "Move O" / "Move X" if user types "이동" or "이동O", "이동X"
+        let moveMatch = false;
+        if (lowerTerm.includes("이동")) {
+            if (lowerTerm.includes("o") && item.isMovingClass) moveMatch = true;
+            else if (lowerTerm.includes("x") && !item.isMovingClass) moveMatch = true;
+            else moveMatch = true; // Just "이동" matches both
+        }
+
+        return subjectMatch || teacherMatch || fullTeacherMatch || classCodeMatch || moveMatch;
+    });
 
     return (
         <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
@@ -174,12 +197,26 @@ function ElectiveManager({ password }: { password: string }) {
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-bold flex items-center gap-2">
+                <div className="flex justify-between items-center gap-4">
+                    <h3 className="text-lg font-bold flex items-center gap-2 shrink-0">
                         <BookOpen className="w-5 h-5" />
                         {selectedGrade}학년 선택과목 목록
                     </h3>
-                    <div className="flex gap-2">
+
+                    {/* Search Bar */}
+                    <div className="flex-1 max-w-sm">
+                        <div className="relative">
+                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+                            <Input
+                                placeholder="검색 (과목, 선생님, 분반, 이동여부...)"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-8"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2 shrink-0">
                         <Button
                             variant="outline"
                             disabled={!hasChanges || isSaving}
@@ -214,14 +251,17 @@ function ElectiveManager({ password }: { password: string }) {
                                         로딩 중...
                                     </TableCell>
                                 </TableRow>
-                            ) : subjects.length === 0 ? (
+                            ) : filteredSubjects.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={5} className="text-center h-24">
-                                        데이터가 없습니다.
+                                        {searchTerm ? "검색 결과가 없습니다." : "데이터가 없습니다."}
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                subjects.map((item: any, index: number) => {
+                                filteredSubjects.map((item: any, index: number) => {
+                                    // Need to find original index to update state correctly
+                                    const originalIndex = subjects.findIndex((s: any) => s.subject === item.subject && s.teacher === item.teacher);
+
                                     // Check subject name for keywords (Korean & English) - removed teacher check as per user request
                                     // Also checking for potential invisible characters or whitespace
                                     const subjectKeyword = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].find(ex => item.subject.trim().includes(ex));
@@ -246,7 +286,7 @@ function ElectiveManager({ password }: { password: string }) {
                                             <TableCell>
                                                 <Select
                                                     value={item.classCode}
-                                                    onValueChange={(value: string) => handleInputChange(index, "classCode", value)}
+                                                    onValueChange={(value: string) => handleInputChange(originalIndex, "classCode", value)}
                                                     disabled={isDisabled}
                                                 >
                                                     <SelectTrigger className={`w-[100px] ${isDisabled ? "pointer-events-none" : ""}`}>
@@ -263,7 +303,7 @@ function ElectiveManager({ password }: { password: string }) {
                                             <TableCell>
                                                 <Input
                                                     value={item.fullTeacherName}
-                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(index, "fullTeacherName", e.target.value)}
+                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(originalIndex, "fullTeacherName", e.target.value)}
                                                     placeholder="선생님 성함 입력"
                                                     className={`max-w-[200px] ${isDisabled ? "pointer-events-none" : ""}`}
                                                     disabled={isDisabled}
@@ -275,7 +315,7 @@ function ElectiveManager({ password }: { password: string }) {
                                                         variant={item.isMovingClass ? "default" : "outline"}
                                                         size="sm"
                                                         className={`h-7 text-xs px-2 ${item.isMovingClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
-                                                        onClick={() => handleInputChange(index, "isMovingClass", true)}
+                                                        onClick={() => handleInputChange(originalIndex, "isMovingClass", true)}
                                                         disabled={isDisabled}
                                                     >
                                                         이동 O
@@ -284,7 +324,7 @@ function ElectiveManager({ password }: { password: string }) {
                                                         variant={!item.isMovingClass ? "default" : "outline"}
                                                         size="sm"
                                                         className={`h-7 text-xs px-2 ${!item.isMovingClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
-                                                        onClick={() => handleInputChange(index, "isMovingClass", false)}
+                                                        onClick={() => handleInputChange(originalIndex, "isMovingClass", false)}
                                                         disabled={isDisabled}
                                                     >
                                                         이동 X
