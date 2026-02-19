@@ -650,7 +650,51 @@ export default function Dashboard() {
 
               {/* Desktop Selectors */}
               <div className="hidden md:flex items-center gap-2">
-                <StudentIdChangeControl className="gap-2" inputClassName="w-[60px] h-10 text-sm font-bold bg-white" />
+                <Select
+                  value={grade}
+                  onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
+                >
+                  <SelectTrigger className="w-[90px] h-10 bg-white px-2 text-sm" style={selectorStyle}>
+                    <SelectValue placeholder="학년" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1학년</SelectItem>
+                    <SelectItem value="2">2학년</SelectItem>
+                    <SelectItem value="3">3학년</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={classNum}
+                  onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
+                >
+                  <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm" style={selectorStyle}>
+                    <SelectValue placeholder="반" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((num) => (
+                      <SelectItem key={num} value={num.toString()}>
+                        {num}반
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={studentNumber}
+                  onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
+                >
+                  <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm" style={selectorStyle}>
+                    <SelectValue placeholder="번호" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
+                      <SelectItem key={num} value={num.toString()}>
+                        {num}번
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </CardHeader>
             <CardContent className="px-1 pb-1 md:px-2 md:pb-2">
