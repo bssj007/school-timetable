@@ -111,6 +111,12 @@ export default function Dashboard() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<AssessmentItem | null>(null);
 
+  import ElectiveSelectionDialog from "@/components/ElectiveSelectionDialog";
+
+  // ... previous imports
+
+  // ... existing code ...
+
   const [formData, setFormData] = useState({
     assessmentDate: "",
     subject: "",
@@ -119,7 +125,26 @@ export default function Dashboard() {
     round: "1",
   });
 
-  // 1. 시간표 조회 -> Moved down
+  const [showElectiveDialog, setShowElectiveDialog] = useState(false);
+
+  // 2, 3학년 선택과목 설정 확인
+  useEffect(() => {
+    if ((grade === "2" || grade === "3") && classNum && studentNumber) {
+      // Check if electives are already set
+      fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`)
+        .then(res => res.json())
+        .then(data => {
+          // If no profile or no electives, show dialog
+          if (!data || !data.electives) {
+            setShowElectiveDialog(true);
+          }
+        })
+        .catch(err => console.error("Failed to check electives", err));
+    }
+  }, [grade, classNum, studentNumber]);
+
+  // 1. 시간표 조회
+  -> Moved down
   // 시간표 셀 클릭 핸들러
   const handleCellClick = (
     weekdayIdx: number,
@@ -1166,6 +1191,18 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      {/* 선택과목 선택 다이얼로그 */}
+      <ElectiveSelectionDialog
+        isOpen={showElectiveDialog}
+        grade={grade}
+        classNum={classNum}
+        studentNumber={studentNumber}
+        onSaveSuccess={() => setShowElectiveDialog(false)}
+        onBack={() => {
+          setShowElectiveDialog(false);
+          setConfig({ studentNumber: "" }); // Go back to student number input
+        }}
+      />
     </div >
   );
 }
