@@ -222,7 +222,7 @@
   }
 }
 
-@media (min-width: 1024px) and (hover: hover) {
+@media (min-width: 1024px) {
   body {
     zoom: 0.9;
   }
