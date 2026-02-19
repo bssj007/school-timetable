@@ -221,62 +221,70 @@ function ElectiveManager({ password }: { password: string }) {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                subjects.map((item: any, index: number) => (
-                                    <TableRow key={`${item.subject}-${item.teacher}`}>
-                                        <TableCell className="font-medium">{item.subject}</TableCell>
-                                        <TableCell className="text-gray-500">{item.teacher}</TableCell>
-                                        <TableCell>
-                                            <Select
-                                                value={item.classCode}
-                                                onValueChange={(value: string) => handleInputChange(index, "classCode", value)}
-                                            >
-                                                <SelectTrigger className="w-[100px]">
-                                                    <SelectValue placeholder="선택" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="none">-</SelectItem>
-                                                    {["A", "B", "C", "D", "E", "F", "G"].map((code) => (
-                                                        <SelectItem key={code} value={code}>{code}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Input
-                                                value={item.fullTeacherName}
-                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(index, "fullTeacherName", e.target.value)}
-                                                placeholder="선생님 성함 입력"
-                                                className="max-w-[200px]"
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-1">
-                                                <Button
-                                                    variant={item.isMovingClass ? "default" : "outline"}
-                                                    size="sm"
-                                                    className={`h-7 text-xs px-2 ${item.isMovingClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"}`}
-                                                    onClick={() => handleInputChange(index, "isMovingClass", true)}
+                                subjects.map((item: any, index: number) => {
+                                    const isDisabled = ["빈교실", "공강"].some(ex => item.subject.includes(ex));
+                                    return (
+                                        <TableRow key={`${item.subject}-${item.teacher}`} className={isDisabled ? "opacity-50 bg-gray-50" : ""}>
+                                            <TableCell className="font-medium">{item.subject}</TableCell>
+                                            <TableCell className="text-gray-500">{item.teacher}</TableCell>
+                                            <TableCell>
+                                                <Select
+                                                    value={item.classCode}
+                                                    onValueChange={(value: string) => handleInputChange(index, "classCode", value)}
+                                                    disabled={isDisabled}
                                                 >
-                                                    이동 O
-                                                </Button>
-                                                <Button
-                                                    variant={!item.isMovingClass ? "default" : "outline"}
-                                                    size="sm"
-                                                    className={`h-7 text-xs px-2 ${!item.isMovingClass ? "bg-red-500 hover:bg-red-600 text-white" : "text-gray-400"}`}
-                                                    onClick={() => handleInputChange(index, "isMovingClass", false)}
-                                                >
-                                                    이동 X
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
-            </div>
-        </div>
+                                                    <SelectTrigger className="w-[100px]">
+                                                        <SelectValue placeholder="선택" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="none">-</SelectItem>
+                                                        {["A", "B", "C", "D", "E", "F", "G", "H", "I"].map((code) => (
+                                                            <SelectItem key={code} value={code}>{code}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Input
+                                                    value={item.fullTeacherName}
+                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(index, "fullTeacherName", e.target.value)}
+                                                    placeholder="선생님 성함 입력"
+                                                    className="max-w-[200px]"
+                                                    disabled={isDisabled}
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-1">
+                                                    <Button
+                                                        variant={item.isMovingClass ? "default" : "outline"}
+                                                        size="sm"
+                                                        className={`h-7 text-xs px-2 ${item.isMovingClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"}`}
+                                                        onClick={() => handleInputChange(index, "isMovingClass", true)}
+                                                        disabled={isDisabled}
+                                                    >
+                                                        이동 O
+                                                    </Button>
+                                                    <Button
+                                                        variant={!item.isMovingClass ? "default" : "outline"}
+                                                        size="sm"
+                                                        className={`h-7 text-xs px-2 ${!item.isMovingClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"}`}
+                                                        onClick={() => handleInputChange(index, "isMovingClass", false)}
+                                                        disabled={isDisabled}
+                                                    >
+                                                        이동 X
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
+                            )
+                            }
+                        </TableBody >
+                    </Table >
+                </div >
+            </div >
+        </div >
     );
 }
 
