@@ -11,13 +11,7 @@ import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, Log
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import StudentIdChangeControl from "@/components/StudentIdChangeControl";
 import ElectiveSelectionDialog from "@/components/ElectiveSelectionDialog";
 
 // 타입 정의
@@ -571,55 +565,7 @@ export default function Dashboard() {
 
         <div className="flex flex-wrap items-center gap-2 justify-end">
           <div className="flex items-center gap-[6px] md:gap-2">
-            <Select
-              value={grade}
-              onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
-            >
-              <SelectTrigger className="w-[80px] md:w-[90px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm" style={selectorStyle}>
-                <SelectValue placeholder="학년" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">1학년</SelectItem>
-                <SelectItem value="2">2학년</SelectItem>
-                <SelectItem value="3">3학년</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <div className="flex items-center gap-1">
-              <Select
-                value={classNum}
-                onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
-              >
-                <SelectTrigger className="w-[70px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm" style={selectorStyle}>
-                  <SelectValue placeholder="반" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
-                    <SelectItem key={num} value={num.toString()}>
-                      {num}반
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center gap-1">
-              <Select
-                value={studentNumber}
-                onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
-              >
-                <SelectTrigger className="w-[70px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm" style={selectorStyle}>
-                  <SelectValue placeholder="번호" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
-                    <SelectItem key={num} value={num.toString()}>
-                      {num}번
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <StudentIdChangeControl className="gap-1 md:gap-2" inputClassName="w-[50px] md:w-[60px] h-9 md:h-10 text-xs md:text-sm font-bold bg-white" />
           </div>
 
           {kakaoUser && (
