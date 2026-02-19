@@ -1,4 +1,4 @@
-import { ensureProfileTables } from "../db_schema";
+import { ensureProfileTables, dropProfileTables } from "../db_schema";
 
 interface Env {
     DB: D1Database;
@@ -41,9 +41,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
                 ).bind(grade, classNum, studentNumber).first();
                 return new Response(JSON.stringify(profile || null), { headers: { "Content-Type": "application/json" } });
             } catch (e: any) {
-                if (e.message && e.message.includes("no such table")) {
-                    console.log("Table missing, creating tables...");
+                // Handle missing table OR missing column (schema mismatch)
+                if (e.message && (e.message.includes("no such table") || e.message.includes("no column named"))) {
+                    console.log("Schema issue detected (" + e.message + "). Recreating tables...");
+                    if (e.message.includes("no column named")) {
+                        await dropProfileTables(env.DB);
+                    }
                     await ensureProfileTables(env.DB);
+
                     // Retry
                     const profile = await env.DB.prepare(
                         "SELECT * FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?"
@@ -66,7 +71,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
             ).bind(grade).all();
             return new Response(JSON.stringify(configs.results), { headers: { "Content-Type": "application/json" } });
         } catch (e: any) {
-            // elective_config might also be missing, but for now dealing with profiles.
+            // elective_config might also be missing.
             // If elective_config is missing, we should probably create it too?
             // User emphasized "Lists created as needed".
             // Since I don't have the create script for elective_config in db_schema yet, I'll allow error for now or add it later.
@@ -102,9 +107,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         try {
             await env.DB.prepare(query).bind(grade, classNum, studentNumber, JSON.stringify(electives)).run();
         } catch (dbErr: any) {
-            if (dbErr.message && dbErr.message.includes("no such table")) {
-                console.log("Table missing during save, creating tables...");
+            // Handle table missing OR column missing
+            if (dbErr.message && (dbErr.message.includes("no such table") || dbErr.message.includes("no column named"))) {
+                console.log("Schema issue detected during save (" + dbErr.message + "). Recreating tables...");
+
+                if (dbErr.message.includes("no column named")) {
+                    await dropProfileTables(env.DB);
+                }
                 await ensureProfileTables(env.DB);
+
                 // Retry
                 await env.DB.prepare(query).bind(grade, classNum, studentNumber, JSON.stringify(electives)).run();
             } else {
