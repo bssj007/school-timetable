@@ -43,7 +43,6 @@ export default function OnboardingDialog() {
             setGrade(val);
             // Clear subsequent fields
             if (val !== grade) {
-                setConfig({ studentNumber: "" }); // Reset config if grade changes? No, just local state for now
                 setClassNum("");
                 setStudentNumber("");
             }
@@ -62,6 +61,7 @@ export default function OnboardingDialog() {
             if (val !== classNum) {
                 setStudentNumber("");
             }
+            // Auto-focus next if 2 digits (optional, but good for speed)
             if (val.length === 2) {
                 numberInputRef.current?.focus();
             }
@@ -77,6 +77,28 @@ export default function OnboardingDialog() {
 
     const isComplete = grade.length === 1 && classNum.length >= 1 && studentNumber.length >= 1;
 
+    // Auto-save effect with debounce
+    React.useEffect(() => {
+        if (grade && classNum && studentNumber) {
+            const g = parseInt(grade);
+            const c = parseInt(classNum);
+            const n = parseInt(studentNumber);
+
+            if (g >= 1 && g <= 3 && c >= 1 && n >= 1) {
+                const timer = setTimeout(() => {
+                    setConfig({
+                        schoolName: "부산성지고등학교",
+                        grade,
+                        classNum,
+                        studentNumber: n.toString()
+                    });
+                }, 500); // 500ms debounce
+
+                return () => clearTimeout(timer);
+            }
+        }
+    }, [grade, classNum, studentNumber, setConfig]);
+
     return (
         <Dialog open={isOpen}>
             <DialogContent className="sm:max-w-[425px] md:max-w-xl md:min-h-[320px] flex flex-col justify-center" onInteractOutside={(e: any) => e.preventDefault()} showCloseButton={false}>
@@ -87,7 +109,7 @@ export default function OnboardingDialog() {
                         학년, 반, 번호를 각각 입력해주세요.
                     </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-6 pt-6">
+                <div className="space-y-6 pt-6">
                     <div className="flex gap-4 justify-center">
                         {/* Grade */}
                         <div className="flex-1 space-y-2">
@@ -140,11 +162,7 @@ export default function OnboardingDialog() {
                             />
                         </div>
                     </div>
-
-                    <Button type="submit" className="w-full h-12 text-lg" disabled={!isComplete}>
-                        설정 저장
-                    </Button>
-                </form>
+                </div>
             </DialogContent>
         </Dialog>
     );
