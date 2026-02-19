@@ -738,13 +738,22 @@ export default function Dashboard() {
                           const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
                           const selectionStyle = isSelected ? "ring-2 ring-blue-500 ring-inset z-10" : "";
 
+                          // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
+                          const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
+
                           return (
                             <td
                               key={weekdayIdx}
                               id={`cell-${weekdayIdx}-${classTime}`}
                               onClick={() => {
-                                if (item && (!isPast || cellAssessments.length > 0)) {
-                                  handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx], cellAssessments);
+                                if (item) {
+                                  if (isSubjectDisabled) {
+                                    toast.error(`${item.subject}은(는) 선택할 수 없습니다.`);
+                                    return;
+                                  }
+                                  if (!isPast || cellAssessments.length > 0) {
+                                    handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx], cellAssessments);
+                                  }
                                 }
                               }}
                               className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors overflow-hidden
