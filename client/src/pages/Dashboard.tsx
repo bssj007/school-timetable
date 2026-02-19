@@ -85,9 +85,24 @@ function isDateInWeek(dateStr: string, weekDates: Date[]): boolean {
   return date >= startDate && date <= endDate;
 }
 
+
+// Helper hook for previous value
+function usePrevious<T>(value: T): T | undefined {
+  const ref = useRef<T>();
+  useEffect(() => {
+    ref.current = value;
+  });
+  return ref.current;
+}
+
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, refreshKakaoUser } = useUserConfig();
+
+  // Create a config object to track previous state
+  const currentConfig = useMemo(() => ({ grade, classNum, studentNumber }), [grade, classNum, studentNumber]);
+  const prevConfig = usePrevious(currentConfig);
+  const revertConfigRef = useRef<{ grade: string, classNum: string, studentNumber: string } | null>(null);
 
   const handleLogout = async () => {
     try {
@@ -112,9 +127,7 @@ export default function Dashboard() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<AssessmentItem | null>(null);
 
-
   // ... previous imports
-
 
   // ... existing code ...
 
@@ -127,6 +140,7 @@ export default function Dashboard() {
   });
 
   const [showElectiveDialog, setShowElectiveDialog] = useState(false);
+  const [isAutoElectiveOpen, setIsAutoElectiveOpen] = useState(false);
 
   // 2, 3학년 선택과목 설정 확인
   useEffect(() => {
@@ -137,12 +151,20 @@ export default function Dashboard() {
         .then(data => {
           // If no profile or no electives, show dialog
           if (!data || !data.electives) {
+            // Capture previous valid config for revert
+            if (prevConfig && prevConfig.grade && prevConfig.classNum && prevConfig.studentNumber) {
+              revertConfigRef.current = prevConfig;
+            } else {
+              revertConfigRef.current = null;
+            }
+
+            setIsAutoElectiveOpen(true);
             setShowElectiveDialog(true);
           }
         })
         .catch(err => console.error("Failed to check electives", err));
     }
-  }, [grade, classNum, studentNumber]);
+  }, [grade, classNum, studentNumber, prevConfig]);
 
   // 1. 시간표 조회
   // 1. 시간표 조회
@@ -453,6 +475,11 @@ export default function Dashboard() {
     }
   };
 
+  const handleManualElectiveOpen = () => {
+    setIsAutoElectiveOpen(false);
+    setShowElectiveDialog(true);
+  };
+
   // 요일별로 시간표 데이터를 그룹화
   const weekdayNames = ["월", "화", "수", "목", "금"];
   const timetableByDay: Record<number, TimetableItem[]> = {};
@@ -621,7 +648,7 @@ export default function Dashboard() {
                   <Button
                     size="sm"
                     className="bg-blue-600 hover:bg-blue-700 h-8 text-xs ml-2"
-                    onClick={() => setShowElectiveDialog(true)}
+                    onClick={handleManualElectiveOpen}
                   >
                     <Pencil className="w-3 h-3 mr-1" />
                     선택과목 수정
@@ -636,7 +663,7 @@ export default function Dashboard() {
                   variant="ghost"
                   size="sm"
                   className="absolute left-1 top-1/2 -translate-y-1/2 md:hidden text-blue-600 font-bold text-xs px-2 h-8 z-10"
-                  onClick={() => setShowElectiveDialog(true)}
+                  onClick={handleManualElectiveOpen}
                 >
                   선택과목
                 </Button>
