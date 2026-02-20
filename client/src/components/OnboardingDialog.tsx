@@ -61,14 +61,14 @@ export default function OnboardingDialog() {
                             }}
                             className={`text-center h-20 md:h-[84px] py-0 ${studentId.length === 0
                                 ? "text-base md:text-lg font-normal tracking-normal indent-0"
-                                : "text-5xl md:text-[68px] font-bold md:font-semibold tracking-[0.3em] md:tracking-[0.4em] indent-[0.3em] md:indent-[0.4em]"
+                                : "text-5xl md:text-[68px] font-bold md:font-medium tracking-[0.3em] md:tracking-[0.4em] indent-[0.3em] md:indent-[0.4em]"
                                 }`}
                             required
                             autoFocus
                         />
                     </div>
 
-                    <Button type="submit" className="w-full h-12 md:h-14 text-lg md:text-xl font-bold md:font-semibold" disabled={studentId.length !== 4}>
+                    <Button type="submit" className="w-full h-12 md:h-14 text-lg md:text-xl font-bold md:font-medium" disabled={studentId.length !== 4}>
                         설정 저장
                     </Button>
                 </form>
