@@ -581,7 +581,7 @@ export default function Dashboard() {
               value={grade}
               onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
             >
-              <SelectTrigger className="w-[80px] md:w-[90px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm" style={selectorStyle}>
+              <SelectTrigger className="w-[80px] md:w-[90px] h-9 md:h-10 bg-white px-2 text-lg md:text-sm font-bold" style={selectorStyle}>
                 <SelectValue placeholder="학년" />
               </SelectTrigger>
               <SelectContent>
@@ -596,7 +596,7 @@ export default function Dashboard() {
                 value={classNum}
                 onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
               >
-                <SelectTrigger className="w-[70px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm" style={selectorStyle}>
+                <SelectTrigger className="w-[70px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-lg md:text-sm font-bold" style={selectorStyle}>
                   <SelectValue placeholder="반" />
                 </SelectTrigger>
                 <SelectContent>
@@ -614,7 +614,7 @@ export default function Dashboard() {
                 value={studentNumber}
                 onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
               >
-                <SelectTrigger className="w-[70px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-xs md:text-sm" style={selectorStyle}>
+                <SelectTrigger className="w-[70px] md:w-[80px] h-9 md:h-10 bg-white px-2 text-lg md:text-sm font-bold" style={selectorStyle}>
                   <SelectValue placeholder="번호" />
                 </SelectTrigger>
                 <SelectContent>
@@ -673,21 +673,23 @@ export default function Dashboard() {
 
               {/* Mobile Elective Edit Button */}
               {(grade === "2" || grade === "3") && (
-                <div className="absolute left-[15%] sm:left-[20%] top-1/2 -translate-y-1/2 md:hidden z-20">
-                  <Button
-                    variant={isElectiveMissing ? "default" : "ghost"}
-                    size="sm"
-                    className={`font-bold text-sm px-3 h-10 transition-all duration-300 ${isElectiveMissing ? "bg-[#fc6603] hover:bg-[#e05a00] text-white animate-pulse" : "text-[#fc6603]"}`}
-                    style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
-                    onClick={() => setShowElectiveDialog(true)}
-                  >
-                    선택과목
-                  </Button>
-                  {isElectiveMissing && (
-                    <div className="absolute -bottom-20 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center">
-                      <ArrowUp className="w-8 h-16 text-[#fc6603]" strokeWidth={3} />
-                    </div>
-                  )}
+                <div className="absolute left-0 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center md:hidden z-20 pointer-events-none">
+                  <div className="pointer-events-auto relative">
+                    <Button
+                      variant={isElectiveMissing ? "default" : "ghost"}
+                      size="sm"
+                      className={`font-bold text-sm px-3 h-10 transition-all duration-300 ${isElectiveMissing ? "bg-[#fc6603] hover:bg-[#e05a00] text-white animate-pulse" : "text-[#fc6603]"}`}
+                      style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
+                      onClick={() => setShowElectiveDialog(true)}
+                    >
+                      선택과목
+                    </Button>
+                    {isElectiveMissing && (
+                      <div className="absolute -bottom-20 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center">
+                        <ArrowUp className="w-8 h-16 text-[#fc6603]" strokeWidth={3} />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -697,6 +699,7 @@ export default function Dashboard() {
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-10 h-8 p-0"
                     onClick={() => setWeekOffset(weekOffset - 1)}
                     disabled={weekOffset === 0}
                   >
