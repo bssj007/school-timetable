@@ -646,15 +646,15 @@ export default function Dashboard() {
           <Card className="py-1 gap-1 md:py-2 md:gap-2">
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
               {/* Desktop Title */}
-              <div className="hidden md:flex items-center gap-2">
-                <h1 className="text-2xl font-bold whitespace-nowrap">
+              <div className="hidden md:flex items-center gap-2 flex-1 min-w-0">
+                <h1 className="text-2xl font-bold whitespace-nowrap overflow-hidden text-ellipsis">
                   {grade || '?'}-{classNum || '?'} 시간표
                 </h1>
                 {(grade === "2" || grade === "3") && (
                   <div className="relative inline-block">
                     <Button
                       size="sm"
-                      className={`h-10 text-sm ml-2 transition-all duration-300 bg-[#fc6603] hover:bg-[#e05a00] text-white ${isElectiveMissing ? "animate-pulse" : ""}`}
+                      className={`h-10 text-sm ml-2 shrink-0 transition-all duration-300 bg-[#fc6603] hover:bg-[#e05a00] text-white ${isElectiveMissing ? "animate-pulse" : ""}`}
                       style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
                       onClick={() => setShowElectiveDialog(true)}
                     >
@@ -694,7 +694,7 @@ export default function Dashboard() {
               )}
 
               {/* Week Navigation */}
-              <div className="flex flex-col items-center justify-center gap-1 w-full -translate-x-1 md:w-auto md:absolute md:left-1/2 md:-translate-x-1/2">
+              <div className="flex flex-col items-center justify-center gap-1 w-full -translate-x-1 md:translate-x-0 md:w-auto shrink-0 z-10 relative">
                 <div className="flex items-center gap-2 md:gap-1">
                   <Button
                     variant="outline"
@@ -728,12 +728,12 @@ export default function Dashboard() {
               </div>
 
               {/* Desktop Selectors */}
-              <div className="hidden md:flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-2 flex-1 justify-end min-w-0">
                 <Select
                   value={grade}
                   onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
                 >
-                  <SelectTrigger className="w-[100px] h-10 bg-white px-3 text-base md:text-lg font-medium" style={selectorStyle}>
+                  <SelectTrigger className="w-[100px] shrink min-w-[50px] md:max-w-[100px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium [&>span]:relative [&>span]:z-10" style={selectorStyle}>
                     <SelectValue placeholder="학년" />
                   </SelectTrigger>
                   <SelectContent>
@@ -747,7 +747,7 @@ export default function Dashboard() {
                   value={classNum}
                   onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
                 >
-                  <SelectTrigger className="w-[90px] h-10 bg-white px-3 text-base md:text-lg font-medium" style={selectorStyle}>
+                  <SelectTrigger className="w-[90px] shrink min-w-[50px] md:max-w-[90px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium [&>span]:relative [&>span]:z-10" style={selectorStyle}>
                     <SelectValue placeholder="반" />
                   </SelectTrigger>
                   <SelectContent>
@@ -763,7 +763,7 @@ export default function Dashboard() {
                   value={studentNumber}
                   onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
                 >
-                  <SelectTrigger className="w-[90px] h-10 bg-white px-3 text-base md:text-lg font-medium" style={selectorStyle}>
+                  <SelectTrigger className="w-[90px] shrink min-w-[50px] md:max-w-[90px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium [&>span]:relative [&>span]:z-10" style={selectorStyle}>
                     <SelectValue placeholder="번호" />
                   </SelectTrigger>
                   <SelectContent>
