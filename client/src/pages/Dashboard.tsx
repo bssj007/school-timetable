@@ -581,7 +581,7 @@ export default function Dashboard() {
               value={grade}
               onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
             >
-              <SelectTrigger className="w-[80px] md:w-[90px] shrink min-w-[50px] h-9 md:h-10 bg-white px-2 text-lg md:text-sm font-bold [&>span]:relative [&>span]:z-10" style={selectorStyle}>
+              <SelectTrigger className="relative w-[80px] md:w-[90px] shrink min-w-[50px] h-9 md:h-10 bg-white px-2 text-lg md:text-sm font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0 md:[&>svg]:static" style={selectorStyle}>
                 <SelectValue placeholder="학년" />
               </SelectTrigger>
               <SelectContent>
@@ -596,7 +596,7 @@ export default function Dashboard() {
                 value={classNum}
                 onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
               >
-                <SelectTrigger className="w-[70px] md:w-[80px] shrink min-w-[45px] h-9 md:h-10 bg-white px-2 text-lg md:text-sm font-bold [&>span]:relative [&>span]:z-10" style={selectorStyle}>
+                <SelectTrigger className="relative w-[70px] md:w-[80px] shrink min-w-[45px] h-9 md:h-10 bg-white px-2 text-lg md:text-sm font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0 md:[&>svg]:static" style={selectorStyle}>
                   <SelectValue placeholder="반" />
                 </SelectTrigger>
                 <SelectContent>
@@ -614,7 +614,7 @@ export default function Dashboard() {
                 value={studentNumber}
                 onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
               >
-                <SelectTrigger className="w-[70px] md:w-[80px] shrink min-w-[45px] h-9 md:h-10 bg-white px-2 text-lg md:text-sm font-bold [&>span]:relative [&>span]:z-10" style={selectorStyle}>
+                <SelectTrigger className="relative w-[70px] md:w-[80px] shrink min-w-[45px] h-9 md:h-10 bg-white px-2 text-lg md:text-sm font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0 md:[&>svg]:static" style={selectorStyle}>
                   <SelectValue placeholder="번호" />
                 </SelectTrigger>
                 <SelectContent>
@@ -673,7 +673,7 @@ export default function Dashboard() {
 
               {/* Mobile Elective Edit Button */}
               {(grade === "2" || grade === "3") && (
-                <div className="absolute left-0 -translate-x-1 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center md:hidden z-20 pointer-events-none">
+                <div className="absolute left-0 -translate-x-[10px] top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center md:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative">
                     <Button
                       variant={isElectiveMissing ? "default" : "ghost"}
