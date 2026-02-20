@@ -134,8 +134,6 @@ export default function Dashboard() {
 
   // 2, 3학년 선택과목 설정 확인
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-
     if ((grade === "2" || grade === "3") && classNum && studentNumber) {
       // Check if electives are already set
       fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`)
@@ -145,12 +143,10 @@ export default function Dashboard() {
           if (!data || !data.electives || Object.keys(data.electives).length === 0) {
             setIsElectiveEntered(false);
             const currentConfig = `${grade}-${classNum}-${studentNumber}`;
-            timeoutId = setTimeout(() => {
-              setShowElectiveWarning(true);
-              if (currentConfig === initialConfigRef.current) {
-                setShowElectiveDialog(true);
-              }
-            }, 4000);
+            setShowElectiveWarning(true);
+            if (currentConfig === initialConfigRef.current) {
+              setShowElectiveDialog(true);
+            }
           } else {
             setIsElectiveEntered(true);
             setShowElectiveWarning(false);
@@ -163,10 +159,6 @@ export default function Dashboard() {
       setIsElectiveEntered(true);
       setShowElectiveWarning(false);
     }
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
   }, [grade, classNum, studentNumber]);
 
   useEffect(() => {
