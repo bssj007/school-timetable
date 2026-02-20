@@ -673,7 +673,7 @@ export default function Dashboard() {
 
               {/* Mobile Elective Edit Button */}
               {(grade === "2" || grade === "3") && (
-                <div className="absolute left-1 top-1/2 -translate-y-1/2 md:hidden z-20">
+                <div className="absolute left-[15%] sm:left-[20%] top-1/2 -translate-y-1/2 md:hidden z-20">
                   <Button
                     variant={isElectiveMissing ? "default" : "ghost"}
                     size="sm"
@@ -730,7 +730,7 @@ export default function Dashboard() {
                   value={grade}
                   onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
                 >
-                  <SelectTrigger className="w-[90px] h-10 bg-white px-2 text-sm" style={selectorStyle}>
+                  <SelectTrigger className="w-[100px] h-10 bg-white px-3 text-base md:text-lg font-medium" style={selectorStyle}>
                     <SelectValue placeholder="학년" />
                   </SelectTrigger>
                   <SelectContent>
@@ -744,11 +744,11 @@ export default function Dashboard() {
                   value={classNum}
                   onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
                 >
-                  <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm" style={selectorStyle}>
+                  <SelectTrigger className="w-[90px] h-10 bg-white px-3 text-base md:text-lg font-medium" style={selectorStyle}>
                     <SelectValue placeholder="반" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map((num) => (
+                    {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
                       <SelectItem key={num} value={num.toString()}>
                         {num}반
                       </SelectItem>
@@ -760,7 +760,7 @@ export default function Dashboard() {
                   value={studentNumber}
                   onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
                 >
-                  <SelectTrigger className="w-[80px] h-10 bg-white px-2 text-sm" style={selectorStyle}>
+                  <SelectTrigger className="w-[90px] h-10 bg-white px-3 text-base md:text-lg font-medium" style={selectorStyle}>
                     <SelectValue placeholder="번호" />
                   </SelectTrigger>
                   <SelectContent>

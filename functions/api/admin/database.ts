@@ -195,6 +195,19 @@ export const onRequest = async (context: any) => {
                 if (tableName === 'ip_profiles') pkColumn = 'ip';
                 if (tableName === 'student_profiles') pkColumn = 'studentNumber';
 
+                if (tableName === 'student_profiles') {
+                    // Prevent Foreign Key constraint errors by clearing references first
+                    try {
+                        await env.DB.prepare(`UPDATE ip_profiles SET studentNumber = NULL WHERE studentNumber = ?`).bind(id).run();
+                    } catch (e) { /* ignore if ip_profiles doesn't exist */ }
+                    try {
+                        const profile = await env.DB.prepare(`SELECT id FROM student_profiles WHERE studentNumber = ?`).bind(id).first();
+                        if (profile && profile.id) {
+                            await env.DB.prepare(`UPDATE cookie_profiles SET student_profile_id = NULL WHERE student_profile_id = ?`).bind(profile.id).run();
+                        }
+                    } catch (e) { /* ignore */ }
+                }
+
                 await env.DB.prepare(`DELETE FROM ${tableName} WHERE ${pkColumn} = ?`).bind(id).run();
                 return new Response(JSON.stringify({ success: true, message: `Deleted row ${id} from ${tableName}` }), {
                     headers: { 'Content-Type': 'application/json' }
