@@ -59,13 +59,13 @@ export default function OnboardingDialog() {
                                 const val = e.target.value.replace(/[^0-9]/g, "");
                                 if (val.length <= 4) setStudentId(val);
                             }}
-                            className="font-bold text-center text-5xl md:text-[68px] tracking-[0.3em] md:tracking-[0.4em] placeholder:font-normal placeholder:tracking-normal indent-[0.3em] md:indent-[0.4em] placeholder:indent-0 placeholder:text-base md:placeholder:text-lg h-20 md:h-[84px]"
+                            className="font-bold md:font-semibold text-center text-5xl md:text-[68px] tracking-[0.3em] md:tracking-[0.4em] placeholder:font-normal placeholder:tracking-normal indent-[0.3em] md:indent-[0.4em] placeholder:indent-0 placeholder:text-base md:placeholder:text-lg h-20 md:h-[84px] py-0 leading-normal"
                             required
                             autoFocus
                         />
                     </div>
 
-                    <Button type="submit" className="w-full h-12 md:h-14 text-lg md:text-xl font-bold" disabled={studentId.length !== 4}>
+                    <Button type="submit" className="w-full h-12 md:h-14 text-lg md:text-xl font-bold md:font-semibold" disabled={studentId.length !== 4}>
                         설정 저장
                     </Button>
                 </form>
