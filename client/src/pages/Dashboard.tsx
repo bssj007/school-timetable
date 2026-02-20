@@ -128,10 +128,13 @@ export default function Dashboard() {
 
   const [showElectiveDialog, setShowElectiveDialog] = useState(false);
   const [isElectiveEntered, setIsElectiveEntered] = useState<boolean>(true);
+  const [showElectiveWarning, setShowElectiveWarning] = useState<boolean>(false);
   const initialConfigRef = useRef(`${grade}-${classNum}-${studentNumber}`);
 
   // 2, 3학년 선택과목 설정 확인
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
     if ((grade === "2" || grade === "3") && classNum && studentNumber) {
       // Check if electives are already set
       fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`)
@@ -141,11 +144,15 @@ export default function Dashboard() {
           if (!data || !data.electives || Object.keys(data.electives).length === 0) {
             setIsElectiveEntered(false);
             const currentConfig = `${grade}-${classNum}-${studentNumber}`;
-            if (currentConfig === initialConfigRef.current) {
-              setShowElectiveDialog(true);
-            }
+            timeoutId = setTimeout(() => {
+              setShowElectiveWarning(true);
+              if (currentConfig === initialConfigRef.current) {
+                setShowElectiveDialog(true);
+              }
+            }, 4000);
           } else {
             setIsElectiveEntered(true);
+            setShowElectiveWarning(false);
           }
         })
         .catch(err => {
@@ -153,7 +160,12 @@ export default function Dashboard() {
         });
     } else {
       setIsElectiveEntered(true);
+      setShowElectiveWarning(false);
     }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [grade, classNum, studentNumber]);
 
   // 1. 시간표 조회
@@ -491,7 +503,7 @@ export default function Dashboard() {
 
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
 
-  const isElectiveMissing = !isElectiveEntered && (grade === "2" || grade === "3") && !!classNum && !!studentNumber;
+  const isElectiveMissing = !isElectiveEntered && (grade === "2" || grade === "3") && !!classNum && !!studentNumber && showElectiveWarning;
 
   const gradeColors: Record<string, string> = {
     "1": "#a6ff00",
