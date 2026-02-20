@@ -673,7 +673,7 @@ export default function Dashboard() {
 
               {/* Mobile Elective Edit Button */}
               {(grade === "2" || grade === "3") && (
-                <div className="absolute left-0 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center md:hidden z-20 pointer-events-none">
+                <div className="absolute left-0 -translate-x-1 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center md:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative">
                     <Button
                       variant={isElectiveMissing ? "default" : "ghost"}
@@ -694,7 +694,7 @@ export default function Dashboard() {
               )}
 
               {/* Week Navigation */}
-              <div className="flex flex-col items-center justify-center gap-1 w-full md:w-auto md:absolute md:left-1/2 md:-translate-x-1/2">
+              <div className="flex flex-col items-center justify-center gap-1 w-full -translate-x-1 md:w-auto md:absolute md:left-1/2 md:-translate-x-1/2">
                 <div className="flex items-center gap-2 md:gap-1">
                   <Button
                     variant="outline"
