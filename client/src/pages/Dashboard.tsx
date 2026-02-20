@@ -521,7 +521,8 @@ export default function Dashboard() {
 
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
 
-  const isElectiveMissing = !isElectiveEntered && (grade === "2" || grade === "3") && !!classNum && !!studentNumber && showElectiveWarning;
+  const isElectiveMissingImmediate = !isElectiveEntered && (grade === "2" || grade === "3") && !!classNum && !!studentNumber;
+  const isElectiveMissing = isElectiveMissingImmediate && showElectiveWarning;
 
   const gradeColors: Record<string, string> = {
     "1": "#a6ff00",
@@ -786,7 +787,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="px-1 pb-1 md:px-2 md:pb-2">
               <div className="overflow-x-auto relative">
-                {isElectiveMissing && (
+                {isElectiveMissingImmediate && (
                   <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
                     <div
                       className="absolute inset-0 rounded-lg pointer-events-none"
@@ -802,7 +803,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                 )}
-                <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissing ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
+                <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
                   <thead>
                     <tr>
                       <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
