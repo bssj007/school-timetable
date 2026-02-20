@@ -1,3 +1,4 @@
+import { createStudentProfilesTable, createIpProfilesTable } from "./db_schema";
 
 interface Env {
     DB: D1Database;
@@ -100,62 +101,51 @@ export const onRequest = async (context: any) => {
             }
 
 
-            // 2. Dynamic Profile Creation Helper
-            // NEW SCHEMA: Use 4-digit studentNumber as PK (e.g. 1101, 3524)
-            const ensureStudentProfile = async (sNum: number) => {
+            // 2. Dynamic Profile Creation Helper (Using Correct DB Schema)
+            const ensureStudentProfileAndGetId = async (g: number, c: number, s: number) => {
                 try {
-                    // Upsert Student Profile
-                    await env.DB.prepare(`
-                        INSERT INTO student_profiles (studentNumber, lastModified) 
-                        VALUES (?, datetime('now'))
-                        ON CONFLICT(studentNumber) 
-                        DO UPDATE SET lastModified = datetime('now')
-                    `).bind(sNum).run();
-                    return true;
+                    const res = await env.DB.prepare(`
+                        INSERT INTO student_profiles (grade, classNum, studentNumber, updatedAt) 
+                        VALUES (?, ?, ?, datetime('now'))
+                        ON CONFLICT(grade, classNum, studentNumber) 
+                        DO UPDATE SET updatedAt = datetime('now')
+                        RETURNING id
+                    `).bind(g, c, s).first();
+                    return res?.id as number | null;
                 } catch (e: any) {
                     console.error("[Middleware] Student Profile Upsert Failed:", e);
                     if (e.message && e.message.includes("no such table")) {
-                        console.log("[Middleware] Creating student_profiles table (New Schema)");
+                        console.log("[Middleware] Creating student_profiles table (New Schema from db_schema.ts)");
                         try {
-                            await env.DB.prepare(`
-                                CREATE TABLE IF NOT EXISTS student_profiles (
-                                    studentNumber INTEGER PRIMARY KEY,
-                                    content TEXT,
-                                    lastModified TEXT
-                                )
-                            `).run();
+                            await env.DB.prepare(createStudentProfilesTable).run();
                             // Retry Insert
-                            await env.DB.prepare(`
-                                INSERT INTO student_profiles (studentNumber, lastModified) 
-                                VALUES (?, datetime('now'))
-                                ON CONFLICT(studentNumber) 
-                                DO UPDATE SET lastModified = datetime('now')
-                            `).bind(sNum).run();
-                            return true;
+                            const res = await env.DB.prepare(`
+                                INSERT INTO student_profiles (grade, classNum, studentNumber, updatedAt) 
+                                VALUES (?, ?, ?, datetime('now'))
+                                ON CONFLICT(grade, classNum, studentNumber) 
+                                DO UPDATE SET updatedAt = datetime('now')
+                                RETURNING id
+                            `).bind(g, c, s).first();
+                            return res?.id as number | null;
                         } catch (createError) {
                             console.error("[Middleware] Create student_profiles Failed:", createError);
                         }
+                    } else if (e.message && e.message.includes("has no column named")) {
+                        console.warn("[Middleware] student_profiles schema mismatch:", e.message);
                     }
-                    return false;
+                    return null;
                 }
             };
 
             // Calculate Target ID
-            let targetStudentNumber: number | null = null;
+            let resolvedStudentProfileId: number | null = null;
             if (grade && classNum && studentNumber) {
                 const g = parseInt(grade);
                 const c = parseInt(classNum);
                 const n = parseInt(studentNumber);
                 if (!isNaN(g) && !isNaN(c) && !isNaN(n)) {
-                    const idStr = `${g}${c}${n.toString().padStart(2, '0')}`;
-                    targetStudentNumber = parseInt(idStr);
+                    resolvedStudentProfileId = await ensureStudentProfileAndGetId(g, c, n);
                 }
-            }
-
-            // Execute Step 2
-            if (targetStudentNumber !== null) {
-                const success = await ensureStudentProfile(targetStudentNumber);
-                if (!success) targetStudentNumber = null;
             }
 
             // Helper: Retry Operation with Backoff
@@ -179,36 +169,28 @@ export const onRequest = async (context: any) => {
                 return false;
             };
 
-            // 3. Update IP Profile (Link to studentNumber)
+            // 3. Update IP Profile (Link to student_profile_id)
             const updateIpProfile = async () => {
-                // Check if IP profile exists
-                // We want to update: studentNumber (link), kakaoInfo, userAgent, lastAccess
-
-                // If existing, we might want to increment editCount only on specific actions.
-                // Note: editCount logic was:
-                // if (['POST', 'DELETE'].includes(request.method) && url.pathname.startsWith('/api/assessment'))
-
                 const isEditAction = (['POST', 'DELETE', 'PATCH', 'PUT'].includes(request.method) && url.pathname.startsWith('/api/assessment'));
 
                 const query = `
-                    INSERT INTO ip_profiles (ip, studentNumber, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent)
+                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent)
                     VALUES (?, ?, ?, ?, datetime('now'), ?, ?)
                     ON CONFLICT(ip) DO UPDATE SET
                         lastAccess = datetime('now'),
                         userAgent = excluded.userAgent,
-                        studentNumber = excluded.studentNumber,
+                        student_profile_id = excluded.student_profile_id,
                         kakaoId = COALESCE(excluded.kakaoId, ip_profiles.kakaoId),
                         kakaoNickname = COALESCE(excluded.kakaoNickname, ip_profiles.kakaoNickname),
                         modificationCount = ip_profiles.modificationCount + ?
                 `;
 
                 const increment = isEditAction ? 1 : 0;
-                // Initial insert modificationCount is increment if it's an edit, else 0.
 
-                const executeLink = async (sNum: number | null) => {
+                const executeLink = async (profileId: number | null) => {
                     await env.DB.prepare(query).bind(
                         ip,
-                        sNum,
+                        profileId,
                         kakaoId,
                         kakaoNickname,
                         increment, // Initial value
@@ -219,37 +201,16 @@ export const onRequest = async (context: any) => {
 
                 // Logic with Retry
                 try {
-                    // Attempt 1: Try linking with Retry Logic
                     await retryOperation(async () => {
-                        await executeLink(targetStudentNumber);
+                        await executeLink(resolvedStudentProfileId);
                     });
                 } catch (e: any) {
-                    // CRITICAL FIX: Graceful Fallback for Foreign Key Violation
-                    if (targetStudentNumber !== null && (e.message && (e.message.includes("FOREIGN KEY") || e.message.includes("constraint")))) {
-                        console.warn(`[Middleware] FK Violation for student ${targetStudentNumber} after retries. Attempting repair...`);
-
-                        // REPAIR STRATEGY: Try to create the student profile again
-                        const repairSuccess = await ensureStudentProfile(targetStudentNumber);
-
-                        if (repairSuccess) {
-                            try {
-                                console.log(`[Middleware] Repair successful. Retrying link...`);
-                                // Retry link one last time
-                                await executeLink(targetStudentNumber);
-                                return; // Success!
-                            } catch (retryError) {
-                                console.warn(`[Middleware] Link retry failed even after repair.`);
-                            }
-                        }
-
+                    if (resolvedStudentProfileId !== null && (e.message && (e.message.includes("FOREIGN KEY") || e.message.includes("constraint")))) {
+                        console.warn(`[Middleware] FK Violation for profile ${resolvedStudentProfileId} after retries.`);
                         console.warn(`[Middleware] Fallback to NULL link.`);
                         await executeLink(null);
                     } else if (e.message && e.message.includes("database is locked")) {
-                        // Even after retries, if locked, we might want to fallback or just log
                         console.error("[Middleware] Database Locked. Skipping profile update to prevent blocking.");
-                        // Dropping the update is better than crashing or hanging indefinitely?
-                        // Ideally we fallback to NULL but that also requires DB write.
-                        // So we just give up.
                     } else {
                         throw e;
                     }
@@ -262,24 +223,14 @@ export const onRequest = async (context: any) => {
                 if (e.message && e.message.includes("no such table")) {
                     console.log("[Middleware] Creating ip_profiles table (New Schema)");
                     try {
-                        await env.DB.prepare(`
-                            CREATE TABLE IF NOT EXISTS ip_profiles (
-                                ip TEXT PRIMARY KEY,
-                                studentNumber INTEGER,
-                                kakaoId TEXT,
-                                kakaoNickname TEXT,
-                                lastAccess TEXT,
-                                modificationCount INTEGER DEFAULT 0,
-                                userAgent TEXT,
-                                instructionDismissed INTEGER DEFAULT 0,
-                                FOREIGN KEY (studentNumber) REFERENCES student_profiles(studentNumber)
-                            )
-                        `).run();
+                        await env.DB.prepare(createIpProfilesTable).run();
                         // Retry update
                         await updateIpProfile();
                     } catch (migrationError) {
                         console.error("[Middleware] Migration Failed for ip_profiles:", migrationError);
                     }
+                } else if (e.message && e.message.includes("has no column named")) {
+                    console.warn("[Middleware] ip_profiles schema mismatch:", e.message);
                 } else {
                     console.error("IP Profile Update Error", e);
                 }
