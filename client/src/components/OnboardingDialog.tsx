@@ -59,7 +59,10 @@ export default function OnboardingDialog() {
                                 const val = e.target.value.replace(/[^0-9]/g, "");
                                 if (val.length <= 4) setStudentId(val);
                             }}
-                            className="font-bold md:font-semibold text-center text-5xl md:text-[68px] tracking-[0.3em] md:tracking-[0.4em] placeholder:font-normal placeholder:tracking-normal indent-[0.3em] md:indent-[0.4em] placeholder:indent-0 placeholder:text-base md:placeholder:text-lg h-20 md:h-[84px] py-0 leading-normal"
+                            className={`text-center h-20 md:h-[84px] py-0 ${studentId.length === 0
+                                ? "text-base md:text-lg font-normal tracking-normal indent-0"
+                                : "text-5xl md:text-[68px] font-bold md:font-semibold tracking-[0.3em] md:tracking-[0.4em] indent-[0.3em] md:indent-[0.4em]"
+                                }`}
                             required
                             autoFocus
                         />
