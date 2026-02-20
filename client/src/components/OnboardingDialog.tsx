@@ -34,7 +34,7 @@ export default function OnboardingDialog() {
 
     return (
         <Dialog open={isOpen}>
-            <DialogContent className="sm:max-w-[425px] md:max-w-xl md:min-h-[320px] flex flex-col justify-center" onInteractOutside={(e: any) => e.preventDefault()} showCloseButton={false}>
+            <DialogContent className="sm:max-w-[425px] md:max-w-xl md:min-h-[288px] flex flex-col justify-center" onInteractOutside={(e: any) => e.preventDefault()} showCloseButton={false}>
                 <DialogHeader>
                     <DialogTitle>학번 입력</DialogTitle>
                     <DialogDescription>
@@ -59,7 +59,7 @@ export default function OnboardingDialog() {
                                 const val = e.target.value.replace(/[^0-9]/g, "");
                                 if (val.length <= 4) setStudentId(val);
                             }}
-                            className="font-bold text-center text-xl tracking-widest placeholder:font-normal placeholder:tracking-normal placeholder:text-sm h-14"
+                            className="font-bold text-center text-4xl tracking-widest placeholder:font-normal placeholder:tracking-normal placeholder:text-base h-16"
                             required
                             autoFocus
                         />

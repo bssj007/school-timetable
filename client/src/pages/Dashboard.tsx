@@ -129,6 +129,7 @@ export default function Dashboard() {
   const [showElectiveDialog, setShowElectiveDialog] = useState(false);
   const [isElectiveEntered, setIsElectiveEntered] = useState<boolean>(true);
   const [showElectiveWarning, setShowElectiveWarning] = useState<boolean>(false);
+  const [showInstructionTooltip, setShowInstructionTooltip] = useState<boolean>(false);
   const initialConfigRef = useRef(`${grade}-${classNum}-${studentNumber}`);
 
   // 2, 3학년 선택과목 설정 확인
@@ -167,6 +168,23 @@ export default function Dashboard() {
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, [grade, classNum, studentNumber]);
+
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    const isSetupComplete = isConfigured && (grade === "1" || isElectiveEntered);
+
+    if (isSetupComplete) {
+      timeoutId = setTimeout(() => {
+        setShowInstructionTooltip(true);
+      }, 4000);
+    } else {
+      setShowInstructionTooltip(false);
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [isConfigured, grade, isElectiveEntered]);
 
   // 1. 시간표 조회
   // 1. 시간표 조회
@@ -647,7 +665,7 @@ export default function Dashboard() {
                   <div className="relative inline-block">
                     <Button
                       size="sm"
-                      className={`h-10 text-sm ml-2 transition-all duration-300 ${isElectiveMissing ? "bg-purple-600 hover:bg-purple-700 text-white animate-pulse" : "bg-blue-600 hover:bg-blue-700 text-white"}`}
+                      className={`h-10 text-sm ml-2 transition-all duration-300 bg-[#fc6603] hover:bg-[#e05a00] text-white ${isElectiveMissing ? "animate-pulse" : ""}`}
                       style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
                       onClick={() => setShowElectiveDialog(true)}
                     >
@@ -655,8 +673,8 @@ export default function Dashboard() {
                       선택과목 수정
                     </Button>
                     {isElectiveMissing && (
-                      <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center ml-1">
-                        <ArrowUp className="w-5 h-5 text-purple-600" strokeWidth={3} />
+                      <div className="absolute -bottom-14 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center ml-1">
+                        <ArrowUp className="w-7 h-12 text-[#fc6603]" strokeWidth={3} />
                       </div>
                     )}
                   </div>
@@ -670,15 +688,15 @@ export default function Dashboard() {
                   <Button
                     variant={isElectiveMissing ? "default" : "ghost"}
                     size="sm"
-                    className={`font-bold text-sm px-3 h-10 transition-all duration-300 ${isElectiveMissing ? "bg-purple-600 hover:bg-purple-700 text-white animate-pulse" : "text-blue-600"}`}
+                    className={`font-bold text-sm px-3 h-10 transition-all duration-300 ${isElectiveMissing ? "bg-[#fc6603] hover:bg-[#e05a00] text-white animate-pulse" : "text-[#fc6603]"}`}
                     style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
                     onClick={() => setShowElectiveDialog(true)}
                   >
                     선택과목
                   </Button>
                   {isElectiveMissing && (
-                    <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center">
-                      <ArrowUp className="w-5 h-5 text-purple-600" strokeWidth={3} />
+                    <div className="absolute -bottom-14 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center">
+                      <ArrowUp className="w-7 h-12 text-[#fc6603]" strokeWidth={3} />
                     </div>
                   )}
                 </div>
@@ -1254,7 +1272,7 @@ export default function Dashboard() {
       </div>
 
       {/* Instruction Notification */}
-      {isConfigured && !useUserConfig().instructionDismissedV2 && (
+      {showInstructionTooltip && !useUserConfig().instructionDismissedV2 && (
         <div className="fixed bottom-4 right-4 z-[9999] bg-white dark:bg-gray-800 border border-orange-200 shadow-lg rounded-lg p-6 md:p-8 max-w-[90vw] md:max-w-xl animate-in slide-in-from-bottom-2 fade-in duration-300">
           <div className="flex flex-col gap-4 md:gap-6">
             <p
