@@ -38,8 +38,8 @@ export default function OnboardingDialog() {
                 <DialogHeader>
                     <DialogTitle>학번 입력</DialogTitle>
                     <DialogDescription>
-                        부산성지고등학교 시간표를 확인하기 위해 학번을 입력해주세요.<br />
-                        4자리 숫자로 입력해주세요.
+                        성지고 수행 공유 사이트 이용을 위해<br />
+                        4자리 학번을 입력하세요
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-6 pt-6">
@@ -59,13 +59,13 @@ export default function OnboardingDialog() {
                                 const val = e.target.value.replace(/[^0-9]/g, "");
                                 if (val.length <= 4) setStudentId(val);
                             }}
-                            className="font-bold text-center text-5xl md:text-8xl tracking-[0.3em] md:tracking-[0.5em] placeholder:font-normal placeholder:tracking-normal placeholder:text-base md:placeholder:text-xl h-20 md:h-32"
+                            className="font-bold text-center text-5xl md:text-[68px] tracking-[0.3em] md:tracking-[0.4em] placeholder:font-normal placeholder:tracking-normal indent-[0.3em] md:indent-[0.4em] placeholder:indent-0 placeholder:text-base md:placeholder:text-lg h-20 md:h-[84px]"
                             required
                             autoFocus
                         />
                     </div>
 
-                    <Button type="submit" className="w-full h-12 md:h-16 text-lg md:text-2xl font-bold" disabled={studentId.length !== 4}>
+                    <Button type="submit" className="w-full h-12 md:h-14 text-lg md:text-xl font-bold" disabled={studentId.length !== 4}>
                         설정 저장
                     </Button>
                 </form>
