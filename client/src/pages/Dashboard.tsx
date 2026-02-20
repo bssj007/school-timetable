@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut } from "lucide-react";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
@@ -632,30 +632,44 @@ export default function Dashboard() {
                   {grade || '?'}-{classNum || '?'} 시간표
                 </h1>
                 {(grade === "2" || grade === "3") && (
-                  <Button
-                    size="sm"
-                    className={`h-8 text-xs ml-2 transition-all duration-300 ${isElectiveMissing ? "bg-purple-600 hover:bg-purple-700 text-white animate-pulse" : "bg-blue-600 hover:bg-blue-700 text-white"}`}
-                    style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
-                    onClick={() => setShowElectiveDialog(true)}
-                  >
-                    <Pencil className="w-3 h-3 mr-1" />
-                    선택과목 수정
-                  </Button>
+                  <div className="relative inline-block">
+                    <Button
+                      size="sm"
+                      className={`h-10 text-sm ml-2 transition-all duration-300 ${isElectiveMissing ? "bg-purple-600 hover:bg-purple-700 text-white animate-pulse" : "bg-blue-600 hover:bg-blue-700 text-white"}`}
+                      style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
+                      onClick={() => setShowElectiveDialog(true)}
+                    >
+                      <Pencil className="w-4 h-4 mr-1" />
+                      선택과목 수정
+                    </Button>
+                    {isElectiveMissing && (
+                      <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center ml-1">
+                        <ArrowUp className="w-5 h-5 text-purple-600" strokeWidth={3} />
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
 
               {/* Mobile Elective Edit Button */}
               {(grade === "2" || grade === "3") && (
-                <Button
-                  variant={isElectiveMissing ? "default" : "ghost"}
-                  size="sm"
-                  className={`absolute left-1 top-1/2 -translate-y-1/2 md:hidden font-bold text-xs px-2 h-8 z-10 transition-all duration-300 ${isElectiveMissing ? "bg-purple-600 hover:bg-purple-700 text-white animate-pulse" : "text-blue-600"}`}
-                  style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
-                  onClick={() => setShowElectiveDialog(true)}
-                >
-                  선택과목
-                </Button>
+                <div className="absolute left-1 top-1/2 -translate-y-1/2 md:hidden z-20">
+                  <Button
+                    variant={isElectiveMissing ? "default" : "ghost"}
+                    size="sm"
+                    className={`font-bold text-sm px-3 h-10 transition-all duration-300 ${isElectiveMissing ? "bg-purple-600 hover:bg-purple-700 text-white animate-pulse" : "text-blue-600"}`}
+                    style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
+                    onClick={() => setShowElectiveDialog(true)}
+                  >
+                    선택과목
+                  </Button>
+                  {isElectiveMissing && (
+                    <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center">
+                      <ArrowUp className="w-5 h-5 text-purple-600" strokeWidth={3} />
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Week Navigation */}
@@ -1229,7 +1243,7 @@ export default function Dashboard() {
 
       {/* Instruction Notification */}
       {isConfigured && !useUserConfig().instructionDismissedV2 && (
-        <div className="fixed bottom-4 right-4 z-50 bg-white dark:bg-gray-800 border border-orange-200 shadow-lg rounded-lg p-6 md:p-8 max-w-[90vw] md:max-w-xl animate-in slide-in-from-bottom-2 fade-in duration-300">
+        <div className="fixed bottom-4 right-4 z-[9999] bg-white dark:bg-gray-800 border border-orange-200 shadow-lg rounded-lg p-6 md:p-8 max-w-[90vw] md:max-w-xl animate-in slide-in-from-bottom-2 fade-in duration-300">
           <div className="flex flex-col gap-4 md:gap-6">
             <p
               className="font-bold text-base md:text-xl leading-relaxed bg-clip-text text-transparent"
