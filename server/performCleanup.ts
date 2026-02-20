@@ -64,7 +64,7 @@ export async function performCleanup(db: any) {
         // 1. Last access > retention
         // 2. AND is "Other"
         //    "Other" means:
-        //    (studentNumber IS NULL)  <-- No Info
+        //    (student_profile_id IS NULL)  <-- No Info
         //    OR
         //    (userAgent IS NULL OR (userAgent NOT LIKE ...)) <-- Unknown Browser
 

@@ -128,7 +128,7 @@ export default function Dashboard() {
 
   const [showElectiveDialog, setShowElectiveDialog] = useState(false);
   const [isElectiveEntered, setIsElectiveEntered] = useState<boolean>(true);
-  const isInitialCheckRef = useRef(true);
+  const initialConfigRef = useRef(`${grade}-${classNum}-${studentNumber}`);
 
   // 2, 3학년 선택과목 설정 확인
   useEffect(() => {
@@ -140,17 +140,16 @@ export default function Dashboard() {
           // If no profile or no electives, show dialog
           if (!data || !data.electives || Object.keys(data.electives).length === 0) {
             setIsElectiveEntered(false);
-            if (isInitialCheckRef.current) {
+            const currentConfig = `${grade}-${classNum}-${studentNumber}`;
+            if (currentConfig === initialConfigRef.current) {
               setShowElectiveDialog(true);
             }
           } else {
             setIsElectiveEntered(true);
           }
-          isInitialCheckRef.current = false;
         })
         .catch(err => {
           console.error("Failed to check electives", err);
-          isInitialCheckRef.current = false;
         });
     } else {
       setIsElectiveEntered(true);
@@ -749,12 +748,17 @@ export default function Dashboard() {
                       className="absolute inset-0 rounded-lg pointer-events-none"
                       style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.08) 10px, rgba(0,0,0,0.08) 20px)' }}
                     ></div>
-                    <div className="relative text-red-600 font-extrabold text-xl md:text-3xl whitespace-pre-wrap text-center bg-white p-6 rounded-xl shadow-lg border-2 border-red-200 pointer-events-auto">
-                      {`[${grade}${classNum!.padStart(2, '0')}${studentNumber!.padStart(2, '0')}]\n선택과목을 입력하세요`}
+                    <div className="relative text-center bg-white px-8 py-5 rounded-xl shadow-lg border-2 border-red-200 pointer-events-auto flex flex-col gap-2">
+                      <div className="text-red-500 text-lg md:text-2xl tracking-wide">
+                        [{grade}{classNum}{studentNumber?.padStart(2, '0')}]
+                      </div>
+                      <div className="text-black text-base md:text-xl">
+                        선택과목을 입력하세요
+                      </div>
                     </div>
                   </div>
                 )}
-                <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissing ? "blur-md opacity-40 pointer-events-none select-none" : ""}`}>
+                <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissing ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
                   <thead>
                     <tr>
                       <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
