@@ -142,11 +142,7 @@ export default function Dashboard() {
           // If no profile or no electives, show dialog
           if (!data || !data.electives || Object.keys(data.electives).length === 0) {
             setIsElectiveEntered(false);
-            const currentConfig = `${grade}-${classNum}-${studentNumber}`;
             setShowElectiveWarning(true);
-            if (currentConfig === initialConfigRef.current) {
-              setShowElectiveDialog(true);
-            }
           } else {
             setIsElectiveEntered(true);
             setShowElectiveWarning(false);
