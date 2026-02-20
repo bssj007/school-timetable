@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
 import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -127,6 +127,8 @@ export default function Dashboard() {
   });
 
   const [showElectiveDialog, setShowElectiveDialog] = useState(false);
+  const [isElectiveEntered, setIsElectiveEntered] = useState<boolean>(true);
+  const isInitialCheckRef = useRef(true);
 
   // 2, 3학년 선택과목 설정 확인
   useEffect(() => {
@@ -136,11 +138,22 @@ export default function Dashboard() {
         .then(res => res.json())
         .then(data => {
           // If no profile or no electives, show dialog
-          if (!data || !data.electives) {
-            setShowElectiveDialog(true);
+          if (!data || !data.electives || Object.keys(data.electives).length === 0) {
+            setIsElectiveEntered(false);
+            if (isInitialCheckRef.current) {
+              setShowElectiveDialog(true);
+            }
+          } else {
+            setIsElectiveEntered(true);
           }
+          isInitialCheckRef.current = false;
         })
-        .catch(err => console.error("Failed to check electives", err));
+        .catch(err => {
+          console.error("Failed to check electives", err);
+          isInitialCheckRef.current = false;
+        });
+    } else {
+      setIsElectiveEntered(true);
     }
   }, [grade, classNum, studentNumber]);
 
@@ -479,6 +492,8 @@ export default function Dashboard() {
 
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
 
+  const isElectiveMissing = !isElectiveEntered && (grade === "2" || grade === "3") && !!classNum && !!studentNumber;
+
   const gradeColors: Record<string, string> = {
     "1": "#a6ff00",
     "2": "#00ffcc",
@@ -620,7 +635,8 @@ export default function Dashboard() {
                 {(grade === "2" || grade === "3") && (
                   <Button
                     size="sm"
-                    className="bg-blue-600 hover:bg-blue-700 h-8 text-xs ml-2"
+                    className={`h-8 text-xs ml-2 transition-all duration-300 ${isElectiveMissing ? "bg-purple-600 hover:bg-purple-700 text-white animate-pulse" : "bg-blue-600 hover:bg-blue-700 text-white"}`}
+                    style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
                     onClick={() => setShowElectiveDialog(true)}
                   >
                     <Pencil className="w-3 h-3 mr-1" />
@@ -633,9 +649,10 @@ export default function Dashboard() {
               {/* Mobile Elective Edit Button */}
               {(grade === "2" || grade === "3") && (
                 <Button
-                  variant="ghost"
+                  variant={isElectiveMissing ? "default" : "ghost"}
                   size="sm"
-                  className="absolute left-1 top-1/2 -translate-y-1/2 md:hidden text-blue-600 font-bold text-xs px-2 h-8 z-10"
+                  className={`absolute left-1 top-1/2 -translate-y-1/2 md:hidden font-bold text-xs px-2 h-8 z-10 transition-all duration-300 ${isElectiveMissing ? "bg-purple-600 hover:bg-purple-700 text-white animate-pulse" : "text-blue-600"}`}
+                  style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
                   onClick={() => setShowElectiveDialog(true)}
                 >
                   선택과목
@@ -725,8 +742,19 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent className="px-1 pb-1 md:px-2 md:pb-2">
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse table-fixed">
+              <div className="overflow-x-auto relative">
+                {isElectiveMissing && (
+                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
+                    <div
+                      className="absolute inset-0 rounded-lg pointer-events-none"
+                      style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.08) 10px, rgba(0,0,0,0.08) 20px)' }}
+                    ></div>
+                    <div className="relative text-red-600 font-extrabold text-xl md:text-3xl whitespace-pre-wrap text-center bg-white p-6 rounded-xl shadow-lg border-2 border-red-200 pointer-events-auto">
+                      {`[${grade}${classNum!.padStart(2, '0')}${studentNumber!.padStart(2, '0')}]\n선택과목을 입력하세요`}
+                    </div>
+                  </div>
+                )}
+                <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissing ? "blur-md opacity-40 pointer-events-none select-none" : ""}`}>
                   <thead>
                     <tr>
                       <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
@@ -1221,7 +1249,10 @@ export default function Dashboard() {
         grade={grade}
         classNum={classNum}
         studentNumber={studentNumber}
-        onSaveSuccess={() => setShowElectiveDialog(false)}
+        onSaveSuccess={() => {
+          setShowElectiveDialog(false);
+          setIsElectiveEntered(true);
+        }}
         onBack={() => {
           setShowElectiveDialog(false);
           setConfig({ studentNumber: "" }); // Go back to student number input
