@@ -728,7 +728,7 @@ export default function Dashboard() {
               </div>
 
               {/* Desktop Selectors */}
-              <div className="hidden md:flex items-center gap-2 flex-1 justify-end min-w-0">
+              <div className="hidden md:flex items-center gap-2 flex-1 justify-end min-w-0 md:ml-[3px]">
                 <Select
                   value={grade}
                   onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
