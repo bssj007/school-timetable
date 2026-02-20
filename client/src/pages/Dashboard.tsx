@@ -733,7 +733,7 @@ export default function Dashboard() {
                   value={grade}
                   onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
                 >
-                  <SelectTrigger className="w-[100px] shrink min-w-[50px] md:max-w-[100px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0" style={selectorStyle}>
+                  <SelectTrigger className="w-[100px] md:w-[110px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
                     <SelectValue placeholder="학년" />
                   </SelectTrigger>
                   <SelectContent>
@@ -747,7 +747,7 @@ export default function Dashboard() {
                   value={classNum}
                   onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
                 >
-                  <SelectTrigger className="w-[90px] shrink min-w-[50px] md:max-w-[90px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0" style={selectorStyle}>
+                  <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
                     <SelectValue placeholder="반" />
                   </SelectTrigger>
                   <SelectContent>
@@ -763,7 +763,7 @@ export default function Dashboard() {
                   value={studentNumber}
                   onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
                 >
-                  <SelectTrigger className="w-[90px] shrink min-w-[50px] md:max-w-[90px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0" style={selectorStyle}>
+                  <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
                     <SelectValue placeholder="번호" />
                   </SelectTrigger>
                   <SelectContent>
