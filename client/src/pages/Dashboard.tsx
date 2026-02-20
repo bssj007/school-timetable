@@ -662,8 +662,8 @@ export default function Dashboard() {
                       선택과목 수정
                     </Button>
                     {isElectiveMissing && (
-                      <div className="absolute -bottom-14 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center ml-1">
-                        <ArrowUp className="w-7 h-12 text-[#fc6603]" strokeWidth={3} />
+                      <div className="absolute -bottom-20 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center ml-1">
+                        <ArrowUp className="w-8 h-16 text-[#fc6603]" strokeWidth={3} />
                       </div>
                     )}
                   </div>
@@ -684,8 +684,8 @@ export default function Dashboard() {
                     선택과목
                   </Button>
                   {isElectiveMissing && (
-                    <div className="absolute -bottom-14 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center">
-                      <ArrowUp className="w-7 h-12 text-[#fc6603]" strokeWidth={3} />
+                    <div className="absolute -bottom-20 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center">
+                      <ArrowUp className="w-8 h-16 text-[#fc6603]" strokeWidth={3} />
                     </div>
                   )}
                 </div>
@@ -1292,7 +1292,6 @@ export default function Dashboard() {
         }}
         onBack={() => {
           setShowElectiveDialog(false);
-          setConfig({ studentNumber: "" }); // Go back to student number input
         }}
       />
     </div >
