@@ -123,3 +123,31 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 };
 
+export const onRequestDelete: PagesFunction<Env> = async (context) => {
+    const { request, env } = context;
+    const url = new URL(request.url);
+
+    try {
+        const grade = url.searchParams.get("grade");
+        const classNum = url.searchParams.get("classNum");
+        const studentNumber = url.searchParams.get("studentNumber");
+
+        if (!grade || !classNum || !studentNumber) {
+            return new Response(JSON.stringify({ error: "Missing parameters for deletion" }), { status: 400 });
+        }
+
+        // Delete the student profile
+        const query = `
+        DELETE FROM student_profiles 
+        WHERE grade = ? AND classNum = ? AND studentNumber = ?
+        `;
+
+        await env.DB.prepare(query).bind(grade, classNum, studentNumber).run();
+
+        return new Response(JSON.stringify({ success: true, message: "Electives reset successfully" }), { headers: { "Content-Type": "application/json" } });
+
+    } catch (error: any) {
+        console.error("Delete Handler Error:", error);
+        return new Response(JSON.stringify({ error: error.message || "Unknown error during reset" }), { status: 500 });
+    }
+};

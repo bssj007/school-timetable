@@ -144,6 +144,30 @@ export default function ElectiveSelectionDialog({
         }
     });
 
+    const deleteMutation = useMutation({
+        mutationFn: async () => {
+            if (!confirm("저장된 선택과목 정보를 모두 초기화하시겠습니까? (이 작업은 되돌릴 수 없습니다.)")) return false;
+            const res = await fetch(`/api/electives?grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`, {
+                method: 'DELETE',
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || "Failed to reset selection");
+            }
+            return res.json();
+        },
+        onSuccess: (data) => {
+            if (data) {
+                toast.success("선택과목이 초기화되었습니다.");
+                setSelections({});
+                queryClient.invalidateQueries({ queryKey: ['studentProfile'] });
+            }
+        },
+        onError: (err) => {
+            toast.error(`초기화 실패: ${err.message}`);
+        }
+    });
+
     const isAllSelected = Object.keys(electivesByGroup).every(group => selections[group]);
 
     return (
@@ -169,7 +193,7 @@ export default function ElectiveSelectionDialog({
                                     <label className="text-right text-sm md:text-lg font-bold text-gray-700">
                                         {group} 그룹
                                     </label>
-                                    <div className="col-span-3 flex flex-col items-start">
+                                    <div className="col-span-3 flex flex-col md:flex-row items-start md:items-center">
                                         <Select
                                             value={selectedSubject || ""}
                                             onValueChange={(val: string) => handleSelection(group, val)}
@@ -177,7 +201,7 @@ export default function ElectiveSelectionDialog({
                                             <SelectTrigger className={`w-[160px] md:w-[220px] md:h-11 md:text-base ${selectedSubject ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}`}>
                                                 <SelectValue placeholder="과목 선택" />
                                             </SelectTrigger>
-                                            <SelectContent align="start" className="w-[var(--radix-select-trigger-width)]">
+                                            <SelectContent align="start" style={{ width: "var(--radix-select-trigger-width)" }}>
                                                 {/* 1. Normal Subjects (Not selected anywhere) */}
                                                 {Array.from(new Map(configs.map(item => [item.subject, item])).values()).map((config: ElectiveConfig) => {
                                                     // Check if selected in OTHER group
@@ -222,7 +246,7 @@ export default function ElectiveSelectionDialog({
                                             </SelectContent>
                                         </Select>
                                         {selectedSubject && selections[group]?.teacher && (
-                                            <div className="text-xs md:text-sm text-blue-600 mt-1 md:mt-2 pl-1">
+                                            <div className="text-xs md:text-sm text-blue-600 mt-1 md:mt-0 pl-1 md:pl-0 md:ml-4 shrink-0">
                                                 담당: {selections[group].teacher}
                                             </div>
                                         )}
@@ -234,13 +258,21 @@ export default function ElectiveSelectionDialog({
                 </div>
 
                 <div className="flex justify-between gap-3 mt-4 md:mt-8">
-                    {onBack ? (
-                        <Button variant="outline" onClick={onBack} className="md:h-12 md:px-6 md:text-base">
-                            뒤로가기
+                    <div className="flex gap-2">
+                        {onBack && (
+                            <Button variant="outline" onClick={onBack} className="md:h-12 md:px-6 md:text-base">
+                                뒤로가기
+                            </Button>
+                        )}
+                        <Button
+                            variant="destructive"
+                            onClick={() => deleteMutation.mutate()}
+                            disabled={deleteMutation.isPending}
+                            className="md:h-12 md:px-6 md:text-base"
+                        >
+                            선택과목 초기화
                         </Button>
-                    ) : (
-                        <div /> // Spacer
-                    )}
+                    </div>
                     <Button
                         onClick={() => saveMutation.mutate()}
                         disabled={!isAllSelected || saveMutation.isPending}
