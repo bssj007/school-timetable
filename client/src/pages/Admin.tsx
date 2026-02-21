@@ -27,6 +27,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -284,21 +289,47 @@ function ElectiveManager({ password }: { password: string }) {
                                             </TableCell>
                                             <TableCell className="text-gray-500">{item.teacher}</TableCell>
                                             <TableCell>
-                                                <Select
-                                                    value={item.classCode}
-                                                    onValueChange={(value: string) => handleInputChange(originalIndex, "classCode", value)}
-                                                    disabled={isDisabled}
-                                                >
-                                                    <SelectTrigger className={`w-[100px] ${isDisabled ? "pointer-events-none" : ""}`}>
-                                                        <SelectValue placeholder="선택" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="none">-</SelectItem>
-                                                        {["A", "B", "C", "D", "E", "F", "G", "H", "I"].map((code) => (
-                                                            <SelectItem key={code} value={code}>{code}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className={`w-[130px] justify-between ${isDisabled ? "pointer-events-none opacity-50" : ""}`}
+                                                            disabled={isDisabled}
+                                                        >
+                                                            <span className="truncate">
+                                                                {item.classCode ? item.classCode.split(',').filter(Boolean).join(", ") : "선택"}
+                                                            </span>
+                                                            <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-[180px] p-2">
+                                                        <div className="grid grid-cols-3 gap-2">
+                                                            {["A", "B", "C", "D", "E", "F", "G", "H", "I"].map((code) => {
+                                                                const currentValues = (item.classCode || "").split(",").filter(Boolean);
+                                                                const isSelected = currentValues.includes(code);
+                                                                return (
+                                                                    <Button
+                                                                        key={code}
+                                                                        variant={isSelected ? "default" : "outline"}
+                                                                        size="sm"
+                                                                        onClick={() => {
+                                                                            let newValues;
+                                                                            if (isSelected) {
+                                                                                newValues = currentValues.filter((c: string) => c !== code);
+                                                                            } else {
+                                                                                newValues = [...currentValues, code].sort();
+                                                                            }
+                                                                            handleInputChange(originalIndex, "classCode", newValues.join(","));
+                                                                        }}
+                                                                    >
+                                                                        {code}
+                                                                    </Button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
                                             </TableCell>
                                             <TableCell>
                                                 <Input

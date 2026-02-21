@@ -66,8 +66,11 @@ export default function ElectiveSelectionDialog({
             const isMoving = config.isMovingClass !== 0;
 
             if (isMoving && config.classCode) {
-                if (!groups[config.classCode]) groups[config.classCode] = [];
-                groups[config.classCode].push(config);
+                const codes = config.classCode.split(',').map((c: string) => c.trim()).filter(Boolean);
+                codes.forEach((code: string) => {
+                    if (!groups[code]) groups[code] = [];
+                    groups[code].push(config);
+                });
             }
         });
 
