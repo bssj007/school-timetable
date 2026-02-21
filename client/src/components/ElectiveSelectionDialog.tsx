@@ -174,10 +174,10 @@ export default function ElectiveSelectionDialog({
                                             value={selectedSubject || ""}
                                             onValueChange={(val: string) => handleSelection(group, val)}
                                         >
-                                            <SelectTrigger className={`w-[160px] md:w-[260px] md:h-12 md:text-base ${selectedSubject ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}`}>
+                                            <SelectTrigger className={`w-[160px] md:w-[220px] md:h-11 md:text-base ${selectedSubject ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}`}>
                                                 <SelectValue placeholder="과목 선택" />
                                             </SelectTrigger>
-                                            <SelectContent align="start">
+                                            <SelectContent align="start" className="w-[var(--radix-select-trigger-width)]">
                                                 {/* 1. Normal Subjects (Not selected anywhere) */}
                                                 {Array.from(new Map(configs.map(item => [item.subject, item])).values()).map((config: ElectiveConfig) => {
                                                     // Check if selected in OTHER group
