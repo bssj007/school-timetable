@@ -51,6 +51,11 @@ export const onRequest = async (context: any) => {
         } catch (e: any) {
             // Ignore duplicate column 
         }
+        try {
+            await env.DB.prepare("ALTER TABLE elective_config ADD COLUMN fullSubjectName TEXT").run();
+        } catch (e: any) {
+            // Ignore duplicate column 
+        }
     } catch (e) {
         console.error("Table creation/migration failed:", e);
     }
@@ -77,7 +82,7 @@ export const onRequest = async (context: any) => {
     if (method === 'POST') {
         try {
             const body = await request.json();
-            const { grade, subject, originalTeacher, classCode, fullTeacherName, className, isMovingClass, isCombinedClass } = body;
+            const { grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, isMovingClass, isCombinedClass } = body;
 
             // Default isMovingClass to 1 (True) if not provided
             const movingVal = isMovingClass === false ? 0 : 1;
@@ -93,12 +98,12 @@ export const onRequest = async (context: any) => {
 
             if (existing) {
                 await env.DB.prepare(
-                    "UPDATE elective_config SET classCode = ?, fullTeacherName = ?, className = ?, isMovingClass = ?, isCombinedClass = ?, updatedAt = ? WHERE id = ?"
-                ).bind(classCode, fullTeacherName, className, movingVal, combinedVal, new Date().toISOString(), existing.id).run();
+                    "UPDATE elective_config SET classCode = ?, fullTeacherName = ?, className = ?, fullSubjectName = ?, isMovingClass = ?, isCombinedClass = ?, updatedAt = ? WHERE id = ?"
+                ).bind(classCode, fullTeacherName, className, fullSubjectName, movingVal, combinedVal, new Date().toISOString(), existing.id).run();
             } else {
                 await env.DB.prepare(
-                    "INSERT INTO elective_config (grade, subject, originalTeacher, classCode, fullTeacherName, className, isMovingClass, isCombinedClass, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                ).bind(grade, subject, originalTeacher, classCode, fullTeacherName, className, movingVal, combinedVal, new Date().toISOString()).run();
+                    "INSERT INTO elective_config (grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, isMovingClass, isCombinedClass, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                ).bind(grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, movingVal, combinedVal, new Date().toISOString()).run();
             }
 
             return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });

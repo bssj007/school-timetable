@@ -169,12 +169,12 @@ export default function ElectiveSelectionDialog({
                                     <label className="text-right text-sm font-bold text-gray-700">
                                         {group} 그룹
                                     </label>
-                                    <div className="col-span-3">
+                                    <div className="col-span-3 flex flex-col items-start">
                                         <Select
                                             value={selectedSubject || ""}
                                             onValueChange={(val: string) => handleSelection(group, val)}
                                         >
-                                            <SelectTrigger className={selectedSubject ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}>
+                                            <SelectTrigger className={`w-[160px] ${selectedSubject ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}`}>
                                                 <SelectValue placeholder="과목 선택" />
                                             </SelectTrigger>
                                             <SelectContent align="center">
@@ -191,7 +191,9 @@ export default function ElectiveSelectionDialog({
                                                     return (
                                                         <SelectItem key={config.id} value={config.subject}>
                                                             {config.subject}
-                                                            {/* <span className="text-xs text-gray-400 ml-2">({config.fullTeacherName || config.originalTeacher})</span> */}
+                                                            {config.fullSubjectName && (
+                                                                <span className="text-xs text-gray-500 ml-2">({config.fullSubjectName})</span>
+                                                            )}
                                                             {/* User requested: "한 과목에 여러 선생님이 있을때도 하나의 과목으로 표시" -> Just Subject Name */}
                                                         </SelectItem>
                                                     );
@@ -209,7 +211,11 @@ export default function ElectiveSelectionDialog({
                                                             value={config.subject}
                                                             className="text-black font-bold line-through border-t border-yellow-200 bg-yellow-100 focus:bg-yellow-200"
                                                         >
-                                                            (선택됨) {config.subject} [{otherGroup}그룹]
+                                                            (선택됨) {config.subject}
+                                                            {config.fullSubjectName && (
+                                                                <span className="text-xs text-gray-600 ml-1">({config.fullSubjectName})</span>
+                                                            )}
+                                                            <span className="text-xs text-gray-500 font-normal ml-2">[{otherGroup}그룹]</span>
                                                         </SelectItem>
                                                     );
                                                 })}

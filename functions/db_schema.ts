@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS elective_config (
     classCode TEXT,
     fullTeacherName TEXT,
     className TEXT,
+    fullSubjectName TEXT,
     isMovingClass INTEGER DEFAULT 0,
     isCombinedClass INTEGER DEFAULT 0,
     updatedAt TEXT DEFAULT (datetime('now'))

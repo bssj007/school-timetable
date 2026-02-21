@@ -94,6 +94,7 @@ function ElectiveManager({ password }: { password: string }) {
                     classCode: saved?.classCode || "",
                     fullTeacherName: saved?.fullTeacherName || "",
                     className: saved?.className || "",
+                    fullSubjectName: saved?.fullSubjectName || "",
                     isMovingClass: saved?.isMovingClass !== 0, // Default to true
                     isCombinedClass: saved?.isCombinedClass === 1 // Default to false
                 };
@@ -138,6 +139,7 @@ function ElectiveManager({ password }: { password: string }) {
                             classCode: item.classCode,
                             fullTeacherName: item.fullTeacherName,
                             className: item.className,
+                            fullSubjectName: item.fullSubjectName,
                             isMovingClass: item.isMovingClass,
                             isCombinedClass: item.isCombinedClass
                         })
@@ -190,7 +192,9 @@ function ElectiveManager({ password }: { password: string }) {
             else combinedMatch = true;
         }
 
-        return subjectMatch || teacherMatch || fullTeacherMatch || classCodeMatch || classNameMatch || moveMatch || combinedMatch;
+        const fullNameMatch = item.fullSubjectName?.toLowerCase().includes(lowerTerm);
+
+        return subjectMatch || teacherMatch || fullTeacherMatch || classCodeMatch || classNameMatch || moveMatch || combinedMatch || fullNameMatch;
     });
 
     return (
@@ -256,6 +260,7 @@ function ElectiveManager({ password }: { password: string }) {
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[150px]">과목명</TableHead>
+                                <TableHead className="w-[150px]">과목 풀네임</TableHead>
                                 <TableHead className="w-[100px]">원래 선생님</TableHead>
                                 <TableHead className="w-[150px]">분반 (A/B/C...)</TableHead>
                                 <TableHead>선생님 성함 (전체)</TableHead>
@@ -267,13 +272,13 @@ function ElectiveManager({ password }: { password: string }) {
                         <TableBody>
                             {isLoading ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center h-24">
+                                    <TableCell colSpan={8} className="text-center h-24">
                                         로딩 중...
                                     </TableCell>
                                 </TableRow>
                             ) : filteredSubjects.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center h-24">
+                                    <TableCell colSpan={8} className="text-center h-24">
                                         {searchTerm ? "검색 결과가 없습니다." : "데이터가 없습니다."}
                                     </TableCell>
                                 </TableRow>
@@ -301,6 +306,15 @@ function ElectiveManager({ password }: { password: string }) {
                                         >
                                             <TableCell className="font-medium">
                                                 {item.subject}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Input
+                                                    value={item.fullSubjectName || ""}
+                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(originalIndex, "fullSubjectName", e.target.value)}
+                                                    placeholder="풀네임 입력"
+                                                    className={`max-w-[150px] ${isDisabled ? "pointer-events-none" : ""}`}
+                                                    disabled={isDisabled}
+                                                />
                                             </TableCell>
                                             <TableCell className="text-gray-500">{item.teacher}</TableCell>
                                             <TableCell>
