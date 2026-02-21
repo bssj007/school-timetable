@@ -148,12 +148,12 @@ export default function ElectiveSelectionDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={() => { }}>
-            <DialogContent className="sm:max-w-[500px] md:max-w-2xl md:min-h-[600px] md:max-h-[90vh] flex flex-col [&>button]:hidden" onPointerDownOutside={(e: any) => e.preventDefault()} onEscapeKeyDown={(e: any) => e.preventDefault()}>
+            <DialogContent className="sm:max-w-[500px] md:max-w-3xl md:min-h-[700px] md:max-h-[90vh] flex flex-col [&>button]:hidden px-4 md:px-12 py-6" onPointerDownOutside={(e: any) => e.preventDefault()} onEscapeKeyDown={(e: any) => e.preventDefault()}>
                 <DialogHeader>
-                    <DialogTitle>선택과목 선택 - <span className="text-red-500">{grade}{classNum}{studentNumber.padStart(2, '0')}</span></DialogTitle>
+                    <DialogTitle className="md:text-2xl mb-2">선택과목 선택 - <span className="text-red-500">{grade}{classNum}{studentNumber.padStart(2, '0')}</span></DialogTitle>
                 </DialogHeader>
 
-                <div className="py-4 space-y-4 flex-1 overflow-y-auto min-h-0">
+                <div className="py-4 md:py-8 space-y-4 md:space-y-8 flex-1 overflow-y-auto min-h-0">
                     {configLoading ? (
                         <div className="flex justify-center p-4"><Loader2 className="animate-spin" /></div>
                     ) : (
@@ -165,8 +165,8 @@ export default function ElectiveSelectionDialog({
                             // However, we need to handle "Already selected in other group" logic display.
 
                             return (
-                                <div key={group} className="grid grid-cols-4 items-center gap-4">
-                                    <label className="text-right text-sm font-bold text-gray-700">
+                                <div key={group} className="grid grid-cols-4 items-center gap-4 md:gap-8">
+                                    <label className="text-right text-sm md:text-lg font-bold text-gray-700">
                                         {group} 그룹
                                     </label>
                                     <div className="col-span-3 flex flex-col items-start">
@@ -174,10 +174,10 @@ export default function ElectiveSelectionDialog({
                                             value={selectedSubject || ""}
                                             onValueChange={(val: string) => handleSelection(group, val)}
                                         >
-                                            <SelectTrigger className={`w-[160px] ${selectedSubject ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}`}>
+                                            <SelectTrigger className={`w-[160px] md:w-[260px] md:h-12 md:text-base ${selectedSubject ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}`}>
                                                 <SelectValue placeholder="과목 선택" />
                                             </SelectTrigger>
-                                            <SelectContent align="center">
+                                            <SelectContent align="start">
                                                 {/* 1. Normal Subjects (Not selected anywhere) */}
                                                 {Array.from(new Map(configs.map(item => [item.subject, item])).values()).map((config: ElectiveConfig) => {
                                                     // Check if selected in OTHER group
@@ -222,7 +222,7 @@ export default function ElectiveSelectionDialog({
                                             </SelectContent>
                                         </Select>
                                         {selectedSubject && selections[group]?.teacher && (
-                                            <div className="text-xs text-blue-600 mt-1 pl-1">
+                                            <div className="text-xs md:text-sm text-blue-600 mt-1 md:mt-2 pl-1">
                                                 담당: {selections[group].teacher}
                                             </div>
                                         )}
@@ -233,9 +233,9 @@ export default function ElectiveSelectionDialog({
                     )}
                 </div>
 
-                <div className="flex justify-between gap-3 mt-4">
+                <div className="flex justify-between gap-3 mt-4 md:mt-8">
                     {onBack ? (
-                        <Button variant="outline" onClick={onBack}>
+                        <Button variant="outline" onClick={onBack} className="md:h-12 md:px-6 md:text-base">
                             뒤로가기
                         </Button>
                     ) : (
@@ -244,7 +244,7 @@ export default function ElectiveSelectionDialog({
                     <Button
                         onClick={() => saveMutation.mutate()}
                         disabled={!isAllSelected || saveMutation.isPending}
-                        className={isAllSelected ? "bg-blue-600 hover:bg-blue-700" : ""}
+                        className={`md:h-12 md:px-8 md:text-base ${isAllSelected ? "bg-blue-600 hover:bg-blue-700" : ""}`}
                     >
                         {saveMutation.isPending ? "저장 중..." : "저장하고 시작하기"}
                     </Button>
