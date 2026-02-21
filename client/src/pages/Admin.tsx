@@ -93,7 +93,9 @@ function ElectiveManager({ password }: { password: string }) {
                     ...item,
                     classCode: saved?.classCode || "",
                     fullTeacherName: saved?.fullTeacherName || "",
-                    isMovingClass: saved?.isMovingClass !== 0 // Default to true
+                    className: saved?.className || "",
+                    isMovingClass: saved?.isMovingClass !== 0, // Default to true
+                    isCombinedClass: saved?.isCombinedClass === 1 // Default to false
                 };
             });
 
@@ -135,7 +137,9 @@ function ElectiveManager({ password }: { password: string }) {
                             originalTeacher: item.teacher || "", // Ensure string
                             classCode: item.classCode,
                             fullTeacherName: item.fullTeacherName,
-                            isMovingClass: item.isMovingClass
+                            className: item.className,
+                            isMovingClass: item.isMovingClass,
+                            isCombinedClass: item.isCombinedClass
                         })
                     });
                     if (!res.ok) throw new Error(`Save failed: ${res.status}`);
@@ -168,6 +172,7 @@ function ElectiveManager({ password }: { password: string }) {
         const teacherMatch = item.teacher?.toLowerCase().includes(lowerTerm);
         const fullTeacherMatch = item.fullTeacherName?.toLowerCase().includes(lowerTerm);
         const classCodeMatch = item.classCode?.toLowerCase().includes(lowerTerm);
+        const classNameMatch = item.className?.toLowerCase().includes(lowerTerm);
 
         // Custom check for "Move O" / "Move X" if user types "이동" or "이동O", "이동X"
         let moveMatch = false;
@@ -177,7 +182,15 @@ function ElectiveManager({ password }: { password: string }) {
             else moveMatch = true; // Just "이동" matches both
         }
 
-        return subjectMatch || teacherMatch || fullTeacherMatch || classCodeMatch || moveMatch;
+        // Custom check for "Combined"
+        let combinedMatch = false;
+        if (lowerTerm.includes("통반")) {
+            if (lowerTerm.includes("o") && item.isCombinedClass) combinedMatch = true;
+            else if (lowerTerm.includes("x") && !item.isCombinedClass) combinedMatch = true;
+            else combinedMatch = true;
+        }
+
+        return subjectMatch || teacherMatch || fullTeacherMatch || classCodeMatch || classNameMatch || moveMatch || combinedMatch;
     });
 
     return (
@@ -247,18 +260,20 @@ function ElectiveManager({ password }: { password: string }) {
                                 <TableHead className="w-[150px]">분반 (A/B/C...)</TableHead>
                                 <TableHead>선생님 성함 (전체)</TableHead>
                                 <TableHead className="w-[150px]">이동 수업 여부</TableHead>
+                                <TableHead className="w-[120px]">대상 반</TableHead>
+                                <TableHead className="w-[150px]">통반 수업 여부</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {isLoading ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center h-24">
+                                    <TableCell colSpan={7} className="text-center h-24">
                                         로딩 중...
                                     </TableCell>
                                 </TableRow>
                             ) : filteredSubjects.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center h-24">
+                                    <TableCell colSpan={7} className="text-center h-24">
                                         {searchTerm ? "검색 결과가 없습니다." : "데이터가 없습니다."}
                                     </TableCell>
                                 </TableRow>
@@ -346,7 +361,9 @@ function ElectiveManager({ password }: { password: string }) {
                                                         variant={item.isMovingClass ? "default" : "outline"}
                                                         size="sm"
                                                         className={`h-7 text-xs px-2 ${item.isMovingClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
-                                                        onClick={() => handleInputChange(originalIndex, "isMovingClass", true)}
+                                                        onClick={() => {
+                                                            handleInputChange(originalIndex, "isMovingClass", true);
+                                                        }}
                                                         disabled={isDisabled}
                                                     >
                                                         이동 O
@@ -355,10 +372,48 @@ function ElectiveManager({ password }: { password: string }) {
                                                         variant={!item.isMovingClass ? "default" : "outline"}
                                                         size="sm"
                                                         className={`h-7 text-xs px-2 ${!item.isMovingClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
-                                                        onClick={() => handleInputChange(originalIndex, "isMovingClass", false)}
+                                                        onClick={() => {
+                                                            handleInputChange(originalIndex, "isMovingClass", false);
+                                                            handleInputChange(originalIndex, "className", ""); // clear className when turned off
+                                                        }}
                                                         disabled={isDisabled}
                                                     >
                                                         이동 X
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Input
+                                                    value={item.className || ""}
+                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(originalIndex, "className", e.target.value)}
+                                                    placeholder="예: 1,2,3"
+                                                    className={`max-w-[100px] ${(!item.isMovingClass || isDisabled) ? "bg-gray-100 pointer-events-none text-gray-400" : ""}`}
+                                                    disabled={!item.isMovingClass || isDisabled}
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-1">
+                                                    <Button
+                                                        variant={item.isCombinedClass ? "default" : "outline"}
+                                                        size="sm"
+                                                        className={`h-7 text-xs px-2 ${item.isCombinedClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
+                                                        onClick={() => {
+                                                            handleInputChange(originalIndex, "isCombinedClass", true);
+                                                        }}
+                                                        disabled={isDisabled}
+                                                    >
+                                                        통반 O
+                                                    </Button>
+                                                    <Button
+                                                        variant={!item.isCombinedClass ? "default" : "outline"}
+                                                        size="sm"
+                                                        className={`h-7 text-xs px-2 ${!item.isCombinedClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
+                                                        onClick={() => {
+                                                            handleInputChange(originalIndex, "isCombinedClass", false);
+                                                        }}
+                                                        disabled={isDisabled}
+                                                    >
+                                                        통반 X
                                                     </Button>
                                                 </div>
                                             </TableCell>

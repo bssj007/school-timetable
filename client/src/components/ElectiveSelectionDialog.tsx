@@ -177,9 +177,9 @@ export default function ElectiveSelectionDialog({
                                             <SelectTrigger className={selectedSubject ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}>
                                                 <SelectValue placeholder="과목 선택" />
                                             </SelectTrigger>
-                                            <SelectContent>
+                                            <SelectContent align="center">
                                                 {/* 1. Normal Subjects (Not selected anywhere) */}
-                                                {configs.map((config: ElectiveConfig) => {
+                                                {Array.from(new Map(configs.map(item => [item.subject, item])).values()).map((config: ElectiveConfig) => {
                                                     // Check if selected in OTHER group
                                                     const selectedInGroup = Object.keys(selections).find(g => selections[g].subject === config.subject && g !== group);
 
@@ -197,8 +197,8 @@ export default function ElectiveSelectionDialog({
                                                     );
                                                 })}
 
-                                                {/* 2. Red Section: Subjects selected in OTHER groups */}
-                                                {configs.map((config: ElectiveConfig) => {
+                                                {/* 2. Red Section -> Yellow Section: Subjects selected in OTHER groups */}
+                                                {Array.from(new Map(configs.map(item => [item.subject, item])).values()).map((config: ElectiveConfig) => {
                                                     const otherGroup = Object.keys(selections).find(g => selections[g].subject === config.subject && g !== group);
 
                                                     if (!otherGroup) return null;
@@ -207,7 +207,7 @@ export default function ElectiveSelectionDialog({
                                                         <SelectItem
                                                             key={config.id}
                                                             value={config.subject}
-                                                            className="text-red-500 font-bold border-t border-red-100 bg-red-50 focus:bg-red-100"
+                                                            className="text-black font-bold line-through border-t border-yellow-200 bg-yellow-100 focus:bg-yellow-200"
                                                         >
                                                             (선택됨) {config.subject} [{otherGroup}그룹]
                                                         </SelectItem>
