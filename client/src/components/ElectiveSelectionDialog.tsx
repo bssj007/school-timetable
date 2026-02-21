@@ -93,9 +93,13 @@ export default function ElectiveSelectionDialog({
     }, [isOpen, grade, classNum, studentNumber]);
 
     const handleSelection = (group: string, subjectName: string) => {
-        // 1. Find the config for this subject in this group to get the teacher
-        const config = electivesByGroup[group]?.find(c => c.subject === subjectName);
-        if (!config) return;
+        // 1. Find the configs for this subject in this group to get ALL teachers
+        const configs = electivesByGroup[group]?.filter(c => c.subject === subjectName);
+        if (!configs || configs.length === 0) return;
+
+        // Extract all teachers, removing duplicates, and join them
+        const teachersSet = new Set(configs.map(c => c.fullTeacherName || c.originalTeacher).filter(Boolean));
+        const combinedTeacherNames = Array.from(teachersSet).join(", ");
 
         // 2. Check if this subject is already selected in ANOTHER group
         // If so, remove it from that other group (Move logic)
@@ -110,7 +114,7 @@ export default function ElectiveSelectionDialog({
         // 3. Set new selection
         newSelections[group] = {
             subject: subjectName,
-            teacher: config.fullTeacherName || config.originalTeacher
+            teacher: combinedTeacherNames
         };
 
         setSelections(newSelections);
@@ -201,7 +205,7 @@ export default function ElectiveSelectionDialog({
                                             <SelectTrigger className={`w-[160px] md:w-[220px] md:h-11 md:text-base ${selectedSubject ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}`}>
                                                 <SelectValue placeholder="과목 선택" />
                                             </SelectTrigger>
-                                            <SelectContent align="start" style={{ width: "var(--radix-select-trigger-width)" }}>
+                                            <SelectContent align="start" style={{ width: "var(--radix-select-trigger-width)", maxWidth: "var(--radix-select-trigger-width)" }}>
                                                 {/* 1. Normal Subjects (Not selected anywhere) */}
                                                 {Array.from(new Map(configs.map(item => [item.subject, item])).values()).map((config: ElectiveConfig) => {
                                                     // Check if selected in OTHER group
@@ -214,11 +218,12 @@ export default function ElectiveSelectionDialog({
                                                     // Ideally configs are unique per (group, subject).
                                                     return (
                                                         <SelectItem key={config.id} value={config.subject}>
-                                                            {config.subject}
-                                                            {config.fullSubjectName && (
-                                                                <span className="text-xs text-gray-500 ml-2">({config.fullSubjectName})</span>
-                                                            )}
-                                                            {/* User requested: "한 과목에 여러 선생님이 있을때도 하나의 과목으로 표시" -> Just Subject Name */}
+                                                            <div className="flex items-center gap-2 truncate block max-w-full">
+                                                                <span className="truncate">{config.subject}</span>
+                                                                {config.fullSubjectName && (
+                                                                    <span className="text-xs text-gray-500 truncate shrink-0">({config.fullSubjectName})</span>
+                                                                )}
+                                                            </div>
                                                         </SelectItem>
                                                     );
                                                 })}
@@ -235,11 +240,14 @@ export default function ElectiveSelectionDialog({
                                                             value={config.subject}
                                                             className="text-black font-bold line-through border-t border-yellow-200 bg-yellow-100 focus:bg-yellow-200"
                                                         >
-                                                            (선택됨) {config.subject}
-                                                            {config.fullSubjectName && (
-                                                                <span className="text-xs text-gray-600 ml-1">({config.fullSubjectName})</span>
-                                                            )}
-                                                            <span className="text-xs text-gray-500 font-normal ml-2">[{otherGroup}그룹]</span>
+                                                            <div className="flex items-center gap-1 truncate block max-w-full">
+                                                                <span className="shrink-0 whitespace-nowrap">(선택됨)</span>
+                                                                <span className="truncate">{config.subject}</span>
+                                                                {config.fullSubjectName && (
+                                                                    <span className="text-xs text-gray-600 truncate shrink-0">({config.fullSubjectName})</span>
+                                                                )}
+                                                                <span className="text-xs text-gray-500 font-normal shrink-0 whitespace-nowrap">[{otherGroup}그룹]</span>
+                                                            </div>
                                                         </SelectItem>
                                                     );
                                                 })}
@@ -268,9 +276,9 @@ export default function ElectiveSelectionDialog({
                             variant="destructive"
                             onClick={() => deleteMutation.mutate()}
                             disabled={deleteMutation.isPending}
-                            className="md:h-12 md:px-6 md:text-base"
+                            className="md:h-12 md:px-4 md:text-base w-fit"
                         >
-                            선택과목 초기화
+                            리셋
                         </Button>
                     </div>
                     <Button
