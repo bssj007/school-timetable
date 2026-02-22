@@ -147,15 +147,8 @@ export const onRequest = async (context: any) => {
 
         // GET method: Return timetable
         if (type === 'timetable') {
-            const gradeStr = url.searchParams.get('grade') || '1';
-            const classNumStr = url.searchParams.get('classNum') || '1';
-            const grade = parseInt(gradeStr);
-
-            if (classNumStr === 'all') {
-                return await getGradeTimetable(grade);
-            }
-
-            const classNum = parseInt(classNumStr);
+            const grade = parseInt(url.searchParams.get('grade') || '1');
+            const classNum = parseInt(url.searchParams.get('classNum') || '1');
             return await getTimetable(grade, classNum);
         }
 
@@ -272,110 +265,3 @@ async function getTimetable(grade: number, classNum: number) {
         data: result
     }), { headers: { 'Content-Type': 'application/json' } });
 }
-
-async function getGradeTimetable(grade: number) {
-    const prefix = await getPrefix();
-    const { code1, code2 } = await getSchoolCode(prefix);
-
-    const param = `${prefix}${code2}_0_${grade}`;
-    const b64 = btoa(param);
-    const targetUrl = `${BASE_URL}/${code1}?${b64}`;
-
-    const jsonText = await fetchWithProxy(targetUrl, HEADERS, false);
-    const jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
-    const rawData = JSON.parse(jsonString);
-
-    const keys = Object.keys(rawData);
-    const teacherProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].some((s: any) => typeof s === 'string' && s.endsWith('*'))) || "";
-
-    const keywords = ["국어", "수학", "영어", "한국사", "통합사회", "통합과학", "체육", "음악", "미술", "진로", "운동", "독서", "문학"];
-    let subjectProp = keys.find(k => {
-        const val = rawData[k];
-        if (!Array.isArray(val)) return false;
-        for (let i = 0; i < Math.min(val.length, 100); i++) {
-            if (typeof val[i] === 'string' && keywords.some(kw => val[i].includes(kw))) return true;
-        }
-        return false;
-    }) || "";
-
-    if (!subjectProp) {
-        const stringArrays = keys.filter(k => k !== teacherProp && Array.isArray(rawData[k]) && typeof rawData[k][0] === 'string');
-        stringArrays.sort((a, b) => rawData[b].length - rawData[a].length);
-        if (stringArrays.length > 0) subjectProp = stringArrays[0];
-    }
-
-    const timedataProp = keys.find(k => {
-        const val = rawData[k];
-        return Array.isArray(val) && val[grade] && Array.isArray(val[grade]);
-    }) || "";
-
-    if (!timedataProp) throw new Error("Data key not found");
-
-    const teachers = rawData[teacherProp] || [];
-    const subjects = rawData[subjectProp] || [];
-    const data = rawData[timedataProp];
-    const bunri = rawData['분리'] !== undefined ? rawData['분리'] : 100;
-    const timeInfoProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].length === 8 && typeof rawData[k][1] === 'number');
-    const timeInfo = timeInfoProp ? rawData[timeInfoProp] : null;
-
-    if (!data || !data[grade]) {
-        throw new Error(`Data not found for G${grade}`);
-    }
-
-    const gradeData = data[grade];
-    const result: any[] = [];
-
-    // Iterate over all classes available in gradeData
-    for (let currentClass = 1; currentClass < gradeData.length; currentClass++) {
-        const classData = gradeData[currentClass];
-        if (!classData || !Array.isArray(classData)) continue;
-
-        for (let weekday = 1; weekday <= 5; weekday++) {
-            let dayHours = 7;
-            if (timeInfo && timeInfo[grade]) {
-                dayHours = timeInfo[grade][weekday];
-            }
-
-            if (!classData[weekday]) continue;
-
-            const maxPeriod = classData[weekday].length - 1;
-            const loopLimit = Math.min(dayHours, maxPeriod);
-
-            for (let period = 1; period <= loopLimit; period++) {
-                const code = classData[weekday][period];
-                if (!code) continue;
-
-                let teacherIdx = 0;
-                let subjectIdx = 0;
-
-                if (bunri === 100) {
-                    teacherIdx = Math.floor(code / bunri);
-                    subjectIdx = code % bunri;
-                } else {
-                    teacherIdx = code % bunri;
-                    subjectIdx = Math.floor(code / bunri);
-                }
-
-                const subject = subjects[subjectIdx] ? subjects[subjectIdx].replace(/_/g, "") : "";
-                const teacher = teachers[teacherIdx] || "";
-
-                if (subject) {
-                    result.push({
-                        grade,
-                        class: currentClass,
-                        weekday,
-                        classTime: period,
-                        subject,
-                        teacher
-                    });
-                }
-            }
-        }
-    }
-
-    return new Response(JSON.stringify({
-        schoolName: "부산성지고등학교",
-        data: result
-    }), { headers: { 'Content-Type': 'application/json' } });
-}
-
