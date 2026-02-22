@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
     BookOpen, Trash2, Eye, EyeOff, Lock,
-    Settings, Search, ChevronDown, Check, ChevronsUpDown, Save, GripVertical, CheckCircle2, AlertCircle, Plus, X,
+    Settings, Search, ChevronDown, ChevronRight, Check, ChevronsUpDown, Save, GripVertical, CheckCircle2, AlertCircle, Plus, X,
     TriangleAlert, ShieldAlert,
     Download, Upload
 } from "lucide-react";
