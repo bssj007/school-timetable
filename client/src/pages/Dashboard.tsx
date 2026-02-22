@@ -293,15 +293,7 @@ export default function Dashboard() {
       if (!grade || !classNum || !studentNumber) return null;
       const response = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`);
       if (!response.ok) return null;
-      const data = await response.json();
-      if (data && typeof data.electives === 'string') {
-        try {
-          data.electives = JSON.parse(data.electives);
-        } catch (e) {
-          console.error("Failed to parse electives JSON", e);
-        }
-      }
-      return data;
+      return await response.json();
     },
     enabled: !!grade && !!classNum && !!studentNumber && (grade === "2" || grade === "3"),
   });
@@ -955,25 +947,11 @@ export default function Dashboard() {
                         </td>
                         {weekdayNames.map((_, weekdayIdx) => {
                           const cellData = timetableByDay[weekdayIdx]?.find(item => item.classTime === classTime);
-                          const currentDate = toDateString(weekDates[weekdayIdx]);
-                          const todayStr = toDateString(new Date());
-                          const isToday = todayStr === currentDate;
-                          const isPast = currentDate < todayStr;
+                          const isPast = toDateString(weekDates[weekdayIdx]) < toDateString(new Date());
 
                           const cellAssessments = assessments.filter(
-                            (a) => a.dueDate === currentDate && a.classTime === classTime
+                            (a) => a.dueDate === toDateString(weekDates[weekdayIdx]) && a.classTime === classTime
                           );
-
-                          // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
-                          let bgColor = "bg-white hover:bg-gray-50";
-                          if (cellAssessments.length > 0) {
-                            bgColor = isPast ? "bg-gray-100 border-gray-300" : "bg-blue-50 border-blue-200 hover:bg-blue-100";
-                          } else if (isToday) {
-                            bgColor = "bg-red-50 hover:bg-red-100";
-                          }
-
-                          // 과거 날짜 스타일
-                          const pastStyle = isPast ? "opacity-60 grayscale-[0.5]" : "";
 
                           let displaySubjectText = cellData?.subject || "";
                           let isElectiveCell = false;
@@ -1000,7 +978,7 @@ export default function Dashboard() {
                           return (
                             <td
                               key={weekdayIdx}
-                              className={`border p-1 md:p-2 text-center relative h-16 md:h-24 ${bgColor} ${pastStyle} ${!isDisabledSubject ? "cursor-pointer" : ""} transition-colors`}
+                              className={`border p-1 md:p-2 text-center relative h-16 md:h-24 ${isPast || isDisabledSubject ? "opacity-50" : "cursor-pointer hover:bg-gray-50"} transition-colors`}
                               onClick={() => {
                                 if (!isDisabledSubject) {
                                   handleCellClick(weekdayIdx, classTime, displaySubjectText, weekDates[weekdayIdx], cellAssessments, isElectiveCell);
