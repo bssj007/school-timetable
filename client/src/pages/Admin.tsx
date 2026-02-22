@@ -439,9 +439,10 @@ function ElectiveManager({ password }: { password: string }) {
                                         </TableRow>
                                     );
                                 })
-                        </TableBody >
-                    </Table >
-                </div >
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </div>
         </div>
     );
