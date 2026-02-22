@@ -945,117 +945,84 @@ export default function Dashboard() {
                         <td className="border p-1 md:p-2 text-center font-medium bg-gray-50 text-sm w-8 md:w-10">
                           {classTime}
                         </td>
-                        {Array.from({ length: 5 }, (_, weekdayIdx) => {
-                          const dayItems = timetableByDay[weekdayIdx] || [];
-                          const item = dayItems.find((t) => t.classTime === classTime);
-                          const currentDate = toDateString(weekDates[weekdayIdx]);
+                        {weekdayNames.map((_, weekdayIdx) => {
+                          const cellData = timetableByDay[weekdayIdx]?.find(item => item.classTime === classTime);
+                          const isPast = toDateString(weekDates[weekdayIdx]) < toDateString(new Date());
 
-                          // 오늘 날짜인지 확인
-                          const today = new Date();
-                          const todayStr = toDateString(today);
-                          const isToday = todayStr === currentDate;
-                          const isPast = currentDate < todayStr;
+                          const cellAssessments = assessments.filter(
+                            (a) => a.dueDate === toDateString(weekDates[weekdayIdx]) && a.classTime === classTime
+                          );
 
-                          // 해당 날짜와 교시에 수행평가가 있는지 확인
-                          const cellAssessments = assessments ? assessments.filter(a => {
-                            if (settings?.hide_past_assessments && isPast) return false;
-                            return item &&
-                              a.subject.trim() === item.subject.trim() &&
-                              a.dueDate === currentDate &&
-                              a.classTime === classTime &&
-                              !a.isDone;
-                          }) : [];
+                          let displaySubjectText = cellData?.subject || "";
+                          let isElectiveCell = false;
+                          let groupTag = null;
+                          let groupColor = "#000000";
 
-                          // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
-                          const bgColor = cellAssessments.length > 0
-                            ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
-                            : isToday
-                              ? "bg-red-50 hover:bg-red-100"
-                              : "bg-yellow-50 hover:bg-yellow-100";
-
-                          // 과거 날짜 스타일
-                          const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400" : "";
-
-                          {
-                            weekdayNames.map((_, weekdayIdx) => {
-                              const cellData = timetableByDay[weekdayIdx]?.find(item => item.classTime === classTime);
-                              const isPast = toDateString(weekDates[weekdayIdx]) < toDateString(new Date());
-
-                              const cellAssessments = assessments.filter(
-                                (a) => a.dueDate === toDateString(weekDates[weekdayIdx]) && a.classTime === classTime
-                              );
-
-                              let displaySubjectText = cellData?.subject || "";
-                              let isElectiveCell = false;
-                              let groupTag = null;
-                              let groupColor = "#000000";
-
-                              // Elective Replacement Logic
-                              if (cellData && (grade === "2" || grade === "3")) {
-                                const majorityGroup = getCellMajorityGroup(weekdayIdx, classTime, cellData.subject);
-                                if (majorityGroup) {
-                                  isElectiveCell = true;
-                                  // If user has saved electives and picked this group
-                                  if (userElectives?.electives && userElectives.electives[majorityGroup]) {
-                                    displaySubjectText = userElectives.electives[majorityGroup].subject;
-                                  }
-                                  groupTag = `(그룹 ${majorityGroup})`;
-                                  groupColor = getGroupColor(majorityGroup);
-                                }
+                          // Elective Replacement Logic
+                          if (cellData && (grade === "2" || grade === "3")) {
+                            const majorityGroup = getCellMajorityGroup(weekdayIdx, classTime, cellData.subject);
+                            if (majorityGroup) {
+                              isElectiveCell = true;
+                              // If user has saved electives and picked this group
+                              if (userElectives?.electives && userElectives.electives[majorityGroup]) {
+                                displaySubjectText = userElectives.electives[majorityGroup].subject;
                               }
+                              groupTag = `(그룹 ${majorityGroup})`;
+                              groupColor = getGroupColor(majorityGroup);
+                            }
+                          }
 
-                              // Check if subject is effectively disabled for assessments
-                              const isDisabledSubject = ["창체", "채플"].includes(cellData?.subject || "");
+                          // Check if subject is effectively disabled for assessments
+                          const isDisabledSubject = ["창체", "채플", "빈교실", "공강", "자습", "점심시간", "Empty", "Free"].some(ex => (cellData?.subject || "").includes(ex));
 
-                              return (
-                                <td
-                                  key={weekdayIdx}
-                                  className={`border p-1 md:p-2 text-center relative h-16 md:h-24 ${isPast || isDisabledSubject ? "opacity-50" : "cursor-pointer hover:bg-gray-50"} transition-colors`}
-                                  onClick={() => {
-                                    if (!isDisabledSubject) {
-                                      handleCellClick(weekdayIdx, classTime, displaySubjectText, weekDates[weekdayIdx], cellAssessments, isElectiveCell);
-                                    }
-                                  }}
-                                >
-                                  <div className="flex flex-col h-full items-center justify-center">
-                                    {cellData ? (
-                                      <>
-                                        <div className="font-bold text-sm md:text-base text-gray-800 break-words line-clamp-2 w-full px-1">
-                                          {displaySubjectText}
-                                        </div>
-                                        {isElectiveCell && groupTag && (
-                                          <div className="text-[10px] md:text-xs font-bold leading-tight" style={{ color: groupColor }}>
-                                            {groupTag}
-                                          </div>
-                                        )}
-                                        {!isElectiveCell && (
-                                          <div className="text-xs text-gray-500 whitespace-nowrap overflow-hidden text-ellipsis w-full">
-                                            {cellData.teacher}
-                                          </div>
-                                        )}
-                                      </>
-                                    ) : (
-                                      <span className="text-gray-300">-</span>
+                          return (
+                            <td
+                              key={weekdayIdx}
+                              className={`border p-1 md:p-2 text-center relative h-16 md:h-24 ${isPast || isDisabledSubject ? "opacity-50" : "cursor-pointer hover:bg-gray-50"} transition-colors`}
+                              onClick={() => {
+                                if (!isDisabledSubject) {
+                                  handleCellClick(weekdayIdx, classTime, displaySubjectText, weekDates[weekdayIdx], cellAssessments, isElectiveCell);
+                                }
+                              }}
+                            >
+                              <div className="flex flex-col h-full items-center justify-center">
+                                {cellData ? (
+                                  <>
+                                    <div className="font-bold text-sm md:text-base text-gray-800 break-words line-clamp-2 w-full px-1">
+                                      {displaySubjectText}
+                                    </div>
+                                    {isElectiveCell && groupTag && (
+                                      <div className="text-[10px] md:text-xs font-bold leading-tight" style={{ color: groupColor }}>
+                                        {groupTag}
+                                      </div>
                                     )}
+                                    {!isElectiveCell && (
+                                      <div className="text-xs text-gray-500 whitespace-nowrap overflow-hidden text-ellipsis w-full">
+                                        {cellData.teacher}
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="text-gray-300">-</span>
+                                )}
 
-                                    {/* Assessment Badges here */}
-                                    <div className="absolute top-1 right-1 flex flex-col gap-1 items-end">
-                                      {cellAssessments.map((a, i) => (
-                                        <div
-                                          key={i}
-                                          className={`w-3 h-3 md:w-4 md:h-4 rounded-full shadow-sm flex items-center justify-center text-[8px] md:text-[10px] font-bold text-white
+                                {/* Assessment Badges here */}
+                                <div className="absolute top-1 right-1 flex flex-col gap-1 items-end">
+                                  {cellAssessments.map((a, i) => (
+                                    <div
+                                      key={i}
+                                      className={`w-3 h-3 md:w-4 md:h-4 rounded-full shadow-sm flex items-center justify-center text-[8px] md:text-[10px] font-bold text-white
                                         ${a.isDone ? "bg-gray-400" : "bg-red-500 animate-[bounce_2s_infinite]"}
                                     `}
-                                        >
-                                          C
-                                        </div>
-                                      ))}
+                                    >
+                                      C
                                     </div>
-                                  </div>
-                                </td>
-                              );
-                            })
-                          }
+                                  ))}
+                                </div>
+                              </div>
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                   </tbody>
