@@ -87,7 +87,15 @@ export default function ElectiveSelectionDialog({
         queryFn: async () => {
             const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`);
             if (!res.ok) throw new Error("Failed to fetch student profile");
-            return res.json();
+            const data = await res.json();
+            if (data && data.electives && typeof data.electives === 'string') {
+                try {
+                    data.electives = JSON.parse(data.electives);
+                } catch (e) {
+                    console.error("Failed to parse existing electives in queryFn", e);
+                }
+            }
+            return data;
         },
         enabled: isOpen && !!grade && !!classNum && !!studentNumber
     });
@@ -98,15 +106,7 @@ export default function ElectiveSelectionDialog({
         if (isOpen) {
             if (existingProfile !== undefined && !initializedRef.current) {
                 if (existingProfile && existingProfile.electives) {
-                    try {
-                        const parsedElectives = typeof existingProfile.electives === 'string'
-                            ? JSON.parse(existingProfile.electives)
-                            : existingProfile.electives;
-                        setSelections(parsedElectives);
-                    } catch (e) {
-                        console.error("Failed to parse existing electives", e);
-                        setSelections({});
-                    }
+                    setSelections(existingProfile.electives);
                 } else {
                     setSelections({});
                 }
