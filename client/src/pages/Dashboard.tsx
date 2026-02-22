@@ -221,7 +221,7 @@ export default function Dashboard() {
   };
 
   // 1. 시간표 조회
-  const { data: rawTimetableData, isLoading: timetableLoading, refetch: refetchTimetable } = useQuery({
+  const { data: rawTimetableData, isLoading: timetableLoading, isFetching: isTimetableFetching, refetch: refetchTimetable } = useQuery({
     queryKey: ['timetable', schoolName, grade, classNum],
     queryFn: async () => {
       if (!grade || !classNum) return [];
@@ -253,7 +253,7 @@ export default function Dashboard() {
   });
 
   // 1.5 선택과목 데이터 및 프로필 조회 (2, 3학년용)
-  const { data: electiveConfigs } = useQuery({
+  const { data: electiveConfigs, isFetching: isElectiveConfigsFetching } = useQuery({
     queryKey: ['electiveConfigs', grade],
     queryFn: async () => {
       if (grade !== "2" && grade !== "3") return [];
@@ -264,7 +264,7 @@ export default function Dashboard() {
     enabled: grade === "2" || grade === "3"
   });
 
-  const { data: studentProfile } = useQuery({
+  const { data: studentProfile, isFetching: isProfileFetching } = useQuery({
     queryKey: ['studentProfile', grade, classNum, studentNumber],
     queryFn: async () => {
       if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber) return null;
@@ -285,12 +285,16 @@ export default function Dashboard() {
 
   const lastValidProfileRef = React.useRef<any>(null);
   const currentProfile = React.useMemo(() => {
-    if (studentProfile) {
-      lastValidProfileRef.current = studentProfile;
-      return studentProfile;
+    if (grade !== "2" && grade !== "3") {
+      lastValidProfileRef.current = null;
+      return null;
     }
-    return lastValidProfileRef.current;
-  }, [studentProfile]);
+    if (isProfileFetching) {
+      return lastValidProfileRef.current;
+    }
+    lastValidProfileRef.current = studentProfile || null;
+    return studentProfile || null;
+  }, [studentProfile, isProfileFetching, grade]);
 
   const { timetableData, allClassesTimetable } = useMemo(() => {
     if (!rawTimetableData) return { timetableData: [], allClassesTimetable: [] };
@@ -304,9 +308,15 @@ export default function Dashboard() {
   const lastValidGroupsRef = React.useRef<Record<string, string>>({});
 
   const computedGroups = useMemo(() => {
-    if ((grade !== "2" && grade !== "3") || !allClassesTimetable || allClassesTimetable.length === 0 || !electiveConfigs || electiveConfigs.length === 0) {
-      // Return previously computed groups if data is temporarily missing during a refetch
+    if (grade !== "2" && grade !== "3") {
+      lastValidGroupsRef.current = {};
+      return {};
+    }
+    if (isTimetableFetching || isElectiveConfigsFetching) {
       return lastValidGroupsRef.current;
+    }
+    if (!allClassesTimetable || allClassesTimetable.length === 0 || !electiveConfigs || electiveConfigs.length === 0) {
+      return {};
     }
 
     const subjectToGroups = new Map<string, string[]>();
