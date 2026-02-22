@@ -569,13 +569,25 @@ export default function Dashboard() {
   }, [electiveConfigs]);
 
   // Determine majority group for a cell using gradeTimetable
-  const getCellMajorityGroup = (weekday: number, classTime: number, subjectStr: string) => {
+  const getCellMajorityGroup = (weekday: number, classTime: number, currentCell: any) => {
     if (!gradeTimetable || gradeTimetable.length === 0 || !movingSubjectsByTeacher.size) return null;
 
-    // Check if the current subject is a moving class
-    let isMoving = false;
-    // We only have subject name from timetable context, we must check if any matching subject is moving
-    // Or we use subject and teacher from cell
+    if (!currentCell || !currentCell.subject) return null;
+
+    // 1. Check if the current subject is a moving class
+    const currentKey = `${currentCell.subject}-${currentCell.teacher}`;
+    let isCurrentSubjectMoving = movingSubjectsByTeacher.has(currentKey);
+
+    // Fallback: Check if any moving subject has this name if teacher mismatch
+    if (!isCurrentSubjectMoving) {
+      movingSubjectsByTeacher.forEach((config) => {
+        if (config.subject === currentCell.subject) {
+          isCurrentSubjectMoving = true;
+        }
+      });
+    }
+
+    if (!isCurrentSubjectMoving) return null;
 
     const candidates = gradeTimetable.filter((t: any) => t.weekday === weekday && t.classTime === classTime);
     if (!candidates.length) return null;
@@ -585,12 +597,21 @@ export default function Dashboard() {
 
     candidates.forEach((t: any) => {
       const key = `${t.subject}-${t.teacher}`;
-      const config = movingSubjectsByTeacher.get(key);
+      let config = movingSubjectsByTeacher.get(key);
+
+      // Fallback by subject name only for candidates
+      if (!config) {
+        movingSubjectsByTeacher.forEach((c) => {
+          if (c.subject === t.subject) config = c;
+        });
+      }
+
       if (config && config.classCode) {
         matchedMovingSubject = true;
         const codes = config.classCode.split(',').filter(Boolean);
         codes.forEach((c: string) => {
-          groupCounts[c] = (groupCounts[c] || 0) + 1;
+          const trimmed = c.trim();
+          groupCounts[trimmed] = (groupCounts[trimmed] || 0) + 1;
         });
       }
     });
@@ -964,12 +985,12 @@ export default function Dashboard() {
                             (a) => a.dueDate === currentDate && a.classTime === classTime
                           );
 
-                          // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
+                          // 배경색 결정: 
                           let bgColor = "bg-white hover:bg-gray-50";
                           if (cellAssessments.length > 0) {
                             bgColor = isPast ? "bg-gray-100 border-gray-300" : "bg-blue-50 border-blue-200 hover:bg-blue-100";
-                          } else if (isToday) {
-                            bgColor = "bg-red-50 hover:bg-red-100";
+                          } else if (isToday && !isPast) {
+                            bgColor = "bg-yellow-50 hover:bg-yellow-100";
                           }
 
                           // 과거 날짜 스타일
@@ -982,7 +1003,7 @@ export default function Dashboard() {
 
                           // Elective Replacement Logic
                           if (cellData && (grade === "2" || grade === "3")) {
-                            const majorityGroup = getCellMajorityGroup(weekdayIdx, classTime, cellData.subject);
+                            const majorityGroup = getCellMajorityGroup(weekdayIdx, classTime, cellData);
                             if (majorityGroup) {
                               isElectiveCell = true;
                               // If user has saved electives and picked this group
