@@ -174,30 +174,6 @@ export default function ElectiveSelectionDialog({
         }
     });
 
-    const deleteMutation = useMutation({
-        mutationFn: async () => {
-            if (!confirm("저장된 선택과목 정보를 모두 초기화하시겠습니까? (이 작업은 되돌릴 수 없습니다.)")) return false;
-            const res = await fetch(`/api/electives?grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`, {
-                method: 'DELETE',
-            });
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.error || "Failed to reset selection");
-            }
-            return res.json();
-        },
-        onSuccess: (data) => {
-            if (data) {
-                toast.success("선택과목이 초기화되었습니다.");
-                setSelections({});
-                queryClient.invalidateQueries({ queryKey: ['studentProfile'] });
-            }
-        },
-        onError: (err) => {
-            toast.error(`초기화 실패: ${err.message}`);
-        }
-    });
-
     const isAllSelected = Object.keys(electivesByGroup).every(group => selections[group]);
 
     return (
@@ -300,8 +276,7 @@ export default function ElectiveSelectionDialog({
                         )}
                         <Button
                             variant="destructive"
-                            onClick={() => deleteMutation.mutate()}
-                            disabled={deleteMutation.isPending}
+                            onClick={() => setSelections({})}
                             className="md:h-12 md:px-4 md:text-base w-fit"
                         >
                             리셋
