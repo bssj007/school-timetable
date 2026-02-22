@@ -42,6 +42,8 @@ function ElectiveManager({ password }: { password: string }) {
     const [selectedGrade, setSelectedGrade] = useState<number>(2);
     const [subjects, setSubjects] = useState<any[]>([]);
     const [originalSubjects, setOriginalSubjects] = useState<any[]>([]); // To track changes
+    const [groupColors, setGroupColors] = useState<Record<string, string>>({});
+    const [originalGroupColors, setOriginalGroupColors] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -100,6 +102,23 @@ function ElectiveManager({ password }: { password: string }) {
                 };
             });
 
+            // 4. Fetch Group Colors
+            let colorsData = [];
+            try {
+                const colorsRes = await fetch(`/api/admin/elective_colors?grade=${selectedGrade}`, {
+                    headers: { "X-Admin-Password": password }
+                });
+                if (colorsRes.ok) {
+                    colorsData = await colorsRes.json();
+                    const colorMap: Record<string, string> = {};
+                    colorsData.forEach((c: any) => colorMap[c.classCode] = c.color);
+                    setGroupColors(colorMap);
+                    setOriginalGroupColors(JSON.parse(JSON.stringify(colorMap)));
+                }
+            } catch (e: any) {
+                console.error("Colors Fetch Error:", e);
+            }
+
             setSubjects(merged);
             setOriginalSubjects(JSON.parse(JSON.stringify(merged)));
         } catch (error: any) {
@@ -116,7 +135,11 @@ function ElectiveManager({ password }: { password: string }) {
         setSubjects(newSubjects);
     };
 
-    const hasChanges = JSON.stringify(subjects) !== JSON.stringify(originalSubjects);
+    const handleColorChange = (group: string, color: string) => {
+        setGroupColors(prev => ({ ...prev, [group]: color }));
+    };
+
+    const hasChanges = JSON.stringify(subjects) !== JSON.stringify(originalSubjects) || JSON.stringify(groupColors) !== JSON.stringify(originalGroupColors);
 
     const handleSave = async () => {
         if (!hasChanges) return;
@@ -148,7 +171,26 @@ function ElectiveManager({ password }: { password: string }) {
                 }
             });
 
-            await Promise.all(promises);
+            // Save Colors
+            const colorPromises = Object.entries(groupColors).map(async ([group, color]) => {
+                if (originalGroupColors[group] !== color) {
+                    const res = await fetch("/api/admin/elective_colors", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-Admin-Password": password
+                        },
+                        body: JSON.stringify({
+                            grade: selectedGrade,
+                            classCode: group,
+                            color: color
+                        })
+                    });
+                    if (!res.ok) throw new Error(`Color Save failed: ${res.status}`);
+                }
+            });
+
+            await Promise.all([...promises, ...colorPromises]);
             toast.success("저장되었습니다.");
             setOriginalSubjects(JSON.parse(JSON.stringify(subjects)));
         } catch (error) {
@@ -163,6 +205,7 @@ function ElectiveManager({ password }: { password: string }) {
 
     const handleCancel = () => {
         setSubjects(JSON.parse(JSON.stringify(originalSubjects)));
+        setGroupColors(JSON.parse(JSON.stringify(originalGroupColors)));
     };
 
     // Filter subjects based on search term
@@ -200,21 +243,45 @@ function ElectiveManager({ password }: { password: string }) {
     return (
         <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
             {/* Sidebar */}
-            <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
-                <Button
-                    variant={selectedGrade === 2 ? "default" : "ghost"}
-                    className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
-                    onClick={() => setSelectedGrade(2)}
-                >
-                    2학년
-                </Button>
-                <Button
-                    variant={selectedGrade === 3 ? "default" : "ghost"}
-                    className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
-                    onClick={() => setSelectedGrade(3)}
-                >
-                    3학년
-                </Button>
+            <div className="w-full md:w-64 flex flex-col gap-4 p-2 border-r shrink-0 overflow-y-auto">
+                <div className="flex flex-row md:flex-col gap-2 border-b md:border-b-0 pb-4 md:pb-0">
+                    <Button
+                        variant={selectedGrade === 2 ? "default" : "ghost"}
+                        className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
+                        onClick={() => setSelectedGrade(2)}
+                    >
+                        2학년
+                    </Button>
+                    <Button
+                        variant={selectedGrade === 3 ? "default" : "ghost"}
+                        className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
+                        onClick={() => setSelectedGrade(3)}
+                    >
+                        3학년
+                    </Button>
+                </div>
+
+                {/* Group Colors Section */}
+                <div className="pt-4 border-t">
+                    <h4 className="text-sm font-bold mb-3">그룹 색상 관리</h4>
+                    <div className="space-y-2">
+                        {["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"].map(group => (
+                            <div key={group} className="flex items-center gap-2">
+                                <span className="text-sm font-medium w-6">{group}</span>
+                                <Input
+                                    type="color"
+                                    value={groupColors[group] || "#000000"}
+                                    onChange={(e) => handleColorChange(group, e.target.value)}
+                                    className="w-12 h-8 p-1 cursor-pointer"
+                                />
+                                <span className="text-xs text-gray-500 uppercase flex-1">{groupColors[group] || "#000000"}</span>
+                                {groupColors[group] && groupColors[group] !== originalGroupColors[group] && (
+                                    <span className="w-2 h-2 rounded-full bg-blue-500" title="수정됨"></span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             {/* Main Content */}

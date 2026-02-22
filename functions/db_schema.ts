@@ -1,9 +1,9 @@
-
 export const ALL_TABLES = [
     "cookie_profiles",
     "ip_profiles",
     "student_profiles",
-    "elective_config"
+    "elective_config",
+    "elective_group_colors"
 ];
 
 export const createStudentProfilesTable = `
@@ -66,12 +66,24 @@ CREATE TABLE IF NOT EXISTS elective_config (
 );
 `;
 
+export const createElectiveGroupColorsTable = `
+CREATE TABLE IF NOT EXISTS elective_group_colors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    grade INTEGER NOT NULL,
+    classCode TEXT NOT NULL, -- "A", "B", "C"...
+    color TEXT NOT NULL,
+    updatedAt TEXT DEFAULT (datetime('now')),
+    UNIQUE(grade, classCode)
+);
+`;
+
 export async function ensureAllTables(db: any) {
     try {
         await db.prepare(createStudentProfilesTable).run();
         await db.prepare(createIpProfilesTable).run();
         await db.prepare(createCookieProfilesTable).run();
         await db.prepare(createElectiveConfigTable).run();
+        await db.prepare(createElectiveGroupColorsTable).run();
         console.log("All tables ensured.");
     } catch (e) {
         console.error("Error ensuring tables:", e);

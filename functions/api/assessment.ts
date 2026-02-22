@@ -22,7 +22,7 @@ export const onRequest = async (context: any) => {
             const classNum = url.searchParams.get('classNum') || '1';
 
             try {
-                let query = "SELECT * FROM performance_assessments WHERE grade = ? AND classNum = ?";
+                let query = "SELECT * FROM performance_assessments WHERE grade = ? AND (classNum = ? OR classNum = 0)";
                 const params: any[] = [grade, classNum];
 
                 // hide_past_assessments logic moved to frontend to preserve timetable view
@@ -74,9 +74,18 @@ export const onRequest = async (context: any) => {
 
             // 중복 체크: 같은 날짜, 같은 교시에 이미 수행평가가 있는지 확인
             if (classTime) {
-                const existing = await env.DB.prepare(
-                    "SELECT id FROM performance_assessments WHERE grade = ? AND classNum = ? AND dueDate = ? AND classTime = ?"
-                ).bind(grade, classNum, dueDate, classTime).first();
+                let existing;
+                if (classNum === 0) {
+                    // For shared electives, they might happen at the same classTime across different groups.
+                    // We must ensure they don't have the exactly same subject, grade, classTime, and dueDate.
+                    existing = await env.DB.prepare(
+                        "SELECT id FROM performance_assessments WHERE grade = ? AND classNum = ? AND dueDate = ? AND classTime = ? AND subject = ?"
+                    ).bind(grade, classNum, dueDate, classTime, subject).first();
+                } else {
+                    existing = await env.DB.prepare(
+                        "SELECT id FROM performance_assessments WHERE grade = ? AND classNum = ? AND dueDate = ? AND classTime = ?"
+                    ).bind(grade, classNum, dueDate, classTime).first();
+                }
 
                 if (existing) {
                     return new Response(JSON.stringify({ error: "이미 해당 교시에 수행평가가 등록되어 있습니다." }), {

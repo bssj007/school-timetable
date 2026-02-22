@@ -124,6 +124,7 @@ export default function Dashboard() {
     content: "",
     classTime: "",
     round: "1",
+    isElective: false,
   });
 
   const [showElectiveDialog, setShowElectiveDialog] = useState(false);
@@ -182,7 +183,8 @@ export default function Dashboard() {
     classTime: number,
     subject: string,
     date: Date,
-    cellAssessments: AssessmentItem[]
+    cellAssessments: AssessmentItem[],
+    isElective: boolean = false
   ) => {
     const today = new Date();
     const todayStr = toDateString(today);
@@ -213,6 +215,7 @@ export default function Dashboard() {
           content: "",
           classTime: classTime.toString(),
           round: "1",
+          isElective: isElective,
         });
         setShowAddDialog(true);
       }
@@ -248,6 +251,63 @@ export default function Dashboard() {
     enabled: !!grade && !!classNum && !!schoolName,
     retry: true, // 무한 재시도
     retryDelay: 3000, // 3초 간격
+  });
+
+  // Fetch grade-wide timetable for majority calculation
+  const { data: gradeTimetable } = useQuery({
+    queryKey: ['gradeTimetable', schoolName, grade],
+    queryFn: async () => {
+      if (!grade) return [];
+      try {
+        const response = await fetch(`/api/comcigan?type=timetable&grade=${grade}&classNum=all`);
+        if (!response.ok) return [];
+        const result = await response.json();
+        return (result.data || []).map((item: any) => ({
+          ...item,
+          weekday: item.weekday - 1
+        })) as TimetableItem[];
+      } catch (e) {
+        return [];
+      }
+    },
+    enabled: !!grade && !!schoolName && (grade === "2" || grade === "3"),
+    retry: true,
+  });
+
+  // Fetch elective configurations for mapping subjects
+  const { data: electiveConfigs } = useQuery({
+    queryKey: ['electiveConfigs', grade],
+    queryFn: async () => {
+      if (!grade) return [];
+      const response = await fetch(`/api/electives?grade=${grade}`);
+      if (!response.ok) return [];
+      return await response.json();
+    },
+    enabled: !!grade && (grade === "2" || grade === "3"),
+  });
+
+  // Fetch user's saved electives
+  const { data: userElectives } = useQuery({
+    queryKey: ['userElectives', grade, classNum, studentNumber],
+    queryFn: async () => {
+      if (!grade || !classNum || !studentNumber) return null;
+      const response = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`);
+      if (!response.ok) return null;
+      return await response.json();
+    },
+    enabled: !!grade && !!classNum && !!studentNumber && (grade === "2" || grade === "3"),
+  });
+
+  // Fetch group colors
+  const { data: groupColors } = useQuery({
+    queryKey: ['electiveGroupColors', grade],
+    queryFn: async () => {
+      if (!grade) return [];
+      const response = await fetch(`/api/elective_colors?grade=${grade}`);
+      if (!response.ok) return [];
+      return await response.json();
+    },
+    enabled: !!grade && (grade === "2" || grade === "3"),
   });
 
   // 2. 컴시간에서 시간표 가져오기
@@ -346,6 +406,7 @@ export default function Dashboard() {
   // 4. 수행평가 추가
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
+      const targetClassNum = data.isElective ? 0 : parseInt(classNum);
       const res = await fetch('/api/assessment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -355,7 +416,7 @@ export default function Dashboard() {
           description: data.round ? `${data.round}차` : "",
           dueDate: data.assessmentDate,
           grade: parseInt(grade),
-          classNum: parseInt(classNum),
+          classNum: targetClassNum,
           classTime: data.classTime ? parseInt(data.classTime) : null,
         }),
       });
@@ -436,6 +497,7 @@ export default function Dashboard() {
         content: "",
         classTime: "",
         round: "1",
+        isElective: false,
       });
       setShowAddDialog(false); // 다이얼로그 닫기
       setSelectedCell(null); // 선택 셀 해제
@@ -461,6 +523,7 @@ export default function Dashboard() {
       content: assessment.title,
       classTime: assessment.classTime?.toString() || "",
       round: assessment.round?.toString() || "1",
+      isElective: false, // For edits, we preserve whatever the existing assessment is mapped to, but the current UI doesn't alter classNum on edit yet.
     });
     setShowViewDialog(false);
     setShowEditDialog(true);
@@ -481,6 +544,68 @@ export default function Dashboard() {
     } catch (error) {
       console.error("수행평가 수정 실패:", error);
     }
+  };
+
+  // Build elective mapping for quick lookup
+  const movingSubjectsByTeacher = useMemo(() => {
+    const map = new Map<string, any>();
+    if (electiveConfigs) {
+      electiveConfigs.forEach((c: any) => {
+        if (c.isMovingClass !== 0) {
+          const key = `${c.subject}-${c.originalTeacher}`;
+          map.set(key, c);
+        }
+      });
+    }
+    return map;
+  }, [electiveConfigs]);
+
+  // Determine majority group for a cell using gradeTimetable
+  const getCellMajorityGroup = (weekday: number, classTime: number, subjectStr: string) => {
+    if (!gradeTimetable || gradeTimetable.length === 0 || !movingSubjectsByTeacher.size) return null;
+
+    // Check if the current subject is a moving class
+    let isMoving = false;
+    // We only have subject name from timetable context, we must check if any matching subject is moving
+    // Or we use subject and teacher from cell
+
+    const candidates = gradeTimetable.filter((t: any) => t.weekday === weekday && t.classTime === classTime);
+    if (!candidates.length) return null;
+
+    const groupCounts: Record<string, number> = {};
+    let matchedMovingSubject = false;
+
+    candidates.forEach((t: any) => {
+      const key = `${t.subject}-${t.teacher}`;
+      const config = movingSubjectsByTeacher.get(key);
+      if (config && config.classCode) {
+        matchedMovingSubject = true;
+        const codes = config.classCode.split(',').filter(Boolean);
+        codes.forEach((c: string) => {
+          groupCounts[c] = (groupCounts[c] || 0) + 1;
+        });
+      }
+    });
+
+    if (!matchedMovingSubject) return null;
+
+    // Find the group with the highest count
+    let maxCount = 0;
+    let majorityGroup = null;
+    Object.entries(groupCounts).forEach(([group, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        majorityGroup = group;
+      }
+    });
+
+    return majorityGroup;
+  };
+
+  const getGroupColor = (group: string) => {
+    if (!groupColors || !Array.isArray(groupColors)) return "#000000";
+    const found = groupColors.find((c: any) => c.classCode === group);
+    return found ? found.color : "#000000";
   };
 
   // 요일별로 시간표 데이터를 그룹화
@@ -851,55 +976,86 @@ export default function Dashboard() {
                           // 과거 날짜 스타일
                           const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400" : "";
 
-                          // 선택된 셀 스타일
-                          const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
-                          const selectionStyle = isSelected ? "ring-2 ring-blue-500 ring-inset z-10" : "";
+                          {
+                            weekdayNames.map((_, weekdayIdx) => {
+                              const cellData = timetableByDay[weekdayIdx]?.find(item => item.classTime === classTime);
+                              const isPast = toDateString(weekDates[weekdayIdx]) < toDateString(new Date());
 
-                          // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
-                          const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
+                              const cellAssessments = assessments.filter(
+                                (a) => a.dueDate === toDateString(weekDates[weekdayIdx]) && a.classTime === classTime
+                              );
 
-                          return (
-                            <td
-                              key={weekdayIdx}
-                              id={`cell-${weekdayIdx}-${classTime}`}
-                              onClick={() => {
-                                if (item) {
-                                  if (isSubjectDisabled) {
-                                    toast.error(`${item.subject}은(는) 선택할 수 없습니다.`);
-                                    return;
+                              let displaySubjectText = cellData?.subject || "";
+                              let isElectiveCell = false;
+                              let groupTag = null;
+                              let groupColor = "#000000";
+
+                              // Elective Replacement Logic
+                              if (cellData && (grade === "2" || grade === "3")) {
+                                const majorityGroup = getCellMajorityGroup(weekdayIdx, classTime, cellData.subject);
+                                if (majorityGroup) {
+                                  isElectiveCell = true;
+                                  // If user has saved electives and picked this group
+                                  if (userElectives?.electives && userElectives.electives[majorityGroup]) {
+                                    displaySubjectText = userElectives.electives[majorityGroup].subject;
                                   }
-                                  if (!isPast || cellAssessments.length > 0) {
-                                    handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx], cellAssessments);
-                                  }
+                                  groupTag = `(그룹 ${majorityGroup})`;
+                                  groupColor = getGroupColor(majorityGroup);
                                 }
-                              }}
-                              className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors overflow-hidden
-                                ${bgColor} ${pastStyle} ${selectionStyle}
-                                ${item && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
-                              `}
-                            >
-                              {item ? (
-                                <div className="flex flex-col items-center justify-center h-full min-h-0">
-                                  <div className={`font-bold text-sm md:text-base leading-tight truncate w-full ${isPast ? "text-gray-400" : "text-gray-900"}`}>{item.subject}</div>
-                                  <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full">{item.teacher}</div>
-                                  {cellAssessments.length > 0 && (
-                                    <div className="mt-0.5 flex-shrink-0">
-                                      <div className="flex flex-wrap gap-0.5 justify-center">
-                                        {cellAssessments.map(a => (
-                                          <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"}`}>
-                                            {a.description && a.description.includes("차") ? a.description : '평가'}
-                                          </span>
-                                        ))}
-                                      </div>
+                              }
+
+                              // Check if subject is effectively disabled for assessments
+                              const isDisabledSubject = ["창체", "채플"].includes(cellData?.subject || "");
+
+                              return (
+                                <td
+                                  key={weekdayIdx}
+                                  className={`border p-1 md:p-2 text-center relative h-16 md:h-24 ${isPast || isDisabledSubject ? "opacity-50" : "cursor-pointer hover:bg-gray-50"} transition-colors`}
+                                  onClick={() => {
+                                    if (!isDisabledSubject) {
+                                      handleCellClick(weekdayIdx, classTime, displaySubjectText, weekDates[weekdayIdx], cellAssessments, isElectiveCell);
+                                    }
+                                  }}
+                                >
+                                  <div className="flex flex-col h-full items-center justify-center">
+                                    {cellData ? (
+                                      <>
+                                        <div className="font-bold text-sm md:text-base text-gray-800 break-words line-clamp-2 w-full px-1">
+                                          {displaySubjectText}
+                                        </div>
+                                        {isElectiveCell && groupTag && (
+                                          <div className="text-[10px] md:text-xs font-bold leading-tight" style={{ color: groupColor }}>
+                                            {groupTag}
+                                          </div>
+                                        )}
+                                        {!isElectiveCell && (
+                                          <div className="text-xs text-gray-500 whitespace-nowrap overflow-hidden text-ellipsis w-full">
+                                            {cellData.teacher}
+                                          </div>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <span className="text-gray-300">-</span>
+                                    )}
+
+                                    {/* Assessment Badges here */}
+                                    <div className="absolute top-1 right-1 flex flex-col gap-1 items-end">
+                                      {cellAssessments.map((a, i) => (
+                                        <div
+                                          key={i}
+                                          className={`w-3 h-3 md:w-4 md:h-4 rounded-full shadow-sm flex items-center justify-center text-[8px] md:text-[10px] font-bold text-white
+                                        ${a.isDone ? "bg-gray-400" : "bg-red-500 animate-[bounce_2s_infinite]"}
+                                    `}
+                                        >
+                                          C
+                                        </div>
+                                      ))}
                                     </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-gray-300 text-sm">-</span>
-                              )}
-                            </td>
-                          );
-                        })}
+                                  </div>
+                                </td>
+                              );
+                            })
+                          }
                       </tr>
                     ))}
                   </tbody>
