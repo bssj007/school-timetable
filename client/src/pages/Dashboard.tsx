@@ -26,6 +26,7 @@ interface TimetableItem {
   classTime: number;
   subject: string;
   teacher: string;
+  class?: number;
 }
 
 interface AssessmentItem {
@@ -220,12 +221,13 @@ export default function Dashboard() {
   };
 
   // 1. 시간표 조회
-  const { data: timetableData, isLoading: timetableLoading, refetch: refetchTimetable } = useQuery({
+  const { data: rawTimetableData, isLoading: timetableLoading, refetch: refetchTimetable } = useQuery({
     queryKey: ['timetable', schoolName, grade, classNum],
     queryFn: async () => {
       if (!grade || !classNum) return [];
       try {
-        const response = await fetch(`/api/comcigan?type=timetable&grade=${grade}&classNum=${classNum}`);
+        const queryClassNum = (grade === "2" || grade === "3") ? "all" : classNum;
+        const response = await fetch(`/api/comcigan?type=timetable&grade=${grade}&classNum=${queryClassNum}`);
         if (!response.ok) {
           console.warn('Failed to fetch from Comcigan, returning empty');
           return [];
@@ -249,6 +251,89 @@ export default function Dashboard() {
     retry: true, // 무한 재시도
     retryDelay: 3000, // 3초 간격
   });
+
+  // 1.5 선택과목 데이터 및 프로필 조회 (2, 3학년용)
+  const { data: electiveConfigs } = useQuery({
+    queryKey: ['electiveConfigs', grade],
+    queryFn: async () => {
+      if (grade !== "2" && grade !== "3") return [];
+      const res = await fetch(`/api/electives?grade=${grade}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: grade === "2" || grade === "3"
+  });
+
+  const { data: studentProfile } = useQuery({
+    queryKey: ['studentProfile', grade, classNum, studentNumber],
+    queryFn: async () => {
+      if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber) return null;
+      const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data && data.electives) {
+        if (typeof data.electives === 'string') {
+          try {
+            data.electives = JSON.parse(data.electives);
+          } catch (e) { }
+        }
+      }
+      return data;
+    },
+    enabled: !!grade && !!classNum && !!studentNumber && (grade === "2" || grade === "3")
+  });
+
+  const { timetableData, allClassesTimetable } = useMemo(() => {
+    if (!rawTimetableData) return { timetableData: [], allClassesTimetable: [] };
+    const all = rawTimetableData;
+    const current = all.filter(t => !t.class || t.class.toString() === classNum.toString());
+    return { timetableData: current, allClassesTimetable: all };
+  }, [rawTimetableData, classNum]);
+
+  // 각 시간(교시)별 다수결 그룹 계산
+  const computedGroups = useMemo(() => {
+    if ((grade !== "2" && grade !== "3") || !allClassesTimetable || allClassesTimetable.length === 0 || !electiveConfigs || electiveConfigs.length === 0) return {};
+
+    const subjectToGroups = new Map<string, string[]>();
+    electiveConfigs.forEach((c: any) => {
+      if (c.isMovingClass !== 0 && c.classCode) {
+        const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
+        const subj = c.subject.trim();
+        const existing = subjectToGroups.get(subj) || [];
+        subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
+      }
+    });
+
+    const cellGroups: Record<string, string> = {};
+
+    for (let w = 0; w < 5; w++) {
+      for (let p = 1; p <= 7; p++) {
+        const slots = allClassesTimetable.filter(t => t.weekday === w && t.classTime === p);
+        if (slots.length === 0) continue;
+
+        const groupCounts: Record<string, number> = {};
+        slots.forEach(slot => {
+          const groups = subjectToGroups.get(slot.subject.trim());
+          if (groups) {
+            groups.forEach(g => {
+              groupCounts[g] = (groupCounts[g] || 0) + 1;
+            });
+          }
+        });
+
+        const entries = Object.entries(groupCounts);
+        if (entries.length > 0) {
+          entries.sort((a, b) => b[1] - a[1]);
+          const maxGroup = entries[0][0];
+          const maxCount = entries[0][1];
+          if (maxCount >= 1) {
+            cellGroups[`${w}-${p}`] = maxGroup;
+          }
+        }
+      }
+    }
+    return cellGroups;
+  }, [allClassesTimetable, electiveConfigs, grade]);
 
   // 2. 컴시간에서 시간표 가져오기
   const fetchFromComcigan = useMutation({
@@ -834,8 +919,14 @@ export default function Dashboard() {
                           // 해당 날짜와 교시에 수행평가가 있는지 확인
                           const cellAssessments = assessments ? assessments.filter(a => {
                             if (settings?.hide_past_assessments && isPast) return false;
-                            return item &&
-                              a.subject.trim() === item.subject.trim() &&
+
+                            // Check item subject if it exists, otherwise check if group is active
+                            const group = computedGroups[`${weekdayIdx}-${classTime}`];
+                            const electiveSelection = studentProfile?.electives?.[group];
+                            const matchSubject = group && electiveSelection ? electiveSelection.subject : (item ? item.subject : null);
+
+                            return matchSubject &&
+                              a.subject.trim() === matchSubject.trim() &&
                               a.dueDate === currentDate &&
                               a.classTime === classTime &&
                               !a.isDone;
@@ -858,30 +949,40 @@ export default function Dashboard() {
                           // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
                           const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
 
+                          const group = computedGroups[`${weekdayIdx}-${classTime}`];
+                          const electiveSelection = studentProfile?.electives?.[group];
+                          const displaySubject = group && electiveSelection ? electiveSelection.subject : (item ? item.subject : "-");
+                          const displayTeacher = group && electiveSelection ? electiveSelection.teacher : (item ? item.teacher : "");
+
                           return (
                             <td
                               key={weekdayIdx}
                               id={`cell-${weekdayIdx}-${classTime}`}
                               onClick={() => {
-                                if (item) {
-                                  if (isSubjectDisabled) {
+                                if (item || (group && electiveSelection)) {
+                                  if (isSubjectDisabled && !group) {
                                     toast.error(`${item.subject}은(는) 선택할 수 없습니다.`);
                                     return;
                                   }
                                   if (!isPast || cellAssessments.length > 0) {
-                                    handleCellClick(weekdayIdx, classTime, item.subject, weekDates[weekdayIdx], cellAssessments);
+                                    handleCellClick(weekdayIdx, classTime, displaySubject, weekDates[weekdayIdx], cellAssessments);
                                   }
                                 }
                               }}
                               className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors overflow-hidden
                                 ${bgColor} ${pastStyle} ${selectionStyle}
-                                ${item && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
+                                ${(item || (group && electiveSelection)) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
                             >
-                              {item ? (
+                              {group && (
+                                <div className="absolute top-0 right-0 px-1 rounded-bl-md bg-orange-100 text-orange-800 text-[9px] md:text-[10px] font-bold">
+                                  {group}그룹
+                                </div>
+                              )}
+                              {item || (group && electiveSelection) ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-0">
-                                  <div className={`font-bold text-sm md:text-base leading-tight truncate w-full ${isPast ? "text-gray-400" : "text-gray-900"}`}>{item.subject}</div>
-                                  <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full">{item.teacher}</div>
+                                  <div className={`font-bold text-sm md:text-base leading-tight truncate w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}>{displaySubject}</div>
+                                  <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">{displayTeacher}</div>
                                   {cellAssessments.length > 0 && (
                                     <div className="mt-0.5 flex-shrink-0">
                                       <div className="flex flex-wrap gap-0.5 justify-center">

@@ -148,7 +148,8 @@ export const onRequest = async (context: any) => {
         // GET method: Return timetable
         if (type === 'timetable') {
             const grade = parseInt(url.searchParams.get('grade') || '1');
-            const classNum = parseInt(url.searchParams.get('classNum') || '1');
+            const classNumStr = url.searchParams.get('classNum');
+            const classNum = classNumStr === 'all' ? 'all' : parseInt(classNumStr || '1');
             return await getTimetable(grade, classNum);
         }
 
@@ -165,7 +166,7 @@ export const onRequest = async (context: any) => {
     }
 }
 
-async function getTimetable(grade: number, classNum: number) {
+async function getTimetable(grade: number, classNumInput: number | 'all') {
     const prefix = await getPrefix();
     const { code1, code2 } = await getSchoolCode(prefix);
 
@@ -198,7 +199,8 @@ async function getTimetable(grade: number, classNum: number) {
 
     const timedataProp = keys.find(k => {
         const val = rawData[k];
-        return Array.isArray(val) && val[grade] && val[grade][classNum] && Array.isArray(val[grade][classNum]);
+        // Just check if class 1 exists for the grade to find the timedata property
+        return Array.isArray(val) && val[grade] && val[grade][1] && Array.isArray(val[grade][1]);
     }) || "";
 
     if (!timedataProp) throw new Error("Data key not found");
@@ -212,50 +214,58 @@ async function getTimetable(grade: number, classNum: number) {
 
     console.log('[Comcigan] 분리:', bunri, 'teachers:', teachers.length, 'subjects:', subjects.length);
 
-    if (!data || !data[grade] || !data[grade][classNum]) {
-        throw new Error(`Data not found for G${grade}-C${classNum}`);
+    if (!data || !data[grade]) {
+        throw new Error(`Data not found for G${grade}`);
     }
 
-    const classData = data[grade][classNum];
+    const classesToProcess = classNumInput === 'all'
+        ? Object.keys(data[grade]).filter(k => !isNaN(parseInt(k)) && parseInt(k) > 0).map(Number)
+        : [classNumInput as number];
+
     const result: any[] = [];
 
-    for (let weekday = 1; weekday <= 5; weekday++) {
-        let dayHours = 7;
-        if (timeInfo && timeInfo[grade]) {
-            dayHours = timeInfo[grade][weekday];
-        }
+    for (const classNum of classesToProcess) {
+        if (!data[grade][classNum]) continue;
+        const classData = data[grade][classNum];
 
-        const maxPeriod = classData[weekday].length - 1;
-        const loopLimit = Math.min(dayHours, maxPeriod);
-
-        for (let period = 1; period <= loopLimit; period++) {
-            const code = classData[weekday][period];
-            if (!code) continue;
-
-            let teacherIdx = 0;
-            let subjectIdx = 0;
-
-            // Based on bunri value (same logic as server comcigan-parser.ts)
-            if (bunri === 100) {
-                teacherIdx = Math.floor(code / bunri);
-                subjectIdx = code % bunri;
-            } else { // bunri === 1000 or other
-                teacherIdx = code % bunri;
-                subjectIdx = Math.floor(code / bunri);
+        for (let weekday = 1; weekday <= 5; weekday++) {
+            let dayHours = 7;
+            if (timeInfo && timeInfo[grade]) {
+                dayHours = timeInfo[grade][weekday];
             }
 
-            const subject = subjects[subjectIdx] ? subjects[subjectIdx].replace(/_/g, "") : "";
-            const teacher = teachers[teacherIdx] || "";
+            const maxPeriod = classData[weekday] ? classData[weekday].length - 1 : 0;
+            const loopLimit = Math.min(dayHours, maxPeriod);
 
-            if (subject) {
-                result.push({
-                    grade,
-                    class: classNum,
-                    weekday,
-                    classTime: period,
-                    subject,
-                    teacher
-                });
+            for (let period = 1; period <= loopLimit; period++) {
+                const code = classData[weekday][period];
+                if (!code) continue;
+
+                let teacherIdx = 0;
+                let subjectIdx = 0;
+
+                // Based on bunri value (same logic as server comcigan-parser.ts)
+                if (bunri === 100) {
+                    teacherIdx = Math.floor(code / bunri);
+                    subjectIdx = code % bunri;
+                } else { // bunri === 1000 or other
+                    teacherIdx = code % bunri;
+                    subjectIdx = Math.floor(code / bunri);
+                }
+
+                const subject = subjects[subjectIdx] ? subjects[subjectIdx].replace(/_/g, "") : "";
+                const teacher = teachers[teacherIdx] || "";
+
+                if (subject) {
+                    result.push({
+                        grade,
+                        class: classNum,
+                        weekday,
+                        classTime: period,
+                        subject,
+                        teacher
+                    });
+                }
             }
         }
     }

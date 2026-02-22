@@ -81,16 +81,36 @@ export default function ElectiveSelectionDialog({
         }, {} as Record<string, ElectiveConfig[]>);
     }, [electiveConfigs]);
 
-    // 2. Fetch existing student profile (if any) to pre-fill? 
-    // Actually, usually this dialog shows if NO profile exists. 
-    // But if they are editing (re-entering ID?), we might want to pre-fill.
-    // Let's implement pre-fill just in case.
+    // 2. Fetch existing student profile to pre-fill
+    const { data: existingProfile, isLoading: profileLoading } = useQuery({
+        queryKey: ['studentProfile', grade, classNum, studentNumber],
+        queryFn: async () => {
+            const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`);
+            if (!res.ok) throw new Error("Failed to fetch student profile");
+            return res.json();
+        },
+        enabled: isOpen && !!grade && !!classNum && !!studentNumber
+    });
+
     useEffect(() => {
-        if (isOpen && grade && classNum && studentNumber) {
-            // Skip for now, assume fresh selection or handled by parent.
-            // User request: "입력한 정보는 각 학번별 프로필에 영구 저장된다" imply persistent.
+        if (isOpen) {
+            if (existingProfile && existingProfile.electives) {
+                try {
+                    const parsedElectives = typeof existingProfile.electives === 'string'
+                        ? JSON.parse(existingProfile.electives)
+                        : existingProfile.electives;
+                    setSelections(parsedElectives);
+                } catch (e) {
+                    console.error("Failed to parse existing electives", e);
+                    setSelections({});
+                }
+            } else if (existingProfile === null) {
+                setSelections({});
+            }
+        } else {
+            setSelections({});
         }
-    }, [isOpen, grade, classNum, studentNumber]);
+    }, [existingProfile, isOpen]);
 
     const handleSelection = (group: string, subjectName: string) => {
         // 1. Find the configs for this subject in this group to get ALL teachers
@@ -182,7 +202,7 @@ export default function ElectiveSelectionDialog({
                 </DialogHeader>
 
                 <div className="py-4 md:py-8 space-y-4 md:space-y-8 flex-1 overflow-y-auto min-h-0">
-                    {configLoading ? (
+                    {(configLoading || profileLoading) ? (
                         <div className="flex justify-center p-4"><Loader2 className="animate-spin" /></div>
                     ) : (
                         Object.entries(electivesByGroup).map(([group, configs]: [string, ElectiveConfig[]]) => {
