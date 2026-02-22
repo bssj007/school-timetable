@@ -81,36 +81,16 @@ export default function ElectiveSelectionDialog({
         }, {} as Record<string, ElectiveConfig[]>);
     }, [electiveConfigs]);
 
-    // 2. Fetch existing student profile to pre-fill selections
-    const { data: savedElectives } = useQuery({
-        queryKey: ['savedElectives', grade, classNum, studentNumber],
-        queryFn: async () => {
-            if (!grade || !classNum || !studentNumber) return null;
-            const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`);
-            if (!res.ok) return null;
-            const data = await res.json();
-            if (data && typeof data.electives === 'string') {
-                try {
-                    return JSON.parse(data.electives);
-                } catch (e) {
-                    console.error("Failed to parse saved electives JSON", e);
-                }
-            } else if (data && data.electives) {
-                return data.electives;
-            }
-            return null;
-        },
-        enabled: isOpen && !!grade && !!classNum && !!studentNumber
-    });
-
+    // 2. Fetch existing student profile (if any) to pre-fill? 
+    // Actually, usually this dialog shows if NO profile exists. 
+    // But if they are editing (re-entering ID?), we might want to pre-fill.
+    // Let's implement pre-fill just in case.
     useEffect(() => {
-        if (isOpen && savedElectives && Object.keys(savedElectives).length > 0) {
-            setSelections(savedElectives);
-        } else if (isOpen && (!savedElectives || Object.keys(savedElectives).length === 0)) {
-            // Reset if opening a fresh dialog with no saved electives (e.g., deleted or uninitialized)
-            setSelections({});
+        if (isOpen && grade && classNum && studentNumber) {
+            // Skip for now, assume fresh selection or handled by parent.
+            // User request: "입력한 정보는 각 학번별 프로필에 영구 저장된다" imply persistent.
         }
-    }, [isOpen, savedElectives]);
+    }, [isOpen, grade, classNum, studentNumber]);
 
     const handleSelection = (group: string, subjectName: string) => {
         // 1. Find the configs for this subject in this group to get ALL teachers

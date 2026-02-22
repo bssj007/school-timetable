@@ -42,6 +42,8 @@ function ElectiveManager({ password }: { password: string }) {
     const [selectedGrade, setSelectedGrade] = useState<number>(2);
     const [subjects, setSubjects] = useState<any[]>([]);
     const [originalSubjects, setOriginalSubjects] = useState<any[]>([]); // To track changes
+    const [groupColors, setGroupColors] = useState<Record<string, string>>({});
+    const [originalGroupColors, setOriginalGroupColors] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -100,7 +102,22 @@ function ElectiveManager({ password }: { password: string }) {
                 };
             });
 
-            // 4. Fetch Group Colors - Removed from here to be moved to GroupColorManager
+            // 4. Fetch Group Colors
+            let colorsData = [];
+            try {
+                const colorsRes = await fetch(`/api/admin/elective_colors?grade=${selectedGrade}`, {
+                    headers: { "X-Admin-Password": password }
+                });
+                if (colorsRes.ok) {
+                    colorsData = await colorsRes.json();
+                    const colorMap: Record<string, string> = {};
+                    colorsData.forEach((c: any) => colorMap[c.classCode] = c.color);
+                    setGroupColors(colorMap);
+                    setOriginalGroupColors(JSON.parse(JSON.stringify(colorMap)));
+                }
+            } catch (e: any) {
+                console.error("Colors Fetch Error:", e);
+            }
 
             setSubjects(merged);
             setOriginalSubjects(JSON.parse(JSON.stringify(merged)));
@@ -118,7 +135,11 @@ function ElectiveManager({ password }: { password: string }) {
         setSubjects(newSubjects);
     };
 
-    const hasChanges = JSON.stringify(subjects) !== JSON.stringify(originalSubjects);
+    const handleColorChange = (group: string, color: string) => {
+        setGroupColors(prev => ({ ...prev, [group]: color }));
+    };
+
+    const hasChanges = JSON.stringify(subjects) !== JSON.stringify(originalSubjects) || JSON.stringify(groupColors) !== JSON.stringify(originalGroupColors);
 
     const handleSave = async () => {
         if (!hasChanges) return;
@@ -150,9 +171,26 @@ function ElectiveManager({ password }: { password: string }) {
                 }
             });
 
-            // Save Colors - Removed
+            // Save Colors
+            const colorPromises = Object.entries(groupColors).map(async ([group, color]) => {
+                if (originalGroupColors[group] !== color) {
+                    const res = await fetch("/api/admin/elective_colors", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-Admin-Password": password
+                        },
+                        body: JSON.stringify({
+                            grade: selectedGrade,
+                            classCode: group,
+                            color: color
+                        })
+                    });
+                    if (!res.ok) throw new Error(`Color Save failed: ${res.status}`);
+                }
+            });
 
-            await Promise.all(promises);
+            await Promise.all([...promises, ...colorPromises]);
             toast.success("저장되었습니다.");
             setOriginalSubjects(JSON.parse(JSON.stringify(subjects)));
         } catch (error) {
@@ -167,6 +205,7 @@ function ElectiveManager({ password }: { password: string }) {
 
     const handleCancel = () => {
         setSubjects(JSON.parse(JSON.stringify(originalSubjects)));
+        setGroupColors(JSON.parse(JSON.stringify(originalGroupColors)));
     };
 
     // Filter subjects based on search term
@@ -222,7 +261,27 @@ function ElectiveManager({ password }: { password: string }) {
                     </Button>
                 </div>
 
-                {/* Group Colors Section Removed */}
+                {/* Group Colors Section */}
+                <div className="pt-4 border-t">
+                    <h4 className="text-sm font-bold mb-3">그룹 색상 관리</h4>
+                    <div className="space-y-2">
+                        {["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"].map(group => (
+                            <div key={group} className="flex items-center gap-2">
+                                <span className="text-sm font-medium w-6">{group}</span>
+                                <Input
+                                    type="color"
+                                    value={groupColors[group] || "#000000"}
+                                    onChange={(e) => handleColorChange(group, e.target.value)}
+                                    className="w-12 h-8 p-1 cursor-pointer"
+                                />
+                                <span className="text-xs text-gray-500 uppercase flex-1">{groupColors[group] || "#000000"}</span>
+                                {groupColors[group] && groupColors[group] !== originalGroupColors[group] && (
+                                    <span className="w-2 h-2 rounded-full bg-blue-500" title="수정됨"></span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             {/* Main Content */}
@@ -449,151 +508,6 @@ function ElectiveManager({ password }: { password: string }) {
                 </div >
             </div >
         </div >
-    );
-}
-
-function GroupColorManager({ password }: { password: string }) {
-    const [selectedGrade, setSelectedGrade] = useState<number>(2);
-    const [groupColors, setGroupColors] = useState<Record<string, string>>({});
-    const [originalGroupColors, setOriginalGroupColors] = useState<Record<string, string>>({});
-    const [isLoading, setIsLoading] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
-
-    useEffect(() => {
-        fetchColors();
-    }, [selectedGrade]);
-
-    const fetchColors = async () => {
-        setIsLoading(true);
-        try {
-            const res = await fetch(`/api/admin/elective_colors?grade=${selectedGrade}`, {
-                headers: { "X-Admin-Password": password }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                const colorMap: Record<string, string> = {};
-                data.forEach((c: any) => colorMap[c.classCode] = c.color);
-                setGroupColors(colorMap);
-                setOriginalGroupColors(JSON.parse(JSON.stringify(colorMap)));
-            }
-        } catch (error: any) {
-            toast.error("색상 데이터를 불러오는 데 실패했습니다.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleColorChange = (group: string, color: string) => {
-        setGroupColors(prev => ({ ...prev, [group]: color }));
-    };
-
-    const hasChanges = JSON.stringify(groupColors) !== JSON.stringify(originalGroupColors);
-
-    const handleSave = async () => {
-        if (!hasChanges) return;
-        setIsSaving(true);
-        try {
-            // Sequential loop to prevent D1 database lock errors from too many concurrent writes
-            for (const [group, color] of Object.entries(groupColors)) {
-                if (originalGroupColors[group] !== color) {
-                    const res = await fetch("/api/admin/elective_colors", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "X-Admin-Password": password
-                        },
-                        body: JSON.stringify({
-                            grade: selectedGrade,
-                            classCode: group,
-                            color: color
-                        })
-                    });
-                    if (!res.ok) throw new Error(`Color Save failed for group ${group}: ${res.status}`);
-                }
-            }
-
-            toast.success("그룹 색상이 저장되었습니다.");
-            setOriginalGroupColors(JSON.parse(JSON.stringify(groupColors)));
-        } catch (error) {
-            toast.error("색상 저장 중 오류가 발생했습니다.");
-            console.error(error);
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    return (
-        <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
-            {/* Sidebar for grade selection */}
-            <div className="w-full md:w-64 flex flex-col gap-4 p-2 border-r shrink-0">
-                <div className="flex flex-row md:flex-col gap-2">
-                    <Button
-                        variant={selectedGrade === 2 ? "default" : "ghost"}
-                        className="justify-center md:justify-start"
-                        onClick={() => setSelectedGrade(2)}
-                    >
-                        2학년
-                    </Button>
-                    <Button
-                        variant={selectedGrade === 3 ? "default" : "ghost"}
-                        className="justify-center md:justify-start"
-                        onClick={() => setSelectedGrade(3)}
-                    >
-                        3학년
-                    </Button>
-                </div>
-            </div>
-
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col gap-4 overflow-hidden p-2">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-bold flex items-center gap-2">
-                        <Settings className="w-5 h-5" />
-                        {selectedGrade}학년 그룹 색상
-                    </h3>
-                    <div className="flex gap-2">
-                        <Button
-                            variant="outline"
-                            disabled={!hasChanges || isSaving}
-                            onClick={() => setGroupColors(JSON.parse(JSON.stringify(originalGroupColors)))}
-                        >
-                            취소
-                        </Button>
-                        <Button
-                            disabled={!hasChanges || isSaving}
-                            onClick={handleSave}
-                        >
-                            {isSaving ? "저장 중..." : "확인 및 저장하기"}
-                        </Button>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto w-full max-w-4xl mx-auto items-center p-4">
-                    {["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M"].map(group => {
-                        const isEdited = groupColors[group] && groupColors[group] !== originalGroupColors[group];
-                        return (
-                            <div key={group} className={`flex items-center justify-between p-4 border rounded-xl shadow-sm bg-white transition-all ${isEdited ? 'ring-2 ring-blue-400' : ''}`}>
-                                <div className="flex items-center gap-4">
-                                    <h4 className="text-2xl font-black text-gray-800 w-8">{group}</h4>
-                                    <div className="flex flex-col">
-                                        <span className="text-xs text-gray-500 font-semibold uppercase">{groupColors[group] || "#000000"}</span>
-                                        {isEdited && <span className="text-[10px] text-blue-500 font-bold">수정됨</span>}
-                                    </div>
-                                </div>
-                                <div className="relative group overflow-hidden rounded-md cursor-pointer border-2 border-transparent hover:border-gray-200">
-                                    <Input
-                                        type="color"
-                                        value={groupColors[group] || "#000000"}
-                                        onChange={(e) => handleColorChange(group, e.target.value)}
-                                        className="w-16 h-12 p-0 border-0 m-0 outline-none cursor-pointer"
-                                    />
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        </div>
     );
 }
 
@@ -885,11 +799,10 @@ export default function Admin() {
             </div>
 
             <Tabs defaultValue="assessments" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 mb-8 h-auto">
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-8 h-auto">
                     <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
                     <TabsTrigger value="users">사용자 관리</TabsTrigger>
                     <TabsTrigger value="electives">선택과목</TabsTrigger>
-                    <TabsTrigger value="group-colors">선택 색상</TabsTrigger>
                     <TabsTrigger
                         value="database"
                         className="data-[state=active]:bg-green-100 data-[state=active]:text-green-800"
@@ -1351,20 +1264,6 @@ export default function Admin() {
                         </CardHeader>
                         <CardContent>
                             <ElectiveManager password={password} />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                <TabsContent value="group-colors" className="space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>그룹 색상 관리</CardTitle>
-                            <CardDescription>
-                                선택과목의 각 반 코드(A, B, C...)별 표시 색상을 지정합니다. 시간표 블록 색상에 이 설정이 적용됩니다. 저장 후 새로고침해야 색상이 반영됩니다.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <GroupColorManager password={password} />
                         </CardContent>
                     </Card>
                 </TabsContent>
