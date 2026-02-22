@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     BookOpen, Trash2, Eye, EyeOff, Lock,
     Settings, Search, ChevronDown, ChevronRight, Check, ChevronsUpDown, Save, GripVertical, CheckCircle2, AlertCircle, Plus, X,
-    TriangleAlert, ShieldAlert,
+    TriangleAlert, ShieldAlert, CheckSquare, Calendar, ShieldCheck, Ban,
     Download, Upload
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
