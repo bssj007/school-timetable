@@ -264,7 +264,7 @@ export default function Dashboard() {
     enabled: grade === "2" || grade === "3"
   });
 
-  const { data: studentProfile, isFetching: isProfileFetching } = useQuery({
+  const { data: studentProfile } = useQuery({
     queryKey: ['studentProfile', grade, classNum, studentNumber],
     queryFn: async () => {
       if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber) return null;
@@ -289,12 +289,12 @@ export default function Dashboard() {
       lastValidProfileRef.current = null;
       return null;
     }
-    if (isProfileFetching) {
-      return lastValidProfileRef.current;
+    if (studentProfile !== undefined) {
+      lastValidProfileRef.current = studentProfile;
+      return studentProfile;
     }
-    lastValidProfileRef.current = studentProfile || null;
-    return studentProfile || null;
-  }, [studentProfile, isProfileFetching, grade]);
+    return lastValidProfileRef.current; // retain only if undefined (e.g. background fetch just started, though usually data stays populated)
+  }, [studentProfile, grade]);
 
   const { timetableData, allClassesTimetable } = useMemo(() => {
     if (!rawTimetableData) return { timetableData: [], allClassesTimetable: [] };
@@ -312,11 +312,8 @@ export default function Dashboard() {
       lastValidGroupsRef.current = {};
       return {};
     }
-    if (isTimetableFetching || isElectiveConfigsFetching) {
-      return lastValidGroupsRef.current;
-    }
     if (!allClassesTimetable || allClassesTimetable.length === 0 || !electiveConfigs || electiveConfigs.length === 0) {
-      return {};
+      return lastValidGroupsRef.current;
     }
 
     const subjectToGroups = new Map<string, string[]>();
