@@ -4,7 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Lock, Eye, EyeOff, Settings, TriangleAlert, BookOpen, ChevronRight, ChevronDown, CheckSquare, Calendar, ShieldCheck, Ban, Search, Trash2 } from "lucide-react";
+import {
+    BookOpen, Trash2, Eye, EyeOff, Lock,
+    Settings, Search, ChevronDown, Check, ChevronsUpDown, Save, GripVertical, CheckCircle2, AlertCircle, Plus, X,
+    TriangleAlert, ShieldAlert,
+    Download, Upload
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import IPProfileViewer from "@/components/IPProfileViewer";
@@ -434,13 +439,164 @@ function ElectiveManager({ password }: { password: string }) {
                                         </TableRow>
                                     );
                                 })
-                            )
-                            }
                         </TableBody >
                     </Table >
                 </div >
-            </div >
-        </div >
+            </div>
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------
+// 6. Data Transfer Manager Component (Import/Export)
+// ----------------------------------------------------------------------
+function DataTransferManager({ adminPassword }: { adminPassword: string }) {
+    const [isExporting, setIsExporting] = React.useState(false);
+    const [isImporting, setIsImporting] = React.useState(false);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const res = await fetch("/api/admin/import_export", {
+                method: "GET",
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("Failed to export data");
+
+            // Extract filename from Content-Disposition if available
+            const contentDisposition = res.headers.get("Content-Disposition");
+            let filename = `backup_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.json`;
+            if (contentDisposition) {
+                const match = contentDisposition.match(/filename="?([^"]+)"?/);
+                if (match && match[1]) filename = match[1];
+            }
+
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            toast.success("데이터 백업이 완료되었습니다.");
+        } catch (error: any) {
+            toast.error("백업 오류: " + error.message);
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!confirm("경고: 업로드한 데이터로 현재 데이터베이스의 모든 내용이 덮어씌워집니다. 계속하시겠습니까? (이 작업은 되돌릴 수 없습니다.)")) {
+            if (fileInputRef.current) fileInputRef.current.value = "";
+            return;
+        }
+
+        setIsImporting(true);
+        try {
+            const fileReader = new FileReader();
+            fileReader.onload = async (event) => {
+                try {
+                    const jsonStr = event.target?.result as string;
+                    const parsedData = JSON.parse(jsonStr);
+
+                    if (!parsedData.success || !parsedData.data) {
+                        throw new Error("유효하지 않은 백업 파일 형식입니다.");
+                    }
+
+                    const res = await fetch("/api/admin/import_export", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-Admin-Password": adminPassword
+                        },
+                        body: JSON.stringify({ action: "import", data: parsedData.data })
+                    });
+
+                    const resultText = await res.text();
+                    let result;
+                    try { result = JSON.parse(resultText); } catch { result = { error: "Unknown error parsing response" }; }
+
+                    if (!res.ok) throw new Error(result.error || "복원 실패");
+
+                    toast.success("데이터베이스 복원이 완료되었습니다. 변경사항을 반영하기 위해 페이지를 새로고침하세요.");
+                    setTimeout(() => window.location.reload(), 2000);
+                } catch (err: any) {
+                    toast.error("파일 처리 오류: " + err.message);
+                } finally {
+                    setIsImporting(false);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                }
+            };
+            fileReader.onerror = () => {
+                toast.error("파일을 읽는 중 오류가 발생했습니다.");
+                setIsImporting(false);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+            };
+            fileReader.readAsText(file);
+        } catch (err: any) {
+            toast.error("복원 중 오류 발생: " + err.message);
+            setIsImporting(false);
+        }
+    };
+
+    return (
+        <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Download className="w-5 h-5" /> 데이터 추출 (백업)
+                    </CardTitle>
+                    <CardDescription>
+                        데이터베이스의 모든 테이블 데이터를 JSON 파일로 다운로드합니다. 이 파일은 나중에 '복원' 기능에서 다시 사용할 수 있습니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={handleExport} disabled={isExporting} className="w-full sm:w-auto">
+                        {isExporting ? "백업 파일 생성 중..." : "백업 데이터 다운로드 (.json)"}
+                    </Button>
+                </CardContent>
+            </Card>
+
+            <Card className="border-red-200">
+                <CardHeader className="bg-red-50/50 rounded-t-xl pb-4 border-b border-red-100">
+                    <CardTitle className="text-red-700 flex items-center gap-2">
+                        <Upload className="w-5 h-5" /> 데이터 삽입 (복원)
+                    </CardTitle>
+                    <CardDescription className="text-red-600 font-medium">
+                        주의: 백업된 JSON 파일을 업로드하면 <strong>현재 데이터베이스의 모든 내용이 완전히 덮어씌워집니다.</strong> 복원 전에는 반드시 현재 상태를 먼저 백업하세요.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6">
+                    <input
+                        type="file"
+                        accept=".json"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        className="hidden"
+                    />
+                    <Button
+                        variant="destructive"
+                        onClick={handleImportClick}
+                        disabled={isImporting}
+                        className="w-full sm:w-auto"
+                    >
+                        {isImporting ? "데이터 복원 중..." : "백업 파일 업로드 및 복원"}
+                    </Button>
+                </CardContent>
+            </Card>
+        </div>
     );
 }
 
@@ -732,7 +888,7 @@ export default function Admin() {
             </div>
 
             <Tabs defaultValue="assessments" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-8 h-auto">
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 mb-8 h-auto">
                     <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
                     <TabsTrigger value="users">사용자 관리</TabsTrigger>
                     <TabsTrigger value="electives">선택과목</TabsTrigger>
@@ -741,6 +897,12 @@ export default function Admin() {
                         className="data-[state=active]:bg-green-100 data-[state=active]:text-green-800"
                     >
                         DB 관리
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="datatransfer"
+                        className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800"
+                    >
+                        데이터 출입
                     </TabsTrigger>
                 </TabsList>
 
@@ -1203,6 +1365,10 @@ export default function Admin() {
 
                 <TabsContent value="database" className="space-y-6">
                     <DatabaseManager adminPassword={password} />
+                </TabsContent>
+
+                <TabsContent value="datatransfer" className="space-y-6">
+                    <DataTransferManager adminPassword={password} />
                 </TabsContent>
             </Tabs>
 
