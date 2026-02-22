@@ -283,6 +283,15 @@ export default function Dashboard() {
     enabled: !!grade && !!classNum && !!studentNumber && (grade === "2" || grade === "3")
   });
 
+  const lastValidProfileRef = React.useRef<any>(null);
+  const currentProfile = React.useMemo(() => {
+    if (studentProfile) {
+      lastValidProfileRef.current = studentProfile;
+      return studentProfile;
+    }
+    return lastValidProfileRef.current;
+  }, [studentProfile]);
+
   const { timetableData, allClassesTimetable } = useMemo(() => {
     if (!rawTimetableData) return { timetableData: [], allClassesTimetable: [] };
     const all = rawTimetableData;
@@ -929,7 +938,7 @@ export default function Dashboard() {
 
                             // Check item subject if it exists, otherwise check if group is active
                             const group = computedGroups[`${weekdayIdx}-${classTime}`];
-                            const electiveSelection = studentProfile?.electives?.[group];
+                            const electiveSelection = currentProfile?.electives?.[group];
                             const matchSubject = group && electiveSelection ? electiveSelection.subject : (item ? item.subject : null);
 
                             return matchSubject &&
@@ -957,7 +966,7 @@ export default function Dashboard() {
                           const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
 
                           const group = computedGroups[`${weekdayIdx}-${classTime}`];
-                          const electiveSelection = studentProfile?.electives?.[group];
+                          const electiveSelection = currentProfile?.electives?.[group];
                           let displaySubject = item ? item.subject : "-";
                           let displayTeacher = item ? item.teacher : "";
 
