@@ -22,7 +22,7 @@ export const onRequest = async (context: any) => {
             const classNum = url.searchParams.get('classNum') || '1';
 
             try {
-                let query = "SELECT * FROM performance_assessments WHERE grade = ? AND classNum = ?";
+                let query = "SELECT * FROM performance_assessments WHERE grade = ? AND (classNum = ? OR classNum = 0)";
                 const params: any[] = [grade, classNum];
 
                 // hide_past_assessments logic moved to frontend to preserve timetable view
@@ -72,11 +72,27 @@ export const onRequest = async (context: any) => {
 
             console.log('[Assessment API] Creating:', { subject, title, dueDate, grade, classNum, classTime });
 
+            // Check if the subject is an elective (isMovingClass = 1)
+            let actualClassNum = classNum;
+            try {
+                const electiveConfig = await env.DB.prepare(
+                    "SELECT isMovingClass FROM elective_config WHERE grade = ? AND subject = ?"
+                ).bind(grade, subject).first();
+
+                if (electiveConfig && electiveConfig.isMovingClass === 1) {
+                    actualClassNum = 0; // 0 indicates it applies to all classes in the grade
+                    console.log(`[Assessment API] Subject ${subject} is a moving class. Setting classNum to 0.`);
+                }
+            } catch (e) {
+                console.error("[Assessment API] Error checking elective config:", e);
+                // Fail gracefully, keep actualClassNum as the specific class
+            }
+
             // 중복 체크: 같은 날짜, 같은 교시에 이미 수행평가가 있는지 확인
             if (classTime) {
                 const existing = await env.DB.prepare(
                     "SELECT id FROM performance_assessments WHERE grade = ? AND classNum = ? AND dueDate = ? AND classTime = ?"
-                ).bind(grade, classNum, dueDate, classTime).first();
+                ).bind(grade, actualClassNum, dueDate, classTime).first();
 
                 if (existing) {
                     return new Response(JSON.stringify({ error: "이미 해당 교시에 수행평가가 등록되어 있습니다." }), {
@@ -93,7 +109,7 @@ export const onRequest = async (context: any) => {
                 const result = await env.DB.prepare(
                     `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, lastModifiedIp) 
                      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
-                ).bind(subject, title, description || '', dueDate, grade, classNum, classTime || null, ip).run();
+                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, ip).run();
 
                 return new Response(JSON.stringify({ success: true, result }), {
                     headers: { 'Content-Type': 'application/json' }
@@ -136,7 +152,7 @@ export const onRequest = async (context: any) => {
                 const result = await env.DB.prepare(
                     `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone) 
                      VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
-                ).bind(subject, title, description || '', dueDate, grade, classNum, classTime || null).run();
+                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null).run();
 
                 return new Response(JSON.stringify({ success: true, result, warning: "IP not saved due to schema mismatch" }), {
                     headers: { 'Content-Type': 'application/json' }

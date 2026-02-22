@@ -92,23 +92,29 @@ export default function ElectiveSelectionDialog({
         enabled: isOpen && !!grade && !!classNum && !!studentNumber
     });
 
+    const initializedRef = React.useRef(false);
+
     useEffect(() => {
         if (isOpen) {
-            if (existingProfile && existingProfile.electives) {
-                try {
-                    const parsedElectives = typeof existingProfile.electives === 'string'
-                        ? JSON.parse(existingProfile.electives)
-                        : existingProfile.electives;
-                    setSelections(parsedElectives);
-                } catch (e) {
-                    console.error("Failed to parse existing electives", e);
+            if (existingProfile !== undefined && !initializedRef.current) {
+                if (existingProfile && existingProfile.electives) {
+                    try {
+                        const parsedElectives = typeof existingProfile.electives === 'string'
+                            ? JSON.parse(existingProfile.electives)
+                            : existingProfile.electives;
+                        setSelections(parsedElectives);
+                    } catch (e) {
+                        console.error("Failed to parse existing electives", e);
+                        setSelections({});
+                    }
+                } else {
                     setSelections({});
                 }
-            } else if (existingProfile === null) {
-                setSelections({});
+                initializedRef.current = true;
             }
         } else {
             setSelections({});
+            initializedRef.current = false;
         }
     }, [existingProfile, isOpen]);
 

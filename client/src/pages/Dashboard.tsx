@@ -291,8 +291,14 @@ export default function Dashboard() {
   }, [rawTimetableData, classNum]);
 
   // 각 시간(교시)별 다수결 그룹 계산
+  // We keep track of the last successfully computed groups to prevent flickering during refetches.
+  const [persistedGroups, setPersistedGroups] = useState<Record<string, string>>({});
+
   const computedGroups = useMemo(() => {
-    if ((grade !== "2" && grade !== "3") || !allClassesTimetable || allClassesTimetable.length === 0 || !electiveConfigs || electiveConfigs.length === 0) return {};
+    if ((grade !== "2" && grade !== "3") || !allClassesTimetable || allClassesTimetable.length === 0 || !electiveConfigs || electiveConfigs.length === 0) {
+      // Return previously computed groups if data is temporarily missing during a refetch
+      return persistedGroups;
+    }
 
     const subjectToGroups = new Map<string, string[]>();
     electiveConfigs.forEach((c: any) => {
@@ -333,7 +339,14 @@ export default function Dashboard() {
       }
     }
     return cellGroups;
-  }, [allClassesTimetable, electiveConfigs, grade]);
+  }, [allClassesTimetable, electiveConfigs, grade, persistedGroups]);
+
+  // Update persisted groups when we successfully compute new non-empty groups
+  useEffect(() => {
+    if (Object.keys(computedGroups).length > 0) {
+      setPersistedGroups(computedGroups);
+    }
+  }, [computedGroups]);
 
   // 2. 컴시간에서 시간표 가져오기
   const fetchFromComcigan = useMutation({
@@ -951,8 +964,23 @@ export default function Dashboard() {
 
                           const group = computedGroups[`${weekdayIdx}-${classTime}`];
                           const electiveSelection = studentProfile?.electives?.[group];
-                          const displaySubject = group && electiveSelection ? electiveSelection.subject : (item ? item.subject : "-");
-                          const displayTeacher = group && electiveSelection ? electiveSelection.teacher : (item ? item.teacher : "");
+                          let displaySubject = item ? item.subject : "-";
+                          let displayTeacher = item ? item.teacher : "";
+
+                          if (group && electiveSelection) {
+                            displaySubject = electiveSelection.subject;
+
+                            // Find the specific teacher teaching this subject in this time slot
+                            const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
+                            const matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
+
+                            if (matchingSlot) {
+                              displayTeacher = matchingSlot.teacher;
+                            } else {
+                              // Fallback to the saved teacher list if not found in the timetable for some reason
+                              displayTeacher = electiveSelection.teacher || "";
+                            }
+                          }
 
                           return (
                             <td
