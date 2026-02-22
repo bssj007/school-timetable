@@ -292,12 +292,12 @@ export default function Dashboard() {
 
   // 각 시간(교시)별 다수결 그룹 계산
   // We keep track of the last successfully computed groups to prevent flickering during refetches.
-  const [persistedGroups, setPersistedGroups] = useState<Record<string, string>>({});
+  const lastValidGroupsRef = React.useRef<Record<string, string>>({});
 
   const computedGroups = useMemo(() => {
     if ((grade !== "2" && grade !== "3") || !allClassesTimetable || allClassesTimetable.length === 0 || !electiveConfigs || electiveConfigs.length === 0) {
       // Return previously computed groups if data is temporarily missing during a refetch
-      return persistedGroups;
+      return lastValidGroupsRef.current;
     }
 
     const subjectToGroups = new Map<string, string[]>();
@@ -338,15 +338,9 @@ export default function Dashboard() {
         }
       }
     }
+    lastValidGroupsRef.current = cellGroups;
     return cellGroups;
-  }, [allClassesTimetable, electiveConfigs, grade, persistedGroups]);
-
-  // Update persisted groups when we successfully compute new non-empty groups
-  useEffect(() => {
-    if (Object.keys(computedGroups).length > 0) {
-      setPersistedGroups(computedGroups);
-    }
-  }, [computedGroups]);
+  }, [allClassesTimetable, electiveConfigs, grade]);
 
   // 2. 컴시간에서 시간표 가져오기
   const fetchFromComcigan = useMutation({
