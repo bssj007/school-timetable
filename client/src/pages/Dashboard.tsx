@@ -976,7 +976,7 @@ export default function Dashboard() {
                           let displaySubject = item ? item.subject : "-";
                           let displayTeacher = item ? item.teacher : "";
 
-                          const isFreePeriod = item?.subject.trim().includes("공강");
+                          const isFreePeriod = item && item.subject ? item.subject.trim().includes("공강") : false;
 
                           if (group && electiveSelection && !isFreePeriod) {
                             displaySubject = electiveSelection.subject;
