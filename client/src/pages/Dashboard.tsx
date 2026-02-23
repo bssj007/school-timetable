@@ -784,9 +784,8 @@ export default function Dashboard() {
                 <div className="absolute left-0 -translate-x-[10px] top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center md:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative">
                     <Button
-                      variant={isElectiveMissing ? "default" : "ghost"}
                       size="sm"
-                      className={`font-bold text-sm px-3 h-10 transition-all duration-300 ${isElectiveMissing ? "bg-[#fc6603] hover:bg-[#e05a00] text-white animate-pulse" : "text-[#fc6603]"}`}
+                      className={`font-bold text-sm px-3 h-10 transition-all duration-300 bg-[#fc6603] hover:bg-[#e05a00] text-white ${isElectiveMissing ? "animate-pulse" : ""}`}
                       style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
                       onClick={() => setShowElectiveDialog(true)}
                     >
