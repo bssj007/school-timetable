@@ -979,15 +979,21 @@ export default function Dashboard() {
                           if (group && electiveSelection) {
                             displaySubject = electiveSelection.subject;
 
-                            // Find the specific teacher teaching this subject in this time slot
-                            const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
-                            const matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
-
-                            if (matchingSlot) {
-                              displayTeacher = matchingSlot.teacher;
+                            // If there is a timetable item for this specific class and slot
+                            // It represents the exact teacher assigned to this class for the group block
+                            if (item && item.subject.trim() === displaySubject.trim()) {
+                              displayTeacher = item.teacher;
                             } else {
-                              // Fallback to the saved teacher list if not found in the timetable for some reason
-                              displayTeacher = electiveSelection.teacher || "";
+                              // Fallback: find any teacher for this subject in this time slot across all classes (if the class data is missing for some reason)
+                              const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
+                              const matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
+
+                              if (matchingSlot) {
+                                displayTeacher = matchingSlot.teacher;
+                              } else {
+                                // Final fallback: the teacher string saved during selection
+                                displayTeacher = electiveSelection.teacher ? electiveSelection.teacher.split(",")[0].trim() : "";
+                              }
                             }
                           }
 
