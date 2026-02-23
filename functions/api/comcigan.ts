@@ -280,6 +280,17 @@ async function getTimetable(grade: number, classNumInput: number | 'all') {
 
     return new Response(JSON.stringify({
         schoolName: "부산성지고등학교",
-        data: result
+        data: result,
+        debugTokens: {
+            keysCount: keys.length,
+            teacherProp,
+            subjectProp,
+            timetableProps,
+            timedataProp,
+            bunri,
+            timeInfoProp,
+            hasData: !!(data && data[grade]),
+            bunriLogic: bunri === 100 ? "100" : "other"
+        }
     }), { headers: { 'Content-Type': 'application/json' } });
 }
