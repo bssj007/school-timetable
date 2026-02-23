@@ -978,20 +978,24 @@ export default function Dashboard() {
 
                           if (group && electiveSelection) {
                             displaySubject = electiveSelection.subject;
-
-                            // If there is a timetable item for this specific class and slot
-                            // It represents the exact teacher assigned to this class for the group block
+                            // 1. Direct match: If the timetable explicitly specifies the subject name
                             if (item && item.subject.trim() === displaySubject.trim()) {
                               displayTeacher = item.teacher;
-                            } else {
-                              // Fallback: find any teacher for this subject in this time slot across all classes (if the class data is missing for some reason)
+                            }
+                            // 2. Intersection match: If the timetable has '선택A' but the teacher for this class slot matches the saved teacher for '심독'
+                            else if (item && item.teacher && electiveSelection.teacher &&
+                              electiveSelection.teacher.split(",").map((t: string) => t.trim()).includes(item.teacher.trim())) {
+                              displayTeacher = item.teacher;
+                            }
+                            else {
+                              // 3. Fallback: find any teacher for this subject in this time slot across all classes (if the class data is missing for some reason)
                               const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
                               const matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
 
                               if (matchingSlot) {
                                 displayTeacher = matchingSlot.teacher;
                               } else {
-                                // Final fallback: the teacher string saved during selection
+                                // 4. Final fallback: the teacher string saved during selection (just take the first one)
                                 displayTeacher = electiveSelection.teacher ? electiveSelection.teacher.split(",")[0].trim() : "";
                               }
                             }
@@ -1408,25 +1412,27 @@ export default function Dashboard() {
       </div>
 
       {/* Instruction Notification */}
-      {showInstructionTooltip && !useUserConfig().instructionDismissedV2 && (
-        <div className="fixed bottom-4 right-4 z-[9999] bg-white dark:bg-gray-800 border border-orange-200 shadow-lg rounded-lg p-6 md:p-8 max-w-[90vw] md:max-w-xl animate-in slide-in-from-bottom-2 fade-in duration-300">
-          <div className="flex flex-col gap-4 md:gap-6">
-            <p
-              className="font-bold text-base md:text-xl leading-relaxed bg-clip-text text-transparent"
-              style={{ backgroundImage: 'linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet)' }}
-            >
-              표의 칸을 클릭해서 수행평가를 추가하십쇼
-            </p>
-            <Button
-              size="lg"
-              className="bg-orange-500 hover:bg-orange-600 text-white border-none w-full text-lg md:text-xl py-3 md:py-4 font-['Gungsuh',_serif]"
-              onClick={() => setConfig({ instructionDismissedV2: true })}
-            >
-              이해함
-            </Button>
+      {
+        showInstructionTooltip && !useUserConfig().instructionDismissedV2 && (
+          <div className="fixed bottom-4 right-4 z-[9999] bg-white dark:bg-gray-800 border border-orange-200 shadow-lg rounded-lg p-6 md:p-8 max-w-[90vw] md:max-w-xl animate-in slide-in-from-bottom-2 fade-in duration-300">
+            <div className="flex flex-col gap-4 md:gap-6">
+              <p
+                className="font-bold text-base md:text-xl leading-relaxed bg-clip-text text-transparent"
+                style={{ backgroundImage: 'linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet)' }}
+              >
+                표의 칸을 클릭해서 수행평가를 추가하십쇼
+              </p>
+              <Button
+                size="lg"
+                className="bg-orange-500 hover:bg-orange-600 text-white border-none w-full text-lg md:text-xl py-3 md:py-4 font-['Gungsuh',_serif]"
+                onClick={() => setConfig({ instructionDismissedV2: true })}
+              >
+                이해함
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
       {/* 선택과목 선택 다이얼로그 */}
       <ElectiveSelectionDialog
         isOpen={showElectiveDialog}
