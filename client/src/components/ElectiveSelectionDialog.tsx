@@ -17,6 +17,7 @@ interface ElectiveConfig {
     grade: number;
     classCode: string; // A, B, C...
     subject: string;
+    fullSubjectName?: string;
     originalTeacher: string;
     fullTeacherName?: string;
     isMovingClass?: number; // 0 or 1
@@ -118,9 +119,12 @@ export default function ElectiveSelectionDialog({
         }
     }, [existingProfile, isOpen]);
 
-    const handleSelection = (group: string, subjectName: string) => {
-        // 1. Find the configs for this subject in this group to get ALL teachers
-        const configs = electivesByGroup[group]?.filter(c => c.subject === subjectName);
+    const handleSelection = (group: string, compoundSubjectName: string) => {
+        // Compound name is "subject|fullSubjectName"
+        const [subjectName, fullSubjectName] = compoundSubjectName.split("|");
+
+        // 1. Find the configs for this subject and fullSubjectName in this group to get ALL teachers
+        const configs = electivesByGroup[group]?.filter(c => c.subject === subjectName && c.fullSubjectName === (fullSubjectName || undefined));
         if (!configs || configs.length === 0) return;
 
         // Extract all teachers, removing duplicates, and join them
@@ -132,7 +136,7 @@ export default function ElectiveSelectionDialog({
         const newSelections = { ...selections };
 
         Object.keys(newSelections).forEach(g => {
-            if (g !== group && newSelections[g].subject === subjectName) {
+            if (g !== group && newSelections[g].subject === subjectName && newSelections[g].fullSubjectName === (fullSubjectName || undefined)) {
                 delete newSelections[g]; // Remove from old group
             }
         });
@@ -140,6 +144,7 @@ export default function ElectiveSelectionDialog({
         // 3. Set new selection
         newSelections[group] = {
             subject: subjectName,
+            fullSubjectName: fullSubjectName || undefined,
             teacher: combinedTeacherNames
         };
 
@@ -188,11 +193,8 @@ export default function ElectiveSelectionDialog({
                         <div className="flex justify-center p-4"><Loader2 className="animate-spin" /></div>
                     ) : (
                         Object.entries(electivesByGroup).map(([group, configs]: [string, ElectiveConfig[]]) => {
-                            const selectedSubject = selections[group]?.subject;
-
-                            // Filter available subjects for this group
-                            // Logic: Show all subjects available in this group.
-                            // However, we need to handle "Already selected in other group" logic display.
+                            const currentSel = selections[group];
+                            const selectedCompoundValue = currentSel ? `${currentSel.subject}|${currentSel.fullSubjectName || ""}` : "";
 
                             return (
                                 <div key={group} className="grid grid-cols-4 items-center gap-4 md:gap-8">
@@ -201,25 +203,23 @@ export default function ElectiveSelectionDialog({
                                     </label>
                                     <div className="col-span-3 flex flex-col md:flex-row items-start md:items-center">
                                         <Select
-                                            value={selectedSubject || ""}
+                                            value={selectedCompoundValue}
                                             onValueChange={(val: string) => handleSelection(group, val)}
                                         >
-                                            <SelectTrigger className={`w-[160px] md:w-[220px] md:h-11 md:text-base ${selectedSubject ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}`}>
+                                            <SelectTrigger className={`w-[160px] md:w-[220px] md:h-11 md:text-base ${selectedCompoundValue ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}`}>
                                                 <SelectValue placeholder="과목 선택" />
                                             </SelectTrigger>
                                             <SelectContent align="start" style={{ width: "var(--radix-select-trigger-width)", maxWidth: "var(--radix-select-trigger-width)" }}>
                                                 {/* 1. Normal Subjects (Not selected anywhere) */}
-                                                {Array.from(new Map(configs.map(item => [item.subject, item])).values()).map((config: ElectiveConfig) => {
+                                                {Array.from(new Map(configs.map(item => [`${item.subject}|${item.fullSubjectName || ""}`, item])).values()).map((config: ElectiveConfig) => {
+                                                    const compoundVal = `${config.subject}|${config.fullSubjectName || ""}`;
                                                     // Check if selected in OTHER group
-                                                    const selectedInGroup = Object.keys(selections).find(g => selections[g].subject === config.subject && g !== group);
+                                                    const selectedInGroup = Object.keys(selections).find(g => selections[g].subject === config.subject && selections[g].fullSubjectName === (config.fullSubjectName || undefined) && g !== group);
 
                                                     if (selectedInGroup) return null; // Handle in Red Section
 
-                                                    // Should be unique subject names in this list. 
-                                                    // If configs has duplicates (same subject, diff teacher/classCode?), we might duplicate options. 
-                                                    // Ideally configs are unique per (group, subject).
                                                     return (
-                                                        <SelectItem key={config.id} value={config.subject}>
+                                                        <SelectItem key={compoundVal} value={compoundVal}>
                                                             <div className="flex items-center gap-2 truncate block max-w-full">
                                                                 <span className="truncate">{config.subject}</span>
                                                                 {config.fullSubjectName && (
@@ -231,15 +231,16 @@ export default function ElectiveSelectionDialog({
                                                 })}
 
                                                 {/* 2. Red Section -> Yellow Section: Subjects selected in OTHER groups */}
-                                                {Array.from(new Map(configs.map(item => [item.subject, item])).values()).map((config: ElectiveConfig) => {
-                                                    const otherGroup = Object.keys(selections).find(g => selections[g].subject === config.subject && g !== group);
+                                                {Array.from(new Map(configs.map(item => [`${item.subject}|${item.fullSubjectName || ""}`, item])).values()).map((config: ElectiveConfig) => {
+                                                    const compoundVal = `${config.subject}|${config.fullSubjectName || ""}`;
+                                                    const otherGroup = Object.keys(selections).find(g => selections[g].subject === config.subject && selections[g].fullSubjectName === (config.fullSubjectName || undefined) && g !== group);
 
                                                     if (!otherGroup) return null;
 
                                                     return (
                                                         <SelectItem
-                                                            key={config.id}
-                                                            value={config.subject}
+                                                            key={compoundVal}
+                                                            value={compoundVal}
                                                             className="text-black font-bold line-through border-t border-yellow-200 bg-yellow-100 focus:bg-yellow-200"
                                                         >
                                                             <div className="flex items-center gap-1 truncate block max-w-full">

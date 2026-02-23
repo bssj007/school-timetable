@@ -992,7 +992,16 @@ export default function Dashboard() {
                             else {
                               // 3. Fallback: find any teacher for this subject in this time slot across all classes
                               const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
-                              const matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
+                              const electiveTeachers = electiveSelection.teacher ? electiveSelection.teacher.split(",").map((t: string) => t.trim()) : [];
+
+                              let matchingSlot = slotItems.find(t =>
+                                t.subject.trim() === electiveSelection.subject.trim() &&
+                                electiveTeachers.includes(t.teacher.trim())
+                              );
+
+                              if (!matchingSlot) {
+                                matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
+                              }
 
                               if (matchingSlot) {
                                 displayTeacher = matchingSlot.teacher;

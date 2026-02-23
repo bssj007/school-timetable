@@ -206,6 +206,9 @@ async function getTimetable(grade: number, classNumInput: number | 'all') {
     // We want the changed schedule, so we pick the last one.
     const timedataProp = timetableProps.length > 0 ? timetableProps[timetableProps.length - 1] : "";
 
+    console.log('[Comcigan Debug] keys:', keys.length, 'teacherProp:', teacherProp, 'subjectProp:', subjectProp);
+    console.log('[Comcigan Debug] timetableProps:', timetableProps, 'selected timedataProp:', timedataProp);
+
     if (!timedataProp) throw new Error("Data key not found");
 
     const teachers = rawData[teacherProp] || [];
@@ -213,6 +216,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all') {
     const data = rawData[timedataProp];
     const bunri = rawData['분리'] !== undefined ? rawData['분리'] : 100; // Get bunri value
     const timeInfoProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].length === 8 && typeof rawData[k][1] === 'number');
+
+    console.log('[Comcigan Debug] data for grade', grade, 'is array?', Array.isArray(data[grade]));
     const timeInfo = timeInfoProp ? rawData[timeInfoProp] : null;
 
     console.log('[Comcigan] 분리:', bunri, 'teachers:', teachers.length, 'subjects:', subjects.length);

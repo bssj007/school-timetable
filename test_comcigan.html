@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Comcigan Data Inspector</title>
+</head>
+<body>
+    <h1>Comcigan API Inspector</h1>
+    <pre id="output"></pre>
+    <script>
+        async function fetchWithProxy(url) {
+            // Using a simple CORS proxy just for testing
+            const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+            const response = await fetch(proxyUrl + url, {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+                }
+            });
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return await response.text();
+        }
+
+        async function inspect() {
+            const BASE_URL = 'https://comci.kr:4082';
+            const output = document.getElementById('output');
+            function log(msg) { output.textContent += msg + '\n'; console.log(msg); }
+
+            try {
+                // Actually to avoid CORS proxy issues for this quick test, let's just create an endpoint on the running dev server that dumps it,
+                // or just modify comcigan.ts to print the whole array for a bit and see the CF Worker logs.
+                // Wait, the dev server is probably running, I can just fetch it from there!
+                log("Fetching from local /api/comcigan directly...");
+                const res = await fetch('http://localhost:5173/api/comcigan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ schoolName: "충현고등학교", grade: 3, classNum: 5 })
+                });
+                
+                const data = await res.json();
+                log("Response status: " + res.status);
+                log(JSON.stringify(data, null, 2));
+            } catch (err) {
+                log("Error: " + err.message);
+                log("Dev server might not be running on 5173 or API failed.");
+            }
+        }
+        inspect();
+    </script>
+</body>
+</html>
