@@ -278,6 +278,44 @@ async function getTimetable(grade: number, classNumInput: number | 'all') {
         }
     }
 
+    const samples: any[] = [];
+    if (data && data[grade]) {
+        const cls = Object.keys(data[grade]).find(k => parseInt(k) > 0);
+        if (cls) {
+            for (let w = 1; w <= 5; w++) {
+                if (data[grade][cls][w]) {
+                    for (let p = 1; p <= 4; p++) {
+                        const code = data[grade][cls][w][p];
+                        if (code) samples.push(code);
+                    }
+                }
+                if (samples.length >= 5) break;
+            }
+        }
+    }
+
+    const parsedSamples = samples.map(code => {
+        let tIdx = 0, sIdx = 0;
+        if (bunri === 100) {
+            tIdx = Math.floor(code / bunri);
+            sIdx = code % bunri;
+        } else {
+            tIdx = code % bunri;
+            sIdx = Math.floor(code / bunri);
+        }
+        return {
+            code,
+            tIdx,
+            sIdx,
+            subj: subjects[sIdx] || "(none)",
+            teacher: teachers[tIdx] || "(none)",
+            alt_sIdx: code % bunri,
+            alt_tIdx: Math.floor(code / bunri),
+            alt_subj: subjects[code % bunri] || "(none)",
+            alt_teacher: teachers[Math.floor(code / bunri)] || "(none)"
+        };
+    });
+
     return new Response(JSON.stringify({
         schoolName: "부산성지고등학교",
         data: result,
@@ -290,7 +328,10 @@ async function getTimetable(grade: number, classNumInput: number | 'all') {
             bunri,
             timeInfoProp,
             hasData: !!(data && data[grade]),
-            bunriLogic: bunri === 100 ? "100" : "other"
+            bunriLogic: bunri === 100 ? "100" : "other",
+            subjectsCount: subjects.length,
+            teachersCount: teachers.length,
+            parsedSamples
         }
     }), { headers: { 'Content-Type': 'application/json' } });
 }
