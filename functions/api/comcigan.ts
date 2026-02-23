@@ -197,11 +197,14 @@ async function getTimetable(grade: number, classNumInput: number | 'all') {
         if (stringArrays.length > 0) subjectProp = stringArrays[0];
     }
 
-    const timedataProp = keys.find(k => {
+    const timetableProps = keys.filter(k => {
         const val = rawData[k];
         // Just check if class 1 exists for the grade to find the timedata property
         return Array.isArray(val) && val[grade] && val[grade][1] && Array.isArray(val[grade][1]);
-    }) || "";
+    });
+    // Comcigan usually returns original timetable first (e.g. 자료481) and changed daily timetable later (e.g. 자료492). 
+    // We want the changed schedule, so we pick the last one.
+    const timedataProp = timetableProps.length > 0 ? timetableProps[timetableProps.length - 1] : "";
 
     if (!timedataProp) throw new Error("Data key not found");
 

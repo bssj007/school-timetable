@@ -976,7 +976,9 @@ export default function Dashboard() {
                           let displaySubject = item ? item.subject : "-";
                           let displayTeacher = item ? item.teacher : "";
 
-                          if (group && electiveSelection) {
+                          const isFreePeriod = item?.subject.trim().includes("공강");
+
+                          if (group && electiveSelection && !isFreePeriod) {
                             displaySubject = electiveSelection.subject;
                             // 1. Direct match: If the timetable explicitly specifies the subject name
                             if (item && item.subject.trim() === displaySubject.trim()) {
@@ -988,15 +990,22 @@ export default function Dashboard() {
                               displayTeacher = item.teacher;
                             }
                             else {
-                              // 3. Fallback: find any teacher for this subject in this time slot across all classes (if the class data is missing for some reason)
+                              // 3. Fallback: find any teacher for this subject in this time slot across all classes
                               const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
                               const matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
 
                               if (matchingSlot) {
                                 displayTeacher = matchingSlot.teacher;
                               } else {
-                                // 4. Final fallback: the teacher string saved during selection (just take the first one)
-                                displayTeacher = electiveSelection.teacher ? electiveSelection.teacher.split(",")[0].trim() : "";
+                                // 4. Final fallback: The elective class is NOT running today (e.g., schedule changed to a generic class like '미창박상').
+                                // Revert to showing the actual timetable subject from Comcigan.
+                                if (item) {
+                                  displaySubject = item.subject;
+                                  displayTeacher = item.teacher;
+                                } else {
+                                  displaySubject = "-";
+                                  displayTeacher = "";
+                                }
                               }
                             }
                           }
