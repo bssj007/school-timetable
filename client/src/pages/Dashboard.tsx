@@ -1005,41 +1005,50 @@ export default function Dashboard() {
 
                           if (group && electiveSelection && !isFreePeriod) {
                             displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject;
-                            // 1. Direct match: If the timetable explicitly specifies the subject name
-                            if (item && item.subject.trim() === electiveSelection.subject.trim()) {
-                              displayTeacher = item.teacher;
+                            let teacherFound = false;
+                            const electiveTeachers = electiveSelection.teacher ? electiveSelection.teacher.split(",").map((t: string) => t.trim()) : [];
+                            const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
+
+                            // 1. Exact match across all classes for this timeslot
+                            let matchingSlot = slotItems.find(t =>
+                              t.subject.trim() === electiveSelection.subject.trim() &&
+                              electiveTeachers.includes(t.teacher.trim())
+                            );
+
+                            if (matchingSlot) {
+                              displayTeacher = matchingSlot.teacher;
+                              teacherFound = true;
                             }
-                            // 2. Intersection match: If the timetable has '선택A' but the teacher for this class slot matches the saved teacher for '심독'
-                            else if (item && item.teacher && electiveSelection.teacher &&
-                              electiveSelection.teacher.split(",").map((t: string) => t.trim()).includes(item.teacher.trim())) {
+
+                            // 2. Intersection match on base class (if subject changed abbreviation but teacher is identical)
+                            if (!teacherFound && item && item.teacher && electiveTeachers.includes(item.teacher.trim())) {
                               displayTeacher = item.teacher;
+                              teacherFound = true;
                             }
-                            else {
-                              // 3. Fallback: find any teacher for this subject in this time slot across all classes
-                              const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
-                              const electiveTeachers = electiveSelection.teacher ? electiveSelection.teacher.split(",").map((t: string) => t.trim()) : [];
 
-                              let matchingSlot = slotItems.find(t =>
-                                t.subject.trim() === electiveSelection.subject.trim() &&
-                                electiveTeachers.includes(t.teacher.trim())
-                              );
+                            // 3. Subject match on base class (teacher substituted, but base room remains the correct schedule)
+                            if (!teacherFound && item && item.subject.trim() === electiveSelection.subject.trim()) {
+                              displayTeacher = item.teacher;
+                              teacherFound = true;
+                            }
 
-                              if (!matchingSlot) {
-                                matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
-                              }
-
+                            // 4. Any subject match across all classes (if base class changed subject too, but the elective belongs somewhere)
+                            if (!teacherFound) {
+                              matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
                               if (matchingSlot) {
                                 displayTeacher = matchingSlot.teacher;
+                                teacherFound = true;
+                              }
+                            }
+
+                            // 5. Final fallback: The elective class is NOT running today (e.g., completely changed to a generic class like '미창박상').
+                            if (!teacherFound) {
+                              if (item) {
+                                displaySubject = item.subject;
+                                displayTeacher = item.teacher;
                               } else {
-                                // 4. Final fallback: The elective class is NOT running today (e.g., schedule changed to a generic class like '미창박상').
-                                // Revert to showing the actual timetable subject from Comcigan.
-                                if (item) {
-                                  displaySubject = item.subject;
-                                  displayTeacher = item.teacher;
-                                } else {
-                                  displaySubject = "-";
-                                  displayTeacher = "";
-                                }
+                                displaySubject = "-";
+                                displayTeacher = "";
                               }
                             }
                           }
