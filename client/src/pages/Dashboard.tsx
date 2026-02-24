@@ -316,13 +316,27 @@ export default function Dashboard() {
       return lastValidGroupsRef.current;
     }
 
+    const subjectTeacherToGroups = new Map<string, string[]>();
     const subjectToGroups = new Map<string, string[]>();
+
     electiveConfigs.forEach((c: any) => {
       if (c.isMovingClass !== 0 && c.classCode) {
         const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
         const subj = c.subject.trim();
+
+        // Optional fallback to just subject
         const existing = subjectToGroups.get(subj) || [];
         subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
+
+        // Strict subject + teacher mapping
+        const teachersStr = c.fullTeacherName || c.originalTeacher || "";
+        const teachers = teachersStr.split(",").map((t: string) => t.trim()).filter(Boolean);
+
+        teachers.forEach((tName: string) => {
+          const key = `${subj}|${tName}`;
+          const existingKey = subjectTeacherToGroups.get(key) || [];
+          subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
+        });
       }
     });
 
@@ -335,7 +349,13 @@ export default function Dashboard() {
 
         const groupCounts: Record<string, number> = {};
         slots.forEach(slot => {
-          const groups = subjectToGroups.get(slot.subject.trim());
+          const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
+          let groups = subjectTeacherToGroups.get(key);
+
+          if (!groups || groups.length === 0) {
+            groups = subjectToGroups.get(slot.subject.trim());
+          }
+
           if (groups) {
             groups.forEach(g => {
               groupCounts[g] = (groupCounts[g] || 0) + 1;
@@ -979,9 +999,9 @@ export default function Dashboard() {
                           const isFreePeriod = item && item.subject ? item.subject.trim().includes("공강") : false;
 
                           if (group && electiveSelection && !isFreePeriod) {
-                            displaySubject = electiveSelection.subject;
+                            displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject;
                             // 1. Direct match: If the timetable explicitly specifies the subject name
-                            if (item && item.subject.trim() === displaySubject.trim()) {
+                            if (item && item.subject.trim() === electiveSelection.subject.trim()) {
                               displayTeacher = item.teacher;
                             }
                             // 2. Intersection match: If the timetable has '선택A' but the teacher for this class slot matches the saved teacher for '심독'

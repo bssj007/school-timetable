@@ -8,7 +8,7 @@ import {
     BookOpen, Trash2, Eye, EyeOff, Lock,
     Settings, Search, ChevronDown, ChevronRight, Check, ChevronsUpDown, Save, GripVertical, CheckCircle2, AlertCircle, Plus, X,
     TriangleAlert, ShieldAlert, CheckSquare, Calendar, ShieldCheck, Ban,
-    Download, Upload
+    Download, Upload, Database
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -632,7 +632,7 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
 
             return json.data;
         },
-        enabled: selectedMenu === "raw-comcigan" && !!schoolSearchQuery,
+        enabled: (selectedMenu === "raw-comcigan" || selectedMenu === "dataset-selector") && !!schoolSearchQuery,
         retry: 1
     });
 
@@ -651,6 +651,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 >
                     <BookOpen className="w-4 h-4 mr-2" />
                     컴시간알리미 전체 데이터
+                </Button>
+                <Button
+                    variant={selectedMenu === "dataset-selector" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("dataset-selector")}
+                >
+                    <Database className="w-4 h-4 mr-2" />
+                    시간표 데이터셋 선택기
                 </Button>
                 {/* Additional list items can go here later */}
             </div>
@@ -682,6 +690,38 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                                 </div>
                             ) : rawDataQuery.data ? (
                                 <RawTimetableViewer rawData={rawDataQuery.data} />
+                            ) : (
+                                <div className="text-gray-400 p-4">학교 이름을 입력하고 조회를 눌러주세요.</div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "dataset-selector" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">시간표 데이터셋 선택기</h3>
+                            <Input
+                                value={schoolNameInput}
+                                onChange={(e) => setSchoolNameInput(e.target.value)}
+                                placeholder="학교명 (예: 부산성지고)"
+                                className="w-[180px]"
+                            />
+                            <Button onClick={handleFetchRaw} disabled={rawDataQuery.isFetching}>
+                                {rawDataQuery.isFetching ? "조회 중..." : "조회"}
+                            </Button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto">
+                            {rawDataQuery.isLoading ? (
+                                <div className="text-gray-400 p-4">데이터를 불러오는 중입니다...</div>
+                            ) : rawDataQuery.isError ? (
+                                <div className="text-red-400 flex items-center gap-2 p-4">
+                                    <AlertCircle className="w-4 h-4" />
+                                    오류가 발생했습니다: {(rawDataQuery.error as Error).message}
+                                </div>
+                            ) : rawDataQuery.data ? (
+                                <DatasetSelector rawData={rawDataQuery.data} adminPassword={adminPassword} />
                             ) : (
                                 <div className="text-gray-400 p-4">학교 이름을 입력하고 조회를 눌러주세요.</div>
                             )}
@@ -1682,5 +1722,121 @@ export default function Admin() {
                 </DialogContent>
             </Dialog>
         </div>
+    );
+}
+
+function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [selectedProp, setSelectedProp] = useState<string>('');
+
+    // Fetch current setting
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: {
+                    "X-Admin-Password": adminPassword
+                }
+            });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            setSelectedProp(settingsQuery.data.comcigan_dataset_selected || '');
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (newData: any) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify(newData)
+            });
+            if (!res.ok) throw new Error("Failed to save settings");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("설정이 저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err) => {
+            toast.error(`저장 실패: ${err.message}`);
+        }
+    });
+
+    if (settingsQuery.isLoading) return <div className="p-4">설정을 불러오는 중...</div>;
+
+    // Available timetable datasets
+    const keys = Object.keys(rawData);
+    const timetableProps = keys.filter(k => {
+        const val = rawData[k];
+        return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+    });
+
+    const handleSave = () => {
+        saveMutation.mutate({ comcigan_dataset_selected: selectedProp });
+    };
+
+    const handleCancel = () => {
+        setSelectedProp(settingsQuery.data?.comcigan_dataset_selected || '');
+    };
+
+    // To allow selecting an empty string (auto), we use a special value in SelectItem
+    // because Shadcn UI Select doesn't always handle empty string values gracefully.
+    // We'll use "_auto_" instead of "" for the internal state.
+    const displayValue = selectedProp || "_auto_";
+
+    const handleValueChange = (val: string) => {
+        if (val === "_auto_") {
+            setSelectedProp('');
+        } else {
+            setSelectedProp(val);
+        }
+    };
+
+    return (
+        <Card className="w-full max-w-2xl">
+            <CardHeader>
+                <CardTitle>출처 데이터셋 선택</CardTitle>
+                <CardDescription>
+                    메인 화면의 시간표에서 출력할 원본 데이터셋을 선택합니다.
+                    "자동"으로 설정할 경우 가장 최신 데이터셋을 자동으로 선택합니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">데이터셋</label>
+                    <Select value={displayValue} onValueChange={handleValueChange}>
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder="자동 (최신 유효 데이터셋)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="_auto_">자동 (최신 데이터셋)</SelectItem>
+                            {timetableProps.map(prop => (
+                                <SelectItem key={prop} value={prop}>
+                                    {prop}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={handleCancel} disabled={saveMutation.isPending}>
+                        변경 취소
+                    </Button>
+                    <Button onClick={handleSave} disabled={saveMutation.isPending}>
+                        {saveMutation.isPending ? "저장 중..." : "저장"}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
     );
 }

@@ -128,7 +128,7 @@ export const onRequest = async (context: any) => {
 
             // Just fetch the timetable and return it
             // D1 save will be handled client-side or later
-            const timetableResponse = await getTimetable(grade, classNum);
+            const timetableResponse = await getTimetable(grade, classNum, context.env ? context.env.DB : undefined);
             const timetableJson = await timetableResponse.json();
 
             return new Response(JSON.stringify({
@@ -150,7 +150,7 @@ export const onRequest = async (context: any) => {
             const grade = parseInt(url.searchParams.get('grade') || '1');
             const classNumStr = url.searchParams.get('classNum');
             const classNum = classNumStr === 'all' ? 'all' : parseInt(classNumStr || '1');
-            return await getTimetable(grade, classNum);
+            return await getTimetable(grade, classNum, context.env ? context.env.DB : undefined);
         }
 
         return new Response('Invalid type or method', { status: 400 });
@@ -166,7 +166,7 @@ export const onRequest = async (context: any) => {
     }
 }
 
-async function getTimetable(grade: number, classNumInput: number | 'all') {
+async function getTimetable(grade: number, classNumInput: number | 'all', db?: any) {
     const prefix = await getPrefix();
     const { code1, code2 } = await getSchoolCode(prefix);
 
@@ -206,31 +206,57 @@ async function getTimetable(grade: number, classNumInput: number | 'all') {
     // Sometimes the last element is an empty matrix of zeros for future use.
     // Pick the last one that actually has non-zero values in its class 1 timetable.
     let timedataProp = "";
-    for (let i = timetableProps.length - 1; i >= 0; i--) {
-        const prop = timetableProps[i];
-        const gradeData = rawData[prop][grade];
-        if (!gradeData || !gradeData[1]) continue;
 
-        // Flatten the week's data to check for non-zero codes
-        const class1Data = gradeData[1];
-        let hasData = false;
-        for (let w = 1; w <= 5; w++) {
-            if (class1Data[w] && Array.isArray(class1Data[w])) {
-                if (class1Data[w].some((code: any) => typeof code === 'number' && code > 0)) {
-                    hasData = true;
-                    break;
+    if (db) {
+        try {
+            // Ensure table exists just in case
+            await db.prepare(`
+                CREATE TABLE IF NOT EXISTS system_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            `).run();
+
+            const { results } = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_dataset_selected'").all();
+            if (results && results.length > 0 && results[0].value) {
+                const selected = results[0].value;
+                if (timetableProps.includes(selected)) {
+                    timedataProp = selected;
+                    console.log(`[Comcigan Debug] Using admin selected timetable dataset: ${timedataProp}`);
                 }
             }
-        }
-
-        if (hasData) {
-            timedataProp = prop;
-            break;
+        } catch (e) {
+            console.warn("[Comcigan Debug] Failed to read system_settings for comcigan_dataset_selected", e);
         }
     }
-    // Fallback just in case
-    if (!timedataProp && timetableProps.length > 0) {
-        timedataProp = timetableProps[timetableProps.length - 1];
+
+    if (!timedataProp) {
+        for (let i = timetableProps.length - 1; i >= 0; i--) {
+            const prop = timetableProps[i];
+            const gradeData = rawData[prop][grade];
+            if (!gradeData || !gradeData[1]) continue;
+
+            // Flatten the week's data to check for non-zero codes
+            const class1Data = gradeData[1];
+            let hasData = false;
+            for (let w = 1; w <= 5; w++) {
+                if (class1Data[w] && Array.isArray(class1Data[w])) {
+                    if (class1Data[w].some((code: any) => typeof code === 'number' && code > 0)) {
+                        hasData = true;
+                        break;
+                    }
+                }
+            }
+
+            if (hasData) {
+                timedataProp = prop;
+                break;
+            }
+        }
+        // Fallback just in case
+        if (!timedataProp && timetableProps.length > 0) {
+            timedataProp = timetableProps[timetableProps.length - 1];
+        }
     }
 
     console.log('[Comcigan Debug] keys:', keys.length, 'teacherProp:', teacherProp, 'subjectProp:', subjectProp);
