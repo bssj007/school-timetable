@@ -41,7 +41,7 @@ export default function ElectiveSelectionDialog({
     onBack
 }: ElectiveSelectionDialogProps) {
     const queryClient = useQueryClient();
-    const [selections, setSelections] = useState<Record<string, { subject: string, teacher: string }>>({});
+    const [selections, setSelections] = useState<Record<string, { subject: string, teacher: string, fullSubjectName?: string }>>({});
 
     // 1. Fetch available electives
     const { data: electiveConfigs, isLoading: configLoading } = useQuery({
@@ -256,9 +256,9 @@ export default function ElectiveSelectionDialog({
                                                 })}
                                             </SelectContent>
                                         </Select>
-                                        {selectedSubject && selections[group]?.teacher && (
+                                        {currentSel && currentSel.teacher && (
                                             <div className="text-xs md:text-sm text-blue-600 mt-1 md:mt-0 pl-1 md:pl-0 md:ml-4 shrink-0">
-                                                담당: {selections[group].teacher}
+                                                담당: {currentSel.teacher}
                                             </div>
                                         )}
                                     </div>

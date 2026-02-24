@@ -15,6 +15,21 @@ router.use((req, res, next) => {
     next();
 });
 
+router.post("/raw_comcigan", async (req, res) => {
+    try {
+        const { schoolName } = req.body;
+        if (!schoolName) {
+            return res.status(400).json({ error: "schoolName is required" });
+        }
+        const { fetchRawTimetableFromComcigan } = await import("../comcigan");
+        const rawData = await fetchRawTimetableFromComcigan(schoolName);
+        res.json({ success: true, data: rawData });
+    } catch (err: any) {
+        console.error('[Admin] Raw Fetch Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /assessments: Get all assessments for admin view
 router.get("/assessments", async (req, res) => {
     const db = await getDb();

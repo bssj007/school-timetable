@@ -202,8 +202,8 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
         setIsSaving(true);
         try {
             // Construct UPDATE query
-            const updates = [];
-            const values = [];
+            const updates: string[] = [];
+            const values: any[] = [];
 
             for (const key in editValues) {
                 if (key === pkField) continue; // Don't update PK

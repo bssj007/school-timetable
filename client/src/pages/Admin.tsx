@@ -612,7 +612,7 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
     const rawDataQuery = useQuery({
         queryKey: ["admin", "rawComcigan", schoolSearchQuery],
         queryFn: async () => {
-            const res = await fetch("/api/trpc/admin.getRawComciganData", {
+            const res = await fetch("/api/admin/raw_comcigan", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -622,9 +622,8 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
             });
             if (!res.ok) throw new Error("Failed to fetch raw data");
             const json = await res.json();
-            if (json.error) throw new Error(json.error.message);
-            // Result is under result.data.data from tRPC
-            return json.result.data.data;
+            if (json.error) throw new Error(json.error);
+            return json.data;
         },
         enabled: selectedMenu === "raw-comcigan" && !!schoolSearchQuery,
         retry: 1
@@ -666,24 +665,180 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                             </Button>
                         </div>
 
-                        <div className="flex-1 overflow-auto bg-slate-950 text-green-400 p-4 rounded-md font-mono text-xs">
+                        <div className="flex-1 overflow-y-auto">
                             {rawDataQuery.isLoading ? (
-                                <div className="text-gray-400">데이터를 불러오는 중입니다...</div>
+                                <div className="text-gray-400 p-4">데이터를 불러오는 중입니다...</div>
                             ) : rawDataQuery.isError ? (
-                                <div className="text-red-400 flex items-center gap-2">
+                                <div className="text-red-400 flex items-center gap-2 p-4">
                                     <AlertCircle className="w-4 h-4" />
                                     오류가 발생했습니다: {(rawDataQuery.error as Error).message}
                                 </div>
                             ) : rawDataQuery.data ? (
-                                <pre className="whitespace-pre-wrap break-all">
-                                    {JSON.stringify(rawDataQuery.data, null, 2)}
-                                </pre>
+                                <RawTimetableViewer rawData={rawDataQuery.data} />
                             ) : (
-                                <div className="text-gray-400">학교 이름을 입력하고 조회를 눌러주세요.</div>
+                                <div className="text-gray-400 p-4">학교 이름을 입력하고 조회를 눌러주세요.</div>
                             )}
                         </div>
                     </div>
                 )}
+            </div>
+        </div>
+    );
+}
+
+function RawTimetableViewer({ rawData }: { rawData: any }) {
+    const [selectedProp, setSelectedProp] = useState<string>('');
+    const [selectedGrade, setSelectedGrade] = useState<string>('1');
+    const [selectedClassNum, setSelectedClassNum] = useState<string>('1');
+
+    const dataKeys = Object.keys(rawData || {});
+    const timetableProps = dataKeys.filter(k => {
+        const val = rawData[k];
+        return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+    });
+
+    React.useEffect(() => {
+        if (timetableProps.length > 0 && !selectedProp) {
+            setSelectedProp(timetableProps[timetableProps.length - 1]);
+        }
+    }, [timetableProps, selectedProp]);
+
+    if (!rawData) return null;
+
+    let teacherKey = dataKeys.find(k => Array.isArray(rawData[k]) && rawData[k].some((s: any) => typeof s === 'string' && s.endsWith('*')));
+    const keywords = ["국어", "수학", "영어", "한국사", "통합사회", "통합과학", "체육", "음악", "미술", "진로", "운동", "독서", "문학"];
+    let subjectKey = dataKeys.find(k => {
+        const val = rawData[k];
+        if (!Array.isArray(val)) return false;
+        for (let i = 0; i < Math.min(val.length, 100); i++) {
+            if (typeof val[i] === 'string' && keywords.some(kw => val[i].includes(kw))) return true;
+        }
+        return false;
+    });
+
+    if (!subjectKey) {
+        const stringArrays = dataKeys.filter(k => k !== teacherKey && Array.isArray(rawData[k]) && typeof rawData[k][0] === 'string');
+        stringArrays.sort((a, b) => rawData[b].length - rawData[a].length);
+        if (stringArrays.length > 0) subjectKey = stringArrays[0];
+    }
+
+    const bunri = rawData['분리'] !== undefined ? rawData['분리'] : 100;
+    const teachers = teacherKey ? rawData[teacherKey] : [];
+    const subjects = subjectKey ? rawData[subjectKey] : [];
+
+    const renderCell = (code: number) => {
+        if (!code || code === 0) return "-";
+        const teacherCode = Math.floor(code / bunri);
+        const subjectCode = code % bunri;
+        const teacherStr = teachers[teacherCode] || teacherCode;
+        const subjectStr = subjects[subjectCode] || subjectCode;
+        return (
+            <div className="flex flex-col items-center justify-center text-xs p-1">
+                <span className="font-bold text-blue-700">{subjectStr}</span>
+                <span className="text-gray-500">{teacherStr}</span>
+                <span className="text-[10px] text-gray-300 mt-1">({code})</span>
+            </div>
+        );
+    };
+
+    const scheduleData = selectedProp ? rawData[selectedProp] : null;
+    const gradeData = scheduleData ? scheduleData[Number(selectedGrade)] : null;
+    const classData = gradeData ? gradeData[Number(selectedClassNum)] : null;
+
+    const weekdays = ["월", "화", "수", "목", "금"];
+
+    return (
+        <div className="flex flex-col gap-4 bg-white p-4 rounded-md border text-black shadow-sm">
+            <div className="flex flex-wrap gap-4 items-center mb-2">
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold">시간표 속성:</span>
+                    <Select value={selectedProp} onValueChange={setSelectedProp}>
+                        <SelectTrigger className="w-[120px]">
+                            <SelectValue placeholder="속성" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {timetableProps.map(prop => (
+                                <SelectItem key={prop} value={prop}>{prop}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold">학년:</span>
+                    <Select value={selectedGrade} onValueChange={setSelectedGrade}>
+                        <SelectTrigger className="w-[80px]">
+                            <SelectValue placeholder="학년" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {[1, 2, 3].map(g => (
+                                <SelectItem key={g} value={String(g)}>{g}학년</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold">반:</span>
+                    <Select value={selectedClassNum} onValueChange={setSelectedClassNum}>
+                        <SelectTrigger className="w-[80px]">
+                            <SelectValue placeholder="반" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {Array.from({ length: 15 }, (_, i) => i + 1).map(c => (
+                                <SelectItem key={c} value={String(c)}>{c}반</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
+            <div className="border border-slate-200 rounded-md overflow-hidden">
+                <Table>
+                    <TableHeader className="bg-slate-50">
+                        <TableRow>
+                            <TableHead className="w-16 text-center border-r font-bold text-slate-700">교시</TableHead>
+                            {weekdays.map(day => (
+                                <TableHead key={day} className="text-center border-r last:border-0 font-bold text-slate-700">{day}</TableHead>
+                            ))}
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {!classData ? (
+                            <TableRow>
+                                <TableCell colSpan={6} className="text-center h-32 text-slate-400">
+                                    해당 학년/반 데이터가 없습니다. 속성이나 반을 변경해주세요.
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            Array.from({ length: 7 }, (_, i) => i + 1).map(period => (
+                                <TableRow key={period} className="hover:bg-slate-50">
+                                    <TableCell className="text-center font-bold bg-slate-50 border-r text-slate-700">
+                                        {period}
+                                    </TableCell>
+                                    {weekdays.map((day, i) => {
+                                        const weekdayIndex = i + 1;
+                                        const dayData = classData[weekdayIndex];
+                                        const code = dayData && dayData.length > period ? dayData[period] : 0;
+
+                                        return (
+                                            <TableCell key={day} className="text-center p-0 border-r last:border-0 align-middle">
+                                                {renderCell(code)}
+                                            </TableCell>
+                                        );
+                                    })}
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+
+            <div className="mt-4 border-t pt-4">
+                <h4 className="text-sm font-bold mb-2">원시 JSON 구조 (Raw Data)</h4>
+                <div className="h-64 overflow-auto bg-slate-950 text-green-400 p-4 rounded-md font-mono text-xs shadow-inner">
+                    <pre className="whitespace-pre-wrap break-all">
+                        {JSON.stringify(rawData, null, 2)}
+                    </pre>
+                </div>
             </div>
         </div>
     );
