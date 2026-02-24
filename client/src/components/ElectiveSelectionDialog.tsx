@@ -124,7 +124,7 @@ export default function ElectiveSelectionDialog({
         const [subjectName, fullSubjectName] = compoundSubjectName.split("|");
 
         // 1. Find the configs for this subject and fullSubjectName in this group to get ALL teachers
-        const configs = electivesByGroup[group]?.filter(c => c.subject === subjectName && c.fullSubjectName === (fullSubjectName || undefined));
+        const configs = electivesByGroup[group]?.filter(c => c.subject === subjectName && (c.fullSubjectName || "") === (fullSubjectName || ""));
         if (!configs || configs.length === 0) return;
 
         // Extract all teachers, removing duplicates, and join them
@@ -136,7 +136,7 @@ export default function ElectiveSelectionDialog({
         const newSelections = { ...selections };
 
         Object.keys(newSelections).forEach(g => {
-            if (g !== group && newSelections[g].subject === subjectName && newSelections[g].fullSubjectName === (fullSubjectName || undefined)) {
+            if (g !== group && newSelections[g].subject === subjectName && (newSelections[g].fullSubjectName || "") === (fullSubjectName || "")) {
                 delete newSelections[g]; // Remove from old group
             }
         });
@@ -214,7 +214,7 @@ export default function ElectiveSelectionDialog({
                                                 {Array.from(new Map(configs.map(item => [`${item.subject}|${item.fullSubjectName || ""}`, item])).values()).map((config: ElectiveConfig) => {
                                                     const compoundVal = `${config.subject}|${config.fullSubjectName || ""}`;
                                                     // Check if selected in OTHER group
-                                                    const selectedInGroup = Object.keys(selections).find(g => selections[g].subject === config.subject && selections[g].fullSubjectName === (config.fullSubjectName || undefined) && g !== group);
+                                                    const selectedInGroup = Object.keys(selections).find(g => selections[g].subject === config.subject && (selections[g].fullSubjectName || "") === (config.fullSubjectName || "") && g !== group);
 
                                                     if (selectedInGroup) return null; // Handle in Red Section
 
@@ -233,7 +233,7 @@ export default function ElectiveSelectionDialog({
                                                 {/* 2. Red Section -> Yellow Section: Subjects selected in OTHER groups */}
                                                 {Array.from(new Map(configs.map(item => [`${item.subject}|${item.fullSubjectName || ""}`, item])).values()).map((config: ElectiveConfig) => {
                                                     const compoundVal = `${config.subject}|${config.fullSubjectName || ""}`;
-                                                    const otherGroup = Object.keys(selections).find(g => selections[g].subject === config.subject && selections[g].fullSubjectName === (config.fullSubjectName || undefined) && g !== group);
+                                                    const otherGroup = Object.keys(selections).find(g => selections[g].subject === config.subject && (selections[g].fullSubjectName || "") === (config.fullSubjectName || "") && g !== group);
 
                                                     if (!otherGroup) return null;
 
