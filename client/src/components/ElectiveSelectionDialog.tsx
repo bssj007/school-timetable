@@ -194,7 +194,7 @@ export default function ElectiveSelectionDialog({
                     ) : (
                         Object.entries(electivesByGroup).map(([group, configs]: [string, ElectiveConfig[]]) => {
                             const currentSel = selections[group];
-                            const selectedCompoundValue = currentSel ? `${currentSel.subject}|${currentSel.fullSubjectName || ""}` : "";
+                            const selectedCompoundValue = currentSel ? `${currentSel.subject}|${currentSel.fullSubjectName || ""}` : undefined;
 
                             return (
                                 <div key={group} className="grid grid-cols-4 items-center gap-4 md:gap-8">

@@ -7,9 +7,12 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { getDb } from "./db";
+import { getDb } from "../db";
 import { sql } from "drizzle-orm";
-// ... imports ...
+import { adminRouter } from "../routes/admin";
+import { assessmentRouter } from "../routes/assessment";
+import { myIpRouter } from "../routes/my-ip";
+import { runMigrations } from "./migrate";
 
 async function startServer() {
   // Run migrations on startup (Local Dev)
@@ -157,12 +160,7 @@ async function startServer() {
     serveStatic(app);
   }
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
-
-  if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
-  }
+  const port = parseInt(process.env.PORT || "3000");
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);

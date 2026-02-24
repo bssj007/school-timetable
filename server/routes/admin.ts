@@ -60,8 +60,8 @@ router.delete("/assessments", async (req, res) => {
 
     try {
         // Build WHERE IN clause
-        const placeholders = ids.map(() => '?').join(',');
-        await db.execute(sql.raw(`DELETE FROM performanceAssessments WHERE id IN (${placeholders})`, ids));
+        const inClause = ids.map((id: any) => Number(id)).filter((n: number) => !isNaN(n)).join(',');
+        await db.execute(sql.raw(`DELETE FROM performanceAssessments WHERE id IN (${inClause})`));
 
         res.json({ success: true, count: ids.length });
     } catch (err: any) {
