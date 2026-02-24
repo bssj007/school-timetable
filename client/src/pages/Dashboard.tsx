@@ -1003,11 +1003,14 @@ export default function Dashboard() {
 
                           const isFreePeriod = item && item.subject ? item.subject.trim().includes("공강") : false;
 
+                          let isElectiveActive = false;
                           if (group && electiveSelection && !isFreePeriod) {
                             displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject;
                             let teacherFound = false;
-                            const electiveTeachers = electiveSelection.teacher ? electiveSelection.teacher.split(",").map((t: string) => t.trim()) : [];
+                            const electiveTeachers = electiveSelection.teacher ? electiveSelection.teacher.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
                             const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
+
+                            const isEmptyClass = item && item.subject.trim() === "빈교실";
 
                             // 1. Exact match across all classes for this timeslot
                             let matchingSlot = slotItems.find(t =>
@@ -1026,14 +1029,14 @@ export default function Dashboard() {
                               teacherFound = true;
                             }
 
-                            // 3. Subject match on base class (teacher substituted, but base room remains the correct schedule)
-                            if (!teacherFound && item && item.subject.trim() === electiveSelection.subject.trim()) {
+                            // 3. Subject match on base class (only if student didn't specify teachers, or teacher was substituted)
+                            if (!teacherFound && electiveTeachers.length === 0 && item && item.subject.trim() === electiveSelection.subject.trim()) {
                               displayTeacher = item.teacher;
                               teacherFound = true;
                             }
 
-                            // 4. Any subject match across all classes (if base class changed subject too, but the elective belongs somewhere)
-                            if (!teacherFound) {
+                            // 4. Any subject match across all classes (if base class is empty OR student didn't specify teachers)
+                            if (!teacherFound && (electiveTeachers.length === 0 || isEmptyClass)) {
                               matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
                               if (matchingSlot) {
                                 displayTeacher = matchingSlot.teacher;
@@ -1041,8 +1044,17 @@ export default function Dashboard() {
                               }
                             }
 
-                            // 5. Final fallback: The elective class is NOT running today (e.g., completely changed to a generic class like '미창박상').
-                            if (!teacherFound) {
+                            if (teacherFound || isEmptyClass) {
+                              isElectiveActive = true;
+                              if (!teacherFound && isEmptyClass) {
+                                // Base class is empty, and we couldn't find the specific teacher. 
+                                // According to user, we MUST show the elective anyway since it's an empty class.
+                                displayTeacher = electiveTeachers[0] || "";
+                              }
+                            } else {
+                              // 5. Final fallback: The elective class is NOT running today (e.g., completely changed to a generic class like '미창박상').
+                              // Or computedGroups misidentified the group.
+                              isElectiveActive = false;
                               if (item) {
                                 displaySubject = item.subject;
                                 displayTeacher = item.teacher;
@@ -1058,8 +1070,8 @@ export default function Dashboard() {
                               key={weekdayIdx}
                               id={`cell-${weekdayIdx}-${classTime}`}
                               onClick={() => {
-                                if (item || (group && electiveSelection)) {
-                                  if (isSubjectDisabled && !group) {
+                                if (item || isElectiveActive) {
+                                  if (isSubjectDisabled && !isElectiveActive) {
                                     toast.error(`${item.subject}은(는) 선택할 수 없습니다.`);
                                     return;
                                   }
@@ -1070,15 +1082,15 @@ export default function Dashboard() {
                               }}
                               className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors overflow-hidden
                                 ${bgColor} ${pastStyle} ${selectionStyle}
-                                ${(item || (group && electiveSelection)) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
+                                ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
                             >
-                              {group && (
+                              {isElectiveActive && group && (
                                 <div className="absolute top-0 right-0 px-1 rounded-bl-md bg-orange-100 text-orange-800 text-[9px] md:text-[10px] font-bold">
                                   {group}그룹
                                 </div>
                               )}
-                              {item || (group && electiveSelection) ? (
+                              {item || isElectiveActive ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-0">
                                   <div className={`font-bold text-sm md:text-base leading-tight truncate w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}>{displaySubject}</div>
                                   <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">{displayTeacher}</div>
