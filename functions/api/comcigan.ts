@@ -202,9 +202,36 @@ async function getTimetable(grade: number, classNumInput: number | 'all') {
         // Just check if class 1 exists for the grade to find the timedata property
         return Array.isArray(val) && val[grade] && val[grade][1] && Array.isArray(val[grade][1]);
     });
-    // Comcigan usually returns original timetable first (e.g. 자료481) and changed daily timetable later (e.g. 자료492). 
-    // We want the changed schedule, so we pick the last one.
-    const timedataProp = timetableProps.length > 0 ? timetableProps[timetableProps.length - 1] : "";
+    // Comcigan usually returns original timetable first (e.g. 자료481) and changed daily timetable later. 
+    // Sometimes the last element is an empty matrix of zeros for future use.
+    // Pick the last one that actually has non-zero values in its class 1 timetable.
+    let timedataProp = "";
+    for (let i = timetableProps.length - 1; i >= 0; i--) {
+        const prop = timetableProps[i];
+        const gradeData = rawData[prop][grade];
+        if (!gradeData || !gradeData[1]) continue;
+
+        // Flatten the week's data to check for non-zero codes
+        const class1Data = gradeData[1];
+        let hasData = false;
+        for (let w = 1; w <= 5; w++) {
+            if (class1Data[w] && Array.isArray(class1Data[w])) {
+                if (class1Data[w].some((code: any) => typeof code === 'number' && code > 0)) {
+                    hasData = true;
+                    break;
+                }
+            }
+        }
+
+        if (hasData) {
+            timedataProp = prop;
+            break;
+        }
+    }
+    // Fallback just in case
+    if (!timedataProp && timetableProps.length > 0) {
+        timedataProp = timetableProps[timetableProps.length - 1];
+    }
 
     console.log('[Comcigan Debug] keys:', keys.length, 'teacherProp:', teacherProp, 'subjectProp:', subjectProp);
     console.log('[Comcigan Debug] timetableProps:', timetableProps, 'selected timedataProp:', timedataProp);

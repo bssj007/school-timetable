@@ -167,14 +167,54 @@ export class ComciganParser {
         // Keys are EUC-KR encoded, so we need to find them by pattern
         const dataKeys = Object.keys(data);
 
-        // Find keys by looking for patterns
-        // Teachers: 자료446
-        // Subjects: 자료492
-        // Schedule: 자료481
-        const teacherKey = dataKeys.find(k => k.includes('446'));
-        const subjectKey = dataKeys.find(k => k.includes('492'));
-        const scheduleKey = dataKeys.find(k => k.includes('481'));
+        let teacherKey = dataKeys.find(k => Array.isArray(data[k]) && data[k].some((s: any) => typeof s === 'string' && s.endsWith('*')));
 
+        const keywords = ["국어", "수학", "영어", "한국사", "통합사회", "통합과학", "체육", "음악", "미술", "진로", "운동", "독서", "문학"];
+        let subjectKey = dataKeys.find(k => {
+            const val = data[k];
+            if (!Array.isArray(val)) return false;
+            for (let i = 0; i < Math.min(val.length, 100); i++) {
+                if (typeof val[i] === 'string' && keywords.some(kw => val[i].includes(kw))) return true;
+            }
+            return false;
+        });
+
+        if (!subjectKey) {
+            const stringArrays = dataKeys.filter(k => k !== teacherKey && Array.isArray(data[k]) && typeof data[k][0] === 'string');
+            stringArrays.sort((a, b) => data[b].length - data[a].length);
+            if (stringArrays.length > 0) subjectKey = stringArrays[0];
+        }
+
+        const timetableProps = dataKeys.filter(k => {
+            const val = data[k];
+            // Just check if class 1 exists for the grade
+            return Array.isArray(val) && val[grade] && val[grade][1] && Array.isArray(val[grade][1]);
+        });
+
+        let scheduleKey = "";
+        for (let i = timetableProps.length - 1; i >= 0; i--) {
+            const prop = timetableProps[i];
+            const gradeData = data[prop][grade];
+            if (!gradeData || !gradeData[1]) continue;
+
+            const class1Data = gradeData[1];
+            let hasData = false;
+            for (let w = 1; w <= 5; w++) {
+                if (class1Data[w] && Array.isArray(class1Data[w])) {
+                    if (class1Data[w].some((code: any) => typeof code === 'number' && code > 0)) {
+                        hasData = true;
+                        break;
+                    }
+                }
+            }
+            if (hasData) {
+                scheduleKey = prop;
+                break;
+            }
+        }
+        if (!scheduleKey && timetableProps.length > 0) {
+            scheduleKey = timetableProps[timetableProps.length - 1];
+        }
 
         const teachers = teacherKey ? data[teacherKey] : [];
         const subjects = subjectKey ? data[subjectKey] : [];
@@ -319,5 +359,33 @@ export async function fetchTimetableFromComcigan(
     } catch (error) {
         console.error('[Comcigan] Error:', error);
         throw new Error(`시간표 조회 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    }
+}
+
+/**
+ * Fetch RAw timetable JSON from Comcigan without parsing
+ */
+export async function fetchRawTimetableFromComcigan(
+    schoolName: string
+): Promise<any> {
+    try {
+        console.log(`[Comcigan] Fetching RAW timetable: ${schoolName}`);
+
+        const schools = await searchSchools(schoolName);
+        if (schools.length === 0) {
+            throw new Error(`학교를 찾을 수 없습니다: ${schoolName}`);
+        }
+
+        const school = schools[0];
+        console.log(`[Comcigan] Found school: ${school.name} (${school.code})`);
+
+        const parser = await getParser();
+        const data = await parser.getTimetableData(school.code);
+
+        return data;
+
+    } catch (error) {
+        console.error('[Comcigan] Raw Fetch Error:', error);
+        throw new Error(`원본 시간표 형태 조회 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
     }
 }

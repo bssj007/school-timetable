@@ -155,6 +155,24 @@ export const appRouter = router({
           return { success: false, message: "Incorrect password" };
         }
       }),
+
+    getRawComciganData: protectedProcedure
+      .input((val: unknown) => {
+        if (typeof val !== "object" || val === null) throw new Error("Invalid input");
+        const obj = val as Record<string, unknown>;
+        return { schoolName: String(obj.schoolName) };
+      })
+      .mutation(async ({ input }) => {
+        try {
+          // fetch from the newly added raw fetcher
+          const { fetchRawTimetableFromComcigan } = await import("./comcigan");
+          const rawData = await fetchRawTimetableFromComcigan(input.schoolName);
+          return { success: true, data: rawData };
+        } catch (error) {
+          console.error('[Router] Raw Fetch Error:', error);
+          throw new Error(error instanceof Error ? error.message : '데이터 조회 실패');
+        }
+      }),
   }),
 });
 

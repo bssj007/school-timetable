@@ -6,6 +6,7 @@
 export {
     searchSchools,
     fetchTimetableFromComcigan,
+    fetchRawTimetableFromComcigan,
 } from './comcigan-parser';
 
 export type { SchoolSearchResult } from './comcigan-parser';

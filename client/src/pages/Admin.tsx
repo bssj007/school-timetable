@@ -601,6 +601,94 @@ function DataTransferManager({ adminPassword }: { adminPassword: string }) {
     );
 }
 
+// ----------------------------------------------------------------------
+// 7. Etc Manager (Miscellaneous features like Raw Comcigan Data)
+// ----------------------------------------------------------------------
+function EtcManager({ adminPassword }: { adminPassword: string }) {
+    const [selectedMenu, setSelectedMenu] = useState("raw-comcigan");
+    const [schoolSearchQuery, setSchoolSearchQuery] = useState("성지");
+    const [schoolNameInput, setSchoolNameInput] = useState("부산성지고");
+
+    const rawDataQuery = useQuery({
+        queryKey: ["admin", "rawComcigan", schoolSearchQuery],
+        queryFn: async () => {
+            const res = await fetch("/api/trpc/admin.getRawComciganData", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({ schoolName: schoolSearchQuery })
+            });
+            if (!res.ok) throw new Error("Failed to fetch raw data");
+            const json = await res.json();
+            if (json.error) throw new Error(json.error.message);
+            // Result is under result.data.data from tRPC
+            return json.result.data.data;
+        },
+        enabled: selectedMenu === "raw-comcigan" && !!schoolSearchQuery,
+        retry: 1
+    });
+
+    const handleFetchRaw = () => {
+        setSchoolSearchQuery(schoolNameInput);
+    };
+
+    return (
+        <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
+            {/* Sidebar List */}
+            <div className="w-full md:w-64 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
+                <Button
+                    variant={selectedMenu === "raw-comcigan" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("raw-comcigan")}
+                >
+                    <BookOpen className="w-4 h-4 mr-2" />
+                    컴시간알리미 전체 데이터
+                </Button>
+                {/* Additional list items can go here later */}
+            </div>
+
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col gap-4 overflow-hidden border rounded-md bg-white p-4">
+                {selectedMenu === "raw-comcigan" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">컴시간알리미 원본 데이터 구조</h3>
+                            <Input
+                                value={schoolNameInput}
+                                onChange={(e) => setSchoolNameInput(e.target.value)}
+                                placeholder="학교명 (예: 부산성지고)"
+                                className="w-[180px]"
+                            />
+                            <Button onClick={handleFetchRaw} disabled={rawDataQuery.isFetching}>
+                                {rawDataQuery.isFetching ? "조회 중..." : "조회"}
+                            </Button>
+                        </div>
+
+                        <div className="flex-1 overflow-auto bg-slate-950 text-green-400 p-4 rounded-md font-mono text-xs">
+                            {rawDataQuery.isLoading ? (
+                                <div className="text-gray-400">데이터를 불러오는 중입니다...</div>
+                            ) : rawDataQuery.isError ? (
+                                <div className="text-red-400 flex items-center gap-2">
+                                    <AlertCircle className="w-4 h-4" />
+                                    오류가 발생했습니다: {(rawDataQuery.error as Error).message}
+                                </div>
+                            ) : rawDataQuery.data ? (
+                                <pre className="whitespace-pre-wrap break-all">
+                                    {JSON.stringify(rawDataQuery.data, null, 2)}
+                                </pre>
+                            ) : (
+                                <div className="text-gray-400">학교 이름을 입력하고 조회를 눌러주세요.</div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export default function Admin() {
     const [password, setPassword] = useState("");
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -904,6 +992,11 @@ export default function Admin() {
                         className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800"
                     >
                         데이터 출입
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="etc"
+                    >
+                        기타
                     </TabsTrigger>
                 </TabsList>
 
@@ -1370,6 +1463,10 @@ export default function Admin() {
 
                 <TabsContent value="datatransfer" className="space-y-6">
                     <DataTransferManager adminPassword={password} />
+                </TabsContent>
+
+                <TabsContent value="etc" className="space-y-6">
+                    <EtcManager adminPassword={password} />
                 </TabsContent>
             </Tabs>
 
