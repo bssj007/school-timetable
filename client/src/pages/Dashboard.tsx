@@ -329,10 +329,15 @@ export default function Dashboard() {
         subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
 
         // Strict subject + teacher mapping
-        const teachersStr = c.fullTeacherName || c.originalTeacher || "";
-        const teachers = teachersStr.split(",").map((t: string) => t.trim()).filter(Boolean);
+        // We must include BOTH originalTeacher and fullTeacherName, because
+        // Comcigan usually provides a 2-character teacher name (originalTeacher).
+        const teacherNames = [];
+        if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
+        if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
 
-        teachers.forEach((tName: string) => {
+        const uniqueTeachers = Array.from(new Set(teacherNames));
+
+        uniqueTeachers.forEach((tName: string) => {
           const key = `${subj}|${tName}`;
           const existingKey = subjectTeacherToGroups.get(key) || [];
           subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
@@ -965,7 +970,7 @@ export default function Dashboard() {
                             // Check item subject if it exists, otherwise check if group is active
                             const group = computedGroups[`${weekdayIdx}-${classTime}`];
                             const electiveSelection = currentProfile?.electives?.[group];
-                            const matchSubject = group && electiveSelection ? electiveSelection.subject : (item ? item.subject : null);
+                            const matchSubject = group && electiveSelection ? (electiveSelection.fullSubjectName || electiveSelection.subject) : (item ? item.subject : null);
 
                             return matchSubject &&
                               a.subject.trim() === matchSubject.trim() &&
