@@ -620,9 +620,16 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 },
                 body: JSON.stringify({ schoolName: schoolSearchQuery })
             });
+            let json;
+            try {
+                json = await res.json();
+            } catch (e) {
+                if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+            }
+
+            if (json?.error) throw new Error(json.error);
             if (!res.ok) throw new Error("Failed to fetch raw data");
-            const json = await res.json();
-            if (json.error) throw new Error(json.error);
+
             return json.data;
         },
         enabled: selectedMenu === "raw-comcigan" && !!schoolSearchQuery,
