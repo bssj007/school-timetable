@@ -310,20 +310,19 @@ export default function Dashboard() {
 
   // 각 시간(교시)별 다수결 그룹 계산
   // We keep track of the last successfully computed groups to prevent flickering during refetches.
-  const lastValidGroupsRef = React.useRef<{ activeCellGroups: Record<string, string[]>, classToGroupMembership: Record<string, string[]> }>({ activeCellGroups: {}, classToGroupMembership: {} });
+  const lastValidGroupsRef = React.useRef<Record<string, string>>({});
 
   const computedGroups = useMemo(() => {
     if (grade !== "2" && grade !== "3") {
-      lastValidGroupsRef.current = { activeCellGroups: {}, classToGroupMembership: {} };
-      return lastValidGroupsRef.current;
+      lastValidGroupsRef.current = {};
+      return {};
     }
     if (!allClassesTimetable || allClassesTimetable.length === 0 || !electiveConfigs || electiveConfigs.length === 0) {
       return lastValidGroupsRef.current;
     }
 
-    const groupToClasses = new Map<string, number[]>();
     const subjectTeacherToGroups = new Map<string, string[]>();
-    const safeSubjectToGroups = new Map<string, string[]>();
+    const subjectToGroups = new Map<string, string[]>();
 
     // 1. 과목 설정(electiveConfigs)에서 각 반이 어떤 그룹들에 속해있는지 매핑합니다.
     electiveConfigs.forEach((c: any) => {
@@ -331,13 +330,10 @@ export default function Dashboard() {
         // classCode는 "A, B, C" 형태
         const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
         const subj = c.subject.trim();
-        const classes = c.targetClasses ? c.targetClasses.split(',').map((n: string) => parseInt(n.trim())).filter((n: number) => !isNaN(n)) : [];
 
-        // 대상 반(targetClasses) 기록
-        codes.forEach((g: string) => {
-          const existing = groupToClasses.get(g) || [];
-          groupToClasses.set(g, Array.from(new Set([...existing, ...classes])));
-        });
+        // Optional fallback to just subject
+        const existing = subjectToGroups.get(subj) || [];
+        subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
 
         // Strict subject + teacher mapping
         const teacherNames: string[] = [];
@@ -346,79 +342,69 @@ export default function Dashboard() {
 
         const uniqueTeachers = Array.from(new Set(teacherNames));
 
-        if (uniqueTeachers.length > 0) {
-          uniqueTeachers.forEach((tName: string) => {
-            const key = `${subj}|${tName}`;
-            const existingKey = subjectTeacherToGroups.get(key) || [];
-            subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
-          });
-        } else {
-          const existing = safeSubjectToGroups.get(subj) || [];
-          safeSubjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
-        }
+        uniqueTeachers.forEach((tName: string) => {
+          const key = `${subj}|${tName}`;
+          const existingKey = subjectTeacherToGroups.get(key) || [];
+          subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
+        });
       }
     });
 
-    const activeCellGroups: Record<string, string[]> = {};
-    const classToGroupMembership: Record<string, string[]> = {};
-
-    Array.from(groupToClasses.entries()).forEach(([g, classes]) => {
-      classes.forEach(cls => {
-        const clsStr = cls.toString();
-        if (!classToGroupMembership[clsStr]) classToGroupMembership[clsStr] = [];
-        classToGroupMembership[clsStr].push(g);
-      });
-    });
+    const cellGroups: Record<string, string> = {};
 
     for (let w = 0; w < 5; w++) {
       for (let p = 1; p <= 7; p++) {
         const slots = allClassesTimetable.filter(t => t.weekday === w && t.classTime === p);
         if (slots.length === 0) continue;
 
-        // 교시에 해당하는 각 반별 매핑된 그룹 세트를 수집합니다.
-        const groupHits = new Map<string, number>();
+        // 교시에 해당하는 반들의 현재 시간표 과목이 속한 그룹 세트를 수집합니다.
+        const activeGroupSets: Set<string>[] = [];
 
         slots.forEach(slot => {
-          if (!slot.subject || !slot.class) return;
+          if (!slot.subject) return;
 
           const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
           let groups = subjectTeacherToGroups.get(key);
 
           if (!groups || groups.length === 0) {
-            groups = safeSubjectToGroups.get(slot.subject.trim());
+            groups = subjectToGroups.get(slot.subject.trim());
           }
 
           if (groups && groups.length > 0) {
-            const clsNum = parseInt(slot.class.toString());
-            groups.forEach(g => {
-              const targets = groupToClasses.get(g);
-              if (!targets || targets.length === 0 || targets.includes(clsNum)) {
-                groupHits.set(g, (groupHits.get(g) || 0) + 1);
+            activeGroupSets.push(new Set(groups));
+          }
+        });
+
+        if (activeGroupSets.length === 0) continue;
+
+        // 선택과목을 진행 중인 반들이 공통으로 가지고 있는 그룹(교집합)을 찾습니다.
+        let intersection: Set<string> | null = null;
+
+        for (const groups of activeGroupSets) {
+          if (intersection === null) {
+            intersection = new Set(groups);
+          } else {
+            intersection.forEach(g => {
+              if (!groups.has(g)) {
+                intersection!.delete(g);
               }
             });
           }
-        });
+        }
 
-        const activeGroups: string[] = [];
-        Array.from(groupHits.entries()).forEach(([g, hits]) => {
-          const targets = groupToClasses.get(g);
-          const targetLimit = targets && targets.length > 0 ? targets.length : 4;
-          const requiredHits = Math.max(2, Math.floor(targetLimit * 0.5));
-
-          if (hits >= requiredHits) {
-            activeGroups.push(g);
+        // 공통된 그룹이 있으면 그 그룹을 해당 교시의 그룹으로 설정 (가장 첫 번째 것 사용)
+        if (intersection && intersection.size > 0) {
+          const threshold = Math.min(slots.length, Math.max(2, Math.floor(slots.length * 0.25)));
+          // 최소 임계값(전체의 25% 이상 반이 선택과목 진행)을 넘어야만 그룹 블록으로 확정합니다.
+          if (activeGroupSets.length >= threshold) {
+            const commonGroups = Array.from(intersection);
+            cellGroups[`${w}-${p}`] = commonGroups[0];
           }
-        });
-
-        if (activeGroups.length > 0) {
-          activeCellGroups[`${w}-${p}`] = activeGroups;
         }
       }
     }
-    const result = { activeCellGroups, classToGroupMembership };
-    // @ts-ignore
-    lastValidGroupsRef.current = result;
-    return result;
+    lastValidGroupsRef.current = cellGroups;
+    return cellGroups;
   }, [allClassesTimetable, electiveConfigs, grade]);
 
   // 2. 컴시간에서 시간표 가져오기
@@ -1005,12 +991,8 @@ export default function Dashboard() {
                           const cellAssessments = assessments ? assessments.filter(a => {
                             if (settings?.hide_past_assessments && isPast) return false;
 
-                            const activeCellGroups = computedGroups.activeCellGroups || {};
-                            const classToGroupMembership = computedGroups.classToGroupMembership || {};
-                            const activeGroupsForSlot = activeCellGroups[`${weekdayIdx}-${classTime}`] || [];
-                            const myClassGroups = classNum ? (classToGroupMembership[classNum.toString()] || []) : [];
-                            const group = activeGroupsForSlot.find((g: string) => myClassGroups.includes(g)) || "";
-
+                            // Check item subject if it exists, otherwise check if group is active
+                            const group = computedGroups[`${weekdayIdx}-${classTime}`];
                             const electiveSelection = currentProfile?.electives?.[group];
                             const matchSubject = group && electiveSelection ? (electiveSelection.fullSubjectName || electiveSelection.subject) : (item ? item.subject : null);
 
@@ -1038,18 +1020,7 @@ export default function Dashboard() {
                           // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
                           const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
 
-                          // @ts-ignore
-                          const activeCellGroups = computedGroups.activeCellGroups || {};
-                          // @ts-ignore
-                          const classToGroupMembership = computedGroups.classToGroupMembership || {};
-
-                          const activeGroupsForSlot = activeCellGroups[`${weekdayIdx}-${classTime}`] || [];
-                          // 현재 로그인된 사용자의 반이 속한 그룹 목록
-                          const myClassGroups = classNum ? (classToGroupMembership[classNum] || []) : [];
-
-                          // 이 교시에 활성화된 블록 중 내가 속한 하나를 찾는다
-                          const group = activeGroupsForSlot.find((g: string) => myClassGroups.includes(g)) || "";
-
+                          const group = computedGroups[`${weekdayIdx}-${classTime}`];
                           const electiveSelection = currentProfile?.electives?.[group];
                           let displaySubject = item ? item.subject : "-";
                           let displayTeacher = item ? item.teacher : "";
@@ -1097,9 +1068,15 @@ export default function Dashboard() {
                               }
                             }
 
+                            // We MUST set isElectiveActive to true if computedGroups determined this period belongs to the group,
+                            // because the student is definitively taking their selected elective for this group right now.
+                            // The strict threshold in computedGroups prevents false positives here.
                             isElectiveActive = true;
 
                             if (!teacherFound) {
+                              // If we couldn't find the teacher in the timetable (e.g. absent, subject renamed, or comcigan data issue),
+                              // we still show the student's chosen elective subject.
+                              // For the teacher name, we fall back to the first expected teacher, or the base class teacher, or blank.
                               displayTeacher = electiveTeachers.length > 0 ? electiveTeachers[0] : (item ? item.teacher : "");
                             }
                           }

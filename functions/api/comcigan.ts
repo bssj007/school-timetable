@@ -295,15 +295,12 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 dayHours = timeInfo[grade][weekday];
             }
 
-            const maxPeriod = Array.isArray(classData[weekday]) ? classData[weekday].length - 1 : 0;
+            const maxPeriod = classData[weekday] ? classData[weekday].length - 1 : 0;
             const loopLimit = Math.min(dayHours, maxPeriod);
-
-            // Skip empty days like `[ 0 ]`, which means there are no classes or day is off
-            if (loopLimit <= 0) continue;
 
             for (let period = 1; period <= loopLimit; period++) {
                 const code = classData[weekday][period];
-                if (!code || code === 0) continue;
+                if (!code) continue;
 
                 let teacherIdx = 0;
                 let subjectIdx = 0;
