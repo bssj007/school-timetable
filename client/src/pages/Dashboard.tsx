@@ -229,8 +229,7 @@ export default function Dashboard() {
         const queryClassNum = (grade === "2" || grade === "3") ? "all" : classNum;
         const response = await fetch(`/api/comcigan?type=timetable&grade=${grade}&classNum=${queryClassNum}`);
         if (!response.ok) {
-          console.warn('Failed to fetch from Comcigan, returning empty');
-          return [];
+          throw new Error(`Failed to fetch from Comcigan: ${response.status}`);
         }
         const result = await response.json();
         console.log('[Dashboard] Timetable data:', result);
@@ -244,7 +243,7 @@ export default function Dashboard() {
         return [] as TimetableItem[];
       } catch (e) {
         console.error('Failed to fetch timetable', e);
-        return [] as TimetableItem[];
+        throw e;
       }
     },
     enabled: !!grade && !!classNum && !!schoolName,
@@ -258,7 +257,10 @@ export default function Dashboard() {
     queryFn: async () => {
       if (grade !== "2" && grade !== "3") return [];
       const res = await fetch(`/api/electives?grade=${grade}`);
-      if (!res.ok) return [];
+      if (!res.ok) {
+        if (res.status === 404) return [];
+        throw new Error(`Failed to fetch elective configs: ${res.status}`);
+      }
       return res.json();
     },
     enabled: grade === "2" || grade === "3"
@@ -269,7 +271,10 @@ export default function Dashboard() {
     queryFn: async () => {
       if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber) return null;
       const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`);
-      if (!res.ok) return null;
+      if (!res.ok) {
+        if (res.status === 404) return null;
+        throw new Error(`Failed to fetch student profile: ${res.status}`);
+      }
       const data = await res.json();
       if (data && data.electives) {
         if (typeof data.electives === 'string') {
@@ -429,7 +434,7 @@ export default function Dashboard() {
         return await res.json() as AssessmentItem[];
       } catch (e) {
         console.warn('Failed to fetch assessments:', e);
-        return [] as AssessmentItem[];
+        throw e;
       }
     },
     enabled: !!grade && !!classNum,
