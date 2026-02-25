@@ -378,9 +378,7 @@ export default function Dashboard() {
           entries.sort((a, b) => b[1] - a[1]);
           const maxGroup = entries[0][0];
           const maxCount = entries[0][1];
-          // To prevent false positives, require a significant portion of classes in the grade to match the group
-          const threshold = Math.min(slots.length, Math.max(2, Math.floor(slots.length * 0.3)));
-          if (maxCount >= threshold) {
+          if (maxCount >= 1) {
             cellGroups[`${w}-${p}`] = maxGroup;
           }
         }
@@ -1051,16 +1049,24 @@ export default function Dashboard() {
                               }
                             }
 
-                            // We MUST set isElectiveActive to true if computedGroups determined this period belongs to the group,
-                            // because the student is definitively taking their selected elective for this group right now.
-                            // The strict threshold in computedGroups prevents false positives here.
-                            isElectiveActive = true;
-
-                            if (!teacherFound) {
-                              // If we couldn't find the teacher in the timetable (e.g. absent, subject renamed, or comcigan data issue),
-                              // we still show the student's chosen elective subject.
-                              // For the teacher name, we fall back to the first expected teacher, or the base class teacher, or blank.
-                              displayTeacher = electiveTeachers.length > 0 ? electiveTeachers[0] : (item ? item.teacher : "");
+                            if (teacherFound || isEmptyClass) {
+                              isElectiveActive = true;
+                              if (!teacherFound && isEmptyClass) {
+                                // Base class is empty, and we couldn't find the specific teacher. 
+                                // According to user, we MUST show the elective anyway since it's an empty class.
+                                displayTeacher = electiveTeachers[0] || "";
+                              }
+                            } else {
+                              // 5. Final fallback: The elective class is NOT running today (e.g., completely changed to a generic class like '미창박상').
+                              // Or computedGroups misidentified the group.
+                              isElectiveActive = false;
+                              if (item) {
+                                displaySubject = item.subject;
+                                displayTeacher = item.teacher;
+                              } else {
+                                displaySubject = "-";
+                                displayTeacher = "";
+                              }
                             }
                           }
 
