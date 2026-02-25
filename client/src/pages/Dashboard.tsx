@@ -321,27 +321,32 @@ export default function Dashboard() {
       return lastValidGroupsRef.current;
     }
 
-    const classToGroups = new Map<number, string[]>();
+    const subjectTeacherToGroups = new Map<string, string[]>();
+    const subjectToGroups = new Map<string, string[]>();
 
     // 1. 과목 설정(electiveConfigs)에서 각 반이 어떤 그룹들에 속해있는지 매핑합니다.
     electiveConfigs.forEach((c: any) => {
       if (c.isMovingClass !== 0 && c.classCode) {
         // classCode는 "A, B, C" 형태
-        const groups = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
-        // targetClasses는 이 선택과목을 듣는 반 목록 "1, 2, 3" 형태
-        if (c.targetClasses) {
-          const classes = c.targetClasses.split(',').map((num: string) => parseInt(num.trim())).filter((num: number) => !isNaN(num));
-          classes.forEach((clsNum: number) => {
-            const existingGroups = classToGroups.get(clsNum) || [];
-            // 중복 그룹 방지
-            groups.forEach((g: string) => {
-              if (!existingGroups.includes(g)) {
-                existingGroups.push(g);
-              }
-            });
-            classToGroups.set(clsNum, existingGroups);
-          });
-        }
+        const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
+        const subj = c.subject.trim();
+
+        // Optional fallback to just subject
+        const existing = subjectToGroups.get(subj) || [];
+        subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
+
+        // Strict subject + teacher mapping
+        const teacherNames: string[] = [];
+        if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
+        if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
+
+        const uniqueTeachers = Array.from(new Set(teacherNames));
+
+        uniqueTeachers.forEach((tName: string) => {
+          const key = `${subj}|${tName}`;
+          const existingKey = subjectTeacherToGroups.get(key) || [];
+          subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
+        });
       }
     });
 
@@ -352,28 +357,30 @@ export default function Dashboard() {
         const slots = allClassesTimetable.filter(t => t.weekday === w && t.classTime === p);
         if (slots.length === 0) continue;
 
-        // 해당 교시에 이동수업/선택과목으로 추정되는 반들의 목록을 찾습니다.
-        // 교시에 해당하는 모든 반들의 활성 그룹 정보를 수집합니다.
-        const classActiveGroups = new Map<number, Set<string>>();
+        // 교시에 해당하는 반들의 현재 시간표 과목이 속한 그룹 세트를 수집합니다.
+        const activeGroupSets: Set<string>[] = [];
 
         slots.forEach(slot => {
-          if (!slot.class) return;
-          const clsNum = parseInt(slot.class.toString());
-          const clsGroups = classToGroups.get(clsNum);
+          if (!slot.subject) return;
 
-          if (!clsGroups || clsGroups.length === 0) return;
+          const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
+          let groups = subjectTeacherToGroups.get(key);
 
-          // 과목명 기준으로 일치하는지 확인 (선택 옵션)
-          // 여기서는 해당 반이 이동수업 블록에 해당한다고 판단
-          classActiveGroups.set(clsNum, new Set(clsGroups));
+          if (!groups || groups.length === 0) {
+            groups = subjectToGroups.get(slot.subject.trim());
+          }
+
+          if (groups && groups.length > 0) {
+            activeGroupSets.push(new Set(groups));
+          }
         });
 
-        if (classActiveGroups.size === 0) continue;
+        if (activeGroupSets.length === 0) continue;
 
-        // 모든 반이 공통으로 가지고 있는 그룹(교집합)을 찾습니다.
+        // 선택과목을 진행 중인 반들이 공통으로 가지고 있는 그룹(교집합)을 찾습니다.
         let intersection: Set<string> | null = null;
 
-        for (const [clsNum, groups] of classActiveGroups.entries()) {
+        for (const groups of activeGroupSets) {
           if (intersection === null) {
             intersection = new Set(groups);
           } else {
@@ -387,9 +394,12 @@ export default function Dashboard() {
 
         // 공통된 그룹이 있으면 그 그룹을 해당 교시의 그룹으로 설정 (가장 첫 번째 것 사용)
         if (intersection && intersection.size > 0) {
-          const commonGroups = Array.from(intersection);
-          // 여러 개가 교집합될 가능성은 낮지만, 확실한 한 개만 배정
-          cellGroups[`${w}-${p}`] = commonGroups[0];
+          const threshold = Math.min(slots.length, Math.max(2, Math.floor(slots.length * 0.25)));
+          // 최소 임계값(전체의 25% 이상 반이 선택과목 진행)을 넘어야만 그룹 블록으로 확정합니다.
+          if (activeGroupSets.length >= threshold) {
+            const commonGroups = Array.from(intersection);
+            cellGroups[`${w}-${p}`] = commonGroups[0];
+          }
         }
       }
     }
