@@ -237,7 +237,7 @@ export default function Dashboard() {
         if (result.data && Array.isArray(result.data)) {
           return result.data.map((item: any) => ({
             ...item,
-            weekday: item.weekday - 1
+            weekday: item.weekday
           })) as TimetableItem[];
         }
         return [] as TimetableItem[];
@@ -645,6 +645,8 @@ export default function Dashboard() {
     );
   }
 
+  const isRestricted = Boolean(settings?.restricted_grades?.includes(parseInt(grade)) && !settings?.is_whitelisted);
+
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
 
   const isElectiveMissingImmediate = !isElectiveEntered && (grade === "2" || grade === "3") && !!classNum && !!studentNumber;
@@ -788,7 +790,7 @@ export default function Dashboard() {
                 <h1 className="text-2xl font-bold whitespace-nowrap overflow-hidden text-ellipsis">
                   {grade || '?'}-{classNum || '?'} 시간표
                 </h1>
-                {(grade === "2" || grade === "3") && (
+                {!isRestricted && (grade === "2" || grade === "3") && (
                   <div className="relative inline-block">
                     <Button
                       size="sm"
@@ -810,7 +812,7 @@ export default function Dashboard() {
 
 
               {/* Mobile Elective Edit Button */}
-              {(grade === "2" || grade === "3") && (
+              {!isRestricted && (grade === "2" || grade === "3") && (
                 <div className="absolute left-0 -translate-x-[10px] top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center md:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative">
                     <Button
@@ -915,226 +917,231 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="px-1 pb-1 md:px-2 md:pb-2">
               <div className="overflow-x-auto relative">
-                {isElectiveMissingImmediate && (
-                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
-                    <div
-                      className="absolute inset-0 rounded-lg pointer-events-none"
-                      style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.08) 10px, rgba(0,0,0,0.08) 20px)' }}
-                    ></div>
-                    <div className="relative text-center bg-white px-8 py-5 rounded-xl shadow-lg border-2 border-red-200 pointer-events-auto flex flex-col gap-2">
-                      <div className="text-red-500 text-lg md:text-2xl tracking-wide">
-                        [{grade}{classNum}{studentNumber?.padStart(2, '0')}]
-                      </div>
-                      <div className="text-black text-base md:text-xl">
-                        선택과목을 입력하세요
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Visit Restriction Overlay */}
-                {settings?.restricted_grades?.includes(parseInt(grade)) && !settings?.is_whitelisted && (
-                  <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm rounded-lg">
-                    <div className="text-center p-6 bg-white border border-red-200 shadow-xl rounded-2xl max-w-md mx-4">
-                      <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold text-gray-900 mb-2">접근 제한 안내</h3>
-                      <p className="text-gray-600 whitespace-pre-wrap">
-                        {settings?.restriction_reason || "현재 해당 학년은 서비스 이용이 제한되어 있습니다."}
-                      </p>
-                    </div>
+                {isRestricted && (
+                  <div className="min-h-[300px] flex flex-col items-center justify-center bg-white rounded-lg p-6">
+                    <ShieldAlert className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">접근 제한 안내</h3>
+                    <p className="text-gray-600 whitespace-pre-wrap text-center">
+                      {settings?.restriction_reason || `${grade}학년 개발 중`}
+                    </p>
                   </div>
                 )}
 
-                <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate || (settings?.restricted_grades?.includes(parseInt(grade)) && !settings?.is_whitelisted) ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
-                  <thead>
-                    <tr>
-                      <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
-                      {weekdayNames.map((day, idx) => {
-                        const currentDate = toDateString(weekDates[idx]);
-                        const todayStr = toDateString(new Date());
-                        const isPast = currentDate < todayStr;
+                {/* Only render timetable and elective warnings if not restricted */}
+                {!isRestricted && (
+                  <>
+                    {/* Select Electives Warning Overlay */}
+                    {isElectiveMissingImmediate && (
+                      <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
+                        <div
+                          className="absolute inset-0 rounded-lg pointer-events-none"
+                          style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.08) 10px, rgba(0,0,0,0.08) 20px)' }}
+                        ></div>
+                        <div className="relative text-center bg-white px-8 py-5 rounded-xl shadow-lg border-2 border-red-200 pointer-events-auto flex flex-col gap-2">
+                          <div className="text-red-500 text-lg md:text-2xl tracking-wide">
+                            [{grade}{classNum}{studentNumber?.padStart(2, '0')}]
+                          </div>
+                          <div className="text-black text-base md:text-xl">
+                            선택과목을 입력하세요
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-                        return (
-                          <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70" : ""}`}>
-                            <div className="text-sm font-semibold">{day}</div>
-                            <div className="text-[10px] md:text-xs text-gray-500 font-normal">
-                              {formatDate(weekDates[idx])}
-                            </div>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.from({ length: 7 }, (_, i) => i + 1).map((classTime) => (
-                      <tr key={classTime}>
-                        <td className="border p-1 md:p-2 text-center font-medium bg-gray-50 text-sm w-8 md:w-10">
-                          {classTime}
-                        </td>
-                        {Array.from({ length: 5 }, (_, weekdayIdx) => {
-                          const dayItems = timetableByDay[weekdayIdx] || [];
-                          const item = dayItems.find((t) => t.classTime === classTime);
-                          const currentDate = toDateString(weekDates[weekdayIdx]);
+                    <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
+                      <thead>
+                        <tr>
+                          <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
+                          {weekdayNames.map((day, idx) => {
+                            const currentDate = toDateString(weekDates[idx]);
+                            const todayStr = toDateString(new Date());
+                            const isPast = currentDate < todayStr;
 
-                          // 오늘 날짜인지 확인
-                          const today = new Date();
-                          const todayStr = toDateString(today);
-                          const isToday = todayStr === currentDate;
-                          const isPast = currentDate < todayStr;
-
-                          // 해당 날짜와 교시에 수행평가가 있는지 확인
-                          const cellAssessments = assessments ? assessments.filter(a => {
-                            if (settings?.hide_past_assessments && isPast) return false;
-
-                            // Check item subject if it exists, otherwise check if group is active
-                            const group = computedGroups[`${weekdayIdx}-${classTime}`];
-                            const electiveSelection = currentProfile?.electives?.[group];
-                            const matchSubject = group && electiveSelection ? (electiveSelection.fullSubjectName || electiveSelection.subject) : (item ? item.subject : null);
-
-                            return matchSubject &&
-                              a.subject.trim() === matchSubject.trim() &&
-                              a.dueDate === currentDate &&
-                              a.classTime === classTime &&
-                              !a.isDone;
-                          }) : [];
-
-                          // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
-                          const bgColor = cellAssessments.length > 0
-                            ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
-                            : isToday
-                              ? "bg-red-50 hover:bg-red-100"
-                              : "bg-yellow-50 hover:bg-yellow-100";
-
-                          // 과거 날짜 스타일
-                          const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400" : "";
-
-                          // 선택된 셀 스타일
-                          const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
-                          const selectionStyle = isSelected ? "ring-2 ring-blue-500 ring-inset z-10" : "";
-
-                          // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
-                          const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
-
-                          const group = computedGroups[`${weekdayIdx}-${classTime}`];
-                          const electiveSelection = currentProfile?.electives?.[group];
-                          let displaySubject = item ? item.subject : "-";
-                          let displayTeacher = item ? item.teacher : "";
-
-                          const isFreePeriod = item && item.subject ? item.subject.trim().includes("공강") : false;
-
-                          let isElectiveActive = false;
-                          if (group && electiveSelection && !isFreePeriod) {
-                            displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject;
-                            let teacherFound = false;
-                            const electiveTeachers = electiveSelection.teacher ? electiveSelection.teacher.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
-                            const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
-
-                            const isEmptyClass = item && item.subject.trim() === "빈교실";
-
-                            // 1. Exact match across all classes for this timeslot
-                            let matchingSlot = slotItems.find(t =>
-                              t.subject.trim() === electiveSelection.subject.trim() &&
-                              electiveTeachers.includes(t.teacher.trim())
+                            return (
+                              <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70" : ""}`}>
+                                <div className="text-sm font-semibold">{day}</div>
+                                <div className="text-[10px] md:text-xs text-gray-500 font-normal">
+                                  {formatDate(weekDates[idx])}
+                                </div>
+                              </th>
                             );
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.from({ length: 7 }, (_, i) => i + 1).map((classTime) => (
+                          <tr key={classTime}>
+                            <td className="border p-1 md:p-2 text-center font-medium bg-gray-50 text-sm w-8 md:w-10">
+                              {classTime}
+                            </td>
+                            {Array.from({ length: 5 }, (_, weekdayIdx) => {
+                              const dayItems = timetableByDay[weekdayIdx] || [];
+                              const item = dayItems.find((t) => t.classTime === classTime);
+                              const currentDate = toDateString(weekDates[weekdayIdx]);
 
-                            if (matchingSlot) {
-                              displayTeacher = matchingSlot.teacher;
-                              teacherFound = true;
-                            }
+                              // 오늘 날짜인지 확인
+                              const today = new Date();
+                              const todayStr = toDateString(today);
+                              const isToday = todayStr === currentDate;
+                              const isPast = currentDate < todayStr;
 
-                            // 2. Intersection match on base class (if subject changed abbreviation but teacher is identical)
-                            if (!teacherFound && item && item.teacher && electiveTeachers.includes(item.teacher.trim())) {
-                              displayTeacher = item.teacher;
-                              teacherFound = true;
-                            }
+                              // 해당 날짜와 교시에 수행평가가 있는지 확인
+                              const cellAssessments = assessments ? assessments.filter(a => {
+                                if (settings?.hide_past_assessments && isPast) return false;
 
-                            // 3. Subject match on base class (only if student didn't specify teachers, or teacher was substituted)
-                            if (!teacherFound && electiveTeachers.length === 0 && item && item.subject.trim() === electiveSelection.subject.trim()) {
-                              displayTeacher = item.teacher;
-                              teacherFound = true;
-                            }
+                                // Check item subject if it exists, otherwise check if group is active
+                                const group = computedGroups[`${weekdayIdx}-${classTime}`];
+                                const electiveSelection = currentProfile?.electives?.[group];
+                                const matchSubject = group && electiveSelection ? (electiveSelection.fullSubjectName || electiveSelection.subject) : (item ? item.subject : null);
 
-                            // 4. Any subject match across all classes (if base class is empty OR student didn't specify teachers)
-                            if (!teacherFound && (electiveTeachers.length === 0 || isEmptyClass)) {
-                              matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
-                              if (matchingSlot) {
-                                displayTeacher = matchingSlot.teacher;
-                                teacherFound = true;
-                              }
-                            }
+                                return matchSubject &&
+                                  a.subject.trim() === matchSubject.trim() &&
+                                  a.dueDate === currentDate &&
+                                  a.classTime === classTime &&
+                                  !a.isDone;
+                              }) : [];
 
-                            if (teacherFound || isEmptyClass) {
-                              isElectiveActive = true;
-                              if (!teacherFound && isEmptyClass) {
-                                // Base class is empty, and we couldn't find the specific teacher. 
-                                // According to user, we MUST show the elective anyway since it's an empty class.
-                                displayTeacher = electiveTeachers[0] || "";
-                              }
-                            } else {
-                              // 5. Final fallback: The elective class is NOT running today (e.g., completely changed to a generic class like '미창박상').
-                              // Or computedGroups misidentified the group.
-                              isElectiveActive = false;
-                              if (item) {
-                                displaySubject = item.subject;
-                                displayTeacher = item.teacher;
-                              } else {
-                                displaySubject = "-";
-                                displayTeacher = "";
-                              }
-                            }
-                          }
+                              // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
+                              const bgColor = cellAssessments.length > 0
+                                ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
+                                : isToday
+                                  ? "bg-red-50 hover:bg-red-100"
+                                  : "bg-yellow-50 hover:bg-yellow-100";
 
-                          return (
-                            <td
-                              key={weekdayIdx}
-                              id={`cell-${weekdayIdx}-${classTime}`}
-                              onClick={() => {
-                                if (item || isElectiveActive) {
-                                  if (isSubjectDisabled && !isElectiveActive) {
-                                    toast.error(`${item.subject}은(는) 선택할 수 없습니다.`);
-                                    return;
-                                  }
-                                  if (!isPast || cellAssessments.length > 0) {
-                                    handleCellClick(weekdayIdx, classTime, displaySubject, weekDates[weekdayIdx], cellAssessments);
+                              // 과거 날짜 스타일
+                              const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400" : "";
+
+                              // 선택된 셀 스타일
+                              const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
+                              const selectionStyle = isSelected ? "ring-2 ring-blue-500 ring-inset z-10" : "";
+
+                              // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
+                              const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
+
+                              const group = computedGroups[`${weekdayIdx}-${classTime}`];
+                              const electiveSelection = currentProfile?.electives?.[group];
+                              let displaySubject = item ? item.subject : "-";
+                              let displayTeacher = item ? item.teacher : "";
+
+                              const isFreePeriod = item && item.subject ? item.subject.trim().includes("공강") : false;
+
+                              let isElectiveActive = false;
+                              if (group && electiveSelection && !isFreePeriod) {
+                                displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject;
+                                let teacherFound = false;
+                                const electiveTeachers = electiveSelection.teacher ? electiveSelection.teacher.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
+                                const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
+
+                                const isEmptyClass = item && item.subject.trim() === "빈교실";
+
+                                // 1. Exact match across all classes for this timeslot
+                                let matchingSlot = slotItems.find(t =>
+                                  t.subject.trim() === electiveSelection.subject.trim() &&
+                                  electiveTeachers.includes(t.teacher.trim())
+                                );
+
+                                if (matchingSlot) {
+                                  displayTeacher = matchingSlot.teacher;
+                                  teacherFound = true;
+                                }
+
+                                // 2. Intersection match on base class (if subject changed abbreviation but teacher is identical)
+                                if (!teacherFound && item && item.teacher && electiveTeachers.includes(item.teacher.trim())) {
+                                  displayTeacher = item.teacher;
+                                  teacherFound = true;
+                                }
+
+                                // 3. Subject match on base class (only if student didn't specify teachers, or teacher was substituted)
+                                if (!teacherFound && electiveTeachers.length === 0 && item && item.subject.trim() === electiveSelection.subject.trim()) {
+                                  displayTeacher = item.teacher;
+                                  teacherFound = true;
+                                }
+
+                                // 4. Any subject match across all classes (if base class is empty OR student didn't specify teachers)
+                                if (!teacherFound && (electiveTeachers.length === 0 || isEmptyClass)) {
+                                  matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
+                                  if (matchingSlot) {
+                                    displayTeacher = matchingSlot.teacher;
+                                    teacherFound = true;
                                   }
                                 }
-                              }}
-                              className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors overflow-hidden
+
+                                if (teacherFound || isEmptyClass) {
+                                  isElectiveActive = true;
+                                  if (!teacherFound && isEmptyClass) {
+                                    // Base class is empty, and we couldn't find the specific teacher. 
+                                    // According to user, we MUST show the elective anyway since it's an empty class.
+                                    displayTeacher = electiveTeachers[0] || "";
+                                  }
+                                } else {
+                                  // 5. Final fallback: The elective class is NOT running today (e.g., completely changed to a generic class like '미창박상').
+                                  // Or computedGroups misidentified the group.
+                                  isElectiveActive = false;
+                                  if (item) {
+                                    displaySubject = item.subject;
+                                    displayTeacher = item.teacher;
+                                  } else {
+                                    displaySubject = "-";
+                                    displayTeacher = "";
+                                  }
+                                }
+                              }
+
+                              return (
+                                <td
+                                  key={weekdayIdx}
+                                  id={`cell-${weekdayIdx}-${classTime}`}
+                                  onClick={() => {
+                                    if (item || isElectiveActive) {
+                                      if (isSubjectDisabled && !isElectiveActive) {
+                                        toast.error(`${item.subject}은(는) 선택할 수 없습니다.`);
+                                        return;
+                                      }
+                                      if (!isPast || cellAssessments.length > 0) {
+                                        handleCellClick(weekdayIdx, classTime, displaySubject, weekDates[weekdayIdx], cellAssessments);
+                                      }
+                                    }
+                                  }}
+                                  className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors overflow-hidden
                                 ${bgColor} ${pastStyle} ${selectionStyle}
                                 ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
-                            >
-                              {isElectiveActive && group && (
-                                <div className="absolute top-0 right-0 px-1 rounded-bl-md bg-orange-100 text-orange-800 text-[9px] md:text-[10px] font-bold">
-                                  {group}그룹
-                                </div>
-                              )}
-                              {item || isElectiveActive ? (
-                                <div className="flex flex-col items-center justify-center h-full min-h-0">
-                                  <div className={`font-bold text-sm md:text-base leading-tight truncate w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}>{displaySubject}</div>
-                                  <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">{displayTeacher}</div>
-                                  {cellAssessments.length > 0 && (
-                                    <div className="mt-0.5 flex-shrink-0">
-                                      <div className="flex flex-wrap gap-0.5 justify-center">
-                                        {cellAssessments.map(a => (
-                                          <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"}`}>
-                                            {a.description && a.description.includes("차") ? a.description : '평가'}
-                                          </span>
-                                        ))}
-                                      </div>
+                                >
+                                  {isElectiveActive && group && (
+                                    <div className="absolute top-0 right-0 px-1 rounded-bl-md bg-orange-100 text-orange-800 text-[9px] md:text-[10px] font-bold">
+                                      {group}그룹
                                     </div>
                                   )}
-                                </div>
-                              ) : (
-                                <span className="text-gray-300 text-sm">-</span>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                                  {item || isElectiveActive ? (
+                                    <div className="flex flex-col items-center justify-center h-full min-h-0">
+                                      <div className={`font-bold text-sm md:text-base leading-tight truncate w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}>{displaySubject}</div>
+                                      <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">{displayTeacher}</div>
+                                      {cellAssessments.length > 0 && (
+                                        <div className="mt-0.5 flex-shrink-0">
+                                          <div className="flex flex-wrap gap-0.5 justify-center">
+                                            {cellAssessments.map(a => (
+                                              <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"}`}>
+                                                {a.description && a.description.includes("차") ? a.description : '평가'}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-300 text-sm">-</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card >

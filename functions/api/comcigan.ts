@@ -288,13 +288,11 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         const classData = data[grade][classNum];
 
         for (let weekday = 1; weekday <= 5; weekday++) {
-            let dayHours = 7;
-            if (timeInfo && timeInfo[grade]) {
-                dayHours = timeInfo[grade][weekday];
-            }
+            if (!classData[weekday] || !Array.isArray(classData[weekday])) continue;
 
-            const maxPeriod = classData[weekday] ? classData[weekday].length - 1 : 0;
-            const loopLimit = Math.min(dayHours, maxPeriod);
+            const periodCount = classData[weekday][0] || 0;
+            const maxPeriod = classData[weekday].length - 1;
+            const loopLimit = Math.min(periodCount, maxPeriod);
 
             for (let period = 1; period <= loopLimit; period++) {
                 const code = classData[weekday][period];
@@ -319,7 +317,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                     result.push({
                         grade,
                         class: classNum,
-                        weekday,
+                        weekday: weekday - 1, // Convert to 0-indexed (0=Mon, 4=Fri)
                         classTime: period,
                         subject,
                         teacher
