@@ -198,16 +198,13 @@ export class ComciganParser {
             if (!gradeData || !gradeData[1]) continue;
 
             const class1Data = gradeData[1];
-            let hasData = false;
+            let dataCount = 0;
             for (let w = 1; w <= 5; w++) {
                 if (class1Data[w] && Array.isArray(class1Data[w])) {
-                    if (class1Data[w].some((code: any) => typeof code === 'number' && code > 0)) {
-                        hasData = true;
-                        break;
-                    }
+                    dataCount += class1Data[w].filter((code: any) => typeof code === 'number' && code > 0).length;
                 }
             }
-            if (hasData) {
+            if (dataCount > 10) {
                 scheduleKey = prop;
                 break;
             }

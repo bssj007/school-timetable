@@ -6,8 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Route, Switch, useLocation, Link } from "wouter";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp } from "lucide-react";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
@@ -931,7 +930,21 @@ export default function Dashboard() {
                     </div>
                   </div>
                 )}
-                <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
+
+                {/* Visit Restriction Overlay */}
+                {settings?.restricted_grades?.includes(parseInt(grade)) && !settings?.is_whitelisted && (
+                  <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm rounded-lg">
+                    <div className="text-center p-6 bg-white border border-red-200 shadow-xl rounded-2xl max-w-md mx-4">
+                      <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">접근 제한 안내</h3>
+                      <p className="text-gray-600 whitespace-pre-wrap">
+                        {settings?.restriction_reason || "현재 해당 학년은 서비스 이용이 제한되어 있습니다."}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate || (settings?.restricted_grades?.includes(parseInt(grade)) && !settings?.is_whitelisted) ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
                   <thead>
                     <tr>
                       <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
