@@ -195,13 +195,17 @@ export class ComciganParser {
         for (let i = timetableProps.length - 1; i >= 0; i--) {
             const prop = timetableProps[i];
             const gradeData = data[prop][grade];
-            if (!gradeData || !gradeData[1]) continue;
+            if (!gradeData) continue;
 
-            const class1Data = gradeData[1];
             let dataCount = 0;
-            for (let w = 1; w <= 5; w++) {
-                if (class1Data[w] && Array.isArray(class1Data[w])) {
-                    dataCount += class1Data[w].filter((code: any) => typeof code === 'number' && code > 0).length;
+            // Iterate over all classes in the grade to safely count data
+            for (let c = 1; c < gradeData.length; c++) {
+                const classData = gradeData[c];
+                if (!classData) continue;
+                for (let w = 1; w <= 5; w++) {
+                    if (classData[w] && Array.isArray(classData[w])) {
+                        dataCount += classData[w].filter((code: any) => typeof code === 'number' && code > 0).length;
+                    }
                 }
             }
             if (dataCount > 10) {

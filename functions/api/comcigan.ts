@@ -234,14 +234,17 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         for (let i = timetableProps.length - 1; i >= 0; i--) {
             const prop = timetableProps[i];
             const gradeData = rawData[prop][grade];
-            if (!gradeData || !gradeData[1]) continue;
+            if (!gradeData) continue;
 
-            // Flatten the week's data to check for non-zero codes
-            const class1Data = gradeData[1];
             let dataCount = 0;
-            for (let w = 1; w <= 5; w++) {
-                if (class1Data[w] && Array.isArray(class1Data[w])) {
-                    dataCount += class1Data[w].filter((code: any) => typeof code === 'number' && code > 0).length;
+            for (let c = 1; c < gradeData.length; c++) {
+                const classData = gradeData[c];
+                if (!classData) continue;
+                // Flatten the week's data to check for non-zero codes
+                for (let w = 1; w <= 5; w++) {
+                    if (classData[w] && Array.isArray(classData[w])) {
+                        dataCount += classData[w].filter((code: any) => typeof code === 'number' && code > 0).length;
+                    }
                 }
             }
 
