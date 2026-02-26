@@ -238,17 +238,15 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
             // Flatten the week's data to check for non-zero codes
             const class1Data = gradeData[1];
-            let hasData = false;
+            let dataCount = 0;
             for (let w = 1; w <= 5; w++) {
                 if (class1Data[w] && Array.isArray(class1Data[w])) {
-                    if (class1Data[w].some((code: any) => typeof code === 'number' && code > 0)) {
-                        hasData = true;
-                        break;
-                    }
+                    dataCount += class1Data[w].filter((code: any) => typeof code === 'number' && code > 0).length;
                 }
             }
 
-            if (hasData) {
+            // If it has a reasonable amount of data for the week (e.g. at least 10 classes)
+            if (dataCount > 10) {
                 timedataProp = prop;
                 break;
             }
