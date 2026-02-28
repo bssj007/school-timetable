@@ -1,14 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
-    BookOpen, Trash2, Eye, EyeOff, Lock,
-    Settings, Search, ChevronDown, ChevronRight, Check, ChevronsUpDown, Save, GripVertical, CheckCircle2, AlertCircle, Plus, X,
-    TriangleAlert, ShieldAlert, CheckSquare, Calendar, ShieldCheck, Ban,
-    Download, Upload, Database, Wand2
+    AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
+    BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -601,6 +600,283 @@ function DataTransferManager({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
+// 6.5 Group Checker (Override configuration for dynamic grouping)
+// ----------------------------------------------------------------------
+function GroupChecker({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [grade, setGrade] = useState("2");
+
+    // 1. Fetch data
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "groupOverrides"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        },
+    });
+
+    const [overrides, setOverrides] = useState<Record<string, Record<string, string>>>({
+        "2": {},
+        "3": {},
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data?.elective_group_overrides) {
+            try {
+                const parsed = JSON.parse(settingsQuery.data.elective_group_overrides);
+                setOverrides({
+                    "2": parsed["2"] || {},
+                    "3": parsed["3"] || {},
+                });
+            } catch (e) {
+                console.error("Failed to parse elective_group_overrides", e);
+            }
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (newData: any) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(newData),
+            });
+            if (!res.ok) throw new Error("Failed to save settings");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("그룹 강제 지정이 저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err) => {
+            toast.error(`저장 실패: ${err.message}`);
+        },
+    });
+
+    const handleSave = () => {
+        saveMutation.mutate({
+            elective_group_overrides: JSON.stringify(overrides),
+        });
+    };
+
+    const handleClearOverrides = () => {
+        if (confirm("정말로 모든 그룹 강제 지정을 초기화하시겠습니까?")) {
+            setOverrides({ "2": {}, "3": {} });
+        }
+    };
+
+    // --- Mocking Data needed for computation. In reality we should fetch raw_comcigan and elective configs ---
+    // But since Admin.tsx already can fetch raw_comcigan, let's use it.
+    const [schoolSearchQuery] = useState("부산성지고"); // Can make configurable if needed
+    const rawDataQuery = useQuery({
+        queryKey: ["admin", "rawComcigan", schoolSearchQuery],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/raw_comcigan", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({ schoolName: schoolSearchQuery })
+            });
+            const json = await res.json();
+            if (!res.ok || json?.error) return null;
+            return json.data;
+        }
+    });
+
+    const { data: dbData } = useQuery({
+        queryKey: ['adminData'],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/data", { headers: { "X-Admin-Password": adminPassword } });
+            return res.json();
+        }
+    });
+
+    // Compute Groups (Similar logic to Dashboard)
+    const computedBaseGroups = useMemo(() => {
+        if (grade !== "2" && grade !== "3") return {};
+        const rawTimetableData = rawDataQuery.data;
+        const electiveConfigs = dbData?.electiveSubjects?.filter((c: any) => c.grade.toString() === grade) || [];
+
+        if (!rawTimetableData || !electiveConfigs || electiveConfigs.length === 0) return {};
+
+        const subjectTeacherToGroups = new Map<string, string[]>();
+        const subjectToGroups = new Map<string, string[]>();
+
+        electiveConfigs.forEach((c: any) => {
+            if (c.isMovingClass !== 0 && c.classCode) {
+                const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
+                const subj = c.subject.trim();
+
+                const existing = subjectToGroups.get(subj) || [];
+                subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
+
+                const teacherNames = [];
+                if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
+                if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
+
+                Array.from(new Set(teacherNames)).forEach((tName: string) => {
+                    const key = `${subj}|${tName}`;
+                    const existingKey = subjectTeacherToGroups.get(key) || [];
+                    subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
+                });
+            }
+        });
+
+        const cellGroups: Record<string, string> = {};
+        for (let w = 0; w < 5; w++) {
+            for (let p = 1; p <= 7; p++) {
+                const slots = rawTimetableData.filter((t: any) => parseInt(t.grade) === parseInt(grade) && t.weekday === w && t.classTime === p);
+                if (slots.length === 0) continue;
+
+                const groupCounts: Record<string, number> = {};
+                slots.forEach((slot: any) => {
+                    const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
+                    let groups = subjectTeacherToGroups.get(key) || subjectToGroups.get(slot.subject.trim());
+                    if (groups) {
+                        groups.forEach(g => { groupCounts[g] = (groupCounts[g] || 0) + 1; });
+                    }
+                });
+
+                const entries = Object.entries(groupCounts);
+                if (entries.length > 0) {
+                    entries.sort((a, b) => b[1] - a[1]);
+                    if (entries[0][1] >= 1) {
+                        cellGroups[`${w}-${p}`] = entries[0][0];
+                    }
+                }
+            }
+        }
+        return cellGroups;
+    }, [rawDataQuery.data, dbData?.electiveSubjects, grade]);
+
+    const isDirty = JSON.stringify(overrides) !== (settingsQuery.data?.elective_group_overrides || '{"2":{},"3":{}}');
+
+    const handleOverrideChange = (w: number, p: number, val: string) => {
+        const cellKey = `${w}-${p}`;
+        setOverrides(prev => {
+            const next = { ...prev };
+            const gradeOverrides = { ...(next[grade] || {}) };
+
+            if (val === "AUTO") {
+                delete gradeOverrides[cellKey];
+            } else {
+                gradeOverrides[cellKey] = val;
+            }
+
+            next[grade] = gradeOverrides;
+            return next;
+        });
+    };
+
+    return (
+        <Card className="w-full">
+            <CardHeader>
+                <CardTitle>선택과목 그룹 지정기</CardTitle>
+                <CardDescription>
+                    아래 시간표는 <b>데이터를 기반으로 판별한 {grade}학년 이동수업 그룹</b>을 표시합니다.
+                    <br />"강제 할당 없음"이 기본값입니다. 직접 값을 선택해 강제로 그룹을 덮어쓸 수 있습니다.<br />
+                    저장 버튼을 클릭해야 반영됩니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6 flex flex-col items-center">
+                <div className="flex gap-4 items-center self-start w-full">
+                    <label className="text-sm font-medium whitespace-nowrap">학년 선택:</label>
+                    <Select value={grade} onValueChange={setGrade}>
+                        <SelectTrigger className="w-[120px]">
+                            <SelectValue placeholder="학년" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="2">2학년</SelectItem>
+                            <SelectItem value="3">3학년</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <div className="flex-1 flex justify-end gap-2 text-sm text-gray-500">
+                        {rawDataQuery.isLoading ? "시간표 로딩중..." : ""}
+                        {dbData ? "" : "강의설정 로딩중..."}
+                    </div>
+                </div>
+
+                <div className="border rounded-xl bg-slate-50 w-full overflow-x-auto shadow-inner text-sm p-4">
+                    <div className="grid grid-cols-6 gap-2 w-[600px] min-w-max mx-auto">
+                        <div className="font-bold text-center text-slate-500 rounded bg-slate-200 py-1">교시</div>
+                        {['월', '화', '수', '목', '금'].map(d => (
+                            <div key={d} className="font-bold text-center text-slate-500 rounded bg-slate-200 py-1">{d}</div>
+                        ))}
+
+                        {[1, 2, 3, 4, 5, 6, 7].map(p => (
+                            <React.Fragment key={`period-${p}`}>
+                                <div className="font-bold flex items-center justify-center bg-slate-100 rounded text-slate-500 h-[60px]">
+                                    {p}
+                                </div>
+                                {[0, 1, 2, 3, 4].map(w => {
+                                    const cellKey = `${w}-${p}`;
+                                    const autoGroup = computedBaseGroups[cellKey] || null;
+                                    const overrideValue = overrides[grade]?.[cellKey];
+
+                                    const isNone = overrideValue === "NONE";
+                                    const finalGroup = isNone ? null : (overrideValue || autoGroup);
+                                    const isOverridden = !!overrideValue;
+
+                                    return (
+                                        <div key={cellKey} className={`flex flex-col items-center justify-center p-1 rounded border overflow-hidden relative shadow-sm h-[60px]
+                                            ${finalGroup ? 'bg-white border-blue-200' : 'bg-white opacity-60 border-gray-200'}
+                                            ${isOverridden ? 'ring-2 ring-orange-400' : ''}
+                                        `}>
+                                            <div className={`font-bold text-lg leading-none mb-1 
+                                                ${finalGroup ? 'text-blue-600' : 'text-gray-300'}`}>
+                                                {finalGroup || '없음'}
+                                            </div>
+                                            <div className="w-full">
+                                                <select
+                                                    className={`w-full text-xs text-center border-none bg-transparent outline-none cursor-pointer p-0 m-0 ${isOverridden ? 'text-orange-600 font-bold' : 'text-slate-500'}`}
+                                                    value={overrideValue || 'AUTO'}
+                                                    onChange={e => handleOverrideChange(w, p, e.target.value)}
+                                                >
+                                                    <option value="AUTO">--자동--</option>
+                                                    <option value="NONE">-없음 강제-</option>
+                                                    <option value="A">A 지정</option>
+                                                    <option value="B">B 지정</option>
+                                                    <option value="C">C 지정</option>
+                                                    <option value="D">D 지정</option>
+                                                    <option value="E">E 지정</option>
+                                                    <option value="F">F 지정</option>
+                                                    <option value="G">G 지정</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </React.Fragment>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="flex gap-2 justify-end w-full">
+                    <Button variant="outline" onClick={handleClearOverrides} className="text-red-500 hover:text-red-600 mr-auto">
+                        전체 초기화 (All Clear)
+                    </Button>
+                    <Button variant="outline" onClick={() => setOverrides(JSON.parse(settingsQuery.data?.elective_group_overrides || '{"2":{},"3":{}}'))} disabled={!isDirty || saveMutation.isPending}>
+                        저장 취소
+                    </Button>
+                    <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
+                        {saveMutation.isPending ? "저장 중..." : "오버라이드 저장"}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
 // 7. Etc Manager (Miscellaneous features like Raw Comcigan Data)
 // ----------------------------------------------------------------------
 function EtcManager({ adminPassword }: { adminPassword: string }) {
@@ -666,6 +942,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 >
                     <ShieldCheck className="w-4 h-4 mr-2" />
                     방문제한 설정
+                </Button>
+                <Button
+                    variant={selectedMenu === "group-checker" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("group-checker")}
+                >
+                    <Grid2X2 className="w-4 h-4 mr-2" />
+                    그룹 확인기 / 오버라이드
                 </Button>
                 {/* Additional list items can go here later */}
             </div>
@@ -744,6 +1028,18 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
 
                         <div className="flex-1 overflow-y-auto">
                             <VisitRestrictionSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "group-checker" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">그룹 확인기 / 오버라이드</h3>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto">
+                            <GroupChecker adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -2404,7 +2700,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
         },
     });
 
-    useEffect(() => {
+    const resetState = () => {
         if (settingsQuery.data) {
             try {
                 const parsedGrades = settingsQuery.data.restricted_grades
@@ -2433,6 +2729,10 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                 setIpWhitelist("");
             }
         }
+    };
+
+    useEffect(() => {
+        resetState();
     }, [settingsQuery.data]);
 
     const saveMutation = useMutation({
@@ -2477,6 +2777,31 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     };
 
     if (settingsQuery.isLoading) return <div className="p-4">설정을 불러오는 중...</div>;
+
+    // Check if dirty
+    const savedGradesStr = settingsQuery.data?.restricted_grades || "[]";
+    const currentGradesStr = JSON.stringify(restrictedGrades.sort());
+    const isGradesDirty = savedGradesStr !== currentGradesStr && !(savedGradesStr === "[]" && restrictedGrades.length === 0);
+
+    const savedReason = settingsQuery.data?.restriction_reason || "현재 해당 학년은 서비스 이용이 제한되어 있습니다.";
+    const isReasonDirty = savedReason !== restrictionReason;
+
+    const savedKakaoRestricted = settingsQuery.data?.kakao_login_restricted === 'true';
+    const isKakaoRestrictedDirty = savedKakaoRestricted !== kakaoLoginRestricted;
+
+    const savedKakaoReason = settingsQuery.data?.kakao_restriction_reason || "현재 카카오 연동이 제한되어 있습니다.";
+    const isKakaoReasonDirty = savedKakaoReason !== kakaoRestrictionReason;
+
+    let savedIpsStr = "";
+    try {
+        const parsed = settingsQuery.data?.ip_whitelist ? JSON.parse(settingsQuery.data.ip_whitelist) : [];
+        savedIpsStr = Array.isArray(parsed) ? parsed.join('\n') : "";
+    } catch { }
+    const currentIpsNormalized = ipWhitelist.split('\n').map(ip => ip.trim()).filter(ip => ip.length > 0).join('\n');
+    const savedIpsNormalized = savedIpsStr.split('\n').map(r => r.trim()).filter(r => r.length > 0).join('\n');
+    const isIpsDirty = currentIpsNormalized !== savedIpsNormalized;
+
+    const isDirty = isGradesDirty || isReasonDirty || isKakaoRestrictedDirty || isKakaoReasonDirty || isIpsDirty;
 
     return (
         <Card className="w-full max-w-2xl">
@@ -2565,7 +2890,10 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                 </div>
 
                 <div className="flex justify-end gap-2 pt-4">
-                    <Button onClick={handleSave} disabled={saveMutation.isPending}>
+                    <Button variant="outline" onClick={resetState} disabled={!isDirty || saveMutation.isPending}>
+                        변경 취소
+                    </Button>
+                    <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
                         {saveMutation.isPending ? "저장 중..." : "설정 저장"}
                     </Button>
                 </div>

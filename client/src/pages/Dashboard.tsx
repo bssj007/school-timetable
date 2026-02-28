@@ -308,6 +308,16 @@ export default function Dashboard() {
     return { timetableData: current, allClassesTimetable: all };
   }, [rawTimetableData, classNum]);
 
+  // 5. 설정 조회 (Public)
+  const { data: settings } = useQuery({
+    queryKey: ['publicSettings'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/public');
+      if (!res.ok) return { hide_past_assessments: false };
+      return res.json();
+    }
+  });
+
   // 각 시간(교시)별 다수결 그룹 계산
   // We keep track of the last successfully computed groups to prevent flickering during refetches.
   const lastValidGroupsRef = React.useRef<Record<string, string>>({});
@@ -384,9 +394,22 @@ export default function Dashboard() {
         }
       }
     }
+
+    // Apply Overrides
+    if (settings?.elective_group_overrides?.[grade]) {
+      const gradeOverrides = settings.elective_group_overrides[grade];
+      for (const [cellKey, overrideValue] of Object.entries(gradeOverrides)) {
+        if (overrideValue === "NONE") {
+          delete cellGroups[cellKey];
+        } else if (typeof overrideValue === "string") {
+          cellGroups[cellKey] = overrideValue;
+        }
+      }
+    }
+
     lastValidGroupsRef.current = cellGroups;
     return cellGroups;
-  }, [allClassesTimetable, electiveConfigs, grade]);
+  }, [allClassesTimetable, electiveConfigs, grade, settings?.elective_group_overrides]);
 
   // 2. 컴시간에서 시간표 가져오기
   const fetchFromComcigan = useMutation({
@@ -470,16 +493,6 @@ export default function Dashboard() {
     });
     return filtered;
   }, [allAssessments, weekDates]);
-
-  // 5. 설정 조회 (Public)
-  const { data: settings } = useQuery({
-    queryKey: ['publicSettings'],
-    queryFn: async () => {
-      const res = await fetch('/api/settings/public');
-      if (!res.ok) return { hide_past_assessments: false };
-      return res.json();
-    }
-  });
 
   // 4. 수행평가 추가
   const createMutation = useMutation({
