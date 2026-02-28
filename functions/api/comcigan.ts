@@ -218,16 +218,82 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 )
             `).run();
 
-            const { results } = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_dataset_selected'").all();
-            if (results && results.length > 0 && results[0].value) {
-                const selected = results[0].value;
-                if (timetableProps.includes(selected)) {
-                    timedataProp = selected;
-                    console.log(`[Comcigan Debug] Using admin selected timetable dataset: ${timedataProp}`);
+            const { results } = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'manual_semester_plan'").all();
+
+            let manualPlanData: any = null;
+            let datasetSelected: string | null = null;
+
+            if (results && results.length > 0) {
+                results.forEach((row: any) => {
+                    if (row.key === 'comcigan_dataset_selected') datasetSelected = row.value;
+                    if (row.key === 'manual_semester_plan') {
+                        try {
+                            manualPlanData = JSON.parse(row.value);
+                        } catch (e) {
+                            console.error("Failed to parse manual_semester_plan", e);
+                        }
+                    }
+                });
+            }
+
+            if (datasetSelected === 'MANUAL_PLAN') {
+                console.log(`[Comcigan Debug] Using MANUAL_PLAN dataset`);
+
+                // Parse the manual plan for the requested grade and class
+                const result: any[] = [];
+                const classList = classNumInput === 'all'
+                    ? (manualPlanData?.timetables?.[grade] ? Object.keys(manualPlanData.timetables[grade]).map(Number) : [])
+                    : [classNumInput as number];
+
+                for (const cls of classList) {
+                    const classPlan = manualPlanData?.timetables?.[`${grade}-${cls}`];
+                    if (classPlan) {
+                        for (const [key, subjectStr] of Object.entries(classPlan)) {
+                            // key is "weekday-period", e.g. "0-2" (Monday 2nd period)
+                            const [weekdayStr, periodStr] = key.split('-');
+                            const weekday = parseInt(weekdayStr);
+                            const period = parseInt(periodStr);
+                            const subjectValue = subjectStr as string;
+
+                            // Let's try to extract teacher if it's "Subj Name". Basically split by space.
+                            let subject = subjectValue;
+                            let teacher = "";
+                            const parts = subjectValue.split(' ');
+                            if (parts.length > 1) {
+                                subject = parts[0];
+                                teacher = parts.slice(1).join(' '); // in case name has spaces
+                            }
+
+                            if (subjectValue) {
+                                result.push({
+                                    grade,
+                                    class: cls,
+                                    weekday, // already 0-indexed in our manual planner
+                                    classTime: period,
+                                    subject,
+                                    teacher
+                                });
+                            }
+                        }
+                    }
                 }
+
+                if (result.length > 0) {
+                    return new Response(JSON.stringify({
+                        schoolName: "부산성지고등학교 (수동 시간표)",
+                        data: result,
+                        debugTokens: { manualPlan: true }
+                    }), { headers: { 'Content-Type': 'application/json' } });
+                } else {
+                    console.warn(`[Comcigan Debug] MANUAL_PLAN selected but no data found for G${grade} C${classNumInput}. Falling back to normal.`);
+                }
+
+            } else if (datasetSelected && timetableProps.includes(datasetSelected)) {
+                timedataProp = datasetSelected;
+                console.log(`[Comcigan Debug] Using admin selected timetable dataset: ${timedataProp}`);
             }
         } catch (e) {
-            console.warn("[Comcigan Debug] Failed to read system_settings for comcigan_dataset_selected", e);
+            console.warn("[Comcigan Debug] Failed to read system_settings for dataset selection", e);
         }
     }
 

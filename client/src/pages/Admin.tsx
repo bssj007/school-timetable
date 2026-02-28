@@ -8,7 +8,7 @@ import {
     BookOpen, Trash2, Eye, EyeOff, Lock,
     Settings, Search, ChevronDown, ChevronRight, Check, ChevronsUpDown, Save, GripVertical, CheckCircle2, AlertCircle, Plus, X,
     TriangleAlert, ShieldAlert, CheckSquare, Calendar, ShieldCheck, Ban,
-    Download, Upload, Database
+    Download, Upload, Database, Wand2
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -1237,6 +1237,12 @@ export default function Admin() {
                         데이터 출입
                     </TabsTrigger>
                     <TabsTrigger
+                        value="manualplan"
+                        className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800"
+                    >
+                        학기별 계획
+                    </TabsTrigger>
+                    <TabsTrigger
                         value="etc"
                     >
                         기타
@@ -1708,6 +1714,10 @@ export default function Admin() {
                     <DataTransferManager adminPassword={password} />
                 </TabsContent>
 
+                <TabsContent value="manualplan" className="space-y-6">
+                    <ManualSemesterPlan adminPassword={password} />
+                </TabsContent>
+
                 <TabsContent value="etc" className="space-y-6">
                     <EtcManager adminPassword={password} />
                 </TabsContent>
@@ -1860,6 +1870,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="_auto_">자동 (최신 데이터셋)</SelectItem>
+                            <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획 수동 입력)</SelectItem>
                             {timetableProps.map(prop => (
                                 <SelectItem key={prop} value={prop}>
                                     {prop}
@@ -1875,6 +1886,498 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                     </Button>
                     <Button onClick={handleSave} disabled={saveMutation.isPending}>
                         {saveMutation.isPending ? "저장 중..." : "저장"}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPassword: string, onBack: () => void, currentPlan: any }) {
+    const { grade } = currentPlan;
+    const queryClient = useQueryClient();
+
+    // 1. Fetch Live Subjects from Comcigan
+    const liveSubjectsQuery = useQuery({
+        queryKey: ["admin", "comcigan-subjects", grade],
+        queryFn: async () => {
+            const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}`);
+            if (!res.ok) throw new Error("Failed to fetch live subjects");
+            return res.json();
+        }
+    });
+
+    // 2. Algorithm to analyze manual plan and find blocks
+    const analysis = React.useMemo(() => {
+        let warnings: string[] = [];
+        let blocks: { code: string, subjects: Set<string>, occurrences: string[] }[] = [];
+        let manualSubjects = new Set<string>();
+
+        const periodMap: Record<string, { classNum: number, subject: string }[]> = {};
+        let maxClassNum = 0;
+
+        Object.keys(currentPlan.timetables).forEach(classKey => {
+            const [g, c] = classKey.split('-');
+            if (parseInt(g) !== grade) return;
+            const classNum = parseInt(c);
+            if (classNum > maxClassNum) maxClassNum = classNum;
+
+            const tt = currentPlan.timetables[classKey];
+            Object.keys(tt).forEach(timeKey => {
+                const subject = tt[timeKey];
+                if (subject) {
+                    if (!periodMap[timeKey]) periodMap[timeKey] = [];
+                    periodMap[timeKey].push({ classNum, subject });
+                    manualSubjects.add(subject);
+                }
+            });
+        });
+
+        const uniqueSubjectSets = new Map<string, Set<string>>();
+        const setOccurrences = new Map<string, string[]>();
+
+        Object.keys(periodMap).forEach(timeKey => {
+            const classesInPeriod = periodMap[timeKey];
+            const uniqueSubjsInPeriod = new Set(classesInPeriod.map(c => c.subject));
+
+            if (uniqueSubjsInPeriod.size > 1) { // Multiple subjects in one period = Elective Block
+                const sortedSubjs = Array.from(uniqueSubjsInPeriod).sort();
+                const setKey = sortedSubjs.join('|');
+
+                if (!uniqueSubjectSets.has(setKey)) {
+                    uniqueSubjectSets.set(setKey, uniqueSubjsInPeriod);
+                    setOccurrences.set(setKey, []);
+                }
+                setOccurrences.get(setKey)!.push(timeKey);
+
+                if (classesInPeriod.length < maxClassNum) {
+                    if (!warnings.includes("선택과목 그룹이 불안정합니다. 일부 반의 시간표가 비어있습니다.")) {
+                        warnings.push("선택과목 그룹이 불안정합니다. 일부 반의 시간표가 비어있습니다.");
+                    }
+                }
+            }
+        });
+
+        let charCode = 65; // 'A'
+        Array.from(uniqueSubjectSets.entries()).forEach(([setKey, subjs]) => {
+            blocks.push({
+                code: String.fromCharCode(charCode++),
+                subjects: subjs,
+                occurrences: setOccurrences.get(setKey) || []
+            });
+        });
+
+        if (maxClassNum === 0 || manualSubjects.size === 0) {
+            warnings.push("학기별 계획이 비어있습니다. 시간표를 먼저 채워주세요.");
+        }
+
+        return { blocks, manualSubjects: Array.from(manualSubjects).sort(), warnings };
+    }, [currentPlan, grade]);
+
+    const [mappings, setMappings] = useState<Record<string, string>>({});
+
+    // Auto-match subjects on load
+    useEffect(() => {
+        if (liveSubjectsQuery.data && analysis.manualSubjects.length > 0) {
+            const initialMap: Record<string, string> = {};
+            analysis.manualSubjects.forEach(mSubj => {
+                const parts = mSubj.split(' ');
+                let liveMatch = null;
+
+                // Smart matching: try to find teacher name
+                if (parts.length >= 2) {
+                    const teacherName = parts[parts.length - 1];
+                    const subjectKeyword = parts[0].replace(/^[A-Z]_/, ''); // remove prefix like A_
+
+                    liveMatch = liveSubjectsQuery.data.find((ls: any) =>
+                        ls.teacher === teacherName && ls.subject.includes(subjectKeyword)
+                    );
+                }
+
+                // Fallback matching
+                if (!liveMatch) {
+                    liveMatch = liveSubjectsQuery.data.find((ls: any) => mSubj.includes(ls.teacher) && mSubj.includes(ls.subject));
+                }
+
+                if (liveMatch) {
+                    initialMap[mSubj] = `${liveMatch.subject}-${liveMatch.teacher}`;
+                }
+            });
+            setMappings(initialMap);
+        }
+    }, [liveSubjectsQuery.data, analysis.manualSubjects]);
+
+    const executeMutation = useMutation({
+        mutationFn: async () => {
+            const payloads = [];
+            for (const mSubj of analysis.manualSubjects) {
+                const mappingKey = mappings[mSubj];
+                if (!mappingKey) throw new Error(`${mSubj} 과목의 매핑이 누락되었습니다.`);
+
+                const [subj, teacher] = mappingKey.split('-');
+                const block = analysis.blocks.find(b => b.subjects.has(mSubj))?.code;
+                if (!block) throw new Error(`${mSubj} 과목의 블록을 찾을 수 없습니다.`);
+
+                payloads.push({
+                    grade: grade,
+                    subject: subj,
+                    originalTeacher: teacher,
+                    classCode: block,
+                    isMovingClass: true,
+                    isCombinedClass: false
+                });
+            }
+
+            const promises = payloads.map(p => fetch("/api/admin/electives", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify(p)
+            }));
+
+            const results = await Promise.all(promises);
+            for (const res of results) {
+                if (!res.ok) throw new Error("전송 중 오류가 발생했습니다: " + res.statusText);
+            }
+        },
+        onSuccess: () => {
+            toast.success("선택과목 자동 채우기가 완료되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "electives"] });
+            onBack();
+        },
+        onError: (err) => {
+            toast.error(`실행 실패: ${err.message}`);
+        }
+    });
+
+    return (
+        <Card className="w-full border-orange-200 shadow-sm">
+            <CardHeader className="bg-orange-50/50 border-b border-orange-100">
+                <CardTitle className="text-orange-800 flex items-center gap-2">
+                    <Wand2 className="w-5 h-5" />
+                    선택과목 자동 채우기 ({grade}학년)
+                </CardTitle>
+                <CardDescription>
+                    학기별 계획 데이터를 이용해 선택과목 DB를 자동으로 채웁니다. 수동으로 입력한 시간표에서 특정 시간에 동시에 열리는 과목들을 찾아 자동으로 A블록, B블록 등을 계산하고, 실제 라이브 데이터셋과 매핑하여 일괄 저장합니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6 pt-6">
+
+                {analysis.warnings.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+                        <div className="text-sm">
+                            <p className="font-bold mb-1">경고</p>
+                            <ul className="list-disc pl-4 space-y-1">
+                                {analysis.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                            </ul>
+                        </div>
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="border rounded-md p-4 bg-slate-50">
+                        <h4 className="font-bold text-sm text-slate-700 mb-2">추출된 선택과목 그룹 (수동 버젼)</h4>
+                        {analysis.blocks.length === 0 ? (
+                            <p className="text-sm text-slate-500">감지된 그룹이 없습니다.</p>
+                        ) : (
+                            <ul className="space-y-3">
+                                {analysis.blocks.map(b => (
+                                    <li key={b.code} className="text-sm">
+                                        <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200 mr-2">{b.code} 블록</Badge>
+                                        <span className="text-slate-600">{Array.from(b.subjects).join(', ')}</span>
+                                        <div className="text-xs text-slate-400 mt-1 pl-10">
+                                            {b.occurrences.map(o => {
+                                                const [w, p] = o.split('-');
+                                                return `${['월', '화', '수', '목', '금'][parseInt(w) - 1]}${p}교시`;
+                                            }).join(', ')}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+
+                    <div className="border rounded-md p-4 bg-slate-50 overflow-hidden flex flex-col">
+                        <h4 className="font-bold text-sm text-slate-700 mb-2">라이브 과목 매핑</h4>
+                        <div className="overflow-y-auto flex-1 pr-2">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>수동 과목</TableHead>
+                                        <TableHead>자동매핑 (라이브)</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {analysis.manualSubjects.map(mSubj => {
+                                        const block = analysis.blocks.find(b => b.subjects.has(mSubj))?.code || "?";
+                                        const isMapped = !!mappings[mSubj];
+
+                                        return (
+                                            <TableRow key={mSubj}>
+                                                <TableCell className="text-sm p-2">
+                                                    <div className="flex items-center gap-1">
+                                                        <Badge variant="outline" className="text-[10px] px-1">{block}</Badge>
+                                                        <span className="truncate max-w-[100px]" title={mSubj}>{mSubj}</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="p-2">
+                                                    <Select value={mappings[mSubj] || ""} onValueChange={(val) => setMappings({ ...mappings, [mSubj]: val })}>
+                                                        <SelectTrigger className={`h-8 w-full bg-white text-xs ${!isMapped && 'border-red-300 ring-1 ring-red-100'}`}>
+                                                            <SelectValue placeholder="매핑 선택..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {liveSubjectsQuery.data?.map((ls: any) => (
+                                                                <SelectItem key={`${ls.subject}-${ls.teacher}`} value={`${ls.subject}-${ls.teacher}`} className="text-xs">
+                                                                    {ls.subject} ({ls.teacher})
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex justify-between gap-2 pt-4 border-t border-orange-100">
+                    <Button variant="outline" onClick={onBack} disabled={executeMutation.isPending}>
+                        취소 (뒤로가기)
+                    </Button>
+                    <Button
+                        className="bg-orange-600 hover:bg-orange-700"
+                        disabled={analysis.blocks.length === 0 || liveSubjectsQuery.isLoading || executeMutation.isPending || Object.values(mappings).some(v => !v) || Object.keys(mappings).length !== analysis.manualSubjects.length}
+                        onClick={() => executeMutation.mutate()}
+                    >
+                        {executeMutation.isPending ? "저장 중..." : "1:1 매핑 후 DB 저장"}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [showAutoFill, setShowAutoFill] = useState(false);
+    const [subjects, setSubjects] = useState<string[]>([]);
+    const [newSubject, setNewSubject] = useState("");
+    const [grade, setGrade] = useState("2");
+    const [classNum, setClassNum] = useState("1");
+
+    // timetables structure: { "2-1": { "1-1": "A_과목 교사", "2-3": "..." }, "2-2": ... }
+    const [timetables, setTimetables] = useState<Record<string, Record<string, string>>>({});
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "manualPlan"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        },
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data?.manual_semester_plan) {
+            try {
+                const data = JSON.parse(settingsQuery.data.manual_semester_plan);
+                setSubjects(data.subjects || []);
+                setTimetables(data.timetables || {});
+            } catch (e) {
+                console.error("Failed to parse manual_semester_plan", e);
+            }
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async () => {
+            // Save payload
+            const payload = {
+                manual_semester_plan: JSON.stringify({ subjects, timetables })
+            };
+
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("Failed to save settings");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("수동 학기별 계획이 저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err) => {
+            toast.error(`저장 실패: ${err.message}`);
+        },
+    });
+
+    const addSubject = () => {
+        if (!newSubject.trim()) return;
+        if (subjects.includes(newSubject.trim())) {
+            toast.error("이미 존재하는 과목입니다.");
+            return;
+        }
+        setSubjects([...subjects, newSubject.trim()]);
+        setNewSubject("");
+    };
+
+    const removeSubject = (subj: string) => {
+        setSubjects(subjects.filter(s => s !== subj));
+    };
+
+    const handleTimetableChange = (weekday: number, period: number, subj: string) => {
+        const classKey = `${grade}-${classNum}`;
+        const prevClassTimetable = timetables[classKey] || {};
+
+        const newTimetables = { ...timetables };
+        if (subj === "") {
+            // Remove entry
+            const newClassTimetable = { ...prevClassTimetable };
+            delete newClassTimetable[`${weekday}-${period}`];
+            newTimetables[classKey] = newClassTimetable;
+        } else {
+            // Add or update entry
+            newTimetables[classKey] = {
+                ...prevClassTimetable,
+                [`${weekday}-${period}`]: subj
+            };
+        }
+        setTimetables(newTimetables);
+    };
+
+    const currentKey = `${grade}-${classNum}`;
+    const currentTimetable = timetables[currentKey] || {};
+    const weekdays = ['월', '화', '수', '목', '금'];
+
+    if (showAutoFill) {
+        return <AutoFillElectivesView adminPassword={adminPassword} onBack={() => setShowAutoFill(false)} currentPlan={{ subjects, timetables, grade: parseInt(grade) }} />;
+    }
+
+    return (
+        <Card className="w-full">
+            <CardHeader>
+                <CardTitle>학기별 계획 (수동 시간표 기입기)</CardTitle>
+                <CardDescription>
+                    아직 컴시간 데이터셋이 서버에 반영되지 않았거나, 예비 수동 시간표를 작성할 때 사용합니다.
+                    과목 목록을 먼저 정의한 후, 표에 기입할 수 있습니다.
+                    이후 <b>출처 데이터셋 선택기</b>에서 MANUAL_PLAN 을 선택해야 실제로 표시됩니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+
+                {/* Subject Manager */}
+                <div className="border border-purple-200 bg-purple-50/30 rounded-lg p-4 space-y-4">
+                    <h3 className="font-bold text-purple-900 border-b pb-2">과목 및 기입어 관리</h3>
+
+                    <div className="flex gap-2">
+                        <Input
+                            placeholder="예: A_일본어 이소라 또는 독작 임아영 또는 학년공강"
+                            value={newSubject}
+                            onChange={(e) => setNewSubject(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') addSubject(); }}
+                        />
+                        <Button onClick={addSubject}>추가</Button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                        {subjects.length === 0 && <span className="text-gray-400 text-sm">등록된 과목이 없습니다.</span>}
+                        {subjects.map(subj => (
+                            <Badge key={subj} variant="secondary" className="px-3 py-1 flex items-center gap-1 text-sm border bg-white shadow-sm">
+                                {subj}
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-4 w-4 ml-1 hover:bg-red-100 hover:text-red-500 rounded-full"
+                                    onClick={() => removeSubject(subj)}
+                                >
+                                    <Trash2 className="h-3 w-3" />
+                                </Button>
+                            </Badge>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Timetable Editor */}
+                <div className="border border-blue-200 rounded-lg overflow-hidden">
+                    <div className="bg-blue-50/50 p-4 border-b flex items-center gap-4">
+                        <div className="font-bold">시간표 조회/수정 표</div>
+                        <Select value={grade} onValueChange={setGrade}>
+                            <SelectTrigger className="w-24 bg-white"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="2">2학년</SelectItem>
+                                <SelectItem value="3">3학년</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Select value={classNum} onValueChange={setClassNum}>
+                            <SelectTrigger className="w-24 bg-white"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {Array.from({ length: 15 }, (_, i) => i + 1).map(c => (
+                                    <SelectItem key={c} value={String(c)}>{c}반</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="p-4 overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-16 text-center border-r font-bold">교시</TableHead>
+                                    {weekdays.map(day => (
+                                        <TableHead key={day} className="text-center border-r min-w-[120px] font-bold">{day}</TableHead>
+                                    ))}
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {Array.from({ length: 7 }, (_, i) => i + 1).map(period => (
+                                    <TableRow key={period}>
+                                        <TableCell className="text-center font-bold bg-slate-50 border-r">{period}</TableCell>
+                                        {Array.from({ length: 5 }, (_, i) => i).map(weekday => {
+                                            const key = `${weekday}-${period}`;
+                                            const currentVal = currentTimetable[key] || "";
+
+                                            return (
+                                                <TableCell key={weekday} className="p-1 border-r text-center align-middle">
+                                                    <Select value={currentVal} onValueChange={(val) => handleTimetableChange(weekday, period, val)}>
+                                                        <SelectTrigger className={`w-full h-8 text-xs border-transparent hover:border-blue-300 transition-colors ${currentVal ? 'font-bold text-slate-800' : 'text-slate-400'}`}>
+                                                            <SelectValue placeholder="비어있음" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="" className="text-slate-400">비어있음</SelectItem>
+                                                            {subjects.map(subj => (
+                                                                <SelectItem key={subj} value={subj}>
+                                                                    {subj}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </TableCell>
+                                            );
+                                        })}
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </div>
+
+                <div className="flex justify-between gap-2 pt-4 border-t">
+                    <Button variant="outline" className="border-orange-500 text-orange-600 hover:bg-orange-50" onClick={() => setShowAutoFill(true)}>
+                        <Wand2 className="w-4 h-4 mr-2" />
+                        선택과목 자동 채우기
+                    </Button>
+                    <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+                        {saveMutation.isPending ? "저장 중..." : "수동 계획 전체 저장"}
                     </Button>
                 </div>
             </CardContent>
@@ -2070,4 +2573,3 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
         </Card>
     );
 }
-
