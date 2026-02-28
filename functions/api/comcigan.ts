@@ -231,6 +231,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     }
 
     if (!timedataProp) {
+        let minDataCount = Infinity;
         for (let i = timetableProps.length - 1; i >= 0; i--) {
             const prop = timetableProps[i];
             const gradeData = rawData[prop][grade];
@@ -248,10 +249,11 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 }
             }
 
-            // If it has a reasonable amount of data for the week (e.g. at least 10 classes)
-            if (dataCount > 10) {
+            // If it has a reasonable amount of data for the week, it's a valid candidate.
+            // We want the ONE WITH THE FEWEST classes (cancelled classes logic)
+            if (dataCount > 10 && dataCount < minDataCount) {
+                minDataCount = dataCount;
                 timedataProp = prop;
-                break;
             }
         }
         // Fallback just in case

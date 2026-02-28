@@ -192,6 +192,7 @@ export class ComciganParser {
         });
 
         let scheduleKey = "";
+        let minDataCount = Infinity;
         for (let i = timetableProps.length - 1; i >= 0; i--) {
             const prop = timetableProps[i];
             const gradeData = data[prop][grade];
@@ -208,9 +209,9 @@ export class ComciganParser {
                     }
                 }
             }
-            if (dataCount > 10) {
+            if (dataCount > 10 && dataCount < minDataCount) {
+                minDataCount = dataCount;
                 scheduleKey = prop;
-                break;
             }
         }
         if (!scheduleKey && timetableProps.length > 0) {
