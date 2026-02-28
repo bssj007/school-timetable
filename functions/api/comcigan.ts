@@ -251,6 +251,10 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
             // If it has a reasonable amount of data for the week, it's a valid candidate.
             // We want the ONE WITH THE FEWEST classes (cancelled classes logic)
+            // AND we want the LATEST one if there is a tie (iterating backwards, so `<` correctly prefers earlier iterations if we used forward loop, but we use backward loop! Wait, if we use backward loop:
+            // i=3 (자료245): minDataCount=110, timedataProp=자료245
+            // i=2 (자료147): minCount=110. 110 < 110 is false. So timedataProp remains 자료245.
+            // Why did it select 자료147 in my test script?
             if (dataCount > 10 && dataCount < minDataCount) {
                 minDataCount = dataCount;
                 timedataProp = prop;

@@ -1,7 +1,17 @@
 import axios from 'axios';
 import iconv from 'iconv-lite';
 import { URL } from 'url';
-import { InsertTimetable } from '../drizzle/schema';
+export interface InsertTimetable {
+    schoolCode: number;
+    schoolName: string;
+    region: string;
+    grade: number;
+    class: number;
+    weekday: number;
+    classTime: number;
+    subject: string;
+    teacher: string;
+}
 
 const HOST = 'http://컴시간학생.kr';
 
@@ -159,7 +169,7 @@ export class ComciganParser {
     parseTimetable(
         data: any,
         grade: number,
-        classNum: number
+        classNumInput: number | 'all'
     ): InsertTimetable[] {
         const timetable: InsertTimetable[] = [];
 
@@ -209,7 +219,7 @@ export class ComciganParser {
                     }
                 }
             }
-            if (dataCount > 10 && dataCount < minDataCount) {
+            if (dataCount > 10 && dataCount <= minDataCount) {
                 minDataCount = dataCount;
                 scheduleKey = prop;
             }
@@ -236,65 +246,71 @@ export class ComciganParser {
             return timetable;
         }
 
-        const classData = gradeData[classNum];
-        if (!classData || classData.length < 2) {
-            console.warn(`No data for grade ${grade} class ${classNum}`);
-            return timetable;
-        }
+        const classesToProcess = classNumInput === 'all'
+            ? Object.keys(gradeData).filter(k => !isNaN(parseInt(k)) && parseInt(k) > 0).map(Number)
+            : [classNumInput as number];
 
-        // Parse each day (Monday=1 to Friday=5)
-        for (let weekday = 1; weekday <= 5; weekday++) {
-            const dayData = classData[weekday];
-            if (!dayData || !Array.isArray(dayData)) {
+        for (const classNum of classesToProcess) {
+            const classData = gradeData[classNum];
+            if (!classData || classData.length < 2) {
+                console.warn(`No data for grade ${grade} class ${classNum}`);
                 continue;
             }
 
-            // First element is the number of periods
-            const periodCount = dayData[0];
-
-            // Parse each period
-            for (let period = 1; period <= periodCount; period++) {
-                if (period >= dayData.length) break;
-
-                const cellData = dayData[period];
-                if (!cellData || cellData === 0) continue;
-
-                // Based on actual Comcigan source code:
-                // When 분리 = 1000:
-                //   mTh(mm, 1000) = mm % 1000 = Teacher code
-                //   mSb(mm, 1000) = floor(mm / 1000) = Subject code
-                // When 분리 = 100:
-                //   mTh(mm, 100) = floor(mm / 100) = Teacher code  
-                //   mSb(mm, 100) = mm % 100 = Subject code
-
-                let teacherCode: number;
-                let subjectCode: number;
-
-                if (bunri === 100) {
-                    teacherCode = Math.floor(cellData / bunri);
-                    subjectCode = cellData % bunri;
-                } else { // bunri === 1000 or other
-                    teacherCode = cellData % bunri;
-                    subjectCode = Math.floor(cellData / bunri);
+            // Parse each day (Monday=1 to Friday=5)
+            for (let weekday = 1; weekday <= 5; weekday++) {
+                const dayData = classData[weekday];
+                if (!dayData || !Array.isArray(dayData)) {
+                    continue;
                 }
 
-                const subject = subjects[subjectCode] || '알 수 없음';
-                const teacher = teachers[teacherCode] || '알 수 없음';
+                // First element is the number of periods
+                const periodCount = dayData[0];
 
-                // Clean up teacher name (remove trailing *)
-                const cleanTeacher = teacher.replace(/\*$/, '');
+                // Parse each period
+                for (let period = 1; period <= periodCount; period++) {
+                    if (period >= dayData.length) break;
 
-                timetable.push({
-                    schoolCode: 0, // Will be filled later
-                    schoolName: '', // Will be filled later
-                    region: '', // Will be filled later
-                    grade,
-                    class: classNum,
-                    weekday: weekday - 1, // Convert to 0-indexed (0=Mon, 4=Fri)
-                    classTime: period,
-                    subject,
-                    teacher: cleanTeacher,
-                });
+                    const cellData = dayData[period];
+                    if (!cellData || cellData === 0) continue;
+
+                    // Based on actual Comcigan source code:
+                    // When 분리 = 1000:
+                    //   mTh(mm, 1000) = mm % 1000 = Teacher code
+                    //   mSb(mm, 1000) = floor(mm / 1000) = Subject code
+                    // When 분리 = 100:
+                    //   mTh(mm, 100) = floor(mm / 100) = Teacher code  
+                    //   mSb(mm, 100) = mm % 100 = Subject code
+
+                    let teacherCode: number;
+                    let subjectCode: number;
+
+                    if (bunri === 100) {
+                        teacherCode = Math.floor(cellData / bunri);
+                        subjectCode = cellData % bunri;
+                    } else { // bunri === 1000 or other
+                        teacherCode = cellData % bunri;
+                        subjectCode = Math.floor(cellData / bunri);
+                    }
+
+                    const subject = subjects[subjectCode] || '알 수 없음';
+                    const teacher = teachers[teacherCode] || '알 수 없음';
+
+                    // Clean up teacher name (remove trailing *)
+                    const cleanTeacher = teacher.replace(/\*$/, '');
+
+                    timetable.push({
+                        schoolCode: 0, // Will be filled later
+                        schoolName: '', // Will be filled later
+                        region: '', // Will be filled later
+                        grade,
+                        class: classNum,
+                        weekday: weekday - 1, // Convert to 0-indexed (0=Mon, 4=Fri)
+                        classTime: period,
+                        subject,
+                        teacher: cleanTeacher,
+                    });
+                }
             }
         }
 
