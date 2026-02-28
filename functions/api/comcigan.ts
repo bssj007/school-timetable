@@ -231,26 +231,33 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     }
 
     if (!timedataProp) {
+        let minDataCount = Infinity;
         for (let i = timetableProps.length - 1; i >= 0; i--) {
             const prop = timetableProps[i];
             const gradeData = rawData[prop][grade];
-            if (!gradeData || !gradeData[1]) continue;
+            if (!gradeData) continue;
 
-            // Flatten the week's data to check for non-zero codes
-            const class1Data = gradeData[1];
-            let hasData = false;
-            for (let w = 1; w <= 5; w++) {
-                if (class1Data[w] && Array.isArray(class1Data[w])) {
-                    if (class1Data[w].some((code: any) => typeof code === 'number' && code > 0)) {
-                        hasData = true;
-                        break;
+            let dataCount = 0;
+            for (let c = 1; c < gradeData.length; c++) {
+                const classData = gradeData[c];
+                if (!classData) continue;
+                // Flatten the week's data to check for non-zero codes
+                for (let w = 1; w <= 5; w++) {
+                    if (classData[w] && Array.isArray(classData[w])) {
+                        dataCount += classData[w].filter((code: any) => typeof code === 'number' && code > 0).length;
                     }
                 }
             }
 
-            if (hasData) {
+            // If it has a reasonable amount of data for the week, it's a valid candidate.
+            // We want the ONE WITH THE FEWEST classes (cancelled classes logic)
+            // AND we want the LATEST one if there is a tie (iterating backwards, so `<` correctly prefers earlier iterations if we used forward loop, but we use backward loop! Wait, if we use backward loop:
+            // i=3 (자료245): minDataCount=110, timedataProp=자료245
+            // i=2 (자료147): minCount=110. 110 < 110 is false. So timedataProp remains 자료245.
+            // Why did it select 자료147 in my test script?
+            if (dataCount > 10 && dataCount < minDataCount) {
+                minDataCount = dataCount;
                 timedataProp = prop;
-                break;
             }
         }
         // Fallback just in case
@@ -290,13 +297,11 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         const classData = data[grade][classNum];
 
         for (let weekday = 1; weekday <= 5; weekday++) {
-            let dayHours = 7;
-            if (timeInfo && timeInfo[grade]) {
-                dayHours = timeInfo[grade][weekday];
-            }
+            if (!classData[weekday] || !Array.isArray(classData[weekday])) continue;
 
-            const maxPeriod = classData[weekday] ? classData[weekday].length - 1 : 0;
-            const loopLimit = Math.min(dayHours, maxPeriod);
+            const periodCount = classData[weekday][0] || 0;
+            const maxPeriod = classData[weekday].length - 1;
+            const loopLimit = Math.min(periodCount, maxPeriod);
 
             for (let period = 1; period <= loopLimit; period++) {
                 const code = classData[weekday][period];
@@ -321,7 +326,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                     result.push({
                         grade,
                         class: classNum,
-                        weekday,
+                        weekday: weekday - 1, // Convert to 0-indexed (0=Mon, 4=Fri)
                         classTime: period,
                         subject,
                         teacher

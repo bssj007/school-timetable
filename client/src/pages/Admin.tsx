@@ -39,8 +39,7 @@ import {
 } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-
-
+import { Textarea } from "@/components/ui/textarea";
 
 
 function ElectiveManager({ password }: { password: string }) {
@@ -660,6 +659,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <Database className="w-4 h-4 mr-2" />
                     시간표 데이터셋 선택기
                 </Button>
+                <Button
+                    variant={selectedMenu === "visit-restriction" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("visit-restriction")}
+                >
+                    <ShieldCheck className="w-4 h-4 mr-2" />
+                    방문제한 설정
+                </Button>
                 {/* Additional list items can go here later */}
             </div>
 
@@ -725,6 +732,18 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                             ) : (
                                 <div className="text-gray-400 p-4">학교 이름을 입력하고 조회를 눌러주세요.</div>
                             )}
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "visit-restriction" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">방문제한 설정</h3>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto">
+                            <VisitRestrictionSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -1840,3 +1859,154 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         </Card>
     );
 }
+
+function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [restrictedGrades, setRestrictedGrades] = useState<number[]>([]);
+    const [restrictionReason, setRestrictionReason] = useState("");
+    const [ipWhitelist, setIpWhitelist] = useState("");
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "visitRestriction"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        },
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            try {
+                const parsedGrades = settingsQuery.data.restricted_grades
+                    ? JSON.parse(settingsQuery.data.restricted_grades)
+                    : [];
+                setRestrictedGrades(Array.isArray(parsedGrades) ? parsedGrades : []);
+            } catch {
+                setRestrictedGrades([]);
+            }
+
+            setRestrictionReason(
+                settingsQuery.data.restriction_reason || "현재 해당 학년은 서비스 이용이 제한되어 있습니다."
+            );
+
+            try {
+                const parsedIps = settingsQuery.data.ip_whitelist
+                    ? JSON.parse(settingsQuery.data.ip_whitelist)
+                    : [];
+                setIpWhitelist(Array.isArray(parsedIps) ? parsedIps.join('\n') : "");
+            } catch {
+                setIpWhitelist("");
+            }
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (newData: any) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(newData),
+            });
+            if (!res.ok) throw new Error("Failed to save settings");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("방문제한 설정이 저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err) => {
+            toast.error(`저장 실패: ${err.message}`);
+        },
+    });
+
+    const handleSave = () => {
+        const ips = ipWhitelist.split('\n').map(ip => ip.trim()).filter(ip => ip.length > 0);
+        saveMutation.mutate({
+            restricted_grades: JSON.stringify(restrictedGrades),
+            restriction_reason: restrictionReason,
+            ip_whitelist: JSON.stringify(ips)
+        });
+    };
+
+    const toggleGrade = (grade: number) => {
+        if (restrictedGrades.includes(grade)) {
+            setRestrictedGrades(restrictedGrades.filter(g => g !== grade));
+        } else {
+            setRestrictedGrades([...restrictedGrades, grade]);
+        }
+    };
+
+    if (settingsQuery.isLoading) return <div className="p-4">설정을 불러오는 중...</div>;
+
+    return (
+        <Card className="w-full max-w-2xl">
+            <CardHeader>
+                <CardTitle>방문제한 및 예외 IP 관리</CardTitle>
+                <CardDescription>
+                    특정 학년의 접속을 일시적으로 제한하고, 사유를 안내할 수 있습니다. 화이트리스트에 등록된 IP는 제한을 무시하고 접속할 수 있습니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="space-y-3">
+                    <label className="text-sm font-medium">제한할 학년 선택</label>
+                    <div className="flex gap-4">
+                        {[1, 2, 3].map((grade) => (
+                            <div key={grade} className="flex items-center space-x-2">
+                                <Checkbox
+                                    id={`grade-${grade}`}
+                                    checked={restrictedGrades.includes(grade)}
+                                    onCheckedChange={() => toggleGrade(grade)}
+                                />
+                                <label
+                                    htmlFor={`grade-${grade}`}
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                    {grade}학년
+                                </label>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">제한 사유 안내문구</label>
+                    <Input
+                        value={restrictionReason}
+                        onChange={(e) => setRestrictionReason(e.target.value)}
+                        placeholder="예: 2학기 시간표 업데이트 중입니다."
+                    />
+                    <p className="text-xs text-gray-500">
+                        제한된 학년의 학생이 학번을 입력하면 시간표 대신 이 문구가 표시됩니다.
+                    </p>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">IP 화이트리스트 (줄바꿈으로 구분)</label>
+                    <Textarea
+                        value={ipWhitelist}
+                        onChange={(e) => setIpWhitelist(e.target.value)}
+                        placeholder="192.168.1.100&#10;10.0.0.5"
+                        rows={5}
+                        className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-gray-500">
+                        여기에 등록된 IP는 위에서 설정된 방문제한의 영향을 받지 않습니다. (예: 교내망 IP, 관리자 IP 등)
+                    </p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                    <Button onClick={handleSave} disabled={saveMutation.isPending}>
+                        {saveMutation.isPending ? "저장 중..." : "설정 저장"}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
