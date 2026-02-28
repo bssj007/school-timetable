@@ -170,7 +170,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     const prefix = await getPrefix();
     const { code1, code2 } = await getSchoolCode(prefix);
 
-    const param = `${prefix}${code2}_0_${grade}`;
+    // Always fetch grade 1's parameter to avoid Comcigan server corruption where fetching grade 2 breaks the Thursday data
+    const param = `${prefix}${code2}_0_1`;
     const b64 = btoa(param);
     const targetUrl = `${BASE_URL}/${code1}?${b64}`;
 
