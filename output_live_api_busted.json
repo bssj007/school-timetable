@@ -1,0 +1,1232 @@
+{
+  "schoolName": "부산성지고등학교",
+  "data": [
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 0,
+      "classTime": 1,
+      "subject": "영2",
+      "teacher": "최수*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 0,
+      "classTime": 2,
+      "subject": "일1",
+      "teacher": "이소*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 0,
+      "classTime": 3,
+      "subject": "미적",
+      "teacher": "김정*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 0,
+      "classTime": 4,
+      "subject": "수2",
+      "teacher": "이종*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 0,
+      "classTime": 5,
+      "subject": "문학",
+      "teacher": "강성*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 0,
+      "classTime": 6,
+      "subject": "미적",
+      "teacher": "김정*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 0,
+      "classTime": 7,
+      "subject": "수2",
+      "teacher": "이종*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 1,
+      "classTime": 1,
+      "subject": "수2",
+      "teacher": "이종*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 1,
+      "classTime": 2,
+      "subject": "운건",
+      "teacher": "구종*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 1,
+      "classTime": 3,
+      "subject": "영2",
+      "teacher": "최수*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 1,
+      "classTime": 4,
+      "subject": "미적",
+      "teacher": "김정*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 1,
+      "classTime": 5,
+      "subject": "미적",
+      "teacher": "김정*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 1,
+      "classTime": 6,
+      "subject": "세미",
+      "teacher": "김하*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 1,
+      "classTime": 7,
+      "subject": "문학",
+      "teacher": "강성*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 2,
+      "classTime": 1,
+      "subject": "세미",
+      "teacher": "김하*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 2,
+      "classTime": 2,
+      "subject": "영2",
+      "teacher": "최수*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 2,
+      "classTime": 3,
+      "subject": "미적",
+      "teacher": "김정*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 2,
+      "classTime": 4,
+      "subject": "국사",
+      "teacher": "손창*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 2,
+      "classTime": 5,
+      "subject": "채플",
+      "teacher": "채플*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 2,
+      "classTime": 6,
+      "subject": "창체",
+      "teacher": "창체*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 2,
+      "classTime": 7,
+      "subject": "창체",
+      "teacher": "창체*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 4,
+      "classTime": 1,
+      "subject": "진로",
+      "teacher": "최윤*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 4,
+      "classTime": 2,
+      "subject": "국사",
+      "teacher": "손창*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 4,
+      "classTime": 3,
+      "subject": "미적",
+      "teacher": "김정*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 4,
+      "classTime": 4,
+      "subject": "영2",
+      "teacher": "박상*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 4,
+      "classTime": 5,
+      "subject": "수2",
+      "teacher": "이종*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 4,
+      "classTime": 6,
+      "subject": "미적",
+      "teacher": "김정*"
+    },
+    {
+      "grade": 2,
+      "class": 1,
+      "weekday": 4,
+      "classTime": 7,
+      "subject": "문학",
+      "teacher": "심희*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 0,
+      "classTime": 1,
+      "subject": "문학",
+      "teacher": "강성*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 0,
+      "classTime": 2,
+      "subject": "영2",
+      "teacher": "최수*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 0,
+      "classTime": 3,
+      "subject": "생1",
+      "teacher": "백수*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 0,
+      "classTime": 4,
+      "subject": "물1",
+      "teacher": "유동*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 0,
+      "classTime": 5,
+      "subject": "문학",
+      "teacher": "심희*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 0,
+      "classTime": 6,
+      "subject": "수2",
+      "teacher": "이종*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 0,
+      "classTime": 7,
+      "subject": "물1",
+      "teacher": "유동*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 1,
+      "classTime": 1,
+      "subject": "물1",
+      "teacher": "유동*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 1,
+      "classTime": 2,
+      "subject": "국사",
+      "teacher": "손창*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 1,
+      "classTime": 3,
+      "subject": "진로",
+      "teacher": "최윤*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 1,
+      "classTime": 4,
+      "subject": "생1",
+      "teacher": "백수*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 1,
+      "classTime": 5,
+      "subject": "수2",
+      "teacher": "이종*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 1,
+      "classTime": 6,
+      "subject": "과연",
+      "teacher": "윤은*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 1,
+      "classTime": 7,
+      "subject": "영2",
+      "teacher": "최수*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 2,
+      "classTime": 1,
+      "subject": "과연",
+      "teacher": "윤은*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 2,
+      "classTime": 2,
+      "subject": "일1",
+      "teacher": "이소*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 2,
+      "classTime": 3,
+      "subject": "수2",
+      "teacher": "이종*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 2,
+      "classTime": 4,
+      "subject": "운건",
+      "teacher": "구종*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 2,
+      "classTime": 5,
+      "subject": "채플",
+      "teacher": "채플*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 2,
+      "classTime": 6,
+      "subject": "창체",
+      "teacher": "창체*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 2,
+      "classTime": 7,
+      "subject": "창체",
+      "teacher": "창체*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 4,
+      "classTime": 1,
+      "subject": "문학",
+      "teacher": "강성*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 4,
+      "classTime": 2,
+      "subject": "문학",
+      "teacher": "심희*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 4,
+      "classTime": 3,
+      "subject": "생1",
+      "teacher": "백수*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 4,
+      "classTime": 4,
+      "subject": "국사",
+      "teacher": "손창*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 4,
+      "classTime": 5,
+      "subject": "물1",
+      "teacher": "유동*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 4,
+      "classTime": 6,
+      "subject": "생1",
+      "teacher": "백수*"
+    },
+    {
+      "grade": 2,
+      "class": 2,
+      "weekday": 4,
+      "classTime": 7,
+      "subject": "영2",
+      "teacher": "박상*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 0,
+      "classTime": 1,
+      "subject": "국사",
+      "teacher": "손창*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 0,
+      "classTime": 2,
+      "subject": "문학",
+      "teacher": "강성*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 0,
+      "classTime": 3,
+      "subject": "언매",
+      "teacher": "임아*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 0,
+      "classTime": 4,
+      "subject": "생윤",
+      "teacher": "정철*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 0,
+      "classTime": 5,
+      "subject": "일1",
+      "teacher": "이소*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 0,
+      "classTime": 6,
+      "subject": "언매",
+      "teacher": "임아*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 0,
+      "classTime": 7,
+      "subject": "생윤",
+      "teacher": "정철*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 1,
+      "classTime": 1,
+      "subject": "생윤",
+      "teacher": "정철*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 1,
+      "classTime": 2,
+      "subject": "영2",
+      "teacher": "최수*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 1,
+      "classTime": 3,
+      "subject": "국사",
+      "teacher": "손창*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 1,
+      "classTime": 4,
+      "subject": "언매",
+      "teacher": "김수*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 1,
+      "classTime": 5,
+      "subject": "언매",
+      "teacher": "이정*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 1,
+      "classTime": 6,
+      "subject": "언매",
+      "teacher": "이정*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 1,
+      "classTime": 7,
+      "subject": "운건",
+      "teacher": "구종*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 2,
+      "classTime": 1,
+      "subject": "언매",
+      "teacher": "이정*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 2,
+      "classTime": 2,
+      "subject": "국사",
+      "teacher": "손창*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 2,
+      "classTime": 3,
+      "subject": "언매",
+      "teacher": "이정*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 2,
+      "classTime": 4,
+      "subject": "문학",
+      "teacher": "심희*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 2,
+      "classTime": 5,
+      "subject": "채플",
+      "teacher": "채플*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 2,
+      "classTime": 6,
+      "subject": "창체",
+      "teacher": "창체*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 2,
+      "classTime": 7,
+      "subject": "창체",
+      "teacher": "창체*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 4,
+      "classTime": 1,
+      "subject": "문학",
+      "teacher": "심희*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 4,
+      "classTime": 2,
+      "subject": "영2",
+      "teacher": "박상*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 4,
+      "classTime": 3,
+      "subject": "언매",
+      "teacher": "임아*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 4,
+      "classTime": 4,
+      "subject": "영2",
+      "teacher": "최수*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 4,
+      "classTime": 5,
+      "subject": "생윤",
+      "teacher": "정철*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 4,
+      "classTime": 6,
+      "subject": "언매",
+      "teacher": "김수*"
+    },
+    {
+      "grade": 2,
+      "class": 3,
+      "weekday": 4,
+      "classTime": 7,
+      "subject": "운건",
+      "teacher": "구종*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 0,
+      "classTime": 1,
+      "subject": "운건",
+      "teacher": "박인*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 0,
+      "classTime": 2,
+      "subject": "영2",
+      "teacher": "박상*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 0,
+      "classTime": 3,
+      "subject": "생윤",
+      "teacher": "정철*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 0,
+      "classTime": 4,
+      "subject": "과연",
+      "teacher": "최진*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 0,
+      "classTime": 5,
+      "subject": "국사",
+      "teacher": "손창*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 0,
+      "classTime": 6,
+      "subject": "세미",
+      "teacher": "김하*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 0,
+      "classTime": 7,
+      "subject": "과연",
+      "teacher": "최진*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 1,
+      "classTime": 1,
+      "subject": "심리",
+      "teacher": "박상*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 1,
+      "classTime": 2,
+      "subject": "일1",
+      "teacher": "이소*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 1,
+      "classTime": 3,
+      "subject": "문학",
+      "teacher": "심희*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 1,
+      "classTime": 4,
+      "subject": "생윤",
+      "teacher": "정철*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 1,
+      "classTime": 5,
+      "subject": "세미",
+      "teacher": "김하*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 1,
+      "classTime": 6,
+      "subject": "영문",
+      "teacher": "고은*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 1,
+      "classTime": 7,
+      "subject": "국사",
+      "teacher": "손창*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 2,
+      "classTime": 1,
+      "subject": "영문",
+      "teacher": "고은*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 2,
+      "classTime": 2,
+      "subject": "문학",
+      "teacher": "강성*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 2,
+      "classTime": 3,
+      "subject": "세미",
+      "teacher": "김하*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 2,
+      "classTime": 4,
+      "subject": "영2",
+      "teacher": "최수*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 2,
+      "classTime": 5,
+      "subject": "채플",
+      "teacher": "채플*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 2,
+      "classTime": 6,
+      "subject": "창체",
+      "teacher": "창체*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 2,
+      "classTime": 7,
+      "subject": "창체",
+      "teacher": "창체*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 4,
+      "classTime": 1,
+      "subject": "운건",
+      "teacher": "구종*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 4,
+      "classTime": 2,
+      "subject": "영2",
+      "teacher": "최수*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 4,
+      "classTime": 3,
+      "subject": "생윤",
+      "teacher": "정철*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 4,
+      "classTime": 4,
+      "subject": "문학",
+      "teacher": "심희*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 4,
+      "classTime": 5,
+      "subject": "과연",
+      "teacher": "최진*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 4,
+      "classTime": 6,
+      "subject": "생윤",
+      "teacher": "정철*"
+    },
+    {
+      "grade": 2,
+      "class": 4,
+      "weekday": 4,
+      "classTime": 7,
+      "subject": "문학",
+      "teacher": "강성*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 0,
+      "classTime": 1,
+      "subject": "문학",
+      "teacher": "심희*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 0,
+      "classTime": 2,
+      "subject": "국사",
+      "teacher": "손창*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 0,
+      "classTime": 3,
+      "subject": "영문",
+      "teacher": "고은*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 0,
+      "classTime": 4,
+      "subject": "빈교실",
+      "teacher": "빈교*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 0,
+      "classTime": 5,
+      "subject": "영2",
+      "teacher": "최수*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 0,
+      "classTime": 6,
+      "subject": "생1",
+      "teacher": "백수*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 0,
+      "classTime": 7,
+      "subject": "빈교실",
+      "teacher": "빈교*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 1,
+      "classTime": 1,
+      "subject": "빈교실",
+      "teacher": "빈교*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 1,
+      "classTime": 2,
+      "subject": "문학",
+      "teacher": "강성*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 1,
+      "classTime": 3,
+      "subject": "일1",
+      "teacher": "이소*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 1,
+      "classTime": 4,
+      "subject": "영문",
+      "teacher": "고은*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 1,
+      "classTime": 5,
+      "subject": "생1",
+      "teacher": "백수*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 1,
+      "classTime": 6,
+      "subject": "빈교실",
+      "teacher": "빈교*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 1,
+      "classTime": 7,
+      "subject": "문학",
+      "teacher": "심희*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 2,
+      "classTime": 1,
+      "subject": "빈교실",
+      "teacher": "빈교*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 2,
+      "classTime": 2,
+      "subject": "진로",
+      "teacher": "최윤*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 2,
+      "classTime": 3,
+      "subject": "생1",
+      "teacher": "백수*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 2,
+      "classTime": 4,
+      "subject": "운건",
+      "teacher": "박인*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 2,
+      "classTime": 5,
+      "subject": "채플",
+      "teacher": "채플*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 2,
+      "classTime": 6,
+      "subject": "창체",
+      "teacher": "창체*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 2,
+      "classTime": 7,
+      "subject": "창체",
+      "teacher": "창체*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 4,
+      "classTime": 1,
+      "subject": "국사",
+      "teacher": "손창*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 4,
+      "classTime": 2,
+      "subject": "일1",
+      "teacher": "이소*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 4,
+      "classTime": 3,
+      "subject": "영문",
+      "teacher": "고은*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 4,
+      "classTime": 4,
+      "subject": "문학",
+      "teacher": "강성*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 4,
+      "classTime": 5,
+      "subject": "빈교실",
+      "teacher": "빈교*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 4,
+      "classTime": 6,
+      "subject": "영문",
+      "teacher": "고은*"
+    },
+    {
+      "grade": 2,
+      "class": 5,
+      "weekday": 4,
+      "classTime": 7,
+      "subject": "영2",
+      "teacher": "최수*"
+    }
+  ],
+  "debugTokens": {
+    "keysCount": 29,
+    "teacherProp": "자료446",
+    "subjectProp": "자료492",
+    "timetableProps": [
+      "자료481",
+      "자료147",
+      "자료542",
+      "자료245"
+    ],
+    "timedataProp": "자료147",
+    "bunri": 1000,
+    "hasData": true,
+    "bunriLogic": "other",
+    "subjectsCount": 54,
+    "teachersCount": 49,
+    "parsedSamples": [
+      {
+        "code": 15014,
+        "tIdx": 14,
+        "sIdx": 15,
+        "subj": "영2",
+        "teacher": "최수*",
+        "alt_sIdx": 14,
+        "alt_tIdx": 15,
+        "alt_subj": "영어",
+        "alt_teacher": "임예*"
+      },
+      {
+        "code": 21017,
+        "tIdx": 17,
+        "sIdx": 21,
+        "subj": "일1",
+        "teacher": "이소*",
+        "alt_sIdx": 17,
+        "alt_tIdx": 21,
+        "alt_subj": "심영",
+        "alt_teacher": "임영*"
+      },
+      {
+        "code": 11048,
+        "tIdx": 48,
+        "sIdx": 11,
+        "subj": "미적",
+        "teacher": "김정*",
+        "alt_sIdx": 48,
+        "alt_tIdx": 11,
+        "alt_subj": "종교",
+        "alt_teacher": "장은*"
+      },
+      {
+        "code": 9009,
+        "tIdx": 9,
+        "sIdx": 9,
+        "subj": "수2",
+        "teacher": "이종*",
+        "alt_sIdx": 9,
+        "alt_tIdx": 9,
+        "alt_subj": "수2",
+        "alt_teacher": "이종*"
+      },
+      {
+        "code": 9009,
+        "tIdx": 9,
+        "sIdx": 9,
+        "subj": "수2",
+        "teacher": "이종*",
+        "alt_sIdx": 9,
+        "alt_tIdx": 9,
+        "alt_subj": "수2",
+        "alt_teacher": "이종*"
+      },
+      {
+        "code": 43031,
+        "tIdx": 31,
+        "sIdx": 43,
+        "subj": "운건",
+        "teacher": "구종*",
+        "alt_sIdx": 31,
+        "alt_tIdx": 43,
+        "alt_subj": "통과",
+        "alt_teacher": "빈교*"
+      },
+      {
+        "code": 15014,
+        "tIdx": 14,
+        "sIdx": 15,
+        "subj": "영2",
+        "teacher": "최수*",
+        "alt_sIdx": 14,
+        "alt_tIdx": 15,
+        "alt_subj": "영어",
+        "alt_teacher": "임예*"
+      },
+      {
+        "code": 11048,
+        "tIdx": 48,
+        "sIdx": 11,
+        "subj": "미적",
+        "teacher": "김정*",
+        "alt_sIdx": 48,
+        "alt_tIdx": 11,
+        "alt_subj": "종교",
+        "alt_teacher": "장은*"
+      }
+    ]
+  }
+}

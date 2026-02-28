@@ -130,7 +130,8 @@ export class ComciganParser {
 
         // Prepare URL for data
         const s7 = this.scData[0] + schoolCode;
-        const rawQuery = s7 + '_0_' + this.scData[2];
+        // Explicitly hardcode _0_1 to avoid Comcigan grade 2 backend bug
+        const rawQuery = s7 + '_0_1';
         const base64Query = Buffer.from(rawQuery).toString('base64');
         const sc3 = this.extractCode.split('?')[0] + '?' + base64Query;
 
