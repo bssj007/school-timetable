@@ -794,14 +794,29 @@ function RawTimetableViewer({ rawData }: { rawData: any }) {
 
     const renderCell = (code: number) => {
         if (!code || code === 0) return "-";
-        const teacherCode = Math.floor(code / bunri);
-        const subjectCode = code % bunri;
+
+        // Use the exact parsing logic from Cloudflare/local parser
+        let teacherCode: number;
+        let subjectCode: number;
+        if (bunri === 100) {
+            teacherCode = Math.floor(code / bunri);
+            subjectCode = code % bunri;
+        } else { // bunri === 1000 or other
+            teacherCode = code % bunri;
+            subjectCode = Math.floor(code / bunri);
+        }
+
         const teacherStr = teachers[teacherCode] || teacherCode;
         const subjectStr = subjects[subjectCode] || subjectCode;
+
+        // Strip trailing asterisks and underscores exactly like the parser does
+        const cleanTeacherStr = typeof teacherStr === 'string' ? teacherStr.replace(/\*$/, '') : teacherStr;
+        const cleanSubjectStr = typeof subjectStr === 'string' ? subjectStr.replace(/_/g, '') : subjectStr;
+
         return (
             <div className="flex flex-col items-center justify-center text-xs p-1">
-                <span className="font-bold text-blue-700">{subjectStr}</span>
-                <span className="text-gray-500">{teacherStr}</span>
+                <span className="font-bold text-blue-700">{cleanSubjectStr}</span>
+                <span className="text-gray-500">{cleanTeacherStr}</span>
                 <span className="text-[10px] text-gray-300 mt-1">({code})</span>
             </div>
         );
