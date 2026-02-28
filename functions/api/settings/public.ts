@@ -7,7 +7,7 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist')").all();
+        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason')").all();
 
         const settings: any = {};
         if (rows && rows.results) {
@@ -20,6 +20,8 @@ export const onRequest = async (context: any) => {
         const restrictedGrades = settings['restricted_grades'] ? JSON.parse(settings['restricted_grades']) : [];
         const restrictionReason = settings['restriction_reason'] || "현재 해당 학년은 서비스 이용이 제한되어 있습니다.";
         const ipWhitelist = settings['ip_whitelist'] ? JSON.parse(settings['ip_whitelist']) : [];
+        const kakaoLoginRestricted = settings['kakao_login_restricted'] === 'true';
+        const kakaoRestrictionReason = settings['kakao_restriction_reason'] || "현재 카카오 연동이 제한되어 있습니다.";
 
         // Check IP whitelist
         const clientIp = context.request.headers.get('CF-Connecting-IP') || 'unknown';
@@ -29,6 +31,8 @@ export const onRequest = async (context: any) => {
             hide_past_assessments: hidePastValue === 'true',
             restricted_grades: restrictedGrades,
             restriction_reason: restrictionReason,
+            kakao_login_restricted: kakaoLoginRestricted,
+            kakao_restriction_reason: kakaoRestrictionReason,
             is_whitelisted: isWhitelisted,
             client_ip: clientIp
         }), {

@@ -1887,6 +1887,8 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const [restrictedGrades, setRestrictedGrades] = useState<number[]>([]);
     const [restrictionReason, setRestrictionReason] = useState("");
     const [ipWhitelist, setIpWhitelist] = useState("");
+    const [kakaoLoginRestricted, setKakaoLoginRestricted] = useState(false);
+    const [kakaoRestrictionReason, setKakaoRestrictionReason] = useState("");
 
     const settingsQuery = useQuery({
         queryKey: ["admin", "settings", "visitRestriction"],
@@ -1912,6 +1914,11 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
 
             setRestrictionReason(
                 settingsQuery.data.restriction_reason || "현재 해당 학년은 서비스 이용이 제한되어 있습니다."
+            );
+
+            setKakaoLoginRestricted(settingsQuery.data.kakao_login_restricted === 'true');
+            setKakaoRestrictionReason(
+                settingsQuery.data.kakao_restriction_reason || "현재 카카오 연동이 제한되어 있습니다."
             );
 
             try {
@@ -1952,7 +1959,9 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
         saveMutation.mutate({
             restricted_grades: JSON.stringify(restrictedGrades),
             restriction_reason: restrictionReason,
-            ip_whitelist: JSON.stringify(ips)
+            ip_whitelist: JSON.stringify(ips),
+            kakao_login_restricted: String(kakaoLoginRestricted),
+            kakao_restriction_reason: kakaoRestrictionReason,
         });
     };
 
@@ -2008,7 +2017,37 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                     </p>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-4 pt-4 border-t">
+                    <h4 className="text-sm font-bold">카카오 연동 제한</h4>
+                    <div className="flex items-center space-x-2">
+                        <Checkbox
+                            id="kakao-restrict"
+                            checked={kakaoLoginRestricted}
+                            onCheckedChange={(c) => setKakaoLoginRestricted(!!c)}
+                        />
+                        <label
+                            htmlFor="kakao-restrict"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                            카카오 로그인 연동 제한 (모든 학년 적용)
+                        </label>
+                    </div>
+                    {kakaoLoginRestricted && (
+                        <div className="space-y-2 pl-6">
+                            <label className="text-sm font-medium">카카오 연동 제한 안내 문구</label>
+                            <Input
+                                value={kakaoRestrictionReason}
+                                onChange={(e) => setKakaoRestrictionReason(e.target.value)}
+                                placeholder="예: 현재 카카오 연동 점검 중입니다."
+                            />
+                            <p className="text-xs text-gray-500">
+                                제한된 상태에서 사용자가 카카오 로그인을 시도할 때 이 문구가 표시됩니다. (화이트리스트 IP는 예외)
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="space-y-2 pt-4 border-t border-slate-100">
                     <label className="text-sm font-medium">IP 화이트리스트 (줄바꿈으로 구분)</label>
                     <Textarea
                         value={ipWhitelist}

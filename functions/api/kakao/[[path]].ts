@@ -13,6 +13,35 @@ export const onRequest = async (context: any) => {
 
     // 로그인 시작
     if (path === '/api/kakao/login') {
+        let restricted = false;
+
+        if (env.DB) {
+            try {
+                const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('kakao_login_restricted', 'ip_whitelist')").all();
+                const settings: any = {};
+                if (rows && rows.results) {
+                    rows.results.forEach((row: any) => { settings[row.key] = row.value; });
+                }
+
+                const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
+                const whitelist = settings['ip_whitelist'] ? JSON.parse(settings['ip_whitelist']) : [];
+                const isWhitelisted = whitelist.includes(clientIp);
+
+                if (settings['kakao_login_restricted'] === 'true' && !isWhitelisted) {
+                    restricted = true;
+                }
+            } catch (e) {
+                console.error("Failed to check kakao restriction", e);
+            }
+        }
+
+        if (restricted) {
+            return new Response(null, {
+                status: 302,
+                headers: { 'Location': `/?error=kakao_restricted` }
+            });
+        }
+
         const redirectUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_REST_API_KEY}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=talk_message,talk_calendar,talk_calendar_task`;
 
         return new Response(null, {
