@@ -758,10 +758,8 @@ function RawTimetableViewer({ rawData }: { rawData: any }) {
     const [selectedClassNum, setSelectedClassNum] = useState<string>('1');
 
     const dataKeys = Object.keys(rawData || {});
-    const timetableProps = dataKeys.filter(k => {
-        const val = rawData[k];
-        return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
-    });
+    // 모든 자료 속성을 포함하여 선택 가능하게 함
+    const timetableProps = dataKeys.filter(k => k.startsWith('자료'));
 
     React.useEffect(() => {
         if (timetableProps.length > 0 && !selectedProp) {
@@ -826,6 +824,9 @@ function RawTimetableViewer({ rawData }: { rawData: any }) {
     const gradeData = scheduleData ? scheduleData[Number(selectedGrade)] : null;
     const classData = gradeData ? gradeData[Number(selectedClassNum)] : null;
 
+    // 해당 속성이 시간표 구조(3차원 배열)인지 판별
+    const isTimetableProp = scheduleData && Array.isArray(scheduleData) && scheduleData[1] && scheduleData[1][1] && Array.isArray(scheduleData[1][1]);
+
     const weekdays = ["월", "화", "수", "목", "금"];
 
     return (
@@ -873,44 +874,50 @@ function RawTimetableViewer({ rawData }: { rawData: any }) {
             </div>
 
             <div className="border border-slate-200 rounded-md overflow-hidden">
-                <Table>
-                    <TableHeader className="bg-slate-50">
-                        <TableRow>
-                            <TableHead className="w-16 text-center border-r font-bold text-slate-700">교시</TableHead>
-                            {weekdays.map(day => (
-                                <TableHead key={day} className="text-center border-r last:border-0 font-bold text-slate-700">{day}</TableHead>
-                            ))}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {!classData ? (
+                {!isTimetableProp ? (
+                    <div className="p-4 bg-slate-50 text-slate-800 font-mono text-xs overflow-auto max-h-96 whitespace-pre-wrap break-all">
+                        {JSON.stringify(scheduleData, null, 2)}
+                    </div>
+                ) : (
+                    <Table>
+                        <TableHeader className="bg-slate-50">
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center h-32 text-slate-400">
-                                    해당 학년/반 데이터가 없습니다. 속성이나 반을 변경해주세요.
-                                </TableCell>
+                                <TableHead className="w-16 text-center border-r font-bold text-slate-700">교시</TableHead>
+                                {weekdays.map(day => (
+                                    <TableHead key={day} className="text-center border-r last:border-0 font-bold text-slate-700">{day}</TableHead>
+                                ))}
                             </TableRow>
-                        ) : (
-                            Array.from({ length: 7 }, (_, i) => i + 1).map(period => (
-                                <TableRow key={period} className="hover:bg-slate-50">
-                                    <TableCell className="text-center font-bold bg-slate-50 border-r text-slate-700">
-                                        {period}
+                        </TableHeader>
+                        <TableBody>
+                            {!classData ? (
+                                <TableRow>
+                                    <TableCell colSpan={6} className="text-center h-32 text-slate-400">
+                                        해당 학년/반 데이터가 없습니다. 속성이나 반을 변경해주세요.
                                     </TableCell>
-                                    {weekdays.map((day, i) => {
-                                        const weekdayIndex = i + 1;
-                                        const dayData = classData[weekdayIndex];
-                                        const code = dayData && dayData.length > period ? dayData[period] : 0;
-
-                                        return (
-                                            <TableCell key={day} className="text-center p-0 border-r last:border-0 align-middle">
-                                                {renderCell(code)}
-                                            </TableCell>
-                                        );
-                                    })}
                                 </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
+                            ) : (
+                                Array.from({ length: 7 }, (_, i) => i + 1).map(period => (
+                                    <TableRow key={period} className="hover:bg-slate-50">
+                                        <TableCell className="text-center font-bold bg-slate-50 border-r text-slate-700">
+                                            {period}
+                                        </TableCell>
+                                        {weekdays.map((day, i) => {
+                                            const weekdayIndex = i + 1;
+                                            const dayData = classData[weekdayIndex];
+                                            const code = dayData && dayData.length > period ? dayData[period] : 0;
+
+                                            return (
+                                                <TableCell key={day} className="text-center p-0 border-r last:border-0 align-middle">
+                                                    {renderCell(code)}
+                                                </TableCell>
+                                            );
+                                        })}
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                )}
             </div>
 
             <div className="mt-4 border-t pt-4">
