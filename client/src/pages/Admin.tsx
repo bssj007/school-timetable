@@ -2348,12 +2348,12 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
 
                                             return (
                                                 <TableCell key={weekday} className="p-1 border-r text-center align-middle">
-                                                    <Select value={currentVal} onValueChange={(val) => handleTimetableChange(weekday, period, val)}>
+                                                    <Select value={currentVal || "__EMPTY__"} onValueChange={(val) => handleTimetableChange(weekday, period, val === "__EMPTY__" ? "" : val)}>
                                                         <SelectTrigger className={`w-full h-8 text-xs border-transparent hover:border-blue-300 transition-colors ${currentVal ? 'font-bold text-slate-800' : 'text-slate-400'}`}>
                                                             <SelectValue placeholder="비어있음" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="" className="text-slate-400">비어있음</SelectItem>
+                                                            <SelectItem value="__EMPTY__" className="text-slate-400">비어있음</SelectItem>
                                                             {subjects.map(subj => (
                                                                 <SelectItem key={subj} value={subj}>
                                                                     {subj}
