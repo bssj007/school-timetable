@@ -311,14 +311,14 @@ function ElectiveManager({ password }: { password: string }) {
                             {selectedGrade}학년 선택과목 목록
                         </h3>
                         <Select
-                            value={selectedDataset}
-                            onValueChange={setSelectedDataset}
+                            value={selectedDataset || "_auto_"}
+                            onValueChange={(val) => setSelectedDataset(val === "_auto_" ? "" : val)}
                         >
                             <SelectTrigger className="w-[160px] h-9">
                                 <SelectValue placeholder="데이터셋 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">자동 (현재 시간표)</SelectItem>
+                                <SelectItem value="_auto_">자동 (현재 시간표)</SelectItem>
                                 {timetableProps.map((prop: string) => (
                                     <SelectItem key={prop} value={prop}>{prop}</SelectItem>
                                 ))}
@@ -2326,6 +2326,11 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
         }
     }, [settingsQuery.data]);
 
+    const displayDataset = selectedDataset || "_auto_";
+    const handleDatasetChange = (val: string) => {
+        setSelectedDataset(val === "_auto_" ? "" : val);
+    };
+
     // Fetch raw comcigan to build the dataset list
     const rawDataQuery = useQuery({
         queryKey: ["admin", "rawComcigan", "부산성지고"],
@@ -2536,12 +2541,12 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                 </CardDescription>
                 <div className="mt-4 flex items-center gap-3">
                     <span className="text-sm font-bold text-gray-700">대상 데이터셋:</span>
-                    <Select value={selectedDataset} onValueChange={setSelectedDataset}>
+                    <Select value={displayDataset} onValueChange={handleDatasetChange}>
                         <SelectTrigger className="w-[180px]">
                             <SelectValue placeholder="자동 (현재 시간표)" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">자동 (현재 시간표)</SelectItem>
+                            <SelectItem value="_auto_">자동 (현재 시간표)</SelectItem>
                             {timetableProps.map((prop: string) => (
                                 <SelectItem key={prop} value={prop}>{prop}</SelectItem>
                             ))}
@@ -2977,7 +2982,6 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const [restrictionReason, setRestrictionReason] = useState("");
     const [ipWhitelist, setIpWhitelist] = useState("");
     const [kakaoLoginRestricted, setKakaoLoginRestricted] = useState(false);
-    const [kakaoRestrictionReason, setKakaoRestrictionReason] = useState("");
 
     const settingsQuery = useQuery({
         queryKey: ["admin", "settings", "visitRestriction"],
@@ -3006,9 +3010,6 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
             );
 
             setKakaoLoginRestricted(settingsQuery.data.kakao_login_restricted === 'true');
-            setKakaoRestrictionReason(
-                settingsQuery.data.kakao_restriction_reason || "현재 카카오 연동이 제한되어 있습니다."
-            );
 
             try {
                 const parsedIps = settingsQuery.data.ip_whitelist
@@ -3054,7 +3055,6 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
             restriction_reason: restrictionReason,
             ip_whitelist: JSON.stringify(ips),
             kakao_login_restricted: String(kakaoLoginRestricted),
-            kakao_restriction_reason: kakaoRestrictionReason,
         });
     };
 
@@ -3079,9 +3079,6 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const savedKakaoRestricted = settingsQuery.data?.kakao_login_restricted === 'true';
     const isKakaoRestrictedDirty = savedKakaoRestricted !== kakaoLoginRestricted;
 
-    const savedKakaoReason = settingsQuery.data?.kakao_restriction_reason || "현재 카카오 연동이 제한되어 있습니다.";
-    const isKakaoReasonDirty = savedKakaoReason !== kakaoRestrictionReason;
-
     let savedIpsStr = "";
     try {
         const parsed = settingsQuery.data?.ip_whitelist ? JSON.parse(settingsQuery.data.ip_whitelist) : [];
@@ -3091,7 +3088,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const savedIpsNormalized = savedIpsStr.split('\n').map(r => r.trim()).filter(r => r.length > 0).join('\n');
     const isIpsDirty = currentIpsNormalized !== savedIpsNormalized;
 
-    const isDirty = isGradesDirty || isReasonDirty || isKakaoRestrictedDirty || isKakaoReasonDirty || isIpsDirty;
+    const isDirty = isGradesDirty || isReasonDirty || isKakaoRestrictedDirty || isIpsDirty;
 
     return (
         <Card className="w-full max-w-2xl">
@@ -3150,19 +3147,6 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                             카카오 로그인 연동 제한 (모든 학년 적용)
                         </label>
                     </div>
-                    {kakaoLoginRestricted && (
-                        <div className="space-y-2 pl-6">
-                            <label className="text-sm font-medium">카카오 연동 제한 안내 문구</label>
-                            <Input
-                                value={kakaoRestrictionReason}
-                                onChange={(e) => setKakaoRestrictionReason(e.target.value)}
-                                placeholder="예: 현재 카카오 연동 점검 중입니다."
-                            />
-                            <p className="text-xs text-gray-500">
-                                제한된 상태에서 사용자가 카카오 로그인을 시도할 때 이 문구가 표시됩니다. (화이트리스트 IP는 예외)
-                            </p>
-                        </div>
-                    )}
                 </div>
 
                 <div className="space-y-2 pt-4 border-t border-slate-100">

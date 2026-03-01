@@ -720,17 +720,22 @@ export default function Dashboard() {
             <Button
               variant="default"
               size="sm"
-              className="bg-yellow-400 hover:bg-yellow-500 text-gray-900 h-9 rounded-full px-4 font-bold text-xs"
+              disabled={isKakaoRestricted}
+              className={`h-9 rounded-full px-4 font-bold text-xs ${isKakaoRestricted ? 'bg-gray-200 text-gray-500 opacity-70 cursor-not-allowed' : 'bg-yellow-400 hover:bg-yellow-500 text-gray-900'}`}
               onClick={() => {
-                if (isKakaoRestricted) {
-                  toast.error(settings?.kakao_restriction_reason || "현재 카카오 연동이 제한되어 있습니다.");
-                } else {
+                if (!isKakaoRestricted) {
                   window.location.href = '/api/kakao/login';
                 }
               }}
             >
-              <img src="https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png" alt="Kakao" className="h-4 w-4 mr-2" />
-              카카오 연동
+              {isKakaoRestricted ? (
+                "개발 중"
+              ) : (
+                <>
+                  <img src="https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png" alt="Kakao" className="h-4 w-4 mr-2" />
+                  카카오 연동
+                </>
+              )}
             </Button>
           )}
         </div>
