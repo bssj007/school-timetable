@@ -86,15 +86,10 @@ function ElectiveManager({ password }: { password: string }) {
     useEffect(() => {
         if (settingsQuery.data) {
             if (!selectedDataset) {
-                const current = settingsQuery.data.comcigan_dataset_selected;
-                if (current) {
-                    setSelectedDataset(current);
-                } else if (timetableProps && timetableProps.length > 0) {
-                    setSelectedDataset(timetableProps[0]);
-                }
+                setSelectedDataset('_auto_');
             }
         }
-    }, [settingsQuery.data, timetableProps, selectedDataset]);
+    }, [settingsQuery.data, selectedDataset]);
 
     useEffect(() => {
         if (!selectedDataset) return; // Wait until dataset is selected
@@ -106,7 +101,10 @@ function ElectiveManager({ password }: { password: string }) {
         try {
             console.log("Fetching data for grade", selectedGrade);
 
-            let targetDataset = selectedDataset;
+            let targetDataset = selectedDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : selectedDataset;
+            if (!targetDataset && timetableProps && timetableProps.length > 0) {
+                targetDataset = timetableProps[0];
+            }
 
             // 1. Fetch Comcigan Subjects
             let comciganData = [];
@@ -197,7 +195,10 @@ function ElectiveManager({ password }: { password: string }) {
         setIsSaving(true);
         try {
             // Determine the actual dataset to save to
-            let targetDataset = selectedDataset;
+            let targetDataset = selectedDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : selectedDataset;
+            if (!targetDataset && timetableProps && timetableProps.length > 0) {
+                targetDataset = timetableProps[0];
+            }
 
             // Save each changed item
             const promises = subjects.map(async (item: any, index: number) => {
@@ -239,7 +240,10 @@ function ElectiveManager({ password }: { password: string }) {
 
     const handleDelete = async (index: number) => {
         const item = subjects[index];
-        let targetDataset = selectedDataset;
+        let targetDataset = selectedDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : selectedDataset;
+        if (!targetDataset && timetableProps && timetableProps.length > 0) {
+            targetDataset = timetableProps[0];
+        }
 
         if (!confirm(`정말 "${item.subject}" ("${item.teacher}") 데이터를 현재 데이터셋에서 삭제하시겠습니까?`)) return;
         try {
@@ -303,6 +307,12 @@ function ElectiveManager({ password }: { password: string }) {
         return subjectMatch || teacherMatch || fullTeacherMatch || classCodeMatch || classNameMatch || moveMatch || combinedMatch || fullNameMatch;
     });
 
+    let activeTimetable = settingsQuery.data?.comcigan_dataset_selected || "";
+    if (!activeTimetable && timetableProps && timetableProps.length > 0) {
+        activeTimetable = timetableProps[0];
+    }
+    const autoLabel = `자동 (현재: ${activeTimetable || '없음'})`;
+
     return (
         <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
             {/* Sidebar */}
@@ -332,13 +342,14 @@ function ElectiveManager({ password }: { password: string }) {
                             {selectedGrade}학년 선택과목 목록
                         </h3>
                         <Select
-                            value={selectedDataset || (timetableProps && timetableProps.length > 0 ? timetableProps[0] : '')}
+                            value={selectedDataset || "_auto_"}
                             onValueChange={(val) => setSelectedDataset(val)}
                         >
                             <SelectTrigger className="w-[160px] h-9">
                                 <SelectValue placeholder="데이터셋 선택" />
                             </SelectTrigger>
                             <SelectContent>
+                                <SelectItem value="_auto_">{autoLabel}</SelectItem>
                                 <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
                                 {timetableProps.map((prop: string) => (
                                     <SelectItem key={prop} value={prop}>{prop}</SelectItem>
@@ -1362,6 +1373,8 @@ function RawTimetableViewer({ rawData }: { rawData: any }) {
     );
 }
 
+
+
 export default function Admin() {
     const [password, setPassword] = useState("");
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -2226,7 +2239,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
 
     useEffect(() => {
         if (settingsQuery.data) {
-            setSelectedProp(settingsQuery.data.comcigan_dataset_selected || '');
+            setSelectedProp(settingsQuery.data.comcigan_dataset_selected || '_auto_');
         }
     }, [settingsQuery.data]);
 
@@ -2262,18 +2275,20 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     });
 
     const handleSave = () => {
-        saveMutation.mutate({ comcigan_dataset_selected: selectedProp });
+        saveMutation.mutate({ comcigan_dataset_selected: selectedProp === '_auto_' ? '' : selectedProp });
     };
 
     const handleCancel = () => {
-        setSelectedProp(settingsQuery.data?.comcigan_dataset_selected || timetableProps[0] || '');
+        setSelectedProp(settingsQuery.data?.comcigan_dataset_selected || '_auto_');
     };
 
-    const displayValue = selectedProp || timetableProps[0] || '';
+    const displayValue = selectedProp || '_auto_';
 
     const handleValueChange = (val: string) => {
         setSelectedProp(val);
     };
+
+    const latestDatasetName = timetableProps && timetableProps.length > 0 ? timetableProps[0] : '없음';
 
     return (
         <Card className="w-full max-w-2xl">
@@ -2292,6 +2307,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                             <SelectValue placeholder="데이터셋 선택" />
                         </SelectTrigger>
                         <SelectContent>
+                            <SelectItem value="_auto_">자동 (최신: {latestDatasetName})</SelectItem>
                             <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획 수동 입력)</SelectItem>
                             {timetableProps.map(prop => (
                                 <SelectItem key={prop} value={prop}>
@@ -2358,16 +2374,22 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
             const current = settingsQuery.data.comcigan_dataset_selected;
             if (current) {
                 setSelectedDataset(current);
-            } else if (timetableProps && timetableProps.length > 0) {
-                setSelectedDataset(timetableProps[0]);
+            } else {
+                setSelectedDataset('_auto_');
             }
         }
-    }, [settingsQuery.data, timetableProps]);
+    }, [settingsQuery.data]);
 
-    const displayDataset = selectedDataset || (timetableProps && timetableProps.length > 0 ? timetableProps[0] : '');
+    const displayDataset = selectedDataset || '_auto_';
     const handleDatasetChange = (val: string) => {
         setSelectedDataset(val);
     };
+
+    let activeTimetable = settingsQuery.data?.comcigan_dataset_selected || "";
+    if (!activeTimetable && timetableProps && timetableProps.length > 0) {
+        activeTimetable = timetableProps[0];
+    }
+    const autoLabel = `자동 (현재: ${activeTimetable || '없음'})`;
 
     // 1. Fetch Live Subjects from Comcigan
     const liveSubjectsQuery = useQuery({
@@ -2504,7 +2526,7 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
     const executeMutation = useMutation({
         mutationFn: async () => {
             const payloads = [];
-            let targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
+            let targetDataset = selectedDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : selectedDataset;
             if (!targetDataset && timetableProps && timetableProps.length > 0) {
                 targetDataset = timetableProps[0];
             }
@@ -2562,11 +2584,11 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                 <div className="mt-4 flex items-center gap-3">
                     <span className="text-sm font-bold text-gray-700">대상 데이터셋:</span>
                     <Select value={displayDataset} onValueChange={handleDatasetChange}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="자동 (현재 시간표)" />
+                        <SelectTrigger className="w-[180px] h-9">
+                            <SelectValue placeholder="데이터셋 선택" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="_auto_">자동 (현재 시간표)</SelectItem>
+                            <SelectItem value="_auto_">{autoLabel}</SelectItem>
                             <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
                             {timetableProps.map((prop: string) => (
                                 <SelectItem key={prop} value={prop}>{prop}</SelectItem>
