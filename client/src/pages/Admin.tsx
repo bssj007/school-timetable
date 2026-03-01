@@ -2537,7 +2537,7 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
     const executeMutation = useMutation({
         mutationFn: async () => {
             const payloads = [];
-            let targetDataset = selectedDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : selectedDataset;
+            let targetDataset = displayDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : displayDataset;
             if (!targetDataset && timetableProps && timetableProps.length > 0) {
                 targetDataset = timetableProps[0];
             }
