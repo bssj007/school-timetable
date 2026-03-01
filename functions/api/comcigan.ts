@@ -218,7 +218,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 )
             `).run();
 
-            const { results } = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'manual_semester_plan'").all();
+            const { results } = await db.prepare("SELECT key, value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'manual_semester_plan'").all();
 
             let manualPlanData: any = null;
             let datasetSelected: string | null = null;
@@ -241,9 +241,16 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
                 // Parse the manual plan for the requested grade and class
                 const result: any[] = [];
-                const classList = classNumInput === 'all'
-                    ? (manualPlanData?.timetables?.[grade] ? Object.keys(manualPlanData.timetables[grade]).map(Number) : [])
-                    : [classNumInput as number];
+                let classList: number[] = [];
+                if (classNumInput === 'all') {
+                    if (manualPlanData?.timetables) {
+                        classList = Object.keys(manualPlanData.timetables)
+                            .filter(key => key.startsWith(`${grade}-`))
+                            .map(key => parseInt(key.split('-')[1]));
+                    }
+                } else {
+                    classList = [classNumInput as number];
+                }
 
                 for (const cls of classList) {
                     const classPlan = manualPlanData?.timetables?.[`${grade}-${cls}`];
@@ -281,6 +288,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 if (result.length > 0) {
                     return new Response(JSON.stringify({
                         schoolName: "부산성지고등학교 (수동 시간표)",
+                        datasetId: "MANUAL_PLAN",
                         data: result,
                         debugTokens: { manualPlan: true }
                     }), { headers: { 'Content-Type': 'application/json' } });

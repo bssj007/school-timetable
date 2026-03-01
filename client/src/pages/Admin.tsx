@@ -816,23 +816,19 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
         }
     };
 
-    // --- Mocking Data needed for computation. In reality we should fetch raw_comcigan and elective configs ---
-    // But since Admin.tsx already can fetch raw_comcigan, let's use it.
-    const [schoolSearchQuery] = useState("부산성지고"); // Can make configurable if needed
+    const [currentDatasetId, setCurrentDatasetId] = useState<string>('');
+
     const rawDataQuery = useQuery({
-        queryKey: ["admin", "rawComcigan", schoolSearchQuery],
+        queryKey: ["admin", "groupChecker", grade],
         queryFn: async () => {
-            const res = await fetch("/api/admin/raw_comcigan", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-Admin-Password": adminPassword
-                },
-                body: JSON.stringify({ schoolName: schoolSearchQuery })
-            });
+            const res = await fetch(`/api/comcigan?type=timetable&grade=${grade}&classNum=all`);
             const json = await res.json();
-            if (!res.ok || json?.error) return null;
-            return json.data;
+            if (!res.ok || json?.error) return [];
+
+            if (json.datasetId) {
+                setCurrentDatasetId(json.datasetId);
+            }
+            return json.data || [];
         }
     });
 
@@ -847,8 +843,13 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
     // Compute Groups (Similar logic to Dashboard)
     const computedBaseGroups = useMemo(() => {
         if (grade !== "2" && grade !== "3") return {};
-        const rawTimetableData = rawDataQuery.data;
-        const electiveConfigs = dbData?.electiveSubjects?.filter((c: any) => c.grade.toString() === grade) || [];
+        const rawTimetableData = rawDataQuery.data || [];
+
+        // Filter by grade and dataset
+        const electiveConfigs = dbData?.electiveSubjects?.filter((c: any) =>
+            c.grade.toString() === grade &&
+            (currentDatasetId ? c.dataset === currentDatasetId : true)
+        ) || [];
 
         if (!rawTimetableData || !electiveConfigs || electiveConfigs.length === 0) return {};
 
@@ -943,6 +944,10 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
                             <SelectItem value="3">3학년</SelectItem>
                         </SelectContent>
                     </Select>
+
+                    <div className="flex items-center gap-2 text-sm ml-4 font-semibold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-md border border-blue-100">
+                        출처 데이터셋: {currentDatasetId || "로딩중..."}
+                    </div>
 
                     <div className="flex-1 flex justify-end gap-2 text-sm text-gray-500">
                         {rawDataQuery.isLoading ? "시간표 로딩중..." : ""}
