@@ -180,6 +180,9 @@ function ElectiveManager({ password }: { password: string }) {
         if (!hasChanges) return;
         setIsSaving(true);
         try {
+            // Determine the actual dataset to save to (if empty string meaning "Auto", use the current setting)
+            const targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
+
             // Save each changed item
             const promises = subjects.map(async (item: any, index: number) => {
                 const original = originalSubjects[index];
@@ -200,7 +203,7 @@ function ElectiveManager({ password }: { password: string }) {
                             fullSubjectName: item.fullSubjectName,
                             isMovingClass: item.isMovingClass,
                             isCombinedClass: item.isCombinedClass,
-                            dataset: selectedDataset
+                            dataset: targetDataset
                         })
                     });
                     if (!res.ok) throw new Error(`Save failed: ${res.status}`);
@@ -220,6 +223,8 @@ function ElectiveManager({ password }: { password: string }) {
 
     const handleDelete = async (index: number) => {
         const item = subjects[index];
+        const targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
+
         if (!confirm(`정말 "${item.subject}" ("${item.teacher}") 데이터를 현재 데이터셋에서 삭제하시겠습니까?`)) return;
         try {
             const res = await fetch("/api/admin/electives", {
@@ -232,7 +237,7 @@ function ElectiveManager({ password }: { password: string }) {
                     grade: selectedGrade,
                     subject: item.subject,
                     originalTeacher: item.teacher || "",
-                    dataset: selectedDataset
+                    dataset: targetDataset
                 })
             });
             if (!res.ok) throw new Error("Delete failed");
@@ -2490,6 +2495,8 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
     const executeMutation = useMutation({
         mutationFn: async () => {
             const payloads = [];
+            const targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
+
             for (const mSubj of analysis.manualSubjects) {
                 const mappingKey = mappings[mSubj];
                 if (!mappingKey) throw new Error(`${mSubj} 과목의 매핑이 누락되었습니다.`);
@@ -2505,7 +2512,7 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                     classCode: block,
                     isMovingClass: true,
                     isCombinedClass: false,
-                    dataset: selectedDataset
+                    dataset: targetDataset
                 });
             }
 

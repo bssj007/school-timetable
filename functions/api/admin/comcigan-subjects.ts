@@ -92,6 +92,11 @@ export const onRequest = async (context: any) => {
 
     if (!grade) return new Response('Grade required', { status: 400 });
 
+    // If the dataset is MANUAL_PLAN, we shouldn't fetch from Comcigan at all
+    if (dataset === 'MANUAL_PLAN') {
+        return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
+    }
+
     try {
         const prefix = await getPrefix();
         const { code1, code2 } = await getSchoolCode(prefix);
