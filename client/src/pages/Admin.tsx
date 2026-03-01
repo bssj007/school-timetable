@@ -319,6 +319,7 @@ function ElectiveManager({ password }: { password: string }) {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="_auto_">자동 (현재 시간표)</SelectItem>
+                                <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
                                 {timetableProps.map((prop: string) => (
                                     <SelectItem key={prop} value={prop}>{prop}</SelectItem>
                                 ))}
@@ -2320,7 +2321,7 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
     useEffect(() => {
         if (settingsQuery.data) {
             const current = settingsQuery.data.comcigan_dataset_selected;
-            if (current && current !== "MANUAL_PLAN") {
+            if (current) {
                 setSelectedDataset(current);
             }
         }
@@ -2547,6 +2548,7 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="_auto_">자동 (현재 시간표)</SelectItem>
+                            <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
                             {timetableProps.map((prop: string) => (
                                 <SelectItem key={prop} value={prop}>{prop}</SelectItem>
                             ))}
