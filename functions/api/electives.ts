@@ -62,13 +62,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
         // 2. Fetch Elective Config (Available Subjects)
         const grade = url.searchParams.get("grade");
+        const dataset = url.searchParams.get("dataset");
         if (!grade) {
             return new Response(JSON.stringify({ error: "Grade is required" }), { status: 400 });
         }
+        if (!dataset) {
+            return new Response(JSON.stringify({ error: "Dataset is required" }), { status: 400 });
+        }
 
         const configs = await env.DB.prepare(
-            "SELECT * FROM elective_config WHERE grade = ? ORDER BY classCode, subject"
-        ).bind(grade).all();
+            "SELECT * FROM elective_config WHERE grade = ? AND dataset = ? ORDER BY classCode, subject"
+        ).bind(grade, dataset).all();
         return new Response(JSON.stringify(configs.results), { headers: { "Content-Type": "application/json" } });
 
     } catch (error: any) {
@@ -85,31 +89,39 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
         const body = await request.json() as any;
         console.log("Received save request:", body);
-        const { grade, classNum, studentNumber, electives } = body;
+        const { grade, classNum, studentNumber, electives, dataset = '' } = body;
 
         if (!grade || !classNum || !studentNumber || !electives) {
             return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400 });
         }
 
         // Upsert student_profiles
+        // Note: dataset added implicitly to avoid breaking schema immediately if not needed for constraints
+        // For actual dataset tied user profiles, we should add a dataset column if requested.
+        // The plan mentions "Let's add `dataset` to `student_profiles` too."
         const query = `
-        INSERT INTO student_profiles (grade, classNum, studentNumber, electives, updatedAt)
-        VALUES (?, ?, ?, ?, datetime('now'))
+        INSERT INTO student_profiles (grade, classNum, studentNumber, electives, dataset, updatedAt)
+        VALUES (?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(grade, classNum, studentNumber) 
-        DO UPDATE SET electives = excluded.electives, updatedAt = excluded.updatedAt
+        DO UPDATE SET electives = excluded.electives, dataset = excluded.dataset, updatedAt = excluded.updatedAt
         `;
 
         try {
-            await env.DB.prepare(query).bind(grade, classNum, studentNumber, JSON.stringify(electives)).run();
+            await env.DB.prepare(query).bind(grade, classNum, studentNumber, JSON.stringify(electives), dataset).run();
         } catch (dbErr: any) {
             // Handle schema mismatch (column missing)
             if (dbErr.message && dbErr.message.includes("no column named")) {
                 console.log("Schema mismatch detected during save (" + dbErr.message + "). Recreating tables...");
-                await dropAllTables(env.DB);
-                await ensureAllTables(env.DB);
 
-                // Retry
-                await env.DB.prepare(query).bind(grade, classNum, studentNumber, JSON.stringify(electives)).run();
+                // Add column via migration rather than drop all if possible
+                try {
+                    await env.DB.prepare("ALTER TABLE student_profiles ADD COLUMN dataset TEXT DEFAULT ''").run();
+                    await env.DB.prepare(query).bind(grade, classNum, studentNumber, JSON.stringify(electives), dataset).run();
+                } catch (alterErr) {
+                    await dropAllTables(env.DB);
+                    await ensureAllTables(env.DB);
+                    await env.DB.prepare(query).bind(grade, classNum, studentNumber, JSON.stringify(electives), dataset).run();
+                }
             } else {
                 throw dbErr;
             }

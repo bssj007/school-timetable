@@ -149,8 +149,9 @@ export const onRequest = async (context: any) => {
         if (type === 'timetable') {
             const grade = parseInt(url.searchParams.get('grade') || '1');
             const classNumStr = url.searchParams.get('classNum');
+            const datasetOverride = url.searchParams.get('dataset');
             const classNum = classNumStr === 'all' ? 'all' : parseInt(classNumStr || '1');
-            return await getTimetable(grade, classNum, context.env ? context.env.DB : undefined);
+            return await getTimetable(grade, classNum, context.env ? context.env.DB : undefined, datasetOverride);
         }
 
         return new Response('Invalid type or method', { status: 400 });
@@ -166,7 +167,7 @@ export const onRequest = async (context: any) => {
     }
 }
 
-async function getTimetable(grade: number, classNumInput: number | 'all', db?: any) {
+async function getTimetable(grade: number, classNumInput: number | 'all', db?: any, datasetOverride?: string | null) {
     const prefix = await getPrefix();
     const { code1, code2 } = await getSchoolCode(prefix);
 
@@ -218,7 +219,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 )
             `).run();
 
-            const { results } = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'manual_semester_plan'").all();
+            const { results } = await db.prepare("SELECT key, value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'manual_semester_plan'").all();
 
             let manualPlanData: any = null;
             let datasetSelected: string | null = null;
@@ -236,14 +237,25 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 });
             }
 
+            if (datasetOverride && datasetOverride !== ('_auto_')) {
+                datasetSelected = datasetOverride;
+            }
+
             if (datasetSelected === 'MANUAL_PLAN') {
                 console.log(`[Comcigan Debug] Using MANUAL_PLAN dataset`);
 
                 // Parse the manual plan for the requested grade and class
                 const result: any[] = [];
-                const classList = classNumInput === 'all'
-                    ? (manualPlanData?.timetables?.[grade] ? Object.keys(manualPlanData.timetables[grade]).map(Number) : [])
-                    : [classNumInput as number];
+                let classList: number[] = [];
+                if (classNumInput === 'all') {
+                    if (manualPlanData?.timetables) {
+                        classList = Object.keys(manualPlanData.timetables)
+                            .filter(key => key.startsWith(`${grade}-`))
+                            .map(key => parseInt(key.split('-')[1]));
+                    }
+                } else {
+                    classList = [classNumInput as number];
+                }
 
                 for (const cls of classList) {
                     const classPlan = manualPlanData?.timetables?.[`${grade}-${cls}`];
@@ -281,6 +293,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 if (result.length > 0) {
                     return new Response(JSON.stringify({
                         schoolName: "부산성지고등학교 (수동 시간표)",
+                        datasetId: "MANUAL_PLAN",
                         data: result,
                         debugTokens: { manualPlan: true }
                     }), { headers: { 'Content-Type': 'application/json' } });
@@ -443,6 +456,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
     return new Response(JSON.stringify({
         schoolName: "부산성지고등학교",
+        datasetId: timedataProp,
         data: result,
         debugTokens: {
             keysCount: keys.length,

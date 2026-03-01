@@ -88,8 +88,38 @@ async function getSchoolCode(prefix: string) {
 export const onRequest = async (context: any) => {
     const url = new URL(context.request.url);
     const grade = parseInt(url.searchParams.get('grade') || '0');
+    const dataset = url.searchParams.get('dataset') || '';
 
     if (!grade) return new Response('Grade required', { status: 400 });
+
+    // If the dataset is MANUAL_PLAN, we shouldn't fetch from Comcigan at all
+    if (dataset === 'MANUAL_PLAN') {
+        try {
+            const { env } = context;
+            if (!env.DB) throw new Error("DB not configured");
+            const result = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'manual_semester_plan'").first();
+            if (result && result.value) {
+                const manualPlan = JSON.parse(result.value);
+                const subjects = manualPlan.subjects || [];
+
+                // comcigan-subjects expects an array of { subject, teacher }
+                const mappedSubjects = subjects.map((subj: string) => {
+                    const parts = subj.split(' ');
+                    const teacher = parts.length > 1 ? parts[parts.length - 1] : "";
+                    const subjectName = parts.length > 1 ? parts.slice(0, -1).join(' ') : subj;
+
+                    return { subject: subjectName, teacher };
+                });
+
+                return new Response(JSON.stringify(mappedSubjects), { headers: { 'Content-Type': 'application/json' } });
+            } else {
+                return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
+            }
+        } catch (e: any) {
+            console.error("Failed to load manual plan subjects", e);
+            return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
+        }
+    }
 
     try {
         const prefix = await getPrefix();
@@ -120,10 +150,14 @@ export const onRequest = async (context: any) => {
             if (stringArrays.length > 0) subjectProp = stringArrays[0];
         }
 
-        const timedataProp = keys.find(k => {
+        let timedataProp = keys.find(k => {
             const val = rawData[k];
             return Array.isArray(val) && val[grade] && Array.isArray(val[grade][1]);
         }) || "";
+
+        if (dataset && keys.includes(dataset)) {
+            timedataProp = dataset;
+        }
 
         if (!timedataProp) throw new Error("Data key not found");
 

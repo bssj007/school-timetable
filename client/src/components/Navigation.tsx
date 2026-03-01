@@ -66,19 +66,24 @@ export default function Navigation() {
               <Button
                 variant="default"
                 size="sm"
-                className="bg-yellow-400 hover:bg-yellow-500 text-gray-900 h-9 rounded-full px-4 font-bold text-xs"
+                disabled={isKakaoRestricted}
+                className={`h-9 rounded-full px-4 font-bold text-xs ${isKakaoRestricted ? 'bg-gray-200 text-gray-500 opacity-70 cursor-not-allowed' : 'bg-yellow-400 hover:bg-yellow-500 text-gray-900'}`}
                 onClick={() => {
-                  if (isKakaoRestricted) {
-                    toast.error(settings?.kakao_restriction_reason || "현재 카카오 연동이 제한되어 있습니다.");
-                  } else {
+                  if (!isKakaoRestricted) {
                     window.location.href = '/api/kakao/login';
                   }
                 }}
               >
-                <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 3c-4.97 0-9 3.185-9 7.115 0 2.557 1.707 4.8 4.369 5.961-.202.942-.731 3.421-.806 3.755-.005.022.022.043.041.031.144-.085 3.395-2.227 4.708-3.132.551.047 1.114.072 1.688.072 4.97 0 9-3.185 9-7.115S16.97 3 12 3z" />
-                </svg>
-                카카오 연동
+                {isKakaoRestricted ? (
+                  "개발 중"
+                ) : (
+                  <>
+                    <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 3c-4.97 0-9 3.185-9 7.115 0 2.557 1.707 4.8 4.369 5.961-.202.942-.731 3.421-.806 3.755-.005.022.022.043.041.031.144-.085 3.395-2.227 4.708-3.132.551.047 1.114.072 1.688.072 4.97 0 9-3.185 9-7.115S16.97 3 12 3z" />
+                    </svg>
+                    카카오 연동
+                  </>
+                )}
               </Button>
             )}
 

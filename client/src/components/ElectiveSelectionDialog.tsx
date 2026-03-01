@@ -28,6 +28,7 @@ interface ElectiveSelectionDialogProps {
     grade: string;
     classNum: string;
     studentNumber: string;
+    datasetId?: string;
     onSaveSuccess: () => void;
     onBack?: () => void; // Optional back button
 }
@@ -37,6 +38,7 @@ export default function ElectiveSelectionDialog({
     grade,
     classNum,
     studentNumber,
+    datasetId,
     onSaveSuccess,
     onBack
 }: ElectiveSelectionDialogProps) {
@@ -45,13 +47,14 @@ export default function ElectiveSelectionDialog({
 
     // 1. Fetch available electives
     const { data: electiveConfigs, isLoading: configLoading } = useQuery({
-        queryKey: ['electives', grade],
+        queryKey: ['electives', grade, datasetId],
         queryFn: async () => {
-            const res = await fetch(`/api/electives?grade=${grade}`); // Base URL handled by Vite proxy or relative
+            if (!datasetId) return [];
+            const res = await fetch(`/api/electives?grade=${grade}&dataset=${datasetId}`); // Base URL handled by Vite proxy or relative
             if (!res.ok) throw new Error("Failed to fetch electives");
             return res.json() as Promise<ElectiveConfig[]>;
         },
-        enabled: isOpen && !!grade
+        enabled: isOpen && !!grade && !!datasetId
     });
 
     // Group by ClassCode (A, B, C...)
@@ -84,9 +87,10 @@ export default function ElectiveSelectionDialog({
 
     // 2. Fetch existing student profile to pre-fill
     const { data: existingProfile, isLoading: profileLoading } = useQuery({
-        queryKey: ['studentProfile', grade, classNum, studentNumber],
+        queryKey: ['studentProfile', grade, classNum, studentNumber, datasetId],
         queryFn: async () => {
-            const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`);
+            if (!datasetId) return null;
+            const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&dataset=${datasetId}`);
             if (!res.ok) throw new Error("Failed to fetch student profile");
             const data = await res.json();
             if (data && data.electives && typeof data.electives === 'string') {
@@ -98,7 +102,7 @@ export default function ElectiveSelectionDialog({
             }
             return data;
         },
-        enabled: isOpen && !!grade && !!classNum && !!studentNumber
+        enabled: isOpen && !!grade && !!classNum && !!studentNumber && !!datasetId
     });
 
     const initializedRef = React.useRef(false);
@@ -160,6 +164,7 @@ export default function ElectiveSelectionDialog({
                     grade: parseInt(grade),
                     classNum: parseInt(classNum),
                     studentNumber: parseInt(studentNumber),
+                    dataset: datasetId || '',
                     electives: selections
                 })
             });
