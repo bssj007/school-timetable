@@ -2566,6 +2566,12 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                 }
             }
 
+            // Clear old mapping for this dataset explicitly to handle duplicate groups fresh
+            await fetch(`/api/admin/electives?dataset=${targetDataset}`, {
+                method: "DELETE",
+                headers: { "X-Admin-Password": adminPassword }
+            });
+
             const promises = payloads.map(p => fetch("/api/admin/electives", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
