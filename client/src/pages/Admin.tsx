@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -2404,6 +2404,7 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
     // 2. Algorithm to analyze manual plan and map subjects to predefined groups
     const analysis = React.useMemo(() => {
         let warnings: string[] = [];
+        let infos: string[] = [];
         let manualSubjects = new Set<string>();
 
         const periodMap: Record<string, { classNum: number, subject: string }[]> = {};
@@ -2471,7 +2472,7 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
         // Detect conflicts (a subject assigned to multiple blocks)
         subjectToBlocks.forEach((blocks, subj) => {
             if (blocks.size > 1) {
-                warnings.push(`[${subj}] 과목이 여러 블록(${Array.from(blocks).join(', ')})에 중복 배정되었습니다.`);
+                infos.push(`[${subj}] 과목이 여러 블록(${Array.from(blocks).join(', ')})에 배정되었습니다.`);
             }
         });
 
@@ -2497,7 +2498,7 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
             warnings.push("학기별 계획에 등록된 선택과목이 없습니다 (블록이 지정된 과목 없음).");
         }
 
-        return { blocks, manualSubjects: validManualSubjects, warnings, subjectToBlocks };
+        return { blocks, manualSubjects: validManualSubjects, warnings, infos, subjectToBlocks };
     }, [currentPlan, grade]);
 
     const [mappings, setMappings] = useState<Record<string, string>>({});
@@ -2618,6 +2619,18 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                             <p className="font-bold mb-1">경고</p>
                             <ul className="list-disc pl-4 space-y-1">
                                 {analysis.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                            </ul>
+                        </div>
+                    </div>
+                )}
+
+                {analysis.infos.length > 0 && (
+                    <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg flex items-start gap-3">
+                        <Info className="w-5 h-5 mt-0.5 shrink-0" />
+                        <div className="text-sm">
+                            <p className="font-bold mb-1">참고 (정상 작동)</p>
+                            <ul className="list-disc pl-4 space-y-1">
+                                {analysis.infos.map((info, i) => <li key={i}>{info}</li>)}
                             </ul>
                         </div>
                     </div>
