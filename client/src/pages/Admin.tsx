@@ -84,19 +84,29 @@ function ElectiveManager({ password }: { password: string }) {
     }, [rawDataQuery.data]);
 
     useEffect(() => {
-        if (!selectedDataset && !settingsQuery.data?.comcigan_dataset_selected) return; // Wait for settings if Auto is selected
+        if (settingsQuery.data) {
+            if (!selectedDataset) {
+                const current = settingsQuery.data.comcigan_dataset_selected;
+                if (current) {
+                    setSelectedDataset(current);
+                } else if (timetableProps && timetableProps.length > 0) {
+                    setSelectedDataset(timetableProps[0]);
+                }
+            }
+        }
+    }, [settingsQuery.data, timetableProps, selectedDataset]);
+
+    useEffect(() => {
+        if (!selectedDataset) return; // Wait until dataset is selected
         fetchData();
-    }, [selectedGrade, selectedDataset, settingsQuery.data?.comcigan_dataset_selected]);
+    }, [selectedGrade, selectedDataset]);
 
     const fetchData = async () => {
         setIsLoading(true);
         try {
             console.log("Fetching data for grade", selectedGrade);
 
-            let targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
-            if (!targetDataset && timetableProps && timetableProps.length > 0) {
-                targetDataset = timetableProps[0];
-            }
+            let targetDataset = selectedDataset;
 
             // 1. Fetch Comcigan Subjects
             let comciganData = [];
@@ -186,11 +196,8 @@ function ElectiveManager({ password }: { password: string }) {
         if (!hasChanges) return;
         setIsSaving(true);
         try {
-            // Determine the actual dataset to save to (if empty string meaning "Auto", use the current setting)
-            let targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
-            if (!targetDataset && timetableProps && timetableProps.length > 0) {
-                targetDataset = timetableProps[0];
-            }
+            // Determine the actual dataset to save to
+            let targetDataset = selectedDataset;
 
             // Save each changed item
             const promises = subjects.map(async (item: any, index: number) => {
@@ -232,10 +239,7 @@ function ElectiveManager({ password }: { password: string }) {
 
     const handleDelete = async (index: number) => {
         const item = subjects[index];
-        let targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
-        if (!targetDataset && timetableProps && timetableProps.length > 0) {
-            targetDataset = timetableProps[0];
-        }
+        let targetDataset = selectedDataset;
 
         if (!confirm(`정말 "${item.subject}" ("${item.teacher}") 데이터를 현재 데이터셋에서 삭제하시겠습니까?`)) return;
         try {
@@ -328,14 +332,13 @@ function ElectiveManager({ password }: { password: string }) {
                             {selectedGrade}학년 선택과목 목록
                         </h3>
                         <Select
-                            value={selectedDataset || "_auto_"}
-                            onValueChange={(val) => setSelectedDataset(val === "_auto_" ? "" : val)}
+                            value={selectedDataset || (timetableProps && timetableProps.length > 0 ? timetableProps[0] : '')}
+                            onValueChange={(val) => setSelectedDataset(val)}
                         >
                             <SelectTrigger className="w-[160px] h-9">
                                 <SelectValue placeholder="데이터셋 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="_auto_">자동 (현재 시간표)</SelectItem>
                                 <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
                                 {timetableProps.map((prop: string) => (
                                     <SelectItem key={prop} value={prop}>{prop}</SelectItem>
@@ -2263,20 +2266,13 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     };
 
     const handleCancel = () => {
-        setSelectedProp(settingsQuery.data?.comcigan_dataset_selected || '');
+        setSelectedProp(settingsQuery.data?.comcigan_dataset_selected || timetableProps[0] || '');
     };
 
-    // To allow selecting an empty string (auto), we use a special value in SelectItem
-    // because Shadcn UI Select doesn't always handle empty string values gracefully.
-    // We'll use "_auto_" instead of "" for the internal state.
-    const displayValue = selectedProp || "_auto_";
+    const displayValue = selectedProp || timetableProps[0] || '';
 
     const handleValueChange = (val: string) => {
-        if (val === "_auto_") {
-            setSelectedProp('');
-        } else {
-            setSelectedProp(val);
-        }
+        setSelectedProp(val);
     };
 
     return (
@@ -2293,10 +2289,9 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                     <label className="text-sm font-medium">데이터셋</label>
                     <Select value={displayValue} onValueChange={handleValueChange}>
                         <SelectTrigger className="w-full">
-                            <SelectValue placeholder="자동 (최신 유효 데이터셋)" />
+                            <SelectValue placeholder="데이터셋 선택" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="_auto_">자동 (최신 데이터셋)</SelectItem>
                             <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획 수동 입력)</SelectItem>
                             {timetableProps.map(prop => (
                                 <SelectItem key={prop} value={prop}>
@@ -2335,20 +2330,6 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
         }
     });
 
-    useEffect(() => {
-        if (settingsQuery.data) {
-            const current = settingsQuery.data.comcigan_dataset_selected;
-            if (current) {
-                setSelectedDataset(current);
-            }
-        }
-    }, [settingsQuery.data]);
-
-    const displayDataset = selectedDataset || "_auto_";
-    const handleDatasetChange = (val: string) => {
-        setSelectedDataset(val === "_auto_" ? "" : val);
-    };
-
     // Fetch raw comcigan to build the dataset list
     const rawDataQuery = useQuery({
         queryKey: ["admin", "rawComcigan", "부산성지고"],
@@ -2371,6 +2352,22 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
             return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
         });
     }, [rawDataQuery.data]);
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            const current = settingsQuery.data.comcigan_dataset_selected;
+            if (current) {
+                setSelectedDataset(current);
+            } else if (timetableProps && timetableProps.length > 0) {
+                setSelectedDataset(timetableProps[0]);
+            }
+        }
+    }, [settingsQuery.data, timetableProps]);
+
+    const displayDataset = selectedDataset || (timetableProps && timetableProps.length > 0 ? timetableProps[0] : '');
+    const handleDatasetChange = (val: string) => {
+        setSelectedDataset(val);
+    };
 
     // 1. Fetch Live Subjects from Comcigan
     const liveSubjectsQuery = useQuery({
