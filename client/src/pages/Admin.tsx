@@ -2547,20 +2547,23 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                 if (!mappingKey) throw new Error(`${mSubj} 과목의 매핑이 누락되었습니다.`);
 
                 const [subj, teacher] = mappingKey.split('-');
-                const block = analysis.blocks.find(b => b.subjects.has(mSubj))?.code;
-                if (!block) throw new Error(`${mSubj} 과목의 블록을 찾을 수 없습니다.`);
+                const myBlocks = analysis.blocks.filter(b => b.subjects.has(mSubj));
+                if (myBlocks.length === 0) throw new Error(`${mSubj} 과목의 블록을 찾을 수 없습니다.`);
 
-                const isNoGroup = block === "NO_GROUP";
+                for (const b of myBlocks) {
+                    const block = b.code;
+                    const isNoGroup = block === "NO_GROUP";
 
-                payloads.push({
-                    grade: grade,
-                    subject: subj,
-                    originalTeacher: teacher,
-                    classCode: isNoGroup ? "" : block,
-                    isMovingClass: !isNoGroup,
-                    isCombinedClass: false,
-                    dataset: targetDataset
-                });
+                    payloads.push({
+                        grade: grade,
+                        subject: subj,
+                        originalTeacher: teacher,
+                        classCode: isNoGroup ? "" : block,
+                        isMovingClass: !isNoGroup,
+                        isCombinedClass: false,
+                        dataset: targetDataset
+                    });
+                }
             }
 
             const promises = payloads.map(p => fetch("/api/admin/electives", {
