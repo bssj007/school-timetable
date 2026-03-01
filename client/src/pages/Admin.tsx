@@ -2450,11 +2450,21 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                 if (!blockToOccurrences.get(explicitGroup)!.includes(timeStr)) {
                     blockToOccurrences.get(explicitGroup)!.push(timeStr);
                 }
-            } else if (!explicitGroup && uniqueSubjsInPeriod.size > 1) {
-                // If there are multiple subjects but no explicit block assigned
+            } else if (!explicitGroup && uniqueSubjsInPeriod.size > 0) {
+                // -빈칸- 인 경우 일괄적으로 비-이동수업(NO_GROUP)으로 취급
+                const groupName = "NO_GROUP";
+                uniqueSubjsInPeriod.forEach(subj => {
+                    if (!subjectToBlocks.has(subj)) subjectToBlocks.set(subj, new Set());
+                    subjectToBlocks.get(subj)!.add(groupName);
+                });
+
+                if (!blockToOccurrences.has(groupName)) {
+                    blockToOccurrences.set(groupName, []);
+                }
                 const timeStr = `${['월', '화', '수', '목', '금'][parseInt(timeKey.split('-')[0])]}${timeKey.split('-')[1]}교시`;
-                const msg = `[${timeStr}] 다중 과목이 있는데 블록이 지정되지 않았습니다.`;
-                if (!warnings.includes(msg)) warnings.push(msg);
+                if (!blockToOccurrences.get(groupName)!.includes(timeStr)) {
+                    blockToOccurrences.get(groupName)!.push(timeStr);
+                }
             }
         });
 
@@ -2539,12 +2549,14 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                 const block = analysis.blocks.find(b => b.subjects.has(mSubj))?.code;
                 if (!block) throw new Error(`${mSubj} 과목의 블록을 찾을 수 없습니다.`);
 
+                const isNoGroup = block === "NO_GROUP";
+
                 payloads.push({
                     grade: grade,
                     subject: subj,
                     originalTeacher: teacher,
-                    classCode: block,
-                    isMovingClass: true,
+                    classCode: isNoGroup ? "" : block,
+                    isMovingClass: !isNoGroup,
                     isCombinedClass: false,
                     dataset: targetDataset
                 });
@@ -2619,9 +2631,13 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                         ) : (
                             <ul className="space-y-3">
                                 {analysis.blocks.map(b => (
-                                    <li key={b.code} className="text-sm">
-                                        <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200 mr-2">{b.code} 블록</Badge>
-                                        <span className="text-slate-600">{Array.from(b.subjects).join(', ')}</span>
+                                    <li key={b.code} className="text-sm flex flex-col gap-1">
+                                        <div className="flex items-center">
+                                            <Badge variant="outline" className={`mr-2 ${b.code === "NO_GROUP" ? 'bg-gray-100 text-gray-700 border-gray-300' : 'bg-orange-100 text-orange-800 border-orange-200'}`}>
+                                                {b.code === "NO_GROUP" ? "일반 수업 (묶음X)" : `${b.code} 블록`}
+                                            </Badge>
+                                            <span className="text-slate-600 truncate">{Array.from(b.subjects).join(', ')}</span>
+                                        </div>
                                         <div className="text-xs text-slate-400 mt-1 pl-10">
                                             {b.occurrences.join(', ')}
                                         </div>
