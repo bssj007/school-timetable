@@ -149,8 +149,9 @@ export const onRequest = async (context: any) => {
         if (type === 'timetable') {
             const grade = parseInt(url.searchParams.get('grade') || '1');
             const classNumStr = url.searchParams.get('classNum');
+            const datasetOverride = url.searchParams.get('dataset');
             const classNum = classNumStr === 'all' ? 'all' : parseInt(classNumStr || '1');
-            return await getTimetable(grade, classNum, context.env ? context.env.DB : undefined);
+            return await getTimetable(grade, classNum, context.env ? context.env.DB : undefined, datasetOverride);
         }
 
         return new Response('Invalid type or method', { status: 400 });
@@ -166,7 +167,7 @@ export const onRequest = async (context: any) => {
     }
 }
 
-async function getTimetable(grade: number, classNumInput: number | 'all', db?: any) {
+async function getTimetable(grade: number, classNumInput: number | 'all', db?: any, datasetOverride?: string | null) {
     const prefix = await getPrefix();
     const { code1, code2 } = await getSchoolCode(prefix);
 
@@ -234,6 +235,10 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                         }
                     }
                 });
+            }
+
+            if (datasetOverride && datasetOverride !== ('_auto_')) {
+                datasetSelected = datasetOverride;
             }
 
             if (datasetSelected === 'MANUAL_PLAN') {

@@ -817,11 +817,37 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
     };
 
     const [currentDatasetId, setCurrentDatasetId] = useState<string>('');
+    const [selectedDataset, setSelectedDataset] = useState<string>('_auto_');
+
+    const adminRawQuery = useQuery({
+        queryKey: ["admin", "rawComcigan_GroupChecker"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/raw_comcigan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ schoolName: "부산성지고" })
+            });
+            const json = await res.json();
+            if (!res.ok || json?.error) return null;
+            return json.data;
+        }
+    });
+
+    const timetableProps = useMemo(() => {
+        const raw = adminRawQuery.data;
+        if (!raw) return [];
+        const keys = Object.keys(raw);
+        return keys.filter(k => {
+            const val = raw[k];
+            return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+        });
+    }, [adminRawQuery.data]);
 
     const rawDataQuery = useQuery({
-        queryKey: ["admin", "groupChecker", grade],
+        queryKey: ["admin", "groupChecker", grade, selectedDataset],
         queryFn: async () => {
-            const res = await fetch(`/api/comcigan?type=timetable&grade=${grade}&classNum=all`);
+            const url = `/api/comcigan?type=timetable&grade=${grade}&classNum=all` + (selectedDataset !== '_auto_' ? `&dataset=${selectedDataset}` : '');
+            const res = await fetch(url);
             const json = await res.json();
             if (!res.ok || json?.error) return [];
 
@@ -833,11 +859,14 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
     });
 
     const { data: dbData } = useQuery({
-        queryKey: ['adminData'],
+        queryKey: ['adminData', currentDatasetId, grade],
         queryFn: async () => {
-            const res = await fetch("/api/admin/data", { headers: { "X-Admin-Password": adminPassword } });
-            return res.json();
-        }
+            if (!currentDatasetId) return { electiveSubjects: [] };
+            const res = await fetch(`/api/admin/electives?grade=${grade}&dataset=${currentDatasetId}`, { headers: { "X-Admin-Password": adminPassword } });
+            const data = await res.json();
+            return { electiveSubjects: data };
+        },
+        enabled: !!currentDatasetId
     });
 
     // Compute Groups (Similar logic to Dashboard)
@@ -845,11 +874,7 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
         if (grade !== "2" && grade !== "3") return {};
         const rawTimetableData = rawDataQuery.data || [];
 
-        // Filter by grade and dataset
-        const electiveConfigs = dbData?.electiveSubjects?.filter((c: any) =>
-            c.grade.toString() === grade &&
-            (currentDatasetId ? c.dataset === currentDatasetId : true)
-        ) || [];
+        const electiveConfigs = dbData?.electiveSubjects || [];
 
         if (!rawTimetableData || !electiveConfigs || electiveConfigs.length === 0) return {};
 
@@ -945,13 +970,27 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
                         </SelectContent>
                     </Select>
 
+                    <label className="text-sm font-medium whitespace-nowrap ml-4">데이터셋 오버라이드:</label>
+                    <Select value={selectedDataset} onValueChange={setSelectedDataset}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="데이터셋" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="_auto_">자동 (현재 설정)</SelectItem>
+                            <SelectItem value="MANUAL_PLAN">MANUAL_PLAN</SelectItem>
+                            {timetableProps.map(prop => (
+                                <SelectItem key={prop} value={prop}>{prop}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
                     <div className="flex items-center gap-2 text-sm ml-4 font-semibold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-md border border-blue-100">
                         출처 데이터셋: {currentDatasetId || "로딩중..."}
                     </div>
 
                     <div className="flex-1 flex justify-end gap-2 text-sm text-gray-500">
                         {rawDataQuery.isLoading ? "시간표 로딩중..." : ""}
-                        {dbData ? "" : "강의설정 로딩중..."}
+                        {(dbData === undefined && currentDatasetId) ? "강의설정 로딩중..." : ""}
                     </div>
                 </div>
 
@@ -2295,6 +2334,9 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
 
     const latestDatasetName = timetableProps && timetableProps.length > 0 ? timetableProps[0] : '없음';
 
+    const originalValue = settingsQuery.data?.comcigan_dataset_selected || '_auto_';
+    const isDirty = displayValue !== originalValue;
+
     return (
         <Card className="w-full max-w-2xl">
             <CardHeader>
@@ -2324,10 +2366,10 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                 </div>
 
                 <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={handleCancel} disabled={saveMutation.isPending}>
+                    <Button variant="outline" onClick={handleCancel} disabled={!isDirty || saveMutation.isPending}>
                         변경 취소
                     </Button>
-                    <Button onClick={handleSave} disabled={saveMutation.isPending}>
+                    <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
                         {saveMutation.isPending ? "저장 중..." : "저장"}
                     </Button>
                 </div>
