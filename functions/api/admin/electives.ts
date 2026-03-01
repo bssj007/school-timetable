@@ -100,13 +100,13 @@ export const onRequest = async (context: any) => {
             }
 
             const existing = await env.DB.prepare(
-                "SELECT id FROM elective_config WHERE grade = ? AND subject = ? AND originalTeacher = ? AND dataset = ? AND classCode = ?"
-            ).bind(grade, subject, originalTeacher, dataset, classCode).first();
+                "SELECT id FROM elective_config WHERE grade = ? AND subject = ? AND originalTeacher = ? AND dataset = ?"
+            ).bind(grade, subject, originalTeacher, dataset).first();
 
             if (existing) {
                 await env.DB.prepare(
-                    "UPDATE elective_config SET fullTeacherName = ?, className = ?, fullSubjectName = ?, isMovingClass = ?, isCombinedClass = ?, updatedAt = ? WHERE id = ?"
-                ).bind(fullTeacherName, className, fullSubjectName, movingVal, combinedVal, new Date().toISOString(), existing.id).run();
+                    "UPDATE elective_config SET classCode = ?, fullTeacherName = ?, className = ?, fullSubjectName = ?, isMovingClass = ?, isCombinedClass = ?, updatedAt = ? WHERE id = ?"
+                ).bind(classCode, fullTeacherName, className, fullSubjectName, movingVal, combinedVal, new Date().toISOString(), existing.id).run();
             } else {
                 await env.DB.prepare(
                     "INSERT INTO elective_config (grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, isMovingClass, isCombinedClass, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"

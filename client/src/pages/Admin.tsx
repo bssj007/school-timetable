@@ -2536,11 +2536,12 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
 
     const executeMutation = useMutation({
         mutationFn: async () => {
-            const payloads = [];
             let targetDataset = displayDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : displayDataset;
             if (!targetDataset && timetableProps && timetableProps.length > 0) {
                 targetDataset = timetableProps[0];
             }
+
+            const payloadMap = new Map<string, any>();
 
             for (const mSubj of analysis.manualSubjects) {
                 const mappingKey = mappings[mSubj];
@@ -2550,21 +2551,31 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                 const myBlocks = analysis.blocks.filter(b => b.subjects.has(mSubj));
                 if (myBlocks.length === 0) throw new Error(`${mSubj} 과목의 블록을 찾을 수 없습니다.`);
 
-                for (const b of myBlocks) {
-                    const block = b.code;
-                    const isNoGroup = block === "NO_GROUP";
+                const allCodes = myBlocks.map(b => b.code).filter(c => c !== "NO_GROUP");
+                const isNoGroup = allCodes.length === 0;
 
-                    payloads.push({
+                const existingPayload = payloadMap.get(mappingKey);
+                if (existingPayload) {
+                    const existingCodes = existingPayload.classCode ? existingPayload.classCode.split(',') : [];
+                    const mergedCodes = Array.from(new Set([...existingCodes, ...allCodes])).filter(Boolean).sort();
+
+                    existingPayload.classCode = mergedCodes.join(',');
+                    existingPayload.isMovingClass = existingPayload.isMovingClass || !isNoGroup;
+                } else {
+                    payloadMap.set(mappingKey, {
                         grade: grade,
                         subject: subj,
                         originalTeacher: teacher,
-                        classCode: isNoGroup ? "" : block,
+                        classCode: isNoGroup ? "" : allCodes.sort().join(","),
                         isMovingClass: !isNoGroup,
                         isCombinedClass: false,
                         dataset: targetDataset
                     });
                 }
             }
+
+            // Convert map values back to the payloads array format
+            const payloads = Array.from(payloadMap.values());
 
             // Clear old mapping for this dataset explicitly to handle duplicate groups fresh
             await fetch(`/api/admin/electives?dataset=${targetDataset}`, {
