@@ -2551,7 +2551,9 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                 const myBlocks = analysis.blocks.filter(b => b.subjects.has(mSubj));
                 if (myBlocks.length === 0) throw new Error(`${mSubj} 과목의 블록을 찾을 수 없습니다.`);
 
-                const allCodes = myBlocks.map(b => b.code).filter(c => c !== "NO_GROUP");
+                const isExcluded = ["빈교실", "공강", "채플", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => subj.trim().includes(ex));
+
+                const allCodes = isExcluded ? [] : myBlocks.map(b => b.code).filter(c => c !== "NO_GROUP");
                 const isNoGroup = allCodes.length === 0;
 
                 const existingPayload = payloadMap.get(mappingKey);
@@ -2559,15 +2561,15 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                     const existingCodes = existingPayload.classCode ? existingPayload.classCode.split(',') : [];
                     const mergedCodes = Array.from(new Set([...existingCodes, ...allCodes])).filter(Boolean).sort();
 
-                    existingPayload.classCode = mergedCodes.join(',');
-                    existingPayload.isMovingClass = existingPayload.isMovingClass || !isNoGroup;
+                    existingPayload.classCode = isExcluded ? "" : mergedCodes.join(',');
+                    existingPayload.isMovingClass = isExcluded ? false : (existingPayload.isMovingClass || !isNoGroup);
                 } else {
                     payloadMap.set(mappingKey, {
                         grade: grade,
                         subject: subj,
                         originalTeacher: teacher,
-                        classCode: isNoGroup ? "" : allCodes.sort().join(","),
-                        isMovingClass: !isNoGroup,
+                        classCode: isExcluded ? "" : allCodes.sort().join(","),
+                        isMovingClass: !isExcluded && !isNoGroup,
                         isCombinedClass: false,
                         dataset: targetDataset
                     });
