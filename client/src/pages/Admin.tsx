@@ -2725,6 +2725,8 @@ function ManualTimetableCell({
         if (isSafeMode) {
             if (subjects.includes(trimmed)) {
                 onChange(trimmed);
+            } else {
+                setInputValue(value || "");
             }
         } else {
             if (!subjects.includes(trimmed)) {
