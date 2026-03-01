@@ -97,8 +97,7 @@ export const onRequest = async (context: any) => {
         try {
             const { env } = context;
             if (!env.DB) throw new Error("DB not configured");
-
-            const result = await env.DB.prepare("SELECT value FROM settings WHERE key = 'manual_semester_plan'").first();
+            const result = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'manual_semester_plan'").first();
             if (result && result.value) {
                 const manualPlan = JSON.parse(result.value);
                 const subjects = manualPlan.subjects || [];
