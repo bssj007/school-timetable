@@ -121,18 +121,18 @@ export const onRequest = async (context: any) => {
 
     if (method === 'DELETE') {
         try {
-            const body = await request.json();
-            const { grade, subject, originalTeacher, dataset = '' } = body;
+            const url = new URL(request.url);
+            const id = url.searchParams.get('id');
+            const dataset = url.searchParams.get('dataset');
 
-            if (!grade || !subject) {
-                return new Response('Missing required fields', { status: 400 });
+            if (id) {
+                await env.DB.prepare("DELETE FROM elective_config WHERE id = ?").bind(id).run();
+                return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+            } else if (dataset) {
+                await env.DB.prepare("DELETE FROM elective_config WHERE dataset = ?").bind(dataset).run();
+                return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
             }
-
-            await env.DB.prepare(
-                "DELETE FROM elective_config WHERE grade = ? AND subject = ? AND originalTeacher = ? AND dataset = ?"
-            ).bind(grade, subject, originalTeacher, dataset).run();
-
-            return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+            return new Response('ID or dataset is required', { status: 400 });
         } catch (e: any) {
             return new Response(JSON.stringify({ error: e.message }), { status: 500 });
         }
