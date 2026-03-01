@@ -84,18 +84,24 @@ function ElectiveManager({ password }: { password: string }) {
     }, [rawDataQuery.data]);
 
     useEffect(() => {
+        if (!selectedDataset && !settingsQuery.data?.comcigan_dataset_selected) return; // Wait for settings if Auto is selected
         fetchData();
-    }, [selectedGrade, selectedDataset]);
+    }, [selectedGrade, selectedDataset, settingsQuery.data?.comcigan_dataset_selected]);
 
     const fetchData = async () => {
         setIsLoading(true);
         try {
             console.log("Fetching data for grade", selectedGrade);
 
+            let targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
+            if (!targetDataset && timetableProps && timetableProps.length > 0) {
+                targetDataset = timetableProps[0];
+            }
+
             // 1. Fetch Comcigan Subjects
             let comciganData = [];
             try {
-                const comciganRes = await fetch(`/api/admin/comcigan-subjects?grade=${selectedGrade}&dataset=${selectedDataset}`);
+                const comciganRes = await fetch(`/api/admin/comcigan-subjects?grade=${selectedGrade}&dataset=${targetDataset}`);
                 if (!comciganRes.ok) throw new Error(`Comcigan Fetch Failed: ${comciganRes.status}`);
                 comciganData = await comciganRes.json();
                 if (!Array.isArray(comciganData)) throw new Error("Comcigan data is not an array");
@@ -112,7 +118,7 @@ function ElectiveManager({ password }: { password: string }) {
             // 2. Fetch Saved Configs
             let configData = [];
             try {
-                const configRes = await fetch(`/api/admin/electives?grade=${selectedGrade}&dataset=${selectedDataset}`, {
+                const configRes = await fetch(`/api/admin/electives?grade=${selectedGrade}&dataset=${targetDataset}`, {
                     headers: { "X-Admin-Password": password }
                 });
                 if (!configRes.ok) throw new Error(`Config Fetch Failed: ${configRes.status}`);
@@ -181,7 +187,10 @@ function ElectiveManager({ password }: { password: string }) {
         setIsSaving(true);
         try {
             // Determine the actual dataset to save to (if empty string meaning "Auto", use the current setting)
-            const targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
+            let targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
+            if (!targetDataset && timetableProps && timetableProps.length > 0) {
+                targetDataset = timetableProps[0];
+            }
 
             // Save each changed item
             const promises = subjects.map(async (item: any, index: number) => {
@@ -223,7 +232,10 @@ function ElectiveManager({ password }: { password: string }) {
 
     const handleDelete = async (index: number) => {
         const item = subjects[index];
-        const targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
+        let targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
+        if (!targetDataset && timetableProps && timetableProps.length > 0) {
+            targetDataset = timetableProps[0];
+        }
 
         if (!confirm(`정말 "${item.subject}" ("${item.teacher}") 데이터를 현재 데이터셋에서 삭제하시겠습니까?`)) return;
         try {
@@ -2495,7 +2507,10 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
     const executeMutation = useMutation({
         mutationFn: async () => {
             const payloads = [];
-            const targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
+            let targetDataset = selectedDataset || settingsQuery.data?.comcigan_dataset_selected || "";
+            if (!targetDataset && timetableProps && timetableProps.length > 0) {
+                targetDataset = timetableProps[0];
+            }
 
             for (const mSubj of analysis.manualSubjects) {
                 const mappingKey = mappings[mSubj];
