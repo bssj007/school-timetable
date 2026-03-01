@@ -89,7 +89,7 @@ export const onRequest = async (context: any) => {
     if (method === 'POST') {
         try {
             const body = await request.json();
-            const { grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, isMovingClass, isCombinedClass, dataset = '' } = body;
+            const { grade, subject, originalTeacher, classCode = '', fullTeacherName = '', className = '', fullSubjectName = '', isMovingClass, isCombinedClass, dataset = '' } = body;
 
             // Default isMovingClass to 1 (True) if not provided
             const movingVal = isMovingClass === false ? 0 : 1;
