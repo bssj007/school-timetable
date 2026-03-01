@@ -2694,6 +2694,111 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
     );
 }
 
+function ManualTimetableCell({
+    value,
+    onChange,
+    subjects,
+    onAddSubject,
+    isSafeMode,
+    groupInfo
+}: {
+    value: string;
+    onChange: (val: string) => void;
+    subjects: string[];
+    onAddSubject: (val: string) => void;
+    isSafeMode: boolean;
+    groupInfo?: string
+}) {
+    const [inputValue, setInputValue] = useState("");
+
+    useEffect(() => {
+        setInputValue(value || "");
+    }, [value]);
+
+    const handleCommit = () => {
+        const trimmed = inputValue.trim();
+        if (!trimmed) {
+            onChange("");
+            return;
+        }
+
+        if (isSafeMode) {
+            if (subjects.includes(trimmed)) {
+                onChange(trimmed);
+            }
+        } else {
+            if (!subjects.includes(trimmed)) {
+                onAddSubject(trimmed);
+            }
+            onChange(trimmed);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            handleCommit();
+            // Blurring or pressing enter acts similarly
+            e.currentTarget.blur();
+        }
+    };
+
+    const displayVal = value || "__EMPTY__";
+    const filteredSubjects = isSafeMode && inputValue && inputValue !== value
+        ? subjects.filter(s => s.toLowerCase().includes(inputValue.toLowerCase()))
+        : subjects;
+
+    return (
+        <TableCell className="p-1 border-r text-center align-middle relative h-[50px]">
+            {groupInfo && groupInfo !== "학년공강" && (
+                <div className="absolute top-1 left-1 bg-orange-100 text-orange-800 text-[9px] font-bold px-1 rounded shadow-sm z-10 pointer-events-none">
+                    {groupInfo}
+                </div>
+            )}
+            {groupInfo === "학년공강" && (
+                <div className="absolute top-1 left-1 bg-gray-200 text-gray-500 text-[9px] font-bold px-1 rounded shadow-sm z-10 pointer-events-none">
+                    학년공강
+                </div>
+            )}
+
+            <div className={`flex items-center w-full h-full mt-3 border rounded-sm transition-colors focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400 ${value ? 'bg-blue-50/30' : 'bg-transparent'}`}>
+                <input
+                    type="text"
+                    className="flex-1 w-[40px] text-xs outline-none bg-transparent px-1 text-slate-800"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onBlur={handleCommit}
+                    onKeyDown={handleKeyDown}
+                    placeholder={isSafeMode ? "검색" : "입력"}
+                    title={isSafeMode ? "검색어 입력" : "과목명 입력 후 Enter로 자동 등록"}
+                />
+                <Select
+                    value={displayVal}
+                    onValueChange={(val) => {
+                        const newVal = val === "__EMPTY__" ? "" : val;
+                        setInputValue(newVal);
+                        onChange(newVal);
+                    }}
+                >
+                    <SelectTrigger className="w-6 h-6 p-0 border-none shadow-none bg-transparent flex items-center justify-center shrink-0">
+                        <span className="sr-only">선택</span>
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="__EMPTY__" className="text-slate-400">비어있음</SelectItem>
+                        {filteredSubjects.map(subj => (
+                            <SelectItem key={subj} value={subj}>
+                                {subj}
+                            </SelectItem>
+                        ))}
+                        {isSafeMode && filteredSubjects.length === 0 && (
+                            <div className="text-xs text-slate-400 p-2 text-center">결과 없음</div>
+                        )}
+                    </SelectContent>
+                </Select>
+            </div>
+        </TableCell>
+    );
+}
+
 function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
     const [showAutoFill, setShowAutoFill] = useState(false);
@@ -2701,6 +2806,7 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
     const [newSubject, setNewSubject] = useState("");
     const [grade, setGrade] = useState("2");
     const [classNum, setClassNum] = useState("1");
+    const [isSafeMode, setIsSafeMode] = useState(true);
 
     // timetables structure: { "2-1": { "0-1": "과목 교사", "1-3": "..." }, "2-2": ... }
     const [timetables, setTimetables] = useState<Record<string, Record<string, string>>>({});
@@ -2935,12 +3041,19 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
 
                 {/* Timetable Editor */}
                 <div className="border border-blue-200 rounded-lg overflow-hidden">
-                    <div className="bg-blue-50/50 p-4 border-b flex flex-wrap items-center gap-4">
+                    <div className="bg-blue-50/50 p-4 border-b flex flex-col md:flex-row md:items-center gap-4">
                         <div className="font-bold flex items-center gap-2">
                             <Calendar className="w-4 h-4" />
                             조회 및 수정
                         </div>
                         <div className="flex-1"></div>
+                        <div className="flex items-center gap-2">
+                            <Checkbox id="safe-mode" checked={isSafeMode} onCheckedChange={(val) => setIsSafeMode(!!val)} />
+                            <label htmlFor="safe-mode" className="text-sm font-bold cursor-pointer transition-colors tooltip cursor-help flex items-center gap-1" title="체크 시 입력란은 검색으로만 기능하며, 체크 해제 시 새로운 과목 입력 후 Enter를 누르면 과목이 자동 추가됩니다.">
+                                역등록 안전 모드
+                                {isSafeMode ? <ShieldCheck className="w-4 h-4 text-green-600" /> : <ShieldAlert className="w-4 h-4 text-orange-500" />}
+                            </label>
+                        </div>
                         <Select value={classNum} onValueChange={setClassNum}>
                             <SelectTrigger className="w-32 bg-white font-bold"><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -2971,31 +3084,19 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                                             const groupInfo = groups[grade]?.[key];
 
                                             return (
-                                                <TableCell key={weekday} className="p-1 border-r text-center align-middle relative h-[50px]">
-                                                    {groupInfo && groupInfo !== "학년공강" && (
-                                                        <div className="absolute top-1 left-1 bg-orange-100 text-orange-800 text-[9px] font-bold px-1 rounded shadow-sm z-10 pointer-events-none">
-                                                            {groupInfo}
-                                                        </div>
-                                                    )}
-                                                    {groupInfo === "학년공강" && (
-                                                        <div className="absolute top-1 left-1 bg-gray-200 text-gray-500 text-[9px] font-bold px-1 rounded shadow-sm z-10 pointer-events-none">
-                                                            학년공강
-                                                        </div>
-                                                    )}
-                                                    <Select value={currentVal || "__EMPTY__"} onValueChange={(val) => handleTimetableChange(weekday, period, val === "__EMPTY__" ? "" : val)}>
-                                                        <SelectTrigger className={`w-full h-full text-xs border-transparent hover:border-blue-300 transition-colors shadow-none pt-2 ${currentVal ? 'font-bold text-slate-800' : 'text-slate-400'}`}>
-                                                            <SelectValue placeholder="비어있음" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="__EMPTY__" className="text-slate-400">비어있음</SelectItem>
-                                                            {subjects.map(subj => (
-                                                                <SelectItem key={subj} value={subj}>
-                                                                    {subj}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </TableCell>
+                                                <ManualTimetableCell
+                                                    key={weekday}
+                                                    value={currentVal}
+                                                    onChange={(val) => handleTimetableChange(weekday, period, val)}
+                                                    subjects={subjects}
+                                                    onAddSubject={(val) => {
+                                                        if (!subjects.includes(val)) {
+                                                            setSubjects(prev => [...prev, val]);
+                                                        }
+                                                    }}
+                                                    isSafeMode={isSafeMode}
+                                                    groupInfo={groupInfo}
+                                                />
                                             );
                                         })}
                                     </TableRow>
