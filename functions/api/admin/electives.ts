@@ -30,7 +30,8 @@ export const onRequest = async (context: any) => {
                 classCode TEXT,
                 fullTeacherName TEXT,
                 updatedAt TEXT DEFAULT (datetime('now')),
-                isMovingClass INTEGER DEFAULT 1
+                isMovingClass INTEGER DEFAULT 1,
+                dataset TEXT DEFAULT ''
             )
         `).run();
 
@@ -56,6 +57,11 @@ export const onRequest = async (context: any) => {
         } catch (e: any) {
             // Ignore duplicate column 
         }
+        try {
+            await env.DB.prepare("ALTER TABLE elective_config ADD COLUMN dataset TEXT DEFAULT ''").run();
+        } catch (e: any) {
+            // Ignore duplicate column 
+        }
     } catch (e) {
         console.error("Table creation/migration failed:", e);
     }
@@ -63,6 +69,7 @@ export const onRequest = async (context: any) => {
     if (method === 'GET') {
         const url = new URL(request.url);
         const grade = parseInt(url.searchParams.get('grade') || '0');
+        const dataset = url.searchParams.get('dataset') || '';
 
         if (!grade) {
             return new Response('Grade is required', { status: 400 });
@@ -70,8 +77,8 @@ export const onRequest = async (context: any) => {
 
         try {
             const { results } = await env.DB.prepare(
-                "SELECT * FROM elective_config WHERE grade = ?"
-            ).bind(grade).all();
+                "SELECT * FROM elective_config WHERE grade = ? AND dataset = ?"
+            ).bind(grade, dataset).all();
 
             return new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
         } catch (e: any) {
@@ -82,7 +89,7 @@ export const onRequest = async (context: any) => {
     if (method === 'POST') {
         try {
             const body = await request.json();
-            const { grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, isMovingClass, isCombinedClass } = body;
+            const { grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, isMovingClass, isCombinedClass, dataset = '' } = body;
 
             // Default isMovingClass to 1 (True) if not provided
             const movingVal = isMovingClass === false ? 0 : 1;
@@ -93,8 +100,8 @@ export const onRequest = async (context: any) => {
             }
 
             const existing = await env.DB.prepare(
-                "SELECT id FROM elective_config WHERE grade = ? AND subject = ? AND originalTeacher = ?"
-            ).bind(grade, subject, originalTeacher).first();
+                "SELECT id FROM elective_config WHERE grade = ? AND subject = ? AND originalTeacher = ? AND dataset = ?"
+            ).bind(grade, subject, originalTeacher, dataset).first();
 
             if (existing) {
                 await env.DB.prepare(
@@ -102,9 +109,28 @@ export const onRequest = async (context: any) => {
                 ).bind(classCode, fullTeacherName, className, fullSubjectName, movingVal, combinedVal, new Date().toISOString(), existing.id).run();
             } else {
                 await env.DB.prepare(
-                    "INSERT INTO elective_config (grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, isMovingClass, isCombinedClass, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                ).bind(grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, movingVal, combinedVal, new Date().toISOString()).run();
+                    "INSERT INTO elective_config (grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, isMovingClass, isCombinedClass, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                ).bind(grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, movingVal, combinedVal, dataset, new Date().toISOString()).run();
             }
+
+            return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+        } catch (e: any) {
+            return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+        }
+    }
+
+    if (method === 'DELETE') {
+        try {
+            const body = await request.json();
+            const { grade, subject, originalTeacher, dataset = '' } = body;
+
+            if (!grade || !subject) {
+                return new Response('Missing required fields', { status: 400 });
+            }
+
+            await env.DB.prepare(
+                "DELETE FROM elective_config WHERE grade = ? AND subject = ? AND originalTeacher = ? AND dataset = ?"
+            ).bind(grade, subject, originalTeacher, dataset).run();
 
             return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
         } catch (e: any) {

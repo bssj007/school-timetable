@@ -133,11 +133,14 @@ export default function Dashboard() {
   const [showInstructionTooltip, setShowInstructionTooltip] = useState<boolean>(false);
   const initialConfigRef = useRef(`${grade}-${classNum}-${studentNumber}`);
 
+  // Extract datasetId early for use in effects
+  const datasetId = (queryClient.getQueryData(['timetable', schoolName, grade, classNum]) as any)?.datasetId || '';
+
   // 2, 3학년 선택과목 설정 확인
   useEffect(() => {
-    if ((grade === "2" || grade === "3") && classNum && studentNumber) {
-      // Check if electives are already set
-      fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`)
+    if ((grade === "2" || grade === "3") && classNum && studentNumber && datasetId) {
+      // Check if electives are already set for this dataset
+      fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&dataset=${datasetId}`)
         .then(res => res.json())
         .then(data => {
           // If no profile or no electives, show dialog
@@ -156,7 +159,7 @@ export default function Dashboard() {
       setIsElectiveEntered(true);
       setShowElectiveWarning(false);
     }
-  }, [grade, classNum, studentNumber]);
+  }, [grade, classNum, studentNumber, datasetId]);
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
@@ -235,12 +238,17 @@ export default function Dashboard() {
         console.log('[Dashboard] Timetable data:', result);
 
         if (result.data && Array.isArray(result.data)) {
-          return result.data.map((item: any) => ({
+          const mappedData = result.data.map((item: any) => ({
             ...item,
             weekday: item.weekday
           })) as TimetableItem[];
+          // Attach datasetId for downstream queries
+          (mappedData as any).datasetId = result.datasetId;
+          return mappedData;
         }
-        return [] as TimetableItem[];
+        const emptyArray = [] as TimetableItem[];
+        (emptyArray as any).datasetId = result.datasetId;
+        return emptyArray;
       } catch (e) {
         console.error('Failed to fetch timetable', e);
         throw e;
@@ -253,24 +261,24 @@ export default function Dashboard() {
 
   // 1.5 선택과목 데이터 및 프로필 조회 (2, 3학년용)
   const { data: electiveConfigs, isFetching: isElectiveConfigsFetching } = useQuery({
-    queryKey: ['electiveConfigs', grade],
+    queryKey: ['electiveConfigs', grade, datasetId],
     queryFn: async () => {
-      if (grade !== "2" && grade !== "3") return [];
-      const res = await fetch(`/api/electives?grade=${grade}`);
+      if ((grade !== "2" && grade !== "3") || !datasetId) return [];
+      const res = await fetch(`/api/electives?grade=${grade}&dataset=${datasetId}`);
       if (!res.ok) {
         if (res.status === 404) return [];
         throw new Error(`Failed to fetch elective configs: ${res.status}`);
       }
       return res.json();
     },
-    enabled: grade === "2" || grade === "3"
+    enabled: (grade === "2" || grade === "3") && !!datasetId
   });
 
   const { data: studentProfile } = useQuery({
-    queryKey: ['studentProfile', grade, classNum, studentNumber],
+    queryKey: ['studentProfile', grade, classNum, studentNumber, datasetId],
     queryFn: async () => {
-      if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber) return null;
-      const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`);
+      if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber || !datasetId) return null;
+      const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&dataset=${datasetId}`);
       if (!res.ok) {
         if (res.status === 404) return null;
         throw new Error(`Failed to fetch student profile: ${res.status}`);
@@ -285,7 +293,7 @@ export default function Dashboard() {
       }
       return data;
     },
-    enabled: !!grade && !!classNum && !!studentNumber && (grade === "2" || grade === "3")
+    enabled: !!grade && !!classNum && !!studentNumber && (grade === "2" || grade === "3") && !!datasetId
   });
 
   const lastValidProfileRef = React.useRef<any>(null);
@@ -1549,6 +1557,7 @@ export default function Dashboard() {
         grade={grade}
         classNum={classNum}
         studentNumber={studentNumber}
+        datasetId={(rawTimetableData as any)?.datasetId || ''}
         onSaveSuccess={() => {
           setShowElectiveDialog(false);
           setIsElectiveEntered(true);

@@ -88,6 +88,7 @@ async function getSchoolCode(prefix: string) {
 export const onRequest = async (context: any) => {
     const url = new URL(context.request.url);
     const grade = parseInt(url.searchParams.get('grade') || '0');
+    const dataset = url.searchParams.get('dataset') || '';
 
     if (!grade) return new Response('Grade required', { status: 400 });
 
@@ -120,10 +121,14 @@ export const onRequest = async (context: any) => {
             if (stringArrays.length > 0) subjectProp = stringArrays[0];
         }
 
-        const timedataProp = keys.find(k => {
+        let timedataProp = keys.find(k => {
             const val = rawData[k];
             return Array.isArray(val) && val[grade] && Array.isArray(val[grade][1]);
         }) || "";
+
+        if (dataset && keys.includes(dataset)) {
+            timedataProp = dataset;
+        }
 
         if (!timedataProp) throw new Error("Data key not found");
 

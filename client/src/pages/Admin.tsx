@@ -43,15 +43,49 @@ import { Textarea } from "@/components/ui/textarea";
 
 function ElectiveManager({ password }: { password: string }) {
     const [selectedGrade, setSelectedGrade] = useState<number>(2);
+    const [selectedDataset, setSelectedDataset] = useState<string>('');
     const [subjects, setSubjects] = useState<any[]>([]);
     const [originalSubjects, setOriginalSubjects] = useState<any[]>([]); // To track changes
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
+    // Fetch current setting to determine default "Auto" dataset if needed
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": password } });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        }
+    });
+
+    // Fetch raw comcigan to build the dataset list
+    const [schoolSearchQuery] = useState("부산성지고");
+    const rawDataQuery = useQuery({
+        queryKey: ["admin", "rawComcigan", schoolSearchQuery],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/raw_comcigan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": password },
+                body: JSON.stringify({ schoolName: schoolSearchQuery })
+            });
+            const json = await res.json();
+            if (!res.ok || json?.error) return null;
+            return json.data;
+        }
+    });
+
+    const timetableProps = useMemo(() => {
+        if (!rawDataQuery.data) return [];
+        return Object.keys(rawDataQuery.data).filter(k => {
+            const val = rawDataQuery.data[k];
+            return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+        });
+    }, [rawDataQuery.data]);
 
     useEffect(() => {
         fetchData();
-    }, [selectedGrade]);
+    }, [selectedGrade, selectedDataset]);
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -61,7 +95,7 @@ function ElectiveManager({ password }: { password: string }) {
             // 1. Fetch Comcigan Subjects
             let comciganData = [];
             try {
-                const comciganRes = await fetch(`/api/admin/comcigan-subjects?grade=${selectedGrade}`);
+                const comciganRes = await fetch(`/api/admin/comcigan-subjects?grade=${selectedGrade}&dataset=${selectedDataset}`);
                 if (!comciganRes.ok) throw new Error(`Comcigan Fetch Failed: ${comciganRes.status}`);
                 comciganData = await comciganRes.json();
                 if (!Array.isArray(comciganData)) throw new Error("Comcigan data is not an array");
@@ -78,7 +112,7 @@ function ElectiveManager({ password }: { password: string }) {
             // 2. Fetch Saved Configs
             let configData = [];
             try {
-                const configRes = await fetch(`/api/admin/electives?grade=${selectedGrade}`, {
+                const configRes = await fetch(`/api/admin/electives?grade=${selectedGrade}&dataset=${selectedDataset}`, {
                     headers: { "X-Admin-Password": password }
                 });
                 if (!configRes.ok) throw new Error(`Config Fetch Failed: ${configRes.status}`);
@@ -90,6 +124,9 @@ function ElectiveManager({ password }: { password: string }) {
             }
 
             // 3. Merge
+            // If it's in configData but not in comciganData, it's missing (isDeleted: true)
+            const comciganMap = new Map(comciganData.map((c: any) => [`${c.subject}-${c.teacher}`, c]));
+
             const merged = comciganData.map((item: any) => {
                 const saved = configData.find((c: any) => c.subject === item.subject && c.originalTeacher === item.teacher);
                 return {
@@ -98,9 +135,27 @@ function ElectiveManager({ password }: { password: string }) {
                     fullTeacherName: saved?.fullTeacherName || "",
                     className: saved?.className || "",
                     fullSubjectName: saved?.fullSubjectName || "",
-                    isMovingClass: saved?.isMovingClass !== 0, // Default to true
-                    isCombinedClass: saved?.isCombinedClass === 1 // Default to false
+                    isMovingClass: saved?.isMovingClass !== 0,
+                    isCombinedClass: saved?.isCombinedClass === 1,
+                    isDeleted: false
                 };
+            });
+
+            configData.forEach((saved: any) => {
+                const key = `${saved.subject}-${saved.originalTeacher}`;
+                if (!comciganMap.has(key)) {
+                    merged.push({
+                        subject: saved.subject,
+                        teacher: saved.originalTeacher,
+                        classCode: saved.classCode || "",
+                        fullTeacherName: saved.fullTeacherName || "",
+                        className: saved.className || "",
+                        fullSubjectName: saved.fullSubjectName || "",
+                        isMovingClass: saved.isMovingClass !== 0,
+                        isCombinedClass: saved.isCombinedClass === 1,
+                        isDeleted: true
+                    });
+                }
             });
 
             setSubjects(merged);
@@ -144,7 +199,8 @@ function ElectiveManager({ password }: { password: string }) {
                             className: item.className,
                             fullSubjectName: item.fullSubjectName,
                             isMovingClass: item.isMovingClass,
-                            isCombinedClass: item.isCombinedClass
+                            isCombinedClass: item.isCombinedClass,
+                            dataset: selectedDataset
                         })
                     });
                     if (!res.ok) throw new Error(`Save failed: ${res.status}`);
@@ -159,6 +215,32 @@ function ElectiveManager({ password }: { password: string }) {
             console.error(error);
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleDelete = async (index: number) => {
+        const item = subjects[index];
+        if (!confirm(`정말 "${item.subject}" ("${item.teacher}") 데이터를 현재 데이터셋에서 삭제하시겠습니까?`)) return;
+        try {
+            const res = await fetch("/api/admin/electives", {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": password
+                },
+                body: JSON.stringify({
+                    grade: selectedGrade,
+                    subject: item.subject,
+                    originalTeacher: item.teacher || "",
+                    dataset: selectedDataset
+                })
+            });
+            if (!res.ok) throw new Error("Delete failed");
+            toast.success("삭제되었습니다.");
+            fetchData();
+        } catch (error) {
+            toast.error("삭제 중 오류가 발생했습니다.");
+            console.error(error);
         }
     };
 
@@ -221,15 +303,31 @@ function ElectiveManager({ password }: { password: string }) {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-                <div className="flex justify-between items-center gap-4">
-                    <h3 className="text-lg font-bold flex items-center gap-2 shrink-0">
-                        <BookOpen className="w-5 h-5" />
-                        {selectedGrade}학년 선택과목 목록
-                    </h3>
+            <div className="flex-1 flex flex-col gap-4 overflow-hidden pr-2">
+                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                    <div className="flex items-center gap-4 shrink-0">
+                        <h3 className="text-lg font-bold flex items-center gap-2">
+                            <BookOpen className="w-5 h-5" />
+                            {selectedGrade}학년 선택과목 목록
+                        </h3>
+                        <Select
+                            value={selectedDataset}
+                            onValueChange={setSelectedDataset}
+                        >
+                            <SelectTrigger className="w-[160px] h-9">
+                                <SelectValue placeholder="데이터셋 선택" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="">자동 (현재 시간표)</SelectItem>
+                                {timetableProps.map((prop: string) => (
+                                    <SelectItem key={prop} value={prop}>{prop}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
 
                     {/* Search Bar */}
-                    <div className="flex-1 max-w-sm">
+                    <div className="flex-1 w-full xl:max-w-sm">
                         <div className="relative">
                             <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
                             <Input
@@ -296,19 +394,21 @@ function ElectiveManager({ password }: { password: string }) {
 
                                     const matchedKeyword = subjectKeyword;
                                     const isDisabled = !!matchedKeyword;
+                                    const isDeleted = item.isDeleted;
 
                                     return (
                                         <TableRow
                                             key={`${item.subject}-${item.teacher}`}
-                                            className={isDisabled ? "opacity-50 bg-gray-50 cursor-not-allowed" : ""}
+                                            className={`${isDisabled ? "opacity-50 bg-gray-50 cursor-not-allowed" : ""} ${isDeleted ? "opacity-60 bg-red-50/30" : ""}`}
                                             onClick={() => {
                                                 if (isDisabled) {
                                                     toast.error(`${matchedKeyword}은(는) 선택할 수 없습니다.`);
                                                 }
                                             }}
                                         >
-                                            <TableCell className="font-medium">
+                                            <TableCell className={`font-medium ${isDeleted ? "line-through text-red-400" : ""}`}>
                                                 {item.subject}
+                                                {isDeleted && <Badge variant="destructive" className="ml-2 text-[10px] px-1 h-4">없음</Badge>}
                                             </TableCell>
                                             <TableCell>
                                                 <Input
@@ -316,10 +416,10 @@ function ElectiveManager({ password }: { password: string }) {
                                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(originalIndex, "fullSubjectName", e.target.value)}
                                                     placeholder="풀네임 입력"
                                                     className={`max-w-[150px] ${isDisabled ? "pointer-events-none" : ""}`}
-                                                    disabled={isDisabled}
+                                                    disabled={isDisabled || isDeleted}
                                                 />
                                             </TableCell>
-                                            <TableCell className="text-gray-500">{item.teacher}</TableCell>
+                                            <TableCell className={`text-gray-500 ${isDeleted ? "line-through text-red-400" : ""}`}>{item.teacher}</TableCell>
                                             <TableCell>
                                                 <Popover>
                                                     <PopoverTrigger asChild>
@@ -417,7 +517,7 @@ function ElectiveManager({ password }: { password: string }) {
                                                         onClick={() => {
                                                             handleInputChange(originalIndex, "isCombinedClass", true);
                                                         }}
-                                                        disabled={isDisabled}
+                                                        disabled={isDisabled || isDeleted}
                                                     >
                                                         통반 O
                                                     </Button>
@@ -428,21 +528,34 @@ function ElectiveManager({ password }: { password: string }) {
                                                         onClick={() => {
                                                             handleInputChange(originalIndex, "isCombinedClass", false);
                                                         }}
-                                                        disabled={isDisabled}
+                                                        disabled={isDisabled || isDeleted}
                                                     >
                                                         통반 X
                                                     </Button>
                                                 </div>
+                                                {isDeleted && (
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        className="mt-2 h-7 w-full"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDelete(originalIndex);
+                                                        }}
+                                                    >
+                                                        <Trash2 className="w-3 h-3 mr-1" /> 삭제
+                                                    </Button>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     );
                                 })
                             )}
-                        </TableBody>
-                    </Table>
-                </div>
-            </div>
-        </div>
+                        </TableBody >
+                    </Table >
+                </div >
+            </div >
+        </div >
     );
 }
 
@@ -2192,27 +2305,69 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
 function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPassword: string, onBack: () => void, currentPlan: any }) {
     const { grade } = currentPlan;
     const queryClient = useQueryClient();
+    const [selectedDataset, setSelectedDataset] = useState<string>('');
+
+    // Fetch current setting to determine default
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            const current = settingsQuery.data.comcigan_dataset_selected;
+            if (current && current !== "MANUAL_PLAN") {
+                setSelectedDataset(current);
+            }
+        }
+    }, [settingsQuery.data]);
+
+    // Fetch raw comcigan to build the dataset list
+    const rawDataQuery = useQuery({
+        queryKey: ["admin", "rawComcigan", "부산성지고"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/raw_comcigan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ schoolName: "부산성지고" })
+            });
+            const json = await res.json();
+            if (!res.ok || json?.error) return null;
+            return json.data;
+        }
+    });
+
+    const timetableProps = React.useMemo(() => {
+        if (!rawDataQuery.data) return [];
+        return Object.keys(rawDataQuery.data).filter((k: string) => {
+            const val = rawDataQuery.data[k];
+            return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+        });
+    }, [rawDataQuery.data]);
 
     // 1. Fetch Live Subjects from Comcigan
     const liveSubjectsQuery = useQuery({
-        queryKey: ["admin", "comcigan-subjects", grade],
+        queryKey: ["admin", "comcigan-subjects", grade, selectedDataset],
         queryFn: async () => {
-            const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}`);
+            const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${selectedDataset}`);
             if (!res.ok) throw new Error("Failed to fetch live subjects");
             return res.json();
         }
     });
 
-    // 2. Algorithm to analyze manual plan and find blocks
+    // 2. Algorithm to analyze manual plan and map subjects to predefined groups
     const analysis = React.useMemo(() => {
         let warnings: string[] = [];
-        let blocks: { code: string, subjects: Set<string>, occurrences: string[] }[] = [];
         let manualSubjects = new Set<string>();
 
         const periodMap: Record<string, { classNum: number, subject: string }[]> = {};
         let maxClassNum = 0;
 
-        Object.keys(currentPlan.timetables).forEach(classKey => {
+        Object.keys(currentPlan.timetables || {}).forEach(classKey => {
             const [g, c] = classKey.split('-');
             if (parseInt(g) !== grade) return;
             const classNum = parseInt(c);
@@ -2229,45 +2384,68 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
             });
         });
 
-        const uniqueSubjectSets = new Map<string, Set<string>>();
-        const setOccurrences = new Map<string, string[]>();
+        const subjectToBlocks = new Map<string, Set<string>>();
+        const blockToOccurrences = new Map<string, string[]>();
 
         Object.keys(periodMap).forEach(timeKey => {
             const classesInPeriod = periodMap[timeKey];
             const uniqueSubjsInPeriod = new Set(classesInPeriod.map(c => c.subject));
 
-            if (uniqueSubjsInPeriod.size > 1) { // Multiple subjects in one period = Elective Block
-                const sortedSubjs = Array.from(uniqueSubjsInPeriod).sort();
-                const setKey = sortedSubjs.join('|');
+            // Look up the explicit group from the currentPlan.groups for this timeKey
+            const explicitGroup = currentPlan.groups?.[String(grade)]?.[timeKey];
 
-                if (!uniqueSubjectSets.has(setKey)) {
-                    uniqueSubjectSets.set(setKey, uniqueSubjsInPeriod);
-                    setOccurrences.set(setKey, []);
-                }
-                setOccurrences.get(setKey)!.push(timeKey);
+            if (explicitGroup && explicitGroup !== "학년공강") {
+                // Associate all subjects in this period with this block
+                uniqueSubjsInPeriod.forEach(subj => {
+                    if (!subjectToBlocks.has(subj)) subjectToBlocks.set(subj, new Set());
+                    subjectToBlocks.get(subj)!.add(explicitGroup);
+                });
 
-                if (classesInPeriod.length < maxClassNum) {
-                    if (!warnings.includes("선택과목 그룹이 불안정합니다. 일부 반의 시간표가 비어있습니다.")) {
-                        warnings.push("선택과목 그룹이 불안정합니다. 일부 반의 시간표가 비어있습니다.");
-                    }
+                if (!blockToOccurrences.has(explicitGroup)) {
+                    blockToOccurrences.set(explicitGroup, []);
                 }
+                const timeStr = `${['월', '화', '수', '목', '금'][parseInt(timeKey.split('-')[0])]}${timeKey.split('-')[1]}교시`;
+                if (!blockToOccurrences.get(explicitGroup)!.includes(timeStr)) {
+                    blockToOccurrences.get(explicitGroup)!.push(timeStr);
+                }
+            } else if (!explicitGroup && uniqueSubjsInPeriod.size > 1) {
+                // If there are multiple subjects but no explicit block assigned
+                const timeStr = `${['월', '화', '수', '목', '금'][parseInt(timeKey.split('-')[0])]}${timeKey.split('-')[1]}교시`;
+                const msg = `[${timeStr}] 다중 과목이 있는데 블록이 지정되지 않았습니다.`;
+                if (!warnings.includes(msg)) warnings.push(msg);
             }
         });
 
-        let charCode = 65; // 'A'
-        Array.from(uniqueSubjectSets.entries()).forEach(([setKey, subjs]) => {
+        // Detect conflicts (a subject assigned to multiple blocks)
+        subjectToBlocks.forEach((blocks, subj) => {
+            if (blocks.size > 1) {
+                warnings.push(`[${subj}] 과목이 여러 블록(${Array.from(blocks).join(', ')})에 중복 배정되었습니다.`);
+            }
+        });
+
+        // Group the subjects by block for display
+        const blocks: { code: string, subjects: Set<string>, occurrences: string[] }[] = [];
+        const allBlocks = Array.from(blockToOccurrences.keys()).sort();
+
+        allBlocks.forEach(code => {
+            const subjsInBlock = new Set<string>();
+            subjectToBlocks.forEach((bSet, subj) => {
+                if (bSet.has(code)) subjsInBlock.add(subj);
+            });
             blocks.push({
-                code: String.fromCharCode(charCode++),
-                subjects: subjs,
-                occurrences: setOccurrences.get(setKey) || []
+                code: code,
+                subjects: subjsInBlock,
+                occurrences: blockToOccurrences.get(code) || []
             });
         });
 
-        if (maxClassNum === 0 || manualSubjects.size === 0) {
-            warnings.push("학기별 계획이 비어있습니다. 시간표를 먼저 채워주세요.");
+        const validManualSubjects = Array.from(manualSubjects).filter(subj => subjectToBlocks.has(subj)).sort();
+
+        if (maxClassNum === 0 || validManualSubjects.length === 0) {
+            warnings.push("학기별 계획에 등록된 선택과목이 없습니다 (블록이 지정된 과목 없음).");
         }
 
-        return { blocks, manualSubjects: Array.from(manualSubjects).sort(), warnings };
+        return { blocks, manualSubjects: validManualSubjects, warnings, subjectToBlocks };
     }, [currentPlan, grade]);
 
     const [mappings, setMappings] = useState<Record<string, string>>({});
@@ -2320,7 +2498,8 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                     originalTeacher: teacher,
                     classCode: block,
                     isMovingClass: true,
-                    isCombinedClass: false
+                    isCombinedClass: false,
+                    dataset: selectedDataset
                 });
             }
 
@@ -2355,6 +2534,20 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                 <CardDescription>
                     학기별 계획 데이터를 이용해 선택과목 DB를 자동으로 채웁니다. 수동으로 입력한 시간표에서 특정 시간에 동시에 열리는 과목들을 찾아 자동으로 A블록, B블록 등을 계산하고, 실제 라이브 데이터셋과 매핑하여 일괄 저장합니다.
                 </CardDescription>
+                <div className="mt-4 flex items-center gap-3">
+                    <span className="text-sm font-bold text-gray-700">대상 데이터셋:</span>
+                    <Select value={selectedDataset} onValueChange={setSelectedDataset}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="자동 (현재 시간표)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="">자동 (현재 시간표)</SelectItem>
+                            {timetableProps.map((prop: string) => (
+                                <SelectItem key={prop} value={prop}>{prop}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
             </CardHeader>
             <CardContent className="space-y-6 pt-6">
 
@@ -2382,10 +2575,7 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                                         <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200 mr-2">{b.code} 블록</Badge>
                                         <span className="text-slate-600">{Array.from(b.subjects).join(', ')}</span>
                                         <div className="text-xs text-slate-400 mt-1 pl-10">
-                                            {b.occurrences.map(o => {
-                                                const [w, p] = o.split('-');
-                                                return `${['월', '화', '수', '목', '금'][parseInt(w) - 1]}${p}교시`;
-                                            }).join(', ')}
+                                            {b.occurrences.join(', ')}
                                         </div>
                                     </li>
                                 ))}
@@ -2445,7 +2635,7 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                     </Button>
                     <Button
                         className="bg-orange-600 hover:bg-orange-700"
-                        disabled={analysis.blocks.length === 0 || liveSubjectsQuery.isLoading || executeMutation.isPending || Object.values(mappings).some(v => !v) || Object.keys(mappings).length !== analysis.manualSubjects.length}
+                        disabled={analysis.warnings.some(w => w.includes("중복") || w.includes("미확인")) || liveSubjectsQuery.isLoading || executeMutation.isPending || Object.values(mappings).some(v => !v) || Object.keys(mappings).length !== analysis.manualSubjects.length}
                         onClick={() => executeMutation.mutate()}
                     >
                         {executeMutation.isPending ? "저장 중..." : "1:1 매핑 후 DB 저장"}
@@ -2464,8 +2654,10 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
     const [grade, setGrade] = useState("2");
     const [classNum, setClassNum] = useState("1");
 
-    // timetables structure: { "2-1": { "1-1": "A_과목 교사", "2-3": "..." }, "2-2": ... }
+    // timetables structure: { "2-1": { "0-1": "과목 교사", "1-3": "..." }, "2-2": ... }
     const [timetables, setTimetables] = useState<Record<string, Record<string, string>>>({});
+    // groups structure: { "2": { "0-1": "A", "1-3": "B", ... }, "3": ... } // (weekday 0-4, period 1-7)
+    const [groups, setGroups] = useState<Record<string, Record<string, string>>>({ "2": {}, "3": {} });
 
     const settingsQuery = useQuery({
         queryKey: ["admin", "settings", "manualPlan"],
@@ -2484,6 +2676,7 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                 const data = JSON.parse(settingsQuery.data.manual_semester_plan);
                 setSubjects(data.subjects || []);
                 setTimetables(data.timetables || {});
+                setGroups(data.groups || { "2": {}, "3": {} });
             } catch (e) {
                 console.error("Failed to parse manual_semester_plan", e);
             }
@@ -2494,7 +2687,7 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
         mutationFn: async () => {
             // Save payload
             const payload = {
-                manual_semester_plan: JSON.stringify({ subjects, timetables })
+                manual_semester_plan: JSON.stringify({ subjects, timetables, groups })
             };
 
             const res = await fetch("/api/admin/settings", {
@@ -2555,8 +2748,25 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
     const currentTimetable = timetables[currentKey] || {};
     const weekdays = ['월', '화', '수', '목', '금'];
 
+    const handleGroupChange = (weekday: number, period: number, val: string) => {
+        setGroups(prev => {
+            const next = { ...prev };
+            const gradeGroups = { ...(next[grade] || {}) };
+            const cellKey = `${weekday}-${period}`;
+
+            if (val === "NONE" || val === "") {
+                delete gradeGroups[cellKey];
+            } else {
+                gradeGroups[cellKey] = val;
+            }
+
+            next[grade] = gradeGroups;
+            return next;
+        });
+    };
+
     if (showAutoFill) {
-        return <AutoFillElectivesView adminPassword={adminPassword} onBack={() => setShowAutoFill(false)} currentPlan={{ subjects, timetables, grade: parseInt(grade) }} />;
+        return <AutoFillElectivesView adminPassword={adminPassword} onBack={() => setShowAutoFill(false)} currentPlan={{ subjects, timetables, groups, grade: parseInt(grade) }} />;
     }
 
     return (
@@ -2568,16 +2778,88 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                     과목 목록을 먼저 정의한 후, 표에 기입할 수 있습니다.
                     이후 <b>출처 데이터셋 선택기</b>에서 MANUAL_PLAN 을 선택해야 실제로 표시됩니다.
                 </CardDescription>
+
+                <div className="flex justify-end pt-2">
+                    <Select value={grade} onValueChange={setGrade}>
+                        <SelectTrigger className="w-24 bg-white font-bold"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="2">2학년</SelectItem>
+                            <SelectItem value="3">3학년</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
             </CardHeader>
             <CardContent className="space-y-6">
 
+                {/* Elective Group Grid */}
+                <div className="border border-orange-200 bg-orange-50/30 rounded-lg p-4 space-y-4">
+                    <h3 className="font-bold text-orange-900 border-b pb-2 flex items-center gap-2">
+                        <Grid2X2 className="w-4 h-4" />
+                        선택과목 요일/교시별 블록(그룹) 지정 [{grade}학년]
+                    </h3>
+                    <p className="text-sm text-orange-800">
+                        수동 시간표 작성 전, 요일별/교시별로 어떤 선택과목 그룹이 열리는지 미리 지정합니다.
+                    </p>
+
+                    <div className="border rounded-xl bg-white w-full overflow-x-auto shadow-inner text-sm p-4">
+                        <div className="grid grid-cols-6 gap-2 w-[500px] min-w-max mx-auto">
+                            <div className="font-bold text-center text-slate-500 rounded bg-slate-100 py-1">교시</div>
+                            {weekdays.map(d => (
+                                <div key={d} className="font-bold text-center text-slate-500 rounded bg-slate-100 py-1">{d}</div>
+                            ))}
+
+                            {[1, 2, 3, 4, 5, 6, 7].map(period => (
+                                <React.Fragment key={`group-period-${period}`}>
+                                    <div className="font-bold flex items-center justify-center bg-slate-50 rounded text-slate-500 h-[40px]">
+                                        {period}
+                                    </div>
+                                    {[0, 1, 2, 3, 4].map(weekday => {
+                                        const cellKey = `${weekday}-${period}`;
+                                        const groupValue = groups[grade]?.[cellKey] || "";
+
+                                        return (
+                                            <div key={cellKey} className={`flex items-center justify-center p-1 rounded border shadow-sm h-[40px] transition-colors
+                                                ${groupValue ? 'bg-orange-50 border-orange-300' : 'bg-gray-50 border-gray-200'}
+                                            `}>
+                                                <select
+                                                    className={`w-full h-full text-xs text-center border-none bg-transparent outline-none cursor-pointer p-0 m-0 ${groupValue ? 'text-orange-700 font-bold' : 'text-slate-400'}`}
+                                                    value={groupValue || "NONE"}
+                                                    onChange={e => handleGroupChange(weekday, period, e.target.value)}
+                                                >
+                                                    <option value="NONE">-빈칸-</option>
+                                                    <option value="학년공강">학년공강</option>
+                                                    <option value="A">A 블록</option>
+                                                    <option value="B">B 블록</option>
+                                                    <option value="C">C 블록</option>
+                                                    <option value="D">D 블록</option>
+                                                    <option value="E">E 블록</option>
+                                                    <option value="F">F 블록</option>
+                                                    <option value="G">G 블록</option>
+                                                    <option value="H">H 블록</option>
+                                                    <option value="I">I 블록</option>
+                                                </select>
+                                            </div>
+                                        )
+                                    })}
+                                </React.Fragment>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
                 {/* Subject Manager */}
                 <div className="border border-purple-200 bg-purple-50/30 rounded-lg p-4 space-y-4">
-                    <h3 className="font-bold text-purple-900 border-b pb-2">과목 및 기입어 관리</h3>
+                    <h3 className="font-bold text-purple-900 border-b pb-2 flex items-center gap-2">
+                        <BookOpen className="w-4 h-4" />
+                        과목 및 기입어 관리 [{grade}학년]
+                    </h3>
+                    <p className="text-sm text-purple-800">
+                        과목명과 교사명을 띄어쓰기로 구분하여 입력하세요. (교사명은 생략 가능)
+                    </p>
 
                     <div className="flex gap-2">
                         <Input
-                            placeholder="예: A_일본어 이소라 또는 독작 임아영 또는 학년공강"
+                            placeholder="예: 일본어 이소라 또는 물리 임아영 (그룹 기호 없이 입력)"
                             value={newSubject}
                             onChange={(e) => setNewSubject(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') addSubject(); }}
@@ -2605,20 +2887,17 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
 
                 {/* Timetable Editor */}
                 <div className="border border-blue-200 rounded-lg overflow-hidden">
-                    <div className="bg-blue-50/50 p-4 border-b flex items-center gap-4">
-                        <div className="font-bold">시간표 조회/수정 표</div>
-                        <Select value={grade} onValueChange={setGrade}>
-                            <SelectTrigger className="w-24 bg-white"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="2">2학년</SelectItem>
-                                <SelectItem value="3">3학년</SelectItem>
-                            </SelectContent>
-                        </Select>
+                    <div className="bg-blue-50/50 p-4 border-b flex flex-wrap items-center gap-4">
+                        <div className="font-bold flex items-center gap-2">
+                            <Calendar className="w-4 h-4" />
+                            조회 및 수정
+                        </div>
+                        <div className="flex-1"></div>
                         <Select value={classNum} onValueChange={setClassNum}>
-                            <SelectTrigger className="w-24 bg-white"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="w-32 bg-white font-bold"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 {Array.from({ length: 15 }, (_, i) => i + 1).map(c => (
-                                    <SelectItem key={c} value={String(c)}>{c}반</SelectItem>
+                                    <SelectItem key={c} value={String(c)}>{grade}학년 {c}반</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -2641,11 +2920,22 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                                         {Array.from({ length: 5 }, (_, i) => i).map(weekday => {
                                             const key = `${weekday}-${period}`;
                                             const currentVal = currentTimetable[key] || "";
+                                            const groupInfo = groups[grade]?.[key];
 
                                             return (
-                                                <TableCell key={weekday} className="p-1 border-r text-center align-middle">
+                                                <TableCell key={weekday} className="p-1 border-r text-center align-middle relative h-[50px]">
+                                                    {groupInfo && groupInfo !== "학년공강" && (
+                                                        <div className="absolute top-1 left-1 bg-orange-100 text-orange-800 text-[9px] font-bold px-1 rounded shadow-sm z-10 pointer-events-none">
+                                                            {groupInfo}
+                                                        </div>
+                                                    )}
+                                                    {groupInfo === "학년공강" && (
+                                                        <div className="absolute top-1 left-1 bg-gray-200 text-gray-500 text-[9px] font-bold px-1 rounded shadow-sm z-10 pointer-events-none">
+                                                            학년공강
+                                                        </div>
+                                                    )}
                                                     <Select value={currentVal || "__EMPTY__"} onValueChange={(val) => handleTimetableChange(weekday, period, val === "__EMPTY__" ? "" : val)}>
-                                                        <SelectTrigger className={`w-full h-8 text-xs border-transparent hover:border-blue-300 transition-colors ${currentVal ? 'font-bold text-slate-800' : 'text-slate-400'}`}>
+                                                        <SelectTrigger className={`w-full h-full text-xs border-transparent hover:border-blue-300 transition-colors shadow-none pt-2 ${currentVal ? 'font-bold text-slate-800' : 'text-slate-400'}`}>
                                                             <SelectValue placeholder="비어있음" />
                                                         </SelectTrigger>
                                                         <SelectContent>

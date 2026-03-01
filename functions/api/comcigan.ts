@@ -443,6 +443,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
     return new Response(JSON.stringify({
         schoolName: "부산성지고등학교",
+        datasetId: timedataProp,
         data: result,
         debugTokens: {
             keysCount: keys.length,
