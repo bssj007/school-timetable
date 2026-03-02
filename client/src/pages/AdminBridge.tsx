@@ -401,8 +401,8 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         <div className="col-span-12 sm:col-span-5 relative">
                                             <label className="text-sm font-bold block mb-1">출발역 (From)</label>
                                             <Select value={fromDataset} onValueChange={setFromDataset} disabled={!isCreating}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="출발역 선택" />
+                                                <SelectTrigger className={!fromDataset ? "text-slate-500" : ""}>
+                                                    <SelectValue placeholder="-선택-" />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="SEMESTER_PLAN">MANUAL_PLAN (학기별 계획)</SelectItem>
