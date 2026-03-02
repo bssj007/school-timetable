@@ -58,7 +58,7 @@ interface DatasetBridge {
     updatedAt: string;
 }
 
-export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPassword: string, goAutoFillAnalysis: (grade: number, targetDataset: string) => void }) {
+export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPassword: string, goAutoFillAnalysis: (bridgeInfo: { grade: number, fromDataset: string, toDataset: string, mappingRules: any[] }) => void }) {
     const queryClient = useQueryClient();
     const [selectedBridgeId, setSelectedBridgeId] = useState<number | null>(null);
     const [editingBridge, setEditingBridge] = useState<DatasetBridge | null>(null);
@@ -641,7 +641,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                     variant="outline"
                                                     className="w-full text-purple-700 border-purple-200 hover:bg-purple-50 mt-2"
                                                     disabled={hasMappingChanges() || !toDataset}
-                                                    onClick={() => goAutoFillAnalysis(parseInt(targetGrade), toDataset)}
+                                                    onClick={() => goAutoFillAnalysis({ grade: parseInt(targetGrade), fromDataset, toDataset, mappingRules: mappingFields })}
                                                 >
                                                     자동 채우기 연계 분석 시작
                                                 </Button>
