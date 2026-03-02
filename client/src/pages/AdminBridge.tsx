@@ -73,7 +73,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
     const [name, setName] = useState("");
     const [fromDataset, setFromDataset] = useState("MANUAL_PLAN");
     const [toDataset, setToDataset] = useState("");
-    const [targetGrade, setTargetGrade] = useState("2");
+    const [targetGrade, setTargetGrade] = useState("");
 
     // Execution states
     const [execElectives, setExecElectives] = useState(true);
@@ -106,44 +106,40 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
 
     // 2. Fetch Subjects for From
     const fromSubjectsQuery = useQuery({
-        queryKey: ["admin", "bridge-subjects", fromDataset],
+        queryKey: ["admin", "bridge-subjects", fromDataset, targetGrade],
         queryFn: async () => {
-            // We need subjects for ALL grades to map them. Since comcigan-subjects expects a grade, 
-            // we fetch for 1, 2, 3 and combine them.
-            if (!fromDataset) return [];
-            const grades = [1, 2, 3];
+            if (!fromDataset || !targetGrade) return [];
+            const grade = parseInt(targetGrade);
             const allSubjects = new Set<string>();
 
-            await Promise.all(grades.map(async (g) => {
-                const res = await fetch(`/api/admin/comcigan-subjects?grade=${g}&dataset=${fromDataset}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    data.forEach((s: any) => allSubjects.add(s.subject));
-                }
-            }));
+            const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${fromDataset}`);
+            if (res.ok) {
+                const data = await res.json();
+                data.forEach((s: any) => allSubjects.add(s.subject));
+            }
+
             return Array.from(allSubjects).sort();
         },
-        enabled: !!fromDataset
+        enabled: !!fromDataset && !!targetGrade
     });
 
     // 3. Fetch Subjects for To
     const toSubjectsQuery = useQuery({
-        queryKey: ["admin", "bridge-subjects", toDataset],
+        queryKey: ["admin", "bridge-subjects", toDataset, targetGrade],
         queryFn: async () => {
-            if (!toDataset) return [];
-            const grades = [1, 2, 3];
+            if (!toDataset || !targetGrade) return [];
+            const grade = parseInt(targetGrade);
             const allSubjects = new Set<string>();
 
-            await Promise.all(grades.map(async (g) => {
-                const res = await fetch(`/api/admin/comcigan-subjects?grade=${g}&dataset=${toDataset}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    data.forEach((s: any) => allSubjects.add(s.subject));
-                }
-            }));
+            const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${toDataset}`);
+            if (res.ok) {
+                const data = await res.json();
+                data.forEach((s: any) => allSubjects.add(s.subject));
+            }
+
             return Array.from(allSubjects).sort();
         },
-        enabled: !!toDataset
+        enabled: !!toDataset && !!targetGrade
     });
 
     // Auto-populate mappings when fromSubject or toSubject list changes and we are creating
@@ -262,15 +258,16 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             return JSON.stringify(originalMapping) !== JSON.stringify(mappingFields) ||
                 editingBridge.name !== name ||
                 editingBridge.fromDataset !== fromDataset ||
-                editingBridge.toDataset !== toDataset;
+                editingBridge.toDataset !== toDataset ||
+                editingBridge.targetGrade?.toString() !== targetGrade;
         } catch {
             return true;
         }
     };
 
     const handleSave = () => {
-        if (!name || !fromDataset || !toDataset) {
-            toast.error("이름, 출발역, 도착역을 모두 입력해주세요.");
+        if (!name || !fromDataset || !toDataset || !targetGrade) {
+            toast.error("이름, 출발역, 도착역, 대상 학년을 모두 입력해주세요.");
             return;
         }
 
@@ -307,8 +304,8 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         setName("");
         setFromDataset("MANUAL_PLAN");
         setToDataset("");
-        setTargetGrade("2"); // Set default targetGrade
-        setMappingFields([{ from: "", to: "" }]);
+        setTargetGrade("");
+        setMappingFields([]);
         setIsCreating(true);
     };
 
@@ -318,7 +315,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         setName(bridge.name);
         setFromDataset(bridge.fromDataset);
         setToDataset(bridge.toDataset);
-        setTargetGrade(bridge.targetGrade ? bridge.targetGrade.toString() : "2");
+        setTargetGrade(bridge.targetGrade ? bridge.targetGrade.toString() : "");
         try {
             const parsed = JSON.parse(bridge.mappingData);
             // When opening an existing bridge, we consider all mappings as manual
@@ -430,8 +427,8 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         <div>
                                             <label className="text-sm font-bold block mb-1">대상 학년</label>
                                             <Select value={targetGrade} onValueChange={setTargetGrade}>
-                                                <SelectTrigger>
-                                                    <SelectValue />
+                                                <SelectTrigger className={!targetGrade ? "text-slate-500" : ""}>
+                                                    <SelectValue placeholder="-선택-" />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="1">1학년</SelectItem>
@@ -454,7 +451,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         )}
                                         {Array.isArray(mappingFields) && mappingFields.map((field, idx) => (
                                             <div key={idx} className="flex items-center gap-2">
-                                                <div className="flex-1 px-3 py-2 bg-slate-50 border rounded-md text-sm font-medium text-slate-700 truncate min-w-0" title={field.from}>
+                                                <div className="w-[35%] shrink-0 px-3 py-2 bg-slate-50 border rounded-md text-sm font-medium text-slate-700 truncate" title={field.from}>
                                                     {field.from}
                                                 </div>
                                                 <ArrowRight className="w-4 h-4 text-slate-300 shrink-0" />
