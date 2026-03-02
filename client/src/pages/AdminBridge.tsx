@@ -533,22 +533,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                                 <CommandInput
                                                                     placeholder="과목명 검색..."
                                                                     value={searchQuery}
-                                                                    onValueChange={(val) => {
-                                                                        const subjects = Array.isArray(toSubjectsQuery.data) ? toSubjectsQuery.data : [];
-                                                                        // Check if any subject matches the typed search query
-                                                                        const hasMatch = subjects.some(s =>
-                                                                            s.toLowerCase().includes(val.toLowerCase()) ||
-                                                                            s.replace(/\s+/g, "").toLowerCase().includes(val.replace(/\s+/g, "").toLowerCase())
-                                                                        );
-
-                                                                        if (!hasMatch && val.trim() !== "") {
-                                                                            // User requested: If no match is found, clear the search field
-                                                                            setSearchQuery("");
-                                                                            toast.info("검색된 과목이 없어 초기화되었습니다.");
-                                                                        } else {
-                                                                            setSearchQuery(val);
-                                                                        }
-                                                                    }}
+                                                                    onValueChange={setSearchQuery}
                                                                 />
                                                                 <CommandList>
                                                                     <CommandEmpty>결과가 없습니다.</CommandEmpty>

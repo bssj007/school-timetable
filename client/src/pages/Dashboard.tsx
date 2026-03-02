@@ -666,6 +666,30 @@ export default function Dashboard() {
     );
   }
 
+  // Check Maintenance Mode First
+  const isMaintenanceActive = Boolean(settings?.maintenance_mode?.active && !settings?.is_whitelisted);
+
+  if (isMaintenanceActive) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 text-center px-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-red-100 p-8 flex flex-col items-center">
+          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">사이트 점검 중</h2>
+          <p className="text-gray-600 mb-6 whitespace-pre-wrap leading-relaxed">
+            {settings?.maintenance_mode?.message || "서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요."}
+          </p>
+          {settings?.maintenance_mode?.endTime && (
+            <div className="py-2 px-4 bg-gray-100 rounded-lg text-sm text-gray-700 font-medium">
+              점검 종료 예정: {new Date(settings.maintenance_mode.endTime).toLocaleString()}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const isRestricted = Boolean(settings?.restricted_grades?.includes(parseInt(grade)) && !settings?.is_whitelisted);
   const isKakaoRestricted = Boolean(settings?.kakao_login_restricted && !settings?.is_whitelisted);
 
@@ -814,8 +838,18 @@ export default function Dashboard() {
 
 
       <div>
-        {/* 시간표 Card */}
-        <div>
+        {/* Visit Restriction Overlay (Completely Replaces Timetable Card) */}
+        {isRestricted ? (
+          <div className="min-h-[400px] mt-8 flex flex-col items-center justify-center bg-white/50 backdrop-blur-sm rounded-2xl border-2 border-red-100 shadow-sm p-8 max-w-2xl mx-auto">
+            <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
+              <ShieldAlert className="w-10 h-10" />
+            </div>
+            <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 text-center">접근 제한 안내</h3>
+            <p className="text-gray-600 text-lg md:text-xl whitespace-pre-wrap text-center leading-relaxed font-medium">
+              {settings?.restriction_reason || `${grade}학년 서비스가 일시적으로 제한되었습니다.`}
+            </p>
+          </div>
+        ) : (
           <Card className="py-1 gap-1 md:py-2 md:gap-2">
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
               {/* Desktop Title */}
@@ -823,7 +857,7 @@ export default function Dashboard() {
                 <h1 className="text-2xl font-bold whitespace-nowrap overflow-hidden text-ellipsis">
                   {grade || '?'}-{classNum || '?'} 시간표
                 </h1>
-                {!isRestricted && (grade === "2" || grade === "3") && (
+                {(grade === "2" || grade === "3") && (
                   <div className="relative inline-block">
                     <Button
                       size="sm"
@@ -843,9 +877,8 @@ export default function Dashboard() {
                 )}
               </div>
 
-
               {/* Mobile Elective Edit Button */}
-              {!isRestricted && (grade === "2" || grade === "3") && (
+              {(grade === "2" || grade === "3") && (
                 <div className="absolute left-0 -translate-x-[10px] top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center md:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative">
                     <Button
@@ -950,582 +983,563 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="px-1 pb-1 md:px-2 md:pb-2">
               <div className="overflow-x-auto relative">
-
-                {/* Visit Restriction Overlay */}
-                {isRestricted && (
-                  <div className="min-h-[300px] flex flex-col items-center justify-center bg-white rounded-lg p-6">
-                    <ShieldAlert className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">접근 제한 안내</h3>
-                    <p className="text-gray-600 whitespace-pre-wrap text-center">
-                      {settings?.restriction_reason || `${grade}학년 개발 중`}
-                    </p>
+                {/* Select Electives Warning Overlay */}
+                {isElectiveMissingImmediate && (
+                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
+                    <div
+                      className="absolute inset-0 rounded-lg pointer-events-none"
+                      style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.08) 10px, rgba(0,0,0,0.08) 20px)' }}
+                    ></div>
+                    <div className="relative text-center bg-white px-8 py-5 rounded-xl shadow-lg border-2 border-red-200 pointer-events-auto flex flex-col gap-2">
+                      <div className="text-red-500 text-lg md:text-2xl tracking-wide">
+                        [{grade}{classNum}{studentNumber?.padStart(2, '0')}]
+                      </div>
+                      <div className="text-black text-base md:text-xl">
+                        선택과목을 입력하세요
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                {/* Only render timetable and elective warnings if not restricted */}
-                {!isRestricted && (
-                  <>
-                    {/* Select Electives Warning Overlay */}
-                    {isElectiveMissingImmediate && (
-                      <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
-                        <div
-                          className="absolute inset-0 rounded-lg pointer-events-none"
-                          style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.08) 10px, rgba(0,0,0,0.08) 20px)' }}
-                        ></div>
-                        <div className="relative text-center bg-white px-8 py-5 rounded-xl shadow-lg border-2 border-red-200 pointer-events-auto flex flex-col gap-2">
-                          <div className="text-red-500 text-lg md:text-2xl tracking-wide">
-                            [{grade}{classNum}{studentNumber?.padStart(2, '0')}]
-                          </div>
-                          <div className="text-black text-base md:text-xl">
-                            선택과목을 입력하세요
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
+                  <thead>
+                    <tr>
+                      <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
+                      {weekdayNames.map((day, idx) => {
+                        const currentDate = toDateString(weekDates[idx]);
+                        const todayStr = toDateString(new Date());
+                        const isPast = currentDate < todayStr;
 
-                    <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
-                      <thead>
-                        <tr>
-                          <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
-                          {weekdayNames.map((day, idx) => {
-                            const currentDate = toDateString(weekDates[idx]);
-                            const todayStr = toDateString(new Date());
-                            const isPast = currentDate < todayStr;
+                        return (
+                          <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70" : ""}`}>
+                            <div className="text-sm font-semibold">{day}</div>
+                            <div className="text-[10px] md:text-xs text-gray-500 font-normal">
+                              {formatDate(weekDates[idx])}
+                            </div>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: 7 }, (_, i) => i + 1).map((classTime) => (
+                      <tr key={classTime}>
+                        <td className="border p-1 md:p-2 text-center font-medium bg-gray-50 text-sm w-8 md:w-10">
+                          {classTime}
+                        </td>
+                        {Array.from({ length: 5 }, (_, weekdayIdx) => {
+                          const dayItems = timetableByDay[weekdayIdx] || [];
+                          const item = dayItems.find((t) => t.classTime === classTime);
+                          const currentDate = toDateString(weekDates[weekdayIdx]);
 
-                            return (
-                              <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70" : ""}`}>
-                                <div className="text-sm font-semibold">{day}</div>
-                                <div className="text-[10px] md:text-xs text-gray-500 font-normal">
-                                  {formatDate(weekDates[idx])}
-                                </div>
-                              </th>
+                          // 오늘 날짜인지 확인
+                          const today = new Date();
+                          const todayStr = toDateString(today);
+                          const isToday = todayStr === currentDate;
+                          const isPast = currentDate < todayStr;
+
+                          // 해당 날짜와 교시에 수행평가가 있는지 확인
+                          const cellAssessments = assessments ? assessments.filter(a => {
+                            if (settings?.hide_past_assessments && isPast) return false;
+
+                            // Check item subject if it exists, otherwise check if group is active
+                            const group = computedGroups[`${weekdayIdx}-${classTime}`];
+                            const electiveSelection = currentProfile?.electives?.[group];
+                            const matchSubject = group && electiveSelection ? (electiveSelection.fullSubjectName || electiveSelection.subject) : (item ? item.subject : null);
+
+                            return matchSubject &&
+                              a.subject.trim() === matchSubject.trim() &&
+                              a.dueDate === currentDate &&
+                              a.classTime === classTime &&
+                              !a.isDone;
+                          }) : [];
+
+                          // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
+                          const bgColor = cellAssessments.length > 0
+                            ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
+                            : isToday
+                              ? "bg-red-50 hover:bg-red-100"
+                              : "bg-yellow-50 hover:bg-yellow-100";
+
+                          // 과거 날짜 스타일
+                          const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400" : "";
+
+                          // 선택된 셀 스타일
+                          const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
+                          const selectionStyle = isSelected ? "ring-2 ring-blue-500 ring-inset z-10" : "";
+
+                          // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
+                          const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
+
+                          const group = computedGroups[`${weekdayIdx}-${classTime}`];
+                          const electiveSelection = currentProfile?.electives?.[group];
+                          let displaySubject = item ? item.subject : "-";
+                          let displayTeacher = item ? item.teacher : "";
+
+                          const isFreePeriod = item && item.subject ? item.subject.trim().includes("공강") : false;
+
+                          let isElectiveActive = false;
+                          if (group && electiveSelection && !isFreePeriod) {
+                            displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject;
+                            let teacherFound = false;
+                            const electiveTeachers = electiveSelection.teacher ? electiveSelection.teacher.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
+                            const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
+
+                            const isEmptyClass = item && item.subject.trim() === "빈교실";
+
+                            // 1. Exact match across all classes for this timeslot
+                            let matchingSlot = slotItems.find(t =>
+                              t.subject.trim() === electiveSelection.subject.trim() &&
+                              electiveTeachers.includes(t.teacher.trim())
                             );
-                          })}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Array.from({ length: 7 }, (_, i) => i + 1).map((classTime) => (
-                          <tr key={classTime}>
-                            <td className="border p-1 md:p-2 text-center font-medium bg-gray-50 text-sm w-8 md:w-10">
-                              {classTime}
-                            </td>
-                            {Array.from({ length: 5 }, (_, weekdayIdx) => {
-                              const dayItems = timetableByDay[weekdayIdx] || [];
-                              const item = dayItems.find((t) => t.classTime === classTime);
-                              const currentDate = toDateString(weekDates[weekdayIdx]);
 
-                              // 오늘 날짜인지 확인
-                              const today = new Date();
-                              const todayStr = toDateString(today);
-                              const isToday = todayStr === currentDate;
-                              const isPast = currentDate < todayStr;
+                            if (matchingSlot) {
+                              displayTeacher = matchingSlot.teacher;
+                              teacherFound = true;
+                            }
 
-                              // 해당 날짜와 교시에 수행평가가 있는지 확인
-                              const cellAssessments = assessments ? assessments.filter(a => {
-                                if (settings?.hide_past_assessments && isPast) return false;
+                            // 2. Intersection match on base class (if subject changed abbreviation but teacher is identical)
+                            if (!teacherFound && item && item.teacher && electiveTeachers.includes(item.teacher.trim())) {
+                              displayTeacher = item.teacher;
+                              teacherFound = true;
+                            }
 
-                                // Check item subject if it exists, otherwise check if group is active
-                                const group = computedGroups[`${weekdayIdx}-${classTime}`];
-                                const electiveSelection = currentProfile?.electives?.[group];
-                                const matchSubject = group && electiveSelection ? (electiveSelection.fullSubjectName || electiveSelection.subject) : (item ? item.subject : null);
+                            // 3. Subject match on base class (only if student didn't specify teachers, or teacher was substituted)
+                            if (!teacherFound && electiveTeachers.length === 0 && item && item.subject.trim() === electiveSelection.subject.trim()) {
+                              displayTeacher = item.teacher;
+                              teacherFound = true;
+                            }
 
-                                return matchSubject &&
-                                  a.subject.trim() === matchSubject.trim() &&
-                                  a.dueDate === currentDate &&
-                                  a.classTime === classTime &&
-                                  !a.isDone;
-                              }) : [];
-
-                              // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
-                              const bgColor = cellAssessments.length > 0
-                                ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
-                                : isToday
-                                  ? "bg-red-50 hover:bg-red-100"
-                                  : "bg-yellow-50 hover:bg-yellow-100";
-
-                              // 과거 날짜 스타일
-                              const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400" : "";
-
-                              // 선택된 셀 스타일
-                              const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
-                              const selectionStyle = isSelected ? "ring-2 ring-blue-500 ring-inset z-10" : "";
-
-                              // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
-                              const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
-
-                              const group = computedGroups[`${weekdayIdx}-${classTime}`];
-                              const electiveSelection = currentProfile?.electives?.[group];
-                              let displaySubject = item ? item.subject : "-";
-                              let displayTeacher = item ? item.teacher : "";
-
-                              const isFreePeriod = item && item.subject ? item.subject.trim().includes("공강") : false;
-
-                              let isElectiveActive = false;
-                              if (group && electiveSelection && !isFreePeriod) {
-                                displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject;
-                                let teacherFound = false;
-                                const electiveTeachers = electiveSelection.teacher ? electiveSelection.teacher.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
-                                const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
-
-                                const isEmptyClass = item && item.subject.trim() === "빈교실";
-
-                                // 1. Exact match across all classes for this timeslot
-                                let matchingSlot = slotItems.find(t =>
-                                  t.subject.trim() === electiveSelection.subject.trim() &&
-                                  electiveTeachers.includes(t.teacher.trim())
-                                );
-
-                                if (matchingSlot) {
-                                  displayTeacher = matchingSlot.teacher;
-                                  teacherFound = true;
-                                }
-
-                                // 2. Intersection match on base class (if subject changed abbreviation but teacher is identical)
-                                if (!teacherFound && item && item.teacher && electiveTeachers.includes(item.teacher.trim())) {
-                                  displayTeacher = item.teacher;
-                                  teacherFound = true;
-                                }
-
-                                // 3. Subject match on base class (only if student didn't specify teachers, or teacher was substituted)
-                                if (!teacherFound && electiveTeachers.length === 0 && item && item.subject.trim() === electiveSelection.subject.trim()) {
-                                  displayTeacher = item.teacher;
-                                  teacherFound = true;
-                                }
-
-                                // 4. Any subject match across all classes (if base class is empty OR student didn't specify teachers)
-                                if (!teacherFound && (electiveTeachers.length === 0 || isEmptyClass)) {
-                                  matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
-                                  if (matchingSlot) {
-                                    displayTeacher = matchingSlot.teacher;
-                                    teacherFound = true;
-                                  }
-                                }
-
-                                if (teacherFound || isEmptyClass) {
-                                  isElectiveActive = true;
-                                  if (!teacherFound && isEmptyClass) {
-                                    // Base class is empty, and we couldn't find the specific teacher. 
-                                    // According to user, we MUST show the elective anyway since it's an empty class.
-                                    displayTeacher = electiveTeachers[0] || "";
-                                  }
-                                } else {
-                                  // 5. Final fallback: The elective class is NOT running today (e.g., completely changed to a generic class like '미창박상').
-                                  // Or computedGroups misidentified the group.
-                                  isElectiveActive = false;
-                                  if (item) {
-                                    displaySubject = item.subject;
-                                    displayTeacher = item.teacher;
-                                  } else {
-                                    displaySubject = "-";
-                                    displayTeacher = "";
-                                  }
-                                }
+                            // 4. Any subject match across all classes (if base class is empty OR student didn't specify teachers)
+                            if (!teacherFound && (electiveTeachers.length === 0 || isEmptyClass)) {
+                              matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
+                              if (matchingSlot) {
+                                displayTeacher = matchingSlot.teacher;
+                                teacherFound = true;
                               }
+                            }
 
-                              return (
-                                <td
-                                  key={weekdayIdx}
-                                  id={`cell-${weekdayIdx}-${classTime}`}
-                                  onClick={() => {
-                                    if (item || isElectiveActive) {
-                                      if (isSubjectDisabled && !isElectiveActive) {
-                                        toast.error(`${item.subject}은(는) 선택할 수 없습니다.`);
-                                        return;
-                                      }
-                                      if (!isPast || cellAssessments.length > 0) {
-                                        handleCellClick(weekdayIdx, classTime, displaySubject, weekDates[weekdayIdx], cellAssessments);
-                                      }
-                                    }
-                                  }}
-                                  className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors overflow-hidden
+                            if (teacherFound || isEmptyClass) {
+                              isElectiveActive = true;
+                              if (!teacherFound && isEmptyClass) {
+                                // Base class is empty, and we couldn't find the specific teacher. 
+                                // According to user, we MUST show the elective anyway since it's an empty class.
+                                displayTeacher = electiveTeachers[0] || "";
+                              }
+                            } else {
+                              // 5. Final fallback: The elective class is NOT running today (e.g., completely changed to a generic class like '미창박상').
+                              // Or computedGroups misidentified the group.
+                              isElectiveActive = false;
+                              if (item) {
+                                displaySubject = item.subject;
+                                displayTeacher = item.teacher;
+                              } else {
+                                displaySubject = "-";
+                                displayTeacher = "";
+                              }
+                            }
+                          }
+
+                          return (
+                            <td
+                              key={weekdayIdx}
+                              id={`cell-${weekdayIdx}-${classTime}`}
+                              onClick={() => {
+                                if (item || isElectiveActive) {
+                                  if (isSubjectDisabled && !isElectiveActive) {
+                                    toast.error(`${item.subject}은(는) 선택할 수 없습니다.`);
+                                    return;
+                                  }
+                                  if (!isPast || cellAssessments.length > 0) {
+                                    handleCellClick(weekdayIdx, classTime, displaySubject, weekDates[weekdayIdx], cellAssessments);
+                                  }
+                                }
+                              }}
+                              className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors overflow-hidden
                                 ${bgColor} ${pastStyle} ${selectionStyle}
                                 ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
-                                >
-                                  {isElectiveActive && group && (
-                                    <div className="absolute top-0 right-0 px-1 rounded-bl-md bg-orange-100 text-orange-800 text-[9px] md:text-[10px] font-bold">
-                                      {group}그룹
+                            >
+                              {isElectiveActive && group && (
+                                <div className="absolute top-0 right-0 px-1 rounded-bl-md bg-orange-100 text-orange-800 text-[9px] md:text-[10px] font-bold">
+                                  {group}그룹
+                                </div>
+                              )}
+                              {item || isElectiveActive ? (
+                                <div className="flex flex-col items-center justify-center h-full min-h-0">
+                                  <div className={`font-bold text-sm md:text-base leading-tight truncate w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}>{displaySubject}</div>
+                                  <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">{displayTeacher}</div>
+                                  {cellAssessments.length > 0 && (
+                                    <div className="mt-0.5 flex-shrink-0">
+                                      <div className="flex flex-wrap gap-0.5 justify-center">
+                                        {cellAssessments.map(a => (
+                                          <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"}`}>
+                                            {a.description && a.description.includes("차") ? a.description : '평가'}
+                                          </span>
+                                        ))}
+                                      </div>
                                     </div>
                                   )}
-                                  {item || isElectiveActive ? (
-                                    <div className="flex flex-col items-center justify-center h-full min-h-0">
-                                      <div className={`font-bold text-sm md:text-base leading-tight truncate w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}>{displaySubject}</div>
-                                      <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">{displayTeacher}</div>
-                                      {cellAssessments.length > 0 && (
-                                        <div className="mt-0.5 flex-shrink-0">
-                                          <div className="flex flex-wrap gap-0.5 justify-center">
-                                            {cellAssessments.map(a => (
-                                              <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"}`}>
-                                                {a.description && a.description.includes("차") ? a.description : '평가'}
-                                              </span>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span className="text-gray-300 text-sm">-</span>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </>
-                )}
+                                </div>
+                              ) : (
+                                <span className="text-gray-300 text-sm">-</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </CardContent>
-          </Card >
-        </div >
+          </Card>
+        )}
+      </div>
 
-        {/* 수행평가 추가 다이얼로그 */}
-        < Dialog open={showAddDialog} onOpenChange={(open) => {
-          setShowAddDialog(open);
-          if (!open) setSelectedCell(null);
-        }
-        }>
-          <DialogContent className="sm:max-w-[500px]" aria-describedby="add-assessment-description">
-            <DialogHeader>
-              <DialogTitle>수행평가 추가</DialogTitle>
-              <p id="add-assessment-description" className="text-sm text-gray-500 mt-1">
-                선택한 과목에 수행평가를 추가합니다
-              </p>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">날짜</label>
-                  <Input
-                    type="date"
-                    value={formData.assessmentDate}
-                    readOnly
-                    tabIndex={-1}
-                    className="bg-gray-100 focus:ring-0"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">차수</label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={formData.round}
-                    onChange={(e) => setFormData({ ...formData, round: e.target.value })}
-                    required
-                  >
-                    {[1, 2, 3, 4].map((r) => (
-                      <option key={r} value={r.toString()}>{r}차</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+      {/* 수행평가 추가 다이얼로그 */}
+      < Dialog open={showAddDialog} onOpenChange={(open) => {
+        setShowAddDialog(open);
+        if (!open) setSelectedCell(null);
+      }
+      }>
+        <DialogContent className="sm:max-w-[500px]" aria-describedby="add-assessment-description">
+          <DialogHeader>
+            <DialogTitle>수행평가 추가</DialogTitle>
+            <p id="add-assessment-description" className="text-sm text-gray-500 mt-1">
+              선택한 과목에 수행평가를 추가합니다
+            </p>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1">
-                  과목
-                </label>
+                <label className="block text-sm font-medium mb-1">날짜</label>
                 <Input
-                  value={formData.subject}
+                  type="date"
+                  value={formData.assessmentDate}
                   readOnly
                   tabIndex={-1}
                   className="bg-gray-100 focus:ring-0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  교시
-                </label>
-                <Input
-                  value={formData.classTime ? `${formData.classTime}교시` : ""}
-                  readOnly
-                  tabIndex={-1}
-                  className="bg-gray-100 focus:ring-0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">내용</label>
-                <Textarea
-                  value={formData.content}
-                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                  placeholder="수행평가 내용 입력"
                   required
-                  rows={3}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => {
-                  setShowAddDialog(false);
-                  setSelectedCell(null);
-                }} className="flex-1">
-                  취소
-                </Button>
-                <Button type="submit" className="flex-1">
-                  <Plus className="mr-2 h-4 w-4" />
-                  추가하기
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog >
-
-        {/* 수행평가 수정 다이얼로그 */}
-        < Dialog open={showEditDialog} onOpenChange={(open) => {
-          setShowEditDialog(open);
-          if (!open) setSelectedCell(null);
-        }}>
-          <DialogContent className="sm:max-w-[500px]" aria-describedby="edit-assessment-description">
-            <DialogHeader>
-              <DialogTitle>수행평가 수정</DialogTitle>
-              <p id="edit-assessment-description" className="text-sm text-gray-500 mt-1">
-                수행평가 정보를 수정합니다
-              </p>
-            </DialogHeader>
-            <form onSubmit={handleUpdate} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">날짜</label>
-                  <Input
-                    type="date"
-                    value={formData.assessmentDate}
-                    readOnly
-                    tabIndex={-1}
-                    className="bg-gray-100 focus:ring-0"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">차수</label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={formData.round}
-                    onChange={(e) => setFormData({ ...formData, round: e.target.value })}
-                    required
-                  >
-                    {[1, 2, 3, 4].map((r) => (
-                      <option key={r} value={r.toString()}>{r}차</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  과목
-                </label>
-                <Input
-                  value={formData.subject}
-                  readOnly
-                  tabIndex={-1}
-                  className="bg-gray-100 focus:ring-0"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">
-                  교시
-                </label>
-                <Input
-                  value={formData.classTime ? `${formData.classTime}교시` : ""}
-                  readOnly
-                  tabIndex={-1}
-                  className="bg-gray-100 focus:ring-0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">내용</label>
-                <Textarea
-                  value={formData.content}
-                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                  placeholder="수행평가 내용 입력"
+                <label className="block text-sm font-medium mb-1">차수</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={formData.round}
+                  onChange={(e) => setFormData({ ...formData, round: e.target.value })}
                   required
-                  rows={3}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => {
-                  setShowEditDialog(false);
-                  setSelectedCell(null);
-                }} className="flex-1">
-                  취소
-                </Button>
-                <Button type="submit" className="flex-1">
-                  수정하기
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog >
-
-        {/* 수행평가 정보 다이얼로그 */}
-        < Dialog open={showViewDialog} onOpenChange={(open) => {
-          setShowViewDialog(open);
-          if (!open) setSelectedCell(null);
-        }}>
-          <DialogContent className="sm:max-w-[500px]" aria-describedby="view-assessment-description">
-            <DialogHeader>
-              <DialogTitle>수행평가 정보</DialogTitle>
-              <p id="view-assessment-description" className="text-sm text-gray-500 mt-1">
-                이 교시에 등록된 수행평가 목록입니다
-              </p>
-            </DialogHeader>
-            <div className="space-y-4">
-              {viewingAssessments.map((assessment) => (
-                <div
-                  key={assessment.id}
-                  className="p-4 border rounded-lg bg-gray-50"
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-lg text-gray-900">
-                        {assessment.subject}
-                      </span>
-                      {assessment.description && (
-                        <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">
-                          {assessment.description}
-                        </span>
-                      )}
-                      {assessment.classTime && (
-                        <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
-                          {assessment.classTime}교시
-                        </span>
-                      )}
-                    </div>
-                    {/* 과거 날짜가 아닐 때만 수정/삭제 버튼 표시 */}
-                    {assessment.dueDate >= toDateString(new Date()) && (
-                      <div className="flex bg-gray-100 rounded-md">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-blue-500 hover:text-blue-600 hover:bg-blue-50 h-8 w-8"
-                          onClick={() => handleEditClick(assessment)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <div className="w-px bg-gray-200"></div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 w-8"
-                          onClick={() => {
-                            handleDelete(assessment.id);
-                            setShowViewDialog(false);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )
-                    }
-                  </div>
-                  <p className="text-gray-700 mb-2">{assessment.title}</p>
-                  <div className="text-xs text-gray-500">
-                    {assessment.dueDate}
-                  </div>
-                </div>
-              ))}
+                  {[1, 2, 3, 4].map((r) => (
+                    <option key={r} value={r.toString()}>{r}차</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="flex justify-end">
-              <Button variant="outline" onClick={() => {
-                setShowViewDialog(false);
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                과목
+              </label>
+              <Input
+                value={formData.subject}
+                readOnly
+                tabIndex={-1}
+                className="bg-gray-100 focus:ring-0"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                교시
+              </label>
+              <Input
+                value={formData.classTime ? `${formData.classTime}교시` : ""}
+                readOnly
+                tabIndex={-1}
+                className="bg-gray-100 focus:ring-0"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">내용</label>
+              <Textarea
+                value={formData.content}
+                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                placeholder="수행평가 내용 입력"
+                required
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => {
+                setShowAddDialog(false);
                 setSelectedCell(null);
-              }}>
-                닫기
+              }} className="flex-1">
+                취소
+              </Button>
+              <Button type="submit" className="flex-1">
+                <Plus className="mr-2 h-4 w-4" />
+                추가하기
               </Button>
             </div>
-          </DialogContent>
-        </Dialog >
+          </form>
+        </DialogContent>
+      </Dialog >
 
-        {/* 수행평가 목록 */}
-        < Card className="mt-8" >
-          <CardHeader>
-            <CardTitle>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`} 수행평가 ({weekRangeText})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* 수행평가 수정 다이얼로그 */}
+      < Dialog open={showEditDialog} onOpenChange={(open) => {
+        setShowEditDialog(open);
+        if (!open) setSelectedCell(null);
+      }}>
+        <DialogContent className="sm:max-w-[500px]" aria-describedby="edit-assessment-description">
+          <DialogHeader>
+            <DialogTitle>수행평가 수정</DialogTitle>
+            <p id="edit-assessment-description" className="text-sm text-gray-500 mt-1">
+              수행평가 정보를 수정합니다
+            </p>
+          </DialogHeader>
+          <form onSubmit={handleUpdate} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">날짜</label>
+                <Input
+                  type="date"
+                  value={formData.assessmentDate}
+                  readOnly
+                  tabIndex={-1}
+                  className="bg-gray-100 focus:ring-0"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">차수</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={formData.round}
+                  onChange={(e) => setFormData({ ...formData, round: e.target.value })}
+                  required
+                >
+                  {[1, 2, 3, 4].map((r) => (
+                    <option key={r} value={r.toString()}>{r}차</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                과목
+              </label>
+              <Input
+                value={formData.subject}
+                readOnly
+                tabIndex={-1}
+                className="bg-gray-100 focus:ring-0"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                교시
+              </label>
+              <Input
+                value={formData.classTime ? `${formData.classTime}교시` : ""}
+                readOnly
+                tabIndex={-1}
+                className="bg-gray-100 focus:ring-0"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">내용</label>
+              <Textarea
+                value={formData.content}
+                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                placeholder="수행평가 내용 입력"
+                required
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => {
+                setShowEditDialog(false);
+                setSelectedCell(null);
+              }} className="flex-1">
+                취소
+              </Button>
+              <Button type="submit" className="flex-1">
+                수정하기
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog >
 
-              {assessments && assessments.filter(assessment => {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                return new Date(assessment.dueDate) >= today;
-              }).length > 0 ? (
-                assessments
-                  .filter(assessment => {
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    return new Date(assessment.dueDate) >= today;
-                  })
-                  .map((assessment) => {
-                    const diffDate = Math.ceil((new Date(assessment.dueDate).getTime() - new Date(toDateString(new Date())).getTime()) / (1000 * 60 * 60 * 24));
-                    const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
-                    const isToday = diffDate === 0;
-
-                    return (
-                      <div
-                        key={assessment.id}
-                        className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'bg-red-50 border-red-200' : 'bg-white'}`}
+      {/* 수행평가 정보 다이얼로그 */}
+      < Dialog open={showViewDialog} onOpenChange={(open) => {
+        setShowViewDialog(open);
+        if (!open) setSelectedCell(null);
+      }}>
+        <DialogContent className="sm:max-w-[500px]" aria-describedby="view-assessment-description">
+          <DialogHeader>
+            <DialogTitle>수행평가 정보</DialogTitle>
+            <p id="view-assessment-description" className="text-sm text-gray-500 mt-1">
+              이 교시에 등록된 수행평가 목록입니다
+            </p>
+          </DialogHeader>
+          <div className="space-y-4">
+            {viewingAssessments.map((assessment) => (
+              <div
+                key={assessment.id}
+                className="p-4 border rounded-lg bg-gray-50"
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-lg text-gray-900">
+                      {assessment.subject}
+                    </span>
+                    {assessment.description && (
+                      <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">
+                        {assessment.description}
+                      </span>
+                    )}
+                    {assessment.classTime && (
+                      <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                        {assessment.classTime}교시
+                      </span>
+                    )}
+                  </div>
+                  {/* 과거 날짜가 아닐 때만 수정/삭제 버튼 표시 */}
+                  {assessment.dueDate >= toDateString(new Date()) && (
+                    <div className="flex bg-gray-100 rounded-md">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-blue-500 hover:text-blue-600 hover:bg-blue-50 h-8 w-8"
+                        onClick={() => handleEditClick(assessment)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <div className="w-px bg-gray-200"></div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 w-8"
                         onClick={() => {
-                          // Find the cell logic
-                          const targetDate = new Date(assessment.dueDate); // This might be string 'YYYY-MM-DD'
-                          // We need to find which column (weekday) and row (classTime) this corresponds to.
-                          // However, viewingAssessments are "this week's" assessments, so they should be on the screen.
-                          // But wait, the assessments list is "This Week's".
-
-                          // Let's find the weekday index.
-                          // assessment.weekday might be available if we joined it, but currently AssessmentItem has weekday optional.
-                          // Actually, we can calculate weekday from date.
-                          const aDate = new Date(assessment.dueDate);
-                          const day = aDate.getDay(); // 0(Sun) - 6(Sat). 
-                          const weekdayIdx = day === 0 ? 6 : day - 1; // 0(Mon) - 4(Fri). Adjust for Sunday (0) and Saturday (6) if needed, assuming Mon-Fri.
-
-                          // Check if weekday is valid (Mon-Fri) and classTime exists
-                          if (weekdayIdx >= 0 && weekdayIdx <= 4 && assessment.classTime) {
-                            const cellId = `cell-${weekdayIdx}-${assessment.classTime}`;
-                            const element = document.getElementById(cellId);
-                            if (element) {
-                              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                              element.classList.add('highlight-cell');
-                              setTimeout(() => {
-                                element.classList.remove('highlight-cell');
-                              }, 2000);
-                            }
-                          }
+                          handleDelete(assessment.id);
+                          setShowViewDialog(false);
                         }}
                       >
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-lg text-blue-600">
-                              {assessment.subject}
-                            </span>
-                            <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-                              {assessment.description}
-                            </span>
-                            <span className={`text-sm font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
-                              {dDay}
-                            </span>
-                          </div>
-                        </div>
-                        <p className="text-gray-700 mb-2">{assessment.title}</p>
-                        <div className="flex items-center gap-2 mt-auto">
-                          <div className="flex items-center text-sm text-gray-500">
-                            <span>{assessment.dueDate}</span>
-                            <span className="mx-2">|</span>
-                            <span>{assessment.classTime}교시</span>
-                          </div>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )
+                  }
+                </div>
+                <p className="text-gray-700 mb-2">{assessment.title}</p>
+                <div className="text-xs text-gray-500">
+                  {assessment.dueDate}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => {
+              setShowViewDialog(false);
+              setSelectedCell(null);
+            }}>
+              닫기
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog >
+
+      {/* 수행평가 목록 */}
+      < Card className="mt-8" >
+        <CardHeader>
+          <CardTitle>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`} 수행평가 ({weekRangeText})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+            {assessments && assessments.filter(assessment => {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              return new Date(assessment.dueDate) >= today;
+            }).length > 0 ? (
+              assessments
+                .filter(assessment => {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  return new Date(assessment.dueDate) >= today;
+                })
+                .map((assessment) => {
+                  const diffDate = Math.ceil((new Date(assessment.dueDate).getTime() - new Date(toDateString(new Date())).getTime()) / (1000 * 60 * 60 * 24));
+                  const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
+                  const isToday = diffDate === 0;
+
+                  return (
+                    <div
+                      key={assessment.id}
+                      className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'bg-red-50 border-red-200' : 'bg-white'}`}
+                      onClick={() => {
+                        // Find the cell logic
+                        const targetDate = new Date(assessment.dueDate); // This might be string 'YYYY-MM-DD'
+                        // We need to find which column (weekday) and row (classTime) this corresponds to.
+                        // However, viewingAssessments are "this week's" assessments, so they should be on the screen.
+                        // But wait, the assessments list is "This Week's".
+
+                        // Let's find the weekday index.
+                        // assessment.weekday might be available if we joined it, but currently AssessmentItem has weekday optional.
+                        // Actually, we can calculate weekday from date.
+                        const aDate = new Date(assessment.dueDate);
+                        const day = aDate.getDay(); // 0(Sun) - 6(Sat). 
+                        const weekdayIdx = day === 0 ? 6 : day - 1; // 0(Mon) - 4(Fri). Adjust for Sunday (0) and Saturday (6) if needed, assuming Mon-Fri.
+
+                        // Check if weekday is valid (Mon-Fri) and classTime exists
+                        if (weekdayIdx >= 0 && weekdayIdx <= 4 && assessment.classTime) {
+                          const cellId = `cell-${weekdayIdx}-${assessment.classTime}`;
+                          const element = document.getElementById(cellId);
+                          if (element) {
+                            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            element.classList.add('highlight-cell');
+                            setTimeout(() => {
+                              element.classList.remove('highlight-cell');
+                            }, 2000);
+                          }
+                        }
+                      }}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-lg text-blue-600">
+                            {assessment.subject}
+                          </span>
+                          <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                            {assessment.description}
+                          </span>
+                          <span className={`text-sm font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
+                            {dDay}
+                          </span>
                         </div>
                       </div>
-                    );
-                  })
-              ) : (
-                <div className="col-span-full text-center py-12 text-gray-500">
-                  이번 주 등록된 수행평가가 없습니다.
-                  <br />
-                  <span className="text-sm">시간표에서 과목을 클릭하여 추가하세요.</span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card >
-      </div >
-
-
+                      <p className="text-gray-700 mb-2">{assessment.title}</p>
+                      <div className="flex items-center gap-2 mt-auto">
+                        <div className="flex items-center text-sm text-gray-500">
+                          <span>{assessment.dueDate}</span>
+                          <span className="mx-2">|</span>
+                          <span>{assessment.classTime}교시</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+            ) : (
+              <div className="col-span-full text-center py-12 text-gray-500">
+                이번 주 등록된 수행평가가 없습니다.
+                <br />
+                <span className="text-sm">시간표에서 과목을 클릭하여 추가하세요.</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
       <div className="mt-2 flex justify-end">
         <Link href="/admin">
           <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-transparent text-xs font-normal h-auto p-0">
@@ -1571,6 +1585,6 @@ export default function Dashboard() {
           setShowElectiveDialog(false);
         }}
       />
-    </div >
+    </div>
   );
 }

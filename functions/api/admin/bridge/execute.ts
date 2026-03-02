@@ -47,8 +47,8 @@ export const onRequest = async (context: any) => {
         let mappingDict: Record<string, string> = {};
         if (Array.isArray(mappingData)) {
             mappingData.forEach((row: any) => {
-                if (row.from && row.to) {
-                    mappingDict[row.from] = row.to;
+                if (row.from) {
+                    mappingDict[row.from] = (!row.to || row.to === "_none_") ? "_none_" : row.to;
                 }
             });
         } else if (typeof mappingData === 'object') {
@@ -78,8 +78,11 @@ export const onRequest = async (context: any) => {
 
             const batchStatements = [];
             for (const config of sourceConfigs) {
-                // Apply mapping to subject name
-                const mappedSubject = mappingDict[config.subject] || config.subject;
+                // Apply mapping to subject name. Default to original if not found in dict.
+                const mappedSubject = mappingDict[config.subject] !== undefined ? mappingDict[config.subject] : config.subject;
+
+                // If the mapping explicitly says "_none_", we skip duplicating this subject.
+                if (mappedSubject === "_none_") continue;
 
                 batchStatements.push(env.DB.prepare(
                     "INSERT INTO elective_config (grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, isMovingClass, isCombinedClass, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -117,19 +120,23 @@ export const onRequest = async (context: any) => {
 
                     if (Array.isArray(electivesObj)) {
                         for (const subj of electivesObj) {
-                            if (mappingDict[subj]) {
-                                newElectives.push(mappingDict[subj]);
-                                changed = true;
+                            const mapped = mappingDict[subj] !== undefined ? mappingDict[subj] : subj;
+                            if (mapped === "_none_") {
+                                changed = true; // Subject dropped
                             } else {
-                                newElectives.push(subj);
+                                newElectives.push(mapped);
+                                if (mapped !== subj) changed = true;
                             }
                         }
                     } else if (typeof electivesObj === 'object') {
                         // Handle potential legacy formats if any
                         Object.keys(electivesObj).forEach(key => {
-                            // Assuming format { "blockA": "Subject", "blockB": "Subject" } etc
-                            if (mappingDict[electivesObj[key]]) {
-                                electivesObj[key] = mappingDict[electivesObj[key]];
+                            const mapped = mappingDict[electivesObj[key]] !== undefined ? mappingDict[electivesObj[key]] : electivesObj[key];
+                            if (mapped === "_none_") {
+                                delete electivesObj[key];
+                                changed = true;
+                            } else if (mapped !== electivesObj[key]) {
+                                electivesObj[key] = mapped;
                                 changed = true;
                             }
                         });
@@ -166,7 +173,7 @@ export const onRequest = async (context: any) => {
 
             const batchStatements = [];
             for (const assessment of assessments) {
-                if (mappingDict[assessment.subject]) {
+                if (mappingDict[assessment.subject] && mappingDict[assessment.subject] !== "_none_") {
                     batchStatements.push(env.DB.prepare(
                         "UPDATE performance_assessments SET subject = ? WHERE id = ?"
                     ).bind(mappingDict[assessment.subject], assessment.id));

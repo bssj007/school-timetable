@@ -2947,6 +2947,34 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
         setSubjects({ ...subjects, [grade]: currentSubjects.filter(s => s !== subj) });
     };
 
+    const importSubjectsForGrade = async () => {
+        const dataset = settingsQuery.data?.comcigan_dataset_selected;
+        if (!dataset) {
+            toast.error("지정된 원본 데이터셋이 없습니다. (설정 탭에서 확인)");
+            return;
+        }
+        try {
+            const res = await fetch(`/api/admin/electives?grade=${grade}&dataset=${dataset}`, {
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) throw new Error("가져오기 실패");
+            const data = await res.json();
+
+            const uniqueSubjects = Array.from(new Set(data.map((item: any) => item.subject))).filter(Boolean) as string[];
+            if (uniqueSubjects.length === 0) {
+                toast.error(`${grade}학년 데이터셋(${dataset})에 과목이 없습니다.`);
+                return;
+            }
+
+            if (!confirm(`원본 데이터셋 '${dataset}' 에서 ${grade}학년 (${uniqueSubjects.length}개 과목) 목록을 가져오시겠습니까?\n(현재 목록을 덮어씁니다)`)) return;
+
+            setSubjects(prev => ({ ...prev, [grade]: uniqueSubjects }));
+            toast.success("과목을 가져왔습니다. [수동 계획 전체 저장] 버튼을 눌러 적용하세요.");
+        } catch (e: any) {
+            toast.error(e.message);
+        }
+    };
+
     const handleTimetableChange = (weekday: number, period: number, subj: string) => {
         const classKey = `${grade}-${classNum}`;
         const prevClassTimetable = timetables[classKey] || {};
@@ -3084,6 +3112,9 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                             onKeyDown={(e) => { if (e.key === 'Enter') addSubject(); }}
                         />
                         <Button onClick={addSubject}>추가</Button>
+                        <Button variant="outline" onClick={importSubjectsForGrade}>
+                            이 학년 과목 가져오기
+                        </Button>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -3189,6 +3220,11 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const [ipWhitelist, setIpWhitelist] = useState("");
     const [kakaoLoginRestricted, setKakaoLoginRestricted] = useState(false);
 
+    const [maintenanceActive, setMaintenanceActive] = useState(false);
+    const [maintenanceDuration, setMaintenanceDuration] = useState("3"); // hours
+    const [maintenanceMessage, setMaintenanceMessage] = useState("서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
+    const [maintenanceEndTime, setMaintenanceEndTime] = useState<string | null>(null);
+
     const settingsQuery = useQuery({
         queryKey: ["admin", "settings", "visitRestriction"],
         queryFn: async () => {
@@ -3216,6 +3252,21 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
             );
 
             setKakaoLoginRestricted(settingsQuery.data.kakao_login_restricted === 'true');
+
+            try {
+                const parsedMaint = settingsQuery.data.maintenance_mode ? JSON.parse(settingsQuery.data.maintenance_mode) : null;
+                if (parsedMaint) {
+                    setMaintenanceActive(!!parsedMaint.active);
+                    setMaintenanceMessage(parsedMaint.message || "서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
+                    setMaintenanceEndTime(parsedMaint.endTime || null);
+                    // Duration is visual only during active set, keep default 3
+                } else {
+                    setMaintenanceActive(false);
+                    setMaintenanceEndTime(null);
+                }
+            } catch {
+                setMaintenanceActive(false);
+            }
 
             try {
                 const parsedIps = settingsQuery.data.ip_whitelist
@@ -3256,11 +3307,32 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
 
     const handleSave = () => {
         const ips = ipWhitelist.split('\n').map(ip => ip.trim()).filter(ip => ip.length > 0);
+
+        // Calculate new end time if activating now
+        let newEndTime = maintenanceEndTime;
+        if (maintenanceActive && !maintenanceEndTime) {
+            if (maintenanceDuration === "unlimited") {
+                newEndTime = null;
+            } else {
+                const hours = parseInt(maintenanceDuration);
+                const endDate = new Date();
+                endDate.setHours(endDate.getHours() + hours);
+                newEndTime = endDate.toISOString();
+            }
+        } else if (!maintenanceActive) {
+            newEndTime = null;
+        }
+
         saveMutation.mutate({
             restricted_grades: JSON.stringify(restrictedGrades),
             restriction_reason: restrictionReason,
             ip_whitelist: JSON.stringify(ips),
             kakao_login_restricted: String(kakaoLoginRestricted),
+            maintenance_mode: JSON.stringify({
+                active: maintenanceActive,
+                endTime: newEndTime,
+                message: maintenanceMessage
+            })
         });
     };
 
@@ -3294,90 +3366,185 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const savedIpsNormalized = savedIpsStr.split('\n').map(r => r.trim()).filter(r => r.length > 0).join('\n');
     const isIpsDirty = currentIpsNormalized !== savedIpsNormalized;
 
-    const isDirty = isGradesDirty || isReasonDirty || isKakaoRestrictedDirty || isIpsDirty;
+    let savedMaintStr = "";
+    try {
+        const parsed = settingsQuery.data?.maintenance_mode ? JSON.parse(settingsQuery.data.maintenance_mode) : null;
+        savedMaintStr = parsed ? JSON.stringify({ active: !!parsed.active, message: parsed.message || "" }) : "";
+    } catch { }
+
+    const currentMaintStr = JSON.stringify({ active: maintenanceActive, message: maintenanceMessage });
+    // We ignore duration/endTime check for dirtiness since it's dynamic
+    const isMaintenanceDirty = currentMaintStr !== savedMaintStr;
+
+    const isDirty = isGradesDirty || isReasonDirty || isKakaoRestrictedDirty || isIpsDirty || isMaintenanceDirty;
 
     return (
-        <Card className="w-full max-w-2xl">
-            <CardHeader>
-                <CardTitle>방문제한 및 예외 IP 관리</CardTitle>
-                <CardDescription>
-                    특정 학년의 접속을 일시적으로 제한하고, 사유를 안내할 수 있습니다. 화이트리스트에 등록된 IP는 제한을 무시하고 접속할 수 있습니다.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="space-y-3">
-                    <label className="text-sm font-medium">제한할 학년 선택</label>
-                    <div className="flex gap-4">
-                        {[1, 2, 3].map((grade) => (
-                            <div key={grade} className="flex items-center space-x-2">
-                                <Checkbox
-                                    id={`grade-${grade}`}
-                                    checked={restrictedGrades.includes(grade)}
-                                    onCheckedChange={() => toggleGrade(grade)}
-                                />
-                                <label
-                                    htmlFor={`grade-${grade}`}
-                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        <div className="space-y-6 flex flex-col items-center">
+            {/* Maintenance Mode Card */}
+            <Card className="w-full max-w-2xl border-red-200 shadow-sm">
+                <CardHeader className="bg-red-50/50 rounded-t-xl pb-4">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <CardTitle className="text-red-600 flex items-center gap-2">
+                                <ShieldAlert className="w-5 h-5" />
+                                사이트 점검 모드 (Maintenance)
+                            </CardTitle>
+                            <CardDescription className="text-red-900/60 mt-1">
+                                활성화 시 지정된 시간 동안 관리자 및 IP 화이트리스트를 제외한 모든 접속이 차단됩니다.
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <span className={`text-sm font-bold ${maintenanceActive ? 'text-red-600' : 'text-slate-400'}`}>
+                                {maintenanceActive ? "점검 중" : "비활성"}
+                            </span>
+                            <Checkbox
+                                checked={maintenanceActive}
+                                onCheckedChange={(c) => {
+                                    setMaintenanceActive(!!c);
+                                    if (!c) setMaintenanceEndTime(null);
+                                }}
+                                className="w-6 h-6 rounded-full data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+                            />
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold">점검 진행 시간</label>
+                            <Select
+                                value={maintenanceDuration}
+                                onValueChange={setMaintenanceDuration}
+                                disabled={maintenanceActive && !!maintenanceEndTime} // Once active with an end time, disable duration change unless turned off and back on
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="기간 선택" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="1">1시간</SelectItem>
+                                    <SelectItem value="3">3시간</SelectItem>
+                                    <SelectItem value="12">12시간</SelectItem>
+                                    <SelectItem value="24">24시간 (1일)</SelectItem>
+                                    <SelectItem value="unlimited">무제한 (수동 해제)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {maintenanceActive && maintenanceEndTime && (
+                                <p className="text-xs text-red-500 font-medium">
+                                    종료 예정: {new Date(maintenanceEndTime).toLocaleString()}
+                                </p>
+                            )}
+                        </div>
+                        <div className="space-y-2 flex flex-col justify-end pb-[2px]">
+                            {maintenanceActive && (
+                                <Button
+                                    variant="outline"
+                                    className="border-red-200 text-red-600 hover:bg-red-50"
+                                    onClick={() => {
+                                        setMaintenanceActive(false);
+                                        setMaintenanceEndTime(null);
+                                        handleSave(); // Immediate save optional, but let's let big save do it
+                                    }}
                                 >
-                                    {grade}학년
-                                </label>
-                            </div>
-                        ))}
+                                    즉시 점검 해제
+                                </Button>
+                            )}
+                        </div>
                     </div>
-                </div>
 
-                <div className="space-y-2">
-                    <label className="text-sm font-medium">제한 사유 안내문구</label>
-                    <Input
-                        value={restrictionReason}
-                        onChange={(e) => setRestrictionReason(e.target.value)}
-                        placeholder="예: 2학기 시간표 업데이트 중입니다."
-                    />
-                    <p className="text-xs text-gray-500">
-                        제한된 학년의 학생이 학번을 입력하면 시간표 대신 이 문구가 표시됩니다.
-                    </p>
-                </div>
-
-                <div className="space-y-4 pt-4 border-t">
-                    <h4 className="text-sm font-bold">카카오 연동 제한</h4>
-                    <div className="flex items-center space-x-2">
-                        <Checkbox
-                            id="kakao-restrict"
-                            checked={kakaoLoginRestricted}
-                            onCheckedChange={(c) => setKakaoLoginRestricted(!!c)}
+                    <div className="space-y-2 mt-4">
+                        <label className="text-sm font-bold">점검 안내 메시지</label>
+                        <Textarea
+                            value={maintenanceMessage}
+                            onChange={(e) => setMaintenanceMessage(e.target.value)}
+                            placeholder="점검 사유를 입력하세요 (예: DB 안정화 작업)"
+                            rows={3}
                         />
-                        <label
-                            htmlFor="kakao-restrict"
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                            카카오 로그인 연동 제한 (모든 학년 적용)
-                        </label>
                     </div>
-                </div>
+                </CardContent>
+            </Card>
 
-                <div className="space-y-2 pt-4 border-t border-slate-100">
-                    <label className="text-sm font-medium">IP 화이트리스트 (줄바꿈으로 구분)</label>
-                    <Textarea
-                        value={ipWhitelist}
-                        onChange={(e) => setIpWhitelist(e.target.value)}
-                        placeholder="192.168.1.100&#10;10.0.0.5"
-                        rows={5}
-                        className="font-mono text-sm"
-                    />
-                    <p className="text-xs text-gray-500">
-                        여기에 등록된 IP는 위에서 설정된 방문제한의 영향을 받지 않습니다. (예: 교내망 IP, 관리자 IP 등)
-                    </p>
-                </div>
+            <Card className="w-full max-w-2xl">
+                <CardHeader>
+                    <CardTitle>방문제한 및 예외 IP 관리</CardTitle>
+                    <CardDescription>
+                        특정 학년의 접속을 일시적으로 제한하고, 사유를 안내할 수 있습니다. 화이트리스트에 등록된 IP는 제한을 무시하고 접속할 수 있습니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                        <label className="text-sm font-medium">제한할 학년 선택</label>
+                        <div className="flex gap-4">
+                            {[1, 2, 3].map((grade) => (
+                                <div key={grade} className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id={`grade-${grade}`}
+                                        checked={restrictedGrades.includes(grade)}
+                                        onCheckedChange={() => toggleGrade(grade)}
+                                    />
+                                    <label
+                                        htmlFor={`grade-${grade}`}
+                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                    >
+                                        {grade}학년
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
 
-                <div className="flex justify-end gap-2 pt-4">
-                    <Button variant="outline" onClick={resetState} disabled={!isDirty || saveMutation.isPending}>
-                        변경 취소
-                    </Button>
-                    <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
-                        {saveMutation.isPending ? "저장 중..." : "설정 저장"}
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">제한 사유 안내문구</label>
+                        <Input
+                            value={restrictionReason}
+                            onChange={(e) => setRestrictionReason(e.target.value)}
+                            placeholder="예: 2학기 시간표 업데이트 중입니다."
+                        />
+                        <p className="text-xs text-gray-500">
+                            제한된 학년의 학생이 학번을 입력하면 시간표 대신 이 문구가 표시됩니다.
+                        </p>
+                    </div>
+
+                    <div className="space-y-4 pt-4 border-t">
+                        <h4 className="text-sm font-bold">카카오 연동 제한</h4>
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                                id="kakao-restrict"
+                                checked={kakaoLoginRestricted}
+                                onCheckedChange={(c) => setKakaoLoginRestricted(!!c)}
+                            />
+                            <label
+                                htmlFor="kakao-restrict"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                            >
+                                카카오 로그인 연동 제한 (모든 학년 적용)
+                            </label>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2 pt-4 border-t border-slate-100">
+                        <label className="text-sm font-medium">IP 화이트리스트 (줄바꿈으로 구분)</label>
+                        <Textarea
+                            value={ipWhitelist}
+                            onChange={(e) => setIpWhitelist(e.target.value)}
+                            placeholder="192.168.1.100&#10;10.0.0.5"
+                            rows={5}
+                            className="font-mono text-sm"
+                        />
+                        <p className="text-xs text-gray-500">
+                            여기에 등록된 IP는 위에서 설정된 방문제한의 영향을 받지 않습니다. (예: 교내망 IP, 관리자 IP 등)
+                        </p>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-4">
+                        <Button variant="outline" onClick={resetState} disabled={!isDirty || saveMutation.isPending}>
+                            변경 취소
+                        </Button>
+                        <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
+                            {saveMutation.isPending ? "저장 중..." : "설정 저장"}
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
     );
 }
