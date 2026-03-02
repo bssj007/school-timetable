@@ -155,7 +155,10 @@ export const onRequest = async (context: any) => {
 
         // --- 3. Migrate Assessments ---
         if (migrateAssessments) {
-            const { results: assessments } = await env.DB.prepare("SELECT id, subject FROM performance_assessments").all();
+            // Apply mappings only to assessments belonging to the targetGrade
+            const { results: assessments } = await env.DB.prepare(
+                "SELECT id, subject FROM performance_assessments WHERE grade = ?"
+            ).bind(targetGrade).all();
 
             const batchStatements = [];
             for (const assessment of assessments) {

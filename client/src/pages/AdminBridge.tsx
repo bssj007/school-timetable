@@ -420,6 +420,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                     <SelectValue placeholder="도착역 선택" />
                                                 </SelectTrigger>
                                                 <SelectContent>
+                                                    <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
                                                     {Array.isArray(datasetOptions) && datasetOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                                                 </SelectContent>
                                             </Select>
@@ -592,16 +593,16 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                     <div className="p-4 bg-white space-y-4 text-sm">
 
                                         {/* Auto-fill Trigger Action */}
-                                        {fromDataset === 'MANUAL_PLAN' && toDataset === 'MANUAL_PLAN' && (
+                                        {fromDataset === 'MANUAL_PLAN' && (
                                             <div className="space-y-2 border-b pb-4">
                                                 <p className="font-semibold text-slate-700">선택과목 자동 채우기</p>
                                                 <p className="text-xs text-slate-500">
-                                                    출발역과 도착역이 모두 <strong>MANUAL_PLAN</strong>일 경우 학기별 계획 데이터를 바탕으로 1:1 과목명 규칙을 적용하면서 선택과목 블록을 자동으로 생성할 수 있습니다.
+                                                    출발역이 <strong>MANUAL_PLAN (학기별 계획)</strong> 일 경우, 학기별 계획 데이터를 바탕으로 <strong>{toDataset || '선택된 도착역'}</strong>으로 선택과목을 자동으로 생성할 수 있습니다.
                                                 </p>
                                                 <Button
                                                     variant="outline"
                                                     className="w-full text-purple-700 border-purple-200 hover:bg-purple-50 mt-2"
-                                                    disabled={hasMappingChanges()}
+                                                    disabled={hasMappingChanges() || !toDataset}
                                                     onClick={() => goAutoFillAnalysis(parseInt(targetGrade), toDataset)}
                                                 >
                                                     자동 채우기 연계 분석 시작
@@ -610,7 +611,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         )}
 
                                         {/* Classic Execution Checkboxes */}
-                                        {!(fromDataset === 'MANUAL_PLAN' && toDataset === 'MANUAL_PLAN') && (
+                                        {fromDataset !== 'MANUAL_PLAN' && (
                                             <div className="space-y-2 pt-2">
                                                 <p className="font-semibold text-slate-700">마이그레이션 옵션</p>
 

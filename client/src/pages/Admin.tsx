@@ -2674,7 +2674,7 @@ function AutoFillAnalyzer({ grade, adminPassword, onBack, initialTargetDataset }
             const payloads = Array.from(payloadMap.values());
 
             // Clear old mapping for this dataset explicitly to handle duplicate groups fresh
-            await fetch(`/api/admin/electives?dataset=${targetDataset}`, {
+            await fetch(`/api/admin/electives?dataset=${targetDataset}&grade=${grade}`, {
                 method: "DELETE",
                 headers: { "X-Admin-Password": adminPassword }
             });

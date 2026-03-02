@@ -100,10 +100,23 @@ export const onRequest = async (context: any) => {
             const result = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'manual_semester_plan'").first();
             if (result && result.value) {
                 const manualPlan = JSON.parse(result.value);
-                const subjects = manualPlan.subjects || [];
 
-                // comcigan-subjects expects an array of { subject, teacher }
-                const mappedSubjects = subjects.map((subj: string) => {
+                // Dynamically find subjects used ONLY in the requested grade
+                const usedSubjects = new Set<string>();
+                if (manualPlan.timetables) {
+                    Object.keys(manualPlan.timetables).forEach(classKey => {
+                        const [g, c] = classKey.split('-');
+                        if (parseInt(g) === grade) {
+                            const tt = manualPlan.timetables[classKey];
+                            Object.values(tt).forEach((subj: any) => {
+                                if (subj) usedSubjects.add(subj);
+                            });
+                        }
+                    });
+                }
+
+                // Convert to array and handle the fact that subject might have "Teacher" suffix
+                const mappedSubjects = Array.from(usedSubjects).map((subj: string) => {
                     const parts = subj.split(' ');
                     const teacher = parts.length > 1 ? parts[parts.length - 1] : "";
                     const subjectName = parts.length > 1 ? parts.slice(0, -1).join(' ') : subj;
