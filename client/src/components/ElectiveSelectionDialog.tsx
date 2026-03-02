@@ -594,6 +594,14 @@ export default function ElectiveSelectionDialog({
                                             </div>
                                         );
                                     })}
+                                    {/* Mobile-only: 자동 탐색으로 전환 below dropdowns */}
+                                    {!forceManualMode && (
+                                        <div className="flex justify-center sm:hidden pt-2">
+                                            <Button variant="outline" size="sm" onClick={() => setMode("smart")}>
+                                                자동 탐색으로 전환
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </>
@@ -623,9 +631,9 @@ export default function ElectiveSelectionDialog({
                                 수동 입력으로 전환
                             </Button>
                         )}
-                        {/* 자동 탐색으로 전환 — only shown when user was auto-fallback to manual, not when admin forced manual */}
+                        {/* 자동 탐색으로 전환 — desktop only; mobile version shown inline above */}
                         {mode === "manual" && !forceManualMode && (
-                            <Button variant="ghost" size="sm" onClick={() => setMode("smart")}>
+                            <Button variant="ghost" size="sm" onClick={() => setMode("smart")} className="hidden sm:flex">
                                 자동 탐색으로 전환
                             </Button>
                         )}

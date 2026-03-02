@@ -239,9 +239,13 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 });
             }
 
-            // Grade 1 uses its own dataset setting; grade 2/3 use the shared one
+            // Grade 1 dataset resolution:
+            //   datasetSelectedGrade1 === null  → key never in DB; fall back to grade 2/3 setting (backward compat)
+            //   datasetSelectedGrade1 === ''    → user explicitly set 자동; auto-detect independently for grade 1
+            //   datasetSelectedGrade1 === 'xxx' → specific dataset chosen; use it
+            // Grade 2/3: always use comcigan_dataset_selected ('' = auto-detect)
             const effectiveDataset = grade === 1
-                ? (datasetSelectedGrade1 || datasetSelected)
+                ? (datasetSelectedGrade1 === null ? datasetSelected : datasetSelectedGrade1)
                 : datasetSelected;
 
             if (datasetOverride && datasetOverride !== ('_auto_')) {
