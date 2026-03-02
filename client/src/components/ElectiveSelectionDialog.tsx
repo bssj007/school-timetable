@@ -50,7 +50,7 @@ type SelectionResult = Record<string, { subject: string; teacher: string; fullSu
 //   { result: null, solutionCount: N }              → ambiguous (>1 solutions)
 // =====================================================================
 
-const MAX_SOLUTIONS_TO_COLLECT = 4; // Collect up to 4, stop early after that
+const MAX_SOLUTIONS_TO_COLLECT = 100; // Collect up to 100, stop early after that
 
 type SolverOutcome = {
     result: SelectionResult | null;
@@ -154,6 +154,8 @@ export default function ElectiveSelectionDialog({
 
     // Manual mode (fallback): group -> selection
     const [manualSelections, setManualSelections] = useState<SelectionResult>({});
+    // Smart ambiguous mode: a solution the user clicked to pick (pending confirmation)
+    const [selectedSolution, setSelectedSolution] = useState<SelectionResult | null>(null);
 
     // ── Data Fetching ──────────────────────────────────────────────────
 
@@ -265,6 +267,7 @@ export default function ElectiveSelectionDialog({
         } else {
             setSmartSelected([]);
             setManualSelections({});
+            setSelectedSolution(null);
             setSearchQuery("");
             setMode("smart");
             initializedRef.current = false;
@@ -307,7 +310,10 @@ export default function ElectiveSelectionDialog({
 
     const saveMutation = useMutation({
         mutationFn: async (overrideElectives?: SelectionResult) => {
-            const toSave = overrideElectives ?? (mode === "smart" ? smartAssigned! : manualSelections);
+            // Priority: explicit override > selectedSolution (ambiguous pick) > smart/manual
+            const toSave = overrideElectives
+                ?? selectedSolution
+                ?? (mode === "smart" ? smartAssigned! : manualSelections);
             const res = await fetch('/api/electives', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -333,7 +339,7 @@ export default function ElectiveSelectionDialog({
         onError: (err: Error) => toast.error(`저장 실패: ${err.message}`),
     });
 
-    const canSaveSmart = smartSelected.length === groupCount && smartAssigned !== null;
+    const canSaveSmart = (smartSelected.length === groupCount && smartAssigned !== null) || selectedSolution !== null;
     const canSaveManual = Object.keys(electivesByGroup).every(g => manualSelections[g]);
 
     // ── Render ─────────────────────────────────────────────────────────
@@ -428,18 +434,26 @@ export default function ElectiveSelectionDialog({
 
                                     {/* Auto-assignment preview / ambiguous picker */}
                                     {smartSelected.length > 0 && (
-                                        <div className={`rounded-lg border p-3 text-sm space-y-2 ${hasConflict ? "border-red-200 bg-red-50"
-                                            : smartAssigned ? "border-green-200 bg-green-50"
-                                                : "border-slate-200 bg-slate-50"
+                                        <div className={`rounded-lg border p-3 text-sm space-y-2 ${(isAmbiguous && (solverOutcome?.solutionCount ?? 0) <= 3)
+                                                ? "border-yellow-200 bg-yellow-50"
+                                                : hasConflict
+                                                    ? "border-red-200 bg-red-50"
+                                                    : smartAssigned
+                                                        ? "border-green-200 bg-green-50"
+                                                        : "border-slate-200 bg-slate-50"
                                             }`}>
-                                            <p className={`font-semibold text-xs uppercase tracking-wide ${hasConflict ? "text-red-600"
-                                                : smartAssigned ? "text-green-700"
-                                                    : "text-slate-500"
+                                            <p className={`font-semibold text-xs uppercase tracking-wide ${(isAmbiguous && (solverOutcome?.solutionCount ?? 0) <= 3)
+                                                    ? "text-yellow-700"
+                                                    : hasConflict
+                                                        ? "text-red-600"
+                                                        : smartAssigned
+                                                            ? "text-green-700"
+                                                            : "text-slate-500"
                                                 }`}>
                                                 {isAmbiguous
                                                     ? (solverOutcome && solverOutcome.solutionCount <= 3
                                                         ? `⚠️ 가능한 조합 ${solverOutcome.solutionCount}가지 — 하나를 선택하세요`
-                                                        : "⚠️ 조합이 너무 많습니다 — 수동 모드로 직접 지정하세요"
+                                                        : `⚠️ 가능한 조합 ${solverOutcome?.solutionCount}${(solverOutcome?.solutionCount ?? 0) >= MAX_SOLUTIONS_TO_COLLECT ? '가지 이상' : '가지'} — 수동 모드로 직접 지정하세요`
                                                     )
                                                     : hasConflict
                                                         ? "⚠️ 그룹 배정 불가 — 과목 조합을 다시 선택하거나 수동 모드를 이용하세요"
@@ -465,32 +479,41 @@ export default function ElectiveSelectionDialog({
                                             {/* Ambiguous ≤3: selectable solution cards */}
                                             {isAmbiguous && solverOutcome && solverOutcome.solutionCount <= 3 && (
                                                 <div className="space-y-2 pt-1">
-                                                    {solverOutcome.allSolutions.map((sol, idx) => (
-                                                        <button
-                                                            key={idx}
-                                                            onClick={() => saveMutation.mutate(sol)}
-                                                            className="w-full text-left rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 px-3 py-2 transition-all"
-                                                        >
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    {Object.entries(sol).sort(([a], [b]) => a.localeCompare(b)).map(([group, sel]) => (
-                                                                        <div key={group} className="flex items-center gap-1">
-                                                                            <span className="font-bold text-xs text-blue-400">{group}</span>
-                                                                            <span className="text-slate-800 font-medium text-sm">{sel.subject}</span>
-                                                                        </div>
-                                                                    ))}
+                                                    {solverOutcome.allSolutions.map((sol, idx) => {
+                                                        const isChosen = selectedSolution !== null &&
+                                                            JSON.stringify(sol) === JSON.stringify(selectedSolution);
+                                                        return (
+                                                            <button
+                                                                key={idx}
+                                                                onClick={() => setSelectedSolution(isChosen ? null : sol)}
+                                                                className={`w-full text-left rounded-lg border px-3 py-2 transition-all ${isChosen
+                                                                    ? "border-blue-500 bg-blue-100 ring-2 ring-blue-300"
+                                                                    : "border-blue-200 bg-blue-50 hover:bg-blue-100"
+                                                                    }`}
+                                                            >
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {Object.entries(sol).sort(([a], [b]) => a.localeCompare(b)).map(([group, sel]) => (
+                                                                            <div key={group} className="flex items-center gap-1">
+                                                                                <span className="font-bold text-xs text-blue-400">{group}</span>
+                                                                                <span className="text-slate-800 font-medium text-sm">{sel.subject}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                    <span className={`text-xs shrink-0 ml-2 ${isChosen ? "text-blue-600 font-semibold" : "text-blue-400"}`}>
+                                                                        {isChosen ? "✓ 선택됨" : "선택"}
+                                                                    </span>
                                                                 </div>
-                                                                <span className="text-xs text-blue-500 shrink-0 ml-2">이걸로 저장 →</span>
-                                                            </div>
-                                                        </button>
-                                                    ))}
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
 
                                             {/* Ambiguous >3: just a note (manual mode button in footer) */}
                                             {isAmbiguous && solverOutcome && solverOutcome.solutionCount >= MAX_SOLUTIONS_TO_COLLECT && (
                                                 <p className="text-xs text-red-500">
-                                                    가능한 조합이 너무 많아 자동 배정이 불가합니다. 수동 모드로 전환하세요.
+                                                    가능한 조합이 {solverOutcome.solutionCount}가지 이상으로 너무 많아 자동 배정이 불가합니다. 수동 모드로 전환하세요.
                                                 </p>
                                             )}
 
