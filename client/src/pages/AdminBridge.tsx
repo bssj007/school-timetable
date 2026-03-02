@@ -42,6 +42,78 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
     const [execAssessments, setExecAssessments] = useState(true);
     const [isExecuting, setIsExecuting] = useState(false);
 
+    // 1. Fetch Datasets
+    const rawDataQuery = useQuery({
+        queryKey: ["admin", "rawComcigan", "부산성지고"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/raw_comcigan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ schoolName: "부산성지고" })
+            });
+            const json = await res.json();
+            if (!res.ok || json?.error) return null;
+            return json.data;
+        }
+    });
+
+    const datasetOptions = React.useMemo(() => {
+        if (!rawDataQuery.data) return [];
+        return Object.keys(rawDataQuery.data).filter((k: string) => {
+            const val = rawDataQuery.data[k];
+            return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+        });
+    }, [rawDataQuery.data]);
+
+    // 2. Fetch Subjects for From
+    const fromSubjectsQuery = useQuery({
+        queryKey: ["admin", "bridge-subjects", fromDataset],
+        queryFn: async () => {
+            // We need subjects for ALL grades to map them. Since comcigan-subjects expects a grade, 
+            // we fetch for 1, 2, 3 and combine them.
+            if (!fromDataset) return [];
+            const grades = [1, 2, 3];
+            const allSubjects = new Set<string>();
+
+            await Promise.all(grades.map(async (g) => {
+                const res = await fetch(`/api/admin/comcigan-subjects?grade=${g}&dataset=${fromDataset}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    data.forEach((s: any) => allSubjects.add(s.subject));
+                }
+            }));
+            return Array.from(allSubjects).sort();
+        },
+        enabled: !!fromDataset
+    });
+
+    // 3. Fetch Subjects for To
+    const toSubjectsQuery = useQuery({
+        queryKey: ["admin", "bridge-subjects", toDataset],
+        queryFn: async () => {
+            if (!toDataset) return [];
+            const grades = [1, 2, 3];
+            const allSubjects = new Set<string>();
+
+            await Promise.all(grades.map(async (g) => {
+                const res = await fetch(`/api/admin/comcigan-subjects?grade=${g}&dataset=${toDataset}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    data.forEach((s: any) => allSubjects.add(s.subject));
+                }
+            }));
+            return Array.from(allSubjects).sort();
+        },
+        enabled: !!toDataset
+    });
+
+    // Auto-populate mappings when fromSubject list changes and we are creating
+    useEffect(() => {
+        if (isCreating && fromSubjectsQuery.data) {
+            setMappingFields(fromSubjectsQuery.data.map(subj => ({ from: subj, to: "" })));
+        }
+    }, [fromSubjectsQuery.data, isCreating]);
+
     const { data: bridges, isLoading } = useQuery({
         queryKey: ["admin", "bridges"],
         queryFn: async () => {
@@ -263,14 +335,29 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         </div>
                                         <div>
                                             <label className="text-sm font-bold block mb-1">출발역 (From)</label>
-                                            <Input value={fromDataset} onChange={e => setFromDataset(e.target.value)} placeholder="기존 데이터셋 명" />
+                                            <Select value={fromDataset} onValueChange={setFromDataset} disabled={!isCreating}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="출발역 선택" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획)</SelectItem>
+                                                    {datasetOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                         <div className="flex justify-center pb-2">
                                             <ArrowRight className="w-6 h-6 text-slate-400" />
                                         </div>
                                         <div>
                                             <label className="text-sm font-bold block mb-1">도착역 (To)</label>
-                                            <Input value={toDataset} onChange={e => setToDataset(e.target.value)} placeholder="새 데이터셋 명" />
+                                            <Select value={toDataset} onValueChange={setToDataset} disabled={!isCreating}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="도착역 선택" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {datasetOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                     </div>
                                 </div>
@@ -278,42 +365,42 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                 <div className="border rounded-xl flex flex-col">
                                     <div className="p-3 bg-slate-100 border-b flex justify-between items-center rounded-t-xl">
                                         <h3 className="font-bold text-sm">1:1 과목명 매핑 규칙</h3>
-                                        <Button variant="outline" size="sm" onClick={() => setMappingFields([...mappingFields, { from: "", to: "" }])}>
-                                            <Plus className="w-4 h-4 mr-1" /> 규칙 추가
-                                        </Button>
+                                        <span className="text-xs text-slate-500">{mappingFields.length}개 과목 발견됨</span>
                                     </div>
                                     <div className="p-4 space-y-2 max-h-[400px] overflow-auto bg-white">
+                                        {fromSubjectsQuery.isLoading && isCreating && (
+                                            <p className="text-sm text-center text-slate-400 py-4">과목 목록을 불러오는 중...</p>
+                                        )}
                                         {mappingFields.map((field, idx) => (
                                             <div key={idx} className="flex items-center gap-2">
-                                                <Input
-                                                    placeholder="변경 전 명칭 (예: 화작)"
-                                                    value={field.from}
-                                                    onChange={e => {
-                                                        const newFields = [...mappingFields];
-                                                        newFields[idx].from = e.target.value;
-                                                        setMappingFields(newFields);
-                                                    }}
-                                                />
+                                                <div className="flex-1 px-3 py-2 bg-slate-50 border rounded-md text-sm font-medium text-slate-700 truncate min-w-0" title={field.from}>
+                                                    {field.from}
+                                                </div>
                                                 <ArrowRight className="w-4 h-4 text-slate-300 shrink-0" />
-                                                <Input
-                                                    placeholder="변경 후 명칭 (예: 화법과작문)"
-                                                    value={field.to}
-                                                    onChange={e => {
-                                                        const newFields = [...mappingFields];
-                                                        newFields[idx].to = e.target.value;
-                                                        setMappingFields(newFields);
-                                                    }}
-                                                />
-                                                <Button
-                                                    variant="ghost" size="icon" className="shrink-0 text-red-500"
-                                                    onClick={() => setMappingFields(mappingFields.filter((_, i) => i !== idx))}
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
+                                                <div className="flex-1 min-w-0">
+                                                    <Select
+                                                        value={field.to || "_none_"}
+                                                        onValueChange={val => {
+                                                            const newFields = [...mappingFields];
+                                                            newFields[idx].to = val === "_none_" ? "" : val;
+                                                            setMappingFields(newFields);
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className={`w-full ${!field.to && 'border-red-200 bg-red-50'}`}>
+                                                            <SelectValue placeholder="매핑 선택..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="_none_" className="text-red-500">매핑 안함 (삭제됨/유실됨)</SelectItem>
+                                                            {toSubjectsQuery.data?.map(opt => (
+                                                                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
                                             </div>
                                         ))}
-                                        {mappingFields.length === 0 && (
-                                            <p className="text-sm text-center text-slate-400 py-4">매핑 규칙이 없습니다.</p>
+                                        {mappingFields.length === 0 && !fromSubjectsQuery.isLoading && (
+                                            <p className="text-sm text-center text-slate-400 py-4">추출된 출발역 대상 과목이 없습니다.</p>
                                         )}
                                     </div>
                                     <div className="p-3 border-t bg-slate-50 flex justify-between items-center rounded-b-xl gap-2">
