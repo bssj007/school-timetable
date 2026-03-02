@@ -132,6 +132,8 @@ export default function Dashboard() {
   const [showElectiveWarning, setShowElectiveWarning] = useState<boolean>(false);
   const [showInstructionTooltip, setShowInstructionTooltip] = useState<boolean>(false);
   const initialConfigRef = useRef(`${grade}-${classNum}-${studentNumber}`);
+  // Track whether the instruction tooltip was visible before the elective dialog opened
+  const tooltipWasVisibleRef = useRef(false);
 
   // Extract datasetId early for use in effects
   const datasetId = (queryClient.getQueryData(['timetable', schoolName, grade, classNum]) as any)?.datasetId || '';
@@ -177,6 +179,16 @@ export default function Dashboard() {
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, [isConfigured, grade, isElectiveEntered]);
+
+  // Hide instruction tooltip while the elective dialog is open, restore on close
+  useEffect(() => {
+    if (showElectiveDialog) {
+      tooltipWasVisibleRef.current = showInstructionTooltip;
+      if (showInstructionTooltip) setShowInstructionTooltip(false);
+    } else {
+      if (tooltipWasVisibleRef.current) setShowInstructionTooltip(true);
+    }
+  }, [showElectiveDialog]);
 
   // 1. 시간표 조회
   // 1. 시간표 조회
@@ -1580,9 +1592,13 @@ export default function Dashboard() {
         onSaveSuccess={() => {
           setShowElectiveDialog(false);
           setIsElectiveEntered(true);
+          // Restore tooltip if it was visible before the dialog
+          if (tooltipWasVisibleRef.current) setShowInstructionTooltip(true);
         }}
         onBack={() => {
           setShowElectiveDialog(false);
+          // Restore tooltip if it was visible before the dialog
+          if (tooltipWasVisibleRef.current) setShowInstructionTooltip(true);
         }}
       />
     </div>

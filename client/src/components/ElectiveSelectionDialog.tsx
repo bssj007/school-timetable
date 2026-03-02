@@ -41,20 +41,22 @@ interface ElectiveSelectionDialogProps {
 }
 
 // =====================================================================
-// Backtracking CSP Solver
-// Maps selected subject names to specific groups (A/B/C...)
-// Returns null if no valid assignment is found.
+// Backtracking CSP Solver — finds ALL valid group assignments.
+// Returns:
+type SelectionResult = Record<string, { subject: string; teacher: string; fullSubjectName?: string }>;
+//
+//   { result: SelectionResult, solutionCount: 1 }  → unique, auto-assign OK
+//   { result: null, solutionCount: 0 }              → conflict (no solution)
+//   { result: null, solutionCount: N }              → ambiguous (>1 solutions)
 // =====================================================================
 
-type SelectionResult = Record<string, { subject: string; teacher: string; fullSubjectName?: string }>;
+type SolverOutcome = { result: SelectionResult | null; solutionCount: number };
 
 function solveAssignment(
     selectedSubjects: string[],
     groups: Record<string, ElectiveConfig[]>,
     electiveConfigs: ElectiveConfig[]
-): SelectionResult | null {
-    const groupKeys = Object.keys(groups).sort();
-
+): SolverOutcome {
     // Build a map: subject -> which groups it appears in
     const subjectGroups: Record<string, string[]> = {};
     for (const subject of selectedSubjects) {
@@ -66,7 +68,6 @@ function solveAssignment(
         }
     }
 
-    // Build teacher lookup: subject -> group -> teachers string
     const getTeacherForSubjectInGroup = (subject: string, group: string): string => {
         const configs = (groups[group] || []).filter(c => c.subject === subject);
         const teachers = new Set(configs.map(c => c.fullTeacherName || c.originalTeacher).filter(Boolean));
@@ -78,39 +79,48 @@ function solveAssignment(
         return config?.fullSubjectName;
     };
 
-    // Backtracking search
-    const result: Record<string, string> = {}; // group -> subject
-    const subjectAssigned: Record<string, string> = {}; // subject -> group
+    let solutionCount = 0;
+    let firstSolution: Record<string, string> | null = null;
+    const current: Record<string, string> = {}; // group -> subject
 
-    function backtrack(idx: number): boolean {
-        if (idx === selectedSubjects.length) return true;
+    function backtrack(idx: number): void {
+        if (solutionCount > 1) return; // Early exit — already ambiguous
+        if (idx === selectedSubjects.length) {
+            solutionCount++;
+            if (solutionCount === 1) {
+                firstSolution = { ...current };
+            }
+            return;
+        }
         const subject = selectedSubjects[idx];
-        const candidateGroups = subjectGroups[subject];
-        for (const group of candidateGroups) {
-            if (!result[group]) { // group not yet taken
-                result[group] = subject;
-                subjectAssigned[subject] = group;
-                if (backtrack(idx + 1)) return true;
-                delete result[group];
-                delete subjectAssigned[subject];
+        for (const group of (subjectGroups[subject] || [])) {
+            if (!current[group]) {
+                current[group] = subject;
+                backtrack(idx + 1);
+                delete current[group];
+                if (solutionCount > 1) return; // Prune early
             }
         }
-        return false;
     }
 
-    if (!backtrack(0)) return null;
+    backtrack(0);
 
-    // Build the output SelectionResult
+    if (solutionCount !== 1 || !firstSolution) {
+        return { result: null, solutionCount };
+    }
+
+    // Build output
     const output: SelectionResult = {};
-    for (const [group, subject] of Object.entries(result)) {
+    for (const [group, subject] of Object.entries(firstSolution as Record<string, string>)) {
         output[group] = {
             subject,
             teacher: getTeacherForSubjectInGroup(subject, group),
             fullSubjectName: getFullSubjectForSubjectInGroup(subject, group),
         };
     }
-    return output;
+    return { result: output, solutionCount: 1 };
 }
+
 
 // =====================================================================
 // Non-elective (mandatory non-moving) subject keywords to exclude
@@ -224,12 +234,15 @@ export default function ElectiveSelectionDialog({
 
     // ── Solver ─────────────────────────────────────────────────────────
 
-    const smartAssigned = useMemo<SelectionResult | null>(() => {
+    const solverOutcome = useMemo<ReturnType<typeof solveAssignment> | null>(() => {
         if (smartSelected.length !== groupCount || groupCount === 0) return null;
         return solveAssignment(smartSelected, electivesByGroup, electiveConfigs || []);
     }, [smartSelected, electivesByGroup, groupCount, electiveConfigs]);
 
-    const hasConflict = smartSelected.length === groupCount && smartAssigned === null;
+    const smartAssigned = solverOutcome?.result ?? null;
+    // 0 solutions = conflict (no valid assignment), >1 solutions = ambiguous
+    const hasConflict = smartSelected.length === groupCount && solverOutcome !== null && solverOutcome.result === null;
+    const isAmbiguous = hasConflict && (solverOutcome?.solutionCount ?? 0) > 1;
 
     // ── Initialization ─────────────────────────────────────────────────
 
@@ -241,7 +254,7 @@ export default function ElectiveSelectionDialog({
                 if (existingProfile?.electives && typeof existingProfile.electives === 'object') {
                     const existing = existingProfile.electives as SelectionResult;
                     // Restore smart mode selections from saved data
-                    const subjects = Object.values(existing).map(v => v.subject).filter(Boolean);
+                    const subjects = Object.values(existing).map((v: any) => v.subject).filter(Boolean);
                     setSmartSelected(subjects);
                     setManualSelections(existing);
                 } else {
@@ -268,8 +281,8 @@ export default function ElectiveSelectionDialog({
             } else if (prev.length < groupCount) {
                 return [...prev, subject];
             } else {
-                // Replace oldest
-                return [...prev.slice(1), subject];
+                // Replace most recently added (last)
+                return [...prev.slice(0, -1), subject];
             }
         });
     };
@@ -418,20 +431,32 @@ export default function ElectiveSelectionDialog({
                                     {smartSelected.length > 0 && (
                                         <div className={`rounded-lg border p-3 text-sm space-y-1.5 ${hasConflict ? "border-red-200 bg-red-50" : smartAssigned ? "border-green-200 bg-green-50" : "border-slate-200 bg-slate-50"}`}>
                                             <p className={`font-semibold text-xs uppercase tracking-wide ${hasConflict ? "text-red-600" : smartAssigned ? "text-green-700" : "text-slate-500"}`}>
-                                                {hasConflict ? "⚠️ 그룹 배정 불가 — 조합을 다시 선택하거나 수동 모드를 이용하세요" : smartAssigned ? "✅ 자동 그룹 배정 완료" : "과목을 모두 선택하면 자동 배정합니다"}
+                                                {isAmbiguous
+                                                    ? "⚠️ 조합이 여러 가지 — 수동 모드로 직접 지정하세요"
+                                                    : hasConflict
+                                                        ? "⚠️ 그룹 배정 불가 — 조합을 다시 선택하거나 수동 모드를 이용하세요"
+                                                        : smartAssigned
+                                                            ? "✅ 자동 그룹 배정 완료"
+                                                            : "과목을 모두 선택하면 자동 배정합니다"
+                                                }
                                             </p>
                                             {smartAssigned && (
                                                 <div className="flex flex-wrap gap-2">
-                                                    {Object.entries(smartAssigned).sort(([a], [b]) => a.localeCompare(b)).map(([group, { subject, teacher }]) => (
+                                                    {Object.entries(smartAssigned).sort(([a], [b]) => a.localeCompare(b)).map(([group, sel]) => (
                                                         <div key={group} className="flex items-center gap-1 bg-white rounded-md border px-2 py-1">
                                                             <span className="font-bold text-xs text-slate-500">{group}</span>
-                                                            <span className="text-slate-800 font-medium">{subject}</span>
-                                                            {teacher && <span className="text-xs text-slate-400 ml-1">{teacher}</span>}
+                                                            <span className="text-slate-800 font-medium">{sel.subject}</span>
+                                                            {sel.teacher && <span className="text-xs text-slate-400 ml-1">{sel.teacher}</span>}
                                                         </div>
                                                     ))}
                                                 </div>
                                             )}
-                                            {hasConflict && (
+                                            {isAmbiguous && (
+                                                <p className="text-xs text-red-500">
+                                                    이 과목 조합은 {solverOutcome?.solutionCount}가지 그룹 배정이 가능합니다. 수동 모드로 직접 지정하세요.
+                                                </p>
+                                            )}
+                                            {hasConflict && !isAmbiguous && (
                                                 <p className="text-xs text-red-500">
                                                     선택한 과목들이 동일한 그룹에 중복 배정되어 충돌이 발생합니다.
                                                 </p>
