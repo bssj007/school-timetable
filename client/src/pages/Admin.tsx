@@ -1068,6 +1068,101 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
+// 6.6 Elective Input Mode Settings
+// ----------------------------------------------------------------------
+function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [selectedMode, setSelectedMode] = useState<'auto' | 'manual'>('auto');
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "electiveInputMode"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        },
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            setSelectedMode((settingsQuery.data.elective_input_mode as 'auto' | 'manual') || 'auto');
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (mode: string) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ elective_input_mode: mode }),
+            });
+            if (!res.ok) throw new Error("Failed to save");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("\uc124\uc815\uc774 \uc800\uc7a5\ub418\uc5c8\uc2b5\ub2c8\ub2e4.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err: Error) => toast.error(`\uc800\uc7a5 \uc2e4\ud328: ${err.message}`),
+    });
+
+    const originalMode = (settingsQuery.data?.elective_input_mode as 'auto' | 'manual') || 'auto';
+    const isDirty = selectedMode !== originalMode;
+
+    return (
+        <Card className="w-full max-w-lg">
+            <CardHeader>
+                <CardTitle>\ud559\uc0dd \uc120\ud0dd\uacfc\ubaa9 \uc785\ub825\ubc29\uc2dd</CardTitle>
+                <CardDescription>
+                    \uba54\uc778 \ud654\uba74\uc758 \uc120\ud0dd\uacfc\ubaa9 \ud3b8\uc9d1\ucc3d\uc5d0\uc11c \uc0ac\uc6a9\ud560 \uc785\ub825 \ubc29\uc2dd\uc744 \uc120\ud0dd\ud569\ub2c8\ub2e4.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="space-y-3">
+                    <label
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedMode === 'auto' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}
+                        onClick={() => setSelectedMode('auto')}
+                    >
+                        <input type="radio" className="mt-0.5" checked={selectedMode === 'auto'} onChange={() => setSelectedMode('auto')} />
+                        <div>
+                            <p className="font-semibold text-sm">\uc790\ub3d9 \ud0d0\uc0c9 (\uae30\ubcf8\uac12)</p>
+                            <p className="text-xs text-slate-500">
+                                \ud559\uc0dd\uc774 \uacfc\ubaa9\uba85\ub9cc \uc120\ud0dd\ud558\uba74 \uac00\ub2a5\ud55c ABCD \uc870\ud569\uc744 \uc790\ub3d9\uc73c\ub85c \ud0d0\uc0c9\ud569\ub2c8\ub2e4.
+                                \uc870\ud569\uc774 \ud558\ub098\uc774\uba74 \uc790\ub3d9 \ubc30\uc815, \uc5ec\ub7ec \uac00\uc9c0\uc774\uba74 \uc120\ud0dd \ucee4\ub4dc \ud45c\uc2dc.
+                            </p>
+                        </div>
+                    </label>
+
+                    <label
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedMode === 'manual' ? 'border-orange-500 bg-orange-50' : 'border-slate-200 hover:bg-slate-50'}`}
+                        onClick={() => setSelectedMode('manual')}
+                    >
+                        <input type="radio" className="mt-0.5" checked={selectedMode === 'manual'} onChange={() => setSelectedMode('manual')} />
+                        <div>
+                            <p className="font-semibold text-sm">\uc218\ub3d9 \uc785\ub825</p>
+                            <p className="text-xs text-slate-500">
+                                \uc790\ub3d9 \ud0d0\uc0c9 \uc5c6\uc774 ABCD \uadf8\ub8f9\ubcc4\ub85c \uc9c1\uc811 \ub4dc\ub86d\ub2e4\uc6b4\uc73c\ub85c \uc785\ub825\ud569\ub2c8\ub2e4.
+                            </p>
+                        </div>
+                    </label>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t">
+                    <Button variant="outline" onClick={() => setSelectedMode(originalMode)} disabled={!isDirty || saveMutation.isPending}>
+                        \ucde8\uc18c
+                    </Button>
+                    <Button onClick={() => saveMutation.mutate(selectedMode)} disabled={!isDirty || saveMutation.isPending}>
+                        {saveMutation.isPending ? "\uc800\uc7a5 \uc911..." : "\uc800\uc7a5"}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
 // 7. Etc Manager (Miscellaneous features like Raw Comcigan Data)
 // ----------------------------------------------------------------------
 function EtcManager({ adminPassword }: { adminPassword: string }) {
@@ -1141,6 +1236,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 >
                     <Grid2X2 className="w-4 h-4 mr-2" />
                     그룹 확인기 / 오버라이드
+                </Button>
+                <Button
+                    variant={selectedMenu === "elective-input-mode" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("elective-input-mode")}
+                >
+                    <Settings className="w-4 h-4 mr-2" />
+                    선택과목 입력방식
                 </Button>
                 {/* Additional list items can go here later */}
             </div>
@@ -1231,6 +1334,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
 
                         <div className="flex-1 overflow-y-auto">
                             <GroupChecker adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "elective-input-mode" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">학생 선택과목 입력방식</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <ElectiveInputModeSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -2300,9 +2414,12 @@ export default function Admin() {
 
 function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPassword: string }) {
     const queryClient = useQueryClient();
+    // Grade 2/3 dataset selection
     const [selectedProp, setSelectedProp] = useState<string>('');
+    // Grade 1 dataset selection (separate)
+    const [selectedPropGrade1, setSelectedPropGrade1] = useState<string>('');
 
-    // Fetch current setting
+    // Fetch current settings
     const settingsQuery = useQuery({
         queryKey: ["admin", "settings"],
         queryFn: async () => {
@@ -2319,6 +2436,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     useEffect(() => {
         if (settingsQuery.data) {
             setSelectedProp(settingsQuery.data.comcigan_dataset_selected || '_auto_');
+            setSelectedPropGrade1(settingsQuery.data.comcigan_dataset_selected_grade1 || '_auto_');
         }
     }, [settingsQuery.data]);
 
@@ -2353,61 +2471,77 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
     });
 
-    const handleSave = () => {
-        saveMutation.mutate({ comcigan_dataset_selected: selectedProp === '_auto_' ? '' : selectedProp });
-    };
-
-    const handleCancel = () => {
-        setSelectedProp(settingsQuery.data?.comcigan_dataset_selected || '_auto_');
-    };
-
-    const displayValue = selectedProp || '_auto_';
-
-    const handleValueChange = (val: string) => {
-        setSelectedProp(val);
-    };
-
     const latestDatasetName = timetableProps && timetableProps.length > 0 ? timetableProps[0] : '없음';
 
+    // Grade 2/3 dirty tracking
+    const displayValue = selectedProp || '_auto_';
     const originalValue = settingsQuery.data?.comcigan_dataset_selected || '_auto_';
     const isDirty = displayValue !== originalValue;
+
+    // Grade 1 dirty tracking
+    const displayValueG1 = selectedPropGrade1 || '_auto_';
+    const originalValueG1 = settingsQuery.data?.comcigan_dataset_selected_grade1 || '_auto_';
+    const isDirtyG1 = displayValueG1 !== originalValueG1;
+
+    const DatasetDropdown = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+        <Select value={value} onValueChange={onChange}>
+            <SelectTrigger className="w-full">
+                <SelectValue placeholder="데이터셋 선택" />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value="_auto_">자동 (최신: {latestDatasetName})</SelectItem>
+                <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획 수동 입력)</SelectItem>
+                {timetableProps.map(prop => (
+                    <SelectItem key={prop} value={prop}>{prop}</SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
 
     return (
         <Card className="w-full max-w-2xl">
             <CardHeader>
-                <CardTitle>출처 데이터셋 선택</CardTitle>
+                <CardTitle>출체 데이터셋 선택</CardTitle>
                 <CardDescription>
-                    메인 화면의 시간표에서 출력할 원본 데이터셋을 선택합니다.
-                    "자동"으로 설정할 경우 가장 최신 데이터셋을 자동으로 선택합니다.
+                    메인 화면의 시간표에서 출력할 원본 데이터셋을 학년별로 선택합니다.
+                    &quot;자동&quot;으로 설정할 경우 가장 최신 데이터셋을 자동으로 선택합니다.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-                <div className="space-y-2">
-                    <label className="text-sm font-medium">데이터셋</label>
-                    <Select value={displayValue} onValueChange={handleValueChange}>
-                        <SelectTrigger className="w-full">
-                            <SelectValue placeholder="데이터셋 선택" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="_auto_">자동 (최신: {latestDatasetName})</SelectItem>
-                            <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획 수동 입력)</SelectItem>
-                            {timetableProps.map(prop => (
-                                <SelectItem key={prop} value={prop}>
-                                    {prop}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+
+                {/* Grade 1 dataset */}
+                <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-700">1학년 데이터셋</span>
+                    </div>
+                    <DatasetDropdown value={displayValueG1} onChange={setSelectedPropGrade1} />
+                    <div className="flex justify-end gap-2 pt-1">
+                        <Button variant="outline" size="sm" onClick={() => setSelectedPropGrade1(originalValueG1)} disabled={!isDirtyG1 || saveMutation.isPending}>
+                            변경 취소
+                        </Button>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected_grade1: selectedPropGrade1 === '_auto_' ? '' : selectedPropGrade1 })} disabled={!isDirtyG1 || saveMutation.isPending}>
+                            {saveMutation.isPending ? "저장 중..." : "저장"}
+                        </Button>
+                    </div>
                 </div>
 
-                <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={handleCancel} disabled={!isDirty || saveMutation.isPending}>
-                        변경 취소
-                    </Button>
-                    <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
-                        {saveMutation.isPending ? "저장 중..." : "저장"}
-                    </Button>
+                {/* Grade 2/3 dataset */}
+                <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-700">2/3학년 데이터셋</span>
+                        <span className="text-xs text-slate-400">(그룹 확인기, 선택과목 자동 등에 적용)</span>
+                    </div>
+                    <DatasetDropdown value={displayValue} onChange={setSelectedProp} />
+                    <div className="flex justify-end gap-2 pt-1">
+                        <Button variant="outline" size="sm" onClick={() => setSelectedProp(originalValue)} disabled={!isDirty || saveMutation.isPending}>
+                            변경 취소
+                        </Button>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected: selectedProp === '_auto_' ? '' : selectedProp })} disabled={!isDirty || saveMutation.isPending}>
+                            {saveMutation.isPending ? "저장 중..." : "저장"}
+                        </Button>
+                    </div>
                 </div>
+
             </CardContent>
         </Card>
     );
@@ -2886,11 +3020,10 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                 let loadedSubjects = data.subjects || {};
 
                 // Backwards compatibility: upgrade string[] to Record<string, string[]>
+                // Only migrate to grade "2" — grade 1 and 3 start empty and must be set separately
                 if (Array.isArray(loadedSubjects)) {
                     loadedSubjects = {
-                        "1": [...loadedSubjects],
-                        "2": [...loadedSubjects],
-                        "3": [...loadedSubjects]
+                        "2": [...loadedSubjects]
                     };
                 }
 
@@ -2947,33 +3080,34 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
         setSubjects({ ...subjects, [grade]: currentSubjects.filter(s => s !== subj) });
     };
 
-    const importSubjectsForGrade = async () => {
-        const dataset = settingsQuery.data?.comcigan_dataset_selected;
-        if (!dataset) {
-            toast.error("지정된 원본 데이터셋이 없습니다. (설정 탭에서 확인)");
-            return;
-        }
-        try {
-            const res = await fetch(`/api/admin/electives?grade=${grade}&dataset=${dataset}`, {
+    const clearSubjectsForGrade = () => {
+        if (!confirm(`${grade}학년 과목 목록을 모두 삭제하시겠습니까?`)) return;
+        setSubjects(prev => ({ ...prev, [grade]: [] }));
+    };
+
+    // Auto-load subjects for the selected grade when the grade has no subjects yet
+    const autoImportDataset = settingsQuery.data?.comcigan_dataset_selected;
+    const autoImportQuery = useQuery({
+        queryKey: ["admin", "autoImportSubjects", grade, autoImportDataset],
+        queryFn: async () => {
+            if (!autoImportDataset || grade === "1") return [];
+            const res = await fetch(`/api/admin/electives?grade=${grade}&dataset=${autoImportDataset}`, {
                 headers: { "X-Admin-Password": adminPassword },
             });
-            if (!res.ok) throw new Error("가져오기 실패");
+            if (!res.ok) return [];
             const data = await res.json();
+            return Array.from(new Set(data.map((item: any) => item.subject))).filter(Boolean) as string[];
+        },
+        enabled: !!autoImportDataset && grade !== "1",
+        staleTime: 1000 * 60 * 5, // 5 min cache per grade
+    });
 
-            const uniqueSubjects = Array.from(new Set(data.map((item: any) => item.subject))).filter(Boolean) as string[];
-            if (uniqueSubjects.length === 0) {
-                toast.error(`${grade}학년 데이터셋(${dataset})에 과목이 없습니다.`);
-                return;
-            }
-
-            if (!confirm(`원본 데이터셋 '${dataset}' 에서 ${grade}학년 (${uniqueSubjects.length}개 과목) 목록을 가져오시겠습니까?\n(현재 목록을 덮어씁니다)`)) return;
-
-            setSubjects(prev => ({ ...prev, [grade]: uniqueSubjects }));
-            toast.success("과목을 가져왔습니다. [수동 계획 전체 저장] 버튼을 눌러 적용하세요.");
-        } catch (e: any) {
-            toast.error(e.message);
+    useEffect(() => {
+        const fetched = autoImportQuery.data;
+        if (fetched && fetched.length > 0 && (!subjects[grade] || subjects[grade].length === 0)) {
+            setSubjects(prev => ({ ...prev, [grade]: fetched }));
         }
-    };
+    }, [autoImportQuery.data, grade]);
 
     const handleTimetableChange = (weekday: number, period: number, subj: string) => {
         const classKey = `${grade}-${classNum}`;
@@ -3030,6 +3164,7 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                     <Select value={grade} onValueChange={setGrade}>
                         <SelectTrigger className="w-24 bg-white font-bold"><SelectValue /></SelectTrigger>
                         <SelectContent>
+                            <SelectItem value="1">1학년</SelectItem>
                             <SelectItem value="2">2학년</SelectItem>
                             <SelectItem value="3">3학년</SelectItem>
                         </SelectContent>
@@ -3038,61 +3173,63 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
             </CardHeader>
             <CardContent className="space-y-6">
 
-                {/* Elective Group Grid */}
-                <div className="border border-orange-200 bg-orange-50/30 rounded-lg p-4 space-y-4">
-                    <h3 className="font-bold text-orange-900 border-b pb-2 flex items-center gap-2">
-                        <Grid2X2 className="w-4 h-4" />
-                        선택과목 요일/교시별 블록(그룹) 지정 [{grade}학년]
-                    </h3>
-                    <p className="text-sm text-orange-800">
-                        수동 시간표 작성 전, 요일별/교시별로 어떤 선택과목 그룹이 열리는지 미리 지정합니다.
-                    </p>
+                {/* Elective Group Grid — only for grade 2/3 */}
+                {grade !== "1" && (
+                    <div className="border border-orange-200 bg-orange-50/30 rounded-lg p-4 space-y-4">
+                        <h3 className="font-bold text-orange-900 border-b pb-2 flex items-center gap-2">
+                            <Grid2X2 className="w-4 h-4" />
+                            선택과목 요일/교시별 블록(그룹) 지정 [{grade}학년]
+                        </h3>
+                        <p className="text-sm text-orange-800">
+                            수동 시간표 작성 전, 요일별/교시별로 어떤 선택과목 그룹이 열리는지 미리 지정합니다.
+                        </p>
 
-                    <div className="border rounded-xl bg-white w-full overflow-x-auto shadow-inner text-sm p-4">
-                        <div className="grid grid-cols-6 gap-2 w-[500px] min-w-max mx-auto">
-                            <div className="font-bold text-center text-slate-500 rounded bg-slate-100 py-1">교시</div>
-                            {weekdays.map(d => (
-                                <div key={d} className="font-bold text-center text-slate-500 rounded bg-slate-100 py-1">{d}</div>
-                            ))}
+                        <div className="border rounded-xl bg-white w-full overflow-x-auto shadow-inner text-sm p-4">
+                            <div className="grid grid-cols-6 gap-2 w-[500px] min-w-max mx-auto">
+                                <div className="font-bold text-center text-slate-500 rounded bg-slate-100 py-1">교시</div>
+                                {weekdays.map(d => (
+                                    <div key={d} className="font-bold text-center text-slate-500 rounded bg-slate-100 py-1">{d}</div>
+                                ))}
 
-                            {[1, 2, 3, 4, 5, 6, 7].map(period => (
-                                <React.Fragment key={`group-period-${period}`}>
-                                    <div className="font-bold flex items-center justify-center bg-slate-50 rounded text-slate-500 h-[40px]">
-                                        {period}
-                                    </div>
-                                    {[0, 1, 2, 3, 4].map(weekday => {
-                                        const cellKey = `${weekday}-${period}`;
-                                        const groupValue = groups[grade]?.[cellKey] || "";
+                                {[1, 2, 3, 4, 5, 6, 7].map(period => (
+                                    <React.Fragment key={`group-period-${period}`}>
+                                        <div className="font-bold flex items-center justify-center bg-slate-50 rounded text-slate-500 h-[40px]">
+                                            {period}
+                                        </div>
+                                        {[0, 1, 2, 3, 4].map(weekday => {
+                                            const cellKey = `${weekday}-${period}`;
+                                            const groupValue = groups[grade]?.[cellKey] || "";
 
-                                        return (
-                                            <div key={cellKey} className={`flex items-center justify-center p-1 rounded border shadow-sm h-[40px] transition-colors
+                                            return (
+                                                <div key={cellKey} className={`flex items-center justify-center p-1 rounded border shadow-sm h-[40px] transition-colors
                                                 ${groupValue ? 'bg-orange-50 border-orange-300' : 'bg-gray-50 border-gray-200'}
                                             `}>
-                                                <select
-                                                    className={`w-full h-full text-xs text-center border-none bg-transparent outline-none cursor-pointer p-0 m-0 ${groupValue ? 'text-orange-700 font-bold' : 'text-slate-400'}`}
-                                                    value={groupValue || "NONE"}
-                                                    onChange={e => handleGroupChange(weekday, period, e.target.value)}
-                                                >
-                                                    <option value="NONE">-빈칸-</option>
-                                                    <option value="학년공강">학년공강</option>
-                                                    <option value="A">A 블록</option>
-                                                    <option value="B">B 블록</option>
-                                                    <option value="C">C 블록</option>
-                                                    <option value="D">D 블록</option>
-                                                    <option value="E">E 블록</option>
-                                                    <option value="F">F 블록</option>
-                                                    <option value="G">G 블록</option>
-                                                    <option value="H">H 블록</option>
-                                                    <option value="I">I 블록</option>
-                                                </select>
-                                            </div>
-                                        )
-                                    })}
-                                </React.Fragment>
-                            ))}
+                                                    <select
+                                                        className={`w-full h-full text-xs text-center border-none bg-transparent outline-none cursor-pointer p-0 m-0 ${groupValue ? 'text-orange-700 font-bold' : 'text-slate-400'}`}
+                                                        value={groupValue || "NONE"}
+                                                        onChange={e => handleGroupChange(weekday, period, e.target.value)}
+                                                    >
+                                                        <option value="NONE">-빈칸-</option>
+                                                        <option value="학년공강">학년공강</option>
+                                                        <option value="A">A 블록</option>
+                                                        <option value="B">B 블록</option>
+                                                        <option value="C">C 블록</option>
+                                                        <option value="D">D 블록</option>
+                                                        <option value="E">E 블록</option>
+                                                        <option value="F">F 블록</option>
+                                                        <option value="G">G 블록</option>
+                                                        <option value="H">H 블록</option>
+                                                        <option value="I">I 블록</option>
+                                                    </select>
+                                                </div>
+                                            )
+                                        })}
+                                    </React.Fragment>
+                                ))}
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 {/* Subject Manager */}
                 <div className="border border-purple-200 bg-purple-50/30 rounded-lg p-4 space-y-4">
@@ -3112,9 +3249,15 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                             onKeyDown={(e) => { if (e.key === 'Enter') addSubject(); }}
                         />
                         <Button onClick={addSubject}>추가</Button>
-                        <Button variant="outline" onClick={importSubjectsForGrade}>
-                            이 학년 과목 가져오기
-                        </Button>
+                        {(subjects[grade] || []).length > 0 && (
+                            <Button
+                                variant="outline"
+                                onClick={clearSubjectsForGrade}
+                                className="text-red-500 border-red-200 hover:bg-red-50"
+                            >
+                                이 학년 과목 초기화
+                            </Button>
+                        )}
                     </div>
 
                     <div className="flex flex-wrap gap-2">

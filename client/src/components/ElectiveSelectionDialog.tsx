@@ -36,6 +36,7 @@ interface ElectiveSelectionDialogProps {
     classNum: string;
     studentNumber: string;
     datasetId?: string;
+    forceManualMode?: boolean;
     onSaveSuccess: () => void;
     onBack?: () => void;
 }
@@ -140,13 +141,14 @@ export default function ElectiveSelectionDialog({
     classNum,
     studentNumber,
     datasetId,
+    forceManualMode = false,
     onSaveSuccess,
     onBack
 }: ElectiveSelectionDialogProps) {
     const queryClient = useQueryClient();
 
     // UI mode: "smart" = subject-name picker, "manual" = group dropdown fallback
-    const [mode, setMode] = useState<"smart" | "manual">("smart");
+    const [mode, setMode] = useState<"smart" | "manual">(forceManualMode ? "manual" : "smart");
 
     // Smart mode: list of selected subject strings
     const [smartSelected, setSmartSelected] = useState<string[]>([]);
@@ -269,7 +271,7 @@ export default function ElectiveSelectionDialog({
             setManualSelections({});
             setSelectedSolution(null);
             setSearchQuery("");
-            setMode("smart");
+            setMode(forceManualMode ? "manual" : "smart");
             initializedRef.current = false;
         }
     }, [existingProfile, isOpen]);
@@ -405,7 +407,7 @@ export default function ElectiveSelectionDialog({
                                     </div>
 
                                     {/* Subject picker grid */}
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[260px] overflow-y-auto pr-1">
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[260px] overflow-y-auto pr-1">
                                         {filteredSubjects.map(subj => {
                                             const isSelected = smartSelected.includes(subj);
                                             return (

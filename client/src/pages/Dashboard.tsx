@@ -1589,6 +1589,7 @@ export default function Dashboard() {
         classNum={classNum}
         studentNumber={studentNumber}
         datasetId={(rawTimetableData as any)?.datasetId || ''}
+        forceManualMode={settings?.elective_input_mode === 'manual'}
         onSaveSuccess={() => {
           setShowElectiveDialog(false);
           setIsElectiveEntered(true);
