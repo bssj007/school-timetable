@@ -50,7 +50,13 @@ type SelectionResult = Record<string, { subject: string; teacher: string; fullSu
 //   { result: null, solutionCount: N }              → ambiguous (>1 solutions)
 // =====================================================================
 
-type SolverOutcome = { result: SelectionResult | null; solutionCount: number };
+const MAX_SOLUTIONS_TO_COLLECT = 4; // Collect up to 4, stop early after that
+
+type SolverOutcome = {
+    result: SelectionResult | null;
+    solutionCount: number;
+    allSolutions: SelectionResult[]; // Up to MAX_SOLUTIONS_TO_COLLECT
+};
 
 function solveAssignment(
     selectedSubjects: string[],
@@ -68,28 +74,30 @@ function solveAssignment(
         }
     }
 
-    const getTeacherForSubjectInGroup = (subject: string, group: string): string => {
+    const getTeacher = (subject: string, group: string): string => {
         const configs = (groups[group] || []).filter(c => c.subject === subject);
         const teachers = new Set(configs.map(c => c.fullTeacherName || c.originalTeacher).filter(Boolean));
         return Array.from(teachers).join(", ");
     };
 
-    const getFullSubjectForSubjectInGroup = (subject: string, group: string): string | undefined => {
-        const config = (groups[group] || []).find(c => c.subject === subject);
-        return config?.fullSubjectName;
+    const getFullSubject = (subject: string, group: string): string | undefined =>
+        (groups[group] || []).find(c => c.subject === subject)?.fullSubjectName;
+
+    const buildResult = (assignment: Record<string, string>): SelectionResult => {
+        const out: SelectionResult = {};
+        for (const [group, subject] of Object.entries(assignment)) {
+            out[group] = { subject, teacher: getTeacher(subject, group), fullSubjectName: getFullSubject(subject, group) };
+        }
+        return out;
     };
 
-    let solutionCount = 0;
-    let firstSolution: Record<string, string> | null = null;
-    const current: Record<string, string> = {}; // group -> subject
+    const allSolutions: SelectionResult[] = [];
+    const current: Record<string, string> = {};
 
     function backtrack(idx: number): void {
-        if (solutionCount > 1) return; // Early exit — already ambiguous
+        if (allSolutions.length >= MAX_SOLUTIONS_TO_COLLECT) return; // Stop collecting
         if (idx === selectedSubjects.length) {
-            solutionCount++;
-            if (solutionCount === 1) {
-                firstSolution = { ...current };
-            }
+            allSolutions.push(buildResult({ ...current }));
             return;
         }
         const subject = selectedSubjects[idx];
@@ -98,27 +106,18 @@ function solveAssignment(
                 current[group] = subject;
                 backtrack(idx + 1);
                 delete current[group];
-                if (solutionCount > 1) return; // Prune early
+                if (allSolutions.length >= MAX_SOLUTIONS_TO_COLLECT) return;
             }
         }
     }
 
     backtrack(0);
 
-    if (solutionCount !== 1 || !firstSolution) {
-        return { result: null, solutionCount };
+    const solutionCount = allSolutions.length;
+    if (solutionCount === 1) {
+        return { result: allSolutions[0], solutionCount: 1, allSolutions };
     }
-
-    // Build output
-    const output: SelectionResult = {};
-    for (const [group, subject] of Object.entries(firstSolution as Record<string, string>)) {
-        output[group] = {
-            subject,
-            teacher: getTeacherForSubjectInGroup(subject, group),
-            fullSubjectName: getFullSubjectForSubjectInGroup(subject, group),
-        };
-    }
-    return { result: output, solutionCount: 1 };
+    return { result: null, solutionCount, allSolutions };
 }
 
 
@@ -307,8 +306,8 @@ export default function ElectiveSelectionDialog({
     // ── Save ───────────────────────────────────────────────────────────
 
     const saveMutation = useMutation({
-        mutationFn: async () => {
-            const toSave = mode === "smart" ? smartAssigned! : manualSelections;
+        mutationFn: async (overrideElectives?: SelectionResult) => {
+            const toSave = overrideElectives ?? (mode === "smart" ? smartAssigned! : manualSelections);
             const res = await fetch('/api/electives', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -427,19 +426,30 @@ export default function ElectiveSelectionDialog({
                                         )}
                                     </div>
 
-                                    {/* Auto-assignment preview */}
+                                    {/* Auto-assignment preview / ambiguous picker */}
                                     {smartSelected.length > 0 && (
-                                        <div className={`rounded-lg border p-3 text-sm space-y-1.5 ${hasConflict ? "border-red-200 bg-red-50" : smartAssigned ? "border-green-200 bg-green-50" : "border-slate-200 bg-slate-50"}`}>
-                                            <p className={`font-semibold text-xs uppercase tracking-wide ${hasConflict ? "text-red-600" : smartAssigned ? "text-green-700" : "text-slate-500"}`}>
+                                        <div className={`rounded-lg border p-3 text-sm space-y-2 ${hasConflict ? "border-red-200 bg-red-50"
+                                            : smartAssigned ? "border-green-200 bg-green-50"
+                                                : "border-slate-200 bg-slate-50"
+                                            }`}>
+                                            <p className={`font-semibold text-xs uppercase tracking-wide ${hasConflict ? "text-red-600"
+                                                : smartAssigned ? "text-green-700"
+                                                    : "text-slate-500"
+                                                }`}>
                                                 {isAmbiguous
-                                                    ? "⚠️ 조합이 여러 가지 — 수동 모드로 직접 지정하세요"
+                                                    ? (solverOutcome && solverOutcome.solutionCount <= 3
+                                                        ? `⚠️ 가능한 조합 ${solverOutcome.solutionCount}가지 — 하나를 선택하세요`
+                                                        : "⚠️ 조합이 너무 많습니다 — 수동 모드로 직접 지정하세요"
+                                                    )
                                                     : hasConflict
-                                                        ? "⚠️ 그룹 배정 불가 — 조합을 다시 선택하거나 수동 모드를 이용하세요"
+                                                        ? "⚠️ 그룹 배정 불가 — 과목 조합을 다시 선택하거나 수동 모드를 이용하세요"
                                                         : smartAssigned
                                                             ? "✅ 자동 그룹 배정 완료"
                                                             : "과목을 모두 선택하면 자동 배정합니다"
                                                 }
                                             </p>
+
+                                            {/* Unique solution preview */}
                                             {smartAssigned && (
                                                 <div className="flex flex-wrap gap-2">
                                                     {Object.entries(smartAssigned).sort(([a], [b]) => a.localeCompare(b)).map(([group, sel]) => (
@@ -451,11 +461,40 @@ export default function ElectiveSelectionDialog({
                                                     ))}
                                                 </div>
                                             )}
-                                            {isAmbiguous && (
+
+                                            {/* Ambiguous ≤3: selectable solution cards */}
+                                            {isAmbiguous && solverOutcome && solverOutcome.solutionCount <= 3 && (
+                                                <div className="space-y-2 pt-1">
+                                                    {solverOutcome.allSolutions.map((sol, idx) => (
+                                                        <button
+                                                            key={idx}
+                                                            onClick={() => saveMutation.mutate(sol)}
+                                                            className="w-full text-left rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 px-3 py-2 transition-all"
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {Object.entries(sol).sort(([a], [b]) => a.localeCompare(b)).map(([group, sel]) => (
+                                                                        <div key={group} className="flex items-center gap-1">
+                                                                            <span className="font-bold text-xs text-blue-400">{group}</span>
+                                                                            <span className="text-slate-800 font-medium text-sm">{sel.subject}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                                <span className="text-xs text-blue-500 shrink-0 ml-2">이걸로 저장 →</span>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* Ambiguous >3: just a note (manual mode button in footer) */}
+                                            {isAmbiguous && solverOutcome && solverOutcome.solutionCount >= MAX_SOLUTIONS_TO_COLLECT && (
                                                 <p className="text-xs text-red-500">
-                                                    이 과목 조합은 {solverOutcome?.solutionCount}가지 그룹 배정이 가능합니다. 수동 모드로 직접 지정하세요.
+                                                    가능한 조합이 너무 많아 자동 배정이 불가합니다. 수동 모드로 전환하세요.
                                                 </p>
                                             )}
+
+                                            {/* Pure conflict (0 solutions) */}
                                             {hasConflict && !isAmbiguous && (
                                                 <p className="text-xs text-red-500">
                                                     선택한 과목들이 동일한 그룹에 중복 배정되어 충돌이 발생합니다.
@@ -527,7 +566,7 @@ export default function ElectiveSelectionDialog({
                     </div>
                     <div className="flex gap-2 items-center">
                         {/* Mode toggle */}
-                        {mode === "smart" && hasConflict && (
+                        {mode === "smart" && isAmbiguous && solverOutcome && solverOutcome.solutionCount >= MAX_SOLUTIONS_TO_COLLECT && (
                             <Button variant="outline" size="sm" onClick={() => setMode("manual")} className="text-amber-600 border-amber-300">
                                 수동 입력으로 전환
                             </Button>
@@ -538,7 +577,7 @@ export default function ElectiveSelectionDialog({
                             </Button>
                         )}
                         <Button
-                            onClick={() => saveMutation.mutate()}
+                            onClick={() => saveMutation.mutate(undefined)}
                             disabled={(mode === "smart" ? !canSaveSmart : !canSaveManual) || saveMutation.isPending}
                             className={`${(mode === "smart" ? canSaveSmart : canSaveManual) ? "bg-blue-600 hover:bg-blue-700" : ""}`}
                         >
