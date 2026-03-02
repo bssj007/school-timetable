@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS dataset_bridges (
     name TEXT NOT NULL,
     fromDataset TEXT NOT NULL,
     toDataset TEXT NOT NULL,
+    targetGrade INTEGER,
     mappingData TEXT NOT NULL, -- JSON string representing mapping rules
     createdAt TEXT DEFAULT (datetime('now')),
     updatedAt TEXT DEFAULT (datetime('now'))

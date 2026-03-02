@@ -6,8 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, ArrowRight, Save, X, Play, Wand2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Plus, Trash2, ArrowRight, Save, X, Play, Wand2, ChevronsUpDown, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from "@/lib/utils";
 
 interface BridgeMapping {
     from: string;
@@ -49,6 +52,7 @@ interface DatasetBridge {
     name: string;
     fromDataset: string;
     toDataset: string;
+    targetGrade: number;
     mappingData: string; // JSON string of BridgeMapping[]
     createdAt: string;
     updatedAt: string;
@@ -61,10 +65,15 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
     const [mappingFields, setMappingFields] = useState<BridgeMapping[]>([]);
     const [isCreating, setIsCreating] = useState(false);
 
+    // Combobox (searchable select) state
+    const [openComboboxId, setOpenComboboxId] = useState<number | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+
     // Form inputs for creation/editing
     const [name, setName] = useState("");
     const [fromDataset, setFromDataset] = useState("MANUAL_PLAN");
     const [toDataset, setToDataset] = useState("");
+    const [targetGrade, setTargetGrade] = useState("2");
 
     // Execution states
     const [execElectives, setExecElectives] = useState(true);
@@ -272,6 +281,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             name,
             fromDataset,
             toDataset,
+            targetGrade: parseInt(targetGrade), // Added targetGrade
             mappingData: JSON.stringify(validMapping)
         });
     };
@@ -297,6 +307,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         setName("");
         setFromDataset("MANUAL_PLAN");
         setToDataset("");
+        setTargetGrade("2"); // Set default targetGrade
         setMappingFields([{ from: "", to: "" }]);
         setIsCreating(true);
     };
@@ -307,6 +318,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         setName(bridge.name);
         setFromDataset(bridge.fromDataset);
         setToDataset(bridge.toDataset);
+        setTargetGrade(bridge.targetGrade ? bridge.targetGrade.toString() : "2");
         try {
             const parsed = JSON.parse(bridge.mappingData);
             // When opening an existing bridge, we consider all mappings as manual
@@ -345,6 +357,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>BRIDGE 이름</TableHead>
+                                        <TableHead className="w-24">대상 학년</TableHead> {/* Added TableHead */}
                                         <TableHead>출발역 (From)</TableHead>
                                         <TableHead className="w-[50px]"></TableHead>
                                         <TableHead>도착역 (To)</TableHead>
@@ -363,6 +376,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         return (
                                             <TableRow key={bridge.id} className="cursor-pointer hover:bg-slate-50" onClick={() => openEdit(bridge)}>
                                                 <TableCell className="font-bold">{bridge.name}</TableCell>
+                                                <TableCell><span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold">{bridge.targetGrade || "-"}학년</span></TableCell>
                                                 <TableCell><span className="bg-slate-100 px-2 py-1 rounded text-xs font-mono">{bridge.fromDataset}</span></TableCell>
                                                 <TableCell><ArrowRight className="w-4 h-4 text-slate-400" /></TableCell>
                                                 <TableCell><span className="bg-orange-100 px-2 py-1 rounded text-xs font-mono text-orange-800">{bridge.toDataset}</span></TableCell>
@@ -382,8 +396,8 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                             {/* Editor Panel (2 cols) */}
                             <div className="lg:col-span-2 space-y-4">
                                 <div className="p-4 border rounded-xl bg-slate-50 space-y-4">
-                                    <div className="grid grid-cols-3 gap-4 items-end">
-                                        <div className="col-span-3">
+                                    <div className="grid grid-cols-4 gap-4 items-end">
+                                        <div className="col-span-4">
                                             <label className="text-sm font-bold block mb-1">BRIDGE 식별 이름</label>
                                             <Input value={name} onChange={e => setName(e.target.value)} placeholder="예: 24년도 1학기 마이그레이션" />
                                         </div>
@@ -413,6 +427,19 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                 </SelectContent>
                                             </Select>
                                         </div>
+                                        <div>
+                                            <label className="text-sm font-bold block mb-1">대상 학년</label>
+                                            <Select value={targetGrade} onValueChange={setTargetGrade}>
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="1">1학년</SelectItem>
+                                                    <SelectItem value="2">2학년</SelectItem>
+                                                    <SelectItem value="3">3학년</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -432,25 +459,95 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                 </div>
                                                 <ArrowRight className="w-4 h-4 text-slate-300 shrink-0" />
                                                 <div className="flex-1 min-w-0 flex items-center gap-2">
-                                                    <Select
-                                                        value={field.to || "_none_"}
-                                                        onValueChange={val => {
-                                                            const newFields = [...mappingFields];
-                                                            newFields[idx].to = val === "_none_" ? "" : val;
-                                                            newFields[idx].isManual = true; // User manually interacted
-                                                            setMappingFields(newFields);
+                                                    <Popover
+                                                        open={openComboboxId === idx}
+                                                        onOpenChange={(open) => {
+                                                            if (open) {
+                                                                setOpenComboboxId(idx);
+                                                                setSearchQuery("");
+                                                            } else {
+                                                                setOpenComboboxId(null);
+                                                            }
                                                         }}
                                                     >
-                                                        <SelectTrigger className={`w-full ${!field.to && 'border-red-200 bg-red-50'}`}>
-                                                            <SelectValue placeholder="매핑 선택..." />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="_none_" className="text-red-500">매핑 안함 (삭제됨/유실됨)</SelectItem>
-                                                            {Array.isArray(toSubjectsQuery.data) && toSubjectsQuery.data.map(opt => (
-                                                                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
+                                                        <PopoverTrigger asChild>
+                                                            <Button
+                                                                variant="outline"
+                                                                role="combobox"
+                                                                aria-expanded={openComboboxId === idx}
+                                                                className={cn("w-full justify-between font-normal", !field.to && 'border-red-200 bg-red-50 text-slate-500')}
+                                                            >
+                                                                <span className="truncate">
+                                                                    {field.to ? (field.to === "_none_" ? "매핑 안함 (삭제됨/유실됨)" : field.to) : "매핑 검색 및 선택..."}
+                                                                </span>
+                                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="p-0" align="start">
+                                                            <Command>
+                                                                <CommandInput
+                                                                    placeholder="과목명 검색..."
+                                                                    value={searchQuery}
+                                                                    onValueChange={(val) => {
+                                                                        const subjects = Array.isArray(toSubjectsQuery.data) ? toSubjectsQuery.data : [];
+                                                                        // Check if any subject matches the typed search query
+                                                                        const hasMatch = subjects.some(s =>
+                                                                            s.toLowerCase().includes(val.toLowerCase()) ||
+                                                                            s.replace(/\s+/g, "").toLowerCase().includes(val.replace(/\s+/g, "").toLowerCase())
+                                                                        );
+
+                                                                        if (!hasMatch && val.trim() !== "") {
+                                                                            // User requested: If no match is found, clear the search field
+                                                                            setSearchQuery("");
+                                                                            toast.info("검색된 과목이 없어 초기화되었습니다.");
+                                                                        } else {
+                                                                            setSearchQuery(val);
+                                                                        }
+                                                                    }}
+                                                                />
+                                                                <CommandList>
+                                                                    <CommandEmpty>결과가 없습니다.</CommandEmpty>
+                                                                    <CommandGroup>
+                                                                        <CommandItem
+                                                                            value="_none_"
+                                                                            onSelect={() => {
+                                                                                const newFields = [...mappingFields];
+                                                                                newFields[idx].to = "";
+                                                                                newFields[idx].isManual = true;
+                                                                                setMappingFields(newFields);
+                                                                                setOpenComboboxId(null);
+                                                                            }}
+                                                                            className="text-red-500 text-sm"
+                                                                        >
+                                                                            <Check className={cn("mr-2 h-4 w-4", field.to === "" || field.to === "_none_" ? "opacity-100" : "opacity-0")} />
+                                                                            매핑 안함 (수동 매핑 거부)
+                                                                        </CommandItem>
+                                                                        {Array.isArray(toSubjectsQuery.data) && toSubjectsQuery.data.map(opt => (
+                                                                            <CommandItem
+                                                                                key={opt}
+                                                                                value={opt}
+                                                                                onSelect={(currentValue) => {
+                                                                                    // CommandItem passes the lowercased value by default usually, but we need the exact casing.
+                                                                                    const subjects = Array.isArray(toSubjectsQuery.data) ? toSubjectsQuery.data : [];
+                                                                                    const exactMatch = subjects.find(s => s.toLowerCase() === currentValue.toLowerCase() || s === opt) || opt;
+
+                                                                                    const newFields = [...mappingFields];
+                                                                                    newFields[idx].to = exactMatch;
+                                                                                    newFields[idx].isManual = true;
+                                                                                    setMappingFields(newFields);
+                                                                                    setOpenComboboxId(null);
+                                                                                }}
+                                                                                className="text-sm"
+                                                                            >
+                                                                                <Check className={cn("mr-2 h-4 w-4", field.to === opt ? "opacity-100" : "opacity-0")} />
+                                                                                {opt}
+                                                                            </CommandItem>
+                                                                        ))}
+                                                                    </CommandGroup>
+                                                                </CommandList>
+                                                            </Command>
+                                                        </PopoverContent>
+                                                    </Popover>
 
                                                     {field.to && !field.isManual && field.similarity !== undefined && field.similarity > 0 && (
                                                         <span className="text-red-500 text-xs font-bold whitespace-nowrap" title="시스템이 추천한 유사도 점수입니다.">
@@ -488,89 +585,79 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                 </div>
                             </div>
 
-                            {/* Execution & AutoFill Panel (1 col) - Now visible during both creation and editing */}
-                            <div className="space-y-4">
-                                <div className="border border-orange-200 rounded-xl overflow-hidden shadow-sm">
-                                    <div className="p-4 bg-orange-50 border-b border-orange-100 flex items-center gap-2">
-                                        <Play className="w-5 h-5 text-orange-600" />
-                                        <h3 className="font-bold text-orange-800">마이그레이션 실행</h3>
-                                    </div>
-                                    <div className="p-4 bg-white space-y-4 text-sm">
-                                        <p className="text-slate-600 mb-2">실행할 항목을 선택해주세요:</p>
-
-                                        <label className="flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer hover:bg-slate-50">
-                                            <div className="space-y-0.5">
-                                                <p className="font-medium text-base">선택과목 데이터 복제</p>
-                                                <p className="text-xs text-slate-500">지정된 데이터셋의 구성을 기반으로 1:1 매핑 복사</p>
-                                            </div>
-                                            <Checkbox checked={execElectives} onCheckedChange={(v) => setExecElectives(!!v)} />
-                                        </label>
-
-                                        <label className="flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer hover:bg-slate-50">
-                                            <div className="space-y-0.5">
-                                                <p className="font-medium text-base">학생 선택과목 변경</p>
-                                                <p className="text-xs text-slate-500">학생 프로필에 저장된 과목명을 매핑 규칙대로 변경</p>
-                                            </div>
-                                            <Checkbox checked={execProfiles} onCheckedChange={(v) => setExecProfiles(!!v)} />
-                                        </label>
-
-                                        <label className="flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer hover:bg-slate-50">
-                                            <div className="space-y-0.5">
-                                                <p className="font-medium text-base">수행평가 데이터 연결</p>
-                                                <p className="text-xs text-slate-500">수행평가 DB에 저장된 과목명을 매핑 규칙대로 수정</p>
-                                            </div>
-                                            <Checkbox checked={execAssessments} onCheckedChange={(v) => setExecAssessments(!!v)} />
-                                        </label>
-
-                                        <Button
-                                            className="w-full mt-2"
-                                            onClick={handleExecute}
-                                            disabled={isExecuting || hasMappingChanges() || !selectedBridgeId || (!execElectives && !execProfiles && !execAssessments)}
-                                        >
-                                            {isExecuting ? "실행 중..." : "선택 항목 실행 (Execute)"}
-                                        </Button>
-
-                                        {hasMappingChanges() && (
-                                            <p className="text-xs text-red-500 text-center font-bold">
-                                                변경사항을 먼저 저장해야 실행할 수 있습니다.
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Bridge Level Auto-Fill Extractor functionality */}
+                            {/* Unified Migration & AutoFill Panel */}
+                            <div className="space-y-4 lg:col-span-1">
                                 <div className="border border-purple-200 rounded-xl overflow-hidden shadow-sm">
                                     <div className="p-4 bg-purple-50 border-b border-purple-100 flex items-center gap-2">
                                         <Wand2 className="w-5 h-5 text-purple-600" />
-                                        <h3 className="font-bold text-purple-800">선택과목 자동 채우기 연계</h3>
+                                        <h3 className="font-bold text-purple-800">마이그레이션 실행 & 도구</h3>
                                     </div>
                                     <div className="p-4 bg-white space-y-4 text-sm">
-                                        <p className="text-slate-600">
-                                            이 BRIDGE의 '출발역'이 <strong>MANUAL_PLAN</strong>이라면 학기별 계획의 시간표 데이터 구조를 가져와 블록을 자동계산할 수 있습니다.
-                                        </p>
-                                        <div className="flex items-center gap-2">
-                                            <Select value={autofillGrade} onValueChange={setAutofillGrade}>
-                                                <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="1">1학년</SelectItem>
-                                                    <SelectItem value="2">2학년</SelectItem>
-                                                    <SelectItem value="3">3학년</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+
+                                        {/* Auto-fill Trigger Action */}
+                                        <div className="space-y-2 border-b pb-4">
+                                            <p className="font-semibold text-slate-700">선택과목 자동 채우기</p>
+                                            <p className="text-xs text-slate-500">
+                                                출발역이 <strong>MANUAL_PLAN</strong>일 경우 학기별 계획 데이터를 바탕으로 블록을 생성할 수 있습니다.
+                                            </p>
                                             <Button
-                                                variant="secondary"
-                                                className="flex-1"
+                                                variant="outline"
+                                                className="w-full text-purple-700 border-purple-200 hover:bg-purple-50"
                                                 disabled={fromDataset !== 'MANUAL_PLAN' || hasMappingChanges()}
-                                                onClick={() => goAutoFillAnalysis(parseInt(autofillGrade), toDataset)}
+                                                onClick={() => goAutoFillAnalysis(parseInt(targetGrade), toDataset)}
                                             >
-                                                자동 채우기 (Auto-fill) 분석
+                                                자동 채우기 연계 분석 시작
                                             </Button>
                                         </div>
-                                        {fromDataset !== 'MANUAL_PLAN' && (
-                                            <p className="text-xs text-slate-500 mt-1">
-                                                * 출발역이 MANUAL_PLAN일 때만 활성화됩니다.
-                                            </p>
-                                        )}
+
+                                        {/* Classic Execution Checkboxes */}
+                                        <div className="space-y-2 pt-2">
+                                            <p className="font-semibold text-slate-700">마이그레이션 옵션</p>
+
+                                            <label className={`flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer ${targetGrade === '1' ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-50'}`}>
+                                                <div className="space-y-0.5">
+                                                    <p className="font-medium text-base">선택과목 데이터 복제</p>
+                                                    <p className="text-xs text-slate-500">지정된 데이터셋의 구성을 기반으로 1:1 매핑 복사</p>
+                                                </div>
+                                                <Checkbox checked={targetGrade !== '1' && execElectives} disabled={targetGrade === '1'} onCheckedChange={(v) => setExecElectives(!!v)} />
+                                            </label>
+
+                                            <label className={`flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer ${targetGrade === '1' ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-50'}`}>
+                                                <div className="space-y-0.5">
+                                                    <p className="font-medium text-base">학생 선택과목 변경</p>
+                                                    <p className="text-xs text-slate-500">학생 프로필에 저장된 과목명을 매핑 규칙대로 변경</p>
+                                                </div>
+                                                <Checkbox checked={targetGrade !== '1' && execProfiles} disabled={targetGrade === '1'} onCheckedChange={(v) => setExecProfiles(!!v)} />
+                                            </label>
+
+                                            <label className="flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer hover:bg-slate-50">
+                                                <div className="space-y-0.5">
+                                                    <p className="font-medium text-base">수행평가 데이터 연결</p>
+                                                    <p className="text-xs text-slate-500">수행평가 DB에 저장된 과목명을 매핑 규칙대로 수정</p>
+                                                </div>
+                                                <Checkbox checked={execAssessments} onCheckedChange={(v) => setExecAssessments(!!v)} />
+                                            </label>
+
+                                            {targetGrade === '1' && (
+                                                <p className="text-xs text-amber-600 font-medium">
+                                                    * 1학년은 독립된 선택과목 구조가 없으므로 해당 옵션들이 비활성화됩니다.
+                                                </p>
+                                            )}
+
+                                            <Button
+                                                className="w-full mt-4 bg-purple-600 hover:bg-purple-700 text-white"
+                                                onClick={handleExecute}
+                                                disabled={isExecuting || hasMappingChanges() || !selectedBridgeId || (!execElectives && !execProfiles && !execAssessments) || (targetGrade === '1' && !execAssessments)}
+                                            >
+                                                {isExecuting ? "실행 중..." : "선택 옵션 마이그레이션 실행"}
+                                            </Button>
+
+                                            {hasMappingChanges() && (
+                                                <p className="text-xs text-red-500 text-center font-bold">
+                                                    변경사항을 먼저 저장해야 실행할 수 있습니다.
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>

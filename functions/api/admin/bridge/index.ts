@@ -22,6 +22,7 @@ export const onRequest = async (context: any) => {
                 name TEXT NOT NULL,
                 fromDataset TEXT NOT NULL,
                 toDataset TEXT NOT NULL,
+                targetGrade INTEGER,
                 mappingData TEXT NOT NULL,
                 createdAt TEXT DEFAULT (datetime('now')),
                 updatedAt TEXT DEFAULT (datetime('now'))
@@ -54,22 +55,22 @@ export const onRequest = async (context: any) => {
             // Currently keeping CRUD here, moving EXEUCTION to a separate endpoint for clarity, 
             // OR handling it here if action === 'execute'
 
-            const { id, name, fromDataset, toDataset, mappingData } = body;
+            const { id, name, fromDataset, toDataset, targetGrade, mappingData } = body;
 
-            if (!name || !fromDataset || !toDataset || !mappingData) {
+            if (!name || !fromDataset || !toDataset || !mappingData || !targetGrade) {
                 return new Response('Missing required fields', { status: 400 });
             }
 
             if (id) {
                 // Update
                 await env.DB.prepare(
-                    "UPDATE dataset_bridges SET name = ?, fromDataset = ?, toDataset = ?, mappingData = ?, updatedAt = ? WHERE id = ?"
-                ).bind(name, fromDataset, toDataset, JSON.stringify(mappingData), new Date().toISOString(), id).run();
+                    "UPDATE dataset_bridges SET name = ?, fromDataset = ?, toDataset = ?, targetGrade = ?, mappingData = ?, updatedAt = ? WHERE id = ?"
+                ).bind(name, fromDataset, toDataset, targetGrade, JSON.stringify(mappingData), new Date().toISOString(), id).run();
             } else {
                 // Create
                 await env.DB.prepare(
-                    "INSERT INTO dataset_bridges (name, fromDataset, toDataset, mappingData, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)"
-                ).bind(name, fromDataset, toDataset, JSON.stringify(mappingData), new Date().toISOString(), new Date().toISOString()).run();
+                    "INSERT INTO dataset_bridges (name, fromDataset, toDataset, targetGrade, mappingData, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)"
+                ).bind(name, fromDataset, toDataset, targetGrade, JSON.stringify(mappingData), new Date().toISOString(), new Date().toISOString()).run();
             }
 
             return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });

@@ -35,8 +35,9 @@ export const onRequest = async (context: any) => {
             return new Response('Bridge not found', { status: 404 });
         }
 
-        const { fromDataset, toDataset, mappingData: mappingDataStr } = bridgeEntry;
+        const { fromDataset, toDataset, targetGrade, mappingData: mappingDataStr } = bridgeEntry;
         const mappingData = JSON.parse(mappingDataStr); // Expected format: { "Math": "Mathematics 1", "Eng": "English 2" }
+
 
         // Reverse mapping for converting string "from" to "to".
         // Example: mappingData is usually { source: target }
@@ -57,20 +58,23 @@ export const onRequest = async (context: any) => {
         // The flags indicated by user
         const { migrateElectiveConfig, migrateStudentProfiles, migrateAssessments } = options || {};
 
+        if (targetGrade === 1 && (migrateElectiveConfig || migrateStudentProfiles)) {
+            return new Response(JSON.stringify({ error: "1학년은 선택과목 데이터 복제 및 프로필 과목 변경을 지원하지 않습니다." }), { status: 400 });
+        }
+
         let totalElectiveConfigsCopied = 0;
         let totalStudentProfilesUpdated = 0;
         let totalAssessmentsUpdated = 0;
 
         // --- 1. Migrate Elective Configs ---
         if (migrateElectiveConfig) {
-            // Read fromDataset
+            // Read fromDataset ONLY for the targetGrade
             const { results: sourceConfigs } = await env.DB.prepare(
-                "SELECT * FROM elective_config WHERE dataset = ?"
-            ).bind(fromDataset).all();
+                "SELECT * FROM elective_config WHERE dataset = ? AND grade = ?"
+            ).bind(fromDataset, targetGrade).all();
 
-            // Delete old existing configs on toDataset ? 
-            // Better to clear out the target mapping to prevent duplicates for the same dataset.
-            await env.DB.prepare("DELETE FROM elective_config WHERE dataset = ?").bind(toDataset).run();
+            // Delete old existing configs on toDataset for this targetGrade
+            await env.DB.prepare("DELETE FROM elective_config WHERE dataset = ? AND grade = ?").bind(toDataset, targetGrade).run();
 
             const batchStatements = [];
             for (const config of sourceConfigs) {
@@ -93,10 +97,11 @@ export const onRequest = async (context: any) => {
         }
 
         // --- 2. Migrate Student Profiles ---
-        // Student Profiles doesn't have a dataset column, they represent the "current" reality.
-        // We will transform any existing subjects in their JSON strictly based on the mapping.
+        // Profile migrations should strictly apply to the targetGrade
         if (migrateStudentProfiles) {
-            const { results: profiles } = await env.DB.prepare("SELECT * FROM student_profiles").all();
+            const { results: profiles } = await env.DB.prepare(
+                "SELECT * FROM student_profiles WHERE grade = ?"
+            ).bind(targetGrade).all();
 
             const batchStatements = [];
             for (const profile of profiles) {
