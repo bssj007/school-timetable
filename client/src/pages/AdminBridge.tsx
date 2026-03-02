@@ -142,33 +142,34 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         enabled: !!toDataset && !!targetGrade
     });
 
-    // Auto-populate mappings when fromSubject or toSubject list changes and we are creating
-    useEffect(() => {
-        if (isCreating && fromSubjectsQuery.data) {
-            const defaultMappings = fromSubjectsQuery.data.map(subj => {
-                let matchedTo = "";
-                let maxSimilarity = 0;
+    // Manually trigger mapping generation
+    const generateAutoMappings = () => {
+        if (!fromSubjectsQuery.data) return;
 
-                if (toSubjectsQuery.data && Array.isArray(toSubjectsQuery.data)) {
-                    // Find the best match using the similarity algorithm
-                    for (const candidate of toSubjectsQuery.data) {
-                        const score = calculateSimilarity(subj, candidate);
-                        if (score > maxSimilarity) {
-                            maxSimilarity = score;
-                            matchedTo = candidate;
-                        }
-                    }
-                    // Only auto-match if there's at least a weak similarity (e.g. > 30%)
-                    if (maxSimilarity < 30) {
-                        matchedTo = "";
-                        maxSimilarity = 0;
+        const defaultMappings = fromSubjectsQuery.data.map(subj => {
+            let matchedTo = "";
+            let maxSimilarity = 0;
+
+            if (toSubjectsQuery.data && Array.isArray(toSubjectsQuery.data)) {
+                // Find the best match using the similarity algorithm
+                for (const candidate of toSubjectsQuery.data) {
+                    const score = calculateSimilarity(subj, candidate);
+                    if (score > maxSimilarity) {
+                        maxSimilarity = score;
+                        matchedTo = candidate;
                     }
                 }
-                return { from: subj, to: matchedTo, similarity: maxSimilarity, isManual: false };
-            });
-            setMappingFields(defaultMappings);
-        }
-    }, [fromSubjectsQuery.data, toSubjectsQuery.data, isCreating]);
+                // Only auto-match if there's at least a weak similarity (e.g. > 30%)
+                if (maxSimilarity < 30) {
+                    matchedTo = "";
+                    maxSimilarity = 0;
+                }
+            }
+            return { from: subj, to: matchedTo, similarity: maxSimilarity, isManual: false };
+        });
+        setMappingFields(defaultMappings);
+        toast.success("이름 기반 1:1 매핑 규칙이 생성되었습니다.");
+    };
 
     const { data: bridges, isLoading } = useQuery({
         queryKey: ["admin", "bridges"],
@@ -255,7 +256,13 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         if (!editingBridge) return true; // It's a new bridge
         try {
             const originalMapping = JSON.parse(editingBridge.mappingData);
-            return JSON.stringify(originalMapping) !== JSON.stringify(mappingFields) ||
+
+            // Normalize for comparison: ignore transient UI state like similarity and isManual
+            const normalize = (arr: any[]) => arr.map((m: any) => ({ from: m.from, to: m.to }));
+            const currentStr = JSON.stringify(normalize(mappingFields));
+            const originalStr = JSON.stringify(normalize(originalMapping));
+
+            return currentStr !== originalStr ||
                 editingBridge.name !== name ||
                 editingBridge.fromDataset !== fromDataset ||
                 editingBridge.toDataset !== toDataset ||
@@ -400,7 +407,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         </div>
                                         <div className="col-span-12 sm:col-span-4 relative">
                                             <label className="text-sm font-bold block mb-1">출발역 (From)</label>
-                                            <Select value={fromDataset} onValueChange={setFromDataset} disabled={!isCreating}>
+                                            <Select value={fromDataset || undefined} onValueChange={setFromDataset} disabled={!isCreating}>
                                                 <SelectTrigger className={!fromDataset ? "text-slate-500" : ""}>
                                                     <SelectValue placeholder="-선택-" />
                                                 </SelectTrigger>
@@ -416,7 +423,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         </div>
                                         <div className="col-span-12 sm:col-span-5">
                                             <label className="text-sm font-bold block mb-1">도착역 (To)</label>
-                                            <Select value={toDataset} onValueChange={setToDataset} disabled={!isCreating}>
+                                            <Select value={toDataset || undefined} onValueChange={setToDataset} disabled={!isCreating}>
                                                 <SelectTrigger className={!toDataset ? "text-slate-500" : ""}>
                                                     <SelectValue placeholder="-선택-" />
                                                 </SelectTrigger>
@@ -444,7 +451,15 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
 
                                 <div className="border rounded-xl flex flex-col">
                                     <div className="p-3 bg-slate-100 border-b flex justify-between items-center rounded-t-xl">
-                                        <h3 className="font-bold text-sm">1:1 과목명 매핑 규칙</h3>
+                                        <div className="flex items-center gap-3">
+                                            <h3 className="font-bold text-sm">1:1 과목명 매핑 규칙</h3>
+                                            {(fromSubjectsQuery.data && fromSubjectsQuery.data.length > 0) && (
+                                                <Button variant="secondary" size="sm" onClick={generateAutoMappings} disabled={!isCreating} className="h-7 text-xs px-2">
+                                                    <Wand2 className="w-3 h-3 mr-1.5" />
+                                                    이름 자동 매핑
+                                                </Button>
+                                            )}
+                                        </div>
                                         <span className="text-xs text-slate-500">{mappingFields.length}개 과목 발견됨</span>
                                     </div>
                                     <div className="p-4 space-y-2 max-h-[400px] overflow-auto bg-white">
