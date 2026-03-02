@@ -398,7 +398,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                             <label className="text-sm font-bold block mb-1">BRIDGE 식별 이름</label>
                                             <Input value={name} onChange={e => setName(e.target.value)} placeholder="예: 24년도 1학기 마이그레이션" />
                                         </div>
-                                        <div className="col-span-12 sm:col-span-5 relative">
+                                        <div className="col-span-12 sm:col-span-4 relative">
                                             <label className="text-sm font-bold block mb-1">출발역 (From)</label>
                                             <Select value={fromDataset} onValueChange={setFromDataset} disabled={!isCreating}>
                                                 <SelectTrigger className={!fromDataset ? "text-slate-500" : ""}>
@@ -414,11 +414,11 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         <div className="hidden sm:flex col-span-1 justify-center pb-2">
                                             <ArrowRight className="w-6 h-6 text-slate-400" />
                                         </div>
-                                        <div className="col-span-12 sm:col-span-4">
+                                        <div className="col-span-12 sm:col-span-5">
                                             <label className="text-sm font-bold block mb-1">도착역 (To)</label>
                                             <Select value={toDataset} onValueChange={setToDataset} disabled={!isCreating}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="도착역 선택" />
+                                                <SelectTrigger className={!toDataset ? "text-slate-500" : ""}>
+                                                    <SelectValue placeholder="-선택-" />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>

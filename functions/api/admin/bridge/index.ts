@@ -32,6 +32,13 @@ export const onRequest = async (context: any) => {
         console.error("Table creation/migration failed:", e);
     }
 
+    // Explicitly add targetGrade column if it's missing from older schemas
+    try {
+        await env.DB.prepare("ALTER TABLE dataset_bridges ADD COLUMN targetGrade INTEGER").run();
+    } catch (e) {
+        // Ignored: Column already exists or other safe failure
+    }
+
     const url = new URL(request.url);
 
     if (method === 'GET') {
