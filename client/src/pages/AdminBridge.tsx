@@ -112,7 +112,8 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             const grade = parseInt(targetGrade);
             const allSubjects = new Set<string>();
 
-            const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${fromDataset}`);
+            const fetchDataset = fromDataset === "MANUAL_PLAN" ? "SEMESTER_PLAN" : fromDataset;
+            const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${fetchDataset}`);
             if (res.ok) {
                 const data = await res.json();
                 data.forEach((s: any) => allSubjects.add(s.subject));
@@ -131,7 +132,8 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             const grade = parseInt(targetGrade);
             const allSubjects = new Set<string>();
 
-            const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${toDataset}`);
+            const fetchDataset = toDataset === "MANUAL_PLAN" ? "SEMESTER_PLAN" : toDataset;
+            const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${fetchDataset}`);
             if (res.ok) {
                 const data = await res.json();
                 data.forEach((s: any) => allSubjects.add(s.subject));
