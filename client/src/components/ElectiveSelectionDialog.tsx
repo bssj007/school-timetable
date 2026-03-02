@@ -514,9 +514,17 @@ export default function ElectiveSelectionDialog({
 
                                             {/* Ambiguous >3: just a note (manual mode button in footer) */}
                                             {isAmbiguous && solverOutcome && solverOutcome.solutionCount >= MAX_SOLUTIONS_TO_COLLECT && (
-                                                <p className="text-xs text-red-500">
-                                                    가능한 조합이 {solverOutcome.solutionCount}가지 이상으로 너무 많아 자동 배정이 불가합니다. 수동 모드로 전환하세요.
-                                                </p>
+                                                <div className="space-y-2">
+                                                    <p className="text-xs text-red-500">
+                                                        가능한 조합이 {solverOutcome.solutionCount}가지 이상으로 너무 많아 자동 배정이 불가합니다. 수동 모드로 전환하세요.
+                                                    </p>
+                                                    {/* Mobile-only: button shown inline below error, not in footer */}
+                                                    <div className="flex justify-center sm:hidden">
+                                                        <Button variant="outline" size="sm" onClick={() => setMode("manual")} className="text-amber-600 border-amber-300">
+                                                            수동 입력으로 전환
+                                                        </Button>
+                                                    </div>
+                                                </div>
                                             )}
 
                                             {/* Pure conflict (0 solutions) */}
@@ -533,10 +541,13 @@ export default function ElectiveSelectionDialog({
                             {/* ── MANUAL (FALLBACK) MODE ── */}
                             {mode === "manual" && (
                                 <div className="space-y-3">
-                                    <div className="flex items-center gap-2 px-1 py-1.5 rounded-md bg-amber-50 border border-amber-200">
-                                        <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                                        <p className="text-xs text-amber-700">자동 배정이 불가능하여 수동 입력 모드로 전환했습니다.</p>
-                                    </div>
+                                    {/* Only show the fallback warning when the user was forced into manual mode automatically, not when admin set it as default */}
+                                    {!forceManualMode && (
+                                        <div className="flex items-center gap-2 px-1 py-1.5 rounded-md bg-amber-50 border border-amber-200">
+                                            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                                            <p className="text-xs text-amber-700">자동 배정이 불가능하여 수동 입력 모드로 전환했습니다.</p>
+                                        </div>
+                                    )}
                                     {Object.entries(electivesByGroup).map(([group, configs]) => {
                                         const currentSel = manualSelections[group];
                                         const selectedCompoundValue = currentSel ? `${currentSel.subject}|${currentSel.fullSubjectName || ""}` : undefined;
@@ -590,13 +601,14 @@ export default function ElectiveSelectionDialog({
                         </Button>
                     </div>
                     <div className="flex gap-2 items-center">
-                        {/* Mode toggle */}
+                        {/* Mode toggle — desktop only (mobile version shown inline above) */}
                         {mode === "smart" && isAmbiguous && solverOutcome && solverOutcome.solutionCount > 3 && (
-                            <Button variant="outline" size="sm" onClick={() => setMode("manual")} className="text-amber-600 border-amber-300">
+                            <Button variant="outline" size="sm" onClick={() => setMode("manual")} className="hidden sm:flex text-amber-600 border-amber-300">
                                 수동 입력으로 전환
                             </Button>
                         )}
-                        {mode === "manual" && (
+                        {/* 자동 탐색으로 전환 — only shown when user was auto-fallback to manual, not when admin forced manual */}
+                        {mode === "manual" && !forceManualMode && (
                             <Button variant="ghost" size="sm" onClick={() => setMode("smart")}>
                                 자동 탐색으로 전환
                             </Button>
