@@ -2564,20 +2564,21 @@ function AutoFillAnalyzer({ data, adminPassword, onBack }: {
                 let targetSubjectName = "";
                 let matchedTeacher = "";
 
+                const parts = mSubj.split(' ');
+                const baseSubjectName = parts.length > 1 ? parts.slice(0, -1).join(' ') : mSubj;
+                const manualTeacherName = parts.length >= 2 ? parts[parts.length - 1] : "";
+
                 if (isExcludedManual) {
-                    const parts = mSubj.split(' ');
                     targetSubjectName = parts.length > 0 ? parts[0] : mSubj;
-                    matchedTeacher = parts.length >= 2 ? parts[parts.length - 1] : "";
+                    matchedTeacher = manualTeacherName;
                 } else {
                     // Look up BRIDGE mappings instead of local 'mappings' state
-                    const bridgeRule = bridgeMappingRules.find(r => r.from === mSubj);
+                    const bridgeRule = bridgeMappingRules.find(r => r.from === baseSubjectName);
                     if (!bridgeRule || !bridgeRule.to) {
-                        throw new Error(`[${mSubj}] 과목이 BRIDGE 매핑 규칙에 지정되어 있지 않습니다.`);
+                        throw new Error(`[${mSubj}]의 기본 과목명인 [${baseSubjectName}] 과목이 BRIDGE 매핑 규칙에 지정되어 있지 않습니다.`);
                     }
 
                     targetSubjectName = bridgeRule.to;
-                    const parts = mSubj.split(' ');
-                    const manualTeacherName = parts.length >= 2 ? parts[parts.length - 1] : "";
 
                     // Live Match extraction
                     matchedTeacher = manualTeacherName;
