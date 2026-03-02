@@ -458,7 +458,7 @@ export default function ElectiveSelectionDialog({
                                                         : `⚠️ 가능한 조합 ${solverOutcome?.solutionCount}${(solverOutcome?.solutionCount ?? 0) >= MAX_SOLUTIONS_TO_COLLECT ? '가지 이상' : '가지'} — 수동 모드로 직접 지정하세요`
                                                     )
                                                     : hasConflict
-                                                        ? "⚠️ 그룹 배정 불가 — 과목 조합을 다시 선택하거나 수동 모드를 이용하세요"
+                                                        ? "⚠️ 그룹 배정 불가 — 과목 조합을 다시 선택하세요"
                                                         : smartAssigned
                                                             ? "✅ 자동 그룹 배정 완료"
                                                             : "과목을 모두 선택하면 자동 배정합니다"
@@ -512,7 +512,16 @@ export default function ElectiveSelectionDialog({
                                                 </div>
                                             )}
 
-                                            {/* Ambiguous >3: just a note (manual mode button in footer) */}
+                                            {/* Ambiguous 4-99: mobile button inline, desktop button in footer */}
+                                            {isAmbiguous && solverOutcome && solverOutcome.solutionCount > 3 && solverOutcome.solutionCount < MAX_SOLUTIONS_TO_COLLECT && (
+                                                <div className="flex justify-center sm:hidden pt-1">
+                                                    <Button variant="outline" size="sm" onClick={() => setMode("manual")} className="text-amber-600 border-amber-300">
+                                                        수동 입력으로 전환
+                                                    </Button>
+                                                </div>
+                                            )}
+
+                                            {/* Ambiguous ≥100: mobile button + error note */}
                                             {isAmbiguous && solverOutcome && solverOutcome.solutionCount >= MAX_SOLUTIONS_TO_COLLECT && (
                                                 <div className="space-y-2">
                                                     <p className="text-xs text-red-500">
@@ -527,11 +536,18 @@ export default function ElectiveSelectionDialog({
                                                 </div>
                                             )}
 
-                                            {/* Pure conflict (0 solutions) */}
+                                            {/* Pure conflict (0 solutions) — also show mobile button */}
                                             {hasConflict && !isAmbiguous && (
-                                                <p className="text-xs text-red-500">
-                                                    선택한 과목들이 동일한 그룹에 중복 배정되어 충돌이 발생합니다.
-                                                </p>
+                                                <div className="space-y-2">
+                                                    <p className="text-xs text-red-500">
+                                                        선택한 과목들이 동일한 그룹에 중복 배정되어 충돌이 발생합니다.
+                                                    </p>
+                                                    <div className="flex justify-center sm:hidden">
+                                                        <Button variant="outline" size="sm" onClick={() => setMode("manual")} className="text-amber-600 border-amber-300">
+                                                            수동 입력으로 전환
+                                                        </Button>
+                                                    </div>
+                                                </div>
                                             )}
                                         </div>
                                     )}
