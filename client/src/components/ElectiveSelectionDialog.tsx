@@ -435,20 +435,20 @@ export default function ElectiveSelectionDialog({
                                     {/* Auto-assignment preview / ambiguous picker */}
                                     {smartSelected.length > 0 && (
                                         <div className={`rounded-lg border p-3 text-sm space-y-2 ${(isAmbiguous && (solverOutcome?.solutionCount ?? 0) <= 3)
-                                                ? "border-yellow-200 bg-yellow-50"
-                                                : hasConflict
-                                                    ? "border-red-200 bg-red-50"
-                                                    : smartAssigned
-                                                        ? "border-green-200 bg-green-50"
-                                                        : "border-slate-200 bg-slate-50"
+                                            ? "border-yellow-200 bg-yellow-50"
+                                            : hasConflict
+                                                ? "border-red-200 bg-red-50"
+                                                : smartAssigned
+                                                    ? "border-green-200 bg-green-50"
+                                                    : "border-slate-200 bg-slate-50"
                                             }`}>
                                             <p className={`font-semibold text-xs uppercase tracking-wide ${(isAmbiguous && (solverOutcome?.solutionCount ?? 0) <= 3)
-                                                    ? "text-yellow-700"
-                                                    : hasConflict
-                                                        ? "text-red-600"
-                                                        : smartAssigned
-                                                            ? "text-green-700"
-                                                            : "text-slate-500"
+                                                ? "text-yellow-700"
+                                                : hasConflict
+                                                    ? "text-red-600"
+                                                    : smartAssigned
+                                                        ? "text-green-700"
+                                                        : "text-slate-500"
                                                 }`}>
                                                 {isAmbiguous
                                                     ? (solverOutcome && solverOutcome.solutionCount <= 3
@@ -495,7 +495,7 @@ export default function ElectiveSelectionDialog({
                                                                     <div className="flex flex-wrap gap-2">
                                                                         {Object.entries(sol).sort(([a], [b]) => a.localeCompare(b)).map(([group, sel]) => (
                                                                             <div key={group} className="flex items-center gap-1">
-                                                                                <span className="font-bold text-xs text-blue-400">{group}</span>
+                                                                                <span className="font-bold text-sm text-blue-400">{group}</span>
                                                                                 <span className="text-slate-800 font-medium text-sm">{sel.subject}</span>
                                                                             </div>
                                                                         ))}
@@ -589,7 +589,7 @@ export default function ElectiveSelectionDialog({
                     </div>
                     <div className="flex gap-2 items-center">
                         {/* Mode toggle */}
-                        {mode === "smart" && isAmbiguous && solverOutcome && solverOutcome.solutionCount >= MAX_SOLUTIONS_TO_COLLECT && (
+                        {mode === "smart" && isAmbiguous && solverOutcome && solverOutcome.solutionCount > 3 && (
                             <Button variant="outline" size="sm" onClick={() => setMode("manual")} className="text-amber-600 border-amber-300">
                                 수동 입력으로 전환
                             </Button>
