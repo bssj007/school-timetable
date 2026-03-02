@@ -1692,9 +1692,7 @@ export default function Admin() {
             <div className="container max-w-6xl mx-auto px-4 py-8">
                 <AutoFillAnalyzer
                     grade={autoFillGrade}
-                    planData={[]} // No longer passing manual plan prop down directly. It will fetch itself inside.
                     adminPassword={password}
-                    timetableProps={[autoFillTargetDataset]} // Preselect from Bridge
                     onBack={() => setShowAutoFill(false)}
                     initialTargetDataset={autoFillTargetDataset}
                 />
@@ -2233,6 +2231,17 @@ export default function Admin() {
                     <ManualSemesterPlan adminPassword={password} />
                 </TabsContent>
 
+                <TabsContent value="bridge" className="space-y-6">
+                    <BridgeManager
+                        adminPassword={password}
+                        goAutoFillAnalysis={(grade, targetDataset) => {
+                            setAutoFillGrade(grade);
+                            setAutoFillTargetDataset(targetDataset);
+                            setShowAutoFill(true);
+                        }}
+                    />
+                </TabsContent>
+
                 <TabsContent value="etc" className="space-y-6">
                     <EtcManager adminPassword={password} />
                 </TabsContent>
@@ -2406,10 +2415,9 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     );
 }
 
-function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPassword: string, onBack: () => void, currentPlan: any }) {
-    const { grade } = currentPlan;
+function AutoFillAnalyzer({ grade, adminPassword, onBack, initialTargetDataset }: { grade: number, adminPassword: string, onBack: () => void, initialTargetDataset?: string }) {
     const queryClient = useQueryClient();
-    const [selectedDataset, setSelectedDataset] = useState<string>('');
+    const [selectedDataset, setSelectedDataset] = useState<string>(initialTargetDataset || '');
 
     // Fetch current setting to determine default
     const settingsQuery = useQuery({
@@ -2420,6 +2428,17 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
             return res.json();
         }
     });
+
+    const currentPlan = React.useMemo(() => {
+        if (!settingsQuery.data || !settingsQuery.data.manual_plan_v2) return { grade, timetables: {}, groups: {}, subjects: [] };
+        try {
+            const parsed = JSON.parse(settingsQuery.data.manual_plan_v2);
+            parsed.grade = grade;
+            return parsed;
+        } catch {
+            return { grade, timetables: {}, groups: {}, subjects: [] };
+        }
+    }, [settingsQuery.data, grade]);
 
     // Fetch raw comcigan to build the dataset list
     const rawDataQuery = useQuery({
