@@ -143,7 +143,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
     });
 
     // Manually trigger mapping generation
-    const generateAutoMappings = () => {
+    const generateAutoMappings = (isManualClick = true) => {
         if (!fromSubjectsQuery.data) return;
 
         const defaultMappings = fromSubjectsQuery.data.map(subj => {
@@ -168,8 +168,18 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             return { from: subj, to: matchedTo, similarity: maxSimilarity, isManual: false };
         });
         setMappingFields(defaultMappings);
-        toast.success("이름 기반 1:1 매핑 규칙이 생성되었습니다.");
+        if (isManualClick) {
+            toast.success("이름 기반 1:1 매핑 규칙이 생성되었습니다.");
+        }
     };
+
+    // Auto-populate when datasets/grade change and mapping fields are empty
+    useEffect(() => {
+        if (isCreating && fromSubjectsQuery.data && mappingFields.length === 0) {
+            generateAutoMappings(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fromSubjectsQuery.data, toSubjectsQuery.data, isCreating]);
 
     const { data: bridges, isLoading } = useQuery({
         queryKey: ["admin", "bridges"],
@@ -255,10 +265,13 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
     const hasMappingChanges = () => {
         if (!editingBridge) return true; // It's a new bridge
         try {
-            const originalMapping = JSON.parse(editingBridge.mappingData);
+            let originalMapping = JSON.parse(editingBridge.mappingData);
+            if (typeof originalMapping === "string") {
+                originalMapping = JSON.parse(originalMapping);
+            }
 
             // Normalize for comparison: ignore transient UI state like similarity and isManual
-            const normalize = (arr: any[]) => arr.map((m: any) => ({ from: m.from, to: m.to }));
+            const normalize = (arr: any[]) => Array.isArray(arr) ? arr.map((m: any) => ({ from: m.from, to: m.to })) : [];
             const currentStr = JSON.stringify(normalize(mappingFields));
             const originalStr = JSON.stringify(normalize(originalMapping));
 
@@ -309,7 +322,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         setEditingBridge(null);
         setSelectedBridgeId(null);
         setName("");
-        setFromDataset("MANUAL_PLAN");
+        setFromDataset("");
         setToDataset("");
         setTargetGrade("");
         setMappingFields([]);
@@ -324,10 +337,13 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         setToDataset(bridge.toDataset);
         setTargetGrade(bridge.targetGrade ? bridge.targetGrade.toString() : "");
         try {
-            const parsed = JSON.parse(bridge.mappingData);
+            let parsed = JSON.parse(bridge.mappingData);
+            if (typeof parsed === "string") {
+                parsed = JSON.parse(parsed); // Rescue double-escaped DB entries
+            }
             // When opening an existing bridge, we consider all mappings as manual
             // so we don't inappropriately show old similarity scores if they weren't saved or changed
-            const restored = parsed.length > 0 ? parsed.map((m: any) => ({ ...m, isManual: true })) : [{ from: "", to: "" }];
+            const restored = (Array.isArray(parsed) && parsed.length > 0) ? parsed.map((m: any) => ({ ...m, isManual: true })) : [{ from: "", to: "" }];
             setMappingFields(restored);
         } catch {
             setMappingFields([{ from: "", to: "" }]);
@@ -453,12 +469,6 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                     <div className="p-3 bg-slate-100 border-b flex justify-between items-center rounded-t-xl">
                                         <div className="flex items-center gap-3">
                                             <h3 className="font-bold text-sm">1:1 과목명 매핑 규칙</h3>
-                                            {(fromSubjectsQuery.data && fromSubjectsQuery.data.length > 0) && (
-                                                <Button variant="secondary" size="sm" onClick={generateAutoMappings} disabled={!isCreating} className="h-7 text-xs px-2">
-                                                    <Wand2 className="w-3 h-3 mr-1.5" />
-                                                    이름 자동 매핑
-                                                </Button>
-                                            )}
                                         </div>
                                         <span className="text-xs text-slate-500">{mappingFields.length}개 과목 발견됨</span>
                                     </div>
