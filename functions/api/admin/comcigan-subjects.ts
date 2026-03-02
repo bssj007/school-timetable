@@ -99,7 +99,7 @@ export const onRequest = async (context: any) => {
 
             if (dataset === 'SEMESTER_PLAN') {
                 // Return subjects generated from Manual Semester Plan ("학기별 계획")
-                const result = await env.DB.prepare("SELECT value FROM settings WHERE key = 'manual_semester_plan'").first();
+                const result = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'manual_semester_plan'").first();
                 if (result && result.value) {
                     const manualPlan = JSON.parse(result.value);
 

@@ -175,19 +175,28 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         }
     };
 
-    // Auto-populate when datasets/grade change and mapping fields are basically empty
+    const lastGenSig = React.useRef("");
+
+    // Auto-populate when datasets/grade change and mapping fields are out of sync
     useEffect(() => {
-        // We only auto-fill if we are creating and the mapping fields are empty of any valid from-subjects
-        const hasExistingValidMappers = mappingFields.some(m => m.from && m.from.trim() !== "");
         // We need both subjects lists to be loaded to accurately calculate similarities
         const canGenerate = Array.isArray(fromSubjectsQuery.data) && fromSubjectsQuery.data.length > 0 &&
             Array.isArray(toSubjectsQuery.data) && toSubjectsQuery.data.length > 0;
 
-        if (isCreating && canGenerate && !hasExistingValidMappers) {
+        const currentFroms = mappingFields.map(m => m.from).slice().sort().join(",");
+        const fetchedFroms = Array.isArray(fromSubjectsQuery.data) ? fromSubjectsQuery.data.slice().sort().join(",") : "";
+
+        const currentSig = `${fromDataset}-${toDataset}-${targetGrade}`;
+        const hasSigChanged = lastGenSig.current !== currentSig;
+
+        const mappingMismatch = currentFroms !== fetchedFroms || hasSigChanged;
+
+        if (isCreating && canGenerate && mappingMismatch) {
+            lastGenSig.current = currentSig;
             generateAutoMappings(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fromSubjectsQuery.data, toSubjectsQuery.data, isCreating, mappingFields]);
+    }, [fromSubjectsQuery.data, toSubjectsQuery.data, isCreating, mappingFields, fromDataset, toDataset, targetGrade]);
 
     const { data: bridges, isLoading } = useQuery({
         queryKey: ["admin", "bridges"],

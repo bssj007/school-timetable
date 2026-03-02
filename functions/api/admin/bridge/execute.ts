@@ -91,7 +91,11 @@ export const onRequest = async (context: any) => {
             }
 
             if (batchStatements.length > 0) {
-                await env.DB.batch(batchStatements);
+                const chunkSize = 50;
+                for (let i = 0; i < batchStatements.length; i += chunkSize) {
+                    const chunk = batchStatements.slice(i, i + chunkSize);
+                    await env.DB.batch(chunk);
+                }
                 totalElectiveConfigsCopied = batchStatements.length;
             }
         }
