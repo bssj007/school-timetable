@@ -472,7 +472,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                                 variant="outline"
                                                                 role="combobox"
                                                                 aria-expanded={openComboboxId === idx}
-                                                                className={cn("w-full justify-between font-normal", !field.to && 'border-red-200 bg-red-50 text-slate-500')}
+                                                                className={cn("flex-1 min-w-0 justify-between font-normal", !field.to && 'border-red-200 bg-red-50 text-slate-500')}
                                                             >
                                                                 <span className="truncate">
                                                                     {field.to ? (field.to === "_none_" ? "매핑 안함 (삭제됨/유실됨)" : field.to) : "매핑 검색 및 선택..."}
@@ -592,69 +592,73 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                     <div className="p-4 bg-white space-y-4 text-sm">
 
                                         {/* Auto-fill Trigger Action */}
-                                        <div className="space-y-2 border-b pb-4">
-                                            <p className="font-semibold text-slate-700">선택과목 자동 채우기</p>
-                                            <p className="text-xs text-slate-500">
-                                                출발역이 <strong>MANUAL_PLAN</strong>일 경우 학기별 계획 데이터를 바탕으로 블록을 생성할 수 있습니다.
-                                            </p>
-                                            <Button
-                                                variant="outline"
-                                                className="w-full text-purple-700 border-purple-200 hover:bg-purple-50"
-                                                disabled={fromDataset !== 'MANUAL_PLAN' || hasMappingChanges()}
-                                                onClick={() => goAutoFillAnalysis(parseInt(targetGrade), toDataset)}
-                                            >
-                                                자동 채우기 연계 분석 시작
-                                            </Button>
-                                        </div>
+                                        {fromDataset === 'MANUAL_PLAN' && toDataset === 'MANUAL_PLAN' && (
+                                            <div className="space-y-2 border-b pb-4">
+                                                <p className="font-semibold text-slate-700">선택과목 자동 채우기</p>
+                                                <p className="text-xs text-slate-500">
+                                                    출발역과 도착역이 모두 <strong>MANUAL_PLAN</strong>일 경우 학기별 계획 데이터를 바탕으로 1:1 과목명 규칙을 적용하면서 선택과목 블록을 자동으로 생성할 수 있습니다.
+                                                </p>
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full text-purple-700 border-purple-200 hover:bg-purple-50 mt-2"
+                                                    disabled={hasMappingChanges()}
+                                                    onClick={() => goAutoFillAnalysis(parseInt(targetGrade), toDataset)}
+                                                >
+                                                    자동 채우기 연계 분석 시작
+                                                </Button>
+                                            </div>
+                                        )}
 
                                         {/* Classic Execution Checkboxes */}
-                                        <div className="space-y-2 pt-2">
-                                            <p className="font-semibold text-slate-700">마이그레이션 옵션</p>
+                                        {!(fromDataset === 'MANUAL_PLAN' && toDataset === 'MANUAL_PLAN') && (
+                                            <div className="space-y-2 pt-2">
+                                                <p className="font-semibold text-slate-700">마이그레이션 옵션</p>
 
-                                            <label className={`flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer ${targetGrade === '1' ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-50'}`}>
-                                                <div className="space-y-0.5">
-                                                    <p className="font-medium text-base">선택과목 데이터 복제</p>
-                                                    <p className="text-xs text-slate-500">지정된 데이터셋의 구성을 기반으로 1:1 매핑 복사</p>
-                                                </div>
-                                                <Checkbox checked={targetGrade !== '1' && execElectives} disabled={targetGrade === '1'} onCheckedChange={(v) => setExecElectives(!!v)} />
-                                            </label>
+                                                <label className={`flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer ${targetGrade === '1' ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-50'}`}>
+                                                    <div className="space-y-0.5">
+                                                        <p className="font-medium text-base">선택과목 데이터 복제</p>
+                                                        <p className="text-xs text-slate-500">지정된 데이터셋의 구성을 기반으로 1:1 매핑 복사</p>
+                                                    </div>
+                                                    <Checkbox checked={targetGrade !== '1' && execElectives} disabled={targetGrade === '1'} onCheckedChange={(v) => setExecElectives(!!v)} />
+                                                </label>
 
-                                            <label className={`flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer ${targetGrade === '1' ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-50'}`}>
-                                                <div className="space-y-0.5">
-                                                    <p className="font-medium text-base">학생 선택과목 변경</p>
-                                                    <p className="text-xs text-slate-500">학생 프로필에 저장된 과목명을 매핑 규칙대로 변경</p>
-                                                </div>
-                                                <Checkbox checked={targetGrade !== '1' && execProfiles} disabled={targetGrade === '1'} onCheckedChange={(v) => setExecProfiles(!!v)} />
-                                            </label>
+                                                <label className={`flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer ${targetGrade === '1' ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-50'}`}>
+                                                    <div className="space-y-0.5">
+                                                        <p className="font-medium text-base">학생 선택과목 변경</p>
+                                                        <p className="text-xs text-slate-500">학생 프로필에 저장된 과목명을 매핑 규칙대로 변경</p>
+                                                    </div>
+                                                    <Checkbox checked={targetGrade !== '1' && execProfiles} disabled={targetGrade === '1'} onCheckedChange={(v) => setExecProfiles(!!v)} />
+                                                </label>
 
-                                            <label className="flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer hover:bg-slate-50">
-                                                <div className="space-y-0.5">
-                                                    <p className="font-medium text-base">수행평가 데이터 연결</p>
-                                                    <p className="text-xs text-slate-500">수행평가 DB에 저장된 과목명을 매핑 규칙대로 수정</p>
-                                                </div>
-                                                <Checkbox checked={execAssessments} onCheckedChange={(v) => setExecAssessments(!!v)} />
-                                            </label>
+                                                <label className="flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer hover:bg-slate-50">
+                                                    <div className="space-y-0.5">
+                                                        <p className="font-medium text-base">수행평가 데이터 연결</p>
+                                                        <p className="text-xs text-slate-500">수행평가 DB에 저장된 과목명을 매핑 규칙대로 수정</p>
+                                                    </div>
+                                                    <Checkbox checked={execAssessments} onCheckedChange={(v) => setExecAssessments(!!v)} />
+                                                </label>
 
-                                            {targetGrade === '1' && (
-                                                <p className="text-xs text-amber-600 font-medium">
-                                                    * 1학년은 독립된 선택과목 구조가 없으므로 해당 옵션들이 비활성화됩니다.
-                                                </p>
-                                            )}
+                                                {targetGrade === '1' && (
+                                                    <p className="text-xs text-amber-600 font-medium mt-2">
+                                                        * 1학년은 독립된 선택과목 구조가 없으므로 해당 옵션들이 비활성화됩니다.
+                                                    </p>
+                                                )}
 
-                                            <Button
-                                                className="w-full mt-4 bg-purple-600 hover:bg-purple-700 text-white"
-                                                onClick={handleExecute}
-                                                disabled={isExecuting || hasMappingChanges() || !selectedBridgeId || (!execElectives && !execProfiles && !execAssessments) || (targetGrade === '1' && !execAssessments)}
-                                            >
-                                                {isExecuting ? "실행 중..." : "선택 옵션 마이그레이션 실행"}
-                                            </Button>
+                                                <Button
+                                                    className="w-full mt-4 bg-purple-600 hover:bg-purple-700 text-white"
+                                                    onClick={handleExecute}
+                                                    disabled={isExecuting || hasMappingChanges() || !selectedBridgeId || (!execElectives && !execProfiles && !execAssessments) || (targetGrade === '1' && !execAssessments)}
+                                                >
+                                                    {isExecuting ? "실행 중..." : "선택 옵션 마이그레이션 실행"}
+                                                </Button>
 
-                                            {hasMappingChanges() && (
-                                                <p className="text-xs text-red-500 text-center font-bold">
-                                                    변경사항을 먼저 저장해야 실행할 수 있습니다.
-                                                </p>
-                                            )}
-                                        </div>
+                                                {hasMappingChanges() && (
+                                                    <p className="text-xs text-red-500 text-center font-bold mt-2">
+                                                        변경사항을 먼저 저장해야 실행할 수 있습니다.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -665,4 +669,3 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         </div>
     );
 }
-
