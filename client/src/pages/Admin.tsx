@@ -110,7 +110,8 @@ function ElectiveManager({ password }: { password: string }) {
             // 1. Fetch Comcigan Subjects
             let comciganData = [];
             try {
-                const comciganRes = await fetch(`/api/admin/comcigan-subjects?grade=${selectedGrade}&dataset=${targetDataset}`);
+                const comciganDataset = targetDataset === "MANUAL_PLAN" ? "SEMESTER_PLAN" : targetDataset;
+                const comciganRes = await fetch(`/api/admin/comcigan-subjects?grade=${selectedGrade}&dataset=${comciganDataset}`);
                 if (!comciganRes.ok) throw new Error(`Comcigan Fetch Failed: ${comciganRes.status}`);
                 comciganData = await comciganRes.json();
                 if (!Array.isArray(comciganData)) throw new Error("Comcigan data is not an array");
