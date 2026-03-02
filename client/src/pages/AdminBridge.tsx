@@ -175,13 +175,19 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         }
     };
 
-    // Auto-populate when datasets/grade change and mapping fields are empty
+    // Auto-populate when datasets/grade change and mapping fields are basically empty
     useEffect(() => {
-        if (isCreating && fromSubjectsQuery.data && mappingFields.length === 0) {
+        // We only auto-fill if we are creating and the mapping fields are empty of any valid from-subjects
+        const hasExistingValidMappers = mappingFields.some(m => m.from && m.from.trim() !== "");
+        // We need both subjects lists to be loaded to accurately calculate similarities
+        const canGenerate = Array.isArray(fromSubjectsQuery.data) && fromSubjectsQuery.data.length > 0 &&
+            Array.isArray(toSubjectsQuery.data) && toSubjectsQuery.data.length > 0;
+
+        if (isCreating && canGenerate && !hasExistingValidMappers) {
             generateAutoMappings(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fromSubjectsQuery.data, toSubjectsQuery.data, isCreating]);
+    }, [fromSubjectsQuery.data, toSubjectsQuery.data, isCreating, mappingFields]);
 
     const { data: bridges, isLoading } = useQuery({
         queryKey: ["admin", "bridges"],
