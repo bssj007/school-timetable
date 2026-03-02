@@ -2431,9 +2431,9 @@ function AutoFillAnalyzer({ grade, adminPassword, onBack, initialTargetDataset }
     });
 
     const currentPlan = React.useMemo(() => {
-        if (!settingsQuery.data || !settingsQuery.data.manual_plan_v2) return { grade, timetables: {}, groups: {}, subjects: [] };
+        if (!settingsQuery.data || !settingsQuery.data.manual_semester_plan) return { grade, timetables: {}, groups: {}, subjects: [] };
         try {
-            const parsed = JSON.parse(settingsQuery.data.manual_plan_v2);
+            const parsed = JSON.parse(settingsQuery.data.manual_semester_plan);
             parsed.grade = grade;
             return parsed;
         } catch {

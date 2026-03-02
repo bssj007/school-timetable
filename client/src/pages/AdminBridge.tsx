@@ -400,7 +400,11 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         <TableRow><TableCell colSpan={6} className="text-center text-slate-500 py-8">등록된 BRIDGE가 없습니다.</TableCell></TableRow>
                                     ) : bridges.map(bridge => {
                                         let mappingCount = 0;
-                                        try { mappingCount = JSON.parse(bridge.mappingData).length; } catch { }
+                                        try {
+                                            let parsed = JSON.parse(bridge.mappingData);
+                                            if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+                                            mappingCount = Array.isArray(parsed) ? parsed.length : 0;
+                                        } catch { }
                                         return (
                                             <TableRow key={bridge.id} className="cursor-pointer hover:bg-slate-50" onClick={() => openEdit(bridge)}>
                                                 <TableCell className="font-bold">{bridge.name}</TableCell>
