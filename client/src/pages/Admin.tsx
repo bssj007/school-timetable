@@ -1102,10 +1102,10 @@ function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string })
             return res.json();
         },
         onSuccess: () => {
-            toast.success("\uc124\uc815\uc774 \uc800\uc7a5\ub418\uc5c8\uc2b5\ub2c8\ub2e4.");
+            toast.success("설정이 저장되었습니다.");
             queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
         },
-        onError: (err: Error) => toast.error(`\uc800\uc7a5 \uc2e4\ud328: ${err.message}`),
+        onError: (err: Error) => toast.error(`저장 실패: ${err.message}`),
     });
 
     const originalMode = (settingsQuery.data?.elective_input_mode as 'auto' | 'manual') || 'auto';
@@ -1114,9 +1114,9 @@ function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string })
     return (
         <Card className="w-full max-w-lg">
             <CardHeader>
-                <CardTitle>\ud559\uc0dd \uc120\ud0dd\uacfc\ubaa9 \uc785\ub825\ubc29\uc2dd</CardTitle>
+                <CardTitle>학생 선택과목 입력방식</CardTitle>
                 <CardDescription>
-                    \uba54\uc778 \ud654\uba74\uc758 \uc120\ud0dd\uacfc\ubaa9 \ud3b8\uc9d1\ucc3d\uc5d0\uc11c \uc0ac\uc6a9\ud560 \uc785\ub825 \ubc29\uc2dd\uc744 \uc120\ud0dd\ud569\ub2c8\ub2e4.
+                    메인 화면의 선택과목 편집창에서 사용할 입력 방식을 선택합니다.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1127,10 +1127,10 @@ function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string })
                     >
                         <input type="radio" className="mt-0.5" checked={selectedMode === 'auto'} onChange={() => setSelectedMode('auto')} />
                         <div>
-                            <p className="font-semibold text-sm">\uc790\ub3d9 \ud0d0\uc0c9 (\uae30\ubcf8\uac12)</p>
+                            <p className="font-semibold text-sm">자동 탐색 (기본값)</p>
                             <p className="text-xs text-slate-500">
-                                \ud559\uc0dd\uc774 \uacfc\ubaa9\uba85\ub9cc \uc120\ud0dd\ud558\uba74 \uac00\ub2a5\ud55c ABCD \uc870\ud569\uc744 \uc790\ub3d9\uc73c\ub85c \ud0d0\uc0c9\ud569\ub2c8\ub2e4.
-                                \uc870\ud569\uc774 \ud558\ub098\uc774\uba74 \uc790\ub3d9 \ubc30\uc815, \uc5ec\ub7ec \uac00\uc9c0\uc774\uba74 \uc120\ud0dd \ucee4\ub4dc \ud45c\uc2dc.
+                                학생이 과목명만 선택하면 가능한 ABCD 조합을 자동으로 탐색합니다.
+                                조합이 하나이면 자동 배정, 여러 가지이면 선택 카드 표시.
                             </p>
                         </div>
                     </label>
@@ -1141,9 +1141,9 @@ function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string })
                     >
                         <input type="radio" className="mt-0.5" checked={selectedMode === 'manual'} onChange={() => setSelectedMode('manual')} />
                         <div>
-                            <p className="font-semibold text-sm">\uc218\ub3d9 \uc785\ub825</p>
+                            <p className="font-semibold text-sm">수동 입력</p>
                             <p className="text-xs text-slate-500">
-                                \uc790\ub3d9 \ud0d0\uc0c9 \uc5c6\uc774 ABCD \uadf8\ub8f9\ubcc4\ub85c \uc9c1\uc811 \ub4dc\ub86d\ub2e4\uc6b4\uc73c\ub85c \uc785\ub825\ud569\ub2c8\ub2e4.
+                                자동 탐색 없이 ABCD 그룹별로 직접 드롭다운으로 입력합니다.
                             </p>
                         </div>
                     </label>
@@ -1151,10 +1151,10 @@ function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string })
 
                 <div className="flex justify-end gap-2 pt-2 border-t">
                     <Button variant="outline" onClick={() => setSelectedMode(originalMode)} disabled={!isDirty || saveMutation.isPending}>
-                        \ucde8\uc18c
+                        취소
                     </Button>
                     <Button onClick={() => saveMutation.mutate(selectedMode)} disabled={!isDirty || saveMutation.isPending}>
-                        {saveMutation.isPending ? "\uc800\uc7a5 \uc911..." : "\uc800\uc7a5"}
+                        {saveMutation.isPending ? "저장 중..." : "저장"}
                     </Button>
                 </div>
             </CardContent>
@@ -2996,6 +2996,8 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
     const [grade, setGrade] = useState("2");
     const [classNum, setClassNum] = useState("1");
     const [isSafeMode, setIsSafeMode] = useState(true);
+    // Track which grades have already been auto-imported this session to avoid overwriting manual edits
+    const autoImportedGrades = useRef<Set<string>>(new Set());
 
     // timetables structure: { "2-1": { "0-1": "과목 교사", "1-3": "..." }, "2-2": ... }
     const [timetables, setTimetables] = useState<Record<string, Record<string, string>>>({});
@@ -3096,7 +3098,21 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
             });
             if (!res.ok) return [];
             const data = await res.json();
-            return Array.from(new Set(data.map((item: any) => item.subject))).filter(Boolean) as string[];
+            // Build "과목명 교사명" entries (matching the manual plan's timetable parsing format)
+            // Use a Set keyed by "subject|teacher" to deduplicate, then format as "과목 교사"
+            const seen = new Set<string>();
+            const entries: string[] = [];
+            for (const item of data) {
+                const subj = (item.subject || "").trim();
+                const teacher = (item.originalTeacher || "").trim();
+                if (!subj) continue;
+                const key = teacher ? `${subj} ${teacher}` : subj;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    entries.push(key);
+                }
+            }
+            return entries;
         },
         enabled: !!autoImportDataset && grade !== "1",
         staleTime: 1000 * 60 * 5, // 5 min cache per grade
@@ -3104,7 +3120,10 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
 
     useEffect(() => {
         const fetched = autoImportQuery.data;
-        if (fetched && fetched.length > 0 && (!subjects[grade] || subjects[grade].length === 0)) {
+        // Only auto-import each grade ONCE per session.
+        // Switching back to a previously-visited grade won't overwrite manual edits.
+        if (fetched && fetched.length > 0 && !autoImportedGrades.current.has(grade)) {
+            autoImportedGrades.current.add(grade);
             setSubjects(prev => ({ ...prev, [grade]: fetched }));
         }
     }, [autoImportQuery.data, grade]);

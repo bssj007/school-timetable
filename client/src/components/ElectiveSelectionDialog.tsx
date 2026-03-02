@@ -407,7 +407,7 @@ export default function ElectiveSelectionDialog({
                                     </div>
 
                                     {/* Subject picker grid */}
-                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[260px] overflow-y-auto pr-1">
+                                    <div className="grid grid-cols-3 gap-2 max-h-[260px] overflow-y-auto pr-1">
                                         {filteredSubjects.map(subj => {
                                             const isSelected = smartSelected.includes(subj);
                                             return (
