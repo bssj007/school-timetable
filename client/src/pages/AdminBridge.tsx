@@ -12,6 +12,36 @@ import { toast } from 'sonner';
 interface BridgeMapping {
     from: string;
     to: string;
+    similarity?: number;
+    isManual?: boolean;
+}
+
+// Levenshtein distance based string similarity (0 to 100)
+function calculateSimilarity(str1: string, str2: string): number {
+    const s1 = str1.replace(/\s+/g, '').toLowerCase();
+    const s2 = str2.replace(/\s+/g, '').toLowerCase();
+
+    if (s1 === s2) return 100;
+    if (s1.length === 0 || s2.length === 0) return 0;
+
+    const matrix = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
+
+    for (let i = 0; i <= s1.length; i++) matrix[0][i] = i;
+    for (let j = 0; j <= s2.length; j++) matrix[j][0] = j;
+
+    for (let j = 1; j <= s2.length; j++) {
+        for (let i = 1; i <= s1.length; i++) {
+            const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+            matrix[j][i] = Math.min(
+                matrix[j][i - 1] + 1, // deletion
+                matrix[j - 1][i] + 1, // insertion
+                matrix[j - 1][i - 1] + indicator // substitution
+            );
+        }
+    }
+    const distance = matrix[s2.length][s1.length];
+    const maxLength = Math.max(s1.length, s2.length);
+    return Math.round(((maxLength - distance) / maxLength) * 100);
 }
 
 interface DatasetBridge {
@@ -112,19 +142,24 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         if (isCreating && fromSubjectsQuery.data) {
             const defaultMappings = fromSubjectsQuery.data.map(subj => {
                 let matchedTo = "";
+                let maxSimilarity = 0;
+
                 if (toSubjectsQuery.data && Array.isArray(toSubjectsQuery.data)) {
-                    // Simple exact match or partial match
-                    const exactMatch = toSubjectsQuery.data.find(t => t === subj);
-                    if (exactMatch) {
-                        matchedTo = exactMatch;
-                    } else {
-                        // Try removing spaces, prefixes, etc.
-                        const cleanSubj = subj.replace(/\s+/g, '');
-                        const partialMatch = toSubjectsQuery.data.find(t => t.replace(/\s+/g, '').includes(cleanSubj) || cleanSubj.includes(t.replace(/\s+/g, '')));
-                        if (partialMatch) matchedTo = partialMatch;
+                    // Find the best match using the similarity algorithm
+                    for (const candidate of toSubjectsQuery.data) {
+                        const score = calculateSimilarity(subj, candidate);
+                        if (score > maxSimilarity) {
+                            maxSimilarity = score;
+                            matchedTo = candidate;
+                        }
+                    }
+                    // Only auto-match if there's at least a weak similarity (e.g. > 30%)
+                    if (maxSimilarity < 30) {
+                        matchedTo = "";
+                        maxSimilarity = 0;
                     }
                 }
-                return { from: subj, to: matchedTo };
+                return { from: subj, to: matchedTo, similarity: maxSimilarity, isManual: false };
             });
             setMappingFields(defaultMappings);
         }
@@ -274,7 +309,10 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         setToDataset(bridge.toDataset);
         try {
             const parsed = JSON.parse(bridge.mappingData);
-            setMappingFields(parsed.length > 0 ? parsed : [{ from: "", to: "" }]);
+            // When opening an existing bridge, we consider all mappings as manual
+            // so we don't inappropriately show old similarity scores if they weren't saved or changed
+            const restored = parsed.length > 0 ? parsed.map((m: any) => ({ ...m, isManual: true })) : [{ from: "", to: "" }];
+            setMappingFields(restored);
         } catch {
             setMappingFields([{ from: "", to: "" }]);
         }
@@ -357,7 +395,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획)</SelectItem>
-                                                    {(datasetOptions || []).map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                                                    {Array.isArray(datasetOptions) && datasetOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                                                 </SelectContent>
                                             </Select>
                                         </div>
@@ -371,7 +409,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                     <SelectValue placeholder="도착역 선택" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {(datasetOptions || []).map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                                                    {Array.isArray(datasetOptions) && datasetOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                                                 </SelectContent>
                                             </Select>
                                         </div>
@@ -387,18 +425,19 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         {fromSubjectsQuery.isLoading && isCreating && (
                                             <p className="text-sm text-center text-slate-400 py-4">과목 목록을 불러오는 중...</p>
                                         )}
-                                        {(mappingFields || []).map((field, idx) => (
+                                        {Array.isArray(mappingFields) && mappingFields.map((field, idx) => (
                                             <div key={idx} className="flex items-center gap-2">
                                                 <div className="flex-1 px-3 py-2 bg-slate-50 border rounded-md text-sm font-medium text-slate-700 truncate min-w-0" title={field.from}>
                                                     {field.from}
                                                 </div>
                                                 <ArrowRight className="w-4 h-4 text-slate-300 shrink-0" />
-                                                <div className="flex-1 min-w-0">
+                                                <div className="flex-1 min-w-0 flex items-center gap-2">
                                                     <Select
                                                         value={field.to || "_none_"}
                                                         onValueChange={val => {
                                                             const newFields = [...mappingFields];
                                                             newFields[idx].to = val === "_none_" ? "" : val;
+                                                            newFields[idx].isManual = true; // User manually interacted
                                                             setMappingFields(newFields);
                                                         }}
                                                     >
@@ -412,6 +451,12 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                             ))}
                                                         </SelectContent>
                                                     </Select>
+
+                                                    {field.to && !field.isManual && field.similarity !== undefined && field.similarity > 0 && (
+                                                        <span className="text-red-500 text-xs font-bold whitespace-nowrap" title="시스템이 추천한 유사도 점수입니다.">
+                                                            {field.similarity}%
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))}
