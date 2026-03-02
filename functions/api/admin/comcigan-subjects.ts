@@ -92,44 +92,52 @@ export const onRequest = async (context: any) => {
 
     if (!grade) return new Response('Grade required', { status: 400 });
 
-    // If the dataset is MANUAL_PLAN, we shouldn't fetch from Comcigan at all
-    if (dataset === 'MANUAL_PLAN') {
+    if (dataset === 'SEMESTER_PLAN' || dataset === 'MANUAL_PLAN') {
         try {
             const { env } = context;
             if (!env.DB) throw new Error("DB not configured");
-            const result = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'manual_semester_plan'").first();
-            if (result && result.value) {
-                const manualPlan = JSON.parse(result.value);
 
-                // Dynamically find subjects used ONLY in the requested grade
-                const usedSubjects = new Set<string>();
-                if (manualPlan.timetables) {
-                    Object.keys(manualPlan.timetables).forEach(classKey => {
-                        const [g, c] = classKey.split('-');
-                        if (parseInt(g) === grade) {
-                            const tt = manualPlan.timetables[classKey];
-                            Object.values(tt).forEach((subj: any) => {
-                                if (subj) usedSubjects.add(subj);
-                            });
-                        }
+            if (dataset === 'SEMESTER_PLAN') {
+                const result = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'manual_semester_plan'").first();
+                if (result && result.value) {
+                    const manualPlan = JSON.parse(result.value);
+
+                    // Dynamically find subjects used ONLY in the requested grade
+                    const usedSubjects = new Set<string>();
+                    if (manualPlan.timetables) {
+                        Object.keys(manualPlan.timetables).forEach(classKey => {
+                            const [g, c] = classKey.split('-');
+                            if (parseInt(g) === grade) {
+                                const tt = manualPlan.timetables[classKey];
+                                Object.values(tt).forEach((subj: any) => {
+                                    if (subj) usedSubjects.add(subj);
+                                });
+                            }
+                        });
+                    }
+
+                    // Convert to array and handle the fact that subject might have "Teacher" suffix
+                    const mappedSubjects = Array.from(usedSubjects).map((subj: string) => {
+                        const parts = subj.split(' ');
+                        const teacher = parts.length > 1 ? parts[parts.length - 1] : "";
+                        const subjectName = parts.length > 1 ? parts.slice(0, -1).join(' ') : subj;
+
+                        return { subject: subjectName, teacher };
                     });
+
+                    return new Response(JSON.stringify(mappedSubjects), { headers: { 'Content-Type': 'application/json' } });
+                } else {
+                    return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
                 }
+            } else if (dataset === 'MANUAL_PLAN') {
+                const { results } = await env.DB.prepare(
+                    "SELECT DISTINCT subject, originalTeacher as teacher FROM elective_config WHERE dataset = ? AND grade = ?"
+                ).bind(dataset, grade).all();
 
-                // Convert to array and handle the fact that subject might have "Teacher" suffix
-                const mappedSubjects = Array.from(usedSubjects).map((subj: string) => {
-                    const parts = subj.split(' ');
-                    const teacher = parts.length > 1 ? parts[parts.length - 1] : "";
-                    const subjectName = parts.length > 1 ? parts.slice(0, -1).join(' ') : subj;
-
-                    return { subject: subjectName, teacher };
-                });
-
-                return new Response(JSON.stringify(mappedSubjects), { headers: { 'Content-Type': 'application/json' } });
-            } else {
-                return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
+                return new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
             }
         } catch (e: any) {
-            console.error("Failed to load manual plan subjects", e);
+            console.error("Failed to load custom dataset subjects", e);
             return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
         }
     }

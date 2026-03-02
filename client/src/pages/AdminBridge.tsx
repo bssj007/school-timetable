@@ -393,27 +393,28 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                             {/* Editor Panel (2 cols) */}
                             <div className="lg:col-span-2 space-y-4">
                                 <div className="p-4 border rounded-xl bg-slate-50 space-y-4">
-                                    <div className="grid grid-cols-4 gap-4 items-end">
-                                        <div className="col-span-4">
+                                    <div className="grid grid-cols-12 gap-4 items-end">
+                                        <div className="col-span-12">
                                             <label className="text-sm font-bold block mb-1">BRIDGE 식별 이름</label>
                                             <Input value={name} onChange={e => setName(e.target.value)} placeholder="예: 24년도 1학기 마이그레이션" />
                                         </div>
-                                        <div>
+                                        <div className="col-span-12 sm:col-span-5 relative">
                                             <label className="text-sm font-bold block mb-1">출발역 (From)</label>
                                             <Select value={fromDataset} onValueChange={setFromDataset} disabled={!isCreating}>
                                                 <SelectTrigger>
                                                     <SelectValue placeholder="출발역 선택" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획)</SelectItem>
+                                                    <SelectItem value="SEMESTER_PLAN">MANUAL_PLAN (학기별 계획)</SelectItem>
+                                                    <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
                                                     {Array.isArray(datasetOptions) && datasetOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                        <div className="flex justify-center pb-2">
+                                        <div className="hidden sm:flex col-span-1 justify-center pb-2">
                                             <ArrowRight className="w-6 h-6 text-slate-400" />
                                         </div>
-                                        <div>
+                                        <div className="col-span-12 sm:col-span-4">
                                             <label className="text-sm font-bold block mb-1">도착역 (To)</label>
                                             <Select value={toDataset} onValueChange={setToDataset} disabled={!isCreating}>
                                                 <SelectTrigger>
@@ -425,7 +426,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                        <div>
+                                        <div className="col-span-12 sm:col-span-2">
                                             <label className="text-sm font-bold block mb-1">대상 학년</label>
                                             <Select value={targetGrade} onValueChange={setTargetGrade}>
                                                 <SelectTrigger className={!targetGrade ? "text-slate-500" : ""}>
@@ -593,7 +594,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                     <div className="p-4 bg-white space-y-4 text-sm">
 
                                         {/* Auto-fill Trigger Action */}
-                                        {fromDataset === 'MANUAL_PLAN' && (
+                                        {fromDataset === 'SEMESTER_PLAN' && (
                                             <div className="space-y-2 border-b pb-4">
                                                 <p className="font-semibold text-slate-700">선택과목 자동 채우기</p>
                                                 <p className="text-xs text-slate-500">
@@ -611,7 +612,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         )}
 
                                         {/* Classic Execution Checkboxes */}
-                                        {fromDataset !== 'MANUAL_PLAN' && (
+                                        {fromDataset !== 'SEMESTER_PLAN' && (
                                             <div className="space-y-2 pt-2">
                                                 <p className="font-semibold text-slate-700">마이그레이션 옵션</p>
 
