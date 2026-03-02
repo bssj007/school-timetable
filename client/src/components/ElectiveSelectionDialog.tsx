@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
     Select,
     SelectContent,
@@ -10,7 +12,11 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Check, X, AlertTriangle, RotateCcw, Search, ChevronDown } from "lucide-react";
+
+// =====================================================================
+// Types
+// =====================================================================
 
 interface ElectiveConfig {
     id: number;
@@ -21,6 +27,7 @@ interface ElectiveConfig {
     originalTeacher: string;
     fullTeacherName?: string;
     isMovingClass?: number; // 0 or 1
+    className?: string;
 }
 
 interface ElectiveSelectionDialogProps {
@@ -30,8 +37,93 @@ interface ElectiveSelectionDialogProps {
     studentNumber: string;
     datasetId?: string;
     onSaveSuccess: () => void;
-    onBack?: () => void; // Optional back button
+    onBack?: () => void;
 }
+
+// =====================================================================
+// Backtracking CSP Solver
+// Maps selected subject names to specific groups (A/B/C...)
+// Returns null if no valid assignment is found.
+// =====================================================================
+
+type SelectionResult = Record<string, { subject: string; teacher: string; fullSubjectName?: string }>;
+
+function solveAssignment(
+    selectedSubjects: string[],
+    groups: Record<string, ElectiveConfig[]>,
+    electiveConfigs: ElectiveConfig[]
+): SelectionResult | null {
+    const groupKeys = Object.keys(groups).sort();
+
+    // Build a map: subject -> which groups it appears in
+    const subjectGroups: Record<string, string[]> = {};
+    for (const subject of selectedSubjects) {
+        subjectGroups[subject] = [];
+        for (const [code, configs] of Object.entries(groups)) {
+            if (configs.some(c => c.subject === subject)) {
+                subjectGroups[subject].push(code);
+            }
+        }
+    }
+
+    // Build teacher lookup: subject -> group -> teachers string
+    const getTeacherForSubjectInGroup = (subject: string, group: string): string => {
+        const configs = (groups[group] || []).filter(c => c.subject === subject);
+        const teachers = new Set(configs.map(c => c.fullTeacherName || c.originalTeacher).filter(Boolean));
+        return Array.from(teachers).join(", ");
+    };
+
+    const getFullSubjectForSubjectInGroup = (subject: string, group: string): string | undefined => {
+        const config = (groups[group] || []).find(c => c.subject === subject);
+        return config?.fullSubjectName;
+    };
+
+    // Backtracking search
+    const result: Record<string, string> = {}; // group -> subject
+    const subjectAssigned: Record<string, string> = {}; // subject -> group
+
+    function backtrack(idx: number): boolean {
+        if (idx === selectedSubjects.length) return true;
+        const subject = selectedSubjects[idx];
+        const candidateGroups = subjectGroups[subject];
+        for (const group of candidateGroups) {
+            if (!result[group]) { // group not yet taken
+                result[group] = subject;
+                subjectAssigned[subject] = group;
+                if (backtrack(idx + 1)) return true;
+                delete result[group];
+                delete subjectAssigned[subject];
+            }
+        }
+        return false;
+    }
+
+    if (!backtrack(0)) return null;
+
+    // Build the output SelectionResult
+    const output: SelectionResult = {};
+    for (const [group, subject] of Object.entries(result)) {
+        output[group] = {
+            subject,
+            teacher: getTeacherForSubjectInGroup(subject, group),
+            fullSubjectName: getFullSubjectForSubjectInGroup(subject, group),
+        };
+    }
+    return output;
+}
+
+// =====================================================================
+// Non-elective (mandatory non-moving) subject keywords to exclude
+// =====================================================================
+const EXCLUDED_KEYWORDS = ["창체", "채플", "공강", "빈교실", "자습", "홈룸", "담임", "HR"];
+
+function isMandatoryExcluded(subject: string): boolean {
+    return EXCLUDED_KEYWORDS.some(k => subject.includes(k));
+}
+
+// =====================================================================
+// Main Component
+// =====================================================================
 
 export default function ElectiveSelectionDialog({
     isOpen,
@@ -43,49 +135,30 @@ export default function ElectiveSelectionDialog({
     onBack
 }: ElectiveSelectionDialogProps) {
     const queryClient = useQueryClient();
-    const [selections, setSelections] = useState<Record<string, { subject: string, teacher: string, fullSubjectName?: string }>>({});
 
-    // 1. Fetch available electives
+    // UI mode: "smart" = subject-name picker, "manual" = group dropdown fallback
+    const [mode, setMode] = useState<"smart" | "manual">("smart");
+
+    // Smart mode: list of selected subject strings
+    const [smartSelected, setSmartSelected] = useState<string[]>([]);
+    const [searchQuery, setSearchQuery] = useState("");
+
+    // Manual mode (fallback): group -> selection
+    const [manualSelections, setManualSelections] = useState<SelectionResult>({});
+
+    // ── Data Fetching ──────────────────────────────────────────────────
+
     const { data: electiveConfigs, isLoading: configLoading } = useQuery({
         queryKey: ['electives', grade, datasetId],
         queryFn: async () => {
             if (!datasetId) return [];
-            const res = await fetch(`/api/electives?grade=${grade}&dataset=${datasetId}`); // Base URL handled by Vite proxy or relative
+            const res = await fetch(`/api/electives?grade=${grade}&dataset=${datasetId}`);
             if (!res.ok) throw new Error("Failed to fetch electives");
             return res.json() as Promise<ElectiveConfig[]>;
         },
         enabled: isOpen && !!grade && !!datasetId
     });
 
-    // Group by ClassCode (A, B, C...)
-    // Also ensure unique subjects per group for display, but keep track of teacher for auto-assignment.
-    // Map: ClassCode -> SubjectName -> TeacherName (Assuming unique teacher per subject per group as per plan)
-    const electivesByGroup = React.useMemo(() => {
-        if (!electiveConfigs) return {};
-        const groups: Record<string, ElectiveConfig[]> = {};
-
-        electiveConfigs.forEach(config => {
-            // Filter out non-moving classes (isMovingClass === 0)
-            // Default to 1 if undefined (legacy or optional)
-            const isMoving = config.isMovingClass !== 0;
-
-            if (isMoving && config.classCode) {
-                const codes = config.classCode.split(',').map((c: string) => c.trim()).filter(Boolean);
-                codes.forEach((code: string) => {
-                    if (!groups[code]) groups[code] = [];
-                    groups[code].push(config);
-                });
-            }
-        });
-
-        // Sort groups A, B, C...
-        return Object.keys(groups).sort().reduce((obj, key) => {
-            obj[key] = groups[key];
-            return obj;
-        }, {} as Record<string, ElectiveConfig[]>);
-    }, [electiveConfigs]);
-
-    // 2. Fetch existing student profile to pre-fill
     const { data: existingProfile, isLoading: profileLoading } = useQuery({
         queryKey: ['studentProfile', grade, classNum, studentNumber, datasetId],
         queryFn: async () => {
@@ -93,70 +166,136 @@ export default function ElectiveSelectionDialog({
             const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&dataset=${datasetId}`);
             if (!res.ok) throw new Error("Failed to fetch student profile");
             const data = await res.json();
-            if (data && data.electives && typeof data.electives === 'string') {
-                try {
-                    data.electives = JSON.parse(data.electives);
-                } catch (e) {
-                    console.error("Failed to parse existing electives in queryFn", e);
-                }
+            if (data?.electives && typeof data.electives === 'string') {
+                try { data.electives = JSON.parse(data.electives); } catch { }
             }
             return data;
         },
         enabled: isOpen && !!grade && !!classNum && !!studentNumber && !!datasetId
     });
 
+    // ── Derived Data ───────────────────────────────────────────────────
+
+    // Moving-class groups (A/B/C...)
+    const electivesByGroup = useMemo<Record<string, ElectiveConfig[]>>(() => {
+        if (!electiveConfigs) return {};
+        const groups: Record<string, ElectiveConfig[]> = {};
+        electiveConfigs.forEach(config => {
+            if (config.isMovingClass === 0) return; // Skip non-moving
+            if (!config.classCode) return;
+            const codes = config.classCode.split(',').map((c: string) => c.trim()).filter(Boolean);
+            codes.forEach((code: string) => {
+                if (!groups[code]) groups[code] = [];
+                groups[code].push(config);
+            });
+        });
+        return Object.keys(groups).sort().reduce((obj, key) => {
+            obj[key] = groups[key];
+            return obj;
+        }, {} as Record<string, ElectiveConfig[]>);
+    }, [electiveConfigs]);
+
+    // Non-moving mandatory subjects (filtered)
+    const mandatorySubjects = useMemo<string[]>(() => {
+        if (!electiveConfigs) return [];
+        return Array.from(new Set(
+            electiveConfigs
+                .filter(c => c.isMovingClass === 0 && !isMandatoryExcluded(c.subject))
+                .map(c => c.subject)
+        )).sort();
+    }, [electiveConfigs]);
+
+    // All unique selectable subject names across all moving groups
+    const availableSubjects = useMemo<string[]>(() => {
+        const set = new Set<string>();
+        Object.values(electivesByGroup).forEach(configs => {
+            configs.forEach(c => set.add(c.subject));
+        });
+        return Array.from(set).sort();
+    }, [electivesByGroup]);
+
+    const filteredSubjects = useMemo(() => {
+        if (!searchQuery.trim()) return availableSubjects;
+        const q = searchQuery.toLowerCase();
+        return availableSubjects.filter(s => s.toLowerCase().includes(q));
+    }, [availableSubjects, searchQuery]);
+
+    const groupCount = Object.keys(electivesByGroup).length;
+
+    // ── Solver ─────────────────────────────────────────────────────────
+
+    const smartAssigned = useMemo<SelectionResult | null>(() => {
+        if (smartSelected.length !== groupCount || groupCount === 0) return null;
+        return solveAssignment(smartSelected, electivesByGroup, electiveConfigs || []);
+    }, [smartSelected, electivesByGroup, groupCount, electiveConfigs]);
+
+    const hasConflict = smartSelected.length === groupCount && smartAssigned === null;
+
+    // ── Initialization ─────────────────────────────────────────────────
+
     const initializedRef = React.useRef(false);
 
     useEffect(() => {
         if (isOpen) {
             if (existingProfile !== undefined && !initializedRef.current) {
-                if (existingProfile && existingProfile.electives) {
-                    setSelections(existingProfile.electives);
+                if (existingProfile?.electives && typeof existingProfile.electives === 'object') {
+                    const existing = existingProfile.electives as SelectionResult;
+                    // Restore smart mode selections from saved data
+                    const subjects = Object.values(existing).map(v => v.subject).filter(Boolean);
+                    setSmartSelected(subjects);
+                    setManualSelections(existing);
                 } else {
-                    setSelections({});
+                    setSmartSelected([]);
+                    setManualSelections({});
                 }
                 initializedRef.current = true;
             }
         } else {
-            setSelections({});
+            setSmartSelected([]);
+            setManualSelections({});
+            setSearchQuery("");
+            setMode("smart");
             initializedRef.current = false;
         }
     }, [existingProfile, isOpen]);
 
-    const handleSelection = (group: string, compoundSubjectName: string) => {
-        // Compound name is "subject|fullSubjectName"
-        const [subjectName, fullSubjectName] = compoundSubjectName.split("|");
+    // ── Handlers ───────────────────────────────────────────────────────
 
-        // 1. Find the configs for this subject and fullSubjectName in this group to get ALL teachers
-        const configs = electivesByGroup[group]?.filter(c => c.subject === subjectName && (c.fullSubjectName || "") === (fullSubjectName || ""));
-        if (!configs || configs.length === 0) return;
-
-        // Extract all teachers, removing duplicates, and join them
-        const teachersSet = new Set(configs.map(c => c.fullTeacherName || c.originalTeacher).filter(Boolean));
-        const combinedTeacherNames = Array.from(teachersSet).join(", ");
-
-        // 2. Check if this subject is already selected in ANOTHER group
-        // If so, remove it from that other group (Move logic)
-        const newSelections = { ...selections };
-
-        Object.keys(newSelections).forEach(g => {
-            if (g !== group && newSelections[g].subject === subjectName && (newSelections[g].fullSubjectName || "") === (fullSubjectName || "")) {
-                delete newSelections[g]; // Remove from old group
+    const toggleSubject = (subject: string) => {
+        setSmartSelected(prev => {
+            if (prev.includes(subject)) {
+                return prev.filter(s => s !== subject);
+            } else if (prev.length < groupCount) {
+                return [...prev, subject];
+            } else {
+                // Replace oldest
+                return [...prev.slice(1), subject];
             }
         });
-
-        // 3. Set new selection
-        newSelections[group] = {
-            subject: subjectName,
-            fullSubjectName: fullSubjectName || undefined,
-            teacher: combinedTeacherNames
-        };
-
-        setSelections(newSelections);
     };
+
+    const handleManualSelection = (group: string, compoundSubjectName: string) => {
+        const [subjectName, fullSubjectName] = compoundSubjectName.split("|");
+        const configs = (electivesByGroup[group] || []).filter(c => c.subject === subjectName && (c.fullSubjectName || "") === (fullSubjectName || ""));
+        if (!configs.length) return;
+        const teachers = new Set(configs.map(c => c.fullTeacherName || c.originalTeacher).filter(Boolean));
+        const combinedTeacher = Array.from(teachers).join(", ");
+        const newSel = { ...manualSelections };
+        // Remove from other groups
+        Object.keys(newSel).forEach(g => {
+            if (g !== group && newSel[g].subject === subjectName && (newSel[g].fullSubjectName || "") === (fullSubjectName || "")) {
+                delete newSel[g];
+            }
+        });
+        newSel[group] = { subject: subjectName, fullSubjectName: fullSubjectName || undefined, teacher: combinedTeacher };
+        setManualSelections(newSel);
+    };
+
+    // ── Save ───────────────────────────────────────────────────────────
 
     const saveMutation = useMutation({
         mutationFn: async () => {
+            const toSave = mode === "smart" ? smartAssigned! : manualSelections;
             const res = await fetch('/api/electives', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -165,136 +304,222 @@ export default function ElectiveSelectionDialog({
                     classNum: parseInt(classNum),
                     studentNumber: parseInt(studentNumber),
                     dataset: datasetId || '',
-                    electives: selections
-                })
+                    electives: toSave,
+                }),
             });
             if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.error || "Failed to save selection");
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || "Failed to save");
             }
             return res.json();
         },
         onSuccess: () => {
             toast.success("선택과목이 저장되었습니다.");
-            queryClient.invalidateQueries({ queryKey: ['studentProfile'] }); // Invalidate if we have such query
+            queryClient.invalidateQueries({ queryKey: ['studentProfile'] });
             onSaveSuccess();
         },
-        onError: (err) => {
-            toast.error(`저장 실패: ${err.message}`);
-        }
+        onError: (err: Error) => toast.error(`저장 실패: ${err.message}`),
     });
 
-    const isAllSelected = Object.keys(electivesByGroup).every(group => selections[group]);
+    const canSaveSmart = smartSelected.length === groupCount && smartAssigned !== null;
+    const canSaveManual = Object.keys(electivesByGroup).every(g => manualSelections[g]);
+
+    // ── Render ─────────────────────────────────────────────────────────
+
+    const isLoading = configLoading || profileLoading;
 
     return (
         <Dialog open={isOpen} onOpenChange={() => { }}>
-            <DialogContent className="sm:max-w-[500px] md:max-w-3xl md:min-h-[700px] md:max-h-[90vh] flex flex-col [&>button]:hidden px-4 md:px-12 py-6" onPointerDownOutside={(e: any) => e.preventDefault()} onEscapeKeyDown={(e: any) => e.preventDefault()}>
+            <DialogContent
+                className="sm:max-w-[560px] md:max-w-2xl flex flex-col max-h-[90vh] [&>button]:hidden px-4 md:px-8 py-6"
+                onPointerDownOutside={(e: any) => e.preventDefault()}
+                onEscapeKeyDown={(e: any) => e.preventDefault()}
+            >
                 <DialogHeader>
-                    <DialogTitle className="md:text-2xl mb-2">선택과목 선택 - <span className="text-red-500">{grade}{classNum}{studentNumber.padStart(2, '0')}</span></DialogTitle>
+                    <DialogTitle className="text-lg md:text-2xl mb-1">
+                        선택과목 선택 —{" "}
+                        <span className="text-red-500 font-mono">{grade}{classNum}{studentNumber.padStart(2, '0')}</span>
+                    </DialogTitle>
+                    <p className="text-xs text-slate-500">
+                        {mode === "smart"
+                            ? `이동수업 그룹: ${groupCount}개 | 선택: ${smartSelected.length}/${groupCount}`
+                            : "그룹별로 직접 과목을 선택합니다."
+                        }
+                    </p>
                 </DialogHeader>
 
-                <div className="py-4 md:py-8 space-y-4 md:space-y-8 flex-1 overflow-y-auto min-h-0">
-                    {(configLoading || profileLoading) ? (
-                        <div className="flex justify-center p-4"><Loader2 className="animate-spin" /></div>
+                <div className="flex-1 overflow-y-auto min-h-0 space-y-4 py-2">
+                    {isLoading ? (
+                        <div className="flex justify-center py-12"><Loader2 className="animate-spin w-8 h-8 text-slate-400" /></div>
                     ) : (
-                        Object.entries(electivesByGroup).map(([group, configs]: [string, ElectiveConfig[]]) => {
-                            const currentSel = selections[group];
-                            const selectedCompoundValue = currentSel ? `${currentSel.subject}|${currentSel.fullSubjectName || ""}` : undefined;
-
-                            return (
-                                <div key={group} className="grid grid-cols-4 items-center gap-4 md:gap-8">
-                                    <label className="text-right text-sm md:text-lg font-bold text-gray-700">
-                                        {group} 그룹
-                                    </label>
-                                    <div className="col-span-3 flex flex-col md:flex-row items-start md:items-center">
-                                        <Select
-                                            value={selectedCompoundValue}
-                                            onValueChange={(val: string) => handleSelection(group, val)}
-                                        >
-                                            <SelectTrigger className={`w-[160px] md:w-[220px] md:h-11 md:text-base ${selectedCompoundValue ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}`}>
-                                                <SelectValue placeholder="과목 선택" />
-                                            </SelectTrigger>
-                                            <SelectContent align="start" style={{ width: "var(--radix-select-trigger-width)", maxWidth: "var(--radix-select-trigger-width)" }}>
-                                                {/* 1. Normal Subjects (Not selected anywhere) */}
-                                                {Array.from(new Map(configs.map(item => [`${item.subject}|${item.fullSubjectName || ""}`, item])).values()).map((config: ElectiveConfig) => {
-                                                    const compoundVal = `${config.subject}|${config.fullSubjectName || ""}`;
-                                                    // Check if selected in OTHER group
-                                                    const selectedInGroup = Object.keys(selections).find(g => selections[g].subject === config.subject && (selections[g].fullSubjectName || "") === (config.fullSubjectName || "") && g !== group);
-
-                                                    if (selectedInGroup) return null; // Handle in Red Section
-
-                                                    return (
-                                                        <SelectItem key={compoundVal} value={compoundVal}>
-                                                            <div className="flex items-center gap-2 truncate block max-w-full">
-                                                                <span className="truncate">{config.subject}</span>
-                                                                {config.fullSubjectName && (
-                                                                    <span className="text-xs text-gray-500 truncate shrink-0">({config.fullSubjectName})</span>
-                                                                )}
-                                                            </div>
-                                                        </SelectItem>
-                                                    );
-                                                })}
-
-                                                {/* 2. Red Section -> Yellow Section: Subjects selected in OTHER groups */}
-                                                {Array.from(new Map(configs.map(item => [`${item.subject}|${item.fullSubjectName || ""}`, item])).values()).map((config: ElectiveConfig) => {
-                                                    const compoundVal = `${config.subject}|${config.fullSubjectName || ""}`;
-                                                    const otherGroup = Object.keys(selections).find(g => selections[g].subject === config.subject && (selections[g].fullSubjectName || "") === (config.fullSubjectName || "") && g !== group);
-
-                                                    if (!otherGroup) return null;
-
-                                                    return (
-                                                        <SelectItem
-                                                            key={compoundVal}
-                                                            value={compoundVal}
-                                                            className="text-black font-bold line-through border-t border-yellow-200 bg-yellow-100 focus:bg-yellow-200"
-                                                        >
-                                                            <div className="flex items-center gap-1 truncate block max-w-full">
-                                                                <span className="shrink-0 whitespace-nowrap">(선택됨)</span>
-                                                                <span className="truncate">{config.subject}</span>
-                                                                {config.fullSubjectName && (
-                                                                    <span className="text-xs text-gray-600 truncate shrink-0">({config.fullSubjectName})</span>
-                                                                )}
-                                                                <span className="text-xs text-gray-500 font-normal shrink-0 whitespace-nowrap">[{otherGroup}그룹]</span>
-                                                            </div>
-                                                        </SelectItem>
-                                                    );
-                                                })}
-                                            </SelectContent>
-                                        </Select>
-                                        {currentSel && currentSel.teacher && (
-                                            <div className="text-xs md:text-sm text-blue-600 mt-1 md:mt-0 pl-1 md:pl-0 md:ml-4 shrink-0">
-                                                담당: {currentSel.teacher}
-                                            </div>
-                                        )}
+                        <>
+                            {/* ── Mandatory (non-moving) subjects ── */}
+                            {mandatorySubjects.length > 0 && (
+                                <div className="rounded-lg border bg-slate-50 p-3 space-y-2">
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">필수 배정 과목 (변경 불가)</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {mandatorySubjects.map(s => (
+                                            <Badge key={s} variant="secondary" className="text-xs bg-white border text-slate-600">
+                                                {s}
+                                            </Badge>
+                                        ))}
                                     </div>
                                 </div>
-                            );
-                        })
+                            )}
+
+                            {/* ── SMART MODE ── */}
+                            {mode === "smart" && (
+                                <div className="space-y-3">
+                                    {/* Search + subject grid */}
+                                    <div className="flex gap-2 items-center">
+                                        <div className="relative flex-1">
+                                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                                            <Input
+                                                placeholder="과목 검색..."
+                                                value={searchQuery}
+                                                onChange={e => setSearchQuery(e.target.value)}
+                                                className="pl-8 text-sm"
+                                            />
+                                        </div>
+                                        <div className="text-sm font-semibold text-slate-700 whitespace-nowrap shrink-0">
+                                            {smartSelected.length} / {groupCount} 선택
+                                        </div>
+                                    </div>
+
+                                    {/* Subject picker grid */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[260px] overflow-y-auto pr-1">
+                                        {filteredSubjects.map(subj => {
+                                            const isSelected = smartSelected.includes(subj);
+                                            return (
+                                                <button
+                                                    key={subj}
+                                                    onClick={() => toggleSubject(subj)}
+                                                    className={`
+                                                        text-left text-sm px-3 py-2.5 rounded-lg border transition-all font-medium
+                                                        ${isSelected
+                                                            ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                                                            : "bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:bg-blue-50"
+                                                        }
+                                                    `}
+                                                >
+                                                    <div className="flex items-center gap-1.5">
+                                                        {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
+                                                        <span className="truncate">{subj}</span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                        {filteredSubjects.length === 0 && (
+                                            <div className="col-span-3 text-center py-6 text-slate-400 text-sm">일치하는 과목 없음</div>
+                                        )}
+                                    </div>
+
+                                    {/* Auto-assignment preview */}
+                                    {smartSelected.length > 0 && (
+                                        <div className={`rounded-lg border p-3 text-sm space-y-1.5 ${hasConflict ? "border-red-200 bg-red-50" : smartAssigned ? "border-green-200 bg-green-50" : "border-slate-200 bg-slate-50"}`}>
+                                            <p className={`font-semibold text-xs uppercase tracking-wide ${hasConflict ? "text-red-600" : smartAssigned ? "text-green-700" : "text-slate-500"}`}>
+                                                {hasConflict ? "⚠️ 그룹 배정 불가 — 조합을 다시 선택하거나 수동 모드를 이용하세요" : smartAssigned ? "✅ 자동 그룹 배정 완료" : "과목을 모두 선택하면 자동 배정합니다"}
+                                            </p>
+                                            {smartAssigned && (
+                                                <div className="flex flex-wrap gap-2">
+                                                    {Object.entries(smartAssigned).sort(([a], [b]) => a.localeCompare(b)).map(([group, { subject, teacher }]) => (
+                                                        <div key={group} className="flex items-center gap-1 bg-white rounded-md border px-2 py-1">
+                                                            <span className="font-bold text-xs text-slate-500">{group}</span>
+                                                            <span className="text-slate-800 font-medium">{subject}</span>
+                                                            {teacher && <span className="text-xs text-slate-400 ml-1">{teacher}</span>}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {hasConflict && (
+                                                <p className="text-xs text-red-500">
+                                                    선택한 과목들이 동일한 그룹에 중복 배정되어 충돌이 발생합니다.
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* ── MANUAL (FALLBACK) MODE ── */}
+                            {mode === "manual" && (
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2 px-1 py-1.5 rounded-md bg-amber-50 border border-amber-200">
+                                        <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                                        <p className="text-xs text-amber-700">자동 배정이 불가능하여 수동 입력 모드로 전환했습니다.</p>
+                                    </div>
+                                    {Object.entries(electivesByGroup).map(([group, configs]) => {
+                                        const currentSel = manualSelections[group];
+                                        const selectedCompoundValue = currentSel ? `${currentSel.subject}|${currentSel.fullSubjectName || ""}` : undefined;
+                                        return (
+                                            <div key={group} className="grid grid-cols-4 items-center gap-3">
+                                                <label className="text-right text-sm font-bold text-gray-700">{group} 그룹</label>
+                                                <div className="col-span-3 flex flex-col sm:flex-row items-start sm:items-center">
+                                                    <Select value={selectedCompoundValue} onValueChange={(val: string) => handleManualSelection(group, val)}>
+                                                        <SelectTrigger className={`w-full sm:w-[220px] ${selectedCompoundValue ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}`}>
+                                                            <SelectValue placeholder="과목 선택" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {Array.from(new Map(configs.map(item => [`${item.subject}|${item.fullSubjectName || ""}`, item])).values()).map((config: ElectiveConfig) => {
+                                                                const compoundVal = `${config.subject}|${config.fullSubjectName || ""}`;
+                                                                const otherGroup = Object.keys(manualSelections).find(g => manualSelections[g].subject === config.subject && g !== group);
+                                                                return (
+                                                                    <SelectItem key={compoundVal} value={compoundVal} className={otherGroup ? "text-slate-400 bg-yellow-50" : ""}>
+                                                                        {config.subject}{config.fullSubjectName && ` (${config.fullSubjectName})`}{otherGroup ? ` [${otherGroup}에서 선택됨]` : ""}
+                                                                    </SelectItem>
+                                                                );
+                                                            })}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    {currentSel?.teacher && (
+                                                        <span className="text-xs text-blue-600 mt-1 sm:mt-0 sm:ml-3">{currentSel.teacher}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
 
-                <div className="flex justify-between gap-3 mt-4 md:mt-8">
+                {/* ── Footer Buttons ── */}
+                <div className="flex justify-between gap-3 mt-4 pt-3 border-t">
                     <div className="flex gap-2">
                         {onBack && (
-                            <Button variant="outline" onClick={onBack} className="md:h-12 md:px-6 md:text-base">
-                                뒤로가기
+                            <Button variant="outline" onClick={onBack}>뒤로가기</Button>
+                        )}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { setSmartSelected([]); setManualSelections({}); }}
+                            className="text-destructive hover:text-destructive"
+                        >
+                            <RotateCcw className="w-4 h-4 mr-1" />
+                            초기화
+                        </Button>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                        {/* Mode toggle */}
+                        {mode === "smart" && hasConflict && (
+                            <Button variant="outline" size="sm" onClick={() => setMode("manual")} className="text-amber-600 border-amber-300">
+                                수동 입력으로 전환
+                            </Button>
+                        )}
+                        {mode === "manual" && (
+                            <Button variant="ghost" size="sm" onClick={() => setMode("smart")}>
+                                자동 탐색으로 전환
                             </Button>
                         )}
                         <Button
-                            variant="destructive"
-                            onClick={() => setSelections({})}
-                            className="md:h-12 md:px-4 md:text-base w-fit"
+                            onClick={() => saveMutation.mutate()}
+                            disabled={(mode === "smart" ? !canSaveSmart : !canSaveManual) || saveMutation.isPending}
+                            className={`${(mode === "smart" ? canSaveSmart : canSaveManual) ? "bg-blue-600 hover:bg-blue-700" : ""}`}
                         >
-                            리셋
+                            {saveMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />저장 중...</> : "저장하고 시작하기"}
                         </Button>
                     </div>
-                    <Button
-                        onClick={() => saveMutation.mutate()}
-                        disabled={!isAllSelected || saveMutation.isPending}
-                        className={`md:h-12 md:px-8 md:text-base ${isAllSelected ? "bg-blue-600 hover:bg-blue-700" : ""}`}
-                    >
-                        {saveMutation.isPending ? "저장 중..." : "저장하고 시작하기"}
-                    </Button>
                 </div>
             </DialogContent>
         </Dialog>
