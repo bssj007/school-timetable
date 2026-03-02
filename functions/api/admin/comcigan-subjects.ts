@@ -92,31 +92,50 @@ export const onRequest = async (context: any) => {
 
     if (!grade) return new Response('Grade required', { status: 400 });
 
-    // If the dataset is MANUAL_PLAN, we shouldn't fetch from Comcigan at all
-    if (dataset === 'MANUAL_PLAN') {
+    if (dataset === 'SEMESTER_PLAN' || dataset === 'MANUAL_PLAN') {
         try {
             const { env } = context;
             if (!env.DB) throw new Error("DB not configured");
-            const result = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'manual_semester_plan'").first();
-            if (result && result.value) {
-                const manualPlan = JSON.parse(result.value);
-                const subjects = manualPlan.subjects || [];
 
-                // comcigan-subjects expects an array of { subject, teacher }
-                const mappedSubjects = subjects.map((subj: string) => {
-                    const parts = subj.split(' ');
-                    const teacher = parts.length > 1 ? parts[parts.length - 1] : "";
-                    const subjectName = parts.length > 1 ? parts.slice(0, -1).join(' ') : subj;
+            if (dataset === 'SEMESTER_PLAN') {
+                // Return subjects generated from Manual Semester Plan ("학기별 계획")
+                const result = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'manual_semester_plan'").first();
+                if (result && result.value) {
+                    const manualPlan = JSON.parse(result.value);
 
-                    return { subject: subjectName, teacher };
-                });
+                    // Use the explicitly defined subject list in the Manual Plan
+                    let usedSubjects: string[] = [];
+                    if (Array.isArray(manualPlan.subjects)) {
+                        usedSubjects = manualPlan.subjects;
+                    } else if (manualPlan.subjects && typeof manualPlan.subjects === 'object') {
+                        usedSubjects = manualPlan.subjects[grade] || [];
+                    }
 
-                return new Response(JSON.stringify(mappedSubjects), { headers: { 'Content-Type': 'application/json' } });
-            } else {
-                return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
+                    // Convert to expected format
+                    const mappedSubjects = usedSubjects.map((subj: string) => {
+                        const parts = subj.split(' ');
+                        const teacher = parts.length > 1 ? parts[parts.length - 1] : "";
+                        const subjectName = parts.length > 1 ? parts.slice(0, -1).join(' ') : subj;
+
+                        return { subject: subjectName, teacher };
+                    });
+
+                    // Sort alphabetically
+                    mappedSubjects.sort((a, b) => a.subject.localeCompare(b.subject));
+
+                    return new Response(JSON.stringify(mappedSubjects), { headers: { 'Content-Type': 'application/json' } });
+                } else {
+                    return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
+                }
+            } else if (dataset === 'MANUAL_PLAN') {
+                const { results } = await env.DB.prepare(
+                    "SELECT DISTINCT subject, originalTeacher as teacher FROM elective_config WHERE dataset = ? AND grade = ?"
+                ).bind(dataset, grade).all();
+
+                return new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
             }
         } catch (e: any) {
-            console.error("Failed to load manual plan subjects", e);
+            console.error("Failed to load custom dataset subjects", e);
             return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
         }
     }

@@ -219,14 +219,16 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 )
             `).run();
 
-            const { results } = await db.prepare("SELECT key, value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'manual_semester_plan'").all();
+            const { results } = await db.prepare("SELECT key, value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'comcigan_dataset_selected_grade1' OR key = 'manual_semester_plan'").all();
 
             let manualPlanData: any = null;
             let datasetSelected: string | null = null;
+            let datasetSelectedGrade1: string | null = null;
 
             if (results && results.length > 0) {
                 results.forEach((row: any) => {
                     if (row.key === 'comcigan_dataset_selected') datasetSelected = row.value;
+                    if (row.key === 'comcigan_dataset_selected_grade1') datasetSelectedGrade1 = row.value;
                     if (row.key === 'manual_semester_plan') {
                         try {
                             manualPlanData = JSON.parse(row.value);
@@ -237,8 +239,19 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 });
             }
 
+            // Grade 1 dataset resolution:
+            //   datasetSelectedGrade1 === null  → key never in DB; fall back to grade 2/3 setting (backward compat)
+            //   datasetSelectedGrade1 === ''    → user explicitly set 자동; auto-detect independently for grade 1
+            //   datasetSelectedGrade1 === 'xxx' → specific dataset chosen; use it
+            // Grade 2/3: always use comcigan_dataset_selected ('' = auto-detect)
+            const effectiveDataset = grade === 1
+                ? (datasetSelectedGrade1 === null ? datasetSelected : datasetSelectedGrade1)
+                : datasetSelected;
+
             if (datasetOverride && datasetOverride !== ('_auto_')) {
                 datasetSelected = datasetOverride;
+            } else {
+                datasetSelected = effectiveDataset;
             }
 
             if (datasetSelected === 'MANUAL_PLAN') {

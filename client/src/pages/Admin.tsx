@@ -7,8 +7,9 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight
 } from "lucide-react";
+import { BridgeManager } from './AdminBridge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import IPProfileViewer from "@/components/IPProfileViewer";
@@ -109,7 +110,8 @@ function ElectiveManager({ password }: { password: string }) {
             // 1. Fetch Comcigan Subjects
             let comciganData = [];
             try {
-                const comciganRes = await fetch(`/api/admin/comcigan-subjects?grade=${selectedGrade}&dataset=${targetDataset}`);
+                const comciganDataset = targetDataset === "MANUAL_PLAN" ? "SEMESTER_PLAN" : targetDataset;
+                const comciganRes = await fetch(`/api/admin/comcigan-subjects?grade=${selectedGrade}&dataset=${comciganDataset}`);
                 if (!comciganRes.ok) throw new Error(`Comcigan Fetch Failed: ${comciganRes.status}`);
                 comciganData = await comciganRes.json();
                 if (!Array.isArray(comciganData)) throw new Error("Comcigan data is not an array");
@@ -1066,6 +1068,101 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
+// 6.6 Elective Input Mode Settings
+// ----------------------------------------------------------------------
+function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [selectedMode, setSelectedMode] = useState<'auto' | 'manual'>('auto');
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "electiveInputMode"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        },
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            setSelectedMode((settingsQuery.data.elective_input_mode as 'auto' | 'manual') || 'auto');
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (mode: string) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ elective_input_mode: mode }),
+            });
+            if (!res.ok) throw new Error("Failed to save");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("설정이 저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err: Error) => toast.error(`저장 실패: ${err.message}`),
+    });
+
+    const originalMode = (settingsQuery.data?.elective_input_mode as 'auto' | 'manual') || 'auto';
+    const isDirty = selectedMode !== originalMode;
+
+    return (
+        <Card className="w-full max-w-lg">
+            <CardHeader>
+                <CardTitle>학생 선택과목 입력방식</CardTitle>
+                <CardDescription>
+                    메인 화면의 선택과목 편집창에서 사용할 입력 방식을 선택합니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="space-y-3">
+                    <label
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedMode === 'auto' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}
+                        onClick={() => setSelectedMode('auto')}
+                    >
+                        <input type="radio" className="mt-0.5" checked={selectedMode === 'auto'} onChange={() => setSelectedMode('auto')} />
+                        <div>
+                            <p className="font-semibold text-sm">자동 탐색 (기본값)</p>
+                            <p className="text-xs text-slate-500">
+                                학생이 과목명만 선택하면 가능한 ABCD 조합을 자동으로 탐색합니다.
+                                조합이 하나이면 자동 배정, 여러 가지이면 선택 카드 표시.
+                            </p>
+                        </div>
+                    </label>
+
+                    <label
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedMode === 'manual' ? 'border-orange-500 bg-orange-50' : 'border-slate-200 hover:bg-slate-50'}`}
+                        onClick={() => setSelectedMode('manual')}
+                    >
+                        <input type="radio" className="mt-0.5" checked={selectedMode === 'manual'} onChange={() => setSelectedMode('manual')} />
+                        <div>
+                            <p className="font-semibold text-sm">수동 입력</p>
+                            <p className="text-xs text-slate-500">
+                                자동 탐색 없이 ABCD 그룹별로 직접 드롭다운으로 입력합니다.
+                            </p>
+                        </div>
+                    </label>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t">
+                    <Button variant="outline" onClick={() => setSelectedMode(originalMode)} disabled={!isDirty || saveMutation.isPending}>
+                        취소
+                    </Button>
+                    <Button onClick={() => saveMutation.mutate(selectedMode)} disabled={!isDirty || saveMutation.isPending}>
+                        {saveMutation.isPending ? "저장 중..." : "저장"}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
 // 7. Etc Manager (Miscellaneous features like Raw Comcigan Data)
 // ----------------------------------------------------------------------
 function EtcManager({ adminPassword }: { adminPassword: string }) {
@@ -1139,6 +1236,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 >
                     <Grid2X2 className="w-4 h-4 mr-2" />
                     그룹 확인기 / 오버라이드
+                </Button>
+                <Button
+                    variant={selectedMenu === "elective-input-mode" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("elective-input-mode")}
+                >
+                    <Settings className="w-4 h-4 mr-2" />
+                    선택과목 입력방식
                 </Button>
                 {/* Additional list items can go here later */}
             </div>
@@ -1229,6 +1334,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
 
                         <div className="flex-1 overflow-y-auto">
                             <GroupChecker adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "elective-input-mode" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">학생 선택과목 입력방식</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <ElectiveInputModeSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -1432,6 +1548,10 @@ export default function Admin() {
     const [resetConfirmation, setResetConfirmation] = useState("");
     const [isResetting, setIsResetting] = useState(false);
     const TARGET_PHRASE = "햇빛이 선명하게 나뭇잎을 핥고 있었다";
+
+    // AutoFill states
+    const [showAutoFill, setShowAutoFill] = useState(false);
+    const [autoFillData, setAutoFillData] = useState<{ grade: number, fromDataset: string, toDataset: string, mappingRules: any[] } | null>(null);
 
     const handleFactoryReset = async () => {
         if (resetConfirmation !== TARGET_PHRASE) {
@@ -1680,6 +1800,19 @@ export default function Admin() {
         );
     }
 
+    // Intercept with AutoFill Analyzer fullscreen
+    if (showAutoFill) {
+        return (
+            <div className="container max-w-6xl mx-auto px-4 py-8">
+                <AutoFillAnalyzer
+                    data={autoFillData!}
+                    adminPassword={password}
+                    onBack={() => setShowAutoFill(false)}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="container max-w-6xl mx-auto px-4 py-8">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-8 gap-4">
@@ -1728,6 +1861,12 @@ export default function Admin() {
                         className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800"
                     >
                         학기별 계획
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="bridge"
+                        className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800"
+                    >
+                        BRIDGE
                     </TabsTrigger>
                     <TabsTrigger
                         value="etc"
@@ -2205,6 +2344,16 @@ export default function Admin() {
                     <ManualSemesterPlan adminPassword={password} />
                 </TabsContent>
 
+                <TabsContent value="bridge" className="space-y-6">
+                    <BridgeManager
+                        adminPassword={password}
+                        goAutoFillAnalysis={(bridgeData) => {
+                            setAutoFillData(bridgeData);
+                            setShowAutoFill(true);
+                        }}
+                    />
+                </TabsContent>
+
                 <TabsContent value="etc" className="space-y-6">
                     <EtcManager adminPassword={password} />
                 </TabsContent>
@@ -2265,9 +2414,12 @@ export default function Admin() {
 
 function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPassword: string }) {
     const queryClient = useQueryClient();
+    // Grade 2/3 dataset selection
     const [selectedProp, setSelectedProp] = useState<string>('');
+    // Grade 1 dataset selection (separate)
+    const [selectedPropGrade1, setSelectedPropGrade1] = useState<string>('');
 
-    // Fetch current setting
+    // Fetch current settings
     const settingsQuery = useQuery({
         queryKey: ["admin", "settings"],
         queryFn: async () => {
@@ -2284,6 +2436,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     useEffect(() => {
         if (settingsQuery.data) {
             setSelectedProp(settingsQuery.data.comcigan_dataset_selected || '_auto_');
+            setSelectedPropGrade1(settingsQuery.data.comcigan_dataset_selected_grade1 || '_auto_');
         }
     }, [settingsQuery.data]);
 
@@ -2318,70 +2471,91 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
     });
 
-    const handleSave = () => {
-        saveMutation.mutate({ comcigan_dataset_selected: selectedProp === '_auto_' ? '' : selectedProp });
-    };
-
-    const handleCancel = () => {
-        setSelectedProp(settingsQuery.data?.comcigan_dataset_selected || '_auto_');
-    };
-
-    const displayValue = selectedProp || '_auto_';
-
-    const handleValueChange = (val: string) => {
-        setSelectedProp(val);
-    };
-
     const latestDatasetName = timetableProps && timetableProps.length > 0 ? timetableProps[0] : '없음';
 
+    // Grade 2/3 dirty tracking
+    const displayValue = selectedProp || '_auto_';
     const originalValue = settingsQuery.data?.comcigan_dataset_selected || '_auto_';
     const isDirty = displayValue !== originalValue;
+
+    // Grade 1 dirty tracking
+    const displayValueG1 = selectedPropGrade1 || '_auto_';
+    const originalValueG1 = settingsQuery.data?.comcigan_dataset_selected_grade1 || '_auto_';
+    const isDirtyG1 = displayValueG1 !== originalValueG1;
+
+    const DatasetDropdown = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+        <Select value={value} onValueChange={onChange}>
+            <SelectTrigger className="w-full">
+                <SelectValue placeholder="데이터셋 선택" />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value="_auto_">자동 (최신: {latestDatasetName})</SelectItem>
+                <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획 수동 입력)</SelectItem>
+                {timetableProps.map(prop => (
+                    <SelectItem key={prop} value={prop}>{prop}</SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
 
     return (
         <Card className="w-full max-w-2xl">
             <CardHeader>
-                <CardTitle>출처 데이터셋 선택</CardTitle>
+                <CardTitle>출체 데이터셋 선택</CardTitle>
                 <CardDescription>
-                    메인 화면의 시간표에서 출력할 원본 데이터셋을 선택합니다.
-                    "자동"으로 설정할 경우 가장 최신 데이터셋을 자동으로 선택합니다.
+                    메인 화면의 시간표에서 출력할 원본 데이터셋을 학년별로 선택합니다.
+                    &quot;자동&quot;으로 설정할 경우 가장 최신 데이터셋을 자동으로 선택합니다.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-                <div className="space-y-2">
-                    <label className="text-sm font-medium">데이터셋</label>
-                    <Select value={displayValue} onValueChange={handleValueChange}>
-                        <SelectTrigger className="w-full">
-                            <SelectValue placeholder="데이터셋 선택" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="_auto_">자동 (최신: {latestDatasetName})</SelectItem>
-                            <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획 수동 입력)</SelectItem>
-                            {timetableProps.map(prop => (
-                                <SelectItem key={prop} value={prop}>
-                                    {prop}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+
+                {/* Grade 1 dataset */}
+                <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-700">1학년 데이터셋</span>
+                    </div>
+                    <DatasetDropdown value={displayValueG1} onChange={setSelectedPropGrade1} />
+                    <div className="flex justify-end gap-2 pt-1">
+                        <Button variant="outline" size="sm" onClick={() => setSelectedPropGrade1(originalValueG1)} disabled={!isDirtyG1 || saveMutation.isPending}>
+                            변경 취소
+                        </Button>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected_grade1: selectedPropGrade1 === '_auto_' ? '' : selectedPropGrade1 })} disabled={!isDirtyG1 || saveMutation.isPending}>
+                            {saveMutation.isPending ? "저장 중..." : "저장"}
+                        </Button>
+                    </div>
                 </div>
 
-                <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={handleCancel} disabled={!isDirty || saveMutation.isPending}>
-                        변경 취소
-                    </Button>
-                    <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
-                        {saveMutation.isPending ? "저장 중..." : "저장"}
-                    </Button>
+                {/* Grade 2/3 dataset */}
+                <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-700">2/3학년 데이터셋</span>
+                        <span className="text-xs text-slate-400">(그룹 확인기, 선택과목 자동 등에 적용)</span>
+                    </div>
+                    <DatasetDropdown value={displayValue} onChange={setSelectedProp} />
+                    <div className="flex justify-end gap-2 pt-1">
+                        <Button variant="outline" size="sm" onClick={() => setSelectedProp(originalValue)} disabled={!isDirty || saveMutation.isPending}>
+                            변경 취소
+                        </Button>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected: selectedProp === '_auto_' ? '' : selectedProp })} disabled={!isDirty || saveMutation.isPending}>
+                            {saveMutation.isPending ? "저장 중..." : "저장"}
+                        </Button>
+                    </div>
                 </div>
+
             </CardContent>
         </Card>
     );
 }
 
-function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPassword: string, onBack: () => void, currentPlan: any }) {
-    const { grade } = currentPlan;
+function AutoFillAnalyzer({ data, adminPassword, onBack }: {
+    data: { grade: number, fromDataset: string, toDataset: string, mappingRules: any[] },
+    adminPassword: string,
+    onBack: () => void
+}) {
     const queryClient = useQueryClient();
-    const [selectedDataset, setSelectedDataset] = useState<string>('');
+    const grade = data.grade;
+    const bridgeMappingRules = data.mappingRules || [];
+    const targetDataset = data.toDataset;
 
     // Fetch current setting to determine default
     const settingsQuery = useQuery({
@@ -2393,56 +2567,22 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
         }
     });
 
-    // Fetch raw comcigan to build the dataset list
-    const rawDataQuery = useQuery({
-        queryKey: ["admin", "rawComcigan", "부산성지고"],
-        queryFn: async () => {
-            const res = await fetch("/api/admin/raw_comcigan", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
-                body: JSON.stringify({ schoolName: "부산성지고" })
-            });
-            const json = await res.json();
-            if (!res.ok || json?.error) return null;
-            return json.data;
+    const currentPlan = React.useMemo(() => {
+        if (!settingsQuery.data || !settingsQuery.data.manual_semester_plan) return { grade, timetables: {}, groups: {}, subjects: [] };
+        try {
+            const parsed = JSON.parse(settingsQuery.data.manual_semester_plan);
+            parsed.grade = grade;
+            return parsed;
+        } catch {
+            return { grade, timetables: {}, groups: {}, subjects: [] };
         }
-    });
+    }, [settingsQuery.data, grade]);
 
-    const timetableProps = React.useMemo(() => {
-        if (!rawDataQuery.data) return [];
-        return Object.keys(rawDataQuery.data).filter((k: string) => {
-            const val = rawDataQuery.data[k];
-            return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
-        });
-    }, [rawDataQuery.data]);
-
-    useEffect(() => {
-        if (settingsQuery.data) {
-            const current = settingsQuery.data.comcigan_dataset_selected;
-            if (current) {
-                setSelectedDataset(current);
-            } else {
-                setSelectedDataset('_auto_');
-            }
-        }
-    }, [settingsQuery.data]);
-
-    const displayDataset = selectedDataset || '_auto_';
-    const handleDatasetChange = (val: string) => {
-        setSelectedDataset(val);
-    };
-
-    let activeTimetable = settingsQuery.data?.comcigan_dataset_selected || "";
-    if (!activeTimetable && timetableProps && timetableProps.length > 0) {
-        activeTimetable = timetableProps[0];
-    }
-    const autoLabel = `자동 (현재: ${activeTimetable || '없음'})`;
-
-    // 1. Fetch Live Subjects from Comcigan
+    // 1. Fetch Live Subjects from Comcigan (target dataset)
     const liveSubjectsQuery = useQuery({
-        queryKey: ["admin", "comcigan-subjects", grade, displayDataset],
+        queryKey: ["admin", "comcigan-subjects", grade, targetDataset],
         queryFn: async () => {
-            const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${displayDataset}`);
+            const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${targetDataset}`);
             if (!res.ok) throw new Error("Failed to fetch live subjects");
             return res.json();
         }
@@ -2548,53 +2688,46 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
         return { blocks, manualSubjects: validManualSubjects, warnings, infos, subjectToBlocks };
     }, [currentPlan, grade]);
 
-    const [mappings, setMappings] = useState<Record<string, string>>({});
-
-    // Auto-match subjects on load
-    useEffect(() => {
-        if (liveSubjectsQuery.data && analysis.manualSubjects.length > 0) {
-            const initialMap: Record<string, string> = {};
-            analysis.manualSubjects.forEach(mSubj => {
-                const parts = mSubj.split(' ');
-                let liveMatch = null;
-
-                // Smart matching: try to find teacher name
-                if (parts.length >= 2) {
-                    const teacherName = parts[parts.length - 1];
-                    const subjectKeyword = parts[0].replace(/^[A-Z]_/, ''); // remove prefix like A_
-
-                    liveMatch = liveSubjectsQuery.data.find((ls: any) =>
-                        ls.teacher === teacherName && ls.subject.includes(subjectKeyword)
-                    );
-                }
-
-                // Fallback matching
-                if (!liveMatch) {
-                    liveMatch = liveSubjectsQuery.data.find((ls: any) => mSubj.includes(ls.teacher) && mSubj.includes(ls.subject));
-                }
-
-                if (liveMatch) {
-                    initialMap[mSubj] = `${liveMatch.subject}-${liveMatch.teacher}`;
-                }
-            });
-            setMappings(initialMap);
-        }
-    }, [liveSubjectsQuery.data, analysis.manualSubjects]);
-
     const executeMutation = useMutation({
         mutationFn: async () => {
-            let targetDataset = displayDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : displayDataset;
-            if (!targetDataset && timetableProps && timetableProps.length > 0) {
-                targetDataset = timetableProps[0];
-            }
-
             const payloadMap = new Map<string, any>();
 
             for (const mSubj of analysis.manualSubjects) {
-                const mappingKey = mappings[mSubj];
-                if (!mappingKey) throw new Error(`${mSubj} 과목의 매핑이 누락되었습니다.`);
+                const isExcludedManual = ["빈교실", "공강", "채플", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => mSubj.trim().includes(ex));
 
-                const [subj, teacher] = mappingKey.split('-');
+                let targetSubjectName = "";
+                let matchedTeacher = "";
+
+                const parts = mSubj.split(' ');
+                const baseSubjectName = parts.length > 1 ? parts.slice(0, -1).join(' ') : mSubj;
+                const manualTeacherName = parts.length >= 2 ? parts[parts.length - 1] : "";
+
+                if (isExcludedManual) {
+                    targetSubjectName = parts.length > 0 ? parts[0] : mSubj;
+                    matchedTeacher = manualTeacherName;
+                } else {
+                    // Look up BRIDGE mappings instead of local 'mappings' state
+                    const bridgeRule = bridgeMappingRules.find(r => r.from === baseSubjectName);
+                    if (!bridgeRule || !bridgeRule.to) {
+                        throw new Error(`[${mSubj}]의 기본 과목명인 [${baseSubjectName}] 과목이 BRIDGE 매핑 규칙에 지정되어 있지 않습니다.`);
+                    }
+
+                    targetSubjectName = bridgeRule.to;
+
+                    // Live Match extraction
+                    matchedTeacher = manualTeacherName;
+                    if (liveSubjectsQuery.data) {
+                        const liveMatches = liveSubjectsQuery.data.filter((ls: any) => ls.subject === targetSubjectName);
+                        if (liveMatches.length > 0) {
+                            const exactMatch = liveMatches.find((ls: any) => ls.teacher === manualTeacherName);
+                            matchedTeacher = exactMatch ? exactMatch.teacher : liveMatches[0].teacher;
+                        }
+                    }
+                }
+
+                const subj = targetSubjectName;
+                const teacher = matchedTeacher;
+                const mappingKey = `${subj}-${teacher}`;
                 const myBlocks = analysis.blocks.filter(b => b.subjects.has(mSubj));
                 if (myBlocks.length === 0) throw new Error(`${mSubj} 과목의 블록을 찾을 수 없습니다.`);
 
@@ -2627,7 +2760,7 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
             const payloads = Array.from(payloadMap.values());
 
             // Clear old mapping for this dataset explicitly to handle duplicate groups fresh
-            await fetch(`/api/admin/electives?dataset=${targetDataset}`, {
+            await fetch(`/api/admin/electives?dataset=${targetDataset}&grade=${grade}`, {
                 method: "DELETE",
                 headers: { "X-Admin-Password": adminPassword }
             });
@@ -2663,21 +2796,6 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                 <CardDescription>
                     학기별 계획 데이터를 이용해 선택과목 DB를 자동으로 채웁니다. 수동으로 입력한 시간표에서 특정 시간에 동시에 열리는 과목들을 찾아 자동으로 A블록, B블록 등을 계산하고, 실제 라이브 데이터셋과 매핑하여 일괄 저장합니다.
                 </CardDescription>
-                <div className="mt-4 flex items-center gap-3">
-                    <span className="text-sm font-bold text-gray-700">대상 데이터셋:</span>
-                    <Select value={displayDataset} onValueChange={handleDatasetChange}>
-                        <SelectTrigger className="w-[180px] h-9">
-                            <SelectValue placeholder="데이터셋 선택" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="_auto_">{autoLabel}</SelectItem>
-                            <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
-                            {timetableProps.map((prop: string) => (
-                                <SelectItem key={prop} value={prop}>{prop}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
             </CardHeader>
             <CardContent className="space-y-6 pt-6">
 
@@ -2729,49 +2847,19 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                         )}
                     </div>
 
-                    <div className="border rounded-md p-4 bg-slate-50 overflow-hidden flex flex-col">
-                        <h4 className="font-bold text-sm text-slate-700 mb-2">라이브 과목 매핑</h4>
-                        <div className="overflow-y-auto flex-1 pr-2">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>수동 과목</TableHead>
-                                        <TableHead>자동매핑 (라이브)</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {analysis.manualSubjects.map(mSubj => {
-                                        const block = analysis.blocks.find(b => b.subjects.has(mSubj))?.code || "?";
-                                        const isMapped = !!mappings[mSubj];
-
-                                        return (
-                                            <TableRow key={mSubj}>
-                                                <TableCell className="text-sm p-2">
-                                                    <div className="flex items-center gap-1">
-                                                        <Badge variant="outline" className="text-[10px] px-1">{block}</Badge>
-                                                        <span className="truncate max-w-[100px]" title={mSubj}>{mSubj}</span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="p-2">
-                                                    <Select value={mappings[mSubj] || ""} onValueChange={(val) => setMappings({ ...mappings, [mSubj]: val })}>
-                                                        <SelectTrigger className={`h-8 w-full bg-white text-xs ${!isMapped && 'border-red-300 ring-1 ring-red-100'}`}>
-                                                            <SelectValue placeholder="매핑 선택..." />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {liveSubjectsQuery.data?.map((ls: any) => (
-                                                                <SelectItem key={`${ls.subject}-${ls.teacher}`} value={`${ls.subject}-${ls.teacher}`} className="text-xs">
-                                                                    {ls.subject} ({ls.teacher})
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })}
-                                </TableBody>
-                            </Table>
+                    <div className="border rounded-md p-4 bg-slate-50 overflow-hidden flex flex-col justify-center items-center text-center space-y-4">
+                        <div className="p-3 bg-white rounded-full border shadow-sm">
+                            <ArrowRight className="w-8 h-8 text-slate-400" />
                         </div>
+                        <h4 className="font-bold text-lg text-slate-700">지정된 BRIDGE 매핑 사용</h4>
+                        <div className="flex items-center gap-3">
+                            <Badge variant="outline" className="bg-slate-100 px-3 py-1">{data.fromDataset}</Badge>
+                            <ArrowRight className="w-4 h-4 text-slate-400" />
+                            <Badge variant="outline" className="bg-orange-100 text-orange-800 px-3 py-1">{data.toDataset}</Badge>
+                        </div>
+                        <p className="text-sm text-slate-500 max-w-[250px]">
+                            우측 표 대신, <strong>{bridgeMappingRules.length}개</strong>의 BRIDGE 자동 매핑 규칙이 일괄 적용됩니다.
+                        </p>
                     </div>
                 </div>
 
@@ -2781,10 +2869,10 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                     </Button>
                     <Button
                         className="bg-orange-600 hover:bg-orange-700"
-                        disabled={analysis.warnings.some(w => w.includes("중복") || w.includes("미확인")) || liveSubjectsQuery.isLoading || executeMutation.isPending || Object.values(mappings).some(v => !v) || Object.keys(mappings).length !== analysis.manualSubjects.length}
+                        disabled={analysis.warnings.some(w => w.includes("중복") || w.includes("미확인")) || liveSubjectsQuery.isLoading || executeMutation.isPending || bridgeMappingRules.length === 0}
                         onClick={() => executeMutation.mutate()}
                     >
-                        {executeMutation.isPending ? "저장 중..." : "1:1 매핑 후 DB 저장"}
+                        {executeMutation.isPending ? "저장 중..." : "선택과목 자동 생성 / 저장"}
                     </Button>
                 </div>
             </CardContent>
@@ -2902,11 +2990,14 @@ function ManualTimetableCell({
 function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
     const [showAutoFill, setShowAutoFill] = useState(false);
-    const [subjects, setSubjects] = useState<string[]>([]);
+    // subjects structure: { "1": ["Math"], "2": ["Sci"], "3": [] }
+    const [subjects, setSubjects] = useState<Record<string, string[]>>({});
     const [newSubject, setNewSubject] = useState("");
     const [grade, setGrade] = useState("2");
     const [classNum, setClassNum] = useState("1");
     const [isSafeMode, setIsSafeMode] = useState(true);
+    // Track which grades have already been auto-imported this session to avoid overwriting manual edits
+    const autoImportedGrades = useRef<Set<string>>(new Set());
 
     // timetables structure: { "2-1": { "0-1": "과목 교사", "1-3": "..." }, "2-2": ... }
     const [timetables, setTimetables] = useState<Record<string, Record<string, string>>>({});
@@ -2928,7 +3019,17 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
         if (settingsQuery.data?.manual_semester_plan) {
             try {
                 const data = JSON.parse(settingsQuery.data.manual_semester_plan);
-                setSubjects(data.subjects || []);
+                let loadedSubjects = data.subjects || {};
+
+                // Backwards compatibility: upgrade string[] to Record<string, string[]>
+                // Only migrate to grade "2" — grade 1 and 3 start empty and must be set separately
+                if (Array.isArray(loadedSubjects)) {
+                    loadedSubjects = {
+                        "2": [...loadedSubjects]
+                    };
+                }
+
+                setSubjects(loadedSubjects);
                 setTimetables(data.timetables || {});
                 setGroups(data.groups || { "2": {}, "3": {} });
             } catch (e) {
@@ -2967,17 +3068,65 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
 
     const addSubject = () => {
         if (!newSubject.trim()) return;
-        if (subjects.includes(newSubject.trim())) {
+        const currentSubjects = subjects[grade] || [];
+        if (currentSubjects.includes(newSubject.trim())) {
             toast.error("이미 존재하는 과목입니다.");
             return;
         }
-        setSubjects([...subjects, newSubject.trim()]);
+        setSubjects({ ...subjects, [grade]: [...currentSubjects, newSubject.trim()] });
         setNewSubject("");
     };
 
     const removeSubject = (subj: string) => {
-        setSubjects(subjects.filter(s => s !== subj));
+        const currentSubjects = subjects[grade] || [];
+        setSubjects({ ...subjects, [grade]: currentSubjects.filter(s => s !== subj) });
     };
+
+    const clearSubjectsForGrade = () => {
+        if (!confirm(`${grade}학년 과목 목록을 모두 삭제하시겠습니까?`)) return;
+        setSubjects(prev => ({ ...prev, [grade]: [] }));
+    };
+
+    // Auto-load subjects for the selected grade when the grade has no subjects yet
+    const autoImportDataset = settingsQuery.data?.comcigan_dataset_selected;
+    const autoImportQuery = useQuery({
+        queryKey: ["admin", "autoImportSubjects", grade, autoImportDataset],
+        queryFn: async () => {
+            if (!autoImportDataset || grade === "1") return [];
+            const res = await fetch(`/api/admin/electives?grade=${grade}&dataset=${autoImportDataset}`, {
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) return [];
+            const data = await res.json();
+            // Build "과목명 교사명" entries (matching the manual plan's timetable parsing format)
+            // Use a Set keyed by "subject|teacher" to deduplicate, then format as "과목 교사"
+            const seen = new Set<string>();
+            const entries: string[] = [];
+            for (const item of data) {
+                const subj = (item.subject || "").trim();
+                const teacher = (item.originalTeacher || "").trim();
+                if (!subj) continue;
+                const key = teacher ? `${subj} ${teacher}` : subj;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    entries.push(key);
+                }
+            }
+            return entries;
+        },
+        enabled: !!autoImportDataset && grade !== "1",
+        staleTime: 1000 * 60 * 5, // 5 min cache per grade
+    });
+
+    useEffect(() => {
+        const fetched = autoImportQuery.data;
+        // Only auto-import each grade ONCE per session.
+        // Switching back to a previously-visited grade won't overwrite manual edits.
+        if (fetched && fetched.length > 0 && !autoImportedGrades.current.has(grade)) {
+            autoImportedGrades.current.add(grade);
+            setSubjects(prev => ({ ...prev, [grade]: fetched }));
+        }
+    }, [autoImportQuery.data, grade]);
 
     const handleTimetableChange = (weekday: number, period: number, subj: string) => {
         const classKey = `${grade}-${classNum}`;
@@ -3020,10 +3169,6 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
         });
     };
 
-    if (showAutoFill) {
-        return <AutoFillElectivesView adminPassword={adminPassword} onBack={() => setShowAutoFill(false)} currentPlan={{ subjects, timetables, groups, grade: parseInt(grade) }} />;
-    }
-
     return (
         <Card className="w-full">
             <CardHeader>
@@ -3038,6 +3183,7 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                     <Select value={grade} onValueChange={setGrade}>
                         <SelectTrigger className="w-24 bg-white font-bold"><SelectValue /></SelectTrigger>
                         <SelectContent>
+                            <SelectItem value="1">1학년</SelectItem>
                             <SelectItem value="2">2학년</SelectItem>
                             <SelectItem value="3">3학년</SelectItem>
                         </SelectContent>
@@ -3046,61 +3192,63 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
             </CardHeader>
             <CardContent className="space-y-6">
 
-                {/* Elective Group Grid */}
-                <div className="border border-orange-200 bg-orange-50/30 rounded-lg p-4 space-y-4">
-                    <h3 className="font-bold text-orange-900 border-b pb-2 flex items-center gap-2">
-                        <Grid2X2 className="w-4 h-4" />
-                        선택과목 요일/교시별 블록(그룹) 지정 [{grade}학년]
-                    </h3>
-                    <p className="text-sm text-orange-800">
-                        수동 시간표 작성 전, 요일별/교시별로 어떤 선택과목 그룹이 열리는지 미리 지정합니다.
-                    </p>
+                {/* Elective Group Grid — only for grade 2/3 */}
+                {grade !== "1" && (
+                    <div className="border border-orange-200 bg-orange-50/30 rounded-lg p-4 space-y-4">
+                        <h3 className="font-bold text-orange-900 border-b pb-2 flex items-center gap-2">
+                            <Grid2X2 className="w-4 h-4" />
+                            선택과목 요일/교시별 블록(그룹) 지정 [{grade}학년]
+                        </h3>
+                        <p className="text-sm text-orange-800">
+                            수동 시간표 작성 전, 요일별/교시별로 어떤 선택과목 그룹이 열리는지 미리 지정합니다.
+                        </p>
 
-                    <div className="border rounded-xl bg-white w-full overflow-x-auto shadow-inner text-sm p-4">
-                        <div className="grid grid-cols-6 gap-2 w-[500px] min-w-max mx-auto">
-                            <div className="font-bold text-center text-slate-500 rounded bg-slate-100 py-1">교시</div>
-                            {weekdays.map(d => (
-                                <div key={d} className="font-bold text-center text-slate-500 rounded bg-slate-100 py-1">{d}</div>
-                            ))}
+                        <div className="border rounded-xl bg-white w-full overflow-x-auto shadow-inner text-sm p-4">
+                            <div className="grid grid-cols-6 gap-2 w-[500px] min-w-max mx-auto">
+                                <div className="font-bold text-center text-slate-500 rounded bg-slate-100 py-1">교시</div>
+                                {weekdays.map(d => (
+                                    <div key={d} className="font-bold text-center text-slate-500 rounded bg-slate-100 py-1">{d}</div>
+                                ))}
 
-                            {[1, 2, 3, 4, 5, 6, 7].map(period => (
-                                <React.Fragment key={`group-period-${period}`}>
-                                    <div className="font-bold flex items-center justify-center bg-slate-50 rounded text-slate-500 h-[40px]">
-                                        {period}
-                                    </div>
-                                    {[0, 1, 2, 3, 4].map(weekday => {
-                                        const cellKey = `${weekday}-${period}`;
-                                        const groupValue = groups[grade]?.[cellKey] || "";
+                                {[1, 2, 3, 4, 5, 6, 7].map(period => (
+                                    <React.Fragment key={`group-period-${period}`}>
+                                        <div className="font-bold flex items-center justify-center bg-slate-50 rounded text-slate-500 h-[40px]">
+                                            {period}
+                                        </div>
+                                        {[0, 1, 2, 3, 4].map(weekday => {
+                                            const cellKey = `${weekday}-${period}`;
+                                            const groupValue = groups[grade]?.[cellKey] || "";
 
-                                        return (
-                                            <div key={cellKey} className={`flex items-center justify-center p-1 rounded border shadow-sm h-[40px] transition-colors
+                                            return (
+                                                <div key={cellKey} className={`flex items-center justify-center p-1 rounded border shadow-sm h-[40px] transition-colors
                                                 ${groupValue ? 'bg-orange-50 border-orange-300' : 'bg-gray-50 border-gray-200'}
                                             `}>
-                                                <select
-                                                    className={`w-full h-full text-xs text-center border-none bg-transparent outline-none cursor-pointer p-0 m-0 ${groupValue ? 'text-orange-700 font-bold' : 'text-slate-400'}`}
-                                                    value={groupValue || "NONE"}
-                                                    onChange={e => handleGroupChange(weekday, period, e.target.value)}
-                                                >
-                                                    <option value="NONE">-빈칸-</option>
-                                                    <option value="학년공강">학년공강</option>
-                                                    <option value="A">A 블록</option>
-                                                    <option value="B">B 블록</option>
-                                                    <option value="C">C 블록</option>
-                                                    <option value="D">D 블록</option>
-                                                    <option value="E">E 블록</option>
-                                                    <option value="F">F 블록</option>
-                                                    <option value="G">G 블록</option>
-                                                    <option value="H">H 블록</option>
-                                                    <option value="I">I 블록</option>
-                                                </select>
-                                            </div>
-                                        )
-                                    })}
-                                </React.Fragment>
-                            ))}
+                                                    <select
+                                                        className={`w-full h-full text-xs text-center border-none bg-transparent outline-none cursor-pointer p-0 m-0 ${groupValue ? 'text-orange-700 font-bold' : 'text-slate-400'}`}
+                                                        value={groupValue || "NONE"}
+                                                        onChange={e => handleGroupChange(weekday, period, e.target.value)}
+                                                    >
+                                                        <option value="NONE">-빈칸-</option>
+                                                        <option value="학년공강">학년공강</option>
+                                                        <option value="A">A 블록</option>
+                                                        <option value="B">B 블록</option>
+                                                        <option value="C">C 블록</option>
+                                                        <option value="D">D 블록</option>
+                                                        <option value="E">E 블록</option>
+                                                        <option value="F">F 블록</option>
+                                                        <option value="G">G 블록</option>
+                                                        <option value="H">H 블록</option>
+                                                        <option value="I">I 블록</option>
+                                                    </select>
+                                                </div>
+                                            )
+                                        })}
+                                    </React.Fragment>
+                                ))}
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 {/* Subject Manager */}
                 <div className="border border-purple-200 bg-purple-50/30 rounded-lg p-4 space-y-4">
@@ -3120,11 +3268,20 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                             onKeyDown={(e) => { if (e.key === 'Enter') addSubject(); }}
                         />
                         <Button onClick={addSubject}>추가</Button>
+                        {(subjects[grade] || []).length > 0 && (
+                            <Button
+                                variant="outline"
+                                onClick={clearSubjectsForGrade}
+                                className="text-red-500 border-red-200 hover:bg-red-50"
+                            >
+                                이 학년 과목 초기화
+                            </Button>
+                        )}
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                        {subjects.length === 0 && <span className="text-gray-400 text-sm">등록된 과목이 없습니다.</span>}
-                        {subjects.map(subj => (
+                        {(!subjects[grade] || subjects[grade].length === 0) && <span className="text-gray-400 text-sm">등록된 과목이 없습니다.</span>}
+                        {(subjects[grade] || []).map(subj => (
                             <Badge key={subj} variant="secondary" className="px-3 py-1 flex items-center gap-1 text-sm border bg-white shadow-sm">
                                 {subj}
                                 <Button
@@ -3189,10 +3346,11 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                                                     key={weekday}
                                                     value={currentVal}
                                                     onChange={(val) => handleTimetableChange(weekday, period, val)}
-                                                    subjects={subjects}
+                                                    subjects={subjects[grade] || []}
                                                     onAddSubject={(val) => {
-                                                        if (!subjects.includes(val)) {
-                                                            setSubjects(prev => [...prev, val]);
+                                                        const currentSubjects = subjects[grade] || [];
+                                                        if (!currentSubjects.includes(val)) {
+                                                            setSubjects(prev => ({ ...prev, [grade]: [...(prev[grade] || []), val] }));
                                                         }
                                                     }}
                                                     isSafeMode={isSafeMode}
@@ -3207,11 +3365,7 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                     </div>
                 </div>
 
-                <div className="flex justify-between gap-2 pt-4 border-t">
-                    <Button variant="outline" className="border-orange-500 text-orange-600 hover:bg-orange-50" onClick={() => setShowAutoFill(true)}>
-                        <Wand2 className="w-4 h-4 mr-2" />
-                        선택과목 자동 채우기
-                    </Button>
+                <div className="flex justify-end gap-2 pt-4 border-t">
                     <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
                         {saveMutation.isPending ? "저장 중..." : "수동 계획 전체 저장"}
                     </Button>
@@ -3227,6 +3381,11 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const [restrictionReason, setRestrictionReason] = useState("");
     const [ipWhitelist, setIpWhitelist] = useState("");
     const [kakaoLoginRestricted, setKakaoLoginRestricted] = useState(false);
+
+    const [maintenanceActive, setMaintenanceActive] = useState(false);
+    const [maintenanceDuration, setMaintenanceDuration] = useState("3"); // hours
+    const [maintenanceMessage, setMaintenanceMessage] = useState("서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
+    const [maintenanceEndTime, setMaintenanceEndTime] = useState<string | null>(null);
 
     const settingsQuery = useQuery({
         queryKey: ["admin", "settings", "visitRestriction"],
@@ -3255,6 +3414,21 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
             );
 
             setKakaoLoginRestricted(settingsQuery.data.kakao_login_restricted === 'true');
+
+            try {
+                const parsedMaint = settingsQuery.data.maintenance_mode ? JSON.parse(settingsQuery.data.maintenance_mode) : null;
+                if (parsedMaint) {
+                    setMaintenanceActive(!!parsedMaint.active);
+                    setMaintenanceMessage(parsedMaint.message || "서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
+                    setMaintenanceEndTime(parsedMaint.endTime || null);
+                    // Duration is visual only during active set, keep default 3
+                } else {
+                    setMaintenanceActive(false);
+                    setMaintenanceEndTime(null);
+                }
+            } catch {
+                setMaintenanceActive(false);
+            }
 
             try {
                 const parsedIps = settingsQuery.data.ip_whitelist
@@ -3295,11 +3469,32 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
 
     const handleSave = () => {
         const ips = ipWhitelist.split('\n').map(ip => ip.trim()).filter(ip => ip.length > 0);
+
+        // Calculate new end time if activating now
+        let newEndTime = maintenanceEndTime;
+        if (maintenanceActive && !maintenanceEndTime) {
+            if (maintenanceDuration === "unlimited") {
+                newEndTime = null;
+            } else {
+                const hours = parseInt(maintenanceDuration);
+                const endDate = new Date();
+                endDate.setHours(endDate.getHours() + hours);
+                newEndTime = endDate.toISOString();
+            }
+        } else if (!maintenanceActive) {
+            newEndTime = null;
+        }
+
         saveMutation.mutate({
             restricted_grades: JSON.stringify(restrictedGrades),
             restriction_reason: restrictionReason,
             ip_whitelist: JSON.stringify(ips),
             kakao_login_restricted: String(kakaoLoginRestricted),
+            maintenance_mode: JSON.stringify({
+                active: maintenanceActive,
+                endTime: newEndTime,
+                message: maintenanceMessage
+            })
         });
     };
 
@@ -3333,90 +3528,185 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const savedIpsNormalized = savedIpsStr.split('\n').map(r => r.trim()).filter(r => r.length > 0).join('\n');
     const isIpsDirty = currentIpsNormalized !== savedIpsNormalized;
 
-    const isDirty = isGradesDirty || isReasonDirty || isKakaoRestrictedDirty || isIpsDirty;
+    let savedMaintStr = "";
+    try {
+        const parsed = settingsQuery.data?.maintenance_mode ? JSON.parse(settingsQuery.data.maintenance_mode) : null;
+        savedMaintStr = parsed ? JSON.stringify({ active: !!parsed.active, message: parsed.message || "" }) : "";
+    } catch { }
+
+    const currentMaintStr = JSON.stringify({ active: maintenanceActive, message: maintenanceMessage });
+    // We ignore duration/endTime check for dirtiness since it's dynamic
+    const isMaintenanceDirty = currentMaintStr !== savedMaintStr;
+
+    const isDirty = isGradesDirty || isReasonDirty || isKakaoRestrictedDirty || isIpsDirty || isMaintenanceDirty;
 
     return (
-        <Card className="w-full max-w-2xl">
-            <CardHeader>
-                <CardTitle>방문제한 및 예외 IP 관리</CardTitle>
-                <CardDescription>
-                    특정 학년의 접속을 일시적으로 제한하고, 사유를 안내할 수 있습니다. 화이트리스트에 등록된 IP는 제한을 무시하고 접속할 수 있습니다.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="space-y-3">
-                    <label className="text-sm font-medium">제한할 학년 선택</label>
-                    <div className="flex gap-4">
-                        {[1, 2, 3].map((grade) => (
-                            <div key={grade} className="flex items-center space-x-2">
-                                <Checkbox
-                                    id={`grade-${grade}`}
-                                    checked={restrictedGrades.includes(grade)}
-                                    onCheckedChange={() => toggleGrade(grade)}
-                                />
-                                <label
-                                    htmlFor={`grade-${grade}`}
-                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        <div className="space-y-6 flex flex-col items-center">
+            {/* Maintenance Mode Card */}
+            <Card className="w-full max-w-2xl border-red-200 shadow-sm">
+                <CardHeader className="bg-red-50/50 rounded-t-xl pb-4">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <CardTitle className="text-red-600 flex items-center gap-2">
+                                <ShieldAlert className="w-5 h-5" />
+                                사이트 점검 모드 (Maintenance)
+                            </CardTitle>
+                            <CardDescription className="text-red-900/60 mt-1">
+                                활성화 시 지정된 시간 동안 관리자 및 IP 화이트리스트를 제외한 모든 접속이 차단됩니다.
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <span className={`text-sm font-bold ${maintenanceActive ? 'text-red-600' : 'text-slate-400'}`}>
+                                {maintenanceActive ? "점검 중" : "비활성"}
+                            </span>
+                            <Checkbox
+                                checked={maintenanceActive}
+                                onCheckedChange={(c) => {
+                                    setMaintenanceActive(!!c);
+                                    if (!c) setMaintenanceEndTime(null);
+                                }}
+                                className="w-6 h-6 rounded-full data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+                            />
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold">점검 진행 시간</label>
+                            <Select
+                                value={maintenanceDuration}
+                                onValueChange={setMaintenanceDuration}
+                                disabled={maintenanceActive && !!maintenanceEndTime} // Once active with an end time, disable duration change unless turned off and back on
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="기간 선택" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="1">1시간</SelectItem>
+                                    <SelectItem value="3">3시간</SelectItem>
+                                    <SelectItem value="12">12시간</SelectItem>
+                                    <SelectItem value="24">24시간 (1일)</SelectItem>
+                                    <SelectItem value="unlimited">무제한 (수동 해제)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {maintenanceActive && maintenanceEndTime && (
+                                <p className="text-xs text-red-500 font-medium">
+                                    종료 예정: {new Date(maintenanceEndTime).toLocaleString()}
+                                </p>
+                            )}
+                        </div>
+                        <div className="space-y-2 flex flex-col justify-end pb-[2px]">
+                            {maintenanceActive && (
+                                <Button
+                                    variant="outline"
+                                    className="border-red-200 text-red-600 hover:bg-red-50"
+                                    onClick={() => {
+                                        setMaintenanceActive(false);
+                                        setMaintenanceEndTime(null);
+                                        handleSave(); // Immediate save optional, but let's let big save do it
+                                    }}
                                 >
-                                    {grade}학년
-                                </label>
-                            </div>
-                        ))}
+                                    즉시 점검 해제
+                                </Button>
+                            )}
+                        </div>
                     </div>
-                </div>
 
-                <div className="space-y-2">
-                    <label className="text-sm font-medium">제한 사유 안내문구</label>
-                    <Input
-                        value={restrictionReason}
-                        onChange={(e) => setRestrictionReason(e.target.value)}
-                        placeholder="예: 2학기 시간표 업데이트 중입니다."
-                    />
-                    <p className="text-xs text-gray-500">
-                        제한된 학년의 학생이 학번을 입력하면 시간표 대신 이 문구가 표시됩니다.
-                    </p>
-                </div>
-
-                <div className="space-y-4 pt-4 border-t">
-                    <h4 className="text-sm font-bold">카카오 연동 제한</h4>
-                    <div className="flex items-center space-x-2">
-                        <Checkbox
-                            id="kakao-restrict"
-                            checked={kakaoLoginRestricted}
-                            onCheckedChange={(c) => setKakaoLoginRestricted(!!c)}
+                    <div className="space-y-2 mt-4">
+                        <label className="text-sm font-bold">점검 안내 메시지</label>
+                        <Textarea
+                            value={maintenanceMessage}
+                            onChange={(e) => setMaintenanceMessage(e.target.value)}
+                            placeholder="점검 사유를 입력하세요 (예: DB 안정화 작업)"
+                            rows={3}
                         />
-                        <label
-                            htmlFor="kakao-restrict"
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                            카카오 로그인 연동 제한 (모든 학년 적용)
-                        </label>
                     </div>
-                </div>
+                </CardContent>
+            </Card>
 
-                <div className="space-y-2 pt-4 border-t border-slate-100">
-                    <label className="text-sm font-medium">IP 화이트리스트 (줄바꿈으로 구분)</label>
-                    <Textarea
-                        value={ipWhitelist}
-                        onChange={(e) => setIpWhitelist(e.target.value)}
-                        placeholder="192.168.1.100&#10;10.0.0.5"
-                        rows={5}
-                        className="font-mono text-sm"
-                    />
-                    <p className="text-xs text-gray-500">
-                        여기에 등록된 IP는 위에서 설정된 방문제한의 영향을 받지 않습니다. (예: 교내망 IP, 관리자 IP 등)
-                    </p>
-                </div>
+            <Card className="w-full max-w-2xl">
+                <CardHeader>
+                    <CardTitle>방문제한 및 예외 IP 관리</CardTitle>
+                    <CardDescription>
+                        특정 학년의 접속을 일시적으로 제한하고, 사유를 안내할 수 있습니다. 화이트리스트에 등록된 IP는 제한을 무시하고 접속할 수 있습니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                        <label className="text-sm font-medium">제한할 학년 선택</label>
+                        <div className="flex gap-4">
+                            {[1, 2, 3].map((grade) => (
+                                <div key={grade} className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id={`grade-${grade}`}
+                                        checked={restrictedGrades.includes(grade)}
+                                        onCheckedChange={() => toggleGrade(grade)}
+                                    />
+                                    <label
+                                        htmlFor={`grade-${grade}`}
+                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                    >
+                                        {grade}학년
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
 
-                <div className="flex justify-end gap-2 pt-4">
-                    <Button variant="outline" onClick={resetState} disabled={!isDirty || saveMutation.isPending}>
-                        변경 취소
-                    </Button>
-                    <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
-                        {saveMutation.isPending ? "저장 중..." : "설정 저장"}
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">제한 사유 안내문구</label>
+                        <Input
+                            value={restrictionReason}
+                            onChange={(e) => setRestrictionReason(e.target.value)}
+                            placeholder="예: 2학기 시간표 업데이트 중입니다."
+                        />
+                        <p className="text-xs text-gray-500">
+                            제한된 학년의 학생이 학번을 입력하면 시간표 대신 이 문구가 표시됩니다.
+                        </p>
+                    </div>
+
+                    <div className="space-y-4 pt-4 border-t">
+                        <h4 className="text-sm font-bold">카카오 연동 제한</h4>
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                                id="kakao-restrict"
+                                checked={kakaoLoginRestricted}
+                                onCheckedChange={(c) => setKakaoLoginRestricted(!!c)}
+                            />
+                            <label
+                                htmlFor="kakao-restrict"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                            >
+                                카카오 로그인 연동 제한 (모든 학년 적용)
+                            </label>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2 pt-4 border-t border-slate-100">
+                        <label className="text-sm font-medium">IP 화이트리스트 (줄바꿈으로 구분)</label>
+                        <Textarea
+                            value={ipWhitelist}
+                            onChange={(e) => setIpWhitelist(e.target.value)}
+                            placeholder="192.168.1.100&#10;10.0.0.5"
+                            rows={5}
+                            className="font-mono text-sm"
+                        />
+                        <p className="text-xs text-gray-500">
+                            여기에 등록된 IP는 위에서 설정된 방문제한의 영향을 받지 않습니다. (예: 교내망 IP, 관리자 IP 등)
+                        </p>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-4">
+                        <Button variant="outline" onClick={resetState} disabled={!isDirty || saveMutation.isPending}>
+                            변경 취소
+                        </Button>
+                        <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
+                            {saveMutation.isPending ? "저장 중..." : "설정 저장"}
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
     );
 }

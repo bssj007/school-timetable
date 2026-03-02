@@ -124,12 +124,17 @@ export const onRequest = async (context: any) => {
             const url = new URL(request.url);
             const id = url.searchParams.get('id');
             const dataset = url.searchParams.get('dataset');
+            const grade = url.searchParams.get('grade');
 
             if (id) {
                 await env.DB.prepare("DELETE FROM elective_config WHERE id = ?").bind(id).run();
                 return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
             } else if (dataset) {
-                await env.DB.prepare("DELETE FROM elective_config WHERE dataset = ?").bind(dataset).run();
+                if (grade) {
+                    await env.DB.prepare("DELETE FROM elective_config WHERE dataset = ? AND grade = ?").bind(dataset, grade).run();
+                } else {
+                    await env.DB.prepare("DELETE FROM elective_config WHERE dataset = ?").bind(dataset).run();
+                }
                 return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
             }
             return new Response('ID or dataset is required', { status: 400 });
