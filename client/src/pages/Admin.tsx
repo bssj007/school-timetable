@@ -2559,23 +2559,34 @@ function AutoFillAnalyzer({ data, adminPassword, onBack }: {
             const payloadMap = new Map<string, any>();
 
             for (const mSubj of analysis.manualSubjects) {
-                // Look up BRIDGE mappings instead of local 'mappings' state
-                const bridgeRule = bridgeMappingRules.find(r => r.from === mSubj);
-                if (!bridgeRule || !bridgeRule.to) {
-                    throw new Error(`[${mSubj}] 과목이 BRIDGE 매핑 규칙에 지정되어 있지 않습니다.`);
-                }
+                const isExcludedManual = ["빈교실", "공강", "채플", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => mSubj.trim().includes(ex));
 
-                const targetSubjectName = bridgeRule.to;
-                const parts = mSubj.split(' ');
-                const manualTeacherName = parts.length >= 2 ? parts[parts.length - 1] : "";
+                let targetSubjectName = "";
+                let matchedTeacher = "";
 
-                // Live Match extraction
-                let matchedTeacher = manualTeacherName;
-                if (liveSubjectsQuery.data) {
-                    const liveMatches = liveSubjectsQuery.data.filter((ls: any) => ls.subject === targetSubjectName);
-                    if (liveMatches.length > 0) {
-                        const exactMatch = liveMatches.find((ls: any) => ls.teacher === manualTeacherName);
-                        matchedTeacher = exactMatch ? exactMatch.teacher : liveMatches[0].teacher;
+                if (isExcludedManual) {
+                    const parts = mSubj.split(' ');
+                    targetSubjectName = parts.length > 0 ? parts[0] : mSubj;
+                    matchedTeacher = parts.length >= 2 ? parts[parts.length - 1] : "";
+                } else {
+                    // Look up BRIDGE mappings instead of local 'mappings' state
+                    const bridgeRule = bridgeMappingRules.find(r => r.from === mSubj);
+                    if (!bridgeRule || !bridgeRule.to) {
+                        throw new Error(`[${mSubj}] 과목이 BRIDGE 매핑 규칙에 지정되어 있지 않습니다.`);
+                    }
+
+                    targetSubjectName = bridgeRule.to;
+                    const parts = mSubj.split(' ');
+                    const manualTeacherName = parts.length >= 2 ? parts[parts.length - 1] : "";
+
+                    // Live Match extraction
+                    matchedTeacher = manualTeacherName;
+                    if (liveSubjectsQuery.data) {
+                        const liveMatches = liveSubjectsQuery.data.filter((ls: any) => ls.subject === targetSubjectName);
+                        if (liveMatches.length > 0) {
+                            const exactMatch = liveMatches.find((ls: any) => ls.teacher === manualTeacherName);
+                            matchedTeacher = exactMatch ? exactMatch.teacher : liveMatches[0].teacher;
+                        }
                     }
                 }
 
@@ -2844,7 +2855,8 @@ function ManualTimetableCell({
 function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
     const [showAutoFill, setShowAutoFill] = useState(false);
-    const [subjects, setSubjects] = useState<string[]>([]);
+    // subjects structure: { "1": ["Math"], "2": ["Sci"], "3": [] }
+    const [subjects, setSubjects] = useState<Record<string, string[]>>({});
     const [newSubject, setNewSubject] = useState("");
     const [grade, setGrade] = useState("2");
     const [classNum, setClassNum] = useState("1");
@@ -2870,7 +2882,18 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
         if (settingsQuery.data?.manual_semester_plan) {
             try {
                 const data = JSON.parse(settingsQuery.data.manual_semester_plan);
-                setSubjects(data.subjects || []);
+                let loadedSubjects = data.subjects || {};
+
+                // Backwards compatibility: upgrade string[] to Record<string, string[]>
+                if (Array.isArray(loadedSubjects)) {
+                    loadedSubjects = {
+                        "1": [...loadedSubjects],
+                        "2": [...loadedSubjects],
+                        "3": [...loadedSubjects]
+                    };
+                }
+
+                setSubjects(loadedSubjects);
                 setTimetables(data.timetables || {});
                 setGroups(data.groups || { "2": {}, "3": {} });
             } catch (e) {
@@ -2909,16 +2932,18 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
 
     const addSubject = () => {
         if (!newSubject.trim()) return;
-        if (subjects.includes(newSubject.trim())) {
+        const currentSubjects = subjects[grade] || [];
+        if (currentSubjects.includes(newSubject.trim())) {
             toast.error("이미 존재하는 과목입니다.");
             return;
         }
-        setSubjects([...subjects, newSubject.trim()]);
+        setSubjects({ ...subjects, [grade]: [...currentSubjects, newSubject.trim()] });
         setNewSubject("");
     };
 
     const removeSubject = (subj: string) => {
-        setSubjects(subjects.filter(s => s !== subj));
+        const currentSubjects = subjects[grade] || [];
+        setSubjects({ ...subjects, [grade]: currentSubjects.filter(s => s !== subj) });
     };
 
     const handleTimetableChange = (weekday: number, period: number, subj: string) => {
@@ -3061,8 +3086,8 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                        {subjects.length === 0 && <span className="text-gray-400 text-sm">등록된 과목이 없습니다.</span>}
-                        {subjects.map(subj => (
+                        {(!subjects[grade] || subjects[grade].length === 0) && <span className="text-gray-400 text-sm">등록된 과목이 없습니다.</span>}
+                        {(subjects[grade] || []).map(subj => (
                             <Badge key={subj} variant="secondary" className="px-3 py-1 flex items-center gap-1 text-sm border bg-white shadow-sm">
                                 {subj}
                                 <Button
@@ -3127,10 +3152,11 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                                                     key={weekday}
                                                     value={currentVal}
                                                     onChange={(val) => handleTimetableChange(weekday, period, val)}
-                                                    subjects={subjects}
+                                                    subjects={subjects[grade] || []}
                                                     onAddSubject={(val) => {
-                                                        if (!subjects.includes(val)) {
-                                                            setSubjects(prev => [...prev, val]);
+                                                        const currentSubjects = subjects[grade] || [];
+                                                        if (!currentSubjects.includes(val)) {
+                                                            setSubjects(prev => ({ ...prev, [grade]: [...(prev[grade] || []), val] }));
                                                         }
                                                     }}
                                                     isSafeMode={isSafeMode}

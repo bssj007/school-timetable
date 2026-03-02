@@ -98,32 +98,30 @@ export const onRequest = async (context: any) => {
             if (!env.DB) throw new Error("DB not configured");
 
             if (dataset === 'SEMESTER_PLAN') {
-                const result = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'manual_semester_plan'").first();
+                // Return subjects generated from Manual Semester Plan ("학기별 계획")
+                const result = await env.DB.prepare("SELECT value FROM settings WHERE key = 'manual_semester_plan'").first();
                 if (result && result.value) {
                     const manualPlan = JSON.parse(result.value);
 
-                    // Dynamically find subjects used ONLY in the requested grade
-                    const usedSubjects = new Set<string>();
-                    if (manualPlan.timetables) {
-                        Object.keys(manualPlan.timetables).forEach(classKey => {
-                            const [g, c] = classKey.split('-');
-                            if (parseInt(g) === grade) {
-                                const tt = manualPlan.timetables[classKey];
-                                Object.values(tt).forEach((subj: any) => {
-                                    if (subj) usedSubjects.add(subj);
-                                });
-                            }
-                        });
+                    // Use the explicitly defined subject list in the Manual Plan
+                    let usedSubjects: string[] = [];
+                    if (Array.isArray(manualPlan.subjects)) {
+                        usedSubjects = manualPlan.subjects;
+                    } else if (manualPlan.subjects && typeof manualPlan.subjects === 'object') {
+                        usedSubjects = manualPlan.subjects[grade] || [];
                     }
 
-                    // Convert to array and handle the fact that subject might have "Teacher" suffix
-                    const mappedSubjects = Array.from(usedSubjects).map((subj: string) => {
+                    // Convert to expected format
+                    const mappedSubjects = usedSubjects.map((subj: string) => {
                         const parts = subj.split(' ');
                         const teacher = parts.length > 1 ? parts[parts.length - 1] : "";
                         const subjectName = parts.length > 1 ? parts.slice(0, -1).join(' ') : subj;
 
                         return { subject: subjectName, teacher };
                     });
+
+                    // Sort alphabetically
+                    mappedSubjects.sort((a, b) => a.subject.localeCompare(b.subject));
 
                     return new Response(JSON.stringify(mappedSubjects), { headers: { 'Content-Type': 'application/json' } });
                 } else {
