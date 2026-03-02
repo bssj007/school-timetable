@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight
 } from "lucide-react";
 import { BridgeManager } from './AdminBridge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1437,8 +1437,7 @@ export default function Admin() {
 
     // AutoFill states
     const [showAutoFill, setShowAutoFill] = useState(false);
-    const [autoFillGrade, setAutoFillGrade] = useState<number>(2);
-    const [autoFillTargetDataset, setAutoFillTargetDataset] = useState<string>("");
+    const [autoFillData, setAutoFillData] = useState<{ grade: number, fromDataset: string, toDataset: string, mappingRules: any[] } | null>(null);
 
     const handleFactoryReset = async () => {
         if (resetConfirmation !== TARGET_PHRASE) {
@@ -1692,10 +1691,9 @@ export default function Admin() {
         return (
             <div className="container max-w-6xl mx-auto px-4 py-8">
                 <AutoFillAnalyzer
-                    grade={autoFillGrade}
+                    data={autoFillData!}
                     adminPassword={password}
                     onBack={() => setShowAutoFill(false)}
-                    initialTargetDataset={autoFillTargetDataset}
                 />
             </div>
         );
@@ -2235,9 +2233,8 @@ export default function Admin() {
                 <TabsContent value="bridge" className="space-y-6">
                     <BridgeManager
                         adminPassword={password}
-                        goAutoFillAnalysis={(grade, targetDataset) => {
-                            setAutoFillGrade(grade);
-                            setAutoFillTargetDataset(targetDataset);
+                        goAutoFillAnalysis={(bridgeData) => {
+                            setAutoFillData(bridgeData);
                             setShowAutoFill(true);
                         }}
                     />
@@ -2416,9 +2413,15 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     );
 }
 
-function AutoFillAnalyzer({ grade, adminPassword, onBack, initialTargetDataset }: { grade: number, adminPassword: string, onBack: () => void, initialTargetDataset?: string }) {
+function AutoFillAnalyzer({ data, adminPassword, onBack }: {
+    data: { grade: number, fromDataset: string, toDataset: string, mappingRules: any[] },
+    adminPassword: string,
+    onBack: () => void
+}) {
     const queryClient = useQueryClient();
-    const [selectedDataset, setSelectedDataset] = useState<string>(initialTargetDataset || '');
+    const grade = data.grade;
+    const bridgeMappingRules = data.mappingRules || [];
+    const targetDataset = data.toDataset;
 
     // Fetch current setting to determine default
     const settingsQuery = useQuery({
@@ -2441,56 +2444,11 @@ function AutoFillAnalyzer({ grade, adminPassword, onBack, initialTargetDataset }
         }
     }, [settingsQuery.data, grade]);
 
-    // Fetch raw comcigan to build the dataset list
-    const rawDataQuery = useQuery({
-        queryKey: ["admin", "rawComcigan", "부산성지고"],
-        queryFn: async () => {
-            const res = await fetch("/api/admin/raw_comcigan", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
-                body: JSON.stringify({ schoolName: "부산성지고" })
-            });
-            const json = await res.json();
-            if (!res.ok || json?.error) return null;
-            return json.data;
-        }
-    });
-
-    const timetableProps = React.useMemo(() => {
-        if (!rawDataQuery.data) return [];
-        return Object.keys(rawDataQuery.data).filter((k: string) => {
-            const val = rawDataQuery.data[k];
-            return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
-        });
-    }, [rawDataQuery.data]);
-
-    useEffect(() => {
-        if (settingsQuery.data) {
-            const current = settingsQuery.data.comcigan_dataset_selected;
-            if (current) {
-                setSelectedDataset(current);
-            } else {
-                setSelectedDataset('_auto_');
-            }
-        }
-    }, [settingsQuery.data]);
-
-    const displayDataset = selectedDataset || '_auto_';
-    const handleDatasetChange = (val: string) => {
-        setSelectedDataset(val);
-    };
-
-    let activeTimetable = settingsQuery.data?.comcigan_dataset_selected || "";
-    if (!activeTimetable && timetableProps && timetableProps.length > 0) {
-        activeTimetable = timetableProps[0];
-    }
-    const autoLabel = `자동 (현재: ${activeTimetable || '없음'})`;
-
-    // 1. Fetch Live Subjects from Comcigan
+    // 1. Fetch Live Subjects from Comcigan (target dataset)
     const liveSubjectsQuery = useQuery({
-        queryKey: ["admin", "comcigan-subjects", grade, displayDataset],
+        queryKey: ["admin", "comcigan-subjects", grade, targetDataset],
         queryFn: async () => {
-            const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${displayDataset}`);
+            const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${targetDataset}`);
             if (!res.ok) throw new Error("Failed to fetch live subjects");
             return res.json();
         }
@@ -2596,53 +2554,34 @@ function AutoFillAnalyzer({ grade, adminPassword, onBack, initialTargetDataset }
         return { blocks, manualSubjects: validManualSubjects, warnings, infos, subjectToBlocks };
     }, [currentPlan, grade]);
 
-    const [mappings, setMappings] = useState<Record<string, string>>({});
-
-    // Auto-match subjects on load
-    useEffect(() => {
-        if (liveSubjectsQuery.data && analysis.manualSubjects.length > 0) {
-            const initialMap: Record<string, string> = {};
-            analysis.manualSubjects.forEach(mSubj => {
-                const parts = mSubj.split(' ');
-                let liveMatch = null;
-
-                // Smart matching: try to find teacher name
-                if (parts.length >= 2) {
-                    const teacherName = parts[parts.length - 1];
-                    const subjectKeyword = parts[0].replace(/^[A-Z]_/, ''); // remove prefix like A_
-
-                    liveMatch = liveSubjectsQuery.data.find((ls: any) =>
-                        ls.teacher === teacherName && ls.subject.includes(subjectKeyword)
-                    );
-                }
-
-                // Fallback matching
-                if (!liveMatch) {
-                    liveMatch = liveSubjectsQuery.data.find((ls: any) => mSubj.includes(ls.teacher) && mSubj.includes(ls.subject));
-                }
-
-                if (liveMatch) {
-                    initialMap[mSubj] = `${liveMatch.subject}-${liveMatch.teacher}`;
-                }
-            });
-            setMappings(initialMap);
-        }
-    }, [liveSubjectsQuery.data, analysis.manualSubjects]);
-
     const executeMutation = useMutation({
         mutationFn: async () => {
-            let targetDataset = displayDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : displayDataset;
-            if (!targetDataset && timetableProps && timetableProps.length > 0) {
-                targetDataset = timetableProps[0];
-            }
-
             const payloadMap = new Map<string, any>();
 
             for (const mSubj of analysis.manualSubjects) {
-                const mappingKey = mappings[mSubj];
-                if (!mappingKey) throw new Error(`${mSubj} 과목의 매핑이 누락되었습니다.`);
+                // Look up BRIDGE mappings instead of local 'mappings' state
+                const bridgeRule = bridgeMappingRules.find(r => r.from === mSubj);
+                if (!bridgeRule || !bridgeRule.to) {
+                    throw new Error(`[${mSubj}] 과목이 BRIDGE 매핑 규칙에 지정되어 있지 않습니다.`);
+                }
 
-                const [subj, teacher] = mappingKey.split('-');
+                const targetSubjectName = bridgeRule.to;
+                const parts = mSubj.split(' ');
+                const manualTeacherName = parts.length >= 2 ? parts[parts.length - 1] : "";
+
+                // Live Match extraction
+                let matchedTeacher = manualTeacherName;
+                if (liveSubjectsQuery.data) {
+                    const liveMatches = liveSubjectsQuery.data.filter((ls: any) => ls.subject === targetSubjectName);
+                    if (liveMatches.length > 0) {
+                        const exactMatch = liveMatches.find((ls: any) => ls.teacher === manualTeacherName);
+                        matchedTeacher = exactMatch ? exactMatch.teacher : liveMatches[0].teacher;
+                    }
+                }
+
+                const subj = targetSubjectName;
+                const teacher = matchedTeacher;
+                const mappingKey = `${subj}-${teacher}`;
                 const myBlocks = analysis.blocks.filter(b => b.subjects.has(mSubj));
                 if (myBlocks.length === 0) throw new Error(`${mSubj} 과목의 블록을 찾을 수 없습니다.`);
 
@@ -2762,49 +2701,19 @@ function AutoFillAnalyzer({ grade, adminPassword, onBack, initialTargetDataset }
                         )}
                     </div>
 
-                    <div className="border rounded-md p-4 bg-slate-50 overflow-hidden flex flex-col">
-                        <h4 className="font-bold text-sm text-slate-700 mb-2">라이브 과목 매핑</h4>
-                        <div className="overflow-y-auto flex-1 pr-2">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>수동 과목</TableHead>
-                                        <TableHead>자동매핑 (라이브)</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {analysis.manualSubjects.map(mSubj => {
-                                        const block = analysis.blocks.find(b => b.subjects.has(mSubj))?.code || "?";
-                                        const isMapped = !!mappings[mSubj];
-
-                                        return (
-                                            <TableRow key={mSubj}>
-                                                <TableCell className="text-sm p-2">
-                                                    <div className="flex items-center gap-1">
-                                                        <Badge variant="outline" className="text-[10px] px-1">{block}</Badge>
-                                                        <span className="truncate max-w-[100px]" title={mSubj}>{mSubj}</span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="p-2">
-                                                    <Select value={mappings[mSubj] || ""} onValueChange={(val) => setMappings({ ...mappings, [mSubj]: val })}>
-                                                        <SelectTrigger className={`h-8 w-full bg-white text-xs ${!isMapped && 'border-red-300 ring-1 ring-red-100'}`}>
-                                                            <SelectValue placeholder="매핑 선택..." />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {liveSubjectsQuery.data?.map((ls: any) => (
-                                                                <SelectItem key={`${ls.subject}-${ls.teacher}`} value={`${ls.subject}-${ls.teacher}`} className="text-xs">
-                                                                    {ls.subject} ({ls.teacher})
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })}
-                                </TableBody>
-                            </Table>
+                    <div className="border rounded-md p-4 bg-slate-50 overflow-hidden flex flex-col justify-center items-center text-center space-y-4">
+                        <div className="p-3 bg-white rounded-full border shadow-sm">
+                            <ArrowRight className="w-8 h-8 text-slate-400" />
                         </div>
+                        <h4 className="font-bold text-lg text-slate-700">지정된 BRIDGE 매핑 사용</h4>
+                        <div className="flex items-center gap-3">
+                            <Badge variant="outline" className="bg-slate-100 px-3 py-1">{data.fromDataset}</Badge>
+                            <ArrowRight className="w-4 h-4 text-slate-400" />
+                            <Badge variant="outline" className="bg-orange-100 text-orange-800 px-3 py-1">{data.toDataset}</Badge>
+                        </div>
+                        <p className="text-sm text-slate-500 max-w-[250px]">
+                            우측 표 대신, <strong>{bridgeMappingRules.length}개</strong>의 BRIDGE 자동 매핑 규칙이 일괄 적용됩니다.
+                        </p>
                     </div>
                 </div>
 
@@ -2814,10 +2723,10 @@ function AutoFillAnalyzer({ grade, adminPassword, onBack, initialTargetDataset }
                     </Button>
                     <Button
                         className="bg-orange-600 hover:bg-orange-700"
-                        disabled={analysis.warnings.some(w => w.includes("중복") || w.includes("미확인")) || liveSubjectsQuery.isLoading || executeMutation.isPending || Object.values(mappings).some(v => !v) || Object.keys(mappings).length !== analysis.manualSubjects.length}
+                        disabled={analysis.warnings.some(w => w.includes("중복") || w.includes("미확인")) || liveSubjectsQuery.isLoading || executeMutation.isPending || bridgeMappingRules.length === 0}
                         onClick={() => executeMutation.mutate()}
                     >
-                        {executeMutation.isPending ? "저장 중..." : "1:1 매핑 후 DB 저장"}
+                        {executeMutation.isPending ? "저장 중..." : "선택과목 자동 생성 / 저장"}
                     </Button>
                 </div>
             </CardContent>
