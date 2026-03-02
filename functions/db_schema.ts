@@ -3,7 +3,8 @@ export const ALL_TABLES = [
     "cookie_profiles",
     "ip_profiles",
     "student_profiles",
-    "elective_config"
+    "elective_config",
+    "dataset_bridges"
 ];
 
 export const createStudentProfilesTable = `
@@ -62,6 +63,19 @@ CREATE TABLE IF NOT EXISTS elective_config (
     fullSubjectName TEXT,
     isMovingClass INTEGER DEFAULT 0,
     isCombinedClass INTEGER DEFAULT 0,
+    dataset TEXT DEFAULT '',
+    updatedAt TEXT DEFAULT (datetime('now'))
+);
+`;
+
+export const createDatasetBridgesTable = `
+CREATE TABLE IF NOT EXISTS dataset_bridges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    fromDataset TEXT NOT NULL,
+    toDataset TEXT NOT NULL,
+    mappingData TEXT NOT NULL, -- JSON string representing mapping rules
+    createdAt TEXT DEFAULT (datetime('now')),
     updatedAt TEXT DEFAULT (datetime('now'))
 );
 `;
@@ -72,6 +86,7 @@ export async function ensureAllTables(db: any) {
         await db.prepare(createIpProfilesTable).run();
         await db.prepare(createCookieProfilesTable).run();
         await db.prepare(createElectiveConfigTable).run();
+        await db.prepare(createDatasetBridgesTable).run();
         console.log("All tables ensured.");
     } catch (e) {
         console.error("Error ensuring tables:", e);

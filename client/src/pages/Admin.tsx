@@ -9,6 +9,7 @@ import {
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
     TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info
 } from "lucide-react";
+import { BridgeManager } from './AdminBridge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import IPProfileViewer from "@/components/IPProfileViewer";
@@ -1433,6 +1434,11 @@ export default function Admin() {
     const [isResetting, setIsResetting] = useState(false);
     const TARGET_PHRASE = "햇빛이 선명하게 나뭇잎을 핥고 있었다";
 
+    // AutoFill states
+    const [showAutoFill, setShowAutoFill] = useState(false);
+    const [autoFillGrade, setAutoFillGrade] = useState<number>(2);
+    const [autoFillTargetDataset, setAutoFillTargetDataset] = useState<string>("");
+
     const handleFactoryReset = async () => {
         if (resetConfirmation !== TARGET_PHRASE) {
             toast.error("확인 문구가 일치하지 않습니다.");
@@ -1680,6 +1686,22 @@ export default function Admin() {
         );
     }
 
+    // Intercept with AutoFill Analyzer fullscreen
+    if (showAutoFill) {
+        return (
+            <div className="container max-w-6xl mx-auto px-4 py-8">
+                <AutoFillAnalyzer
+                    grade={autoFillGrade}
+                    planData={[]} // No longer passing manual plan prop down directly. It will fetch itself inside.
+                    adminPassword={password}
+                    timetableProps={[autoFillTargetDataset]} // Preselect from Bridge
+                    onBack={() => setShowAutoFill(false)}
+                    initialTargetDataset={autoFillTargetDataset}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="container max-w-6xl mx-auto px-4 py-8">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-8 gap-4">
@@ -1728,6 +1750,12 @@ export default function Admin() {
                         className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800"
                     >
                         학기별 계획
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="bridge"
+                        className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800"
+                    >
+                        BRIDGE
                     </TabsTrigger>
                     <TabsTrigger
                         value="etc"
@@ -2663,21 +2691,6 @@ function AutoFillElectivesView({ adminPassword, onBack, currentPlan }: { adminPa
                 <CardDescription>
                     학기별 계획 데이터를 이용해 선택과목 DB를 자동으로 채웁니다. 수동으로 입력한 시간표에서 특정 시간에 동시에 열리는 과목들을 찾아 자동으로 A블록, B블록 등을 계산하고, 실제 라이브 데이터셋과 매핑하여 일괄 저장합니다.
                 </CardDescription>
-                <div className="mt-4 flex items-center gap-3">
-                    <span className="text-sm font-bold text-gray-700">대상 데이터셋:</span>
-                    <Select value={displayDataset} onValueChange={handleDatasetChange}>
-                        <SelectTrigger className="w-[180px] h-9">
-                            <SelectValue placeholder="데이터셋 선택" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="_auto_">{autoLabel}</SelectItem>
-                            <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
-                            {timetableProps.map((prop: string) => (
-                                <SelectItem key={prop} value={prop}>{prop}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
             </CardHeader>
             <CardContent className="space-y-6 pt-6">
 
@@ -3020,10 +3033,6 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
         });
     };
 
-    if (showAutoFill) {
-        return <AutoFillElectivesView adminPassword={adminPassword} onBack={() => setShowAutoFill(false)} currentPlan={{ subjects, timetables, groups, grade: parseInt(grade) }} />;
-    }
-
     return (
         <Card className="w-full">
             <CardHeader>
@@ -3207,11 +3216,7 @@ function ManualSemesterPlan({ adminPassword }: { adminPassword: string }) {
                     </div>
                 </div>
 
-                <div className="flex justify-between gap-2 pt-4 border-t">
-                    <Button variant="outline" className="border-orange-500 text-orange-600 hover:bg-orange-50" onClick={() => setShowAutoFill(true)}>
-                        <Wand2 className="w-4 h-4 mr-2" />
-                        선택과목 자동 채우기
-                    </Button>
+                <div className="flex justify-end gap-2 pt-4 border-t">
                     <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
                         {saveMutation.isPending ? "저장 중..." : "수동 계획 전체 저장"}
                     </Button>
