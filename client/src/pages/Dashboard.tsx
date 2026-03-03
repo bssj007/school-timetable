@@ -343,6 +343,17 @@ export default function Dashboard() {
   // We keep track of the last successfully computed groups to prevent flickering during refetches.
   const lastValidGroupsRef = React.useRef<Record<string, string>>({});
 
+  // Override만 담은 맵: 이 셀은 시간표에 과목이 없어도 강제 표시
+  const overrideGroups = useMemo((): Record<string, string> => {
+    if ((grade !== "2" && grade !== "3") || !settings?.elective_group_overrides?.[grade]) return {};
+    const result: Record<string, string> = {};
+    const gradeOverrides = settings.elective_group_overrides[grade];
+    for (const [cellKey, val] of Object.entries(gradeOverrides)) {
+      if (typeof val === "string" && val !== "NONE") result[cellKey] = val;
+    }
+    return result;
+  }, [grade, settings?.elective_group_overrides]);
+
   const computedGroups = useMemo(() => {
     if (grade !== "2" && grade !== "3") {
       lastValidGroupsRef.current = {};
@@ -1095,6 +1106,10 @@ export default function Dashboard() {
 
                           const isFreePeriod = item && item.subject ? item.subject.trim().includes("공강") : false;
 
+                          // Override 셀 여부 확인
+                          const cellKey = `${weekdayIdx}-${classTime}`;
+                          const isOverrideCell = !!overrideGroups[cellKey];
+
                           let isElectiveActive = false;
                           if (group && electiveSelection && !isFreePeriod) {
                             displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject;
@@ -1113,64 +1128,71 @@ export default function Dashboard() {
                               });
                             };
 
-                            // 1. Subject + teacher match (약칭/풀네임 양방향) across all classes
-                            let matchingSlot = slotItems.find(t =>
-                              t.subject.trim() === electiveSelection.subject.trim() &&
-                              teacherMatches(t.teacher, electiveTeachers)
-                            );
-
-                            if (matchingSlot) {
-                              displayTeacher = matchingSlot.teacher;
-                              teacherFound = true;
-                            }
-
-                            // 2. Intersection match on base class (약칭/풀네임 양방향)
-                            if (!teacherFound && item && item.teacher && teacherMatches(item.teacher, electiveTeachers)) {
-                              displayTeacher = item.teacher;
-                              teacherFound = true;
-                            }
-
-                            // 3. Subject match on base class (only if student didn't specify teachers)
-                            if (!teacherFound && electiveTeachers.length === 0 && item && item.subject.trim() === electiveSelection.subject.trim()) {
-                              displayTeacher = item.teacher;
-                              teacherFound = true;
-                            }
-
-                            // 4. Any subject match across all classes (if base class is empty OR student didn't specify teachers)
-                            if (!teacherFound && (electiveTeachers.length === 0 || isEmptyClass)) {
-                              matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
-                              if (matchingSlot) {
-                                displayTeacher = matchingSlot.teacher;
-                                teacherFound = true;
-                              }
-                            }
-
-                            // 4.5. Subject-only fallback: 선생님 이름 형식 불일치(2글자 약칭 vs 풀네임)로 위 단계 실패 시 최종 대응
-                            if (!teacherFound && electiveTeachers.length > 0 && !isEmptyClass) {
-                              matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
-                              if (matchingSlot) {
-                                displayTeacher = matchingSlot.teacher;
-                                teacherFound = true;
-                              }
-                            }
-
-                            if (teacherFound || isEmptyClass) {
+                            // Override 셀: 시간표에 해당 과목이 없어도 학생 선택과목 강제 표시
+                            if (isOverrideCell) {
+                              // 시간표에서 과목을 찾아 선생님 표시 시도 (없으면 저장된 선생님 표시)
+                              const matchInSlots = slotItems.find(t =>
+                                t.subject.trim() === electiveSelection.subject.trim()
+                              );
+                              displayTeacher = matchInSlots ? matchInSlots.teacher : (electiveTeachers[0] || "");
                               isElectiveActive = true;
-                              if (!teacherFound && isEmptyClass) {
-                                // Base class is empty, and we couldn't find the specific teacher. 
-                                // According to user, we MUST show the elective anyway since it's an empty class.
-                                displayTeacher = electiveTeachers[0] || "";
-                              }
                             } else {
-                              // Final fallback: The elective class is NOT running today (e.g., completely changed to a generic class like '미창박상').
-                              // Or computedGroups misidentified the group.
-                              isElectiveActive = false;
-                              if (item) {
-                                displaySubject = item.subject;
+                              // 1. Subject + teacher match (약칭/풀네임 양방향) across all classes
+                              let matchingSlot = slotItems.find(t =>
+                                t.subject.trim() === electiveSelection.subject.trim() &&
+                                teacherMatches(t.teacher, electiveTeachers)
+                              );
+
+                              if (matchingSlot) {
+                                displayTeacher = matchingSlot.teacher;
+                                teacherFound = true;
+                              }
+
+                              // 2. Intersection match on base class (약칭/풀네임 양방향)
+                              if (!teacherFound && item && item.teacher && teacherMatches(item.teacher, electiveTeachers)) {
                                 displayTeacher = item.teacher;
+                                teacherFound = true;
+                              }
+
+                              // 3. Subject match on base class (only if student didn't specify teachers)
+                              if (!teacherFound && electiveTeachers.length === 0 && item && item.subject.trim() === electiveSelection.subject.trim()) {
+                                displayTeacher = item.teacher;
+                                teacherFound = true;
+                              }
+
+                              // 4. Any subject match across all classes (if base class is empty OR student didn't specify teachers)
+                              if (!teacherFound && (electiveTeachers.length === 0 || isEmptyClass)) {
+                                matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
+                                if (matchingSlot) {
+                                  displayTeacher = matchingSlot.teacher;
+                                  teacherFound = true;
+                                }
+                              }
+
+                              // 4.5. Subject-only fallback: 선생님 이름 형식 불일치(2글자 약칭 vs 풀네임) 최종 대응
+                              if (!teacherFound && electiveTeachers.length > 0 && !isEmptyClass) {
+                                matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
+                                if (matchingSlot) {
+                                  displayTeacher = matchingSlot.teacher;
+                                  teacherFound = true;
+                                }
+                              }
+
+                              if (teacherFound || isEmptyClass) {
+                                isElectiveActive = true;
+                                if (!teacherFound && isEmptyClass) {
+                                  displayTeacher = electiveTeachers[0] || "";
+                                }
                               } else {
-                                displaySubject = "-";
-                                displayTeacher = "";
+                                // 과목이 이 시간에 없거나 그룹 감지 실패
+                                isElectiveActive = false;
+                                if (item) {
+                                  displaySubject = item.subject;
+                                  displayTeacher = item.teacher;
+                                } else {
+                                  displaySubject = "-";
+                                  displayTeacher = "";
+                                }
                               }
                             }
                           }
