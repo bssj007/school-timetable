@@ -753,7 +753,7 @@ export default function Dashboard() {
   return (
     <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-2">
       {/* New Top Bar (Replaces Navigation on Desktop) */}
-      <div className="flex justify-between items-center mb-4">
+      <div className="hidden md:flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
           <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
             <span className="text-blue-600">수행 일정공유</span>

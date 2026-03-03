@@ -1506,38 +1506,67 @@ function BugReportManager({ adminPassword }: { adminPassword: string }) {
 function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
     const [selectedGrade, setSelectedGrade] = useState("2");
-    const [selectedDataset, setSelectedDataset] = useState("");
+    const [selectedDataset, setSelectedDataset] = useState("_auto_");
+    const [resolvedDataset, setResolvedDataset] = useState("");
     const [selectedClass, setSelectedClass] = useState("all");
     const [savingCells, setSavingCells] = useState<Record<string, boolean>>({});
 
-    // Fetch available datasets
-    const datasetsQuery = useQuery({
-        queryKey: ["admin", "publicSettings"],
+    // Fetch admin settings (for active_datasets)
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "electivePreEntry"],
         queryFn: async () => {
-            const res = await fetch("/api/admin/settings?type=public", {
+            const res = await fetch("/api/admin/settings", {
                 headers: { "X-Admin-Password": adminPassword }
             });
+            if (!res.ok) throw new Error("settings fetch failed");
             return res.json();
         }
     });
 
-    // Auto-select first dataset
-    useEffect(() => {
-        if (datasetsQuery.data) {
-            const key = `grade${selectedGrade}_dataset`;
-            const ds = datasetsQuery.data[key];
-            if (ds) setSelectedDataset(ds);
+    // Fetch raw comcigan data (for dataset list)
+    const adminRawQuery = useQuery({
+        queryKey: ["admin", "rawComcigan_ElectivePreEntry"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/raw_comcigan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ schoolName: "부산성지고" })
+            });
+            const json = await res.json();
+            if (!res.ok || json?.error) return null;
+            return json.data;
         }
-    }, [datasetsQuery.data, selectedGrade]);
+    });
+
+    const timetableProps = useMemo(() => {
+        const raw = adminRawQuery.data;
+        if (!raw) return [];
+        return Object.keys(raw).filter(k => {
+            const val = raw[k];
+            return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+        });
+    }, [adminRawQuery.data]);
+
+    // Resolve dataset: _auto_ → active from settings, else manual
+    useEffect(() => {
+        if (selectedDataset === "_auto_" && settingsQuery.data) {
+            try {
+                const ds = JSON.parse(settingsQuery.data.active_datasets || "{}");
+                setResolvedDataset(ds[selectedGrade] || "");
+            } catch { setResolvedDataset(""); }
+        } else if (selectedDataset !== "_auto_") {
+            setResolvedDataset(selectedDataset);
+        }
+    }, [selectedDataset, settingsQuery.data, selectedGrade]);
 
     // Fetch elective configs (groups + subjects) for the dataset
     const electiveConfigQuery = useQuery({
-        queryKey: ["admin", "electiveConfig", selectedGrade, selectedDataset],
+        queryKey: ["admin", "electiveConfig", selectedGrade, resolvedDataset],
         queryFn: async () => {
-            const res = await fetch(`/api/electives?grade=${selectedGrade}&dataset=${encodeURIComponent(selectedDataset)}`);
+            const res = await fetch(`/api/electives?grade=${selectedGrade}&dataset=${encodeURIComponent(resolvedDataset)}`);
             return res.json();
         },
-        enabled: !!selectedDataset
+        enabled: !!resolvedDataset
     });
 
     // Fetch all student profiles for the grade
@@ -1652,7 +1681,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                     classNum,
                     studentNumber,
                     electives,
-                    dataset: selectedDataset,
+                    dataset: resolvedDataset,
                 }),
             });
 
@@ -1682,11 +1711,18 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                         <SelectItem value="3">3학년</SelectItem>
                     </SelectContent>
                 </Select>
-                {selectedDataset && (
-                    <Badge variant="outline" className="text-xs">
-                        데이터셋: {selectedDataset}
-                    </Badge>
-                )}
+                <Select value={selectedDataset} onValueChange={(val) => { setSelectedDataset(val); }}>
+                    <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="데이터셋" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="_auto_">자동 (현재 설정)</SelectItem>
+                        <SelectItem value="MANUAL_PLAN">MANUAL_PLAN</SelectItem>
+                        {timetableProps.map((prop: string) => (
+                            <SelectItem key={prop} value={prop}>{prop}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
 
             {/* Class Filter Tabs */}
