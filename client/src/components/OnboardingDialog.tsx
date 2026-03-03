@@ -3,12 +3,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useUserConfig } from "@/contexts/UserConfigContext";
+import { useLocation } from "wouter";
 
 export default function OnboardingDialog() {
     const { isConfigured, setConfig } = useUserConfig();
     const [studentId, setStudentId] = useState("");
 
-    const location = window.location.pathname;
+    const [location] = useLocation();
 
     const isSystemAdmin = location.startsWith("/admin");
     const isOpen = !isConfigured && !isSystemAdmin;

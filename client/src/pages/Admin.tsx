@@ -882,7 +882,8 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
         const subjectToGroups = new Map<string, string[]>();
 
         electiveConfigs.forEach((c: any) => {
-            if (c.isMovingClass !== 0 && c.classCode) {
+            const isFreePeriod = ["빈교실", "공강", "Empty", "Free"].some(k => (c.subject || "").includes(k));
+            if ((c.isMovingClass !== 0 || isFreePeriod) && c.classCode) {
                 const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
                 const subj = c.subject.trim();
 
@@ -1212,6 +1213,7 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                         className="border rounded px-2 py-1 text-sm"
                     >
                         <option value="_auto_">자동 (활성 데이터셋)</option>
+                        <option value="MANUAL_PLAN">MANUAL_PLAN</option>
                         {timetableProps.map(tp => (
                             <option key={tp} value={tp}>{tp}</option>
                         ))}

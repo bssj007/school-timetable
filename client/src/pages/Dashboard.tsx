@@ -361,7 +361,8 @@ export default function Dashboard() {
       const subjectToGroups = new Map<string, string[]>();
 
       electiveConfigs.forEach((c: any) => {
-        if (c.isMovingClass !== 0 && c.classCode) {
+        const isFreePeriod = ["빈교실", "공강", "Empty", "Free"].some(k => (c.subject || "").includes(k));
+        if ((c.isMovingClass !== 0 || isFreePeriod) && c.classCode) {
           const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
           const subj = c.subject.trim();
 
