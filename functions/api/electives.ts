@@ -66,7 +66,20 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
             }
         }
 
-        // 2. Fetch Elective Config (Available Subjects)
+        // 2. Fetch ALL student profiles for a grade (admin pre-entry)
+        if (type === "all-students") {
+            const gradeStr = url.searchParams.get("grade");
+            if (!gradeStr) {
+                return new Response(JSON.stringify({ error: "Grade is required" }), { status: 400 });
+            }
+            const grade = parseInt(gradeStr);
+            const profiles = await env.DB.prepare(
+                "SELECT * FROM student_profiles WHERE grade = ? ORDER BY classNum, studentNumber"
+            ).bind(grade).all();
+            return new Response(JSON.stringify(profiles.results || []), { headers: { "Content-Type": "application/json" } });
+        }
+
+        // 3. Fetch Elective Config (Available Subjects)
         const grade = url.searchParams.get("grade");
         const dataset = url.searchParams.get("dataset");
         if (!grade) {

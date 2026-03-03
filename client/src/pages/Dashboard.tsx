@@ -753,7 +753,7 @@ export default function Dashboard() {
   return (
     <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-2">
       {/* New Top Bar (Replaces Navigation on Desktop) */}
-      <div className="hidden md:flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
           <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
             <span className="text-blue-600">수행 일정공유</span>
@@ -912,23 +912,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {isBugReportEnabled && (
-            <Button
-              variant="default"
-              size="sm"
-              className="h-9 rounded-full px-3 font-bold text-xs bg-red-500 hover:bg-red-600 text-white ml-auto"
-              onClick={() => setShowBugReportDialog(true)}
-            >
-              <AlertTriangle className="h-4 w-4 mr-1" />
-              오류신고
-            </Button>
-          )}
-          {kakaoUser && (
-            <div className={`flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-100 h-10 text-sm ${isBugReportEnabled ? '' : 'ml-auto'} md:ml-0`}>
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              카카오 알림 활성
-            </div>
-          )}
+
         </div>
       </div>
 
