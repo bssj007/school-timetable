@@ -1160,7 +1160,8 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
         const grouped: Record<string, { subject: string; fullSubjectName?: string; className?: string; freePeriods: string[] }[]> = {};
 
         configs.forEach((c: any) => {
-            if (c.isMovingClass === 0) return;
+            const isFreePeriod = FREE_KEYWORDS.some(k => (c.subject || "").includes(k));
+            if (c.isMovingClass === 0 && !isFreePeriod) return;
             if (!c.classCode) return;
             const codes = (c.classCode as string).split(",").map(s => s.trim()).filter(Boolean);
             codes.forEach(code => {
@@ -2565,6 +2566,10 @@ export default function Admin() {
                             <ElectiveManager password={password} />
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                <TabsContent value="class-free" className="space-y-6">
+                    <ClassFreePeriodChecker adminPassword={password} />
                 </TabsContent>
 
                 <TabsContent value="database" className="space-y-6">
