@@ -34,11 +34,7 @@ export const onRequest = async (context: any) => {
 
         // 9. student_profiles Table
         try {
-            // FORCE RESET for Schema Change
-            await env.DB.prepare("DROP TABLE IF EXISTS student_profiles").run();
-            // Drop deprecated ip_profiles
-            await env.DB.prepare("DROP TABLE IF EXISTS ip_profiles").run();
-
+            // SAFE migration: only create if not exists, never drop existing data
             await env.DB.prepare(`
                 CREATE TABLE IF NOT EXISTS student_profiles (
                     id INTEGER PRIMARY KEY,
@@ -46,12 +42,20 @@ export const onRequest = async (context: any) => {
                     classNum INTEGER NOT NULL,
                     studentNumber INTEGER,
                     electives TEXT,
+                    dataset TEXT DEFAULT '',
                     updatedAt TEXT DEFAULT (datetime('now')),
                     UNIQUE(grade, classNum, studentNumber)
                 )
             `).run();
 
-            results.push("Checked/Created student_profiles table (Updated Schema)");
+            // Ensure dataset column exists (safe ALTER — ignore if already exists)
+            try {
+                await env.DB.prepare("ALTER TABLE student_profiles ADD COLUMN dataset TEXT DEFAULT ''").run();
+            } catch (_) {
+                // Column already exists, ignore
+            }
+
+            results.push("Checked/Created student_profiles table (Safe Migration)");
         } catch (e: any) {
             results.push(`Error creating student_profiles: ${e.message}`);
         }

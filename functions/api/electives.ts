@@ -50,9 +50,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
             } catch (e: any) {
                 // Handle missing column (schema mismatch only, table is already ensured)
                 if (e.message && e.message.includes("no column named")) {
-                    console.log("Schema mismatch detected (" + e.message + "). Recreating tables...");
-                    await dropAllTables(env.DB);
-                    await ensureAllTables(env.DB);
+                    console.log("Schema mismatch detected (" + e.message + "). Attempting safe ALTER...");
+                    // Try adding missing columns safely instead of dropping all tables
+                    try {
+                        await env.DB.prepare("ALTER TABLE student_profiles ADD COLUMN dataset TEXT DEFAULT ''").run();
+                    } catch (_) { /* column may already exist */ }
 
                     // Retry
                     const profile = await env.DB.prepare(

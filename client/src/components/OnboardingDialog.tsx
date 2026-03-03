@@ -17,15 +17,11 @@ export default function OnboardingDialog() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (studentId.length === 4 || studentId.length === 5) {
+        if (studentId.length === 4) {
             const grade = studentId[0];
-            // 4자리: 2102 -> 반은 1번째 자리(1), 학번은 2~3번째 자리(02)
-            // 5자리: 21012 -> 반은 1~2번째 자리(10), 학번은 3~4번째 자리(12)
-            const classNumStr = studentId.length === 4 ? studentId[1] : studentId.substring(1, 3);
-            const studentNumStr = studentId.length === 4 ? studentId.substring(2) : studentId.substring(3);
-
-            const classNum = parseInt(classNumStr).toString();
-            const studentNumber = parseInt(studentNumStr).toString();
+            const classNum = studentId[1];
+            // 0으로 시작하는 번호 처리 (05 -> 5)
+            const studentNumber = parseInt(studentId.substring(2)).toString();
 
             if (parseInt(grade) >= 1 && parseInt(grade) <= 3 && parseInt(classNum) >= 1) {
                 setConfig({
@@ -35,7 +31,7 @@ export default function OnboardingDialog() {
                     studentNumber
                 });
             } else {
-                alert("올바른 학번 형식이 아닙니다. (예: 1102, 11002)");
+                alert("올바른 학번 형식이 아닙니다. (예: 1102)");
             }
         }
     };
@@ -59,13 +55,13 @@ export default function OnboardingDialog() {
                             id="studentId"
                             type="text"
                             inputMode="numeric"
-                            maxLength={5}
-                            pattern="\d{4,5}"
-                            placeholder="예시) 1102 또는 11002"
+                            maxLength={4}
+                            pattern="\d{4}"
+                            placeholder="예) 1102 (1학년 1반 02번)"
                             value={studentId}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                 const val = e.target.value.replace(/[^0-9]/g, "");
-                                if (val.length <= 5) setStudentId(val);
+                                if (val.length <= 4) setStudentId(val);
                             }}
                             className={`text-center h-20 md:h-[84px] py-0 ${studentId.length === 0
                                 ? "text-base md:text-lg font-normal tracking-normal indent-0"
@@ -76,7 +72,7 @@ export default function OnboardingDialog() {
                         />
                     </div>
 
-                    <Button type="submit" className="w-full h-12 md:h-14 text-lg md:text-xl font-bold md:font-semibold" disabled={studentId.length !== 4 && studentId.length !== 5}>
+                    <Button type="submit" className="w-full h-12 md:h-14 text-lg md:text-xl font-bold md:font-semibold" disabled={studentId.length !== 4}>
                         설정 저장
                     </Button>
                 </form>
