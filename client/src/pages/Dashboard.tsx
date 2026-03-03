@@ -1104,10 +1104,19 @@ export default function Dashboard() {
 
                             const isEmptyClass = item && item.subject.trim() === "빈교실";
 
-                            // 1. Exact match across all classes for this timeslot
+                            // 선생님 이름 매칭 헬퍼: Comcigan 2글자 약칭 ↔ 풀네임 양방향 허용
+                            const teacherMatches = (timetableTeacher: string, etList: string[]): boolean => {
+                              const tt = timetableTeacher.trim();
+                              return etList.some(et => {
+                                const e = et.trim();
+                                return e === tt || e.startsWith(tt) || tt.startsWith(e);
+                              });
+                            };
+
+                            // 1. Subject + teacher match (약칭/풀네임 양방향) across all classes
                             let matchingSlot = slotItems.find(t =>
                               t.subject.trim() === electiveSelection.subject.trim() &&
-                              electiveTeachers.includes(t.teacher.trim())
+                              teacherMatches(t.teacher, electiveTeachers)
                             );
 
                             if (matchingSlot) {
@@ -1115,13 +1124,13 @@ export default function Dashboard() {
                               teacherFound = true;
                             }
 
-                            // 2. Intersection match on base class (if subject changed abbreviation but teacher is identical)
-                            if (!teacherFound && item && item.teacher && electiveTeachers.includes(item.teacher.trim())) {
+                            // 2. Intersection match on base class (약칭/풀네임 양방향)
+                            if (!teacherFound && item && item.teacher && teacherMatches(item.teacher, electiveTeachers)) {
                               displayTeacher = item.teacher;
                               teacherFound = true;
                             }
 
-                            // 3. Subject match on base class (only if student didn't specify teachers, or teacher was substituted)
+                            // 3. Subject match on base class (only if student didn't specify teachers)
                             if (!teacherFound && electiveTeachers.length === 0 && item && item.subject.trim() === electiveSelection.subject.trim()) {
                               displayTeacher = item.teacher;
                               teacherFound = true;
@@ -1129,6 +1138,15 @@ export default function Dashboard() {
 
                             // 4. Any subject match across all classes (if base class is empty OR student didn't specify teachers)
                             if (!teacherFound && (electiveTeachers.length === 0 || isEmptyClass)) {
+                              matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
+                              if (matchingSlot) {
+                                displayTeacher = matchingSlot.teacher;
+                                teacherFound = true;
+                              }
+                            }
+
+                            // 4.5. Subject-only fallback: 선생님 이름 형식 불일치(2글자 약칭 vs 풀네임)로 위 단계 실패 시 최종 대응
+                            if (!teacherFound && electiveTeachers.length > 0 && !isEmptyClass) {
                               matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
                               if (matchingSlot) {
                                 displayTeacher = matchingSlot.teacher;
@@ -1144,7 +1162,7 @@ export default function Dashboard() {
                                 displayTeacher = electiveTeachers[0] || "";
                               }
                             } else {
-                              // 5. Final fallback: The elective class is NOT running today (e.g., completely changed to a generic class like '미창박상').
+                              // Final fallback: The elective class is NOT running today (e.g., completely changed to a generic class like '미창박상').
                               // Or computedGroups misidentified the group.
                               isElectiveActive = false;
                               if (item) {
