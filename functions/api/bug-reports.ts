@@ -1,4 +1,4 @@
-import { createBugReportsTable } from "../../db_schema";
+import { createBugReportsTable } from "../db_schema";
 
 interface Env {
     DB: any;
