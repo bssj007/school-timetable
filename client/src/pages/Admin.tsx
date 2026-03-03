@@ -1509,7 +1509,11 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
     const [selectedDataset, setSelectedDataset] = useState("_auto_");
     const [resolvedDataset, setResolvedDataset] = useState("");
     const [selectedClass, setSelectedClass] = useState("all");
-    const [savingCells, setSavingCells] = useState<Record<string, boolean>>({});
+    // pendingChanges: key = "classNum-studentNumber", value = full electives object for that student
+    const [pendingChanges, setPendingChanges] = useState<Record<string, Record<string, any>>>({});
+    const [isSaving, setIsSaving] = useState(false);
+
+    const hasPendingChanges = Object.keys(pendingChanges).length > 0;
 
     // Fetch admin settings (for active_datasets)
     const settingsQuery = useQuery({
@@ -1569,28 +1573,38 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
         enabled: !!resolvedDataset
     });
 
-    // Fetch all student profiles for the grade
+    // Fetch all student profiles for the grade — real-time refresh when no pending changes
     const profilesQuery = useQuery({
         queryKey: ["admin", "allStudentProfiles", selectedGrade],
         queryFn: async () => {
             const res = await fetch(`/api/electives?type=all-students&grade=${selectedGrade}`);
             return res.json();
         },
-        enabled: !!selectedGrade
+        enabled: !!selectedGrade,
+        refetchInterval: hasPendingChanges ? false : 5000, // 5s auto-refresh when no edits
     });
 
     // Build group → subjects mapping from elective config
+    // classCode can be compound like "A,B" or "A,B,C,D", split into individual groups.
+    // Filter out "?" entries (no valid classCode).
     const groupSubjects = useMemo(() => {
         if (!electiveConfigQuery.data || !Array.isArray(electiveConfigQuery.data)) return {};
         const map: Record<string, { subject: string; teacher: string; fullSubjectName: string }[]> = {};
         for (const cfg of electiveConfigQuery.data) {
-            const code = cfg.classCode || "?";
-            if (!map[code]) map[code] = [];
-            map[code].push({
+            const rawCode = cfg.classCode || "";
+            if (!rawCode || rawCode === "?") continue; // Skip invalid classCodes
+            const codes = rawCode.split(",").map((c: string) => c.trim()).filter(Boolean);
+            const entry = {
                 subject: cfg.subject,
                 teacher: cfg.originalTeacher || cfg.fullTeacherName || "",
                 fullSubjectName: cfg.fullSubjectName || cfg.subject,
-            });
+            };
+            for (const code of codes) {
+                if (!map[code]) map[code] = [];
+                if (!map[code].some((e: { subject: string }) => e.subject === entry.subject)) {
+                    map[code].push(entry);
+                }
+            }
         }
         return map;
     }, [electiveConfigQuery.data]);
@@ -1621,8 +1635,8 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
         return rows;
     }, [selectedClass]);
 
-    // Get current elective for a student + group
-    const getElective = (key: string, groupCode: string): string => {
+    // Get current elective for a student + group (server state)
+    const getServerElective = (key: string, groupCode: string): string => {
         const profile = profilesMap[key];
         if (!profile || !profile.electives) return "";
         try {
@@ -1637,14 +1651,49 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
         return "";
     };
 
-    // Save a single cell
-    const handleCellChange = async (classNum: number, studentNumber: number, groupCode: string, subject: string) => {
-        const key = `${classNum}-${studentNumber}`;
-        const cellKey = `${key}-${groupCode}`;
-        setSavingCells(prev => ({ ...prev, [cellKey]: true }));
+    // Get display value: pending change > server value
+    const getDisplayElective = (key: string, groupCode: string): string => {
+        if (pendingChanges[key] && groupCode in pendingChanges[key]) {
+            const entry = pendingChanges[key][groupCode];
+            if (!entry) return "";
+            if (typeof entry === "object" && entry.subject) return entry.subject;
+            if (typeof entry === "string") return entry;
+            return "";
+        }
+        return getServerElective(key, groupCode);
+    };
 
-        try {
-            // Build the full electives object
+    // Handle local cell change (does NOT save to server)
+    const handleCellChange = (classNum: number, studentNumber: number, groupCode: string, subject: string) => {
+        const key = `${classNum}-${studentNumber}`;
+        const subjectConfig = groupSubjects[groupCode]?.find(s => s.subject === subject);
+
+        setPendingChanges(prev => {
+            const existing = prev[key] || {};
+            const newEntry = subject
+                ? { subject, teacher: subjectConfig?.teacher || "", fullSubjectName: subjectConfig?.fullSubjectName || subject }
+                : null; // null means "clear this group"
+            return { ...prev, [key]: { ...existing, [groupCode]: newEntry } };
+        });
+    };
+
+    // Cancel all pending changes
+    const handleCancel = () => {
+        setPendingChanges({});
+    };
+
+    // Save all pending changes to server
+    const handleSaveAll = async () => {
+        setIsSaving(true);
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const [key, groupChanges] of Object.entries(pendingChanges)) {
+            const [classNumStr, studentNumberStr] = key.split("-");
+            const classNum = parseInt(classNumStr);
+            const studentNumber = parseInt(studentNumberStr);
+
+            // Build the full electives object: merge server state + pending changes
             const profile = profilesMap[key];
             let electives: Record<string, any> = {};
             if (profile?.electives) {
@@ -1653,56 +1702,56 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                 } catch { electives = {}; }
             }
 
-            // Find the config for this subject in this group
-            const subjectConfig = groupSubjects[groupCode]?.find(s => s.subject === subject);
-
-            if (subject) {
-                electives[groupCode] = {
-                    subject: subject,
-                    teacher: subjectConfig?.teacher || "",
-                    fullSubjectName: subjectConfig?.fullSubjectName || subject,
-                };
-            } else {
-                delete electives[groupCode];
+            // Apply pending changes
+            for (const [groupCode, value] of Object.entries(groupChanges)) {
+                if (value) {
+                    electives[groupCode] = value;
+                } else {
+                    delete electives[groupCode];
+                }
             }
 
-            // Only save if there's at least one elective
-            if (Object.keys(electives).length === 0) {
-                // If empty, skip (don't save empty object)
-                setSavingCells(prev => ({ ...prev, [cellKey]: false }));
-                return;
+            // Skip if empty
+            if (Object.keys(electives).length === 0) continue;
+
+            try {
+                await fetch("/api/electives", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        grade: parseInt(selectedGrade),
+                        classNum,
+                        studentNumber,
+                        electives,
+                        dataset: resolvedDataset,
+                    }),
+                });
+                successCount++;
+            } catch {
+                errorCount++;
             }
-
-            await fetch("/api/electives", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    grade: parseInt(selectedGrade),
-                    classNum,
-                    studentNumber,
-                    electives,
-                    dataset: resolvedDataset,
-                }),
-            });
-
-            // Update local cache
-            queryClient.invalidateQueries({ queryKey: ["admin", "allStudentProfiles", selectedGrade] });
-        } catch (err) {
-            console.error("Failed to save elective:", err);
-            toast.error("저장 실패");
-        } finally {
-            setSavingCells(prev => ({ ...prev, [cellKey]: false }));
         }
+
+        if (errorCount > 0) {
+            toast.error(`${errorCount}건 저장 실패, ${successCount}건 성공`);
+        } else if (successCount > 0) {
+            toast.success(`${successCount}건 저장 완료`);
+        }
+
+        setPendingChanges({});
+        queryClient.invalidateQueries({ queryKey: ["admin", "allStudentProfiles", selectedGrade] });
+        setIsSaving(false);
     };
 
     const isLoading = electiveConfigQuery.isLoading || profilesQuery.isLoading;
+    const changedStudentCount = Object.keys(pendingChanges).length;
 
     return (
         <div className="flex flex-col h-full gap-4">
             {/* Header Controls */}
             <div className="flex flex-wrap gap-2 items-center pb-4 border-b">
                 <h3 className="text-lg font-bold flex-1">학생 선택과목 사전입력</h3>
-                <Select value={selectedGrade} onValueChange={setSelectedGrade}>
+                <Select value={selectedGrade} onValueChange={(val) => { setSelectedGrade(val); setPendingChanges({}); }}>
                     <SelectTrigger className="w-[100px]">
                         <SelectValue placeholder="학년" />
                     </SelectTrigger>
@@ -1711,7 +1760,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                         <SelectItem value="3">3학년</SelectItem>
                     </SelectContent>
                 </Select>
-                <Select value={selectedDataset} onValueChange={(val) => { setSelectedDataset(val); }}>
+                <Select value={selectedDataset} onValueChange={(val) => { setSelectedDataset(val); setPendingChanges({}); }}>
                     <SelectTrigger className="w-[180px]">
                         <SelectValue placeholder="데이터셋" />
                     </SelectTrigger>
@@ -1768,23 +1817,24 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                         </TableHeader>
                         <TableBody>
                             {studentRows.map(row => {
-                                const hasAnyData = groupCodes.some(code => getElective(row.key, code));
+                                const hasAnyData = groupCodes.some(code => getDisplayElective(row.key, code));
+                                const hasChanges = !!pendingChanges[row.key];
                                 return (
                                     <TableRow
                                         key={row.key}
-                                        className={hasAnyData ? "bg-blue-50/30" : ""}
+                                        className={hasChanges ? "bg-yellow-50/60" : hasAnyData ? "bg-blue-50/30" : ""}
                                     >
                                         <TableCell className="sticky left-0 bg-white z-10 font-mono font-bold text-sm border-r">
                                             {selectedGrade}{row.classNum}{String(row.studentNumber).padStart(2, "0")}
                                         </TableCell>
                                         {groupCodes.map(code => {
-                                            const current = getElective(row.key, code);
-                                            const cellKey = `${row.key}-${code}`;
-                                            const isSaving = savingCells[cellKey];
+                                            const display = getDisplayElective(row.key, code);
+                                            const serverVal = getServerElective(row.key, code);
+                                            const isChanged = pendingChanges[row.key] && code in pendingChanges[row.key];
                                             return (
                                                 <TableCell key={code} className="p-1">
                                                     <Select
-                                                        value={current || "_empty_"}
+                                                        value={display || "_empty_"}
                                                         onValueChange={(val) => handleCellChange(
                                                             row.classNum,
                                                             row.studentNumber,
@@ -1793,7 +1843,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                                                         )}
                                                         disabled={isSaving}
                                                     >
-                                                        <SelectTrigger className={`h-8 text-xs ${current ? "border-blue-200 bg-blue-50" : "border-gray-200"} ${isSaving ? "opacity-50" : ""}`}>
+                                                        <SelectTrigger className={`h-8 text-xs ${isChanged ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-300" : display ? "border-blue-200 bg-blue-50" : "border-gray-200"}`}>
                                                             <SelectValue placeholder="-" />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -1817,12 +1867,25 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
             </div>
 
             {/* Status Bar */}
-            <div className="flex justify-between items-center text-xs text-gray-400 pt-1 border-t">
-                <span>
+            <div className="flex justify-between items-center text-xs pt-1 border-t">
+                <span className="text-gray-400">
                     총 {studentRows.length}명 ·
                     저장된 프로필: {profilesQuery.data?.length || 0}개
+                    {!hasPendingChanges && <span className="ml-2 text-green-500">● 실시간 동기화 중</span>}
                 </span>
-                <span>셀 변경 시 자동 저장됩니다</span>
+                {hasPendingChanges ? (
+                    <div className="flex items-center gap-2">
+                        <span className="text-yellow-600 font-medium">{changedStudentCount}명 변경됨</span>
+                        <Button variant="outline" size="sm" onClick={handleCancel} disabled={isSaving}>
+                            취소
+                        </Button>
+                        <Button size="sm" onClick={handleSaveAll} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
+                            {isSaving ? "저장 중..." : "변경사항 저장"}
+                        </Button>
+                    </div>
+                ) : (
+                    <span className="text-gray-400">변경사항 없음</span>
+                )}
             </div>
         </div>
     );
