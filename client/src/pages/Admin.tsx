@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug
 } from "lucide-react";
 import { BridgeManager } from './AdminBridge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1168,19 +1168,25 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                 if (!grouped[code]) grouped[code] = [];
                 if (grouped[code].some(r => r.subject === c.subject)) return;
 
+                // Find all slots where this subject appears
                 const subjectSlots = allSlots.filter((s: any) =>
                     s.subject && s.subject.trim() === c.subject.trim()
                 );
+
+                // For each subject slot, check if there's a free period in ANY class
+                // at the same weekday+classTime (indicating a parallel free period exists)
                 const freePeriodSet = new Set<string>();
                 subjectSlots.forEach((ss: any) => {
-                    const sameSlotSlots = allSlots.filter((s: any) =>
-                        s.weekday === ss.weekday && s.classTime === ss.classTime
+                    const sameTimeSlots = allSlots.filter((s: any) =>
+                        s.weekday === ss.weekday &&
+                        s.classTime === ss.classTime
                     );
-                    const hasFreePeriodInSameSlot = sameSlotSlots.some((s: any) =>
+                    const hasFreePeriod = sameTimeSlots.some((s: any) =>
                         FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
                     );
-                    if (hasFreePeriodInSameSlot) {
-                        const label = `${WEEKDAY_LABELS[ss.weekday - 1]}${ss.classTime}`;
+                    if (hasFreePeriod) {
+                        // weekday is 0-indexed (0=Mon, 4=Fri)
+                        const label = `${WEEKDAY_LABELS[ss.weekday]}${ss.classTime}`;
                         freePeriodSet.add(label);
                     }
                 });
@@ -1380,6 +1386,121 @@ function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string })
 }
 
 // ----------------------------------------------------------------------
+// 6.9 Bug Report Manager (오류신고 현황)
+// ----------------------------------------------------------------------
+function BugReportManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    // Fetch settings to get current toggle state
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        }
+    });
+
+    const isBugReportEnabled = settingsQuery.data?.bug_report_enabled !== 'false';
+
+    const toggleMutation = useMutation({
+        mutationFn: async (enabled: boolean) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ bug_report_enabled: enabled ? 'true' : 'false' })
+            });
+            if (!res.ok) throw new Error("Failed to update setting");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        }
+    });
+
+    // Fetch all bug reports
+    const reportsQuery = useQuery({
+        queryKey: ["admin", "bugReports"],
+        queryFn: async () => {
+            const res = await fetch("/api/bug-reports", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("Failed to fetch bug reports");
+            return res.json();
+        }
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: async (id: number) => {
+            const res = await fetch(`/api/bug-reports?id=${id}`, {
+                method: "DELETE",
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("Failed to delete");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "bugReports"] });
+        }
+    });
+
+    const reports = reportsQuery.data || [];
+
+    return (
+        <div className="space-y-4">
+            {/* Toggle */}
+            <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
+                <div className="flex items-center gap-2">
+                    <Bug className="w-5 h-5 text-red-500" />
+                    <div>
+                        <p className="font-semibold text-sm">버그제보 버튼 표시</p>
+                        <p className="text-xs text-gray-500">OFF 시 메인페이지에서 오류신고 버튼을 숨깁니다</p>
+                    </div>
+                </div>
+                <Switch
+                    checked={isBugReportEnabled}
+                    onCheckedChange={(checked) => toggleMutation.mutate(checked)}
+                />
+            </div>
+
+            {/* Reports List */}
+            <div className="space-y-2">
+                <p className="text-sm font-bold text-gray-700">신고 목록 ({reports.length}건)</p>
+                {reportsQuery.isLoading ? (
+                    <p className="text-sm text-gray-400">로딩 중...</p>
+                ) : reports.length === 0 ? (
+                    <p className="text-sm text-gray-400">접수된 오류신고가 없습니다.</p>
+                ) : (
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                        {reports.map((report: any) => (
+                            <div key={report.id} className="p-3 border rounded-lg bg-white flex flex-col gap-1">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className="text-xs">
+                                            {report.grade ? `${report.grade}학년 ${report.classNum}반 ${report.studentNumber}번` : '미입력'}
+                                        </Badge>
+                                        <span className="text-xs text-gray-400">
+                                            {report.createdAt ? new Date(report.createdAt + 'Z').toLocaleString() : ''}
+                                        </span>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-gray-400 hover:text-red-500"
+                                        onClick={() => deleteMutation.mutate(report.id)}
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                                <p className="text-sm text-gray-800 whitespace-pre-wrap">{report.message}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------
 // 7. Etc Manager (Miscellaneous features like Raw Comcigan Data)
 // ----------------------------------------------------------------------
 function EtcManager({ adminPassword }: { adminPassword: string }) {
@@ -1469,6 +1590,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 >
                     <Grid2X2 className="w-4 h-4 mr-2" />
                     반 / 공강 확인기
+                </Button>
+                <Button
+                    variant={selectedMenu === "bug-report-manager" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("bug-report-manager")}
+                >
+                    <Bug className="w-4 h-4 mr-2" />
+                    오류신고 현황
                 </Button>
                 {/* Additional list items can go here later */}
             </div>
@@ -1581,6 +1710,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <ClassFreePeriodChecker adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "bug-report-manager" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">오류신고 현황</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <BugReportManager adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}

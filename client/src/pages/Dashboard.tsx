@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert } from "lucide-react";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
@@ -134,6 +134,11 @@ export default function Dashboard() {
   const initialConfigRef = useRef(`${grade}-${classNum}-${studentNumber}`);
   // Track whether the instruction tooltip was visible before the elective dialog opened
   const tooltipWasVisibleRef = useRef(false);
+
+  // Bug report state
+  const [showBugReportDialog, setShowBugReportDialog] = useState(false);
+  const [bugReportMessage, setBugReportMessage] = useState("");
+  const [isBugReportSending, setIsBugReportSending] = useState(false);
 
   // Extract datasetId early for use in effects
   const datasetId = (queryClient.getQueryData(['timetable', schoolName, grade, classNum]) as any)?.datasetId || '';
@@ -710,6 +715,27 @@ export default function Dashboard() {
 
   const isRestricted = Boolean(settings?.restricted_grades?.includes(parseInt(grade)) && !settings?.is_whitelisted);
   const isKakaoRestricted = Boolean(settings?.kakao_login_restricted && !settings?.is_whitelisted);
+  const isBugReportEnabled = Boolean(settings?.bug_report_enabled);
+
+  const handleBugReportSubmit = async () => {
+    if (!bugReportMessage.trim()) return;
+    setIsBugReportSending(true);
+    try {
+      const res = await fetch('/api/bug-reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grade, classNum, studentNumber, message: bugReportMessage })
+      });
+      if (!res.ok) throw new Error();
+      toast.success('오류신고가 전송되었습니다.');
+      setBugReportMessage('');
+      setShowBugReportDialog(false);
+    } catch {
+      toast.error('신고 전송에 실패했습니다.');
+    } finally {
+      setIsBugReportSending(false);
+    }
+  };
 
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
 
@@ -736,6 +762,17 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-2">
+          {isBugReportEnabled && (
+            <Button
+              variant="default"
+              size="sm"
+              className="h-9 rounded-full px-4 font-bold text-xs bg-red-500 hover:bg-red-600 text-white"
+              onClick={() => setShowBugReportDialog(true)}
+            >
+              <AlertTriangle className="h-4 w-4 mr-1" />
+              오류신고
+            </Button>
+          )}
           {kakaoUser ? (
             <div className="flex items-center gap-2 sm:gap-3 bg-gray-50 pr-1 pl-3 py-1 rounded-full border border-gray-100">
               <div className="hidden sm:flex flex-col items-end">
@@ -782,6 +819,38 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Bug Report Dialog */}
+      <Dialog open={showBugReportDialog} onOpenChange={setShowBugReportDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>오류신고</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-gray-500">
+              발견한 오류나 문제점을 설명해 주세요.
+            </p>
+            <Textarea
+              placeholder="예) 시간표에서 3교시 과목명이 잘못 표시됩니다."
+              value={bugReportMessage}
+              onChange={(e) => setBugReportMessage(e.target.value)}
+              rows={4}
+            />
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowBugReportDialog(false)}>
+                취소
+              </Button>
+              <Button
+                className="bg-red-500 hover:bg-red-600 text-white"
+                onClick={handleBugReportSubmit}
+                disabled={isBugReportSending || !bugReportMessage.trim()}
+              >
+                {isBugReportSending ? '전송 중...' : '신고 전송'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-row justify-between items-center gap-2 md:gap-4 mb-6 md:hidden">
         <div>
@@ -843,8 +912,19 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {isBugReportEnabled && (
+            <Button
+              variant="default"
+              size="sm"
+              className="h-9 rounded-full px-3 font-bold text-xs bg-red-500 hover:bg-red-600 text-white ml-auto"
+              onClick={() => setShowBugReportDialog(true)}
+            >
+              <AlertTriangle className="h-4 w-4 mr-1" />
+              오류신고
+            </Button>
+          )}
           {kakaoUser && (
-            <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-100 h-10 text-sm ml-auto md:ml-0">
+            <div className={`flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-100 h-10 text-sm ${isBugReportEnabled ? '' : 'ml-auto'} md:ml-0`}>
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
               카카오 알림 활성
             </div>
@@ -1164,13 +1244,21 @@ export default function Dashboard() {
                               )}
                               {item || isElectiveActive ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-0">
-                                  <div className={`font-bold text-sm md:text-base leading-tight truncate w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}>
-                                    {isCancelledByFreePeriod ? (
-                                      <span>
-                                        <span className="line-through opacity-60">{displaySubject}</span>
-                                        <span className={`ml-1 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"}`}>(공강)</span>
-                                      </span>
-                                    ) : displaySubject}
+                                  <div
+                                    className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}
+                                    style={{
+                                      fontSize: displaySubject.length > 6 ? '9px' : displaySubject.length > 4 ? '11px' : undefined,
+                                      wordBreak: displaySubject.length > 6 ? 'keep-all' : undefined,
+                                    }}
+                                  >
+                                    <span className={displaySubject.length <= 4 ? "text-sm md:text-base" : ""}>
+                                      {isCancelledByFreePeriod ? (
+                                        <span>
+                                          <span className="line-through opacity-60">{displaySubject}</span>
+                                          <span className={`ml-1 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"}`}>(공강)</span>
+                                        </span>
+                                      ) : displaySubject}
+                                    </span>
                                   </div>
                                   <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">
                                     {displayClassName

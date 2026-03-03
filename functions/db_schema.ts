@@ -4,7 +4,8 @@ export const ALL_TABLES = [
     "ip_profiles",
     "student_profiles",
     "elective_config",
-    "dataset_bridges"
+    "dataset_bridges",
+    "bug_reports"
 ];
 
 export const createStudentProfilesTable = `
@@ -81,6 +82,17 @@ CREATE TABLE IF NOT EXISTS dataset_bridges (
 );
 `;
 
+export const createBugReportsTable = `
+CREATE TABLE IF NOT EXISTS bug_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    grade INTEGER,
+    classNum INTEGER,
+    studentNumber INTEGER,
+    message TEXT NOT NULL,
+    createdAt TEXT DEFAULT (datetime('now'))
+);
+`;
+
 export async function ensureAllTables(db: any) {
     try {
         await db.prepare(createStudentProfilesTable).run();
@@ -88,6 +100,7 @@ export async function ensureAllTables(db: any) {
         await db.prepare(createCookieProfilesTable).run();
         await db.prepare(createElectiveConfigTable).run();
         await db.prepare(createDatasetBridgesTable).run();
+        await db.prepare(createBugReportsTable).run();
         console.log("All tables ensured.");
     } catch (e) {
         console.error("Error ensuring tables:", e);
