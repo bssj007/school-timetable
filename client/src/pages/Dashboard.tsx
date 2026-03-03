@@ -348,75 +348,79 @@ export default function Dashboard() {
       lastValidGroupsRef.current = {};
       return {};
     }
-    if (!allClassesTimetable || allClassesTimetable.length === 0 || !electiveConfigs || electiveConfigs.length === 0) {
+    // 시간표 데이터 자체가 없으면 마지막 유효값 유지
+    if (!allClassesTimetable || allClassesTimetable.length === 0) {
       return lastValidGroupsRef.current;
     }
 
-    const subjectTeacherToGroups = new Map<string, string[]>();
-    const subjectToGroups = new Map<string, string[]>();
-
-    electiveConfigs.forEach((c: any) => {
-      if (c.isMovingClass !== 0 && c.classCode) {
-        const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
-        const subj = c.subject.trim();
-
-        // Optional fallback to just subject
-        const existing = subjectToGroups.get(subj) || [];
-        subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
-
-        // Strict subject + teacher mapping
-        // We must include BOTH originalTeacher and fullTeacherName, because
-        // Comcigan usually provides a 2-character teacher name (originalTeacher).
-        const teacherNames = [];
-        if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
-        if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
-
-        const uniqueTeachers = Array.from(new Set(teacherNames));
-
-        uniqueTeachers.forEach((tName: string) => {
-          const key = `${subj}|${tName}`;
-          const existingKey = subjectTeacherToGroups.get(key) || [];
-          subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
-        });
-      }
-    });
-
     const cellGroups: Record<string, string> = {};
 
-    for (let w = 0; w < 5; w++) {
-      for (let p = 1; p <= 7; p++) {
-        const slots = allClassesTimetable.filter(t => t.weekday === w && t.classTime === p);
-        if (slots.length === 0) continue;
+    // electiveConfigs가 있을 때만 자동 감지 수행
+    if (electiveConfigs && electiveConfigs.length > 0) {
+      const subjectTeacherToGroups = new Map<string, string[]>();
+      const subjectToGroups = new Map<string, string[]>();
 
-        const groupCounts: Record<string, number> = {};
-        slots.forEach(slot => {
-          const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
-          let groups = subjectTeacherToGroups.get(key);
+      electiveConfigs.forEach((c: any) => {
+        if (c.isMovingClass !== 0 && c.classCode) {
+          const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
+          const subj = c.subject.trim();
 
-          if (!groups || groups.length === 0) {
-            groups = subjectToGroups.get(slot.subject.trim());
-          }
+          // Optional fallback to just subject
+          const existing = subjectToGroups.get(subj) || [];
+          subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
 
-          if (groups) {
-            groups.forEach(g => {
-              groupCounts[g] = (groupCounts[g] || 0) + 1;
-            });
-          }
-        });
+          // Strict subject + teacher mapping
+          // We must include BOTH originalTeacher and fullTeacherName, because
+          // Comcigan usually provides a 2-character teacher name (originalTeacher).
+          const teacherNames = [];
+          if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
+          if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
 
-        const entries = Object.entries(groupCounts);
-        if (entries.length > 0) {
-          entries.sort((a, b) => b[1] - a[1]);
-          const maxGroup = entries[0][0];
-          const maxCount = entries[0][1];
-          if (maxCount >= 1) {
-            cellGroups[`${w}-${p}`] = maxGroup;
+          const uniqueTeachers = Array.from(new Set(teacherNames));
+
+          uniqueTeachers.forEach((tName: string) => {
+            const key = `${subj}|${tName}`;
+            const existingKey = subjectTeacherToGroups.get(key) || [];
+            subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
+          });
+        }
+      });
+
+      for (let w = 0; w < 5; w++) {
+        for (let p = 1; p <= 7; p++) {
+          const slots = allClassesTimetable.filter(t => t.weekday === w && t.classTime === p);
+          if (slots.length === 0) continue;
+
+          const groupCounts: Record<string, number> = {};
+          slots.forEach(slot => {
+            const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
+            let groups = subjectTeacherToGroups.get(key);
+
+            if (!groups || groups.length === 0) {
+              groups = subjectToGroups.get(slot.subject.trim());
+            }
+
+            if (groups) {
+              groups.forEach(g => {
+                groupCounts[g] = (groupCounts[g] || 0) + 1;
+              });
+            }
+          });
+
+          const entries = Object.entries(groupCounts);
+          if (entries.length > 0) {
+            entries.sort((a, b) => b[1] - a[1]);
+            const maxGroup = entries[0][0];
+            const maxCount = entries[0][1];
+            if (maxCount >= 1) {
+              cellGroups[`${w}-${p}`] = maxGroup;
+            }
           }
         }
       }
     }
 
-    // Apply Overrides
+    // Override는 electiveConfigs 유무와 무관하게 항상 적용
     if (settings?.elective_group_overrides?.[grade]) {
       const gradeOverrides = settings.elective_group_overrides[grade];
       for (const [cellKey, overrideValue] of Object.entries(gradeOverrides)) {
