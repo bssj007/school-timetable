@@ -1093,13 +1093,8 @@ export default function Dashboard() {
                           let displaySubject = item ? item.subject : "-";
                           let displayTeacher = item ? item.teacher : "";
 
-                          const isFreePeriod = item && item.subject ? item.subject.trim().includes("공강") : false;
-
-                          // Override 셀 여부 확인 (지금은 별도 처리 없이 로직 단순화로 통합)
-                          const cellKey = `${weekdayIdx}-${classTime}`;
-
                           let isElectiveActive = false;
-                          if (group && electiveSelection && !isFreePeriod) {
+                          if (group && electiveSelection) {
                             // 그룹이 할당되고 학생의 선택과목이 있으면 항상 표시
                             // (override든 자동감지든 group이 결정됐으면 그걸 신뢰)
                             displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject;

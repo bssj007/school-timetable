@@ -79,6 +79,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
     const [execElectives, setExecElectives] = useState(true);
     const [execProfiles, setExecProfiles] = useState(true);
     const [execAssessments, setExecAssessments] = useState(true);
+    const [execOverrides, setExecOverrides] = useState(false);
     const [isExecuting, setIsExecuting] = useState(false);
 
     // 1. Fetch Datasets
@@ -269,7 +270,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             return data;
         },
         onSuccess: (data) => {
-            toast.success(`마이그레이션이 완료되었습니다. (선택과목 복사: ${data.results.totalElectiveConfigsCopied}, 학생 프로필 업데이트: ${data.results.totalStudentProfilesUpdated}, 수행평가 수정: ${data.results.totalAssessmentsUpdated})`);
+            toast.success(`마이그레이션이 완료되었습니다. (선택과목 복사: ${data.results.totalElectiveConfigsCopied}, 학생 프로필 업데이트: ${data.results.totalStudentProfilesUpdated}, 수행평가 수정: ${data.results.totalAssessmentsUpdated}${data.results.overridesMigrated ? ', 그룹 강제 지정 보존 완료' : ''})`);
             queryClient.invalidateQueries({ queryKey: ["admin"] });
             setIsExecuting(false);
         },
@@ -330,7 +331,8 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             options: {
                 migrateElectiveConfig: execElectives,
                 migrateStudentProfiles: execProfiles,
-                migrateAssessments: execAssessments
+                migrateAssessments: execAssessments,
+                migrateGroupOverrides: execOverrides
             }
         });
     };
@@ -671,6 +673,16 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                     <Checkbox checked={execAssessments} onCheckedChange={(v) => setExecAssessments(!!v)} />
                                                 </label>
 
+                                                {targetGrade !== '1' && (
+                                                    <label className="flex flex-row items-center justify-between border border-orange-200 p-3 rounded-lg cursor-pointer hover:bg-orange-50">
+                                                        <div className="space-y-0.5">
+                                                            <p className="font-medium text-base">그룹 강제 지정 포함</p>
+                                                            <p className="text-xs text-slate-500">관리자가 설정한 날짜/교시별 그룹 override를 현재 설정에 유지/복사</p>
+                                                        </div>
+                                                        <Checkbox checked={execOverrides} onCheckedChange={(v) => setExecOverrides(!!v)} />
+                                                    </label>
+                                                )}
+
                                                 {targetGrade === '1' && (
                                                     <p className="text-xs text-amber-600 font-medium mt-2">
                                                         * 1학년은 독립된 선택과목 구조가 없으므로 해당 옵션들이 비활성화됩니다.
@@ -680,7 +692,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                 <Button
                                                     className="w-full mt-4 bg-purple-600 hover:bg-purple-700 text-white"
                                                     onClick={handleExecute}
-                                                    disabled={isExecuting || hasMappingChanges() || !selectedBridgeId || (!execElectives && !execProfiles && !execAssessments) || (targetGrade === '1' && !execAssessments)}
+                                                    disabled={isExecuting || hasMappingChanges() || !selectedBridgeId || (!execElectives && !execProfiles && !execAssessments && !execOverrides) || (targetGrade === '1' && !execAssessments)}
                                                 >
                                                     {isExecuting ? "실행 중..." : "선택 옵션 마이그레이션 실행"}
                                                 </Button>

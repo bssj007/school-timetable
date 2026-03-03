@@ -17,46 +17,6 @@ export interface KakaoUser {
 }
 
 const COOKIE_NAME = "school_timetable_config";
-const LS_KEY = "school_timetable_config"; // localStorage 백업 키
-
-function readConfig(): UserConfig {
-    const empty: UserConfig = { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissedV2: false };
-    if (typeof document === "undefined") return empty;
-
-    // 1순위: 쿠키
-    const match = document.cookie.match(new RegExp('(^| )' + COOKIE_NAME + '=([^;]+)'));
-    if (match) {
-        try {
-            return JSON.parse(decodeURIComponent(match[2]));
-        } catch (e) {
-            console.error("Failed to parse config cookie", e);
-        }
-    }
-
-    // 2순위: localStorage (쿠키 삭제 후 복구)
-    try {
-        const ls = localStorage.getItem(LS_KEY);
-        if (ls) return JSON.parse(ls);
-    } catch (e) {
-        console.error("Failed to read config from localStorage", e);
-    }
-
-    return empty;
-}
-
-function writeConfig(config: UserConfig) {
-    // 쿠키 저장 (만료 1년)
-    const expires = new Date();
-    expires.setFullYear(expires.getFullYear() + 1);
-    document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(config))}; expires=${expires.toUTCString()}; path=/`;
-
-    // localStorage 백업
-    try {
-        localStorage.setItem(LS_KEY, JSON.stringify(config));
-    } catch (e) {
-        console.error("Failed to write config to localStorage", e);
-    }
-}
 
 interface UserConfigContextType {
     schoolName: string;
@@ -73,7 +33,15 @@ interface UserConfigContextType {
 const UserConfigContext = createContext<UserConfigContextType | undefined>(undefined);
 
 export function UserConfigProvider({ children }: { children: ReactNode }) {
-    const [config, setConfigState] = useState<UserConfig>(() => readConfig());
+    const [config, setConfigState] = useState<UserConfig>(() => {
+        // 초기 로드 시 쿠키 확인
+        if (typeof document === "undefined") return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissedV2: false };
+        const match = document.cookie.match(new RegExp('(^| )' + COOKIE_NAME + '=([^;]+)'));
+        if (match) {
+            try { return JSON.parse(decodeURIComponent(match[2])); } catch { }
+        }
+        return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissedV2: false };
+    });
 
     const [kakaoUser, setKakaoUser] = useState<KakaoUser | null>(null);
 
@@ -112,7 +80,10 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     const setConfig = (newConfig: Partial<UserConfig>) => {
         const updated = { ...config, ...newConfig };
         setConfigState(updated);
-        writeConfig(updated);
+        // 쿠키 저장 (만료 1년)
+        const expires = new Date();
+        expires.setFullYear(expires.getFullYear() + 1);
+        document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(updated))}; expires=${expires.toUTCString()}; path=/`;
 
         // If dismissing instruction, sync to server
         if (newConfig.instructionDismissedV2) {
