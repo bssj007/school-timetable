@@ -114,9 +114,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400 });
         }
 
-        // 빈 선택과목 저장 방지: {} 로 기존 데이터를 덮어쓰는 것을 차단
+        // 빈 선택과목 저장 방지: {} 로 기존 데이터를 덮어쓰는 것을 차단 (allowEmpty 플래그로 관리자 도구에서 명시적 클리어 허용)
         const electivesObj = typeof electives === 'string' ? JSON.parse(electives) : electives;
-        if (typeof electivesObj !== 'object' || Array.isArray(electivesObj) || Object.keys(electivesObj).length === 0) {
+        if (!body.allowEmpty && (typeof electivesObj !== 'object' || Array.isArray(electivesObj) || Object.keys(electivesObj).length === 0)) {
             return new Response(JSON.stringify({ error: "electives must be a non-empty object" }), { status: 400 });
         }
 

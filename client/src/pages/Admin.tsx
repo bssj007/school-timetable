@@ -1590,9 +1590,12 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
     const groupSubjects = useMemo(() => {
         if (!electiveConfigQuery.data || !Array.isArray(electiveConfigQuery.data)) return {};
         const map: Record<string, { subject: string; teacher: string; fullSubjectName: string }[]> = {};
+        const EXCLUDED_SUBJECTS = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "채플", "Empty", "Free"];
         for (const cfg of electiveConfigQuery.data) {
             const rawCode = cfg.classCode || "";
             if (!rawCode || rawCode === "?") continue; // Skip invalid classCodes
+            // Skip excluded subjects (빈교실, 공강 etc.)
+            if (EXCLUDED_SUBJECTS.some(ex => (cfg.subject || "").trim().includes(ex))) continue;
             const codes = rawCode.split(",").map((c: string) => c.trim()).filter(Boolean);
             const entry = {
                 subject: cfg.subject,
@@ -1711,8 +1714,11 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                 }
             }
 
-            // Skip if empty
-            if (Object.keys(electives).length === 0) continue;
+            // If all electives cleared, send with allowEmpty flag
+            const isEmpty = Object.keys(electives).length === 0;
+            if (isEmpty) {
+                electives = {}; // explicitly empty
+            }
 
             try {
                 await fetch("/api/electives", {
@@ -1722,8 +1728,9 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                         grade: parseInt(selectedGrade),
                         classNum,
                         studentNumber,
-                        electives,
+                        electives: isEmpty ? {} : electives,
                         dataset: resolvedDataset,
+                        allowEmpty: isEmpty,
                     }),
                 });
                 successCount++;
@@ -1765,7 +1772,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                         <SelectValue placeholder="데이터셋" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="_auto_">자동 (현재 설정)</SelectItem>
+                        <SelectItem value="_auto_">자동{resolvedDataset && selectedDataset === "_auto_" ? ` (${resolvedDataset})` : ""}</SelectItem>
                         <SelectItem value="MANUAL_PLAN">MANUAL_PLAN</SelectItem>
                         {timetableProps.map((prop: string) => (
                             <SelectItem key={prop} value={prop}>{prop}</SelectItem>
