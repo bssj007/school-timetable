@@ -346,7 +346,9 @@ export default function ElectiveSelectionDialog({
 
     // ── Render ─────────────────────────────────────────────────────────
 
-    const isLoading = configLoading || profileLoading;
+    // datasetId가 없으면 시간표 로딩 전이므로 로딩 중으로 처리
+    // (쿼리가 disabled 상태라 isLoading=false지만, 실제로는 데이터 준비 안 된 상태)
+    const isLoading = configLoading || profileLoading || !datasetId;
 
     return (
         <Dialog open={isOpen} onOpenChange={() => { }}>

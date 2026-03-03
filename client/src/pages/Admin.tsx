@@ -1074,11 +1074,12 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
 // ----------------------------------------------------------------------
 function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
     const [grade, setGrade] = useState("2");
-    const [dataset, setDataset] = useState("");
+    const [selectedDataset, setSelectedDataset] = useState("_auto_");
+    const [resolvedDataset, setResolvedDataset] = useState("");
 
     const WEEKDAY_LABELS = ["월", "화", "수", "목", "금"];
 
-    // 1. settings (active_datasets + overrides)
+    // 1. settings (active_datasets)
     const settingsQuery = useQuery({
         queryKey: ["admin", "settings", "groupOverrides"],
         queryFn: async () => {
@@ -1088,39 +1089,68 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
         },
     });
 
+    // 2. raw comcigan data (for dataset list)
+    const adminRawQuery = useQuery({
+        queryKey: ["admin", "rawComcigan_FreePeriodChecker"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/raw_comcigan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ schoolName: "부산성지고" })
+            });
+            const json = await res.json();
+            if (!res.ok || json?.error) return null;
+            return json.data;
+        }
+    });
+
+    const timetableProps = useMemo(() => {
+        const raw = adminRawQuery.data;
+        if (!raw) return [];
+        const keys = Object.keys(raw);
+        return keys.filter(k => {
+            const val = raw[k];
+            return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+        });
+    }, [adminRawQuery.data]);
+
+    // Resolve dataset: _auto_ → active from settings, else manual
     useEffect(() => {
-        if (settingsQuery.data) {
+        if (selectedDataset === "_auto_" && settingsQuery.data) {
             try {
                 const ds = JSON.parse(settingsQuery.data.active_datasets || "{}");
-                setDataset(ds[grade] || "");
-            } catch { }
+                setResolvedDataset(ds[grade] || "");
+            } catch { setResolvedDataset(""); }
+        } else if (selectedDataset !== "_auto_") {
+            setResolvedDataset(selectedDataset);
         }
-    }, [settingsQuery.data, grade]);
+    }, [selectedDataset, settingsQuery.data, grade]);
 
-    // 2. elective configs (그룹별 과목·반 정보)
+    // 3. elective configs (그룹별 과목·반 정보)
     const electiveConfigQuery = useQuery({
-        queryKey: ["admin", "electiveConfig", grade, dataset],
+        queryKey: ["admin", "electiveConfig", grade, resolvedDataset],
         queryFn: async () => {
-            if (!dataset) return [];
-            const res = await fetch(`/api/electives?grade=${grade}&dataset=${dataset}`);
+            if (!resolvedDataset) return [];
+            const res = await fetch(`/api/electives?grade=${grade}&dataset=${resolvedDataset}`);
             if (!res.ok) throw new Error("elective config fetch failed");
             return res.json();
         },
-        enabled: !!dataset,
+        enabled: !!resolvedDataset,
     });
 
-    // 3. all-class timetable (공강 교시 감지용)
+    // 4. all-class timetable (공강 교시 감지용)
     const timetableQuery = useQuery({
-        queryKey: ["admin", "allClassesTimetable", grade, dataset],
+        queryKey: ["admin", "allClassesTimetable_FreePeriodChecker", grade, resolvedDataset],
         queryFn: async () => {
-            if (!dataset) return [];
-            const res = await fetch(`/api/timetable?grade=${grade}&classNum=all&dataset=${dataset}`);
+            if (!resolvedDataset) return [];
+            const url = `/api/comcigan?type=timetable&grade=${grade}&classNum=all` +
+                (selectedDataset !== '_auto_' ? `&dataset=${resolvedDataset}` : '');
+            const res = await fetch(url);
             if (!res.ok) throw new Error("timetable fetch failed");
             const json = await res.json();
-            // flatten: [{classNum, weekday, classTime, subject, teacher}]
-            return Array.isArray(json) ? json : (json.slots || json.timetable || []);
+            return json.data || [];
         },
-        enabled: !!dataset,
+        enabled: !!resolvedDataset,
     });
 
     const configs: any[] = useMemo(() => electiveConfigQuery.data || [], [electiveConfigQuery.data]);
@@ -1128,12 +1158,10 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
 
     const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free"];
 
-    // Build group → [{subject, className, freePeriods:[{weekday, period}]}]
     const tableRows = useMemo(() => {
         const grouped: Record<string, { subject: string; fullSubjectName?: string; className?: string; freePeriods: string[] }[]> = {};
 
         configs.forEach((c: any) => {
-            // only moving class subjects with a classCode
             if (c.isMovingClass === 0) return;
             if (!c.classCode) return;
             const codes = (c.classCode as string).split(",").map(s => s.trim()).filter(Boolean);
@@ -1141,19 +1169,15 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                 if (!grouped[code]) grouped[code] = [];
                 if (grouped[code].some(r => r.subject === c.subject)) return;
 
-                // detect free periods: slots where this subject is not found but 빈교실/공강 is
-                // First build: which (weekday, period) slots belong to this group
-                // (i.e., any class has this subject at that slot)
-                const subjectSlots = allSlots.filter(s =>
+                const subjectSlots = allSlots.filter((s: any) =>
                     s.subject && s.subject.trim() === c.subject.trim()
                 );
-                // Among those, find ones where there's ALSO a 빈교실/공강 slot (same weekday+period, different class)
                 const freePeriodSet = new Set<string>();
-                subjectSlots.forEach(ss => {
-                    const sameSlotSlots = allSlots.filter(s =>
+                subjectSlots.forEach((ss: any) => {
+                    const sameSlotSlots = allSlots.filter((s: any) =>
                         s.weekday === ss.weekday && s.classTime === ss.classTime
                     );
-                    const hasFreePeriodInSameSlot = sameSlotSlots.some(s =>
+                    const hasFreePeriodInSameSlot = sameSlotSlots.some((s: any) =>
                         FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
                     );
                     if (hasFreePeriodInSameSlot) {
@@ -1179,21 +1203,35 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
     return (
         <Card className="border-0 shadow-none">
             <CardHeader className="pb-3">
-                <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap">
                     <CardTitle className="text-base">반 / 공강 확인기</CardTitle>
-                    <select value={grade} onChange={e => setGrade(e.target.value)} className="border rounded px-2 py-1 text-sm">
+                    <select value={grade} onChange={e => { setGrade(e.target.value); setSelectedDataset("_auto_"); }} className="border rounded px-2 py-1 text-sm">
                         <option value="2">2학년</option>
                         <option value="3">3학년</option>
                     </select>
-                    {dataset && <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-0.5 rounded">{dataset}</span>}
+                    <select
+                        value={selectedDataset}
+                        onChange={e => setSelectedDataset(e.target.value)}
+                        className="border rounded px-2 py-1 text-sm"
+                    >
+                        <option value="_auto_">자동 (활성 데이터셋)</option>
+                        {timetableProps.map(tp => (
+                            <option key={tp} value={tp}>{tp}</option>
+                        ))}
+                    </select>
+                    {resolvedDataset && (
+                        <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-0.5 rounded">{resolvedDataset}</span>
+                    )}
                 </div>
                 <CardDescription>그룹이 있는 이동반 과목의 강의실(반)과 공강 정보를 표시합니다.</CardDescription>
             </CardHeader>
             <CardContent>
                 {isLoading ? (
                     <div className="text-slate-400 py-6 text-center text-sm">로딩 중...</div>
-                ) : !dataset ? (
-                    <div className="text-amber-600 text-sm py-4">해당 학년의 활성 데이터셋이 없습니다.</div>
+                ) : !resolvedDataset ? (
+                    <div className="text-amber-600 text-sm py-4">
+                        데이터셋을 선택하거나 활성 데이터셋을 설정해주세요.
+                    </div>
                 ) : tableRows.length === 0 ? (
                     <div className="text-slate-400 text-sm py-4">그룹이 할당된 이동반 과목이 없습니다.</div>
                 ) : (
@@ -1219,18 +1257,14 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                                                     {groupCode}
                                                 </td>
                                             )}
-                                            <td className="border border-slate-300 px-4 py-2 text-center">
-                                                {row.subject}
-                                            </td>
+                                            <td className="border border-slate-300 px-4 py-2 text-center">{row.subject}</td>
                                             <td className="border border-slate-300 px-4 py-2 text-center">
                                                 {row.className || <span className="text-slate-300">-</span>}
                                             </td>
                                             <td className="border border-slate-300 px-4 py-2 text-center">
                                                 {row.freePeriods.length > 0
                                                     ? row.freePeriods.map(fp => (
-                                                        <span key={fp} className="inline-block mr-1 text-blue-600 font-medium">
-                                                            {fp} 공강
-                                                        </span>
+                                                        <span key={fp} className="inline-block mr-1 text-blue-600 font-medium">{fp} 공강</span>
                                                     ))
                                                     : <span className="text-slate-300">-</span>
                                                 }
@@ -1246,6 +1280,11 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
         </Card>
     );
 }
+
+
+
+
+
 
 // ----------------------------------------------------------------------
 function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string }) {
