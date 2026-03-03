@@ -335,7 +335,8 @@ export default function Dashboard() {
       const res = await fetch('/api/settings/public');
       if (!res.ok) return { hide_past_assessments: false };
       return res.json();
-    }
+    },
+    staleTime: 0, // 항상 최신 설정을 가져오도록 (그룹 override 등 즉시 반영)
   });
 
   // 각 시간(교시)별 다수결 그룹 계산
@@ -1173,8 +1174,8 @@ export default function Dashboard() {
                               `}
                             >
                               {isElectiveActive && group && (
-                                <div className="absolute top-0 right-0 px-1 rounded-bl-md bg-orange-100 text-orange-800 text-[9px] md:text-[10px] font-bold">
-                                  {group}그룹
+                                <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400" : "bg-orange-100 text-orange-800"}`}>
+                                  {group}<span className="hidden md:inline">그룹</span>
                                 </div>
                               )}
                               {item || isElectiveActive ? (

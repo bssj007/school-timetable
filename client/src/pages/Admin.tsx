@@ -800,6 +800,7 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
         onSuccess: () => {
             toast.success("그룹 강제 지정이 저장되었습니다.");
             queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
         },
         onError: (err) => {
             toast.error(`저장 실패: ${err.message}`);
