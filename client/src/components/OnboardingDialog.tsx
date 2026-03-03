@@ -8,7 +8,10 @@ export default function OnboardingDialog() {
     const { isConfigured, setConfig } = useUserConfig();
     const [studentId, setStudentId] = useState("");
 
-    const isOpen = !isConfigured;
+    const location = window.location.pathname;
+
+    const isSystemAdmin = location.startsWith("/admin");
+    const isOpen = !isConfigured && !isSystemAdmin;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

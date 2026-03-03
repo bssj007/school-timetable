@@ -424,20 +424,18 @@ function ElectiveManager({ password }: { password: string }) {
 
                                     // Check subject name for keywords (Korean & English) - removed teacher check as per user request
                                     // Also checking for potential invisible characters or whitespace
-                                    const subjectKeyword = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].find(ex => item.subject.trim().includes(ex));
+                                    const subjectKeyword = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].filter(ex => item.subject.trim().includes(ex))[0];
 
-                                    const matchedKeyword = subjectKeyword;
-                                    const isDisabled = !!matchedKeyword;
-                                    const isDeleted = item.isDeleted;
+                                    const matchedKeyword = subjectKeyword || null;
+                                    const isFreePeriod = !!matchedKeyword;
+                                    const isDeleted = Boolean(item.isDeleted);
 
                                     return (
                                         <TableRow
                                             key={`${item.subject}-${item.teacher}`}
-                                            className={`${isDisabled ? "opacity-50 bg-gray-50 cursor-not-allowed" : ""} ${isDeleted ? "opacity-60 bg-red-50/30" : ""}`}
+                                            className={`${isFreePeriod ? "opacity-75 bg-gray-50/50" : ""} ${isDeleted ? "opacity-60 bg-red-50/30" : ""}`}
                                             onClick={() => {
-                                                if (isDisabled) {
-                                                    toast.error(`${matchedKeyword}은(는) 선택할 수 없습니다.`);
-                                                }
+                                                // Optional wrapper if we want clicking to still work
                                             }}
                                         >
                                             <TableCell className={`font-medium ${isDeleted ? "line-through text-red-400" : ""}`}>
@@ -449,8 +447,8 @@ function ElectiveManager({ password }: { password: string }) {
                                                     value={item.fullSubjectName || ""}
                                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(originalIndex, "fullSubjectName", e.target.value)}
                                                     placeholder="풀네임 입력"
-                                                    className={`max-w-[150px] ${isDisabled ? "pointer-events-none" : ""}`}
-                                                    disabled={isDisabled || isDeleted}
+                                                    className={`max-w-[150px] ${isFreePeriod ? "pointer-events-none" : ""}`}
+                                                    disabled={isFreePeriod || isDeleted}
                                                 />
                                             </TableCell>
                                             <TableCell className={`text-gray-500 ${isDeleted ? "line-through text-red-400" : ""}`}>{item.teacher}</TableCell>
@@ -460,13 +458,12 @@ function ElectiveManager({ password }: { password: string }) {
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            className={`w-[130px] justify-between ${isDisabled ? "pointer-events-none opacity-50" : ""}`}
-                                                            disabled={isDisabled}
+                                                            className={`w-[130px] justify-between ${isFreePeriod ? "" : ""}`} // Allowed even if free period
                                                         >
                                                             <span className="truncate">
-                                                                {item.classCode ? item.classCode.split(',').filter(Boolean).join(", ") : "선택"}
+                                                                {item.classCode ? item.classCode.split(',').filter(Boolean).join(", ") : (isFreePeriod ? "분반 선택(공강)" : "선택")}
                                                             </span>
-                                                            <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+                                                            <ChevronDown className="h-4 w-4 opacity-70 shrink-0" />
                                                         </Button>
                                                     </PopoverTrigger>
                                                     <PopoverContent className="w-[180px] p-2">
@@ -499,11 +496,11 @@ function ElectiveManager({ password }: { password: string }) {
                                             </TableCell>
                                             <TableCell>
                                                 <Input
-                                                    value={item.fullTeacherName}
+                                                    value={item.fullTeacherName || ""}
                                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(originalIndex, "fullTeacherName", e.target.value)}
                                                     placeholder="선생님 성함 입력"
-                                                    className={`max-w-[200px] ${isDisabled ? "pointer-events-none" : ""}`}
-                                                    disabled={isDisabled}
+                                                    className={`max-w-[200px] ${isFreePeriod ? "pointer-events-none" : ""}`}
+                                                    disabled={isFreePeriod || isDeleted}
                                                 />
                                             </TableCell>
                                             <TableCell>
@@ -511,23 +508,23 @@ function ElectiveManager({ password }: { password: string }) {
                                                     <Button
                                                         variant={item.isMovingClass ? "default" : "outline"}
                                                         size="sm"
-                                                        className={`h-7 text-xs px-2 ${item.isMovingClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
+                                                        className={`h-7 text-xs px-2 ${item.isMovingClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"} ${isFreePeriod ? "pointer-events-none" : ""}`}
                                                         onClick={() => {
                                                             handleInputChange(originalIndex, "isMovingClass", true);
                                                         }}
-                                                        disabled={isDisabled}
+                                                        disabled={isFreePeriod || isDeleted}
                                                     >
                                                         이동 O
                                                     </Button>
                                                     <Button
                                                         variant={!item.isMovingClass ? "default" : "outline"}
                                                         size="sm"
-                                                        className={`h-7 text-xs px-2 ${!item.isMovingClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
+                                                        className={`h-7 text-xs px-2 ${!item.isMovingClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isFreePeriod ? "pointer-events-none" : ""}`}
                                                         onClick={() => {
                                                             handleInputChange(originalIndex, "isMovingClass", false);
                                                             handleInputChange(originalIndex, "className", ""); // clear className when turned off
                                                         }}
-                                                        disabled={isDisabled}
+                                                        disabled={isFreePeriod || isDeleted}
                                                     >
                                                         이동 X
                                                     </Button>
@@ -538,8 +535,8 @@ function ElectiveManager({ password }: { password: string }) {
                                                     value={item.className || ""}
                                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(originalIndex, "className", e.target.value)}
                                                     placeholder="예: 1,2,3"
-                                                    className={`max-w-[100px] ${(!item.isMovingClass || isDisabled) ? "bg-gray-100 pointer-events-none text-gray-400" : ""}`}
-                                                    disabled={!item.isMovingClass || isDisabled}
+                                                    className={`max-w-[100px] ${(!item.isMovingClass || isFreePeriod) ? "bg-gray-100 pointer-events-none text-gray-400" : ""}`}
+                                                    disabled={!item.isMovingClass || isFreePeriod || isDeleted}
                                                 />
                                             </TableCell>
                                             <TableCell>
@@ -547,22 +544,22 @@ function ElectiveManager({ password }: { password: string }) {
                                                     <Button
                                                         variant={item.isCombinedClass ? "default" : "outline"}
                                                         size="sm"
-                                                        className={`h-7 text-xs px-2 ${item.isCombinedClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
+                                                        className={`h-7 text-xs px-2 ${item.isCombinedClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"} ${isFreePeriod ? "pointer-events-none" : ""}`}
                                                         onClick={() => {
                                                             handleInputChange(originalIndex, "isCombinedClass", true);
                                                         }}
-                                                        disabled={isDisabled || isDeleted}
+                                                        disabled={isFreePeriod || isDeleted}
                                                     >
                                                         통반 O
                                                     </Button>
                                                     <Button
                                                         variant={!item.isCombinedClass ? "default" : "outline"}
                                                         size="sm"
-                                                        className={`h-7 text-xs px-2 ${!item.isCombinedClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
+                                                        className={`h-7 text-xs px-2 ${!item.isCombinedClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isFreePeriod ? "pointer-events-none" : ""}`}
                                                         onClick={() => {
                                                             handleInputChange(originalIndex, "isCombinedClass", false);
                                                         }}
-                                                        disabled={isDisabled || isDeleted}
+                                                        disabled={isFreePeriod || isDeleted}
                                                     >
                                                         통반 X
                                                     </Button>
@@ -2969,7 +2966,8 @@ function AutoFillAnalyzer({ data, adminPassword, onBack }: {
 
                 const isExcluded = ["빈교실", "공강", "채플", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => subj.trim().includes(ex));
 
-                const allCodes = isExcluded ? [] : myBlocks.map(b => b.code).filter(c => c !== "NO_GROUP");
+                // Always use blocks, even for excluded subjects (so free periods are linked to groups)
+                const allCodes = myBlocks.map(b => b.code).filter(c => c !== "NO_GROUP");
                 const isNoGroup = allCodes.length === 0;
 
                 const existingPayload = payloadMap.get(mappingKey);
@@ -2977,14 +2975,14 @@ function AutoFillAnalyzer({ data, adminPassword, onBack }: {
                     const existingCodes = existingPayload.classCode ? existingPayload.classCode.split(',') : [];
                     const mergedCodes = Array.from(new Set([...existingCodes, ...allCodes])).filter(Boolean).sort();
 
-                    existingPayload.classCode = isExcluded ? "" : mergedCodes.join(',');
+                    existingPayload.classCode = mergedCodes.join(',');
                     existingPayload.isMovingClass = isExcluded ? false : (existingPayload.isMovingClass || !isNoGroup);
                 } else {
                     payloadMap.set(mappingKey, {
                         grade: grade,
                         subject: subj,
                         originalTeacher: teacher,
-                        classCode: isExcluded ? "" : allCodes.sort().join(","),
+                        classCode: allCodes.sort().join(","),
                         isMovingClass: !isExcluded && !isNoGroup,
                         isCombinedClass: false,
                         dataset: targetDataset

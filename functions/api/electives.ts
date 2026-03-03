@@ -30,13 +30,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
         // 1. Fetch Student Profile
         if (type === "student") {
-            const grade = url.searchParams.get("grade");
-            const classNum = url.searchParams.get("classNum");
-            const studentNumber = url.searchParams.get("studentNumber");
+            const gradeStr = url.searchParams.get("grade");
+            const classNumStr = url.searchParams.get("classNum");
+            const studentNumberStr = url.searchParams.get("studentNumber");
 
-            if (!grade || !classNum || !studentNumber) {
+            if (!gradeStr || !classNumStr || !studentNumberStr) {
                 return new Response(JSON.stringify({ error: "Missing parameters" }), { status: 400 });
             }
+
+            const grade = parseInt(gradeStr);
+            const classNum = parseInt(classNumStr);
+            const studentNumber = parseInt(studentNumberStr);
 
             try {
                 const profile = await env.DB.prepare(

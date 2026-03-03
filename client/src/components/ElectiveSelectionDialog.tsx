@@ -195,6 +195,7 @@ export default function ElectiveSelectionDialog({
         const groups: Record<string, ElectiveConfig[]> = {};
         electiveConfigs.forEach(config => {
             if (config.isMovingClass === 0) return; // Skip non-moving
+            if (isMandatoryExcluded(config.subject)) return; // Explicitly ensure excluded subjects never appear in choices
             if (!config.classCode) return;
             const codes = config.classCode.split(',').map((c: string) => c.trim()).filter(Boolean);
             codes.forEach((code: string) => {
