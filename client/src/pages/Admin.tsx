@@ -1069,7 +1069,184 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
-// 6.6 Elective Input Mode Settings
+// 6.55 반/공강 확인기 (Class & Free-Period Checker)
+// 사진 형식: 그룹 | 선택과목 | 강의실 | 비고(공강 시)
+// ----------------------------------------------------------------------
+function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
+    const [grade, setGrade] = useState("2");
+    const [dataset, setDataset] = useState("");
+
+    const WEEKDAY_LABELS = ["월", "화", "수", "목", "금"];
+
+    // 1. settings (active_datasets + overrides)
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "groupOverrides"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("settings fetch failed");
+            return res.json();
+        },
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            try {
+                const ds = JSON.parse(settingsQuery.data.active_datasets || "{}");
+                setDataset(ds[grade] || "");
+            } catch { }
+        }
+    }, [settingsQuery.data, grade]);
+
+    // 2. elective configs (그룹별 과목·반 정보)
+    const electiveConfigQuery = useQuery({
+        queryKey: ["admin", "electiveConfig", grade, dataset],
+        queryFn: async () => {
+            if (!dataset) return [];
+            const res = await fetch(`/api/electives?grade=${grade}&dataset=${dataset}`);
+            if (!res.ok) throw new Error("elective config fetch failed");
+            return res.json();
+        },
+        enabled: !!dataset,
+    });
+
+    // 3. all-class timetable (공강 교시 감지용)
+    const timetableQuery = useQuery({
+        queryKey: ["admin", "allClassesTimetable", grade, dataset],
+        queryFn: async () => {
+            if (!dataset) return [];
+            const res = await fetch(`/api/timetable?grade=${grade}&classNum=all&dataset=${dataset}`);
+            if (!res.ok) throw new Error("timetable fetch failed");
+            const json = await res.json();
+            // flatten: [{classNum, weekday, classTime, subject, teacher}]
+            return Array.isArray(json) ? json : (json.slots || json.timetable || []);
+        },
+        enabled: !!dataset,
+    });
+
+    const configs: any[] = useMemo(() => electiveConfigQuery.data || [], [electiveConfigQuery.data]);
+    const allSlots: any[] = useMemo(() => timetableQuery.data || [], [timetableQuery.data]);
+
+    const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free"];
+
+    // Build group → [{subject, className, freePeriods:[{weekday, period}]}]
+    const tableRows = useMemo(() => {
+        const grouped: Record<string, { subject: string; fullSubjectName?: string; className?: string; freePeriods: string[] }[]> = {};
+
+        configs.forEach((c: any) => {
+            // only moving class subjects with a classCode
+            if (c.isMovingClass === 0) return;
+            if (!c.classCode) return;
+            const codes = (c.classCode as string).split(",").map(s => s.trim()).filter(Boolean);
+            codes.forEach(code => {
+                if (!grouped[code]) grouped[code] = [];
+                if (grouped[code].some(r => r.subject === c.subject)) return;
+
+                // detect free periods: slots where this subject is not found but 빈교실/공강 is
+                // First build: which (weekday, period) slots belong to this group
+                // (i.e., any class has this subject at that slot)
+                const subjectSlots = allSlots.filter(s =>
+                    s.subject && s.subject.trim() === c.subject.trim()
+                );
+                // Among those, find ones where there's ALSO a 빈교실/공강 slot (same weekday+period, different class)
+                const freePeriodSet = new Set<string>();
+                subjectSlots.forEach(ss => {
+                    const sameSlotSlots = allSlots.filter(s =>
+                        s.weekday === ss.weekday && s.classTime === ss.classTime
+                    );
+                    const hasFreePeriodInSameSlot = sameSlotSlots.some(s =>
+                        FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
+                    );
+                    if (hasFreePeriodInSameSlot) {
+                        const label = `${WEEKDAY_LABELS[ss.weekday - 1]}${ss.classTime}`;
+                        freePeriodSet.add(label);
+                    }
+                });
+
+                grouped[code].push({
+                    subject: c.subject,
+                    fullSubjectName: c.fullSubjectName,
+                    className: c.className,
+                    freePeriods: Array.from(freePeriodSet).sort(),
+                });
+            });
+        });
+
+        return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+    }, [configs, allSlots]);
+
+    const isLoading = settingsQuery.isLoading || electiveConfigQuery.isLoading || timetableQuery.isLoading;
+
+    return (
+        <Card className="border-0 shadow-none">
+            <CardHeader className="pb-3">
+                <div className="flex items-center gap-4 flex-wrap">
+                    <CardTitle className="text-base">반 / 공강 확인기</CardTitle>
+                    <select value={grade} onChange={e => setGrade(e.target.value)} className="border rounded px-2 py-1 text-sm">
+                        <option value="2">2학년</option>
+                        <option value="3">3학년</option>
+                    </select>
+                    {dataset && <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-0.5 rounded">{dataset}</span>}
+                </div>
+                <CardDescription>그룹이 있는 이동반 과목의 강의실(반)과 공강 정보를 표시합니다.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {isLoading ? (
+                    <div className="text-slate-400 py-6 text-center text-sm">로딩 중...</div>
+                ) : !dataset ? (
+                    <div className="text-amber-600 text-sm py-4">해당 학년의 활성 데이터셋이 없습니다.</div>
+                ) : tableRows.length === 0 ? (
+                    <div className="text-slate-400 text-sm py-4">그룹이 할당된 이동반 과목이 없습니다.</div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm border-collapse">
+                            <thead>
+                                <tr className="bg-slate-100 text-slate-700">
+                                    <th className="border border-slate-300 px-4 py-2 font-bold text-center w-14">그룹</th>
+                                    <th className="border border-slate-300 px-4 py-2 font-bold text-center">선택과목</th>
+                                    <th className="border border-slate-300 px-4 py-2 font-bold text-center">강의실</th>
+                                    <th className="border border-slate-300 px-4 py-2 font-bold text-center">비고</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {tableRows.map(([groupCode, subjects]) =>
+                                    subjects.map((row, idx) => (
+                                        <tr key={`${groupCode}-${row.subject}`} className="hover:bg-slate-50">
+                                            {idx === 0 && (
+                                                <td
+                                                    className="border border-slate-300 px-4 py-2 font-bold text-center align-middle bg-orange-50 text-orange-700 text-base"
+                                                    rowSpan={subjects.length}
+                                                >
+                                                    {groupCode}
+                                                </td>
+                                            )}
+                                            <td className="border border-slate-300 px-4 py-2 text-center">
+                                                {row.subject}
+                                            </td>
+                                            <td className="border border-slate-300 px-4 py-2 text-center">
+                                                {row.className || <span className="text-slate-300">-</span>}
+                                            </td>
+                                            <td className="border border-slate-300 px-4 py-2 text-center">
+                                                {row.freePeriods.length > 0
+                                                    ? row.freePeriods.map(fp => (
+                                                        <span key={fp} className="inline-block mr-1 text-blue-600 font-medium">
+                                                            {fp} 공강
+                                                        </span>
+                                                    ))
+                                                    : <span className="text-slate-300">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
 // ----------------------------------------------------------------------
 function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
@@ -1246,6 +1423,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <Settings className="w-4 h-4 mr-2" />
                     선택과목 입력방식
                 </Button>
+                <Button
+                    variant={selectedMenu === "class-free-period-checker" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("class-free-period-checker")}
+                >
+                    <Grid2X2 className="w-4 h-4 mr-2" />
+                    반 / 공강 확인기
+                </Button>
                 {/* Additional list items can go here later */}
             </div>
 
@@ -1346,6 +1531,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <ElectiveInputModeSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "class-free-period-checker" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">반 / 공강 확인기</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <ClassFreePeriodChecker adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}

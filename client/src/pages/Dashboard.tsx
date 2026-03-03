@@ -1094,14 +1094,12 @@ export default function Dashboard() {
                           let displayTeacher = item ? item.teacher : "";
 
                           let isElectiveActive = false;
+                          let isCancelledByFreePeriod = false;
+                          let displayClassName = ""; // 반(반이름) 표시용
                           if (group && electiveSelection) {
-                            // 그룹이 할당되고 학생의 선택과목이 있으면 항상 표시
-                            // (override든 자동감지든 group이 결정됐으면 그걸 신뢰)
                             displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject;
                             isElectiveActive = true;
 
-                            // 교사 이름: 시간표에서 해당 과목을 찾아 표시 (best-effort)
-                            // 없으면 선택과목에 저장된 교사 이름 사용
                             const electiveTeachers = electiveSelection.teacher
                               ? electiveSelection.teacher.split(",").map((t: string) => t.trim()).filter(Boolean)
                               : [];
@@ -1109,20 +1107,33 @@ export default function Dashboard() {
                               t => t.weekday === weekdayIdx && t.classTime === classTime
                             );
 
-                            // 과목명으로 시간표에서 해당 교사 찾기
                             const matchingSlot = slotItems.find(
                               t => t.subject.trim() === electiveSelection.subject.trim()
                             );
 
+                            // 선택과목이 없고 빈교실/공강만 있으면 취소선 표시
+                            const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free"];
+                            const hasFreePeriodSlot = slotItems.some(t =>
+                              FREE_KEYWORDS.some(k => t.subject.trim().includes(k))
+                            );
+                            if (!matchingSlot && hasFreePeriodSlot) {
+                              isCancelledByFreePeriod = true;
+                            }
+
                             if (matchingSlot) {
-                              // 시간표에서 찾은 교사 이름 (더 정확한 2글자 이름일 수 있음)
                               displayTeacher = matchingSlot.teacher;
                             } else if (electiveTeachers.length > 0) {
-                              // 시간표에 없으면 저장된 교사 이름 사용
                               displayTeacher = electiveTeachers[0];
                             } else {
                               displayTeacher = item ? item.teacher : "";
                             }
+
+                            // 반(className): electiveConfigs에서 group+subject로 조회
+                            const configEntry = (electiveConfigs || []).find((c: any) =>
+                              c.subject === electiveSelection.subject &&
+                              c.classCode?.split(",").map((s: string) => s.trim()).includes(group)
+                            );
+                            displayClassName = (configEntry as any)?.className || "";
                           }
 
                           return (
@@ -1152,8 +1163,19 @@ export default function Dashboard() {
                               )}
                               {item || isElectiveActive ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-0">
-                                  <div className={`font-bold text-sm md:text-base leading-tight truncate w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}>{displaySubject}</div>
-                                  <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">{displayTeacher}</div>
+                                  <div className={`font-bold text-sm md:text-base leading-tight truncate w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}>
+                                    {isCancelledByFreePeriod ? (
+                                      <span>
+                                        <span className="line-through opacity-60">{displaySubject}</span>
+                                        <span className={`ml-1 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"}`}>(공강)</span>
+                                      </span>
+                                    ) : displaySubject}
+                                  </div>
+                                  <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">
+                                    {displayClassName
+                                      ? <>{displayClassName}{displayTeacher ? <span className="ml-1 opacity-60">{displayTeacher}</span> : null}</>
+                                      : displayTeacher}
+                                  </div>
                                   {cellAssessments.length > 0 && (
                                     <div className="mt-0.5 flex-shrink-0">
                                       <div className="flex flex-wrap gap-0.5 justify-center">

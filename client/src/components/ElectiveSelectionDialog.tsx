@@ -342,7 +342,7 @@ export default function ElectiveSelectionDialog({
     });
 
     const canSaveSmart = (smartSelected.length === groupCount && smartAssigned !== null) || selectedSolution !== null;
-    const canSaveManual = Object.keys(electivesByGroup).every(g => manualSelections[g]);
+    const canSaveManual = Object.keys(electivesByGroup).length > 0 && Object.keys(electivesByGroup).every(g => manualSelections[g]);
 
     // ── Render ─────────────────────────────────────────────────────────
 
@@ -639,7 +639,7 @@ export default function ElectiveSelectionDialog({
                         )}
                         <Button
                             onClick={() => saveMutation.mutate(undefined)}
-                            disabled={(mode === "smart" ? !canSaveSmart : !canSaveManual) || saveMutation.isPending}
+                            disabled={(mode === "smart" ? !canSaveSmart : !canSaveManual) || saveMutation.isPending || isLoading}
                             className={`${(mode === "smart" ? canSaveSmart : canSaveManual) ? "bg-blue-600 hover:bg-blue-700" : ""}`}
                         >
                             {saveMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />저장 중...</> : "저장하고 시작하기"}

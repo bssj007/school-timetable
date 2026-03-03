@@ -95,6 +95,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400 });
         }
 
+        // 빈 선택과목 저장 방지: {} 로 기존 데이터를 덮어쓰는 것을 차단
+        const electivesObj = typeof electives === 'string' ? JSON.parse(electives) : electives;
+        if (typeof electivesObj !== 'object' || Array.isArray(electivesObj) || Object.keys(electivesObj).length === 0) {
+            return new Response(JSON.stringify({ error: "electives must be a non-empty object" }), { status: 400 });
+        }
+
         // Upsert student_profiles
         // Note: dataset added implicitly to avoid breaking schema immediately if not needed for constraints
         // For actual dataset tied user profiles, we should add a dataset column if requested.
