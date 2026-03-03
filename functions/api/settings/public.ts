@@ -7,7 +7,7 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode')").all();
+        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'bug_report_enabled')").all();
 
         const settings: any = {};
         if (rows && rows.results) {
@@ -40,6 +40,7 @@ export const onRequest = async (context: any) => {
             is_whitelisted: isWhitelisted,
             client_ip: clientIp,
             elective_input_mode: settings['elective_input_mode'] || 'auto',
+            bug_report_enabled: settings['bug_report_enabled'] !== 'false', // default true
         }), {
             headers: { 'Content-Type': 'application/json' }
         });

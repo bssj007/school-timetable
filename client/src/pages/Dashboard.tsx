@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert } from "lucide-react";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
@@ -134,6 +134,11 @@ export default function Dashboard() {
   const initialConfigRef = useRef(`${grade}-${classNum}-${studentNumber}`);
   // Track whether the instruction tooltip was visible before the elective dialog opened
   const tooltipWasVisibleRef = useRef(false);
+
+  // Bug report state
+  const [showBugReportDialog, setShowBugReportDialog] = useState(false);
+  const [bugReportMessage, setBugReportMessage] = useState("");
+  const [isBugReportSending, setIsBugReportSending] = useState(false);
 
   // Extract datasetId early for use in effects
   const datasetId = (queryClient.getQueryData(['timetable', schoolName, grade, classNum]) as any)?.datasetId || '';
@@ -335,7 +340,8 @@ export default function Dashboard() {
       const res = await fetch('/api/settings/public');
       if (!res.ok) return { hide_past_assessments: false };
       return res.json();
-    }
+    },
+    staleTime: 0, // 항상 최신 설정을 가져오도록 (그룹 override 등 즉시 반영)
   });
 
   // 각 시간(교시)별 다수결 그룹 계산
@@ -347,75 +353,80 @@ export default function Dashboard() {
       lastValidGroupsRef.current = {};
       return {};
     }
-    if (!allClassesTimetable || allClassesTimetable.length === 0 || !electiveConfigs || electiveConfigs.length === 0) {
+    // 시간표 데이터 자체가 없으면 마지막 유효값 유지
+    if (!allClassesTimetable || allClassesTimetable.length === 0) {
       return lastValidGroupsRef.current;
     }
 
-    const subjectTeacherToGroups = new Map<string, string[]>();
-    const subjectToGroups = new Map<string, string[]>();
-
-    electiveConfigs.forEach((c: any) => {
-      if (c.isMovingClass !== 0 && c.classCode) {
-        const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
-        const subj = c.subject.trim();
-
-        // Optional fallback to just subject
-        const existing = subjectToGroups.get(subj) || [];
-        subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
-
-        // Strict subject + teacher mapping
-        // We must include BOTH originalTeacher and fullTeacherName, because
-        // Comcigan usually provides a 2-character teacher name (originalTeacher).
-        const teacherNames = [];
-        if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
-        if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
-
-        const uniqueTeachers = Array.from(new Set(teacherNames));
-
-        uniqueTeachers.forEach((tName: string) => {
-          const key = `${subj}|${tName}`;
-          const existingKey = subjectTeacherToGroups.get(key) || [];
-          subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
-        });
-      }
-    });
-
     const cellGroups: Record<string, string> = {};
 
-    for (let w = 0; w < 5; w++) {
-      for (let p = 1; p <= 7; p++) {
-        const slots = allClassesTimetable.filter(t => t.weekday === w && t.classTime === p);
-        if (slots.length === 0) continue;
+    // electiveConfigs가 있을 때만 자동 감지 수행
+    if (electiveConfigs && electiveConfigs.length > 0) {
+      const subjectTeacherToGroups = new Map<string, string[]>();
+      const subjectToGroups = new Map<string, string[]>();
 
-        const groupCounts: Record<string, number> = {};
-        slots.forEach(slot => {
-          const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
-          let groups = subjectTeacherToGroups.get(key);
+      electiveConfigs.forEach((c: any) => {
+        const isFreePeriod = ["빈교실", "공강", "Empty", "Free"].some(k => (c.subject || "").includes(k));
+        if ((c.isMovingClass !== 0 || isFreePeriod) && c.classCode) {
+          const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
+          const subj = c.subject.trim();
 
-          if (!groups || groups.length === 0) {
-            groups = subjectToGroups.get(slot.subject.trim());
-          }
+          // Optional fallback to just subject
+          const existing = subjectToGroups.get(subj) || [];
+          subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
 
-          if (groups) {
-            groups.forEach(g => {
-              groupCounts[g] = (groupCounts[g] || 0) + 1;
-            });
-          }
-        });
+          // Strict subject + teacher mapping
+          // We must include BOTH originalTeacher and fullTeacherName, because
+          // Comcigan usually provides a 2-character teacher name (originalTeacher).
+          const teacherNames = [];
+          if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
+          if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
 
-        const entries = Object.entries(groupCounts);
-        if (entries.length > 0) {
-          entries.sort((a, b) => b[1] - a[1]);
-          const maxGroup = entries[0][0];
-          const maxCount = entries[0][1];
-          if (maxCount >= 1) {
-            cellGroups[`${w}-${p}`] = maxGroup;
+          const uniqueTeachers = Array.from(new Set(teacherNames));
+
+          uniqueTeachers.forEach((tName: string) => {
+            const key = `${subj}|${tName}`;
+            const existingKey = subjectTeacherToGroups.get(key) || [];
+            subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
+          });
+        }
+      });
+
+      for (let w = 0; w < 5; w++) {
+        for (let p = 1; p <= 7; p++) {
+          const slots = allClassesTimetable.filter(t => t.weekday === w && t.classTime === p);
+          if (slots.length === 0) continue;
+
+          const groupCounts: Record<string, number> = {};
+          slots.forEach(slot => {
+            const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
+            let groups = subjectTeacherToGroups.get(key);
+
+            if (!groups || groups.length === 0) {
+              groups = subjectToGroups.get(slot.subject.trim());
+            }
+
+            if (groups) {
+              groups.forEach(g => {
+                groupCounts[g] = (groupCounts[g] || 0) + 1;
+              });
+            }
+          });
+
+          const entries = Object.entries(groupCounts);
+          if (entries.length > 0) {
+            entries.sort((a, b) => b[1] - a[1]);
+            const maxGroup = entries[0][0];
+            const maxCount = entries[0][1];
+            if (maxCount >= 1) {
+              cellGroups[`${w}-${p}`] = maxGroup;
+            }
           }
         }
       }
     }
 
-    // Apply Overrides
+    // Override는 electiveConfigs 유무와 무관하게 항상 적용
     if (settings?.elective_group_overrides?.[grade]) {
       const gradeOverrides = settings.elective_group_overrides[grade];
       for (const [cellKey, overrideValue] of Object.entries(gradeOverrides)) {
@@ -704,6 +715,27 @@ export default function Dashboard() {
 
   const isRestricted = Boolean(settings?.restricted_grades?.includes(parseInt(grade)) && !settings?.is_whitelisted);
   const isKakaoRestricted = Boolean(settings?.kakao_login_restricted && !settings?.is_whitelisted);
+  const isBugReportEnabled = Boolean(settings?.bug_report_enabled);
+
+  const handleBugReportSubmit = async () => {
+    if (!bugReportMessage.trim()) return;
+    setIsBugReportSending(true);
+    try {
+      const res = await fetch('/api/bug-reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grade, classNum, studentNumber, message: bugReportMessage })
+      });
+      if (!res.ok) throw new Error();
+      toast.success('오류신고가 전송되었습니다.');
+      setBugReportMessage('');
+      setShowBugReportDialog(false);
+    } catch {
+      toast.error('신고 전송에 실패했습니다.');
+    } finally {
+      setIsBugReportSending(false);
+    }
+  };
 
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
 
@@ -730,6 +762,17 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-2">
+          {isBugReportEnabled && (
+            <Button
+              variant="default"
+              size="sm"
+              className="h-9 rounded-full px-4 font-bold text-xs bg-red-500 hover:bg-red-600 text-white"
+              onClick={() => setShowBugReportDialog(true)}
+            >
+              <AlertTriangle className="h-4 w-4 mr-1" />
+              오류신고
+            </Button>
+          )}
           {kakaoUser ? (
             <div className="flex items-center gap-2 sm:gap-3 bg-gray-50 pr-1 pl-3 py-1 rounded-full border border-gray-100">
               <div className="hidden sm:flex flex-col items-end">
@@ -776,6 +819,38 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Bug Report Dialog */}
+      <Dialog open={showBugReportDialog} onOpenChange={setShowBugReportDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>오류신고</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-gray-500">
+              발견한 오류나 문제점을 설명해 주세요.
+            </p>
+            <Textarea
+              placeholder="예) 시간표에서 3교시 과목명이 잘못 표시됩니다."
+              value={bugReportMessage}
+              onChange={(e) => setBugReportMessage(e.target.value)}
+              rows={4}
+            />
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowBugReportDialog(false)}>
+                취소
+              </Button>
+              <Button
+                className="bg-red-500 hover:bg-red-600 text-white"
+                onClick={handleBugReportSubmit}
+                disabled={isBugReportSending || !bugReportMessage.trim()}
+              >
+                {isBugReportSending ? '전송 중...' : '신고 전송'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-row justify-between items-center gap-2 md:gap-4 mb-6 md:hidden">
         <div>
@@ -837,12 +912,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {kakaoUser && (
-            <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-100 h-10 text-sm ml-auto md:ml-0">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              카카오 알림 활성
-            </div>
-          )}
+
         </div>
       </div>
 
@@ -1088,68 +1158,47 @@ export default function Dashboard() {
                           let displaySubject = item ? item.subject : "-";
                           let displayTeacher = item ? item.teacher : "";
 
-                          const isFreePeriod = item && item.subject ? item.subject.trim().includes("공강") : false;
-
                           let isElectiveActive = false;
-                          if (group && electiveSelection && !isFreePeriod) {
+                          let isCancelledByFreePeriod = false;
+                          let displayClassName = ""; // 반(반이름) 표시용
+                          if (group && electiveSelection) {
                             displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject;
-                            let teacherFound = false;
-                            const electiveTeachers = electiveSelection.teacher ? electiveSelection.teacher.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
-                            const slotItems = allClassesTimetable.filter(t => t.weekday === weekdayIdx && t.classTime === classTime);
+                            isElectiveActive = true;
 
-                            const isEmptyClass = item && item.subject.trim() === "빈교실";
-
-                            // 1. Exact match across all classes for this timeslot
-                            let matchingSlot = slotItems.find(t =>
-                              t.subject.trim() === electiveSelection.subject.trim() &&
-                              electiveTeachers.includes(t.teacher.trim())
+                            const electiveTeachers = electiveSelection.teacher
+                              ? electiveSelection.teacher.split(",").map((t: string) => t.trim()).filter(Boolean)
+                              : [];
+                            const slotItems = allClassesTimetable.filter(
+                              t => t.weekday === weekdayIdx && t.classTime === classTime
                             );
+
+                            const matchingSlot = slotItems.find(
+                              t => t.subject.trim() === electiveSelection.subject.trim()
+                            );
+
+                            // 선택과목이 없고 빈교실/공강만 있으면 취소선 표시
+                            const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free"];
+                            const hasFreePeriodSlot = slotItems.some(t =>
+                              FREE_KEYWORDS.some(k => t.subject.trim().includes(k))
+                            );
+                            if (!matchingSlot && hasFreePeriodSlot) {
+                              isCancelledByFreePeriod = true;
+                            }
 
                             if (matchingSlot) {
                               displayTeacher = matchingSlot.teacher;
-                              teacherFound = true;
-                            }
-
-                            // 2. Intersection match on base class (if subject changed abbreviation but teacher is identical)
-                            if (!teacherFound && item && item.teacher && electiveTeachers.includes(item.teacher.trim())) {
-                              displayTeacher = item.teacher;
-                              teacherFound = true;
-                            }
-
-                            // 3. Subject match on base class (only if student didn't specify teachers, or teacher was substituted)
-                            if (!teacherFound && electiveTeachers.length === 0 && item && item.subject.trim() === electiveSelection.subject.trim()) {
-                              displayTeacher = item.teacher;
-                              teacherFound = true;
-                            }
-
-                            // 4. Any subject match across all classes (if base class is empty OR student didn't specify teachers)
-                            if (!teacherFound && (electiveTeachers.length === 0 || isEmptyClass)) {
-                              matchingSlot = slotItems.find(t => t.subject.trim() === electiveSelection.subject.trim());
-                              if (matchingSlot) {
-                                displayTeacher = matchingSlot.teacher;
-                                teacherFound = true;
-                              }
-                            }
-
-                            if (teacherFound || isEmptyClass) {
-                              isElectiveActive = true;
-                              if (!teacherFound && isEmptyClass) {
-                                // Base class is empty, and we couldn't find the specific teacher. 
-                                // According to user, we MUST show the elective anyway since it's an empty class.
-                                displayTeacher = electiveTeachers[0] || "";
-                              }
+                            } else if (electiveTeachers.length > 0) {
+                              displayTeacher = electiveTeachers[0];
                             } else {
-                              // 5. Final fallback: The elective class is NOT running today (e.g., completely changed to a generic class like '미창박상').
-                              // Or computedGroups misidentified the group.
-                              isElectiveActive = false;
-                              if (item) {
-                                displaySubject = item.subject;
-                                displayTeacher = item.teacher;
-                              } else {
-                                displaySubject = "-";
-                                displayTeacher = "";
-                              }
+                              displayTeacher = item ? item.teacher : "";
                             }
+
+                            // 반(className): electiveConfigs에서 group+subject로 조회
+                            const configEntry = (electiveConfigs || []).find((c: any) =>
+                              c.subject === electiveSelection.subject &&
+                              c.classCode?.split(",").map((s: string) => s.trim()).includes(group)
+                            );
+                            displayClassName = (configEntry as any)?.className || "";
                           }
 
                           return (
@@ -1173,14 +1222,33 @@ export default function Dashboard() {
                               `}
                             >
                               {isElectiveActive && group && (
-                                <div className="absolute top-0 right-0 px-1 rounded-bl-md bg-orange-100 text-orange-800 text-[9px] md:text-[10px] font-bold">
-                                  {group}그룹
+                                <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400" : "bg-orange-100 text-orange-800"}`}>
+                                  {group}<span className="hidden md:inline">그룹</span>
                                 </div>
                               )}
                               {item || isElectiveActive ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-0">
-                                  <div className={`font-bold text-sm md:text-base leading-tight truncate w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}>{displaySubject}</div>
-                                  <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">{displayTeacher}</div>
+                                  <div
+                                    className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}
+                                    style={{
+                                      fontSize: displaySubject.length > 6 ? '9px' : displaySubject.length > 4 ? '11px' : undefined,
+                                      wordBreak: displaySubject.length > 6 ? 'keep-all' : undefined,
+                                    }}
+                                  >
+                                    <span className={displaySubject.length <= 4 ? "text-sm md:text-base" : ""}>
+                                      {isCancelledByFreePeriod ? (
+                                        <span>
+                                          <span className="line-through opacity-60">{displaySubject}</span>
+                                          <span className={`ml-1 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"}`}>(공강)</span>
+                                        </span>
+                                      ) : displaySubject}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">
+                                    {displayClassName
+                                      ? <>{displayClassName}{displayTeacher ? <span className="ml-1 opacity-60">{displayTeacher}</span> : null}</>
+                                      : displayTeacher}
+                                  </div>
                                   {cellAssessments.length > 0 && (
                                     <div className="mt-0.5 flex-shrink-0">
                                       <div className="flex flex-wrap gap-0.5 justify-center">

@@ -3,12 +3,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useUserConfig } from "@/contexts/UserConfigContext";
+import { useLocation } from "wouter";
 
 export default function OnboardingDialog() {
     const { isConfigured, setConfig } = useUserConfig();
     const [studentId, setStudentId] = useState("");
 
-    const isOpen = !isConfigured;
+    const [location] = useLocation();
+
+    const isSystemAdmin = location.startsWith("/admin");
+    const isOpen = !isConfigured && !isSystemAdmin;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -53,7 +57,7 @@ export default function OnboardingDialog() {
                             inputMode="numeric"
                             maxLength={4}
                             pattern="\d{4}"
-                            placeholder="예시) 1102 (1학년 1반 02번)"
+                            placeholder="예) 1102 (1학년 1반 02번)"
                             value={studentId}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                 const val = e.target.value.replace(/[^0-9]/g, "");

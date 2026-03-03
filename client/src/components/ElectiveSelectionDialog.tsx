@@ -195,6 +195,7 @@ export default function ElectiveSelectionDialog({
         const groups: Record<string, ElectiveConfig[]> = {};
         electiveConfigs.forEach(config => {
             if (config.isMovingClass === 0) return; // Skip non-moving
+            if (isMandatoryExcluded(config.subject)) return; // Explicitly ensure excluded subjects never appear in choices
             if (!config.classCode) return;
             const codes = config.classCode.split(',').map((c: string) => c.trim()).filter(Boolean);
             codes.forEach((code: string) => {
@@ -342,11 +343,13 @@ export default function ElectiveSelectionDialog({
     });
 
     const canSaveSmart = (smartSelected.length === groupCount && smartAssigned !== null) || selectedSolution !== null;
-    const canSaveManual = Object.keys(electivesByGroup).every(g => manualSelections[g]);
+    const canSaveManual = Object.keys(electivesByGroup).length > 0 && Object.keys(electivesByGroup).every(g => manualSelections[g]);
 
     // ── Render ─────────────────────────────────────────────────────────
 
-    const isLoading = configLoading || profileLoading;
+    // datasetId가 없으면 시간표 로딩 전이므로 로딩 중으로 처리
+    // (쿼리가 disabled 상태라 isLoading=false지만, 실제로는 데이터 준비 안 된 상태)
+    const isLoading = configLoading || profileLoading || !datasetId;
 
     return (
         <Dialog open={isOpen} onOpenChange={() => { }}>
@@ -639,7 +642,7 @@ export default function ElectiveSelectionDialog({
                         )}
                         <Button
                             onClick={() => saveMutation.mutate(undefined)}
-                            disabled={(mode === "smart" ? !canSaveSmart : !canSaveManual) || saveMutation.isPending}
+                            disabled={(mode === "smart" ? !canSaveSmart : !canSaveManual) || saveMutation.isPending || isLoading}
                             className={`${(mode === "smart" ? canSaveSmart : canSaveManual) ? "bg-blue-600 hover:bg-blue-700" : ""}`}
                         >
                             {saveMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />저장 중...</> : "저장하고 시작하기"}

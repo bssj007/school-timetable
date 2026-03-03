@@ -36,14 +36,9 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     const [config, setConfigState] = useState<UserConfig>(() => {
         // 초기 로드 시 쿠키 확인
         if (typeof document === "undefined") return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissedV2: false };
-
         const match = document.cookie.match(new RegExp('(^| )' + COOKIE_NAME + '=([^;]+)'));
         if (match) {
-            try {
-                return JSON.parse(decodeURIComponent(match[2]));
-            } catch (e) {
-                console.error("Failed to parse config cookie", e);
-            }
+            try { return JSON.parse(decodeURIComponent(match[2])); } catch { }
         }
         return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissedV2: false };
     });

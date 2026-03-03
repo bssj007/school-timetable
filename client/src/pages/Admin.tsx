@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug
 } from "lucide-react";
 import { BridgeManager } from './AdminBridge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -424,20 +424,18 @@ function ElectiveManager({ password }: { password: string }) {
 
                                     // Check subject name for keywords (Korean & English) - removed teacher check as per user request
                                     // Also checking for potential invisible characters or whitespace
-                                    const subjectKeyword = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].find(ex => item.subject.trim().includes(ex));
+                                    const subjectKeyword = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].filter(ex => item.subject.trim().includes(ex))[0];
 
-                                    const matchedKeyword = subjectKeyword;
-                                    const isDisabled = !!matchedKeyword;
-                                    const isDeleted = item.isDeleted;
+                                    const matchedKeyword = subjectKeyword || null;
+                                    const isFreePeriod = !!matchedKeyword;
+                                    const isDeleted = Boolean(item.isDeleted);
 
                                     return (
                                         <TableRow
                                             key={`${item.subject}-${item.teacher}`}
-                                            className={`${isDisabled ? "opacity-50 bg-gray-50 cursor-not-allowed" : ""} ${isDeleted ? "opacity-60 bg-red-50/30" : ""}`}
+                                            className={`${isFreePeriod ? "opacity-75 bg-gray-50/50" : ""} ${isDeleted ? "opacity-60 bg-red-50/30" : ""}`}
                                             onClick={() => {
-                                                if (isDisabled) {
-                                                    toast.error(`${matchedKeyword}은(는) 선택할 수 없습니다.`);
-                                                }
+                                                // Optional wrapper if we want clicking to still work
                                             }}
                                         >
                                             <TableCell className={`font-medium ${isDeleted ? "line-through text-red-400" : ""}`}>
@@ -449,8 +447,8 @@ function ElectiveManager({ password }: { password: string }) {
                                                     value={item.fullSubjectName || ""}
                                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(originalIndex, "fullSubjectName", e.target.value)}
                                                     placeholder="풀네임 입력"
-                                                    className={`max-w-[150px] ${isDisabled ? "pointer-events-none" : ""}`}
-                                                    disabled={isDisabled || isDeleted}
+                                                    className={`max-w-[150px] ${isFreePeriod ? "pointer-events-none" : ""}`}
+                                                    disabled={isFreePeriod || isDeleted}
                                                 />
                                             </TableCell>
                                             <TableCell className={`text-gray-500 ${isDeleted ? "line-through text-red-400" : ""}`}>{item.teacher}</TableCell>
@@ -460,13 +458,12 @@ function ElectiveManager({ password }: { password: string }) {
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            className={`w-[130px] justify-between ${isDisabled ? "pointer-events-none opacity-50" : ""}`}
-                                                            disabled={isDisabled}
+                                                            className={`w-[130px] justify-between ${isFreePeriod ? "" : ""}`} // Allowed even if free period
                                                         >
                                                             <span className="truncate">
-                                                                {item.classCode ? item.classCode.split(',').filter(Boolean).join(", ") : "선택"}
+                                                                {item.classCode ? item.classCode.split(',').filter(Boolean).join(", ") : (isFreePeriod ? "분반 선택(공강)" : "선택")}
                                                             </span>
-                                                            <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+                                                            <ChevronDown className="h-4 w-4 opacity-70 shrink-0" />
                                                         </Button>
                                                     </PopoverTrigger>
                                                     <PopoverContent className="w-[180px] p-2">
@@ -499,11 +496,11 @@ function ElectiveManager({ password }: { password: string }) {
                                             </TableCell>
                                             <TableCell>
                                                 <Input
-                                                    value={item.fullTeacherName}
+                                                    value={item.fullTeacherName || ""}
                                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(originalIndex, "fullTeacherName", e.target.value)}
                                                     placeholder="선생님 성함 입력"
-                                                    className={`max-w-[200px] ${isDisabled ? "pointer-events-none" : ""}`}
-                                                    disabled={isDisabled}
+                                                    className={`max-w-[200px] ${isFreePeriod ? "pointer-events-none" : ""}`}
+                                                    disabled={isFreePeriod || isDeleted}
                                                 />
                                             </TableCell>
                                             <TableCell>
@@ -511,23 +508,23 @@ function ElectiveManager({ password }: { password: string }) {
                                                     <Button
                                                         variant={item.isMovingClass ? "default" : "outline"}
                                                         size="sm"
-                                                        className={`h-7 text-xs px-2 ${item.isMovingClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
+                                                        className={`h-7 text-xs px-2 ${item.isMovingClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"} ${isFreePeriod ? "pointer-events-none" : ""}`}
                                                         onClick={() => {
                                                             handleInputChange(originalIndex, "isMovingClass", true);
                                                         }}
-                                                        disabled={isDisabled}
+                                                        disabled={isFreePeriod || isDeleted}
                                                     >
                                                         이동 O
                                                     </Button>
                                                     <Button
                                                         variant={!item.isMovingClass ? "default" : "outline"}
                                                         size="sm"
-                                                        className={`h-7 text-xs px-2 ${!item.isMovingClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
+                                                        className={`h-7 text-xs px-2 ${!item.isMovingClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isFreePeriod ? "pointer-events-none" : ""}`}
                                                         onClick={() => {
                                                             handleInputChange(originalIndex, "isMovingClass", false);
                                                             handleInputChange(originalIndex, "className", ""); // clear className when turned off
                                                         }}
-                                                        disabled={isDisabled}
+                                                        disabled={isFreePeriod || isDeleted}
                                                     >
                                                         이동 X
                                                     </Button>
@@ -538,8 +535,8 @@ function ElectiveManager({ password }: { password: string }) {
                                                     value={item.className || ""}
                                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(originalIndex, "className", e.target.value)}
                                                     placeholder="예: 1,2,3"
-                                                    className={`max-w-[100px] ${(!item.isMovingClass || isDisabled) ? "bg-gray-100 pointer-events-none text-gray-400" : ""}`}
-                                                    disabled={!item.isMovingClass || isDisabled}
+                                                    className={`max-w-[100px] ${(!item.isMovingClass || isFreePeriod) ? "bg-gray-100 pointer-events-none text-gray-400" : ""}`}
+                                                    disabled={!item.isMovingClass || isFreePeriod || isDeleted}
                                                 />
                                             </TableCell>
                                             <TableCell>
@@ -547,22 +544,22 @@ function ElectiveManager({ password }: { password: string }) {
                                                     <Button
                                                         variant={item.isCombinedClass ? "default" : "outline"}
                                                         size="sm"
-                                                        className={`h-7 text-xs px-2 ${item.isCombinedClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
+                                                        className={`h-7 text-xs px-2 ${item.isCombinedClass ? "bg-blue-600 hover:bg-blue-700" : "text-gray-400"} ${isFreePeriod ? "pointer-events-none" : ""}`}
                                                         onClick={() => {
                                                             handleInputChange(originalIndex, "isCombinedClass", true);
                                                         }}
-                                                        disabled={isDisabled || isDeleted}
+                                                        disabled={isFreePeriod || isDeleted}
                                                     >
                                                         통반 O
                                                     </Button>
                                                     <Button
                                                         variant={!item.isCombinedClass ? "default" : "outline"}
                                                         size="sm"
-                                                        className={`h-7 text-xs px-2 ${!item.isCombinedClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isDisabled ? "pointer-events-none" : ""}`}
+                                                        className={`h-7 text-xs px-2 ${!item.isCombinedClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isFreePeriod ? "pointer-events-none" : ""}`}
                                                         onClick={() => {
                                                             handleInputChange(originalIndex, "isCombinedClass", false);
                                                         }}
-                                                        disabled={isDisabled || isDeleted}
+                                                        disabled={isFreePeriod || isDeleted}
                                                     >
                                                         통반 X
                                                     </Button>
@@ -800,6 +797,7 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
         onSuccess: () => {
             toast.success("그룹 강제 지정이 저장되었습니다.");
             queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
         },
         onError: (err) => {
             toast.error(`저장 실패: ${err.message}`);
@@ -884,7 +882,8 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
         const subjectToGroups = new Map<string, string[]>();
 
         electiveConfigs.forEach((c: any) => {
-            if (c.isMovingClass !== 0 && c.classCode) {
+            const isFreePeriod = ["빈교실", "공강", "Empty", "Free"].some(k => (c.subject || "").includes(k));
+            if ((c.isMovingClass !== 0 || isFreePeriod) && c.classCode) {
                 const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
                 const subj = c.subject.trim();
 
@@ -1068,7 +1067,231 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
-// 6.6 Elective Input Mode Settings
+// 6.55 반/공강 확인기 (Class & Free-Period Checker)
+// 사진 형식: 그룹 | 선택과목 | 강의실 | 비고(공강 시)
+// ----------------------------------------------------------------------
+function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
+    const [grade, setGrade] = useState("2");
+    const [selectedDataset, setSelectedDataset] = useState("_auto_");
+    const [resolvedDataset, setResolvedDataset] = useState("");
+
+    const WEEKDAY_LABELS = ["월", "화", "수", "목", "금"];
+
+    // 1. settings (active_datasets)
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "groupOverrides"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("settings fetch failed");
+            return res.json();
+        },
+    });
+
+    // 2. raw comcigan data (for dataset list)
+    const adminRawQuery = useQuery({
+        queryKey: ["admin", "rawComcigan_FreePeriodChecker"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/raw_comcigan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ schoolName: "부산성지고" })
+            });
+            const json = await res.json();
+            if (!res.ok || json?.error) return null;
+            return json.data;
+        }
+    });
+
+    const timetableProps = useMemo(() => {
+        const raw = adminRawQuery.data;
+        if (!raw) return [];
+        const keys = Object.keys(raw);
+        return keys.filter(k => {
+            const val = raw[k];
+            return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+        });
+    }, [adminRawQuery.data]);
+
+    // Resolve dataset: _auto_ → active from settings, else manual
+    useEffect(() => {
+        if (selectedDataset === "_auto_" && settingsQuery.data) {
+            try {
+                const ds = JSON.parse(settingsQuery.data.active_datasets || "{}");
+                setResolvedDataset(ds[grade] || "");
+            } catch { setResolvedDataset(""); }
+        } else if (selectedDataset !== "_auto_") {
+            setResolvedDataset(selectedDataset);
+        }
+    }, [selectedDataset, settingsQuery.data, grade]);
+
+    // 3. elective configs (그룹별 과목·반 정보)
+    const electiveConfigQuery = useQuery({
+        queryKey: ["admin", "electiveConfig", grade, resolvedDataset],
+        queryFn: async () => {
+            if (!resolvedDataset) return [];
+            const res = await fetch(`/api/electives?grade=${grade}&dataset=${resolvedDataset}`);
+            if (!res.ok) throw new Error("elective config fetch failed");
+            return res.json();
+        },
+        enabled: !!resolvedDataset,
+    });
+
+    // 4. all-class timetable (공강 교시 감지용)
+    const timetableQuery = useQuery({
+        queryKey: ["admin", "allClassesTimetable_FreePeriodChecker", grade, resolvedDataset],
+        queryFn: async () => {
+            if (!resolvedDataset) return [];
+            const url = `/api/comcigan?type=timetable&grade=${grade}&classNum=all` +
+                (selectedDataset !== '_auto_' ? `&dataset=${resolvedDataset}` : '');
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("timetable fetch failed");
+            const json = await res.json();
+            return json.data || [];
+        },
+        enabled: !!resolvedDataset,
+    });
+
+    const configs: any[] = useMemo(() => electiveConfigQuery.data || [], [electiveConfigQuery.data]);
+    const allSlots: any[] = useMemo(() => timetableQuery.data || [], [timetableQuery.data]);
+
+    const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free"];
+
+    const tableRows = useMemo(() => {
+        const grouped: Record<string, { subject: string; fullSubjectName?: string; className?: string; freePeriods: string[] }[]> = {};
+
+        configs.forEach((c: any) => {
+            const isFreePeriod = FREE_KEYWORDS.some(k => (c.subject || "").includes(k));
+            if (c.isMovingClass === 0 && !isFreePeriod) return;
+            if (!c.classCode) return;
+            const codes = (c.classCode as string).split(",").map(s => s.trim()).filter(Boolean);
+            codes.forEach(code => {
+                if (!grouped[code]) grouped[code] = [];
+                if (grouped[code].some(r => r.subject === c.subject)) return;
+
+                // Find all slots where this subject appears
+                const subjectSlots = allSlots.filter((s: any) =>
+                    s.subject && s.subject.trim() === c.subject.trim()
+                );
+
+                // For each subject slot, check if there's a free period in ANY class
+                // at the same weekday+classTime (indicating a parallel free period exists)
+                const freePeriodSet = new Set<string>();
+                subjectSlots.forEach((ss: any) => {
+                    const sameTimeSlots = allSlots.filter((s: any) =>
+                        s.weekday === ss.weekday &&
+                        s.classTime === ss.classTime
+                    );
+                    const hasFreePeriod = sameTimeSlots.some((s: any) =>
+                        FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
+                    );
+                    if (hasFreePeriod) {
+                        // weekday is 0-indexed (0=Mon, 4=Fri)
+                        const label = `${WEEKDAY_LABELS[ss.weekday]}${ss.classTime}`;
+                        freePeriodSet.add(label);
+                    }
+                });
+
+                grouped[code].push({
+                    subject: c.subject,
+                    fullSubjectName: c.fullSubjectName,
+                    className: c.className,
+                    freePeriods: Array.from(freePeriodSet).sort(),
+                });
+            });
+        });
+
+        return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+    }, [configs, allSlots]);
+
+    const isLoading = settingsQuery.isLoading || electiveConfigQuery.isLoading || timetableQuery.isLoading;
+
+    return (
+        <Card className="border-0 shadow-none">
+            <CardHeader className="pb-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <CardTitle className="text-base">반 / 공강 확인기</CardTitle>
+                    <select value={grade} onChange={e => { setGrade(e.target.value); setSelectedDataset("_auto_"); }} className="border rounded px-2 py-1 text-sm">
+                        <option value="2">2학년</option>
+                        <option value="3">3학년</option>
+                    </select>
+                    <select
+                        value={selectedDataset}
+                        onChange={e => setSelectedDataset(e.target.value)}
+                        className="border rounded px-2 py-1 text-sm"
+                    >
+                        <option value="_auto_">자동 (활성 데이터셋)</option>
+                        <option value="MANUAL_PLAN">MANUAL_PLAN</option>
+                        {timetableProps.map(tp => (
+                            <option key={tp} value={tp}>{tp}</option>
+                        ))}
+                    </select>
+                    {resolvedDataset && (
+                        <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-0.5 rounded">{resolvedDataset}</span>
+                    )}
+                </div>
+                <CardDescription>그룹이 있는 이동반 과목의 강의실(반)과 공강 정보를 표시합니다.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {isLoading ? (
+                    <div className="text-slate-400 py-6 text-center text-sm">로딩 중...</div>
+                ) : !resolvedDataset ? (
+                    <div className="text-amber-600 text-sm py-4">
+                        데이터셋을 선택하거나 활성 데이터셋을 설정해주세요.
+                    </div>
+                ) : tableRows.length === 0 ? (
+                    <div className="text-slate-400 text-sm py-4">그룹이 할당된 이동반 과목이 없습니다.</div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm border-collapse">
+                            <thead>
+                                <tr className="bg-slate-100 text-slate-700">
+                                    <th className="border border-slate-300 px-4 py-2 font-bold text-center w-14">그룹</th>
+                                    <th className="border border-slate-300 px-4 py-2 font-bold text-center">선택과목</th>
+                                    <th className="border border-slate-300 px-4 py-2 font-bold text-center">강의실</th>
+                                    <th className="border border-slate-300 px-4 py-2 font-bold text-center">비고</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {tableRows.map(([groupCode, subjects]) =>
+                                    subjects.map((row, idx) => (
+                                        <tr key={`${groupCode}-${row.subject}`} className="hover:bg-slate-50">
+                                            {idx === 0 && (
+                                                <td
+                                                    className="border border-slate-300 px-4 py-2 font-bold text-center align-middle bg-orange-50 text-orange-700 text-base"
+                                                    rowSpan={subjects.length}
+                                                >
+                                                    {groupCode}
+                                                </td>
+                                            )}
+                                            <td className="border border-slate-300 px-4 py-2 text-center">{row.subject}</td>
+                                            <td className="border border-slate-300 px-4 py-2 text-center">
+                                                {row.className || <span className="text-slate-300">-</span>}
+                                            </td>
+                                            <td className="border border-slate-300 px-4 py-2 text-center">
+                                                {row.freePeriods.length > 0
+                                                    ? row.freePeriods.map(fp => (
+                                                        <span key={fp} className="inline-block mr-1 text-blue-600 font-medium">{fp} 공강</span>
+                                                    ))
+                                                    : <span className="text-slate-300">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+
+
+
+
+
 // ----------------------------------------------------------------------
 function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
@@ -1163,6 +1386,519 @@ function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string })
 }
 
 // ----------------------------------------------------------------------
+// 6.9 Bug Report Manager (오류신고 현황)
+// ----------------------------------------------------------------------
+function BugReportManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    // Fetch settings to get current toggle state
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        }
+    });
+
+    const isBugReportEnabled = settingsQuery.data?.bug_report_enabled !== 'false';
+
+    const toggleMutation = useMutation({
+        mutationFn: async (enabled: boolean) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ bug_report_enabled: enabled ? 'true' : 'false' })
+            });
+            if (!res.ok) throw new Error("Failed to update setting");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        }
+    });
+
+    // Fetch all bug reports
+    const reportsQuery = useQuery({
+        queryKey: ["admin", "bugReports"],
+        queryFn: async () => {
+            const res = await fetch("/api/bug-reports", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("Failed to fetch bug reports");
+            return res.json();
+        }
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: async (id: number) => {
+            const res = await fetch(`/api/bug-reports?id=${id}`, {
+                method: "DELETE",
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("Failed to delete");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "bugReports"] });
+        }
+    });
+
+    const reports = reportsQuery.data || [];
+
+    return (
+        <div className="space-y-4">
+            {/* Toggle */}
+            <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
+                <div className="flex items-center gap-2">
+                    <Bug className="w-5 h-5 text-red-500" />
+                    <div>
+                        <p className="font-semibold text-sm">버그제보 버튼 표시</p>
+                        <p className="text-xs text-gray-500">OFF 시 메인페이지에서 오류신고 버튼을 숨깁니다</p>
+                    </div>
+                </div>
+                <Switch
+                    checked={isBugReportEnabled}
+                    onCheckedChange={(checked) => toggleMutation.mutate(checked)}
+                />
+            </div>
+
+            {/* Reports List */}
+            <div className="space-y-2">
+                <p className="text-sm font-bold text-gray-700">신고 목록 ({reports.length}건)</p>
+                {reportsQuery.isLoading ? (
+                    <p className="text-sm text-gray-400">로딩 중...</p>
+                ) : reports.length === 0 ? (
+                    <p className="text-sm text-gray-400">접수된 오류신고가 없습니다.</p>
+                ) : (
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                        {reports.map((report: any) => (
+                            <div key={report.id} className="p-3 border rounded-lg bg-white flex flex-col gap-1">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className="text-xs">
+                                            {report.grade ? `${report.grade}학년 ${report.classNum}반 ${report.studentNumber}번` : '미입력'}
+                                        </Badge>
+                                        <span className="text-xs text-gray-400">
+                                            {report.createdAt ? new Date(report.createdAt + 'Z').toLocaleString() : ''}
+                                        </span>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-gray-400 hover:text-red-500"
+                                        onClick={() => deleteMutation.mutate(report.id)}
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                                <p className="text-sm text-gray-800 whitespace-pre-wrap">{report.message}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------
+// 6.95 Student Elective Pre-Entry (학생 선택과목 사전입력)
+// ----------------------------------------------------------------------
+function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [selectedGrade, setSelectedGrade] = useState("2");
+    const [selectedDataset, setSelectedDataset] = useState("_auto_");
+    const [resolvedDataset, setResolvedDataset] = useState("");
+    const [selectedClass, setSelectedClass] = useState("all");
+    // pendingChanges: key = "classNum-studentNumber", value = full electives object for that student
+    const [pendingChanges, setPendingChanges] = useState<Record<string, Record<string, any>>>({});
+    const [isSaving, setIsSaving] = useState(false);
+
+    const hasPendingChanges = Object.keys(pendingChanges).length > 0;
+
+    // Fetch admin settings (for active_datasets)
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "electivePreEntry"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("settings fetch failed");
+            return res.json();
+        }
+    });
+
+    // Fetch raw comcigan data (for dataset list)
+    const adminRawQuery = useQuery({
+        queryKey: ["admin", "rawComcigan_ElectivePreEntry"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/raw_comcigan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ schoolName: "부산성지고" })
+            });
+            const json = await res.json();
+            if (!res.ok || json?.error) return null;
+            return json.data;
+        }
+    });
+
+    const timetableProps = useMemo(() => {
+        const raw = adminRawQuery.data;
+        if (!raw) return [];
+        return Object.keys(raw).filter(k => {
+            const val = raw[k];
+            return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+        });
+    }, [adminRawQuery.data]);
+
+    // Resolve dataset: _auto_ → active from settings, else manual
+    useEffect(() => {
+        if (selectedDataset === "_auto_" && settingsQuery.data) {
+            try {
+                const ds = JSON.parse(settingsQuery.data.active_datasets || "{}");
+                setResolvedDataset(ds[selectedGrade] || "");
+            } catch { setResolvedDataset(""); }
+        } else if (selectedDataset !== "_auto_") {
+            setResolvedDataset(selectedDataset);
+        }
+    }, [selectedDataset, settingsQuery.data, selectedGrade]);
+
+    // Fetch elective configs (groups + subjects) for the dataset
+    const electiveConfigQuery = useQuery({
+        queryKey: ["admin", "electiveConfig", selectedGrade, resolvedDataset],
+        queryFn: async () => {
+            const res = await fetch(`/api/electives?grade=${selectedGrade}&dataset=${encodeURIComponent(resolvedDataset)}`);
+            return res.json();
+        },
+        enabled: !!resolvedDataset
+    });
+
+    // Fetch all student profiles for the grade — real-time refresh when no pending changes
+    const profilesQuery = useQuery({
+        queryKey: ["admin", "allStudentProfiles", selectedGrade],
+        queryFn: async () => {
+            const res = await fetch(`/api/electives?type=all-students&grade=${selectedGrade}`);
+            return res.json();
+        },
+        enabled: !!selectedGrade,
+        refetchInterval: hasPendingChanges ? false : 5000, // 5s auto-refresh when no edits
+    });
+
+    // Build group → subjects mapping from elective config
+    // classCode can be compound like "A,B" or "A,B,C,D", split into individual groups.
+    // Filter out "?" entries (no valid classCode).
+    const groupSubjects = useMemo(() => {
+        if (!electiveConfigQuery.data || !Array.isArray(electiveConfigQuery.data)) return {};
+        const map: Record<string, { subject: string; teacher: string; fullSubjectName: string }[]> = {};
+        const EXCLUDED_SUBJECTS = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "채플", "Empty", "Free"];
+        for (const cfg of electiveConfigQuery.data) {
+            const rawCode = cfg.classCode || "";
+            if (!rawCode || rawCode === "?") continue; // Skip invalid classCodes
+            // Skip excluded subjects (빈교실, 공강 etc.)
+            if (EXCLUDED_SUBJECTS.some(ex => (cfg.subject || "").trim().includes(ex))) continue;
+            const codes = rawCode.split(",").map((c: string) => c.trim()).filter(Boolean);
+            const entry = {
+                subject: cfg.subject,
+                teacher: cfg.originalTeacher || cfg.fullTeacherName || "",
+                fullSubjectName: cfg.fullSubjectName || cfg.subject,
+            };
+            for (const code of codes) {
+                if (!map[code]) map[code] = [];
+                if (!map[code].some((e: { subject: string }) => e.subject === entry.subject)) {
+                    map[code].push(entry);
+                }
+            }
+        }
+        return map;
+    }, [electiveConfigQuery.data]);
+
+    const groupCodes = useMemo(() => Object.keys(groupSubjects).sort(), [groupSubjects]);
+
+    // Build profiles lookup: key = "classNum-studentNumber" → electives object
+    const profilesMap = useMemo(() => {
+        if (!profilesQuery.data || !Array.isArray(profilesQuery.data)) return {};
+        const map: Record<string, any> = {};
+        for (const p of profilesQuery.data) {
+            map[`${p.classNum}-${p.studentNumber}`] = p;
+        }
+        return map;
+    }, [profilesQuery.data]);
+
+    // Generate student rows
+    const studentRows = useMemo(() => {
+        const rows: { classNum: number; studentNumber: number; key: string }[] = [];
+        const maxClass = 9;
+        const maxNum = 30;
+        for (let c = 1; c <= maxClass; c++) {
+            if (selectedClass !== "all" && c !== parseInt(selectedClass)) continue;
+            for (let n = 1; n <= maxNum; n++) {
+                rows.push({ classNum: c, studentNumber: n, key: `${c}-${n}` });
+            }
+        }
+        return rows;
+    }, [selectedClass]);
+
+    // Get current elective for a student + group (server state)
+    const getServerElective = (key: string, groupCode: string): string => {
+        const profile = profilesMap[key];
+        if (!profile || !profile.electives) return "";
+        try {
+            const electives = typeof profile.electives === "string" ? JSON.parse(profile.electives) : profile.electives;
+            if (typeof electives === "object" && !Array.isArray(electives)) {
+                const entry = electives[groupCode];
+                if (!entry) return "";
+                if (typeof entry === "object" && entry.subject) return entry.subject;
+                if (typeof entry === "string") return entry;
+            }
+        } catch { }
+        return "";
+    };
+
+    // Get display value: pending change > server value
+    const getDisplayElective = (key: string, groupCode: string): string => {
+        if (pendingChanges[key] && groupCode in pendingChanges[key]) {
+            const entry = pendingChanges[key][groupCode];
+            if (!entry) return "";
+            if (typeof entry === "object" && entry.subject) return entry.subject;
+            if (typeof entry === "string") return entry;
+            return "";
+        }
+        return getServerElective(key, groupCode);
+    };
+
+    // Handle local cell change (does NOT save to server)
+    const handleCellChange = (classNum: number, studentNumber: number, groupCode: string, subject: string) => {
+        const key = `${classNum}-${studentNumber}`;
+        const subjectConfig = groupSubjects[groupCode]?.find(s => s.subject === subject);
+
+        setPendingChanges(prev => {
+            const existing = prev[key] || {};
+            const newEntry = subject
+                ? { subject, teacher: subjectConfig?.teacher || "", fullSubjectName: subjectConfig?.fullSubjectName || subject }
+                : null; // null means "clear this group"
+            return { ...prev, [key]: { ...existing, [groupCode]: newEntry } };
+        });
+    };
+
+    // Cancel all pending changes
+    const handleCancel = () => {
+        setPendingChanges({});
+    };
+
+    // Save all pending changes to server
+    const handleSaveAll = async () => {
+        setIsSaving(true);
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const [key, groupChanges] of Object.entries(pendingChanges)) {
+            const [classNumStr, studentNumberStr] = key.split("-");
+            const classNum = parseInt(classNumStr);
+            const studentNumber = parseInt(studentNumberStr);
+
+            // Build the full electives object: merge server state + pending changes
+            const profile = profilesMap[key];
+            let electives: Record<string, any> = {};
+            if (profile?.electives) {
+                try {
+                    electives = typeof profile.electives === "string" ? JSON.parse(profile.electives) : { ...profile.electives };
+                } catch { electives = {}; }
+            }
+
+            // Apply pending changes
+            for (const [groupCode, value] of Object.entries(groupChanges)) {
+                if (value) {
+                    electives[groupCode] = value;
+                } else {
+                    delete electives[groupCode];
+                }
+            }
+
+            // If all electives cleared, send with allowEmpty flag
+            const isEmpty = Object.keys(electives).length === 0;
+            if (isEmpty) {
+                electives = {}; // explicitly empty
+            }
+
+            try {
+                await fetch("/api/electives", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        grade: parseInt(selectedGrade),
+                        classNum,
+                        studentNumber,
+                        electives: isEmpty ? {} : electives,
+                        dataset: resolvedDataset,
+                        allowEmpty: isEmpty,
+                    }),
+                });
+                successCount++;
+            } catch {
+                errorCount++;
+            }
+        }
+
+        if (errorCount > 0) {
+            toast.error(`${errorCount}건 저장 실패, ${successCount}건 성공`);
+        } else if (successCount > 0) {
+            toast.success(`${successCount}건 저장 완료`);
+        }
+
+        setPendingChanges({});
+        queryClient.invalidateQueries({ queryKey: ["admin", "allStudentProfiles", selectedGrade] });
+        setIsSaving(false);
+    };
+
+    const isLoading = electiveConfigQuery.isLoading || profilesQuery.isLoading;
+    const changedStudentCount = Object.keys(pendingChanges).length;
+
+    return (
+        <div className="flex flex-col h-full gap-4">
+            {/* Header Controls */}
+            <div className="flex flex-wrap gap-2 items-center pb-4 border-b">
+                <h3 className="text-lg font-bold flex-1">학생 선택과목 사전입력</h3>
+                <Select value={selectedGrade} onValueChange={(val) => { setSelectedGrade(val); setPendingChanges({}); }}>
+                    <SelectTrigger className="w-[100px]">
+                        <SelectValue placeholder="학년" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="2">2학년</SelectItem>
+                        <SelectItem value="3">3학년</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Select value={selectedDataset} onValueChange={(val) => { setSelectedDataset(val); setPendingChanges({}); }}>
+                    <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="데이터셋" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="_auto_">자동{resolvedDataset && selectedDataset === "_auto_" ? ` (${resolvedDataset})` : ""}</SelectItem>
+                        <SelectItem value="MANUAL_PLAN">MANUAL_PLAN</SelectItem>
+                        {timetableProps.map((prop: string) => (
+                            <SelectItem key={prop} value={prop}>{prop}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {/* Class Filter Tabs */}
+            <div className="flex gap-1 overflow-x-auto pb-1">
+                <Button
+                    variant={selectedClass === "all" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSelectedClass("all")}
+                >
+                    전체
+                </Button>
+                {Array.from({ length: 9 }, (_, i) => i + 1).map(c => (
+                    <Button
+                        key={c}
+                        variant={selectedClass === String(c) ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedClass(String(c))}
+                    >
+                        {c}반
+                    </Button>
+                ))}
+            </div>
+
+            {/* Grid Table */}
+            <div className="flex-1 overflow-auto border rounded-md">
+                {isLoading ? (
+                    <div className="p-8 text-center text-gray-400">데이터를 불러오는 중...</div>
+                ) : groupCodes.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400">
+                        선택과목 설정이 없습니다. 선택과목 관리에서 먼저 설정해주세요.
+                    </div>
+                ) : (
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="bg-gray-50">
+                                <TableHead className="sticky left-0 bg-gray-50 z-10 min-w-[80px] font-bold">학번</TableHead>
+                                {groupCodes.map(code => (
+                                    <TableHead key={code} className="text-center min-w-[120px] font-bold">
+                                        {code}그룹
+                                    </TableHead>
+                                ))}
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {studentRows.map(row => {
+                                const hasAnyData = groupCodes.some(code => getDisplayElective(row.key, code));
+                                const hasChanges = !!pendingChanges[row.key];
+                                return (
+                                    <TableRow
+                                        key={row.key}
+                                        className={hasChanges ? "bg-yellow-50/60" : hasAnyData ? "bg-blue-50/30" : ""}
+                                    >
+                                        <TableCell className="sticky left-0 bg-white z-10 font-mono font-bold text-sm border-r">
+                                            {selectedGrade}{row.classNum}{String(row.studentNumber).padStart(2, "0")}
+                                        </TableCell>
+                                        {groupCodes.map(code => {
+                                            const display = getDisplayElective(row.key, code);
+                                            const serverVal = getServerElective(row.key, code);
+                                            const isChanged = pendingChanges[row.key] && code in pendingChanges[row.key];
+                                            return (
+                                                <TableCell key={code} className="p-1">
+                                                    <Select
+                                                        value={display || "_empty_"}
+                                                        onValueChange={(val) => handleCellChange(
+                                                            row.classNum,
+                                                            row.studentNumber,
+                                                            code,
+                                                            val === "_empty_" ? "" : val
+                                                        )}
+                                                        disabled={isSaving}
+                                                    >
+                                                        <SelectTrigger className={`h-8 text-xs ${isChanged ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-300" : display ? "border-blue-200 bg-blue-50" : "border-gray-200"}`}>
+                                                            <SelectValue placeholder="-" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="_empty_">-</SelectItem>
+                                                            {(groupSubjects[code] || []).map(s => (
+                                                                <SelectItem key={s.subject} value={s.subject}>
+                                                                    {s.subject}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </TableCell>
+                                            );
+                                        })}
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                )}
+            </div>
+
+            {/* Status Bar */}
+            <div className="flex justify-between items-center text-xs pt-1 border-t">
+                <span className="text-gray-400">
+                    총 {studentRows.length}명 ·
+                    저장된 프로필: {profilesQuery.data?.length || 0}개
+                    {!hasPendingChanges && <span className="ml-2 text-green-500">● 실시간 동기화 중</span>}
+                </span>
+                {hasPendingChanges ? (
+                    <div className="flex items-center gap-2">
+                        <span className="text-yellow-600 font-medium">{changedStudentCount}명 변경됨</span>
+                        <Button variant="outline" size="sm" onClick={handleCancel} disabled={isSaving}>
+                            취소
+                        </Button>
+                        <Button size="sm" onClick={handleSaveAll} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
+                            {isSaving ? "저장 중..." : "변경사항 저장"}
+                        </Button>
+                    </div>
+                ) : (
+                    <span className="text-gray-400">변경사항 없음</span>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------
 // 7. Etc Manager (Miscellaneous features like Raw Comcigan Data)
 // ----------------------------------------------------------------------
 function EtcManager({ adminPassword }: { adminPassword: string }) {
@@ -1244,6 +1980,30 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 >
                     <Settings className="w-4 h-4 mr-2" />
                     선택과목 입력방식
+                </Button>
+                <Button
+                    variant={selectedMenu === "class-free-period-checker" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("class-free-period-checker")}
+                >
+                    <Grid2X2 className="w-4 h-4 mr-2" />
+                    반 / 공강 확인기
+                </Button>
+                <Button
+                    variant={selectedMenu === "bug-report-manager" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("bug-report-manager")}
+                >
+                    <Bug className="w-4 h-4 mr-2" />
+                    오류신고 현황
+                </Button>
+                <Button
+                    variant={selectedMenu === "student-elective-preentry" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("student-elective-preentry")}
+                >
+                    <Users className="w-4 h-4 mr-2" />
+                    학생 선택과목 사전입력
                 </Button>
                 {/* Additional list items can go here later */}
             </div>
@@ -1347,6 +2107,32 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                             <ElectiveInputModeSettings adminPassword={adminPassword} />
                         </div>
                     </div>
+                )}
+
+                {selectedMenu === "class-free-period-checker" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">반 / 공강 확인기</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <ClassFreePeriodChecker adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "bug-report-manager" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">오류신고 현황</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <BugReportManager adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "student-elective-preentry" && (
+                    <StudentElectivePreEntry adminPassword={adminPassword} />
                 )}
             </div>
         </div>
@@ -2332,6 +3118,10 @@ export default function Admin() {
                     </Card>
                 </TabsContent>
 
+                <TabsContent value="class-free" className="space-y-6">
+                    <ClassFreePeriodChecker adminPassword={password} />
+                </TabsContent>
+
                 <TabsContent value="database" className="space-y-6">
                     <DatabaseManager adminPassword={password} />
                 </TabsContent>
@@ -2733,7 +3523,8 @@ function AutoFillAnalyzer({ data, adminPassword, onBack }: {
 
                 const isExcluded = ["빈교실", "공강", "채플", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => subj.trim().includes(ex));
 
-                const allCodes = isExcluded ? [] : myBlocks.map(b => b.code).filter(c => c !== "NO_GROUP");
+                // Always use blocks, even for excluded subjects (so free periods are linked to groups)
+                const allCodes = myBlocks.map(b => b.code).filter(c => c !== "NO_GROUP");
                 const isNoGroup = allCodes.length === 0;
 
                 const existingPayload = payloadMap.get(mappingKey);
@@ -2741,14 +3532,14 @@ function AutoFillAnalyzer({ data, adminPassword, onBack }: {
                     const existingCodes = existingPayload.classCode ? existingPayload.classCode.split(',') : [];
                     const mergedCodes = Array.from(new Set([...existingCodes, ...allCodes])).filter(Boolean).sort();
 
-                    existingPayload.classCode = isExcluded ? "" : mergedCodes.join(',');
+                    existingPayload.classCode = mergedCodes.join(',');
                     existingPayload.isMovingClass = isExcluded ? false : (existingPayload.isMovingClass || !isNoGroup);
                 } else {
                     payloadMap.set(mappingKey, {
                         grade: grade,
                         subject: subj,
                         originalTeacher: teacher,
-                        classCode: isExcluded ? "" : allCodes.sort().join(","),
+                        classCode: allCodes.sort().join(","),
                         isMovingClass: !isExcluded && !isNoGroup,
                         isCombinedClass: false,
                         dataset: targetDataset

@@ -30,13 +30,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
         // 1. Fetch Student Profile
         if (type === "student") {
-            const grade = url.searchParams.get("grade");
-            const classNum = url.searchParams.get("classNum");
-            const studentNumber = url.searchParams.get("studentNumber");
+            const gradeStr = url.searchParams.get("grade");
+            const classNumStr = url.searchParams.get("classNum");
+            const studentNumberStr = url.searchParams.get("studentNumber");
 
-            if (!grade || !classNum || !studentNumber) {
+            if (!gradeStr || !classNumStr || !studentNumberStr) {
                 return new Response(JSON.stringify({ error: "Missing parameters" }), { status: 400 });
             }
+
+            const grade = parseInt(gradeStr);
+            const classNum = parseInt(classNumStr);
+            const studentNumber = parseInt(studentNumberStr);
 
             try {
                 const profile = await env.DB.prepare(
@@ -46,9 +50,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
             } catch (e: any) {
                 // Handle missing column (schema mismatch only, table is already ensured)
                 if (e.message && e.message.includes("no column named")) {
-                    console.log("Schema mismatch detected (" + e.message + "). Recreating tables...");
-                    await dropAllTables(env.DB);
-                    await ensureAllTables(env.DB);
+                    console.log("Schema mismatch detected (" + e.message + "). Attempting safe ALTER...");
+                    // Try adding missing columns safely instead of dropping all tables
+                    try {
+                        await env.DB.prepare("ALTER TABLE student_profiles ADD COLUMN dataset TEXT DEFAULT ''").run();
+                    } catch (_) { /* column may already exist */ }
 
                     // Retry
                     const profile = await env.DB.prepare(
@@ -60,7 +66,20 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
             }
         }
 
-        // 2. Fetch Elective Config (Available Subjects)
+        // 2. Fetch ALL student profiles for a grade (admin pre-entry)
+        if (type === "all-students") {
+            const gradeStr = url.searchParams.get("grade");
+            if (!gradeStr) {
+                return new Response(JSON.stringify({ error: "Grade is required" }), { status: 400 });
+            }
+            const grade = parseInt(gradeStr);
+            const profiles = await env.DB.prepare(
+                "SELECT * FROM student_profiles WHERE grade = ? ORDER BY classNum, studentNumber"
+            ).bind(grade).all();
+            return new Response(JSON.stringify(profiles.results || []), { headers: { "Content-Type": "application/json" } });
+        }
+
+        // 3. Fetch Elective Config (Available Subjects)
         const grade = url.searchParams.get("grade");
         const dataset = url.searchParams.get("dataset");
         if (!grade) {
@@ -93,6 +112,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
         if (!grade || !classNum || !studentNumber || !electives) {
             return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400 });
+        }
+
+        // 빈 선택과목 저장 방지: {} 로 기존 데이터를 덮어쓰는 것을 차단 (allowEmpty 플래그로 관리자 도구에서 명시적 클리어 허용)
+        const electivesObj = typeof electives === 'string' ? JSON.parse(electives) : electives;
+        if (!body.allowEmpty && (typeof electivesObj !== 'object' || Array.isArray(electivesObj) || Object.keys(electivesObj).length === 0)) {
+            return new Response(JSON.stringify({ error: "electives must be a non-empty object" }), { status: 400 });
         }
 
         // Upsert student_profiles

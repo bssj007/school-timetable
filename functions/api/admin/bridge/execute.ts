@@ -129,15 +129,32 @@ export const onRequest = async (context: any) => {
                             }
                         }
                     } else if (typeof electivesObj === 'object') {
-                        // Handle potential legacy formats if any
-                        Object.keys(electivesObj).forEach(key => {
-                            const mapped = mappingDict[electivesObj[key]] !== undefined ? mappingDict[electivesObj[key]] : electivesObj[key];
-                            if (mapped === "_none_") {
-                                delete electivesObj[key];
-                                changed = true;
-                            } else if (mapped !== electivesObj[key]) {
-                                electivesObj[key] = mapped;
-                                changed = true;
+                        // Format: { "A": { subject, teacher, fullSubjectName }, "B": {...}, ... }
+                        Object.keys(electivesObj).forEach(groupKey => {
+                            const entry = electivesObj[groupKey];
+                            if (!entry) return;
+
+                            if (typeof entry === 'object' && entry.subject) {
+                                // 현재 표준 형식: { subject, teacher, fullSubjectName }
+                                const oldSubject = entry.subject;
+                                const mapped = mappingDict[oldSubject] !== undefined ? mappingDict[oldSubject] : oldSubject;
+                                if (mapped === "_none_") {
+                                    delete electivesObj[groupKey];
+                                    changed = true;
+                                } else if (mapped !== oldSubject) {
+                                    electivesObj[groupKey] = { ...entry, subject: mapped, fullSubjectName: undefined };
+                                    changed = true;
+                                }
+                            } else if (typeof entry === 'string') {
+                                // 레거시 문자열 형식
+                                const mapped = mappingDict[entry] !== undefined ? mappingDict[entry] : entry;
+                                if (mapped === "_none_") {
+                                    delete electivesObj[groupKey];
+                                    changed = true;
+                                } else if (mapped !== entry) {
+                                    electivesObj[groupKey] = mapped;
+                                    changed = true;
+                                }
                             }
                         });
                     }
@@ -190,12 +207,47 @@ export const onRequest = async (context: any) => {
             }
         }
 
+        // --- 4. Migrate Group Overrides ---
+        // elective_group_overrides는 global settings에 저장됨 (dataset 무관)
+        // "포함" 선택 시: 현재 grade의 override를 clear하지 않고 그대로 유지하는 것이 기본
+        // 단, 새 학기로 이월 시 기존 override를 초기화하거나 유지하는 선택을 제공
+        let overridesMigrated = false;
+        if (options?.migrateGroupOverrides && targetGrade !== 1) {
+            try {
+                const settingsRow = await env.DB.prepare(
+                    "SELECT value FROM system_settings WHERE key = 'elective_group_overrides'"
+                ).first();
+
+                const currentOverrides = settingsRow?.value
+                    ? JSON.parse(settingsRow.value as string)
+                    : { "2": {}, "3": {} };
+
+                const gradeKey = targetGrade.toString();
+
+                // 현재 grade의 override가 비어있으면 빈 객체로 초기화(새학기 시작)
+                // 기존 override를 그대로 두는 것이 "포함" 의미 → 이미 있으면 유지
+                if (!currentOverrides[gradeKey]) {
+                    currentOverrides[gradeKey] = {};
+                }
+                // 이미 grade override가 있으면 유지 (마이그레이션 = 보존)
+
+                await env.DB.prepare(
+                    "INSERT INTO system_settings (key, value) VALUES ('elective_group_overrides', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+                ).bind(JSON.stringify(currentOverrides)).run();
+
+                overridesMigrated = true;
+            } catch (e) {
+                console.error("Override migration failed:", e);
+            }
+        }
+
         return new Response(JSON.stringify({
             success: true,
             results: {
                 totalElectiveConfigsCopied,
                 totalStudentProfilesUpdated,
-                totalAssessmentsUpdated
+                totalAssessmentsUpdated,
+                overridesMigrated
             }
         }), { headers: { 'Content-Type': 'application/json' } });
 
