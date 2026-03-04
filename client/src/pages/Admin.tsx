@@ -2208,6 +2208,25 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                         </div>
                     </div>
 
+                    {/* Graph 1.5: Unique IPs */}
+                    <div>
+                        <h4 className="text-sm font-semibold text-gray-600 mb-3">고유 접속자 수 (IP 기준)</h4>
+                        <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={buckets}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                    <XAxis dataKey="label" tickFormatter={formatLabel} tick={{ fontSize: 12 }} />
+                                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                                    <Tooltip
+                                        labelFormatter={(v) => `구간: ${v}`}
+                                        formatter={(v: number) => [`${v}개`, '고유 IP']}
+                                    />
+                                    <Bar dataKey="uniqueIPs" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="고유 IP" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
                     {/* Graph 2: Total Visits */}
                     <div>
                         <h4 className="text-sm font-semibold text-gray-600 mb-3">총 접속 횟수</h4>
@@ -2230,7 +2249,8 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                     {/* Summary stats */}
                     <div className="flex gap-4 text-sm text-gray-500 border-t pt-3">
                         <span>구간 수: {buckets.length}</span>
-                        <span>총 고유 접속자: {buckets.reduce((s: number, b: any) => s + b.uniqueStudents, 0)}명</span>
+                        <span>총 고유 접속자(학번): {buckets.reduce((s: number, b: any) => s + b.uniqueStudents, 0)}명</span>
+                        <span>총 고유 IP: {buckets.reduce((s: number, b: any) => s + (b.uniqueIPs || 0), 0)}개</span>
                         <span>총 접속: {buckets.reduce((s: number, b: any) => s + b.totalVisits, 0)}회</span>
                         {excludeApplied && <span className="text-orange-500">제외: {excludeApplied}</span>}
                     </div>

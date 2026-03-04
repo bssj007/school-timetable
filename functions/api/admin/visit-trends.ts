@@ -109,21 +109,37 @@ export const onRequest = async (context: any) => {
             ORDER BY _bucket ASC
         `;
 
+        // Query 3: Unique IPs per bucket
+        const uniqueIpQuery = `
+            SELECT 
+                ${bucketExpr} as bucket,
+                COUNT(DISTINCT ip) as uniqueIPs
+            FROM access_logs
+            WHERE grade IS NOT NULL AND classNum IS NOT NULL AND studentNumber IS NOT NULL
+            ${timeFilter}
+            ${excludeClause}
+            GROUP BY bucket
+            ORDER BY bucket ASC
+        `;
+
         const uniqueBinds = [...excludeBinds];
         const totalBinds = [...excludeBinds];
+        const ipBinds = [...excludeBinds];
 
-        const [uniqueResult, totalResult] = await Promise.all([
+        const [uniqueResult, totalResult, ipResult] = await Promise.all([
             env.DB.prepare(uniqueQuery).bind(...uniqueBinds).all(),
             env.DB.prepare(totalQuery).bind(...totalBinds).all(),
+            env.DB.prepare(uniqueIpQuery).bind(...ipBinds).all(),
         ]);
 
         // Merge into unified buckets
-        const bucketMap = new Map<string, { label: string; uniqueStudents: number; totalVisits: number }>();
+        const bucketMap = new Map<string, { label: string; uniqueStudents: number; uniqueIPs: number; totalVisits: number }>();
 
         for (const row of (uniqueResult.results || [])) {
             bucketMap.set(row.bucket as string, {
                 label: row.bucket as string,
                 uniqueStudents: row.uniqueStudents as number,
+                uniqueIPs: 0,
                 totalVisits: 0,
             });
         }
@@ -136,7 +152,22 @@ export const onRequest = async (context: any) => {
                 bucketMap.set(row.bucket as string, {
                     label: row.bucket as string,
                     uniqueStudents: 0,
+                    uniqueIPs: 0,
                     totalVisits: row.totalVisits as number,
+                });
+            }
+        }
+
+        for (const row of (ipResult.results || [])) {
+            const existing = bucketMap.get(row.bucket as string);
+            if (existing) {
+                existing.uniqueIPs = row.uniqueIPs as number;
+            } else {
+                bucketMap.set(row.bucket as string, {
+                    label: row.bucket as string,
+                    uniqueStudents: 0,
+                    uniqueIPs: row.uniqueIPs as number,
+                    totalVisits: 0,
                 });
             }
         }
