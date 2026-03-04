@@ -24,8 +24,34 @@ function Router() {
   );
 }
 
+import { useEffect } from "react";
+
 function App() {
   const [location] = useLocation();
+
+  // 사이트 디자인설정 동적 적용 (제목 + 파비콘)
+  useEffect(() => {
+    fetch('/api/settings/public')
+      .then(res => res.ok ? res.json() : null)
+      .then(settings => {
+        if (!settings) return;
+        // 제목 적용
+        if (settings.site_title) {
+          document.title = settings.site_title;
+        }
+        // 파비콘 적용
+        if (settings.site_favicon_url) {
+          let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+          if (!link) {
+            link = document.createElement('link');
+            link.rel = 'icon';
+            document.head.appendChild(link);
+          }
+          link.href = settings.site_favicon_url;
+        }
+      })
+      .catch(() => { }); // 실패 시 기본값 유지
+  }, []);
 
   return (
     <ErrorBoundary>

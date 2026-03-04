@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette
 } from "lucide-react";
 import { BridgeManager } from './AdminBridge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1899,6 +1899,127 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
+// 6.96 Site Design Settings (사이트 디자인 설정)
+// ----------------------------------------------------------------------
+function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [siteTitle, setSiteTitle] = useState("");
+    const [siteFaviconUrl, setSiteFaviconUrl] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+    const [isInitialized, setIsInitialized] = useState(false);
+
+    // Load current settings
+    const { data: currentSettings, isLoading } = useQuery({
+        queryKey: ['admin', 'settings', 'site-design'],
+        queryFn: async () => {
+            const res = await fetch('/api/admin/settings', {
+                headers: { 'X-Admin-Password': adminPassword }
+            });
+            if (!res.ok) throw new Error('Failed to load settings');
+            return res.json();
+        }
+    });
+
+    // Initialize form values from fetched settings
+    useEffect(() => {
+        if (currentSettings && !isInitialized) {
+            setSiteTitle(currentSettings.site_title || '');
+            setSiteFaviconUrl(currentSettings.site_favicon_url || '');
+            setIsInitialized(true);
+        }
+    }, [currentSettings, isInitialized]);
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            const res = await fetch('/api/admin/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Admin-Password': adminPassword
+                },
+                body: JSON.stringify({
+                    site_title: siteTitle,
+                    site_favicon_url: siteFaviconUrl
+                })
+            });
+            if (!res.ok) throw new Error('Failed to save');
+            toast.success('사이트 디자인 설정이 저장되었습니다.');
+            queryClient.invalidateQueries({ queryKey: ['admin', 'settings', 'site-design'] });
+            queryClient.invalidateQueries({ queryKey: ['publicSettings'] });
+        } catch (e: any) {
+            toast.error(`저장 실패: ${e.message}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    if (isLoading) {
+        return <div className="p-8 text-center text-gray-400">설정을 불러오는 중...</div>;
+    }
+
+    return (
+        <div className="space-y-6 max-w-lg">
+            {/* 사이트 제목 */}
+            <div className="space-y-2">
+                <Label className="text-sm font-semibold">사이트 제목 (HTML Title)</Label>
+                <Input
+                    value={siteTitle}
+                    onChange={(e) => setSiteTitle(e.target.value)}
+                    placeholder="예: 수행평가 일정공유 - 성지고"
+                    className="max-w-md"
+                />
+                <p className="text-xs text-gray-400">브라우저 탭에 표시되는 제목입니다. 비워두면 기본값(수행평가 일정공유 - 성지고)이 사용됩니다.</p>
+            </div>
+
+            {/* 파비콘 URL */}
+            <div className="space-y-2">
+                <Label className="text-sm font-semibold">사이트 아이콘 (Favicon URL)</Label>
+                <div className="flex items-center gap-3">
+                    <Input
+                        value={siteFaviconUrl}
+                        onChange={(e) => setSiteFaviconUrl(e.target.value)}
+                        placeholder="https://example.com/icon.png"
+                        className="max-w-md flex-1"
+                    />
+                    {siteFaviconUrl && (
+                        <div className="shrink-0 w-10 h-10 rounded-lg border bg-white flex items-center justify-center overflow-hidden">
+                            <img
+                                src={siteFaviconUrl}
+                                alt="favicon preview"
+                                className="w-8 h-8 object-contain"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                        </div>
+                    )}
+                </div>
+                <p className="text-xs text-gray-400">브라우저 탭에 표시되는 아이콘 URL입니다. PNG, ICO, SVG 형식을 권장합니다.</p>
+            </div>
+
+            {/* 미리보기 */}
+            {(siteTitle || siteFaviconUrl) && (
+                <div className="rounded-lg border bg-slate-50 p-4 space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">미리보기</p>
+                    <div className="flex items-center gap-2 bg-white rounded-md border px-3 py-2 max-w-sm">
+                        {siteFaviconUrl ? (
+                            <img src={siteFaviconUrl} alt="" className="w-4 h-4 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        ) : (
+                            <div className="w-4 h-4 rounded bg-gray-200" />
+                        )}
+                        <span className="text-sm text-slate-700 truncate">{siteTitle || '수행평가 일정공유 - 성지고'}</span>
+                    </div>
+                </div>
+            )}
+
+            {/* 저장 */}
+            <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
+                {isSaving ? '저장 중...' : '설정 저장'}
+            </Button>
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------
 // 7. Etc Manager (Miscellaneous features like Raw Comcigan Data)
 // ----------------------------------------------------------------------
 function EtcManager({ adminPassword }: { adminPassword: string }) {
@@ -2004,6 +2125,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 >
                     <Users className="w-4 h-4 mr-2" />
                     학생 선택과목 사전입력
+                </Button>
+                <Button
+                    variant={selectedMenu === "site-design" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("site-design")}
+                >
+                    <Palette className="w-4 h-4 mr-2" />
+                    사이트 디자인설정
                 </Button>
                 {/* Additional list items can go here later */}
             </div>
@@ -2133,6 +2262,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
 
                 {selectedMenu === "student-elective-preentry" && (
                     <StudentElectivePreEntry adminPassword={adminPassword} />
+                )}
+
+                {selectedMenu === "site-design" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">사이트 디자인설정</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <SiteDesignSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
                 )}
             </div>
         </div>

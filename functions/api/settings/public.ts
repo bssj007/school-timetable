@@ -7,7 +7,7 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'bug_report_enabled')").all();
+        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'bug_report_enabled', 'site_title', 'site_favicon_url')").all();
 
         const settings: any = {};
         if (rows && rows.results) {
@@ -41,6 +41,8 @@ export const onRequest = async (context: any) => {
             client_ip: clientIp,
             elective_input_mode: settings['elective_input_mode'] || 'auto',
             bug_report_enabled: settings['bug_report_enabled'] !== 'false', // default true
+            site_title: settings['site_title'] || '',
+            site_favicon_url: settings['site_favicon_url'] || '',
         }), {
             headers: { 'Content-Type': 'application/json' }
         });
