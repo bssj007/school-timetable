@@ -227,3 +227,40 @@
     zoom: 0.9;
   }
 }
+
+/* Print Styles */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #timetable-container,
+  #timetable-container * {
+    visibility: visible;
+  }
+
+  #timetable-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  /* Remove box shadows and other web-only effects for cleaner print */
+  #timetable-container {
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Ensure backgrounds are printed if possible */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
