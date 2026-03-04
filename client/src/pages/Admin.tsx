@@ -7,8 +7,9 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { BridgeManager } from './AdminBridge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -2077,6 +2078,169 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
+// 6.97 Visitor Trends (접속자 추이)
+// ----------------------------------------------------------------------
+function VisitorTrends({ adminPassword }: { adminPassword: string }) {
+    const [unit, setUnit] = useState<string>("day");
+    const [excludeInput, setExcludeInput] = useState("");
+    const [excludeApplied, setExcludeApplied] = useState("");
+
+    const { data: trendData, isLoading, isError, error } = useQuery({
+        queryKey: ['admin', 'visitor-trends', unit, excludeApplied],
+        queryFn: async () => {
+            const params = new URLSearchParams({ unit });
+            if (excludeApplied) params.set('exclude', excludeApplied);
+            const res = await fetch(`/api/admin/visit-trends?${params}`, {
+                headers: { 'X-Admin-Password': adminPassword }
+            });
+            if (!res.ok) throw new Error('Failed to fetch trends');
+            return res.json();
+        },
+        refetchInterval: 30000,
+    });
+
+    const formatLabel = (label: string) => {
+        if (!label) return '';
+        if (unit === 'hour') {
+            // "2026-03-05 14:00" → "14시"
+            const parts = label.split(' ');
+            return parts[1] ? parts[1].replace(':00', '시') : label;
+        }
+        if (unit === 'day') {
+            // "2026-03-05" → "3/5"
+            const [, m, d] = label.split('-');
+            return `${parseInt(m)}/${parseInt(d)}`;
+        }
+        if (unit === 'week') {
+            return label.replace(/^\d{4}-/, '');
+        }
+        if (unit === 'month') {
+            // "2026-03" → "3월"
+            const [, m] = label.split('-');
+            return `${parseInt(m)}월`;
+        }
+        return label;
+    };
+
+    const unitOptions = [
+        { value: 'hour', label: '시간' },
+        { value: 'day', label: '일' },
+        { value: 'week', label: '1주일' },
+        { value: 'month', label: '1달' },
+        { value: 'all', label: '전체' },
+    ];
+
+    const buckets = trendData?.buckets || [];
+
+    return (
+        <div className="space-y-6">
+            {/* Controls */}
+            <div className="flex flex-wrap gap-3 items-end">
+                {/* Time unit tabs */}
+                <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                    {unitOptions.map(opt => (
+                        <button
+                            key={opt.value}
+                            onClick={() => setUnit(opt.value)}
+                            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${unit === opt.value
+                                    ? 'bg-white shadow text-blue-700 font-semibold'
+                                    : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Exclude input */}
+                <div className="flex items-center gap-2">
+                    <Input
+                        value={excludeInput}
+                        onChange={(e) => setExcludeInput(e.target.value)}
+                        placeholder="제외 학번 (예: 2101,2305)"
+                        className="w-[200px] h-9 text-sm"
+                        onKeyDown={(e) => { if (e.key === 'Enter') setExcludeApplied(excludeInput); }}
+                    />
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setExcludeApplied(excludeInput)}
+                    >
+                        적용
+                    </Button>
+                    {excludeApplied && (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => { setExcludeInput(''); setExcludeApplied(''); }}
+                            className="text-red-500 px-2"
+                        >
+                            <X className="w-3 h-3" />
+                        </Button>
+                    )}
+                </div>
+            </div>
+
+            {isLoading ? (
+                <div className="text-center text-gray-400 py-12">데이터를 불러오는 중...</div>
+            ) : isError ? (
+                <div className="text-center text-red-400 py-12">오류: {(error as Error).message}</div>
+            ) : buckets.length === 0 ? (
+                <div className="text-center text-gray-400 py-12">해당 기간에 데이터가 없습니다.</div>
+            ) : (
+                <div className="space-y-8">
+                    {/* Graph 1: Unique Students */}
+                    <div>
+                        <h4 className="text-sm font-semibold text-gray-600 mb-3">고유 접속자 수 (학번 기준)</h4>
+                        <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={buckets}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                    <XAxis dataKey="label" tickFormatter={formatLabel} tick={{ fontSize: 12 }} />
+                                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                                    <Tooltip
+                                        labelFormatter={(v) => `구간: ${v}`}
+                                        formatter={(v: number) => [`${v}명`, '고유 접속자']}
+                                    />
+                                    <Bar dataKey="uniqueStudents" fill="#3b82f6" radius={[4, 4, 0, 0]} name="고유 접속자" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* Graph 2: Total Visits */}
+                    <div>
+                        <h4 className="text-sm font-semibold text-gray-600 mb-3">총 접속 횟수</h4>
+                        <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={buckets}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                    <XAxis dataKey="label" tickFormatter={formatLabel} tick={{ fontSize: 12 }} />
+                                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                                    <Tooltip
+                                        labelFormatter={(v) => `구간: ${v}`}
+                                        formatter={(v: number) => [`${v}회`, '접속 횟수']}
+                                    />
+                                    <Bar dataKey="totalVisits" fill="#10b981" radius={[4, 4, 0, 0]} name="접속 횟수" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* Summary stats */}
+                    <div className="flex gap-4 text-sm text-gray-500 border-t pt-3">
+                        <span>구간 수: {buckets.length}</span>
+                        <span>총 고유 접속자: {buckets.reduce((s: number, b: any) => s + b.uniqueStudents, 0)}명</span>
+                        <span>총 접속: {buckets.reduce((s: number, b: any) => s + b.totalVisits, 0)}회</span>
+                        {excludeApplied && <span className="text-orange-500">제외: {excludeApplied}</span>}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------
 // 7. Etc Manager (Miscellaneous features like Raw Comcigan Data)
 // ----------------------------------------------------------------------
 function EtcManager({ adminPassword }: { adminPassword: string }) {
@@ -2190,6 +2354,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 >
                     <Palette className="w-4 h-4 mr-2" />
                     사이트 디자인설정
+                </Button>
+                <Button
+                    variant={selectedMenu === "visitor-trends" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("visitor-trends")}
+                >
+                    <TrendingUp className="w-4 h-4 mr-2" />
+                    접속자 추이
                 </Button>
                 {/* Additional list items can go here later */}
             </div>
@@ -2328,6 +2500,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <SiteDesignSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "visitor-trends" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">접속자 추이</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <VisitorTrends adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
