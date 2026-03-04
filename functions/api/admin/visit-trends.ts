@@ -93,7 +93,7 @@ export const onRequest = async (context: any) => {
         // A "visit" = one student accessing the site in a given hour (not every API call)
         const totalQuery = `
             SELECT 
-                ${bucketExpr} as bucket,
+                _bucket as bucket,
                 COUNT(*) as totalVisits
             FROM (
                 SELECT DISTINCT
@@ -105,8 +105,8 @@ export const onRequest = async (context: any) => {
                 ${timeFilter}
                 ${excludeClause}
             )
-            GROUP BY bucket
-            ORDER BY bucket ASC
+            GROUP BY _bucket
+            ORDER BY _bucket ASC
         `;
 
         const uniqueBinds = [...excludeBinds];
