@@ -183,12 +183,17 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     const keys = Object.keys(rawData);
     const teacherProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].some((s: any) => typeof s === 'string' && s.endsWith('*'))) || "";
 
-    const keywords = ["국어", "수학", "영어", "한국사", "통합사회", "통합과학", "체육", "음악", "미술", "진로", "운동", "독서", "문학"];
+    const keywords = ["국어", "수학", "영어", "한국사", "통합사회", "통합과학", "체육", "음악", "미술", "진로", "운동", "독서", "문학", "일본어", "중국어", "정보", "화학", "생물", "물리", "지리", "역사", "경제", "정치", "사회", "과학", "기술"];
     let subjectProp = keys.find(k => {
+        if (k === teacherProp) return false; // 교사 배열은 후보에서 제외
         const val = rawData[k];
         if (!Array.isArray(val)) return false;
+        let matchCount = 0;
         for (let i = 0; i < Math.min(val.length, 100); i++) {
-            if (typeof val[i] === 'string' && keywords.some(kw => val[i].includes(kw))) return true;
+            if (typeof val[i] === 'string' && keywords.some(kw => val[i].includes(kw))) {
+                matchCount++;
+                if (matchCount >= 2) return true; // 2개 이상 키워드 매칭 시 확정
+            }
         }
         return false;
     }) || "";

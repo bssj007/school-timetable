@@ -1157,12 +1157,13 @@ export default function Dashboard() {
                           const electiveSelection = currentProfile?.electives?.[group];
                           let displaySubject = item ? item.subject : "-";
                           let displayTeacher = item ? item.teacher : "";
+                          // displaySubject가 항상 문자열이도록 보장 (elective 데이터 손상 방어)
 
                           let isElectiveActive = false;
                           let isCancelledByFreePeriod = false;
                           let displayClassName = ""; // 반(반이름) 표시용
                           if (group && electiveSelection) {
-                            displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject;
+                            displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject || displaySubject;
                             isElectiveActive = true;
 
                             const electiveTeachers = electiveSelection.teacher
@@ -1231,11 +1232,11 @@ export default function Dashboard() {
                                   <div
                                     className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}
                                     style={{
-                                      fontSize: displaySubject.length > 6 ? '9px' : displaySubject.length > 4 ? '11px' : undefined,
-                                      wordBreak: displaySubject.length > 6 ? 'keep-all' : undefined,
+                                      fontSize: (displaySubject || "").length > 6 ? '9px' : (displaySubject || "").length > 4 ? '11px' : undefined,
+                                      wordBreak: (displaySubject || "").length > 6 ? 'keep-all' : undefined,
                                     }}
                                   >
-                                    <span className={displaySubject.length <= 4 ? "text-sm md:text-base" : ""}>
+                                    <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
                                       {isCancelledByFreePeriod ? (
                                         <span>
                                           <span className="line-through opacity-60">{displaySubject}</span>

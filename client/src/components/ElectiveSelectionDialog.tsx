@@ -316,7 +316,13 @@ export default function ElectiveSelectionDialog({
             // Priority: explicit override > selectedSolution (ambiguous pick) > smart/manual
             const toSave = overrideElectives
                 ?? selectedSolution
-                ?? (mode === "smart" ? smartAssigned! : manualSelections);
+                ?? (mode === "smart" ? smartAssigned : manualSelections);
+
+            // 저장할 데이터가 없으면 차단 (null/빈 객체 방어)
+            if (!toSave || typeof toSave !== 'object' || Object.keys(toSave).length === 0) {
+                throw new Error("저장할 선택과목 데이터가 없습니다.");
+            }
+
             const res = await fetch('/api/electives', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
