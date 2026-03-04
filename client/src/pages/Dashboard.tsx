@@ -7,8 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon } from "lucide-react";
-import { toPng } from 'html-to-image';
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
@@ -655,23 +654,6 @@ export default function Dashboard() {
     return Array.from(subjects).sort();
   }, [timetableData]);
 
-  // 학번 계산 (G-C-N)
-  const formattedStudentId = useMemo(() => {
-    if (!grade || !classNum || !studentNumber) return "";
-    return `${grade}${classNum}${studentNumber.toString().padStart(2, '0')}`;
-  }, [grade, classNum, studentNumber]);
-
-  // 선택과목 정보 요약 (A: 과목, B: 과목...)
-  const electiveSummary = useMemo(() => {
-    if (!currentProfile?.electives) return "";
-    return Object.entries(currentProfile.electives)
-      .map(([group, elective]: [string, any]) => {
-        const subj = (elective as any).fullSubjectName || (elective as any).subject;
-        return `${group}: ${subj}`;
-      })
-      .join(", ");
-  }, [currentProfile, grade]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -1003,36 +985,24 @@ export default function Dashboard() {
                 <h1 className="text-2xl font-bold whitespace-nowrap overflow-hidden text-ellipsis">
                   {grade || '?'}-{classNum || '?'} 시간표
                 </h1>
-                <div className="flex items-center gap-2 no-print ml-2">
-                  {(grade === "2" || grade === "3") && (
-                    <div className="relative inline-block">
-                      <Button
-                        size="sm"
-                        className={`h-10 text-sm shrink-0 transition-all duration-300 bg-[#fc6603] hover:bg-[#e05a00] text-white ${isElectiveMissing ? "animate-pulse" : ""}`}
-                        style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
-                        onClick={() => setShowElectiveDialog(true)}
-                      >
-                        <Pencil className="w-4 h-4 mr-1" />
-                        선택과목 수정
-                      </Button>
-                      {isElectiveMissing && (
-                        <div className="absolute -bottom-20 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center ml-1">
-                          <ArrowUp className="w-8 h-16 text-[#fc6603]" strokeWidth={3} />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-10 text-sm whitespace-nowrap bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200"
-                    onClick={() => setShowPrintOptions(true)}
-                  >
-                    <Printer className="w-4 h-4 mr-1" />
-                    내보내기 / 인쇄
-                  </Button>
-                </div>
+                {(grade === "2" || grade === "3") && (
+                  <div className="relative inline-block">
+                    <Button
+                      size="sm"
+                      className={`h-10 text-sm ml-2 shrink-0 transition-all duration-300 bg-[#fc6603] hover:bg-[#e05a00] text-white ${isElectiveMissing ? "animate-pulse" : ""}`}
+                      style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
+                      onClick={() => setShowElectiveDialog(true)}
+                    >
+                      <Pencil className="w-4 h-4 mr-1" />
+                      선택과목 수정
+                    </Button>
+                    {isElectiveMissing && (
+                      <div className="absolute -bottom-20 left-1/2 transform -translate-x-1/2 animate-bounce flex flex-col items-center ml-1">
+                        <ArrowUp className="w-8 h-16 text-[#fc6603]" strokeWidth={3} />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Mobile Elective Edit Button */}
@@ -1077,18 +1047,6 @@ export default function Dashboard() {
                     onClick={() => setWeekOffset(weekOffset + 1)}
                   >
                     <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-                {/* Mobile Extra Actions */}
-                <div className="flex md:hidden items-center gap-2 mt-2 no-print">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-2 text-xs bg-blue-50 text-blue-700 border-blue-200"
-                    onClick={() => setShowPrintOptions(true)}
-                  >
-                    <Printer className="w-3.5 h-3.5 mr-1" />
-                    내보내기
                   </Button>
                 </div>
                 <span className={`text-lg md:text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
@@ -1382,48 +1340,12 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* 출력 옵션 다이얼로그 */}
-      <Dialog open={showPrintOptions} onOpenChange={setShowPrintOptions}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>출력 및 저장 설정</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6 pt-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <label className="text-sm font-medium">수행평가 포함</label>
-                <p className="text-xs text-muted-foreground">시간표에 등록된 수행평가를 함께 표시합니다.</p>
-              </div>
-              <input
-                type="checkbox"
-                className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                checked={includeAssessments}
-                onChange={(e) => setIncludeAssessments(e.target.checked)}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Button onClick={handleDownloadPng} className="bg-blue-600 hover:bg-blue-700">
-                <ImageIcon className="w-4 h-4 mr-2" />
-                PNG 저장
-              </Button>
-              <Button onClick={handlePrint} className="bg-green-600 hover:bg-green-700">
-                <Printer className="w-4 h-4 mr-2" />
-                인쇄하기
-              </Button>
-            </div>
-            <p className="text-[10px] text-center text-gray-400">
-              * 인쇄 시 20cm x 20cm 정사각형 규격으로 최적화됩니다.
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* 수행평가 추가 다이얼로그 */}
-      <Dialog open={showAddDialog} onOpenChange={(open) => {
+      < Dialog open={showAddDialog} onOpenChange={(open) => {
         setShowAddDialog(open);
         if (!open) setSelectedCell(null);
-      }}>
+      }
+      }>
         <DialogContent className="sm:max-w-[500px]" aria-describedby="add-assessment-description">
           <DialogHeader>
             <DialogTitle>수행평가 추가</DialogTitle>
@@ -1504,10 +1426,10 @@ export default function Dashboard() {
             </div>
           </form>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       {/* 수행평가 수정 다이얼로그 */}
-      <Dialog open={showEditDialog} onOpenChange={(open) => {
+      < Dialog open={showEditDialog} onOpenChange={(open) => {
         setShowEditDialog(open);
         if (!open) setSelectedCell(null);
       }}>
@@ -1590,10 +1512,10 @@ export default function Dashboard() {
             </div>
           </form>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       {/* 수행평가 정보 다이얼로그 */}
-      <Dialog open={showViewDialog} onOpenChange={(open) => {
+      < Dialog open={showViewDialog} onOpenChange={(open) => {
         setShowViewDialog(open);
         if (!open) setSelectedCell(null);
       }}>
