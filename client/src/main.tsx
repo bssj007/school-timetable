@@ -6,7 +6,11 @@ import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
+import { initGlobalErrorHandlers } from "./lib/autoErrorReporter";
 import "./index.css";
+
+// 글로벌 오류 핸들러 등록 (앱 마운트 전)
+initGlobalErrorHandlers();
 
 const queryClient = new QueryClient();
 

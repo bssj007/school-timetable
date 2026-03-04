@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { reportErrorToBugApi } from "@/lib/autoErrorReporter";
+import { AlertTriangle, CheckCircle, RotateCcw } from "lucide-react";
 import { Component, ReactNode } from "react";
 
 interface Props {
@@ -9,16 +10,32 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  reported: boolean;
 }
 
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, reported: false };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    const stack = [
+      error.stack || error.message,
+      errorInfo.componentStack ? `\nComponent Stack:${errorInfo.componentStack}` : "",
+    ].join("");
+
+    reportErrorToBugApi({
+      message: error.message,
+      stack,
+      source: "React ErrorBoundary",
+    }).then(() => {
+      this.setState({ reported: true });
+    });
   }
 
   render() {
@@ -38,6 +55,13 @@ class ErrorBoundary extends Component<Props, State> {
                 {this.state.error?.stack}
               </pre>
             </div>
+
+            {this.state.reported && (
+              <div className="flex items-center gap-2 text-sm text-green-600 mb-4">
+                <CheckCircle size={16} />
+                오류가 자동으로 제보되었습니다.
+              </div>
+            )}
 
             <button
               onClick={() => window.location.reload()}
@@ -60,3 +84,4 @@ class ErrorBoundary extends Component<Props, State> {
 }
 
 export default ErrorBoundary;
+
