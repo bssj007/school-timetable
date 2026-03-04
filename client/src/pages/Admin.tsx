@@ -1947,12 +1947,22 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
             toast.success('사이트 디자인 설정이 저장되었습니다.');
             queryClient.invalidateQueries({ queryKey: ['admin', 'settings', 'site-design'] });
             queryClient.invalidateQueries({ queryKey: ['publicSettings'] });
+            setIsInitialized(false); // re-sync saved state
         } catch (e: any) {
             toast.error(`저장 실패: ${e.message}`);
         } finally {
             setIsSaving(false);
         }
     };
+
+    const handleCancel = () => {
+        setSiteTitle(currentSettings?.site_title || '');
+        setSiteFaviconUrl(currentSettings?.site_favicon_url || '');
+    };
+
+    const savedTitle = currentSettings?.site_title || '';
+    const savedFavicon = currentSettings?.site_favicon_url || '';
+    const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon;
 
     if (isLoading) {
         return <div className="p-8 text-center text-gray-400">설정을 불러오는 중...</div>;
@@ -1972,28 +1982,62 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 <p className="text-xs text-gray-400">브라우저 탭에 표시되는 제목입니다. 비워두면 기본값(수행평가 일정공유 - 성지고)이 사용됩니다.</p>
             </div>
 
-            {/* 파비콘 URL */}
+            {/* 파비콘 업로드 */}
             <div className="space-y-2">
-                <Label className="text-sm font-semibold">사이트 아이콘 (Favicon URL)</Label>
+                <Label className="text-sm font-semibold">사이트 아이콘 (Favicon)</Label>
                 <div className="flex items-center gap-3">
-                    <Input
-                        value={siteFaviconUrl}
-                        onChange={(e) => setSiteFaviconUrl(e.target.value)}
-                        placeholder="https://example.com/icon.png"
-                        className="max-w-md flex-1"
+                    <input
+                        type="file"
+                        accept="image/png,image/x-icon,image/svg+xml,image/jpeg,image/webp"
+                        className="hidden"
+                        id="favicon-upload"
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (file.size > 1024 * 1024) {
+                                toast.error('파일 크기가 1MB를 초과합니다.');
+                                return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                                const dataUrl = ev.target?.result as string;
+                                if (dataUrl) setSiteFaviconUrl(dataUrl);
+                            };
+                            reader.readAsDataURL(file);
+                            e.target.value = ''; // reset for re-upload
+                        }}
                     />
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => document.getElementById('favicon-upload')?.click()}
+                        className="shrink-0"
+                    >
+                        <Upload className="w-4 h-4 mr-1.5" />
+                        이미지 업로드
+                    </Button>
                     {siteFaviconUrl && (
-                        <div className="shrink-0 w-10 h-10 rounded-lg border bg-white flex items-center justify-center overflow-hidden">
-                            <img
-                                src={siteFaviconUrl}
-                                alt="favicon preview"
-                                className="w-8 h-8 object-contain"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                            />
-                        </div>
+                        <>
+                            <div className="shrink-0 w-10 h-10 rounded-lg border bg-white flex items-center justify-center overflow-hidden">
+                                <img
+                                    src={siteFaviconUrl}
+                                    alt="favicon preview"
+                                    className="w-8 h-8 object-contain"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-500 hover:text-red-700 px-2"
+                                onClick={() => setSiteFaviconUrl('')}
+                            >
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </>
                     )}
                 </div>
-                <p className="text-xs text-gray-400">브라우저 탭에 표시되는 아이콘 URL입니다. PNG, ICO, SVG 형식을 권장합니다.</p>
+                <p className="text-xs text-gray-400">브라우저 탭에 표시되는 아이콘입니다. PNG, ICO, SVG 형식 권장 (최대 1MB).</p>
             </div>
 
             {/* 미리보기 */}
@@ -2011,10 +2055,23 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 </div>
             )}
 
-            {/* 저장 */}
-            <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
-                {isSaving ? '저장 중...' : '설정 저장'}
-            </Button>
+            {/* 취소 / 적용 */}
+            <div className="flex gap-2 pt-2">
+                <Button
+                    variant="outline"
+                    onClick={handleCancel}
+                    disabled={!hasChanges || isSaving}
+                >
+                    취소
+                </Button>
+                <Button
+                    onClick={handleSave}
+                    disabled={!hasChanges || isSaving}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                    {isSaving ? '적용 중...' : '적용'}
+                </Button>
+            </div>
         </div>
     );
 }
