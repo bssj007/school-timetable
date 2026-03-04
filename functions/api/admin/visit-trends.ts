@@ -90,14 +90,21 @@ export const onRequest = async (context: any) => {
         `;
 
         // Query 2: Total visits per bucket (excluding 기타접속)
+        // A "visit" = one student accessing the site in a given hour (not every API call)
         const totalQuery = `
             SELECT 
                 ${bucketExpr} as bucket,
                 COUNT(*) as totalVisits
-            FROM access_logs
-            WHERE grade IS NOT NULL AND classNum IS NOT NULL AND studentNumber IS NOT NULL
-            ${timeFilter}
-            ${excludeClause}
+            FROM (
+                SELECT DISTINCT
+                    ${bucketExpr} as _bucket,
+                    grade, classNum, studentNumber,
+                    strftime('%Y-%m-%d %H', accessedAt) as sessionHour
+                FROM access_logs
+                WHERE grade IS NOT NULL AND classNum IS NOT NULL AND studentNumber IS NOT NULL
+                ${timeFilter}
+                ${excludeClause}
+            )
             GROUP BY bucket
             ORDER BY bucket ASC
         `;
