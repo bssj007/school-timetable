@@ -135,7 +135,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                             </div>
                             <div className="bg-gray-50 p-4 rounded-lg flex flex-col gap-1 border border-gray-200">
                                 <span className="text-xs text-gray-500 font-bold flex items-center gap-1"><Clock className="w-3 h-3" /> 마지막 접속</span>
-                                <span className="text-sm font-mono">{data.lastAccess ? new Date(data.lastAccess).toLocaleString() : '-'}</span>
+                                <span className="text-sm font-mono">{data.lastAccess ? new Date(data.lastAccess + 'Z').toLocaleString() : '-'}</span>
                             </div>
                             <div className="bg-yellow-50 p-4 rounded-lg flex flex-col gap-1 border border-yellow-100 md:col-span-3">
                                 <span className="text-xs text-yellow-700 font-bold flex items-center gap-1"><User className="w-3 h-3" /> 카카오 계정</span>
@@ -175,7 +175,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                             data.logs.map((l: any, i: number) => (
                                                 <div key={i} className="flex justify-between text-xs py-1 border-b">
                                                     <div className="flex gap-2"><Badge variant="outline" className="h-5">{l.method}</Badge> <span className="truncate max-w-[200px]">{l.endpoint}</span></div>
-                                                    <span className="text-gray-400">{new Date(l.accessedAt).toLocaleTimeString()}</span>
+                                                    <span className="text-gray-400">{new Date(l.accessedAt + 'Z').toLocaleTimeString()}</span>
                                                 </div>
                                             ))
                                         ) : <div className="text-center text-gray-400 py-8">로그 없음</div>

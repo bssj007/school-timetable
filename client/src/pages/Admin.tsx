@@ -2143,8 +2143,8 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                             key={opt.value}
                             onClick={() => setUnit(opt.value)}
                             className={`px-3 py-1.5 text-sm rounded-md transition-colors ${unit === opt.value
-                                    ? 'bg-white shadow text-blue-700 font-semibold'
-                                    : 'text-gray-500 hover:text-gray-700'
+                                ? 'bg-white shadow text-blue-700 font-semibold'
+                                : 'text-gray-500 hover:text-gray-700'
                                 }`}
                         >
                             {opt.label}
@@ -3211,7 +3211,7 @@ export default function Admin() {
                                                     <span className="text-gray-400 text-xs">-</span>
                                                 )}
                                             </TableCell>
-                                            <TableCell>{user.lastAccess ? new Date(user.lastAccess).toLocaleString() : '-'}</TableCell>
+                                            <TableCell>{user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}</TableCell>
 
                                             <TableCell>
                                                 {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
