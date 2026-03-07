@@ -9,7 +9,7 @@ import {
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
     TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown
 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -2174,8 +2174,44 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
 
     const buckets = trendData?.buckets || [];
 
+    const isBucketCurrent = (label: string, unit: string) => {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+
+        if (unit === 'hour') return label === `${yyyy}-${mm}-${dd} ${hh}:00`;
+        if (unit === 'day') return label === `${yyyy}-${mm}-${dd}`;
+        if (unit === 'month' || unit === 'all') return label === `${yyyy}-${mm}`;
+
+        // Provide a best-effort approximation for 'week' by checking if it's the last bucket and we are roughly in the same time frame.
+        // It's safer to just decline styling week accurately without complex mapping, but for visual completeness, if we need it, we can fallback.
+        return false;
+    };
+
     return (
         <div className="space-y-6">
+            <svg width="0" height="0" style={{ display: 'block' }}>
+                <defs>
+                    <pattern id="stripe-blue" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                        <rect width="8" height="8" fill="#3b82f6" />
+                        <rect width="4" height="8" fill="#bfdbfe" />
+                    </pattern>
+                    <pattern id="stripe-purple" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                        <rect width="8" height="8" fill="#8b5cf6" />
+                        <rect width="4" height="8" fill="#ddd6fe" />
+                    </pattern>
+                    <pattern id="stripe-green" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                        <rect width="8" height="8" fill="#10b981" />
+                        <rect width="4" height="8" fill="#a7f3d0" />
+                    </pattern>
+                    <pattern id="stripe-orange" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                        <rect width="8" height="8" fill="#f59e0b" />
+                        <rect width="4" height="8" fill="#fde68a" />
+                    </pattern>
+                </defs>
+            </svg>
             {/* Controls */}
             <div className="flex flex-wrap gap-3 items-end">
                 {/* Time unit tabs */}
@@ -2244,7 +2280,11 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                                         labelFormatter={(v) => `구간: ${v}`}
                                         formatter={(v: number) => [`${v}명`, '고유 접속자']}
                                     />
-                                    <Bar dataKey="uniqueStudents" fill="#3b82f6" radius={[4, 4, 0, 0]} name="고유 접속자" />
+                                    <Bar dataKey="uniqueStudents" name="고유 접속자" radius={[4, 4, 0, 0]}>
+                                        {buckets.map((entry: any, index: number) => (
+                                            <Cell key={`cell-${index}`} fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-blue)" : "#3b82f6"} />
+                                        ))}
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -2263,7 +2303,11 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                                         labelFormatter={(v) => `구간: ${v}`}
                                         formatter={(v: number) => [`${v}개`, '고유 IP']}
                                     />
-                                    <Bar dataKey="uniqueIPs" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="고유 IP" />
+                                    <Bar dataKey="uniqueIPs" name="고유 IP" radius={[4, 4, 0, 0]}>
+                                        {buckets.map((entry: any, index: number) => (
+                                            <Cell key={`cell-${index}`} fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-purple)" : "#8b5cf6"} />
+                                        ))}
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -2309,10 +2353,13 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                                     />
                                     <Bar
                                         dataKey={totalMetric === "student" ? "totalVisitsStudent" : "totalVisitsIP"}
-                                        fill={totalMetric === "student" ? "#10b981" : "#f59e0b"}
                                         radius={[4, 4, 0, 0]}
                                         name="접속 횟수"
-                                    />
+                                    >
+                                        {buckets.map((entry: any, index: number) => (
+                                            <Cell key={`cell-${index}`} fill={isBucketCurrent(entry.label, unit) ? (totalMetric === "student" ? "url(#stripe-green)" : "url(#stripe-orange)") : (totalMetric === "student" ? "#10b981" : "#f59e0b")} />
+                                        ))}
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -2931,8 +2978,8 @@ export default function Admin() {
     const [selectedProfile, setSelectedProfile] = useState<IPProfile | null>(null);
     const [selectedIp, setSelectedIp] = useState<string | null>(null);
     const [isOthersExpanded, setIsOthersExpanded] = useState(false);
-    const [sortColumn, setSortColumn] = useState<'id' | 'modCount' | 'lastAccess'>('id');
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+    const [sortColumn, setSortColumn] = useState<'id' | 'modCount' | 'lastAccess'>('lastAccess');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
     const { data: assessments } = useQuery({
