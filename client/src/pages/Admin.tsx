@@ -2177,7 +2177,7 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
             if (!res.ok) throw new Error('Failed to fetch trends');
             return res.json();
         },
-        refetchInterval: 30000,
+        refetchInterval: 5000,
     });
 
     const formatLabel = (label: string) => {
