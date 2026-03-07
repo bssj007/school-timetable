@@ -1069,16 +1069,16 @@ export default function Dashboard() {
 
               {/* Mobile Print Button */}
               {shouldShowPrintButton && (
-                <div className="absolute right-0 top-0 bottom-0 w-auto flex items-center justify-end md:hidden z-20 pointer-events-none">
+                <div className="absolute right-0 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-end md:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative mr-1 md:mr-0">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 px-2 gap-1 font-bold text-xs text-gray-700 hover:bg-gray-100 whitespace-nowrap"
+                      className="h-10 px-3 gap-1 font-bold text-sm text-gray-700 hover:bg-gray-100"
                       onClick={() => setShowPrintOptions(true)}
                       title="내보내기 / 인쇄"
                     >
-                      <Printer className="w-3.5 h-3.5 text-gray-500" />
+                      <Printer className="w-4 h-4 text-gray-500" />
                       인쇄/저장
                     </Button>
                   </div>
