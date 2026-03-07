@@ -1905,10 +1905,11 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
 function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
     const [siteTitle, setSiteTitle] = useState("");
-    const [siteTitleHtml, setSiteTitleHtml] = useState("");
     const [siteFaviconUrl, setSiteFaviconUrl] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
+    const titleHtmlRef = React.useRef<HTMLDivElement>(null);
+    const [htmlChanged, setHtmlChanged] = useState(false);
 
     // Load current settings
     const { data: currentSettings, isLoading } = useQuery({
@@ -1926,15 +1927,22 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     useEffect(() => {
         if (currentSettings && !isInitialized) {
             setSiteTitle(currentSettings.site_title || '');
-            setSiteTitleHtml(currentSettings.site_title_html || '');
+            if (titleHtmlRef.current) {
+                titleHtmlRef.current.innerHTML = currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
+            }
             setSiteFaviconUrl(currentSettings.site_favicon_url || '');
             setIsInitialized(true);
+            setHtmlChanged(false);
         }
     }, [currentSettings, isInitialized]);
 
     const handleSave = async () => {
         setIsSaving(true);
         try {
+            let finalHtml = titleHtmlRef.current?.innerHTML.trim() || '';
+            if (finalHtml === '<br>' || finalHtml === '<div><br></div>' || finalHtml === '') {
+                finalHtml = '';
+            }
             const res = await fetch('/api/admin/settings', {
                 method: 'POST',
                 headers: {
@@ -1943,7 +1951,7 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 },
                 body: JSON.stringify({
                     site_title: siteTitle,
-                    site_title_html: siteTitleHtml,
+                    site_title_html: finalHtml,
                     site_favicon_url: siteFaviconUrl
                 })
             });
@@ -1961,14 +1969,16 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
 
     const handleCancel = () => {
         setSiteTitle(currentSettings?.site_title || '');
-        setSiteTitleHtml(currentSettings?.site_title_html || '');
+        if (titleHtmlRef.current) {
+            titleHtmlRef.current.innerHTML = currentSettings?.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
+        }
         setSiteFaviconUrl(currentSettings?.site_favicon_url || '');
+        setHtmlChanged(false);
     };
 
     const savedTitle = currentSettings?.site_title || '';
-    const savedTitleHtml = currentSettings?.site_title_html || '';
     const savedFavicon = currentSettings?.site_favicon_url || '';
-    const hasChanges = siteTitle !== savedTitle || siteTitleHtml !== savedTitleHtml || siteFaviconUrl !== savedFavicon;
+    const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon || htmlChanged;
 
     if (isLoading) {
         return <div className="p-8 text-center text-gray-400">설정을 불러오는 중...</div>;
@@ -1998,17 +2008,18 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                         onChange={(e) => {
                             document.execCommand('styleWithCSS', false, 'true');
                             document.execCommand('foreColor', false, e.target.value);
+                            setHtmlChanged(true);
                         }}
                         title="글자를 드래그한 후 색상을 골라주세요"
                     />
                     <span className="text-xs text-gray-500">마우스로 변경하고 싶은 글자를 드래그한 뒤 색상을 선택하세요. (기본 텍스트: 수행 일정공유)</span>
                 </div>
                 <div
+                    ref={titleHtmlRef}
                     className="w-full max-w-md min-h-[42px] px-3 py-2 border rounded-md text-lg font-bold shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     contentEditable
                     suppressContentEditableWarning
-                    dangerouslySetInnerHTML={{ __html: siteTitleHtml || '<span style="color: #2563eb">수행 일정공유</span>' }}
-                    onBlur={(e) => setSiteTitleHtml(e.currentTarget.innerHTML)}
+                    onInput={() => setHtmlChanged(true)}
                 />
                 <p className="text-xs text-gray-400">PC와 모바일 화면 상단에 표시되는 제목입니다. 서식이 포함된 HTML 형태로 저장됩니다.</p>
             </div>
@@ -2081,7 +2092,7 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                         ) : (
                             <div className="w-4 h-4 rounded bg-gray-200" />
                         )}
-                        <span className="text-sm text-slate-700 truncate">{siteTitle || '수행평가 일정공유 - 성지고'}</span>
+                        <span className="text-sm text-slate-700 truncate">{siteTitle || '브라우저 탭 기본 제목'}</span>
                     </div>
                 </div>
             )}
@@ -2329,6 +2340,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
     const [schoolSearchQuery, setSchoolSearchQuery] = useState("성지");
     const [schoolNameInput, setSchoolNameInput] = useState("부산성지고");
 
+    // Fetch bug reports for real-time count in the sidebar badge
+    const reportsQuery = useQuery({
+        queryKey: ["admin", "bugReports"],
+        queryFn: async () => {
+            const res = await fetch("/api/bug-reports", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("Failed to fetch bug reports");
+            return res.json();
+        },
+        refetchInterval: 10000,
+    });
+
     const rawDataQuery = useQuery({
         queryKey: ["admin", "rawComcigan", schoolSearchQuery],
         queryFn: async () => {
@@ -2417,8 +2439,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     className="justify-start whitespace-nowrap text-left"
                     onClick={() => setSelectedMenu("bug-report-manager")}
                 >
-                    <Bug className="w-4 h-4 mr-2" />
-                    오류신고 현황
+                    <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center">
+                            <Bug className="w-4 h-4 mr-2" />
+                            오류신고 현황
+                        </div>
+                        {reportsQuery.data && reportsQuery.data.length > 0 && (
+                            <span className="text-xs text-red-500 font-bold ml-2">
+                                ({reportsQuery.data.length})
+                            </span>
+                        )}
+                    </div>
                 </Button>
                 <Button
                     variant={selectedMenu === "student-elective-preentry" ? "default" : "ghost"}

@@ -98,6 +98,7 @@ export const onRequest = async (context: any) => {
             LEFT JOIN LatestIPs ip ON al.ip = ip.ip
             LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
             WHERE
+                al.method = 'GET' AND al.endpoint IN ('/', '/index.html') AND
                 COALESCE(al.grade, sp.grade) IS NOT NULL AND
                 COALESCE(al.classNum, sp.classNum) IS NOT NULL AND
                 COALESCE(al.studentNumber, sp.studentNumber) IS NOT NULL
@@ -189,6 +190,7 @@ export const onRequest = async (context: any) => {
             LEFT JOIN LatestIPs ip ON al.ip = ip.ip
             LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
             WHERE
+                al.method = 'GET' AND al.endpoint IN ('/', '/index.html') AND
                 COALESCE(al.grade, sp.grade) IS NOT NULL AND
                 COALESCE(al.classNum, sp.classNum) IS NOT NULL AND
                 COALESCE(al.studentNumber, sp.studentNumber) IS NOT NULL
