@@ -1507,7 +1507,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
     const [selectedGrade, setSelectedGrade] = useState("2");
     const [selectedDataset, setSelectedDataset] = useState("_auto_");
     const [resolvedDataset, setResolvedDataset] = useState("");
-    const [selectedClass, setSelectedClass] = useState("all");
+    const [selectedClass, setSelectedClass] = useState("");
     // pendingChanges: key = "classNum-studentNumber", value = full electives object for that student
     const [pendingChanges, setPendingChanges] = useState<Record<string, Record<string, any>>>({});
     const [isSaving, setIsSaving] = useState(false);
@@ -1801,7 +1801,12 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
 
             {/* Grid Table */}
             <div className="flex-1 overflow-auto border rounded-md">
-                {isLoading ? (
+                {!selectedClass ? (
+                    <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center h-full">
+                        <p className="text-lg font-medium">선택된 반이 없습니다.</p>
+                        <p className="text-sm mt-1">위의 탭에서 열람할 반(또는 전체)을 선택해 주세요.</p>
+                    </div>
+                ) : isLoading ? (
                     <div className="p-8 text-center text-gray-400">데이터를 불러오는 중...</div>
                 ) : groupCodes.length === 0 ? (
                     <div className="p-8 text-center text-gray-400">
