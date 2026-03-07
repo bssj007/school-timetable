@@ -18,18 +18,31 @@ interface IPProfileViewerProps {
 }
 
 function parseUserAgent(ua: string) {
+    if (!ua) return { os: "Unknown OS", browser: "Unknown Browser", raw: "Unknown" };
+
+    const lowerUa = ua.toLowerCase();
     let os = "Unknown OS";
-    if (ua.includes("Windows")) os = "Windows";
-    else if (ua.includes("Mac")) os = "macOS";
-    else if (ua.includes("Linux")) os = "Linux";
-    else if (ua.includes("Android")) os = "Android";
-    else if (ua.includes("iPhone") || ua.includes("iPad")) os = "iOS";
+
+    // OS Matching
+    if (lowerUa.includes("windows")) os = "Windows";
+    else if (lowerUa.includes("mac os") || lowerUa.includes("macintosh")) os = "macOS";
+    else if (lowerUa.includes("android")) os = "Android";
+    else if (lowerUa.includes("iphone") || lowerUa.includes("ipad") || lowerUa.includes("ipod")) os = "iOS";
+    else if (lowerUa.includes("linux")) os = "Linux";
 
     let browser = "Unknown Browser";
-    if (ua.includes("Edg")) browser = "Edge";
-    else if (ua.includes("Chrome")) browser = "Chrome";
-    else if (ua.includes("Safari")) browser = "Safari";
-    else if (ua.includes("Firefox")) browser = "Firefox";
+
+    // Browser Matching (Precise Precedence)
+    if (lowerUa.includes("kakaotalk")) browser = "KakaoTalk";
+    else if (lowerUa.includes("whale")) browser = "Naver Whale";
+    else if (lowerUa.includes("samsungbrowser")) browser = "Samsung Browser";
+    else if (lowerUa.includes("edg") || lowerUa.includes("edge")) browser = "Edge";
+    else if (lowerUa.includes("opr") || lowerUa.includes("opera")) browser = "Opera";
+    else if (lowerUa.includes("firefox") || lowerUa.includes("fxios")) browser = "Firefox";
+    // Chrome must be checked before Safari, because Chrome includes 'Safari' in its UA string
+    else if (lowerUa.includes("chrome") || lowerUa.includes("crios")) browser = "Chrome";
+    else if (lowerUa.includes("safari")) browser = "Safari";
+    else if (lowerUa.includes("trident") || lowerUa.includes("msie")) browser = "Internet Explorer";
 
     return { os, browser, raw: ua };
 }
@@ -37,13 +50,13 @@ function parseUserAgent(ua: string) {
 export default function IPProfileViewer({ initialData, isOpen, onClose, adminPassword }: IPProfileViewerProps) {
     const [data, setData] = useState<IPProfile | null>(null);
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-    const [selectedLogDate, setSelectedLogDate] = useState<string>("all");
+    const [selectedLogDate, setSelectedLogDate] = useState<string>(new Date().toLocaleDateString('ko-KR'));
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
 
     useEffect(() => {
         if (isOpen && initialData) {
             setData(initialData);
-            setSelectedLogDate("all"); // Reset filter on new open
+            setSelectedLogDate(new Date().toLocaleDateString('ko-KR')); // Default to today
             setIsLogModalOpen(false); // Close log modal on re-open
             if (!initialData.detailsLoaded) {
                 fetchFullProfile(initialData.ip);
@@ -115,26 +128,41 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
     const availableDates = useState<string[]>([]);
     const uniqueLogDates = data?.logs ? Array.from(new Set(data.logs.map(l => new Date(l.accessedAt + 'Z').toLocaleDateString('ko-KR')))) : [];
 
+    // Ensure today's date exists in the dropdown options
+    const todayString = new Date().toLocaleDateString('ko-KR');
+    if (uniqueLogDates.length > 0 && !uniqueLogDates.includes(todayString)) {
+        uniqueLogDates.unshift(todayString);
+    }
+
     // 2. Filter Logs by Date
     const filteredLogs = data?.logs ? data.logs.filter(l => {
         if (selectedLogDate === "all") return true;
         return new Date(l.accessedAt + 'Z').toLocaleDateString('ko-KR') === selectedLogDate;
     }) : [];
 
-    // 3. Group Consecutive Logs
+    // 3. Group Concurrent Access Logs (Bursts within 5 seconds)
     const groupedLogs = [];
     if (filteredLogs.length > 0) {
         // Logs are currently chronologically descending (newest first)
-        let currentGroup = { ...filteredLogs[0], count: 1, accessedAtStart: filteredLogs[0].accessedAt };
+        let currentGroup = {
+            timeEnd: filteredLogs[0].accessedAt,
+            timeStart: filteredLogs[0].accessedAt,
+            logs: [filteredLogs[0]]
+        };
 
         for (let i = 1; i < filteredLogs.length; i++) {
             const log = filteredLogs[i];
-            if (log.method === currentGroup.method && log.endpoint === currentGroup.endpoint) {
-                currentGroup.count++;
-                currentGroup.accessedAtStart = log.accessedAt; // Update start time since it's descending
+            const logTime = new Date(log.accessedAt + 'Z').getTime();
+            const groupStartTime = new Date(currentGroup.timeStart + 'Z').getTime();
+
+            // If the log is within 5 seconds of the start of the current burst (remembering it's descending)
+            // Note: logTime will be earlier (smaller) than groupStartTime
+            if (groupStartTime - logTime <= 5000) {
+                currentGroup.logs.push(log);
+                currentGroup.timeStart = log.accessedAt; // Push start time further back
             } else {
                 groupedLogs.push(currentGroup);
-                currentGroup = { ...log, count: 1, accessedAtStart: log.accessedAt };
+                currentGroup = { timeEnd: log.accessedAt, timeStart: log.accessedAt, logs: [log] };
             }
         }
         groupedLogs.push(currentGroup);
@@ -250,7 +278,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                                                 }
                                                                 <div className="flex-1 overflow-hidden">
                                                                     <div className="font-bold text-sm">{os} / {browser}</div>
-                                                                    <div className="text-[10px] text-gray-400 truncate" title={raw}>{raw}</div>
+                                                                    <div className="text-[11px] text-gray-500 break-all leading-relaxed mt-1" title={raw}>{raw}</div>
                                                                 </div>
                                                             </div>
                                                         );
@@ -294,7 +322,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                 value={selectedLogDate}
                                 onChange={(e) => setSelectedLogDate(e.target.value)}
                             >
-                                <option value="all">전체보기 ({data?.logs?.length || 0})</option>
+                                <option value="all">모든 날짜 보기 ({data?.logs?.length || 0})</option>
                                 {uniqueLogDates.map(date => (
                                     <option key={date} value={date}>{date}</option>
                                 ))}
@@ -303,40 +331,54 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                     </DialogHeader>
 
                     <div className="flex-1 overflow-y-auto bg-gray-50/50 relative">
-                        <div className="p-6">
+                        <div className="p-6 max-w-5xl mx-auto">
                             {data?.detailsLoaded ? (
                                 groupedLogs.length > 0 ? (
-                                    <div className="flex flex-col gap-2">
-                                        {groupedLogs.map((l: any, i: number) => (
-                                            <div key={i} className="flex justify-between items-center text-sm p-3 bg-white border rounded-lg shadow-sm hover:border-gray-300 transition-colors">
-                                                <div className="flex gap-4 items-center flex-1 min-w-0">
-                                                    <Badge variant="outline" className={`h-6 shrink-0 w-16 justify-center ${l.method === 'GET' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                                        l.method === 'POST' ? 'bg-green-50 text-green-700 border-green-200' :
-                                                            l.method === 'PATCH' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                                                l.method === 'DELETE' ? 'bg-red-50 text-red-700 border-red-200' : ''
-                                                        }`}>{l.method}</Badge>
-                                                    <div className="flex flex-col min-w-0 flex-1">
-                                                        <span className="truncate font-mono text-gray-700" title={l.endpoint}>{l.endpoint}</span>
+                                    <div className="flex flex-col gap-3">
+                                        {groupedLogs.map((group: any, i: number) => (
+                                            <details key={i} className="group bg-white border rounded-xl shadow-sm overflow-hidden" open={group.logs.length === 1}>
+                                                <summary className="flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors select-none list-none marker:hidden">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0 text-gray-400 group-open:rotate-90 transition-transform">
+                                                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 2L8 6L4 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="font-mono font-bold text-gray-800">
+                                                                {group.logs.length > 1 ? (
+                                                                    <>{new Date(group.timeStart + 'Z').toLocaleTimeString('ko-KR')} ~ <span className="text-gray-500">{new Date(group.timeEnd + 'Z').toLocaleTimeString('ko-KR')}</span></>
+                                                                ) : (
+                                                                    new Date(group.timeEnd + 'Z').toLocaleTimeString('ko-KR')
+                                                                )}
+                                                            </span>
+                                                            {group.logs.length > 1 && <span className="text-xs text-gray-500 mt-0.5">순간 접속 병합됨</span>}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div className="flex items-center gap-4 shrink-0 pl-4">
-                                                    {l.count > 1 && (
-                                                        <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border-indigo-200 font-bold px-2 py-0.5">
-                                                            연속 {l.count}회
+                                                    <div className="flex items-center gap-3">
+                                                        <Badge variant={group.logs.length > 1 ? "secondary" : "outline"} className={group.logs.length > 1 ? "bg-indigo-50 text-indigo-700 border-indigo-200" : ""}>
+                                                            총 {group.logs.length}건
                                                         </Badge>
-                                                    )}
-                                                    <div className="flex flex-col items-end w-32">
-                                                        <span className="text-gray-900 font-mono text-xs">{new Date(l.accessedAt + 'Z').toLocaleTimeString('ko-KR')}</span>
-                                                        {l.count > 1 && (
-                                                            <span className="text-gray-400 font-mono text-[10px]">~ {new Date(l.accessedAtStart + 'Z').toLocaleTimeString('ko-KR')}</span>
-                                                        )}
                                                     </div>
+                                                </summary>
+                                                <div className="border-t bg-gray-50/50 p-2 break-all divide-y">
+                                                    {group.logs.map((l: any, idx: number) => (
+                                                        <div key={idx} className="flex gap-4 items-center p-2 text-sm hover:bg-white transition-colors rounded">
+                                                            <Badge variant="outline" className={`h-6 shrink-0 w-16 justify-center ${l.method === 'GET' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                                l.method === 'POST' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                                    l.method === 'PATCH' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                                        l.method === 'DELETE' ? 'bg-red-50 text-red-700 border-red-200' : ''
+                                                                }`}>{l.method}</Badge>
+                                                            <div className="flex-1 font-mono text-[13px] text-gray-700 min-w-0 pr-4">{l.endpoint}</div>
+                                                            {group.logs.length > 1 && (
+                                                                <span className="text-gray-400 font-mono text-[11px] shrink-0">{new Date(l.accessedAt + 'Z').toLocaleTimeString('ko-KR')}</span>
+                                                            )}
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            </div>
+                                            </details>
                                         ))}
                                     </div>
-                                ) : <div className="text-center text-gray-500 py-12">선택된 날짜의 로그 내역이 존재하지 않습니다.</div>
-                            ) : <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-300 w-8 h-8" /></div>}
+                                ) : <div className="text-center text-gray-500 py-16">해당 날짜의 로깅 데이터가 존재하지 않습니다.</div>
+                            ) : <div className="flex justify-center py-20"><Loader2 className="animate-spin text-gray-300 w-10 h-10" /></div>}
                         </div>
                     </div>
                 </DialogContent>
