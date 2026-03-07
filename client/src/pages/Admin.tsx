@@ -4972,20 +4972,21 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
         },
     });
 
-    const handleSave = (overrideMaint?: { active: boolean; endTime: string | null; startTime: string | null }) => {
+    const handleSave = (overrideMaint?: { active: boolean; endTime: string | null; startTime: string | null; duration?: string }) => {
         const ips = ipWhitelist.split('\n').map(ip => ip.trim()).filter(ip => ip.length > 0);
 
         const activeState = overrideMaint ? overrideMaint.active : maintenanceActive;
         const currentStartTime = overrideMaint !== undefined ? overrideMaint.startTime : maintenanceStartTime;
         let newEndTime = overrideMaint !== undefined ? overrideMaint.endTime : maintenanceEndTime;
+        const currentDuration = overrideMaint?.duration !== undefined ? overrideMaint.duration : maintenanceDuration;
 
         // Calculate new end time if recalculating
-        if (activeState && maintenanceDuration !== "unlimited" && currentStartTime) {
-            const hours = parseInt(maintenanceDuration);
+        if (activeState && currentDuration !== "unlimited" && currentStartTime) {
+            const hours = parseInt(currentDuration);
             const endDate = new Date(currentStartTime);
             endDate.setHours(endDate.getHours() + hours);
             newEndTime = endDate.toISOString();
-        } else if (activeState && maintenanceDuration === "unlimited") {
+        } else if (activeState && currentDuration === "unlimited") {
             newEndTime = null;
         }
 
@@ -5075,8 +5076,10 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                                 onCheckedChange={(c) => {
                                     if (c === true) {
                                         setMaintenanceActive(true);
-                                        setMaintenanceStartTime(new Date().toISOString());
+                                        const nowStr = new Date().toISOString();
+                                        setMaintenanceStartTime(nowStr);
                                         setMaintenanceEndTime(null);
+                                        handleSave({ active: true, endTime: null, startTime: nowStr, duration: maintenanceDuration });
                                     }
                                 }}
                                 className="w-6 h-6 rounded-full data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600 disabled:opacity-50"
@@ -5090,7 +5093,12 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                             <label className="text-sm font-bold">점검 진행 시간</label>
                             <Select
                                 value={maintenanceDuration}
-                                onValueChange={setMaintenanceDuration}
+                                onValueChange={(val) => {
+                                    setMaintenanceDuration(val);
+                                    if (maintenanceActive) {
+                                        handleSave({ active: true, endTime: null, startTime: maintenanceStartTime, duration: val });
+                                    }
+                                }}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="기간 선택" />
