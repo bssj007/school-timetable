@@ -196,63 +196,69 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                 <TabsTrigger value="electives">선택과목 현황</TabsTrigger>
                                 <TabsTrigger value="devices">접속 환경</TabsTrigger>
                             </TabsList>
-                            <TabsContent value="assessments" className="flex-1 min-h-0 border rounded mt-2">
-                                <ScrollArea className="h-[300px] p-4">
-                                    {data.detailsLoaded ? (
-                                        data.assessments?.length > 0 ? (
-                                            data.assessments.map((a: any, i: number) => (
-                                                <div key={i} className="mb-2 pb-2 border-b last:border-0">
-                                                    <div className="font-bold text-sm">[{a.grade}-{a.classNum}] {a.subject}</div>
-                                                    <div className="text-xs text-gray-600">{a.title}</div>
-                                                    <div className="text-[10px] text-gray-400">{new Date(a.createdAt).toLocaleString()}</div>
-                                                </div>
-                                            ))
-                                        ) : <div className="text-center text-gray-400 py-8">기여 내역 없음</div>
-                                    ) : <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-300" /></div>}
+                            <TabsContent value="assessments" className="flex-1 min-h-0 border rounded mt-2 bg-white">
+                                <ScrollArea className="h-[300px] w-full">
+                                    <div className="p-4">
+                                        {data.detailsLoaded ? (
+                                            data.assessments?.length > 0 ? (
+                                                data.assessments.map((a: any, i: number) => (
+                                                    <div key={i} className="mb-2 pb-2 border-b last:border-0">
+                                                        <div className="font-bold text-sm">[{a.grade}-{a.classNum}] {a.subject}</div>
+                                                        <div className="text-xs text-gray-600">{a.title}</div>
+                                                        <div className="text-[10px] text-gray-400">{new Date(a.createdAt).toLocaleString()}</div>
+                                                    </div>
+                                                ))
+                                            ) : <div className="text-center text-gray-400 py-8">기여 내역 없음</div>
+                                        ) : <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-300" /></div>}
+                                    </div>
                                 </ScrollArea>
                             </TabsContent>
                             <TabsContent value="electives" className="flex-1 min-h-0 border rounded mt-2 bg-purple-50">
-                                <ScrollArea className="h-[300px] p-4">
-                                    {(data.grade === "2" || data.grade === "3" || data.electives) ? (
-                                        <div className="flex flex-col gap-2">
-                                            {data.electives && Object.keys(data.electives).length > 0 ? (
-                                                Object.entries(data.electives).map(([group, subData]: [string, any], i) => {
-                                                    const subjectName = typeof subData === 'object' && subData !== null ? (subData.fullSubjectName || subData.subject) : subData;
-                                                    return (
-                                                        <div key={i} className="flex justify-between items-center p-2 bg-white rounded border border-purple-100">
-                                                            <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-200 px-3">{group}</Badge>
-                                                            <span className="font-bold text-sm">{subjectName}</span>
-                                                        </div>
-                                                    );
-                                                })
-                                            ) : <div className="text-center text-gray-400 py-8">선택과목 데이터가 등록되지 않았습니다.</div>}
-                                        </div>
-                                    ) : <div className="text-center text-gray-400 py-8">선택과목 적용 학년이 아닙니다.</div>}
+                                <ScrollArea className="h-[300px] w-full">
+                                    <div className="p-4">
+                                        {(data.grade === "2" || data.grade === "3" || data.electives) ? (
+                                            <div className="flex flex-wrap gap-2">
+                                                {data.electives && Object.keys(data.electives).length > 0 ? (
+                                                    Object.entries(data.electives).map(([group, subData]: [string, any], i) => {
+                                                        const subjectName = typeof subData === 'object' && subData !== null ? (subData.fullSubjectName || subData.subject) : subData;
+                                                        return (
+                                                            <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-full border border-purple-200 shadow-sm hover:border-purple-300 transition-colors">
+                                                                <span className="text-xs font-bold text-purple-600">{group}</span>
+                                                                <span className="text-sm border-l border-purple-100 pl-1.5">{subjectName}</span>
+                                                            </div>
+                                                        );
+                                                    })
+                                                ) : <div className="text-center w-full text-gray-400 py-8">선택과목 데이터가 등록되지 않았습니다.</div>}
+                                            </div>
+                                        ) : <div className="text-center w-full text-gray-400 py-8">선택과목 적용 학년이 아닙니다.</div>}
+                                    </div>
                                 </ScrollArea>
                             </TabsContent>
-                            <TabsContent value="devices" className="flex-1 min-h-0 border rounded mt-2">
-                                <ScrollArea className="h-[300px] p-4">
-                                    {data.detailsLoaded ? (
-                                        data.recentUserAgents?.length > 0 ? (
-                                            <div className="flex flex-col gap-2">
-                                                {data.recentUserAgents.map((ua: string, i: number) => {
-                                                    const { os, browser, raw } = parseUserAgent(ua);
-                                                    return (
-                                                        <div key={i} className="flex items-center gap-3 p-2 bg-gray-50 rounded border">
-                                                            {os.includes("Window") || os.includes("Mac") || os.includes("Linux") ?
-                                                                <Monitor className="text-gray-500 w-5 h-5" /> :
-                                                                <Smartphone className="text-gray-500 w-5 h-5" />
-                                                            }
-                                                            <div className="flex-1 overflow-hidden">
-                                                                <div className="font-bold text-sm">{os} / {browser}</div>
-                                                                <div className="text-[10px] text-gray-400 truncate" title={raw}>{raw}</div>
+                            <TabsContent value="devices" className="flex-1 min-h-0 border rounded mt-2 bg-white">
+                                <ScrollArea className="h-[300px] w-full">
+                                    <div className="p-4">
+                                        {data.detailsLoaded ? (
+                                            data.recentUserAgents?.length > 0 ? (
+                                                <div className="flex flex-col gap-2">
+                                                    {data.recentUserAgents.map((ua: string, i: number) => {
+                                                        const { os, browser, raw } = parseUserAgent(ua);
+                                                        return (
+                                                            <div key={i} className="flex items-center gap-3 p-2 bg-gray-50 rounded border">
+                                                                {os.includes("Window") || os.includes("Mac") || os.includes("Linux") ?
+                                                                    <Monitor className="text-gray-500 w-5 h-5" /> :
+                                                                    <Smartphone className="text-gray-500 w-5 h-5" />
+                                                                }
+                                                                <div className="flex-1 overflow-hidden">
+                                                                    <div className="font-bold text-sm">{os} / {browser}</div>
+                                                                    <div className="text-[10px] text-gray-400 truncate" title={raw}>{raw}</div>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : <div className="text-center text-gray-400 py-8">기록된 환경 정보 없음</div>
-                                    ) : <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-300" /></div>}
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : <div className="text-center text-gray-400 py-8">기록된 환경 정보 없음</div>
+                                        ) : <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-300" /></div>}
+                                    </div>
                                 </ScrollArea>
                             </TabsContent>
                         </Tabs>
@@ -276,7 +282,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
 
             {/* Sub-modal: Expanded Logs Viewer */}
             <Dialog open={isLogModalOpen} onOpenChange={setIsLogModalOpen}>
-                <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0 overflow-hidden">
+                <DialogContent className="max-w-7xl w-[95vw] h-[90vh] flex flex-col p-0 overflow-hidden">
                     <DialogHeader className="p-6 pb-2 shrink-0 border-b">
                         <div className="flex justify-between items-start">
                             <div>
@@ -296,8 +302,8 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                         </div>
                     </DialogHeader>
 
-                    <div className="flex-1 overflow-hidden flex flex-col bg-gray-50/50">
-                        <ScrollArea className="flex-1 p-6">
+                    <div className="flex-1 overflow-y-auto bg-gray-50/50 relative">
+                        <div className="p-6">
                             {data?.detailsLoaded ? (
                                 groupedLogs.length > 0 ? (
                                     <div className="flex flex-col gap-2">
@@ -305,9 +311,9 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                             <div key={i} className="flex justify-between items-center text-sm p-3 bg-white border rounded-lg shadow-sm hover:border-gray-300 transition-colors">
                                                 <div className="flex gap-4 items-center flex-1 min-w-0">
                                                     <Badge variant="outline" className={`h-6 shrink-0 w-16 justify-center ${l.method === 'GET' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                                            l.method === 'POST' ? 'bg-green-50 text-green-700 border-green-200' :
-                                                                l.method === 'PATCH' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                                                    l.method === 'DELETE' ? 'bg-red-50 text-red-700 border-red-200' : ''
+                                                        l.method === 'POST' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                            l.method === 'PATCH' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                                l.method === 'DELETE' ? 'bg-red-50 text-red-700 border-red-200' : ''
                                                         }`}>{l.method}</Badge>
                                                     <div className="flex flex-col min-w-0 flex-1">
                                                         <span className="truncate font-mono text-gray-700" title={l.endpoint}>{l.endpoint}</span>
@@ -331,7 +337,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                     </div>
                                 ) : <div className="text-center text-gray-500 py-12">선택된 날짜의 로그 내역이 존재하지 않습니다.</div>
                             ) : <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-300 w-8 h-8" /></div>}
-                        </ScrollArea>
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>
