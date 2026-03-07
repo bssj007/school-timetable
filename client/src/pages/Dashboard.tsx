@@ -1063,12 +1063,13 @@ export default function Dashboard() {
                 <div className="pointer-events-auto relative">
                   <Button
                     variant="outline"
-                    size="icon"
-                    className="h-10 w-10 bg-white shadow-sm border-gray-200"
+                    size="sm"
+                    className="h-10 px-3 bg-white shadow-sm border-gray-200 gap-1 font-bold text-sm"
                     onClick={() => setShowPrintOptions(true)}
                     title="내보내기 / 인쇄"
                   >
-                    <Printer className="w-5 h-5 text-gray-500" />
+                    <Printer className="w-4 h-4 text-gray-500" />
+                    인쇄
                   </Button>
                 </div>
               </div>
