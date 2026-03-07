@@ -1021,14 +1021,51 @@ export default function Dashboard() {
       <div>
         {/* Visit Restriction Overlay (Completely Replaces Timetable Card) */}
         {isRestricted ? (
-          <div className="min-h-[400px] mt-8 flex flex-col items-center justify-center bg-white/50 backdrop-blur-sm rounded-2xl border-2 border-red-100 shadow-sm p-8 max-w-2xl mx-auto">
-            <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
-              <ShieldAlert className="w-10 h-10" />
+          <div className="w-full flex flex-col pt-2 md:pt-4">
+            {/* Preserved Desktop Selectors during Restriction */}
+            <div className="hidden md:flex items-center gap-2 justify-center mb-6">
+              <Select value={grade} onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}>
+                <SelectTrigger className="w-[100px] md:w-[110px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
+                  <SelectValue placeholder="학년" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1학년</SelectItem>
+                  <SelectItem value="2">2학년</SelectItem>
+                  <SelectItem value="3">3학년</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={classNum} onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}>
+                <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
+                  <SelectValue placeholder="반" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
+                    <SelectItem key={num} value={num.toString()}>{num}반</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={studentNumber} onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}>
+                <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
+                  <SelectValue placeholder="번호" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
+                    <SelectItem key={num} value={num.toString()}>{num}번</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 text-center">접근 제한 안내</h3>
-            <p className="text-gray-600 text-lg md:text-xl whitespace-pre-wrap text-center leading-relaxed font-medium">
-              {settings?.restriction_reason || `${grade}학년 서비스가 일시적으로 제한되었습니다.`}
-            </p>
+
+            {/* Restricted Message Card */}
+            <div className="min-h-[400px] flex flex-col items-center justify-center bg-white/50 backdrop-blur-sm rounded-2xl border-2 border-red-100 shadow-sm p-8 max-w-2xl mx-auto w-full">
+              <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
+                <ShieldAlert className="w-10 h-10" />
+              </div>
+              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 text-center">접근 제한 안내</h3>
+              <p className="text-gray-600 text-lg md:text-xl whitespace-pre-wrap text-center leading-relaxed font-medium">
+                {settings?.restriction_reason || `${grade}학년 서비스가 일시적으로 제한되었습니다.`}
+              </p>
+            </div>
           </div>
         ) : (
           <Card className="py-1 gap-1 md:py-2 md:gap-2">

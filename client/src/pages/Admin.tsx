@@ -4902,10 +4902,12 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                     // Duration is visual only during active set, keep default 3
                 } else {
                     setMaintenanceActive(false);
+                    setMaintenanceMessage("서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
                     setMaintenanceEndTime(null);
                 }
             } catch {
                 setMaintenanceActive(false);
+                setMaintenanceMessage("서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
             }
 
             try {
@@ -4939,6 +4941,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
         onSuccess: () => {
             toast.success("방문제한 설정이 저장되었습니다.");
             queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
         },
         onError: (err) => {
             toast.error(`저장 실패: ${err.message}`);
@@ -5007,10 +5010,15 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const isIpsDirty = currentIpsNormalized !== savedIpsNormalized;
 
     let savedMaintStr = "";
+    const defaultMaintenanceMessage = "서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.";
     try {
         const parsed = settingsQuery.data?.maintenance_mode ? JSON.parse(settingsQuery.data.maintenance_mode) : null;
-        savedMaintStr = parsed ? JSON.stringify({ active: !!parsed.active, message: parsed.message || "" }) : "";
-    } catch { }
+        savedMaintStr = parsed
+            ? JSON.stringify({ active: !!parsed.active, message: parsed.message || defaultMaintenanceMessage })
+            : JSON.stringify({ active: false, message: defaultMaintenanceMessage });
+    } catch {
+        savedMaintStr = JSON.stringify({ active: false, message: defaultMaintenanceMessage });
+    }
 
     const currentMaintStr = JSON.stringify({ active: maintenanceActive, message: maintenanceMessage });
     // We ignore duration/endTime check for dirtiness since it's dynamic
