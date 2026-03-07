@@ -144,6 +144,8 @@ export default function Dashboard() {
   // 인쇄 / 내보내기 state
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [includeAssessments, setIncludeAssessments] = useState(true);
+  const [printWidth, setPrintWidth] = useState<string>("21");
+  const [printHeight, setPrintHeight] = useState<string>("29.7");
   const timetableRef = useRef<HTMLDivElement>(null);
 
   // PNG 다운로드 핸들러
@@ -1067,16 +1069,16 @@ export default function Dashboard() {
 
               {/* Mobile Print Button */}
               {shouldShowPrintButton && (
-                <div className="absolute right-0 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-end md:hidden z-20 pointer-events-none">
+                <div className="absolute right-0 top-0 bottom-0 w-auto flex items-center justify-end md:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative mr-1 md:mr-0">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-10 px-3 gap-1 font-bold text-sm text-gray-700 hover:bg-gray-100"
+                      className="h-8 px-2 gap-1 font-bold text-xs text-gray-700 hover:bg-gray-100 whitespace-nowrap"
                       onClick={() => setShowPrintOptions(true)}
                       title="내보내기 / 인쇄"
                     >
-                      <Printer className="w-4 h-4 text-gray-500" />
+                      <Printer className="w-3.5 h-3.5 text-gray-500" />
                       인쇄/저장
                     </Button>
                   </div>
@@ -1169,7 +1171,10 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent className="px-1 pb-1 md:px-2 md:pb-2">
-              <div ref={timetableRef} id="timetable-container">
+              <div ref={timetableRef} id="timetable-container" style={{
+                '--print-width': `${printWidth}cm`,
+                '--print-height': `${printHeight}cm`
+              } as React.CSSProperties}>
                 {/* Print Capture Header */}
                 <div className="capture-only mb-3 p-2 border rounded-lg text-black">
                   <div className="text-xl font-bold mb-1">
@@ -1410,6 +1415,26 @@ export default function Dashboard() {
             <DialogTitle>시간표 내보내기</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-4">
+            <div className="flex gap-4 items-center">
+              <div className="flex-1 space-y-1">
+                <label className="text-sm font-medium">가로 크기 (cm)</label>
+                <Input
+                  type="number"
+                  value={printWidth}
+                  onChange={(e) => setPrintWidth(e.target.value)}
+                  step="0.1"
+                />
+              </div>
+              <div className="flex-1 space-y-1">
+                <label className="text-sm font-medium">세로 크기 (cm)</label>
+                <Input
+                  type="number"
+                  value={printHeight}
+                  onChange={(e) => setPrintHeight(e.target.value)}
+                  step="0.1"
+                />
+              </div>
+            </div>
             <Button onClick={handleDownloadPng} className="w-full flex items-center justify-center gap-2 h-12">
               <ImageIcon className="w-5 h-5" />
               이미지(PNG)로 저장
@@ -1420,7 +1445,7 @@ export default function Dashboard() {
             </Button>
             <p className="text-xs font-medium text-gray-500 text-center mt-2 flex flex-col items-center">
               <span>* 수행평가는 <strong>현재 보고 있는 주차</strong> 기준으로만 표시됩니다.</span>
-              <span className="text-red-500 mt-1">* <strong>A4 용지</strong> 비율(정사각형)에 맞추어 출력됩니다.</span>
+              <span className="text-red-500 mt-1">* 기본 <strong>A4 용지</strong>(21x29.7cm) 기준. 숫자를 조절하여 여백을 맞출 수 있습니다.</span>
             </p>
           </div>
         </DialogContent>

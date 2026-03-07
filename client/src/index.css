@@ -244,8 +244,8 @@
     position: fixed;
     left: 0;
     top: 0;
-    width: 20cm !important;
-    height: 20cm !important;
+    width: var(--print-width, 21cm) !important;
+    height: var(--print-height, 29.7cm) !important;
     padding: 0.5cm;
     background: white;
     box-shadow: none !important;
