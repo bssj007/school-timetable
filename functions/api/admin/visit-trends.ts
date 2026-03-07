@@ -49,29 +49,29 @@ export const onRequest = async (context: any) => {
 
         switch (unit) {
             case "hour":
-                timeFilter = "AND al.accessedAt > datetime('now', '-24 hours')";
-                bucketExpr = "strftime('%Y-%m-%d %H:00', al.accessedAt)";
+                timeFilter = "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-24 hours')";
+                bucketExpr = "strftime('%Y-%m-%d %H:00', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "hour";
                 break;
             case "day":
-                timeFilter = "AND al.accessedAt > datetime('now', '-7 days')";
-                bucketExpr = "strftime('%Y-%m-%d', al.accessedAt)";
+                timeFilter = "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-7 days')";
+                bucketExpr = "strftime('%Y-%m-%d', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "day";
                 break;
             case "week":
-                timeFilter = "AND al.accessedAt > datetime('now', '-28 days')";
-                bucketExpr = "strftime('%Y-W%W', al.accessedAt)";
+                timeFilter = "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-28 days')";
+                bucketExpr = "strftime('%Y-W%W', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "week";
                 break;
             case "month":
-                timeFilter = "AND al.accessedAt > datetime('now', '-12 months')";
-                bucketExpr = "strftime('%Y-%m', al.accessedAt)";
+                timeFilter = "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-12 months')";
+                bucketExpr = "strftime('%Y-%m', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "month";
                 break;
             case "all":
             default:
                 timeFilter = "";
-                bucketExpr = "strftime('%Y-%m', al.accessedAt)";
+                bucketExpr = "strftime('%Y-%m', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "month";
                 break;
         }
