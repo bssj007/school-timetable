@@ -1978,14 +1978,39 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
         <div className="space-y-6 max-w-lg">
             {/* 사이트 제목 */}
             <div className="space-y-2">
-                <Label className="text-sm font-semibold">사이트 제목 (HTML Title)</Label>
+                <Label className="text-sm font-semibold">브라우저 탭 제목 (순수 텍스트)</Label>
                 <Input
                     value={siteTitle}
                     onChange={(e) => setSiteTitle(e.target.value)}
                     placeholder="예: 수행평가 일정공유 - 성지고"
                     className="max-w-md"
                 />
-                <p className="text-xs text-gray-400">브라우저 탭에 표시되는 제목입니다. 비워두면 기본값(수행평가 일정공유 - 성지고)이 사용됩니다.</p>
+                <p className="text-xs text-gray-400">브라우저 탭에 표시되는 제목입니다. 비워두면 기본값이 사용됩니다.</p>
+            </div>
+
+            {/* 화면용 사이트 제목 (색상 지원) */}
+            <div className="space-y-2">
+                <Label className="text-sm font-semibold">화면용 사이트 제목 (색상 변경 지원)</Label>
+                <div className="flex items-center gap-2 mb-1">
+                    <input
+                        type="color"
+                        className="w-8 h-8 p-1 border rounded cursor-pointer bg-white"
+                        onChange={(e) => {
+                            document.execCommand('styleWithCSS', false, 'true');
+                            document.execCommand('foreColor', false, e.target.value);
+                        }}
+                        title="글자를 드래그한 후 색상을 골라주세요"
+                    />
+                    <span className="text-xs text-gray-500">마우스로 변경하고 싶은 글자를 드래그한 뒤 색상을 선택하세요. (기본 텍스트: 수행 일정공유)</span>
+                </div>
+                <div
+                    className="w-full max-w-md min-h-[42px] px-3 py-2 border rounded-md text-lg font-bold shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    contentEditable
+                    suppressContentEditableWarning
+                    dangerouslySetInnerHTML={{ __html: siteTitleHtml || '<span style="color: #2563eb">수행 일정공유</span>' }}
+                    onBlur={(e) => setSiteTitleHtml(e.currentTarget.innerHTML)}
+                />
+                <p className="text-xs text-gray-400">PC와 모바일 화면 상단에 표시되는 제목입니다. 서식이 포함된 HTML 형태로 저장됩니다.</p>
             </div>
 
             {/* 파비콘 업로드 */}

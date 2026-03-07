@@ -1070,9 +1070,9 @@ export default function Dashboard() {
                 <div className="absolute right-0 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-end md:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative mr-1 md:mr-0">
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
-                      className="h-10 px-3 bg-white shadow-sm border-gray-200 gap-1 font-bold text-sm"
+                      className="h-10 px-3 gap-1 font-bold text-sm text-gray-700 hover:bg-gray-100"
                       onClick={() => setShowPrintOptions(true)}
                       title="내보내기 / 인쇄"
                     >

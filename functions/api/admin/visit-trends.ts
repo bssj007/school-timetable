@@ -81,7 +81,7 @@ export const onRequest = async (context: any) => {
         // Uses CTE to ensure 1:1 join with ip_profiles (takes the most recently seen student per IP) to prevent JOIN explosion
         const uniqueQuery = `
             WITH RankedIPs AS (
-                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY last_seen DESC) as rn
+                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY lastAccess DESC) as rn
                 FROM ip_profiles
             ),
             LatestIPs AS (
@@ -111,7 +111,7 @@ export const onRequest = async (context: any) => {
         // Counts all GET accesses to the main page that resolve to a student profile.
         const totalStudentQuery = `
             WITH RankedIPs AS (
-                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY last_seen DESC) as rn
+                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY lastAccess DESC) as rn
                 FROM ip_profiles
             ),
             LatestIPs AS (
@@ -146,7 +146,7 @@ export const onRequest = async (context: any) => {
         // Counts all GET accesses to the main page regardless of student profile mapping.
         const totalIpQuery = `
             WITH RankedIPs AS (
-                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY last_seen DESC) as rn
+                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY lastAccess DESC) as rn
                 FROM ip_profiles
             ),
             LatestIPs AS (
@@ -176,7 +176,7 @@ export const onRequest = async (context: any) => {
         // Uses CTE for ip_profiles to prevent JOIN explosion.
         const uniqueIpQuery = `
             WITH RankedIPs AS (
-                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY last_seen DESC) as rn
+                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY lastAccess DESC) as rn
                 FROM ip_profiles
             ),
             LatestIPs AS (
