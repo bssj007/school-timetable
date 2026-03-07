@@ -2194,8 +2194,20 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
         if (unit === 'day') return label === `${yyyy}-${mm}-${dd}`;
         if (unit === 'month' || unit === 'all') return label === `${yyyy}-${mm}`;
 
-        // Provide a best-effort approximation for 'week' by checking if it's the last bucket and we are roughly in the same time frame.
-        // It's safer to just decline styling week accurately without complex mapping, but for visual completeness, if we need it, we can fallback.
+        if (unit === 'week') {
+            const firstDay = new Date(yyyy, 0, 1);
+            let firstMondayDate = 1 + (8 - firstDay.getDay()) % 7;
+            if (firstDay.getDay() === 1) firstMondayDate = 1;
+            const firstMonday = new Date(yyyy, 0, firstMondayDate);
+
+            let weekNum;
+            if (now < firstMonday) {
+                weekNum = 0;
+            } else {
+                weekNum = Math.floor((now.getTime() - firstMonday.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+            }
+            return label === `${yyyy}-W${String(weekNum).padStart(2, '0')}`;
+        }
         return false;
     };
 

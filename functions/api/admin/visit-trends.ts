@@ -95,7 +95,7 @@ export const onRequest = async (context: any) => {
                     COALESCE(al.studentNumber, sp.studentNumber)
                 )) as uniqueStudents
             FROM access_logs al
-            LEFT JOIN LatestIPs ip ON al.ip = ip.ip
+            LEFT JOIN LatestIPs ip ON LOWER(al.ip) = LOWER(ip.ip)
             LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
             WHERE
                 al.method = 'GET' AND al.endpoint IN ('/', '/index.html') AND
@@ -129,7 +129,7 @@ export const onRequest = async (context: any) => {
                     COALESCE(al.studentNumber, sp.studentNumber) as studentNumber,
                     strftime('%Y-%m-%d %H:', al.accessedAt) || (CAST(strftime('%M', al.accessedAt) AS INTEGER) / 10) as session10Min
                 FROM access_logs al
-                LEFT JOIN LatestIPs ip ON al.ip = ip.ip
+                LEFT JOIN LatestIPs ip ON LOWER(al.ip) = LOWER(ip.ip)
                 LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
                 WHERE
                     al.method = 'GET' AND al.endpoint IN ('/', '/index.html') AND
@@ -162,7 +162,7 @@ export const onRequest = async (context: any) => {
                     al.ip,
                     strftime('%Y-%m-%d %H:', al.accessedAt) || (CAST(strftime('%M', al.accessedAt) AS INTEGER) / 10) as session10Min
                 FROM access_logs al
-                LEFT JOIN LatestIPs ip ON al.ip = ip.ip
+                LEFT JOIN LatestIPs ip ON LOWER(al.ip) = LOWER(ip.ip)
                 LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
                 WHERE
                     al.method = 'GET' AND al.endpoint IN ('/', '/index.html')
@@ -185,9 +185,9 @@ export const onRequest = async (context: any) => {
             )
             SELECT 
                 ${bucketExpr} as bucket,
-                COUNT(DISTINCT al.ip) as uniqueIPs
+                COUNT(DISTINCT LOWER(al.ip)) as uniqueIPs
             FROM access_logs al
-            LEFT JOIN LatestIPs ip ON al.ip = ip.ip
+            LEFT JOIN LatestIPs ip ON LOWER(al.ip) = LOWER(ip.ip)
             LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
             WHERE
                 al.method = 'GET' AND al.endpoint IN ('/', '/index.html') AND
