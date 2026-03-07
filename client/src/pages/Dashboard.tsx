@@ -831,6 +831,15 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden md:flex h-9 rounded-full px-4 font-bold text-xs gap-2 border-gray-200 hover:bg-gray-50 shadow-sm"
+            onClick={() => setShowPrintOptions(true)}
+          >
+            <Printer className="w-4 h-4" />
+            내보내기 / 인쇄
+          </Button>
           {isBugReportEnabled && (
             <Button
               variant="default"
@@ -1012,17 +1021,6 @@ export default function Dashboard() {
         ) : (
           <Card className="py-1 gap-1 md:py-2 md:gap-2">
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
-              {/* Desktop Export Button - Absolute to prevent layout shift */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowPrintOptions(true)}
-                className="hidden md:flex absolute -top-10 right-0 h-8 gap-2 bg-white/90 backdrop-blur-sm border-gray-200 hover:bg-gray-50 shadow-sm"
-              >
-                <Printer className="w-4 h-4" />
-                내보내기 / 인쇄
-              </Button>
-
               {/* Desktop Title */}
               <div className="hidden md:flex items-center gap-2 flex-1 min-w-0">
                 <h1 className="text-2xl font-bold whitespace-nowrap overflow-hidden text-ellipsis">
