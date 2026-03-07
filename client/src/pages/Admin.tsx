@@ -1925,16 +1925,25 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
 
     // Initialize form values from fetched settings
     useEffect(() => {
-        if (currentSettings && !isInitialized) {
-            setSiteTitle(currentSettings.site_title || '');
-            if (titleHtmlRef.current) {
-                titleHtmlRef.current.innerHTML = currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
+        if (currentSettings) {
+            if (!isInitialized) {
+                setSiteTitle(currentSettings.site_title || '');
+                if (titleHtmlRef.current) {
+                    titleHtmlRef.current.innerHTML = currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
+                }
+                setSiteFaviconUrl(currentSettings.site_favicon_url || '');
+                setIsInitialized(true);
+                setHtmlChanged(false);
+            } else if (!htmlChanged) {
+                // Background update sync
+                setSiteTitle(currentSettings.site_title || '');
+                if (titleHtmlRef.current && titleHtmlRef.current.innerHTML !== (currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>')) {
+                    titleHtmlRef.current.innerHTML = currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
+                }
+                setSiteFaviconUrl(currentSettings.site_favicon_url || '');
             }
-            setSiteFaviconUrl(currentSettings.site_favicon_url || '');
-            setIsInitialized(true);
-            setHtmlChanged(false);
         }
-    }, [currentSettings, isInitialized]);
+    }, [currentSettings, isInitialized, htmlChanged]);
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -1959,7 +1968,7 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
             toast.success('사이트 디자인 설정이 저장되었습니다.');
             queryClient.invalidateQueries({ queryKey: ['admin', 'settings', 'site-design'] });
             queryClient.invalidateQueries({ queryKey: ['publicSettings'] });
-            setIsInitialized(false); // re-sync saved state
+            setHtmlChanged(false); // Reset changed state to let useEffect sync it back
         } catch (e: any) {
             toast.error(`저장 실패: ${e.message}`);
         } finally {

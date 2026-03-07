@@ -235,17 +235,25 @@
     visibility: hidden;
   }
 
-  #timetable-container,
-  #timetable-container * {
+  #print-wrapper,
+  #print-wrapper * {
     visibility: visible;
   }
 
-  #timetable-container {
-    position: fixed;
+  #print-wrapper {
+    position: absolute;
     left: 0;
     top: 0;
-    width: var(--print-width, 21cm) !important;
-    height: var(--print-height, 29.7cm) !important;
+    width: var(--print-width, 19cm) !important;
+    height: var(--print-height, 27cm) !important;
+    overflow: hidden;
+  }
+
+  #timetable-container {
+    width: 19cm !important;
+    height: 27cm !important;
+    transform: scaleX(var(--scale-x, 1)) scaleY(var(--scale-y, 1));
+    transform-origin: top left;
     padding: 0.5cm;
     background: white;
     box-shadow: none !important;
