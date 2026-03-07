@@ -1186,20 +1186,24 @@ export default function Dashboard() {
               } as React.CSSProperties}>
                 <div ref={timetableRef} id="timetable-container">
                   {/* Print Capture Header */}
-                  <div className="capture-only mb-2 p-1.5 border rounded-md text-black">
-                    <div className="text-base font-bold mb-0.5">
-                      [학생용] {schoolName} {grade}학년 {classNum}반
-                    </div>
-                    <div className="text-xs font-medium mb-0.5">
-                      이름 (학번): _______________ ({formattedStudentId})
-                    </div>
-                    {grade !== "1" && (
-                      <div className="text-[10px] text-gray-700 leading-tight">
-                        {electiveSummary || "선택과목 미설정"}
+                  <div className="capture-only mb-1.5 p-1.5 border rounded-md text-black flex flex-col gap-0.5">
+                    <div className="flex justify-between items-end border-b pb-0.5 mb-0.5">
+                      <div className="text-sm font-bold leading-none">
+                        [학생용] {schoolName} {grade}학년 {classNum}반
                       </div>
-                    )}
-                    <div className="text-[10px] text-gray-600 border-t pt-0.5 mt-0.5">
-                      발급일시: {new Date().toLocaleString('ko-KR')} (수행평가는 출력 시점 기준)
+                      <div className="text-[10px] text-gray-600 leading-none">
+                        발급일시: {new Date().toLocaleString('ko-KR')} (수행평가는 출력 시점 기준)
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div className="text-xs font-medium leading-none">
+                        이름 (학번): _______________ ({formattedStudentId})
+                      </div>
+                      {grade !== "1" && (
+                        <div className="text-[10px] text-gray-700 leading-none truncate max-w-[50%] text-right">
+                          {electiveSummary || "선택과목 미설정"}
+                        </div>
+                      )}
                     </div>
                   </div>
 
