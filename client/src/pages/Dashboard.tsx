@@ -1058,6 +1058,21 @@ export default function Dashboard() {
                 </div>
               )}
 
+              {/* Mobile Print Button */}
+              <div className="absolute right-0 -translate-x-[10px] top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center md:hidden z-20 pointer-events-none">
+                <div className="pointer-events-auto relative">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 bg-white shadow-sm border-gray-200"
+                    onClick={() => setShowPrintOptions(true)}
+                    title="내보내기 / 인쇄"
+                  >
+                    <Printer className="w-5 h-5 text-gray-500" />
+                  </Button>
+                </div>
+              </div>
+
               {/* Week Navigation */}
               <div className="flex flex-col items-center justify-center gap-1 w-full -translate-x-1 md:translate-x-0 md:w-auto shrink-0 z-10 relative">
                 <div className="flex items-center gap-2 md:gap-1">
@@ -1079,15 +1094,6 @@ export default function Dashboard() {
                     onClick={() => setWeekOffset(weekOffset + 1)}
                   >
                     <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 ml-1 md:hidden bg-white shrink-0 border-gray-200"
-                    onClick={() => setShowPrintOptions(true)}
-                    title="내보내기 / 인쇄"
-                  >
-                    <Printer className="w-4 h-4 text-gray-500" />
                   </Button>
                 </div>
                 <span className={`text-lg md:text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
