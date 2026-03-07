@@ -1036,9 +1036,9 @@ export default function Dashboard() {
                   <SelectValue placeholder="학년" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">1학년</SelectItem>
-                  <SelectItem value="2">2학년</SelectItem>
-                  <SelectItem value="3">3학년</SelectItem>
+                  <SelectItem value="1"><span>1학년</span></SelectItem>
+                  <SelectItem value="2"><span>2학년</span></SelectItem>
+                  <SelectItem value="3"><span>3학년</span></SelectItem>
                 </SelectContent>
               </Select>
               <Select value={classNum} onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}>
@@ -1047,7 +1047,7 @@ export default function Dashboard() {
                 </SelectTrigger>
                 <SelectContent>
                   {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
-                    <SelectItem key={num} value={num.toString()}>{num}반</SelectItem>
+                    <SelectItem key={num} value={num.toString()}><span>{num}반</span></SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1057,7 +1057,7 @@ export default function Dashboard() {
                 </SelectTrigger>
                 <SelectContent>
                   {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
-                    <SelectItem key={num} value={num.toString()}>{num}번</SelectItem>
+                    <SelectItem key={num} value={num.toString()}><span>{num}번</span></SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1135,7 +1135,7 @@ export default function Dashboard() {
                       title="내보내기 / 인쇄"
                     >
                       <Printer className="w-4 h-4 text-gray-500" />
-                      인쇄/저장
+                      <span>인쇄/저장</span>
                     </Button>
                   </div>
                 </div>
@@ -1166,12 +1166,12 @@ export default function Dashboard() {
                   </Button>
                 </div>
                 <span className={`text-lg md:text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
-                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}
+                  <span>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}</span>
                 </span>
                 {kakaoUser && (
                   <div className="md:hidden flex items-center justify-center gap-2 bg-green-50 text-green-700 px-3 py-1 mt-2 rounded-md border border-green-100 text-sm">
                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    <span className="font-semibold">{kakaoUser.nickname}</span>
+                    <span className="font-semibold"><span>{kakaoUser.nickname}</span></span>
                   </div>
                 )}
               </div>
@@ -1187,9 +1187,9 @@ export default function Dashboard() {
                     <SelectValue placeholder="학년" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">1학년</SelectItem>
-                    <SelectItem value="2">2학년</SelectItem>
-                    <SelectItem value="3">3학년</SelectItem>
+                    <SelectItem value="1"><span>1학년</span></SelectItem>
+                    <SelectItem value="2"><span>2학년</span></SelectItem>
+                    <SelectItem value="3"><span>3학년</span></SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -1203,7 +1203,7 @@ export default function Dashboard() {
                   <SelectContent>
                     {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
                       <SelectItem key={num} value={num.toString()}>
-                        {num}반
+                        <span>{num}반</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1219,7 +1219,7 @@ export default function Dashboard() {
                   <SelectContent>
                     {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
                       <SelectItem key={num} value={num.toString()}>
-                        {num}번
+                        <span>{num}번</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
