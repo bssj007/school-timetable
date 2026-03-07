@@ -140,6 +140,61 @@ export default function Dashboard() {
   const [bugReportMessage, setBugReportMessage] = useState("");
   const [isBugReportSending, setIsBugReportSending] = useState(false);
 
+  // 인쇄 / 내보내기 state
+  const [showPrintOptions, setShowPrintOptions] = useState(false);
+  const [includeAssessments, setIncludeAssessments] = useState(true);
+  const timetableRef = useRef<HTMLDivElement>(null);
+
+  // PNG 다운로드 핸들러
+  const handleDownloadPng = async () => {
+    if (!timetableRef.current) return;
+
+    // Close dialog first to ensure it's not in the way
+    setShowPrintOptions(false);
+
+    try {
+      // Small delay to let dialog close animation finish
+      await new Promise(r => setTimeout(r, 300));
+
+      document.body.classList.add('capturing');
+      // Extra delay for 'capturing' styles to apply
+      await new Promise(r => setTimeout(r, 100));
+
+      const dataUrl = await toPng(timetableRef.current, {
+        cacheBust: true,
+        backgroundColor: '#ffffff',
+        width: 800,
+        height: 800,
+        style: {
+          margin: '0',
+          padding: '30px',
+        }
+      });
+
+      document.body.classList.remove('capturing');
+
+      const link = document.createElement('a');
+      link.download = `${grade}학년_${classNum}반_시간표.png`;
+      link.href = dataUrl;
+      link.click();
+
+      toast.success("시간표 이미지가 저장되었습니다.");
+    } catch (err) {
+      document.body.classList.remove('capturing');
+      console.error("이미지 저장 실패:", err);
+      toast.error("이미지 저장 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 인쇄 핸들러
+  const handlePrint = () => {
+    setShowPrintOptions(false);
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
+
+
   // Extract datasetId early for use in effects
   const datasetId = (queryClient.getQueryData(['timetable', schoolName, grade, classNum]) as any)?.datasetId || '';
 
@@ -762,6 +817,15 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden md:flex h-9 rounded-full px-4 font-bold text-xs gap-2 border-gray-200 hover:bg-gray-50 shadow-sm"
+            onClick={() => setShowPrintOptions(true)}
+          >
+            <Printer className="w-4 h-4" />
+            내보내기 / 인쇄
+          </Button>
           {isBugReportEnabled && (
             <Button
               variant="default"
@@ -859,8 +923,17 @@ export default function Dashboard() {
           </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 justify-end">
-          <div className="flex items-center gap-[6px] md:gap-2">
+        <div className="flex flex-wrap items-center gap-1 justify-end">
+          <div className="flex items-center gap-[4px] md:gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 bg-white shrink-0 border-gray-200"
+              onClick={() => setShowPrintOptions(true)}
+              title="내보내기 / 인쇄"
+            >
+              <Printer className="w-5 h-5 text-gray-500" />
+            </Button>
             <Select
               value={grade}
               onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
@@ -1016,6 +1089,7 @@ export default function Dashboard() {
 
               {/* Desktop Selectors */}
               <div className="hidden md:flex items-center gap-2 flex-1 justify-end min-w-0 md:ml-[3px]">
+
                 <Select
                   value={grade}
                   onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
