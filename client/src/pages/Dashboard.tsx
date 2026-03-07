@@ -145,7 +145,7 @@ export default function Dashboard() {
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printMode, setPrintMode] = useState<'select' | 'printer'>('select');
   const [includeAssessments, setIncludeAssessments] = useState(true);
-  const [printWidth, setPrintWidth] = useState<string>("10");
+  const [printWidth, setPrintWidth] = useState<string>("8");
   const [printHeight, setPrintHeight] = useState<string>("10");
   const timetableRef = useRef<HTMLDivElement>(null);
 
@@ -1186,19 +1186,19 @@ export default function Dashboard() {
               } as React.CSSProperties}>
                 <div ref={timetableRef} id="timetable-container">
                   {/* Print Capture Header */}
-                  <div className="capture-only mb-3 p-2 border rounded-lg text-black">
-                    <div className="text-xl font-bold mb-1">
+                  <div className="capture-only mb-2 p-1.5 border rounded-md text-black">
+                    <div className="text-base font-bold mb-0.5">
                       [학생용] {schoolName} {grade}학년 {classNum}반
                     </div>
-                    <div className="text-sm font-medium mb-1">
+                    <div className="text-xs font-medium mb-0.5">
                       이름 (학번): _______________ ({formattedStudentId})
                     </div>
                     {grade !== "1" && (
-                      <div className="text-xs text-gray-700 mb-1 leading-relaxed">
+                      <div className="text-[10px] text-gray-700 leading-tight">
                         {electiveSummary || "선택과목 미설정"}
                       </div>
                     )}
-                    <div className="text-xs text-gray-600 border-t pt-1 mt-1">
+                    <div className="text-[10px] text-gray-600 border-t pt-0.5 mt-0.5">
                       발급일시: {new Date().toLocaleString('ko-KR')} (수행평가는 출력 시점 기준)
                     </div>
                   </div>

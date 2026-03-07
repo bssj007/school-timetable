@@ -1945,6 +1945,27 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
         }
     }, [currentSettings, isInitialized, htmlChanged]);
 
+    // 실시간으로 브라우저 탭에 입력값 반영
+    useEffect(() => {
+        if (siteTitle !== undefined && isInitialized) {
+            document.title = siteTitle || '수행 일정공유';
+        }
+    }, [siteTitle, isInitialized]);
+
+    useEffect(() => {
+        if (siteFaviconUrl !== undefined && isInitialized) {
+            let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+            if (!link) {
+                link = document.createElement('link');
+                link.rel = 'icon';
+                document.head.appendChild(link);
+            }
+            if (siteFaviconUrl) {
+                link.href = siteFaviconUrl;
+            }
+        }
+    }, [siteFaviconUrl, isInitialized]);
+
     const handleSave = async () => {
         setIsSaving(true);
         try {
@@ -1966,6 +1987,15 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
             });
             if (!res.ok) throw new Error('Failed to save');
             toast.success('사이트 디자인 설정이 저장되었습니다.');
+
+            // Optimistically update the cache to prevent the input from reverting to old data momentarily
+            queryClient.setQueryData(['admin', 'settings', 'site-design'], (old: any) => ({
+                ...old,
+                site_title: siteTitle,
+                site_title_html: finalHtml,
+                site_favicon_url: siteFaviconUrl
+            }));
+
             queryClient.invalidateQueries({ queryKey: ['admin', 'settings', 'site-design'] });
             queryClient.invalidateQueries({ queryKey: ['publicSettings'] });
             setHtmlChanged(false); // Reset changed state to let useEffect sync it back
@@ -2190,6 +2220,14 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
         const dd = String(now.getDate()).padStart(2, '0');
         const hh = String(now.getHours()).padStart(2, '0');
 
+        console.log("isBucketCurrent DEBUG:", {
+            incomingLabel: label,
+            unit,
+            targetHour: `${yyyy}-${mm}-${dd} ${hh}:00`,
+            targetDay: `${yyyy}-${mm}-${dd}`,
+            targetMonth: `${yyyy}-${mm}`
+        });
+
         if (unit === 'hour') return label === `${yyyy}-${mm}-${dd} ${hh}:00`;
         if (unit === 'day') return label === `${yyyy}-${mm}-${dd}`;
         if (unit === 'month' || unit === 'all') return label === `${yyyy}-${mm}`;
@@ -2213,26 +2251,6 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
 
     return (
         <div className="space-y-6">
-            <svg width="0" height="0" style={{ display: 'block' }}>
-                <defs>
-                    <pattern id="stripe-blue" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-                        <rect width="8" height="8" fill="#3b82f6" />
-                        <rect width="4" height="8" fill="#bfdbfe" />
-                    </pattern>
-                    <pattern id="stripe-purple" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-                        <rect width="8" height="8" fill="#8b5cf6" />
-                        <rect width="4" height="8" fill="#ddd6fe" />
-                    </pattern>
-                    <pattern id="stripe-green" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-                        <rect width="8" height="8" fill="#10b981" />
-                        <rect width="4" height="8" fill="#a7f3d0" />
-                    </pattern>
-                    <pattern id="stripe-orange" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-                        <rect width="8" height="8" fill="#f59e0b" />
-                        <rect width="4" height="8" fill="#fde68a" />
-                    </pattern>
-                </defs>
-            </svg>
             {/* Controls */}
             <div className="flex flex-wrap gap-3 items-end">
                 {/* Time unit tabs */}
@@ -2294,6 +2312,24 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                         <div className="h-64 w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={buckets}>
+                                    <defs>
+                                        <pattern id="stripe-blue" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                                            <rect width="8" height="8" fill="#3b82f6" />
+                                            <rect width="4" height="8" fill="#bfdbfe" />
+                                        </pattern>
+                                        <pattern id="stripe-purple" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                                            <rect width="8" height="8" fill="#8b5cf6" />
+                                            <rect width="4" height="8" fill="#ddd6fe" />
+                                        </pattern>
+                                        <pattern id="stripe-green" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                                            <rect width="8" height="8" fill="#10b981" />
+                                            <rect width="4" height="8" fill="#a7f3d0" />
+                                        </pattern>
+                                        <pattern id="stripe-orange" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                                            <rect width="8" height="8" fill="#f59e0b" />
+                                            <rect width="4" height="8" fill="#fde68a" />
+                                        </pattern>
+                                    </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                                     <XAxis dataKey="label" tickFormatter={formatLabel} tick={{ fontSize: 12 }} />
                                     <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
@@ -3359,6 +3395,7 @@ export default function Admin() {
                                         lastAccess: string | null;
                                         kakaoAccounts: { kakaoId: string; kakaoNickname: string }[];
                                         isBlocked: boolean;
+                                        hasElectives?: boolean;
                                     };
 
                                     const groupMap = new Map<string, UserGroup>();
@@ -3379,6 +3416,7 @@ export default function Admin() {
                                                 }
                                             }
                                             if (user.isBlocked) existing.isBlocked = true;
+                                            if (user.hasElectives) existing.hasElectives = true;
                                         } else {
                                             groupMap.set(key, {
                                                 key,
@@ -3390,6 +3428,7 @@ export default function Admin() {
                                                 lastAccess: user.lastAccess,
                                                 kakaoAccounts: [...(user.kakaoAccounts || [])],
                                                 isBlocked: !!user.isBlocked,
+                                                hasElectives: !!user.hasElectives,
                                             });
                                         }
                                     }
@@ -3531,9 +3570,16 @@ export default function Admin() {
                                                     </TableCell>
                                                     <TableCell>
                                                         {group.grade && group.classNum ? (
-                                                            <Badge variant="outline" className="font-mono text-green-600 border-green-200 bg-green-50">
-                                                                {group.grade}-{group.classNum}{group.studentNumber ? `-${group.studentNumber}` : ''}
-                                                            </Badge>
+                                                            <div className="flex items-center gap-2">
+                                                                <Badge variant="outline" className="font-mono text-green-600 border-green-200 bg-green-50">
+                                                                    {group.grade}-{group.classNum}{group.studentNumber ? `-${group.studentNumber}` : ''}
+                                                                </Badge>
+                                                                {group.hasElectives && (
+                                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-600 border-blue-200 px-1 py-0 h-4">
+                                                                        선택과목
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
                                                         ) : <span className="text-gray-300 text-xs">-</span>}
                                                     </TableCell>
                                                     <TableCell>

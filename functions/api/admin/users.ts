@@ -34,7 +34,8 @@ export const onRequest = async (context: any) => {
                     (SELECT COUNT(*) FROM performance_assessments WHERE lastModifiedIp = ip_profiles.ip) as modificationCount,
                     student_profiles.grade as profileGrade,
                     student_profiles.classNum as profileClassNum,
-                    student_profiles.studentNumber as profileStudentNumber
+                    student_profiles.studentNumber as profileStudentNumber,
+                    student_profiles.electives as rawElectives
                 FROM ip_profiles
                 LEFT JOIN student_profiles ON ip_profiles.student_profile_id = student_profiles.id
             `;
@@ -118,6 +119,7 @@ export const onRequest = async (context: any) => {
                     grade: p.profileGrade || null,
                     classNum: p.profileClassNum || null,
                     studentNumber: p.profileStudentNumber || null,
+                    hasElectives: !!p.rawElectives && p.rawElectives !== '{}' && p.rawElectives !== 'null',
                     instructionDismissed: !!p.instructionDismissed,
                     assessments: [],
                     logs: [],
