@@ -143,9 +143,10 @@ export default function Dashboard() {
 
   // 인쇄 / 내보내기 state
   const [showPrintOptions, setShowPrintOptions] = useState(false);
+  const [printMode, setPrintMode] = useState<'select' | 'printer'>('select');
   const [includeAssessments, setIncludeAssessments] = useState(true);
-  const [printWidth, setPrintWidth] = useState<string>("21");
-  const [printHeight, setPrintHeight] = useState<string>("29.7");
+  const [printWidth, setPrintWidth] = useState<string>("10");
+  const [printHeight, setPrintHeight] = useState<string>("10");
   const timetableRef = useRef<HTMLDivElement>(null);
 
   // PNG 다운로드 핸들러
@@ -1409,44 +1410,67 @@ export default function Dashboard() {
       </div>
 
       {/* Print Options Dialog */}
-      <Dialog open={showPrintOptions} onOpenChange={setShowPrintOptions}>
+      <Dialog open={showPrintOptions} onOpenChange={(open) => {
+        setShowPrintOptions(open);
+        if (!open) {
+          setTimeout(() => setPrintMode('select'), 300);
+        }
+      }}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>시간표 내보내기</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-4">
-            <div className="flex gap-4 items-center">
-              <div className="flex-1 space-y-1">
-                <label className="text-sm font-medium">가로 크기 (cm)</label>
-                <Input
-                  type="number"
-                  value={printWidth}
-                  onChange={(e) => setPrintWidth(e.target.value)}
-                  step="0.1"
-                />
-              </div>
-              <div className="flex-1 space-y-1">
-                <label className="text-sm font-medium">세로 크기 (cm)</label>
-                <Input
-                  type="number"
-                  value={printHeight}
-                  onChange={(e) => setPrintHeight(e.target.value)}
-                  step="0.1"
-                />
-              </div>
-            </div>
-            <Button onClick={handleDownloadPng} className="w-full flex items-center justify-center gap-2 h-12">
-              <ImageIcon className="w-5 h-5" />
-              이미지(PNG)로 저장
-            </Button>
-            <Button onClick={handlePrint} variant="outline" className="w-full flex items-center justify-center gap-2 h-12">
-              <Printer className="w-5 h-5" />
-              프린터로 출력
-            </Button>
-            <p className="text-xs font-medium text-gray-500 text-center mt-2 flex flex-col items-center">
-              <span>* 수행평가는 <strong>현재 보고 있는 주차</strong> 기준으로만 표시됩니다.</span>
-              <span className="text-red-500 mt-1">* 기본 <strong>A4 용지</strong>(21x29.7cm) 기준. 숫자를 조절하여 여백을 맞출 수 있습니다.</span>
-            </p>
+            {printMode === 'select' ? (
+              <>
+                <Button onClick={handleDownloadPng} className="w-full flex items-center justify-center gap-2 h-12">
+                  <ImageIcon className="w-5 h-5" />
+                  이미지(PNG)로 저장
+                </Button>
+                <Button onClick={() => setPrintMode('printer')} variant="outline" className="w-full flex items-center justify-center gap-2 h-12">
+                  <Printer className="w-5 h-5" />
+                  프린터로 출력
+                </Button>
+                <p className="text-xs font-medium text-gray-500 text-center mt-2 flex flex-col items-center">
+                  <span>* 수행평가는 <strong>현재 보고 있는 주차</strong> 기준으로만 표시됩니다.</span>
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex gap-4 items-center">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-sm font-medium">가로 크기 (cm)</label>
+                    <Input
+                      type="number"
+                      value={printWidth}
+                      onChange={(e) => setPrintWidth(e.target.value)}
+                      step="0.1"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-sm font-medium">세로 크기 (cm)</label>
+                    <Input
+                      type="number"
+                      value={printHeight}
+                      onChange={(e) => setPrintHeight(e.target.value)}
+                      step="0.1"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setPrintMode('select')} className="flex-1 h-12">
+                    이전
+                  </Button>
+                  <Button onClick={handlePrint} className="flex-[2] h-12 flex items-center justify-center gap-2">
+                    <Printer className="w-5 h-5" />
+                    인쇄하기
+                  </Button>
+                </div>
+                <p className="text-xs font-medium text-gray-500 text-center mt-2 flex flex-col items-center">
+                  <span className="text-red-500 mt-1">* 기본 <strong>10x10cm</strong> 기준. 숫자를 조절하여 여백을 맞출 수 있습니다.</span>
+                </p>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
