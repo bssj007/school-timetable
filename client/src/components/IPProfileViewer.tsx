@@ -37,10 +37,12 @@ function parseUserAgent(ua: string) {
 export default function IPProfileViewer({ initialData, isOpen, onClose, adminPassword }: IPProfileViewerProps) {
     const [data, setData] = useState<IPProfile | null>(null);
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+    const [selectedLogDate, setSelectedLogDate] = useState<string>("all");
 
     useEffect(() => {
         if (isOpen && initialData) {
             setData(initialData);
+            setSelectedLogDate("all"); // Reset filter on new open
             if (!initialData.detailsLoaded) {
                 fetchFullProfile(initialData.ip);
             }
@@ -106,6 +108,35 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
             toast.error("오류가 발생했습니다.");
         }
     };
+
+    // 1. Extract Unique Dates for the Filter Dropdown
+    const availableDates = useState<string[]>([]);
+    const uniqueLogDates = data?.logs ? Array.from(new Set(data.logs.map(l => new Date(l.accessedAt + 'Z').toLocaleDateString('ko-KR')))) : [];
+
+    // 2. Filter Logs by Date
+    const filteredLogs = data?.logs ? data.logs.filter(l => {
+        if (selectedLogDate === "all") return true;
+        return new Date(l.accessedAt + 'Z').toLocaleDateString('ko-KR') === selectedLogDate;
+    }) : [];
+
+    // 3. Group Consecutive Logs
+    const groupedLogs = [];
+    if (filteredLogs.length > 0) {
+        // Logs are currently chronologically descending (newest first)
+        let currentGroup = { ...filteredLogs[0], count: 1, accessedAtStart: filteredLogs[0].accessedAt };
+
+        for (let i = 1; i < filteredLogs.length; i++) {
+            const log = filteredLogs[i];
+            if (log.method === currentGroup.method && log.endpoint === currentGroup.endpoint) {
+                currentGroup.count++;
+                currentGroup.accessedAtStart = log.accessedAt; // Update start time since it's descending
+            } else {
+                groupedLogs.push(currentGroup);
+                currentGroup = { ...log, count: 1, accessedAtStart: log.accessedAt };
+            }
+        }
+        groupedLogs.push(currentGroup);
+    }
 
     if (!isOpen) return null;
 
@@ -185,17 +216,43 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                     ) : <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-300" /></div>}
                                 </ScrollArea>
                             </TabsContent>
-                            <TabsContent value="logs" className="flex-1 min-h-0 border rounded mt-2">
-                                <ScrollArea className="h-[300px] p-4">
+                            <TabsContent value="logs" className="flex-1 min-h-0 border rounded mt-2 flex flex-col">
+                                <div className="p-2 border-b bg-gray-50 flex items-center justify-between shrink-0">
+                                    <span className="text-xs font-semibold text-gray-600">날짜 필터 ({filteredLogs.length}건)</span>
+                                    <select
+                                        className="text-xs border rounded p-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        value={selectedLogDate}
+                                        onChange={(e) => setSelectedLogDate(e.target.value)}
+                                    >
+                                        <option value="all">전체보기</option>
+                                        {uniqueLogDates.map(date => (
+                                            <option key={date} value={date}>{date}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <ScrollArea className="flex-1 p-4 h-[260px]">
                                     {data.detailsLoaded ? (
-                                        data.logs?.length > 0 ? (
-                                            data.logs.map((l: any, i: number) => (
-                                                <div key={i} className="flex justify-between text-xs py-1 border-b">
-                                                    <div className="flex gap-2"><Badge variant="outline" className="h-5">{l.method}</Badge> <span className="truncate max-w-[200px]">{l.endpoint}</span></div>
-                                                    <span className="text-gray-400">{new Date(l.accessedAt + 'Z').toLocaleTimeString()}</span>
+                                        groupedLogs.length > 0 ? (
+                                            groupedLogs.map((l: any, i: number) => (
+                                                <div key={i} className="flex justify-between items-start text-xs py-2 border-b">
+                                                    <div className="flex gap-2 items-start">
+                                                        <Badge variant="outline" className="h-5 shrink-0">{l.method}</Badge>
+                                                        <div className="flex flex-col">
+                                                            <span className="break-all max-w-[200px] font-medium text-gray-800">{l.endpoint}</span>
+                                                            {l.count > 1 && (
+                                                                <span className="text-[10px] text-blue-600 font-bold mt-0.5">연속 {l.count}회 호출 패턴</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col items-end shrink-0 pl-2">
+                                                        <span className="text-gray-500 font-mono text-[10px]">{new Date(l.accessedAt + 'Z').toLocaleTimeString('ko-KR')}</span>
+                                                        {l.count > 1 && (
+                                                            <span className="text-gray-400 font-mono text-[9px]">부터 {new Date(l.accessedAtStart + 'Z').toLocaleTimeString('ko-KR')}</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             ))
-                                        ) : <div className="text-center text-gray-400 py-8">로그 없음</div>
+                                        ) : <div className="text-center text-gray-400 py-8">선택된 날짜의 로그가 없습니다</div>
                                     ) : <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-300" /></div>}
                                 </ScrollArea>
                             </TabsContent>
