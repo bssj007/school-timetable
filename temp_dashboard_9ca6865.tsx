@@ -19,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import ElectiveSelectionDialog from "@/components/ElectiveSelectionDialog";
 
 // 타입 정의
@@ -88,10 +87,6 @@ function isDateInWeek(dateStr: string, weekDates: Date[]): boolean {
   return date >= startDate && date <= endDate;
 }
 
-// 컴포넌트 외부에 기본 인쇄 크기 상수 정의
-const DEFAULT_PRINT_WIDTH = "9";
-const DEFAULT_PRINT_HEIGHT = "11";
-
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, refreshKakaoUser } = useUserConfig();
@@ -150,8 +145,8 @@ export default function Dashboard() {
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printMode, setPrintMode] = useState<'select' | 'printer'>('select');
   const [includeAssessments, setIncludeAssessments] = useState(true);
-  const [printWidth, setPrintWidth] = useState<string>(DEFAULT_PRINT_WIDTH);
-  const [printHeight, setPrintHeight] = useState<string>(DEFAULT_PRINT_HEIGHT);
+  const [printWidth, setPrintWidth] = useState<string>("8");
+  const [printHeight, setPrintHeight] = useState<string>("10");
   const timetableRef = useRef<HTMLDivElement>(null);
 
   // Compute print scales relative to a standard printable A4 area (roughly 19cm x 27cm)
@@ -707,19 +702,12 @@ export default function Dashboard() {
 
   const handleEditClick = (assessment: AssessmentItem) => {
     setEditingAssessment(assessment);
-
-    // Parse the stored sequence/round number back from the description ("1차" -> "1")
-    let parsedRound = "1";
-    if (assessment.description && assessment.description.includes("차")) {
-      parsedRound = assessment.description.replace("차", "").trim();
-    }
-
     setFormData({
       assessmentDate: assessment.dueDate,
       subject: assessment.subject,
       content: assessment.title,
       classTime: assessment.classTime?.toString() || "",
-      round: parsedRound,
+      round: assessment.round?.toString() || "1",
     });
     setShowViewDialog(false);
     setShowEditDialog(true);
@@ -735,7 +723,7 @@ export default function Dashboard() {
         title: formData.content,
         dueDate: formData.assessmentDate,
         classTime: formData.classTime ? parseInt(formData.classTime) : undefined,
-        description: formData.round ? `${formData.round}차` : "",
+        round: parseInt(formData.round || "1"),
       });
     } catch (error) {
       console.error("수행평가 수정 실패:", error);
@@ -1028,51 +1016,14 @@ export default function Dashboard() {
       <div>
         {/* Visit Restriction Overlay (Completely Replaces Timetable Card) */}
         {isRestricted ? (
-          <div className="w-full flex flex-col pt-2 md:pt-4">
-            {/* Preserved Desktop Selectors during Restriction */}
-            <div className="hidden md:flex items-center gap-2 justify-center mb-6">
-              <Select value={grade} onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}>
-                <SelectTrigger className="w-[100px] md:w-[110px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                  <SelectValue placeholder="학년" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">1학년</SelectItem>
-                  <SelectItem value="2">2학년</SelectItem>
-                  <SelectItem value="3">3학년</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={classNum} onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}>
-                <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                  <SelectValue placeholder="반" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
-                    <SelectItem key={num} value={num.toString()}>{num}반</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={studentNumber} onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}>
-                <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                  <SelectValue placeholder="번호" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
-                    <SelectItem key={num} value={num.toString()}>{num}번</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="min-h-[400px] mt-8 flex flex-col items-center justify-center bg-white/50 backdrop-blur-sm rounded-2xl border-2 border-red-100 shadow-sm p-8 max-w-2xl mx-auto">
+            <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
+              <ShieldAlert className="w-10 h-10" />
             </div>
-
-            {/* Restricted Message Card */}
-            <div className="min-h-[400px] flex flex-col items-center justify-center bg-white/50 backdrop-blur-sm rounded-2xl border-2 border-red-100 shadow-sm p-8 max-w-2xl mx-auto w-full">
-              <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
-                <ShieldAlert className="w-10 h-10" />
-              </div>
-              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 text-center">접근 제한 안내</h3>
-              <p className="text-gray-600 text-lg md:text-xl whitespace-pre-wrap text-center leading-relaxed font-medium">
-                {settings?.restriction_reason || `${grade}학년 서비스가 일시적으로 제한되었습니다.`}
-              </p>
-            </div>
+            <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 text-center">접근 제한 안내</h3>
+            <p className="text-gray-600 text-lg md:text-xl whitespace-pre-wrap text-center leading-relaxed font-medium">
+              {settings?.restriction_reason || `${grade}학년 서비스가 일시적으로 제한되었습니다.`}
+            </p>
           </div>
         ) : (
           <Card className="py-1 gap-1 md:py-2 md:gap-2">
@@ -1416,7 +1367,7 @@ export default function Dashboard() {
                                 >
                                   {isElectiveActive && group && (
                                     <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400" : "bg-orange-100 text-orange-800"}`}>
-                                      <span>{group}</span><span className="hidden md:inline">그룹</span>
+                                      {group}<span className="hidden md:inline">그룹</span>
                                     </div>
                                   )}
                                   {item || isElectiveActive ? (
@@ -1434,15 +1385,15 @@ export default function Dashboard() {
                                               <span className="line-through opacity-60">{displaySubject}</span>
                                               <span className={`ml-1 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"}`}>(공강)</span>
                                             </span>
-                                          ) : <span>{displaySubject}</span>}
+                                          ) : displaySubject}
                                         </span>
                                       </div>
                                       <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">
                                         {displayClassName
-                                          ? <><span>{displayClassName}</span>{displayTeacher ? <span className="ml-1 opacity-60">{displayTeacher}</span> : null}</>
-                                          : <span>{displayTeacher}</span>}
+                                          ? <>{displayClassName}{displayTeacher ? <span className="ml-1 opacity-60">{displayTeacher}</span> : null}</>
+                                          : displayTeacher}
                                       </div>
-                                      {includeAssessments && cellAssessments.length > 0 && (
+                                      {cellAssessments.length > 0 && (
                                         <div className="mt-0.5 flex-shrink-0">
                                           <div className="flex flex-wrap gap-0.5 justify-center">
                                             {cellAssessments.map(a => (
@@ -1494,25 +1445,9 @@ export default function Dashboard() {
                   <Printer className="w-5 h-5" />
                   프린터로 출력
                 </Button>
-
-                <div className="flex items-center space-x-2 mt-4 bg-gray-50 border rounded-lg p-3">
-                  <Checkbox
-                    id="include-assessments"
-                    checked={includeAssessments}
-                    onCheckedChange={(checked) => setIncludeAssessments(!!checked)}
-                  />
-                  <div className="grid gap-1.5 leading-none">
-                    <label
-                      htmlFor="include-assessments"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                    >
-                      수행평가 일정 포함
-                    </label>
-                    <p className="text-xs text-gray-500">
-                      * 현재 보고 있는 주차 기준으로 표기됩니다.
-                    </p>
-                  </div>
-                </div>
+                <p className="text-xs font-medium text-gray-500 text-center mt-2 flex flex-col items-center">
+                  <span>* 수행평가는 <strong>현재 보고 있는 주차</strong> 기준으로만 표시됩니다.</span>
+                </p>
               </>
             ) : (
               <>
@@ -1546,7 +1481,7 @@ export default function Dashboard() {
                   </Button>
                 </div>
                 <p className="text-xs font-medium text-gray-500 text-center mt-2 flex flex-col items-center">
-                  <span className="text-red-500 mt-1">* 기본 <strong>{DEFAULT_PRINT_WIDTH}x{DEFAULT_PRINT_HEIGHT}cm</strong> 기준. 숫자를 조절하여 여백을 맞출 수 있습니다.</span>
+                  <span className="text-red-500 mt-1">* 기본 <strong>10x10cm</strong> 기준. 숫자를 조절하여 여백을 맞출 수 있습니다.</span>
                 </p>
               </>
             )}

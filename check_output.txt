@@ -1,0 +1,24 @@
+
+> school_timetable_wiki@1.0.0 check
+> tsc --noEmit
+
+client/src/pages/Dashboard.tsx(12,23): error TS2307: Cannot find module 'html-to-image' or its corresponding type declarations.
+client/src/pages/Dashboard.tsx(759,17): error TS18046: 'e' is of type 'unknown'.
+server/_core/dataApi.ts(20,12): error TS2339: Property 'forgeApiUrl' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/dataApi.ts(23,12): error TS2339: Property 'forgeApiKey' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/dataApi.ts(28,23): error TS2339: Property 'forgeApiUrl' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/dataApi.ts(28,55): error TS2339: Property 'forgeApiUrl' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/dataApi.ts(28,76): error TS2339: Property 'forgeApiUrl' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/dataApi.ts(37,36): error TS2339: Property 'forgeApiKey' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/imageGeneration.ts(18,28): error TS2307: Cannot find module 'server/storage' or its corresponding type declarations.
+server/_core/imageGeneration.ts(37,12): error TS2339: Property 'forgeApiUrl' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/imageGeneration.ts(40,12): error TS2339: Property 'forgeApiKey' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/imageGeneration.ts(45,23): error TS2339: Property 'forgeApiUrl' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/imageGeneration.ts(46,11): error TS2339: Property 'forgeApiUrl' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/imageGeneration.ts(47,14): error TS2339: Property 'forgeApiUrl' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/imageGeneration.ts(59,36): error TS2339: Property 'forgeApiKey' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/notification.ts(71,12): error TS2339: Property 'forgeApiUrl' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/notification.ts(78,12): error TS2339: Property 'forgeApiKey' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/notification.ts(85,41): error TS2339: Property 'forgeApiUrl' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/_core/notification.ts(92,38): error TS2339: Property 'forgeApiKey' does not exist on type '{ appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string; ownerOpenId: string; isProduction: boolean; }'.
+server/db.ts(106,40): error TS2339: Property 'userId' does not exist on type 'MySqlTableWithColumns<{ name: "performance_assessments"; schema: undefined; columns: { id: MySqlColumn<{ name: "id"; tableName: "performance_assessments"; dataType: "number"; columnType: "MySqlInt"; data: number; driverParam: string | number; ... 8 more ...; generated: undefined; }, {}, {}>; ... 10 more ...; updated...'.

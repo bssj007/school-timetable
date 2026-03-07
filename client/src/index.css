@@ -224,8 +224,8 @@
 
 @media (min-width: 1024px) {
   body {
-    zoom: 0.85;
-    /* Site scale set to 85% for PC */
+    zoom: 0.9;
+    /* Site scale set to 90% for PC */
   }
 }
 
@@ -235,17 +235,25 @@
     visibility: hidden;
   }
 
-  #timetable-container,
-  #timetable-container * {
+  #print-wrapper,
+  #print-wrapper * {
     visibility: visible;
   }
 
-  #timetable-container {
-    position: fixed;
+  #print-wrapper {
+    position: absolute;
     left: 0;
     top: 0;
-    width: 20cm !important;
-    height: 20cm !important;
+    width: var(--print-width, 19cm) !important;
+    height: var(--print-height, 27cm) !important;
+    overflow: hidden;
+  }
+
+  #timetable-container {
+    width: 19cm !important;
+    height: 27cm !important;
+    transform: scaleX(var(--scale-x, 1)) scaleY(var(--scale-y, 1));
+    transform-origin: top left;
     padding: 0.5cm;
     background: white;
     box-shadow: none !important;
@@ -258,14 +266,25 @@
     display: none !important;
   }
 
-  /* Exclude visual effects for printing as requested */
+  /* Exclude visual effects for printing as requested, but keep assessment backgrounds */
   #timetable-container td,
   #timetable-container div,
-  #timetable-container .bg-blue-100,
   #timetable-container .bg-red-50,
   #timetable-container .bg-yellow-50,
   #timetable-container .bg-gray-200 {
     background-color: transparent !important;
+    box-shadow: none !important;
+    animation: none !important;
+  }
+
+  /* Keep blue background for assessments during print */
+  #timetable-container .bg-blue-100 {
+    background-color: #dbeafe !important;
+    /* Tailwind blue-100 */
+    border-color: #93c5fd !important;
+    /* Tailwind blue-300 */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
     box-shadow: none !important;
     animation: none !important;
   }

@@ -9,7 +9,7 @@ import {
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
     TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown
 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -1116,10 +1116,8 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
     // Resolve dataset: _auto_ → active from settings, else manual
     useEffect(() => {
         if (selectedDataset === "_auto_" && settingsQuery.data) {
-            try {
-                const ds = JSON.parse(settingsQuery.data.active_datasets || "{}");
-                setResolvedDataset(ds[grade] || "");
-            } catch { setResolvedDataset(""); }
+            const ds = grade === "1" ? settingsQuery.data.comcigan_dataset_selected_grade1 : settingsQuery.data.comcigan_dataset_selected;
+            setResolvedDataset(ds || "");
         } else if (selectedDataset !== "_auto_") {
             setResolvedDataset(selectedDataset);
         }
@@ -1509,7 +1507,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
     const [selectedGrade, setSelectedGrade] = useState("2");
     const [selectedDataset, setSelectedDataset] = useState("_auto_");
     const [resolvedDataset, setResolvedDataset] = useState("");
-    const [selectedClass, setSelectedClass] = useState("all");
+    const [selectedClass, setSelectedClass] = useState("");
     // pendingChanges: key = "classNum-studentNumber", value = full electives object for that student
     const [pendingChanges, setPendingChanges] = useState<Record<string, Record<string, any>>>({});
     const [isSaving, setIsSaving] = useState(false);
@@ -1555,10 +1553,8 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
     // Resolve dataset: _auto_ → active from settings, else manual
     useEffect(() => {
         if (selectedDataset === "_auto_" && settingsQuery.data) {
-            try {
-                const ds = JSON.parse(settingsQuery.data.active_datasets || "{}");
-                setResolvedDataset(ds[selectedGrade] || "");
-            } catch { setResolvedDataset(""); }
+            const ds = selectedGrade === "1" ? settingsQuery.data.comcigan_dataset_selected_grade1 : settingsQuery.data.comcigan_dataset_selected;
+            setResolvedDataset(ds || "");
         } else if (selectedDataset !== "_auto_") {
             setResolvedDataset(selectedDataset);
         }
@@ -1805,7 +1801,12 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
 
             {/* Grid Table */}
             <div className="flex-1 overflow-auto border rounded-md">
-                {isLoading ? (
+                {!selectedClass ? (
+                    <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center h-full">
+                        <p className="text-lg font-medium">선택된 반이 없습니다.</p>
+                        <p className="text-sm mt-1">위의 탭에서 열람할 반(또는 전체)을 선택해 주세요.</p>
+                    </div>
+                ) : isLoading ? (
                     <div className="p-8 text-center text-gray-400">데이터를 불러오는 중...</div>
                 ) : groupCodes.length === 0 ? (
                     <div className="p-8 text-center text-gray-400">
@@ -1908,6 +1909,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     const [siteFaviconUrl, setSiteFaviconUrl] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
+    const titleHtmlRef = React.useRef<HTMLDivElement>(null);
+    const [htmlChanged, setHtmlChanged] = useState(false);
 
     // Load current settings
     const { data: currentSettings, isLoading } = useQuery({
@@ -1923,16 +1926,54 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
 
     // Initialize form values from fetched settings
     useEffect(() => {
-        if (currentSettings && !isInitialized) {
-            setSiteTitle(currentSettings.site_title || '');
-            setSiteFaviconUrl(currentSettings.site_favicon_url || '');
-            setIsInitialized(true);
+        if (currentSettings) {
+            if (!isInitialized) {
+                setSiteTitle(currentSettings.site_title || '');
+                if (titleHtmlRef.current) {
+                    titleHtmlRef.current.innerHTML = currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
+                }
+                setSiteFaviconUrl(currentSettings.site_favicon_url || '');
+                setIsInitialized(true);
+                setHtmlChanged(false);
+            } else if (!htmlChanged) {
+                // Background update sync
+                setSiteTitle(currentSettings.site_title || '');
+                if (titleHtmlRef.current && titleHtmlRef.current.innerHTML !== (currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>')) {
+                    titleHtmlRef.current.innerHTML = currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
+                }
+                setSiteFaviconUrl(currentSettings.site_favicon_url || '');
+            }
         }
-    }, [currentSettings, isInitialized]);
+    }, [currentSettings, isInitialized, htmlChanged]);
+
+    // 실시간으로 브라우저 탭에 입력값 반영
+    useEffect(() => {
+        if (siteTitle !== undefined && isInitialized) {
+            document.title = siteTitle || '수행 일정공유';
+        }
+    }, [siteTitle, isInitialized]);
+
+    useEffect(() => {
+        if (siteFaviconUrl !== undefined && isInitialized) {
+            let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+            if (!link) {
+                link = document.createElement('link');
+                link.rel = 'icon';
+                document.head.appendChild(link);
+            }
+            if (siteFaviconUrl) {
+                link.href = siteFaviconUrl;
+            }
+        }
+    }, [siteFaviconUrl, isInitialized]);
 
     const handleSave = async () => {
         setIsSaving(true);
         try {
+            let finalHtml = titleHtmlRef.current?.innerHTML.trim() || '';
+            if (finalHtml === '<br>' || finalHtml === '<div><br></div>' || finalHtml === '') {
+                finalHtml = '';
+            }
             const res = await fetch('/api/admin/settings', {
                 method: 'POST',
                 headers: {
@@ -1941,14 +1982,24 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 },
                 body: JSON.stringify({
                     site_title: siteTitle,
+                    site_title_html: finalHtml,
                     site_favicon_url: siteFaviconUrl
                 })
             });
             if (!res.ok) throw new Error('Failed to save');
             toast.success('사이트 디자인 설정이 저장되었습니다.');
+
+            // Optimistically update the cache to prevent the input from reverting to old data momentarily
+            queryClient.setQueryData(['admin', 'settings', 'site-design'], (old: any) => ({
+                ...old,
+                site_title: siteTitle,
+                site_title_html: finalHtml,
+                site_favicon_url: siteFaviconUrl
+            }));
+
             queryClient.invalidateQueries({ queryKey: ['admin', 'settings', 'site-design'] });
             queryClient.invalidateQueries({ queryKey: ['publicSettings'] });
-            setIsInitialized(false); // re-sync saved state
+            setHtmlChanged(false); // Reset changed state to let useEffect sync it back
         } catch (e: any) {
             toast.error(`저장 실패: ${e.message}`);
         } finally {
@@ -1958,12 +2009,16 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
 
     const handleCancel = () => {
         setSiteTitle(currentSettings?.site_title || '');
+        if (titleHtmlRef.current) {
+            titleHtmlRef.current.innerHTML = currentSettings?.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
+        }
         setSiteFaviconUrl(currentSettings?.site_favicon_url || '');
+        setHtmlChanged(false);
     };
 
     const savedTitle = currentSettings?.site_title || '';
     const savedFavicon = currentSettings?.site_favicon_url || '';
-    const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon;
+    const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon || htmlChanged;
 
     if (isLoading) {
         return <div className="p-8 text-center text-gray-400">설정을 불러오는 중...</div>;
@@ -1973,14 +2028,40 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
         <div className="space-y-6 max-w-lg">
             {/* 사이트 제목 */}
             <div className="space-y-2">
-                <Label className="text-sm font-semibold">사이트 제목 (HTML Title)</Label>
+                <Label className="text-sm font-semibold">브라우저 탭 제목 (순수 텍스트)</Label>
                 <Input
                     value={siteTitle}
                     onChange={(e) => setSiteTitle(e.target.value)}
                     placeholder="예: 수행평가 일정공유 - 성지고"
                     className="max-w-md"
                 />
-                <p className="text-xs text-gray-400">브라우저 탭에 표시되는 제목입니다. 비워두면 기본값(수행평가 일정공유 - 성지고)이 사용됩니다.</p>
+                <p className="text-xs text-gray-400">브라우저 탭에 표시되는 제목입니다. 비워두면 기본값이 사용됩니다.</p>
+            </div>
+
+            {/* 화면용 사이트 제목 (색상 지원) */}
+            <div className="space-y-2">
+                <Label className="text-sm font-semibold">화면용 사이트 제목 (색상 변경 지원)</Label>
+                <div className="flex items-center gap-2 mb-1">
+                    <input
+                        type="color"
+                        className="w-8 h-8 p-1 border rounded cursor-pointer bg-white"
+                        onChange={(e) => {
+                            document.execCommand('styleWithCSS', false, 'true');
+                            document.execCommand('foreColor', false, e.target.value);
+                            setHtmlChanged(true);
+                        }}
+                        title="글자를 드래그한 후 색상을 골라주세요"
+                    />
+                    <span className="text-xs text-gray-500">마우스로 변경하고 싶은 글자를 드래그한 뒤 색상을 선택하세요. (기본 텍스트: 수행 일정공유)</span>
+                </div>
+                <div
+                    ref={titleHtmlRef}
+                    className="w-full max-w-md min-h-[42px] px-3 py-2 border rounded-md text-lg font-bold shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={() => setHtmlChanged(true)}
+                />
+                <p className="text-xs text-gray-400">PC와 모바일 화면 상단에 표시되는 제목입니다. 서식이 포함된 HTML 형태로 저장됩니다.</p>
             </div>
 
             {/* 파비콘 업로드 */}
@@ -2051,7 +2132,7 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                         ) : (
                             <div className="w-4 h-4 rounded bg-gray-200" />
                         )}
-                        <span className="text-sm text-slate-700 truncate">{siteTitle || '수행평가 일정공유 - 성지고'}</span>
+                        <span className="text-sm text-slate-700 truncate">{siteTitle || '브라우저 탭 기본 제목'}</span>
                     </div>
                 </div>
             )}
@@ -2084,6 +2165,7 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
     const [unit, setUnit] = useState<string>("day");
     const [excludeInput, setExcludeInput] = useState("");
     const [excludeApplied, setExcludeApplied] = useState("");
+    const [totalMetric, setTotalMetric] = useState<"student" | "ip">("student");
 
     const { data: trendData, isLoading, isError, error } = useQuery({
         queryKey: ['admin', 'visitor-trends', unit, excludeApplied],
@@ -2096,7 +2178,7 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
             if (!res.ok) throw new Error('Failed to fetch trends');
             return res.json();
         },
-        refetchInterval: 30000,
+        refetchInterval: 5000,
     });
 
     const formatLabel = (label: string) => {
@@ -2131,6 +2213,42 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
     ];
 
     const buckets = trendData?.buckets || [];
+
+    const isBucketCurrent = (label: string, unit: string) => {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+
+        console.log("isBucketCurrent DEBUG:", {
+            incomingLabel: label,
+            unit,
+            targetHour: `${yyyy}-${mm}-${dd} ${hh}:00`,
+            targetDay: `${yyyy}-${mm}-${dd}`,
+            targetMonth: `${yyyy}-${mm}`
+        });
+
+        if (unit === 'hour') return label === `${yyyy}-${mm}-${dd} ${hh}:00`;
+        if (unit === 'day') return label === `${yyyy}-${mm}-${dd}`;
+        if (unit === 'month' || unit === 'all') return label === `${yyyy}-${mm}`;
+
+        if (unit === 'week') {
+            const firstDay = new Date(yyyy, 0, 1);
+            let firstMondayDate = 1 + (8 - firstDay.getDay()) % 7;
+            if (firstDay.getDay() === 1) firstMondayDate = 1;
+            const firstMonday = new Date(yyyy, 0, firstMondayDate);
+
+            let weekNum;
+            if (now < firstMonday) {
+                weekNum = 0;
+            } else {
+                weekNum = Math.floor((now.getTime() - firstMonday.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+            }
+            return label === `${yyyy}-W${String(weekNum).padStart(2, '0')}`;
+        }
+        return false;
+    };
 
     return (
         <div className="space-y-6">
@@ -2195,6 +2313,24 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                         <div className="h-64 w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={buckets}>
+                                    <defs>
+                                        <pattern id="stripe-blue" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                                            <rect width="8" height="8" fill="#3b82f6" />
+                                            <rect width="4" height="8" fill="#bfdbfe" />
+                                        </pattern>
+                                        <pattern id="stripe-purple" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                                            <rect width="8" height="8" fill="#8b5cf6" />
+                                            <rect width="4" height="8" fill="#ddd6fe" />
+                                        </pattern>
+                                        <pattern id="stripe-green" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                                            <rect width="8" height="8" fill="#10b981" />
+                                            <rect width="4" height="8" fill="#a7f3d0" />
+                                        </pattern>
+                                        <pattern id="stripe-orange" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                                            <rect width="8" height="8" fill="#f59e0b" />
+                                            <rect width="4" height="8" fill="#fde68a" />
+                                        </pattern>
+                                    </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                                     <XAxis dataKey="label" tickFormatter={formatLabel} tick={{ fontSize: 12 }} />
                                     <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
@@ -2202,7 +2338,11 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                                         labelFormatter={(v) => `구간: ${v}`}
                                         formatter={(v: number) => [`${v}명`, '고유 접속자']}
                                     />
-                                    <Bar dataKey="uniqueStudents" fill="#3b82f6" radius={[4, 4, 0, 0]} name="고유 접속자" />
+                                    <Bar dataKey="uniqueStudents" name="고유 접속자" radius={[4, 4, 0, 0]}>
+                                        {buckets.map((entry: any, index: number) => (
+                                            <Cell key={`cell-${index}`} fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-blue)" : "#3b82f6"} />
+                                        ))}
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -2221,7 +2361,11 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                                         labelFormatter={(v) => `구간: ${v}`}
                                         formatter={(v: number) => [`${v}개`, '고유 IP']}
                                     />
-                                    <Bar dataKey="uniqueIPs" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="고유 IP" />
+                                    <Bar dataKey="uniqueIPs" name="고유 IP" radius={[4, 4, 0, 0]}>
+                                        {buckets.map((entry: any, index: number) => (
+                                            <Cell key={`cell-${index}`} fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-purple)" : "#8b5cf6"} />
+                                        ))}
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -2229,7 +2373,32 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
 
                     {/* Graph 2: Total Visits */}
                     <div>
-                        <h4 className="text-sm font-semibold text-gray-600 mb-3">총 접속 횟수</h4>
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-semibold text-gray-600">총 접속 횟수</h4>
+                                <span className="text-xs text-gray-400 font-normal shadow-none">(10분당 1회 제한)</span>
+                            </div>
+                            <div className="flex bg-gray-100 rounded-md p-0.5">
+                                <button
+                                    onClick={() => setTotalMetric("student")}
+                                    className={`px-2 py-1 text-xs rounded-sm transition-colors ${totalMetric === "student"
+                                        ? 'bg-white shadow-sm text-blue-600 font-bold'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    학번 기준
+                                </button>
+                                <button
+                                    onClick={() => setTotalMetric("ip")}
+                                    className={`px-2 py-1 text-xs rounded-sm transition-colors ${totalMetric === "ip"
+                                        ? 'bg-white shadow-sm text-purple-600 font-bold'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    IP 기준
+                                </button>
+                            </div>
+                        </div>
                         <div className="h-64 w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={buckets}>
@@ -2238,9 +2407,17 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                                     <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                                     <Tooltip
                                         labelFormatter={(v) => `구간: ${v}`}
-                                        formatter={(v: number) => [`${v}회`, '접속 횟수']}
+                                        formatter={(v: number) => [`${v}회`, totalMetric === 'student' ? '접속 횟수 (학번 매핑됨)' : '접속 횟수 (모든 IP)']}
                                     />
-                                    <Bar dataKey="totalVisits" fill="#10b981" radius={[4, 4, 0, 0]} name="접속 횟수" />
+                                    <Bar
+                                        dataKey={totalMetric === "student" ? "totalVisitsStudent" : "totalVisitsIP"}
+                                        radius={[4, 4, 0, 0]}
+                                        name="접속 횟수"
+                                    >
+                                        {buckets.map((entry: any, index: number) => (
+                                            <Cell key={`cell-${index}`} fill={isBucketCurrent(entry.label, unit) ? (totalMetric === "student" ? "url(#stripe-green)" : "url(#stripe-orange)") : (totalMetric === "student" ? "#10b981" : "#f59e0b")} />
+                                        ))}
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -2267,6 +2444,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
     const [selectedMenu, setSelectedMenu] = useState("raw-comcigan");
     const [schoolSearchQuery, setSchoolSearchQuery] = useState("성지");
     const [schoolNameInput, setSchoolNameInput] = useState("부산성지고");
+
+    // Fetch bug reports for real-time count in the sidebar badge
+    const reportsQuery = useQuery({
+        queryKey: ["admin", "bugReports"],
+        queryFn: async () => {
+            const res = await fetch("/api/bug-reports", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("Failed to fetch bug reports");
+            return res.json();
+        },
+        refetchInterval: 10000,
+    });
 
     const rawDataQuery = useQuery({
         queryKey: ["admin", "rawComcigan", schoolSearchQuery],
@@ -2356,8 +2544,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     className="justify-start whitespace-nowrap text-left"
                     onClick={() => setSelectedMenu("bug-report-manager")}
                 >
-                    <Bug className="w-4 h-4 mr-2" />
-                    오류신고 현황
+                    <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center">
+                            <Bug className="w-4 h-4 mr-2" />
+                            오류신고 현황
+                        </div>
+                        {reportsQuery.data && reportsQuery.data.length > 0 && (
+                            <span className="text-xs text-red-500 font-bold ml-2">
+                                ({reportsQuery.data.length})
+                            </span>
+                        )}
+                    </div>
                 </Button>
                 <Button
                     variant={selectedMenu === "student-elective-preentry" ? "default" : "ghost"}
@@ -2839,8 +3036,8 @@ export default function Admin() {
     const [selectedProfile, setSelectedProfile] = useState<IPProfile | null>(null);
     const [selectedIp, setSelectedIp] = useState<string | null>(null);
     const [isOthersExpanded, setIsOthersExpanded] = useState(false);
-    const [sortColumn, setSortColumn] = useState<'id' | 'modCount' | 'lastAccess'>('id');
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+    const [sortColumn, setSortColumn] = useState<'id' | 'modCount' | 'lastAccess'>('lastAccess');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
     const { data: assessments } = useQuery({
@@ -3199,6 +3396,7 @@ export default function Admin() {
                                         lastAccess: string | null;
                                         kakaoAccounts: { kakaoId: string; kakaoNickname: string }[];
                                         isBlocked: boolean;
+                                        hasElectives?: boolean;
                                     };
 
                                     const groupMap = new Map<string, UserGroup>();
@@ -3219,6 +3417,7 @@ export default function Admin() {
                                                 }
                                             }
                                             if (user.isBlocked) existing.isBlocked = true;
+                                            if (user.hasElectives) existing.hasElectives = true;
                                         } else {
                                             groupMap.set(key, {
                                                 key,
@@ -3230,6 +3429,7 @@ export default function Admin() {
                                                 lastAccess: user.lastAccess,
                                                 kakaoAccounts: [...(user.kakaoAccounts || [])],
                                                 isBlocked: !!user.isBlocked,
+                                                hasElectives: !!user.hasElectives,
                                             });
                                         }
                                     }
@@ -3371,9 +3571,16 @@ export default function Admin() {
                                                     </TableCell>
                                                     <TableCell>
                                                         {group.grade && group.classNum ? (
-                                                            <Badge variant="outline" className="font-mono text-green-600 border-green-200 bg-green-50">
-                                                                {group.grade}-{group.classNum}{group.studentNumber ? `-${group.studentNumber}` : ''}
-                                                            </Badge>
+                                                            <div className="flex items-center gap-2">
+                                                                <Badge variant="outline" className="font-mono text-green-600 border-green-200 bg-green-50">
+                                                                    {group.grade}-{group.classNum}{group.studentNumber ? `-${group.studentNumber}` : ''}
+                                                                </Badge>
+                                                                {group.hasElectives && (
+                                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-600 border-blue-200 px-1 py-0 h-4">
+                                                                        선택과목
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
                                                         ) : <span className="text-gray-300 text-xs">-</span>}
                                                     </TableCell>
                                                     <TableCell>
@@ -4657,6 +4864,27 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const [maintenanceDuration, setMaintenanceDuration] = useState("3"); // hours
     const [maintenanceMessage, setMaintenanceMessage] = useState("서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
     const [maintenanceEndTime, setMaintenanceEndTime] = useState<string | null>(null);
+    const [maintenanceStartTime, setMaintenanceStartTime] = useState<string | null>(null);
+
+    const [now, setNow] = useState(Date.now());
+
+    useEffect(() => {
+        const interval = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const getRemainingText = (targetMs: number) => {
+        const diff = targetMs - now;
+        if (diff <= 0) return "(종료됨)";
+
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+
+        if (h > 0) return `(${h}시간 ${m}분 남음)`;
+        if (m > 0) return `(${m}분 ${s}초 남음)`;
+        return `(${s}초 남음)`;
+    };
 
     const settingsQuery = useQuery({
         queryKey: ["admin", "settings", "visitRestriction"],
@@ -4692,13 +4920,18 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                     setMaintenanceActive(!!parsedMaint.active);
                     setMaintenanceMessage(parsedMaint.message || "서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
                     setMaintenanceEndTime(parsedMaint.endTime || null);
+                    setMaintenanceStartTime(parsedMaint.startTime || null);
                     // Duration is visual only during active set, keep default 3
                 } else {
                     setMaintenanceActive(false);
+                    setMaintenanceMessage("서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
                     setMaintenanceEndTime(null);
+                    setMaintenanceStartTime(null);
                 }
             } catch {
                 setMaintenanceActive(false);
+                setMaintenanceMessage("서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
+                setMaintenanceStartTime(null);
             }
 
             try {
@@ -4732,29 +4965,37 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
         onSuccess: () => {
             toast.success("방문제한 설정이 저장되었습니다.");
             queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
         },
         onError: (err) => {
             toast.error(`저장 실패: ${err.message}`);
         },
     });
 
+    const saveMaintenanceMutation = useMutation({
+        mutationFn: async (newData: any) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(newData),
+            });
+            if (!res.ok) throw new Error("Failed to save maintenance settings");
+            return res.json();
+        },
+        onSuccess: () => {
+            // Only invalidate publicSettings so we don't wipe out unsaved user inputs in other fields by triggering resetState()
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+        },
+        onError: (err) => {
+            toast.error(`점검 모드 저장 실패: ${err.message}`);
+        },
+    });
+
     const handleSave = () => {
         const ips = ipWhitelist.split('\n').map(ip => ip.trim()).filter(ip => ip.length > 0);
-
-        // Calculate new end time if activating now
-        let newEndTime = maintenanceEndTime;
-        if (maintenanceActive && !maintenanceEndTime) {
-            if (maintenanceDuration === "unlimited") {
-                newEndTime = null;
-            } else {
-                const hours = parseInt(maintenanceDuration);
-                const endDate = new Date();
-                endDate.setHours(endDate.getHours() + hours);
-                newEndTime = endDate.toISOString();
-            }
-        } else if (!maintenanceActive) {
-            newEndTime = null;
-        }
 
         saveMutation.mutate({
             restricted_grades: JSON.stringify(restrictedGrades),
@@ -4763,8 +5004,35 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
             kakao_login_restricted: String(kakaoLoginRestricted),
             maintenance_mode: JSON.stringify({
                 active: maintenanceActive,
+                endTime: maintenanceEndTime,
+                message: maintenanceMessage,
+                startTime: maintenanceStartTime
+            })
+        });
+    };
+
+    const handleMaintenanceSave = (overrideMaint: { active: boolean; endTime: string | null; startTime: string | null; duration?: string }) => {
+        const activeState = overrideMaint.active;
+        const currentStartTime = overrideMaint.startTime;
+        let newEndTime = overrideMaint.endTime;
+        const currentDuration = overrideMaint.duration !== undefined ? overrideMaint.duration : maintenanceDuration;
+
+        // Calculate new end time if recalculating
+        if (activeState && currentDuration !== "unlimited" && currentStartTime) {
+            const hours = parseInt(currentDuration);
+            const endDate = new Date(currentStartTime);
+            endDate.setHours(endDate.getHours() + hours);
+            newEndTime = endDate.toISOString();
+        } else if (activeState && currentDuration === "unlimited") {
+            newEndTime = null;
+        }
+
+        saveMaintenanceMutation.mutate({
+            maintenance_mode: JSON.stringify({
+                active: activeState,
                 endTime: newEndTime,
-                message: maintenanceMessage
+                message: maintenanceMessage,
+                startTime: currentStartTime
             })
         });
     };
@@ -4800,13 +5068,18 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const isIpsDirty = currentIpsNormalized !== savedIpsNormalized;
 
     let savedMaintStr = "";
+    const defaultMaintenanceMessage = "서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.";
     try {
         const parsed = settingsQuery.data?.maintenance_mode ? JSON.parse(settingsQuery.data.maintenance_mode) : null;
-        savedMaintStr = parsed ? JSON.stringify({ active: !!parsed.active, message: parsed.message || "" }) : "";
-    } catch { }
+        savedMaintStr = parsed
+            ? JSON.stringify({ active: !!parsed.active, message: parsed.message || defaultMaintenanceMessage })
+            : JSON.stringify({ active: false, message: defaultMaintenanceMessage });
+    } catch {
+        savedMaintStr = JSON.stringify({ active: false, message: defaultMaintenanceMessage });
+    }
 
     const currentMaintStr = JSON.stringify({ active: maintenanceActive, message: maintenanceMessage });
-    // We ignore duration/endTime check for dirtiness since it's dynamic
+    // We ignore duration/endTime/startTime check for dirtiness since it's dynamic
     const isMaintenanceDirty = currentMaintStr !== savedMaintStr;
 
     const isDirty = isGradesDirty || isReasonDirty || isKakaoRestrictedDirty || isIpsDirty || isMaintenanceDirty;
@@ -4832,11 +5105,17 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                             </span>
                             <Checkbox
                                 checked={maintenanceActive}
+                                disabled={maintenanceActive} // Once turned on, can only be turned off by immediate disable
                                 onCheckedChange={(c) => {
-                                    setMaintenanceActive(!!c);
-                                    if (!c) setMaintenanceEndTime(null);
+                                    if (c === true) {
+                                        setMaintenanceActive(true);
+                                        const nowStr = new Date().toISOString();
+                                        setMaintenanceStartTime(nowStr);
+                                        setMaintenanceEndTime(null);
+                                        handleMaintenanceSave({ active: true, endTime: null, startTime: nowStr, duration: maintenanceDuration });
+                                    }
                                 }}
-                                className="w-6 h-6 rounded-full data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+                                className="w-6 h-6 rounded-full data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600 disabled:opacity-50"
                             />
                         </div>
                     </div>
@@ -4847,8 +5126,12 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                             <label className="text-sm font-bold">점검 진행 시간</label>
                             <Select
                                 value={maintenanceDuration}
-                                onValueChange={setMaintenanceDuration}
-                                disabled={maintenanceActive && !!maintenanceEndTime} // Once active with an end time, disable duration change unless turned off and back on
+                                onValueChange={(val) => {
+                                    setMaintenanceDuration(val);
+                                    if (maintenanceActive) {
+                                        handleMaintenanceSave({ active: true, endTime: null, startTime: maintenanceStartTime, duration: val });
+                                    }
+                                }}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="기간 선택" />
@@ -4861,9 +5144,18 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                                     <SelectItem value="unlimited">무제한 (수동 해제)</SelectItem>
                                 </SelectContent>
                             </Select>
-                            {maintenanceActive && maintenanceEndTime && (
-                                <p className="text-xs text-red-500 font-medium">
-                                    종료 예정: {new Date(maintenanceEndTime).toLocaleString()}
+                            {maintenanceActive && (
+                                <p className="text-xs text-red-500 font-medium h-4">
+                                    {maintenanceDuration === "unlimited" ? (
+                                        "수동으로 해제할 때까지 무제한 적용됩니다."
+                                    ) : maintenanceStartTime && (
+                                        (() => {
+                                            const isSaved = maintenanceEndTime && new Date(maintenanceEndTime).getTime() === new Date(new Date(maintenanceStartTime).getTime() + parseInt(maintenanceDuration) * 3600000).getTime();
+                                            const endDate = new Date(maintenanceStartTime);
+                                            endDate.setHours(endDate.getHours() + parseInt(maintenanceDuration));
+                                            return `종료 예정${isSaved ? '' : ' (저장 전)'}: ${endDate.toLocaleString()} ${getRemainingText(endDate.getTime())}`;
+                                        })()
+                                    )}
                                 </p>
                             )}
                         </div>
@@ -4875,7 +5167,8 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                                     onClick={() => {
                                         setMaintenanceActive(false);
                                         setMaintenanceEndTime(null);
-                                        handleSave(); // Immediate save optional, but let's let big save do it
+                                        setMaintenanceStartTime(null);
+                                        handleMaintenanceSave({ active: false, endTime: null, startTime: null }); // Force save "OFF" over stale state
                                     }}
                                 >
                                     즉시 점검 해제
@@ -4972,7 +5265,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                         <Button variant="outline" onClick={resetState} disabled={!isDirty || saveMutation.isPending}>
                             변경 취소
                         </Button>
-                        <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
+                        <Button onClick={() => handleSave()} disabled={!isDirty || saveMutation.isPending}>
                             {saveMutation.isPending ? "저장 중..." : "설정 저장"}
                         </Button>
                     </div>
