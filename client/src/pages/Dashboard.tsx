@@ -149,8 +149,16 @@ export default function Dashboard() {
   // PNG 다운로드 핸들러
   const handleDownloadPng = async () => {
     if (!timetableRef.current) return;
+
+    // Close dialog first to ensure it's not in the way
+    setShowPrintOptions(false);
+
     try {
+      // Small delay to let dialog close animation finish
+      await new Promise(r => setTimeout(r, 300));
+
       document.body.classList.add('capturing');
+      // Extra delay for 'capturing' styles to apply
       await new Promise(r => setTimeout(r, 100));
 
       const dataUrl = await toPng(timetableRef.current, {
@@ -158,6 +166,10 @@ export default function Dashboard() {
         backgroundColor: '#ffffff',
         width: 800,
         height: 800,
+        style: {
+          margin: '0',
+          padding: '30px',
+        }
       });
 
       document.body.classList.remove('capturing');
@@ -168,7 +180,6 @@ export default function Dashboard() {
       link.click();
 
       toast.success("시간표 이미지가 저장되었습니다.");
-      setShowPrintOptions(false);
     } catch (err) {
       document.body.classList.remove('capturing');
       console.error("이미지 저장 실패:", err);
@@ -917,16 +928,16 @@ export default function Dashboard() {
           </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 justify-end">
-          <div className="flex items-center gap-[6px] md:gap-2">
+        <div className="flex flex-wrap items-center gap-1 justify-end">
+          <div className="flex items-center gap-[4px] md:gap-2">
             <Button
               variant="outline"
               size="icon"
-              className="h-9 w-9 bg-white shrink-0"
+              className="h-9 w-9 bg-white shrink-0 border-gray-200"
               onClick={() => setShowPrintOptions(true)}
               title="내보내기 / 인쇄"
             >
-              <Printer className="w-5 h-5 text-gray-700" />
+              <Printer className="w-5 h-5 text-gray-500" />
             </Button>
             <Select
               value={grade}
@@ -1001,6 +1012,17 @@ export default function Dashboard() {
         ) : (
           <Card className="py-1 gap-1 md:py-2 md:gap-2">
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
+              {/* Desktop Export Button - Absolute to prevent layout shift */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPrintOptions(true)}
+                className="hidden md:flex absolute -top-10 right-0 h-8 gap-2 bg-white/90 backdrop-blur-sm border-gray-200 hover:bg-gray-50 shadow-sm"
+              >
+                <Printer className="w-4 h-4" />
+                내보내기 / 인쇄
+              </Button>
+
               {/* Desktop Title */}
               <div className="hidden md:flex items-center gap-2 flex-1 min-w-0">
                 <h1 className="text-2xl font-bold whitespace-nowrap overflow-hidden text-ellipsis">
@@ -1083,14 +1105,7 @@ export default function Dashboard() {
 
               {/* Desktop Selectors */}
               <div className="hidden md:flex items-center gap-2 flex-1 justify-end min-w-0 md:ml-[3px]">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowPrintOptions(true)}
-                  className="hidden md:flex items-center gap-2"
-                >
-                  <Printer className="w-4 h-4" />
-                  내보내기 / 인쇄
-                </Button>
+
                 <Select
                   value={grade}
                   onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}

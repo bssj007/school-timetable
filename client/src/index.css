@@ -287,24 +287,67 @@
   }
 }
 
-/* Capture Only Styles (Hidden in UI) */
 .capture-only {
   display: none;
 }
 
-body.capturing .capture-only {
-  display: block;
+body.capturing {
+  overflow: hidden !important;
+  width: 800px !important;
+  height: 800px !important;
+}
+
+body.capturing #root>*:not(#timetable-container) {
+  display: none !important;
 }
 
 body.capturing #timetable-container {
-  width: 800px;
-  height: 800px;
-  padding: 20px;
-  background: white;
+  position: fixed !important;
+  /* Change to fixed to ensure it occupies the viewport independently */
+  left: 0 !important;
+  top: 0 !important;
+  width: 800px !important;
+  height: 800px !important;
+  padding: 30px !important;
+  background: white !important;
   display: flex !important;
-  flex-direction: column;
+  flex-direction: column !important;
+  z-index: 9999 !important;
+  pointer-events: none !important;
+  /* Prevent hover state capture */
+}
+
+/* Suppress all hover effects during capture */
+body.capturing * {
+  transition: none !important;
+  animation: none !important;
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+/* Ensure table fits perfectly */
+body.capturing #timetable-container table {
+  width: 100% !important;
+  height: auto !important;
+  flex-grow: 1;
+  border-collapse: collapse !important;
 }
 
 body.capturing .no-print {
+  display: none !important;
+}
+
+body.capturing .blur-\[3px\] {
+  filter: none !important;
+  /* Remove blur during capture */
+}
+
+body.capturing .opacity-60 {
+  opacity: 1 !important;
+  /* Remove transparency during capture */
+}
+
+/* Hide the elective warning overlay during capture if it exists */
+body.capturing .absolute.inset-0.z-20 {
   display: none !important;
 }
