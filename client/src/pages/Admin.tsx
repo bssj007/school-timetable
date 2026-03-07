@@ -1116,10 +1116,8 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
     // Resolve dataset: _auto_ → active from settings, else manual
     useEffect(() => {
         if (selectedDataset === "_auto_" && settingsQuery.data) {
-            try {
-                const ds = JSON.parse(settingsQuery.data.active_datasets || "{}");
-                setResolvedDataset(ds[grade] || "");
-            } catch { setResolvedDataset(""); }
+            const ds = grade === "1" ? settingsQuery.data.comcigan_dataset_selected_grade1 : settingsQuery.data.comcigan_dataset_selected;
+            setResolvedDataset(ds || "");
         } else if (selectedDataset !== "_auto_") {
             setResolvedDataset(selectedDataset);
         }
@@ -1555,10 +1553,8 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
     // Resolve dataset: _auto_ → active from settings, else manual
     useEffect(() => {
         if (selectedDataset === "_auto_" && settingsQuery.data) {
-            try {
-                const ds = JSON.parse(settingsQuery.data.active_datasets || "{}");
-                setResolvedDataset(ds[selectedGrade] || "");
-            } catch { setResolvedDataset(""); }
+            const ds = selectedGrade === "1" ? settingsQuery.data.comcigan_dataset_selected_grade1 : settingsQuery.data.comcigan_dataset_selected;
+            setResolvedDataset(ds || "");
         } else if (selectedDataset !== "_auto_") {
             setResolvedDataset(selectedDataset);
         }

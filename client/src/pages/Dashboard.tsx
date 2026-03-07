@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import ElectiveSelectionDialog from "@/components/ElectiveSelectionDialog";
 
 // 타입 정의
@@ -87,6 +88,10 @@ function isDateInWeek(dateStr: string, weekDates: Date[]): boolean {
   return date >= startDate && date <= endDate;
 }
 
+// 컴포넌트 외부에 기본 인쇄 크기 상수 정의
+const DEFAULT_PRINT_WIDTH = "9";
+const DEFAULT_PRINT_HEIGHT = "11";
+
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, refreshKakaoUser } = useUserConfig();
@@ -145,8 +150,8 @@ export default function Dashboard() {
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printMode, setPrintMode] = useState<'select' | 'printer'>('select');
   const [includeAssessments, setIncludeAssessments] = useState(true);
-  const [printWidth, setPrintWidth] = useState<string>("8");
-  const [printHeight, setPrintHeight] = useState<string>("10");
+  const [printWidth, setPrintWidth] = useState<string>(DEFAULT_PRINT_WIDTH);
+  const [printHeight, setPrintHeight] = useState<string>(DEFAULT_PRINT_HEIGHT);
   const timetableRef = useRef<HTMLDivElement>(null);
 
   // Compute print scales relative to a standard printable A4 area (roughly 19cm x 27cm)
@@ -1371,31 +1376,32 @@ export default function Dashboard() {
                                     </div>
                                   )}
                                   {item || isElectiveActive ? (
-                                    <div className="flex flex-col items-center justify-center h-full min-h-0">
-                                      <div
-                                        className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}
-                                        style={{
-                                          fontSize: (displaySubject || "").length > 6 ? '9px' : (displaySubject || "").length > 4 ? '11px' : undefined,
-                                          wordBreak: (displaySubject || "").length > 6 ? 'keep-all' : undefined,
-                                        }}
-                                      >
-                                        <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
+                                    <div className="flex flex-col h-full relative group min-h-[50px] md:min-h-[4rem]">
+                                      <div className="flex flex-col items-center justify-center flex-1 z-10 w-full h-full relative bg-white/40 md:bg-transparent rounded-sm md:rounded-none px-0.5">
+                                        <div className="font-bold text-[11px] md:text-sm md:text-base leading-tight text-center md:whitespace-nowrap w-full">
                                           {isCancelledByFreePeriod ? (
                                             <span>
                                               <span className="line-through opacity-60">{displaySubject}</span>
                                               <span className={`ml-1 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"}`}>(공강)</span>
                                             </span>
                                           ) : displaySubject}
-                                        </span>
+                                        </div>
+                                        <div className="text-[9px] md:text-xs text-gray-600 mt-0.5 md:mt-1 truncate max-w-full">
+                                          {displayClassName
+                                            ? <>{displayClassName}{displayTeacher ? <span className="ml-1 opacity-60">{displayTeacher}</span> : null}</>
+                                            : displayTeacher}
+                                        </div>
                                       </div>
-                                      <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">
-                                        {displayClassName
-                                          ? <>{displayClassName}{displayTeacher ? <span className="ml-1 opacity-60">{displayTeacher}</span> : null}</>
-                                          : displayTeacher}
-                                      </div>
-                                      {cellAssessments.length > 0 && (
-                                        <div className="mt-0.5 flex-shrink-0">
-                                          <div className="flex flex-wrap gap-0.5 justify-center">
+
+                                      {includeAssessments && cellAssessments.length > 0 && (
+                                        <div className="absolute inset-0 z-0 opacity-30 pointer-events-none overflow-hidden">
+                                          <div className={`w-full h-full bg-blue-100 ${isPast ? 'bg-gray-100' : ''}`}></div>
+                                        </div>
+                                      )}
+
+                                      {includeAssessments && cellAssessments.length > 0 && (
+                                        <div className="absolute top-1 right-1 z-20 flex flex-col gap-1 pointer-events-none md:pointer-events-auto">
+                                          <div className="flex flex-row gap-0.5 items-end justify-end">
                                             {cellAssessments.map(a => (
                                               <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"}`}>
                                                 {a.description && a.description.includes("차") ? a.description : '평가'}
@@ -1445,9 +1451,25 @@ export default function Dashboard() {
                   <Printer className="w-5 h-5" />
                   프린터로 출력
                 </Button>
-                <p className="text-xs font-medium text-gray-500 text-center mt-2 flex flex-col items-center">
-                  <span>* 수행평가는 <strong>현재 보고 있는 주차</strong> 기준으로만 표시됩니다.</span>
-                </p>
+
+                <div className="flex items-center space-x-2 mt-4 bg-gray-50 border rounded-lg p-3">
+                  <Checkbox
+                    id="include-assessments"
+                    checked={includeAssessments}
+                    onCheckedChange={(checked) => setIncludeAssessments(!!checked)}
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <label
+                      htmlFor="include-assessments"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      수행평가 일정 포함
+                    </label>
+                    <p className="text-xs text-gray-500">
+                      * 현재 보고 있는 주차 기준으로 표기됩니다.
+                    </p>
+                  </div>
+                </div>
               </>
             ) : (
               <>
@@ -1481,7 +1503,7 @@ export default function Dashboard() {
                   </Button>
                 </div>
                 <p className="text-xs font-medium text-gray-500 text-center mt-2 flex flex-col items-center">
-                  <span className="text-red-500 mt-1">* 기본 <strong>10x10cm</strong> 기준. 숫자를 조절하여 여백을 맞출 수 있습니다.</span>
+                  <span className="text-red-500 mt-1">* 기본 <strong>{DEFAULT_PRINT_WIDTH}x{DEFAULT_PRINT_HEIGHT}cm</strong> 기준. 숫자를 조절하여 여백을 맞출 수 있습니다.</span>
                 </p>
               </>
             )}
