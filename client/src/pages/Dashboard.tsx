@@ -939,15 +939,6 @@ export default function Dashboard() {
 
         <div className="flex flex-wrap items-center gap-1 justify-end">
           <div className="flex items-center gap-[4px] md:gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-9 w-9 bg-white shrink-0 border-gray-200"
-              onClick={() => setShowPrintOptions(true)}
-              title="내보내기 / 인쇄"
-            >
-              <Printer className="w-5 h-5 text-gray-500" />
-            </Button>
             <Select
               value={grade}
               onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
@@ -1088,6 +1079,15 @@ export default function Dashboard() {
                     onClick={() => setWeekOffset(weekOffset + 1)}
                   >
                     <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 ml-1 md:hidden bg-white shrink-0 border-gray-200"
+                    onClick={() => setShowPrintOptions(true)}
+                    title="내보내기 / 인쇄"
+                  >
+                    <Printer className="w-4 h-4 text-gray-500" />
                   </Button>
                 </div>
                 <span className={`text-lg md:text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
