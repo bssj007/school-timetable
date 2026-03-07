@@ -36,7 +36,7 @@ export const onRequest = async (context: any) => {
                 const c = parseInt(id[1]);
                 const n = parseInt(id.slice(2));
                 excludeBinds.push(g, c, n);
-                return "(grade = ? AND classNum = ? AND studentNumber = ?)";
+                return "(COALESCE(al.grade, sp.grade) = ? AND COALESCE(al.classNum, sp.classNum) = ? AND COALESCE(al.studentNumber, sp.studentNumber) = ?)";
             });
             excludeClause = `AND NOT (${conditions.join(" OR ")})`;
         }
@@ -48,41 +48,51 @@ export const onRequest = async (context: any) => {
 
         switch (unit) {
             case "hour":
-                timeFilter = "AND accessedAt > datetime('now', '-24 hours')";
-                bucketExpr = "strftime('%Y-%m-%d %H:00', accessedAt)";
+                timeFilter = "AND al.accessedAt > datetime('now', '-24 hours')";
+                bucketExpr = "strftime('%Y-%m-%d %H:00', al.accessedAt)";
                 labelFormat = "hour";
                 break;
             case "day":
-                timeFilter = "AND accessedAt > datetime('now', '-7 days')";
-                bucketExpr = "strftime('%Y-%m-%d', accessedAt)";
+                timeFilter = "AND al.accessedAt > datetime('now', '-7 days')";
+                bucketExpr = "strftime('%Y-%m-%d', al.accessedAt)";
                 labelFormat = "day";
                 break;
             case "week":
-                timeFilter = "AND accessedAt > datetime('now', '-28 days')";
-                bucketExpr = "strftime('%Y-W%W', accessedAt)";
+                timeFilter = "AND al.accessedAt > datetime('now', '-28 days')";
+                bucketExpr = "strftime('%Y-W%W', al.accessedAt)";
                 labelFormat = "week";
                 break;
             case "month":
-                timeFilter = "AND accessedAt > datetime('now', '-12 months')";
-                bucketExpr = "strftime('%Y-%m', accessedAt)";
+                timeFilter = "AND al.accessedAt > datetime('now', '-12 months')";
+                bucketExpr = "strftime('%Y-%m', al.accessedAt)";
                 labelFormat = "month";
                 break;
             case "all":
             default:
                 timeFilter = "";
-                bucketExpr = "strftime('%Y-%m', accessedAt)";
+                bucketExpr = "strftime('%Y-%m', al.accessedAt)";
                 labelFormat = "month";
                 break;
         }
 
         // Query 1: Unique students per bucket
-        // A "student" = grade || classNum || studentNumber (string concat for uniqueness)
+        // Uses COALESCE to fill NULL grade/classNum/studentNumber from ip_profile → student_profile
+        // This ensures IPv6 users (and any user whose request lacked cookies) are still counted.
         const uniqueQuery = `
             SELECT 
                 ${bucketExpr} as bucket,
-                COUNT(DISTINCT (grade || '-' || classNum || '-' || studentNumber)) as uniqueStudents
-            FROM access_logs
-            WHERE grade IS NOT NULL AND classNum IS NOT NULL AND studentNumber IS NOT NULL
+                COUNT(DISTINCT (
+                    COALESCE(al.grade, sp.grade) || '-' ||
+                    COALESCE(al.classNum, sp.classNum) || '-' ||
+                    COALESCE(al.studentNumber, sp.studentNumber)
+                )) as uniqueStudents
+            FROM access_logs al
+            LEFT JOIN ip_profiles ip ON al.ip = ip.ip
+            LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
+            WHERE
+                COALESCE(al.grade, sp.grade) IS NOT NULL AND
+                COALESCE(al.classNum, sp.classNum) IS NOT NULL AND
+                COALESCE(al.studentNumber, sp.studentNumber) IS NOT NULL
             ${timeFilter}
             ${excludeClause}
             GROUP BY bucket
@@ -90,7 +100,8 @@ export const onRequest = async (context: any) => {
         `;
 
         // Query 2: Total visits per bucket (excluding 기타접속)
-        // A "visit" = one student accessing the site in a given hour (not every API call)
+        // A "visit" = one student+sessionHour combination, deduplicated.
+        // Uses COALESCE so IPv6 / cookie-less requests are still counted via ip_profiles.
         const totalQuery = `
             SELECT 
                 _bucket as bucket,
@@ -98,10 +109,17 @@ export const onRequest = async (context: any) => {
             FROM (
                 SELECT DISTINCT
                     ${bucketExpr} as _bucket,
-                    grade, classNum, studentNumber,
-                    strftime('%Y-%m-%d %H', accessedAt) as sessionHour
-                FROM access_logs
-                WHERE grade IS NOT NULL AND classNum IS NOT NULL AND studentNumber IS NOT NULL
+                    COALESCE(al.grade, sp.grade) as grade,
+                    COALESCE(al.classNum, sp.classNum) as classNum,
+                    COALESCE(al.studentNumber, sp.studentNumber) as studentNumber,
+                    strftime('%Y-%m-%d %H', al.accessedAt) as sessionHour
+                FROM access_logs al
+                LEFT JOIN ip_profiles ip ON al.ip = ip.ip
+                LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
+                WHERE
+                    COALESCE(al.grade, sp.grade) IS NOT NULL AND
+                    COALESCE(al.classNum, sp.classNum) IS NOT NULL AND
+                    COALESCE(al.studentNumber, sp.studentNumber) IS NOT NULL
                 ${timeFilter}
                 ${excludeClause}
             )
@@ -110,12 +128,18 @@ export const onRequest = async (context: any) => {
         `;
 
         // Query 3: Unique IPs per bucket
+        // Counts distinct IPs that belong to known students (via COALESCE).
         const uniqueIpQuery = `
             SELECT 
                 ${bucketExpr} as bucket,
-                COUNT(DISTINCT ip) as uniqueIPs
-            FROM access_logs
-            WHERE grade IS NOT NULL AND classNum IS NOT NULL AND studentNumber IS NOT NULL
+                COUNT(DISTINCT al.ip) as uniqueIPs
+            FROM access_logs al
+            LEFT JOIN ip_profiles ip ON al.ip = ip.ip
+            LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
+            WHERE
+                COALESCE(al.grade, sp.grade) IS NOT NULL AND
+                COALESCE(al.classNum, sp.classNum) IS NOT NULL AND
+                COALESCE(al.studentNumber, sp.studentNumber) IS NOT NULL
             ${timeFilter}
             ${excludeClause}
             GROUP BY bucket
