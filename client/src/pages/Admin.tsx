@@ -4972,13 +4972,50 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
         },
     });
 
-    const handleSave = (overrideMaint?: { active: boolean; endTime: string | null; startTime: string | null; duration?: string }) => {
+    const saveMaintenanceMutation = useMutation({
+        mutationFn: async (newData: any) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(newData),
+            });
+            if (!res.ok) throw new Error("Failed to save maintenance settings");
+            return res.json();
+        },
+        onSuccess: () => {
+            // Only invalidate publicSettings so we don't wipe out unsaved user inputs in other fields by triggering resetState()
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+        },
+        onError: (err) => {
+            toast.error(`점검 모드 저장 실패: ${err.message}`);
+        },
+    });
+
+    const handleSave = () => {
         const ips = ipWhitelist.split('\n').map(ip => ip.trim()).filter(ip => ip.length > 0);
 
-        const activeState = overrideMaint ? overrideMaint.active : maintenanceActive;
-        const currentStartTime = overrideMaint !== undefined ? overrideMaint.startTime : maintenanceStartTime;
-        let newEndTime = overrideMaint !== undefined ? overrideMaint.endTime : maintenanceEndTime;
-        const currentDuration = overrideMaint?.duration !== undefined ? overrideMaint.duration : maintenanceDuration;
+        saveMutation.mutate({
+            restricted_grades: JSON.stringify(restrictedGrades),
+            restriction_reason: restrictionReason,
+            ip_whitelist: JSON.stringify(ips),
+            kakao_login_restricted: String(kakaoLoginRestricted),
+            maintenance_mode: JSON.stringify({
+                active: maintenanceActive,
+                endTime: maintenanceEndTime,
+                message: maintenanceMessage,
+                startTime: maintenanceStartTime
+            })
+        });
+    };
+
+    const handleMaintenanceSave = (overrideMaint: { active: boolean; endTime: string | null; startTime: string | null; duration?: string }) => {
+        const activeState = overrideMaint.active;
+        const currentStartTime = overrideMaint.startTime;
+        let newEndTime = overrideMaint.endTime;
+        const currentDuration = overrideMaint.duration !== undefined ? overrideMaint.duration : maintenanceDuration;
 
         // Calculate new end time if recalculating
         if (activeState && currentDuration !== "unlimited" && currentStartTime) {
@@ -4990,11 +5027,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
             newEndTime = null;
         }
 
-        saveMutation.mutate({
-            restricted_grades: JSON.stringify(restrictedGrades),
-            restriction_reason: restrictionReason,
-            ip_whitelist: JSON.stringify(ips),
-            kakao_login_restricted: String(kakaoLoginRestricted),
+        saveMaintenanceMutation.mutate({
             maintenance_mode: JSON.stringify({
                 active: activeState,
                 endTime: newEndTime,
@@ -5079,7 +5112,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                                         const nowStr = new Date().toISOString();
                                         setMaintenanceStartTime(nowStr);
                                         setMaintenanceEndTime(null);
-                                        handleSave({ active: true, endTime: null, startTime: nowStr, duration: maintenanceDuration });
+                                        handleMaintenanceSave({ active: true, endTime: null, startTime: nowStr, duration: maintenanceDuration });
                                     }
                                 }}
                                 className="w-6 h-6 rounded-full data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600 disabled:opacity-50"
@@ -5096,7 +5129,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                                 onValueChange={(val) => {
                                     setMaintenanceDuration(val);
                                     if (maintenanceActive) {
-                                        handleSave({ active: true, endTime: null, startTime: maintenanceStartTime, duration: val });
+                                        handleMaintenanceSave({ active: true, endTime: null, startTime: maintenanceStartTime, duration: val });
                                     }
                                 }}
                             >
@@ -5135,7 +5168,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                                         setMaintenanceActive(false);
                                         setMaintenanceEndTime(null);
                                         setMaintenanceStartTime(null);
-                                        handleSave({ active: false, endTime: null, startTime: null }); // Force save "OFF" over stale state
+                                        handleMaintenanceSave({ active: false, endTime: null, startTime: null }); // Force save "OFF" over stale state
                                     }}
                                 >
                                     즉시 점검 해제
