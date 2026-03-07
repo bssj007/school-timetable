@@ -224,7 +224,8 @@
 
 @media (min-width: 1024px) {
   body {
-    /* zoom: 0.9; removed as it breaks absolute positioning of popovers/selects on large screens */
+    zoom: 0.85;
+    /* Site scale set to 85% for PC */
   }
 }
 
