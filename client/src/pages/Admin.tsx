@@ -4864,6 +4864,27 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const [maintenanceDuration, setMaintenanceDuration] = useState("3"); // hours
     const [maintenanceMessage, setMaintenanceMessage] = useState("서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
     const [maintenanceEndTime, setMaintenanceEndTime] = useState<string | null>(null);
+    const [maintenanceStartTime, setMaintenanceStartTime] = useState<string | null>(null);
+
+    const [now, setNow] = useState(Date.now());
+
+    useEffect(() => {
+        const interval = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const getRemainingText = (targetMs: number) => {
+        const diff = targetMs - now;
+        if (diff <= 0) return "(종료됨)";
+
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+
+        if (h > 0) return `(${h}시간 ${m}분 남음)`;
+        if (m > 0) return `(${m}분 ${s}초 남음)`;
+        return `(${s}초 남음)`;
+    };
 
     const settingsQuery = useQuery({
         queryKey: ["admin", "settings", "visitRestriction"],
@@ -4899,15 +4920,18 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                     setMaintenanceActive(!!parsedMaint.active);
                     setMaintenanceMessage(parsedMaint.message || "서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
                     setMaintenanceEndTime(parsedMaint.endTime || null);
+                    setMaintenanceStartTime(parsedMaint.startTime || null);
                     // Duration is visual only during active set, keep default 3
                 } else {
                     setMaintenanceActive(false);
                     setMaintenanceMessage("서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
                     setMaintenanceEndTime(null);
+                    setMaintenanceStartTime(null);
                 }
             } catch {
                 setMaintenanceActive(false);
                 setMaintenanceMessage("서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.");
+                setMaintenanceStartTime(null);
             }
 
             try {
@@ -4948,21 +4972,20 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
         },
     });
 
-    const handleSave = () => {
+    const handleSave = (overrideMaint?: { active: boolean; endTime: string | null; startTime: string | null }) => {
         const ips = ipWhitelist.split('\n').map(ip => ip.trim()).filter(ip => ip.length > 0);
 
-        // Calculate new end time if activating now
-        let newEndTime = maintenanceEndTime;
-        if (maintenanceActive && !maintenanceEndTime) {
-            if (maintenanceDuration === "unlimited") {
-                newEndTime = null;
-            } else {
-                const hours = parseInt(maintenanceDuration);
-                const endDate = new Date();
-                endDate.setHours(endDate.getHours() + hours);
-                newEndTime = endDate.toISOString();
-            }
-        } else if (!maintenanceActive) {
+        const activeState = overrideMaint ? overrideMaint.active : maintenanceActive;
+        const currentStartTime = overrideMaint !== undefined ? overrideMaint.startTime : maintenanceStartTime;
+        let newEndTime = overrideMaint !== undefined ? overrideMaint.endTime : maintenanceEndTime;
+
+        // Calculate new end time if recalculating
+        if (activeState && maintenanceDuration !== "unlimited" && currentStartTime) {
+            const hours = parseInt(maintenanceDuration);
+            const endDate = new Date(currentStartTime);
+            endDate.setHours(endDate.getHours() + hours);
+            newEndTime = endDate.toISOString();
+        } else if (activeState && maintenanceDuration === "unlimited") {
             newEndTime = null;
         }
 
@@ -4972,9 +4995,10 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
             ip_whitelist: JSON.stringify(ips),
             kakao_login_restricted: String(kakaoLoginRestricted),
             maintenance_mode: JSON.stringify({
-                active: maintenanceActive,
+                active: activeState,
                 endTime: newEndTime,
-                message: maintenanceMessage
+                message: maintenanceMessage,
+                startTime: currentStartTime
             })
         });
     };
@@ -5021,7 +5045,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     }
 
     const currentMaintStr = JSON.stringify({ active: maintenanceActive, message: maintenanceMessage });
-    // We ignore duration/endTime check for dirtiness since it's dynamic
+    // We ignore duration/endTime/startTime check for dirtiness since it's dynamic
     const isMaintenanceDirty = currentMaintStr !== savedMaintStr;
 
     const isDirty = isGradesDirty || isReasonDirty || isKakaoRestrictedDirty || isIpsDirty || isMaintenanceDirty;
@@ -5047,11 +5071,15 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                             </span>
                             <Checkbox
                                 checked={maintenanceActive}
+                                disabled={maintenanceActive} // Once turned on, can only be turned off by immediate disable
                                 onCheckedChange={(c) => {
-                                    setMaintenanceActive(!!c);
-                                    if (!c) setMaintenanceEndTime(null);
+                                    if (c === true) {
+                                        setMaintenanceActive(true);
+                                        setMaintenanceStartTime(new Date().toISOString());
+                                        setMaintenanceEndTime(null);
+                                    }
                                 }}
-                                className="w-6 h-6 rounded-full data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+                                className="w-6 h-6 rounded-full data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600 disabled:opacity-50"
                             />
                         </div>
                     </div>
@@ -5063,7 +5091,6 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                             <Select
                                 value={maintenanceDuration}
                                 onValueChange={setMaintenanceDuration}
-                                disabled={maintenanceActive && !!maintenanceEndTime} // Once active with an end time, disable duration change unless turned off and back on
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="기간 선택" />
@@ -5076,9 +5103,18 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                                     <SelectItem value="unlimited">무제한 (수동 해제)</SelectItem>
                                 </SelectContent>
                             </Select>
-                            {maintenanceActive && maintenanceEndTime && (
-                                <p className="text-xs text-red-500 font-medium">
-                                    종료 예정: {new Date(maintenanceEndTime).toLocaleString()}
+                            {maintenanceActive && (
+                                <p className="text-xs text-red-500 font-medium h-4">
+                                    {maintenanceDuration === "unlimited" ? (
+                                        "수동으로 해제할 때까지 무제한 적용됩니다."
+                                    ) : maintenanceStartTime && (
+                                        (() => {
+                                            const isSaved = maintenanceEndTime && new Date(maintenanceEndTime).getTime() === new Date(new Date(maintenanceStartTime).getTime() + parseInt(maintenanceDuration) * 3600000).getTime();
+                                            const endDate = new Date(maintenanceStartTime);
+                                            endDate.setHours(endDate.getHours() + parseInt(maintenanceDuration));
+                                            return `종료 예정${isSaved ? '' : ' (저장 전)'}: ${endDate.toLocaleString()} ${getRemainingText(endDate.getTime())}`;
+                                        })()
+                                    )}
                                 </p>
                             )}
                         </div>
@@ -5090,7 +5126,8 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                                     onClick={() => {
                                         setMaintenanceActive(false);
                                         setMaintenanceEndTime(null);
-                                        handleSave(); // Immediate save optional, but let's let big save do it
+                                        setMaintenanceStartTime(null);
+                                        handleSave({ active: false, endTime: null, startTime: null }); // Force save "OFF" over stale state
                                     }}
                                 >
                                     즉시 점검 해제
@@ -5187,7 +5224,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                         <Button variant="outline" onClick={resetState} disabled={!isDirty || saveMutation.isPending}>
                             변경 취소
                         </Button>
-                        <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
+                        <Button onClick={() => handleSave()} disabled={!isDirty || saveMutation.isPending}>
                             {saveMutation.isPending ? "저장 중..." : "설정 저장"}
                         </Button>
                     </div>
