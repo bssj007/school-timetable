@@ -1,4 +1,4 @@
-
+﻿
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle } from "lucide-react";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 import {
@@ -139,6 +140,50 @@ export default function Dashboard() {
   const [showBugReportDialog, setShowBugReportDialog] = useState(false);
   const [bugReportMessage, setBugReportMessage] = useState("");
   const [isBugReportSending, setIsBugReportSending] = useState(false);
+
+  // 인쇄 / 내보내기 state
+  const [showPrintOptions, setShowPrintOptions] = useState(false);
+  const [includeAssessments, setIncludeAssessments] = useState(true);
+  const timetableRef = useRef<HTMLDivElement>(null);
+
+  // PNG 다운로드 핸들러
+  const handleDownloadPng = async () => {
+    if (!timetableRef.current) return;
+    try {
+      document.body.classList.add('capturing');
+      await new Promise(r => setTimeout(r, 100));
+
+      const dataUrl = await toPng(timetableRef.current, {
+        cacheBust: true,
+        backgroundColor: '#ffffff',
+        width: 800,
+        height: 800,
+      });
+
+      document.body.classList.remove('capturing');
+
+      const link = document.createElement('a');
+      link.download = `${grade}학년_${classNum}반_시간표.png`;
+      link.href = dataUrl;
+      link.click();
+
+      toast.success("시간표 이미지가 저장되었습니다.");
+      setShowPrintOptions(false);
+    } catch (err) {
+      document.body.classList.remove('capturing');
+      console.error("이미지 저장 실패:", err);
+      toast.error("이미지 저장 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 인쇄 핸들러
+  const handlePrint = () => {
+    setShowPrintOptions(false);
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
+
 
   // Extract datasetId early for use in effects
   const datasetId = (queryClient.getQueryData(['timetable', schoolName, grade, classNum]) as any)?.datasetId || '';
@@ -750,6 +795,19 @@ export default function Dashboard() {
   const currentGradeColor = grade ? gradeColors[grade] : undefined;
   const selectorStyle = currentGradeColor ? { borderColor: currentGradeColor, borderWidth: '2px' } : {};
 
+  // For print export
+  const formattedStudentId = useMemo(() => {
+    return `${grade}${classNum}${studentNumber?.padStart(2, '0') || '00'}`;
+  }, [grade, classNum, studentNumber]);
+
+  const electiveSummary = useMemo(() => {
+    if (!currentProfile?.electives) return "";
+    return Object.values(currentProfile.electives)
+      .map(e => e.subject)
+      .filter(Boolean)
+      .join(", ");
+  }, [currentProfile]);
+
   return (
     <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-2">
       {/* New Top Bar (Replaces Navigation on Desktop) */}
@@ -861,6 +919,15 @@ export default function Dashboard() {
 
         <div className="flex flex-wrap items-center gap-2 justify-end">
           <div className="flex items-center gap-[6px] md:gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 bg-white shrink-0"
+              onClick={() => setShowPrintOptions(true)}
+              title="내보내기 / 인쇄"
+            >
+              <Printer className="w-5 h-5 text-gray-700" />
+            </Button>
             <Select
               value={grade}
               onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
@@ -1016,6 +1083,14 @@ export default function Dashboard() {
 
               {/* Desktop Selectors */}
               <div className="hidden md:flex items-center gap-2 flex-1 justify-end min-w-0 md:ml-[3px]">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowPrintOptions(true)}
+                  className="hidden md:flex items-center gap-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  내보내기 / 인쇄
+                </Button>
                 <Select
                   value={grade}
                   onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
@@ -1064,219 +1139,262 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent className="px-1 pb-1 md:px-2 md:pb-2">
-              <div className="overflow-x-auto relative">
-                {/* Select Electives Warning Overlay */}
-                {isElectiveMissingImmediate && (
-                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
-                    <div
-                      className="absolute inset-0 rounded-lg pointer-events-none"
-                      style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.08) 10px, rgba(0,0,0,0.08) 20px)' }}
-                    ></div>
-                    <div className="relative text-center bg-white px-8 py-5 rounded-xl shadow-lg border-2 border-red-200 pointer-events-auto flex flex-col gap-2">
-                      <div className="text-red-500 text-lg md:text-2xl tracking-wide">
-                        [{grade}{classNum}{studentNumber?.padStart(2, '0')}]
-                      </div>
-                      <div className="text-black text-base md:text-xl">
-                        선택과목을 입력하세요
+              <div ref={timetableRef} id="timetable-container">
+                {/* Print Capture Header */}
+                <div className="capture-only mb-3 p-2 border rounded-lg text-black">
+                  <div className="text-xl font-bold mb-1">
+                    [학생용] {schoolName} {grade}학년 {classNum}반
+                  </div>
+                  <div className="text-sm font-medium mb-1">
+                    이름 (학번): _______________ ({formattedStudentId})
+                  </div>
+                  {grade !== "1" && (
+                    <div className="text-xs text-gray-700 mb-1 leading-relaxed">
+                      {electiveSummary || "선택과목 미설정"}
+                    </div>
+                  )}
+                  <div className="text-xs text-gray-600 border-t pt-1 mt-1">
+                    발급일시: {new Date().toLocaleString('ko-KR')} (수행평가는 출력 시점 기준)
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto relative">
+                  {/* Select Electives Warning Overlay */}
+                  {isElectiveMissingImmediate && (
+                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
+                      <div
+                        className="absolute inset-0 rounded-lg pointer-events-none"
+                        style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.08) 10px, rgba(0,0,0,0.08) 20px)' }}
+                      ></div>
+                      <div className="relative text-center bg-white px-8 py-5 rounded-xl shadow-lg border-2 border-red-200 pointer-events-auto flex flex-col gap-2">
+                        <div className="text-red-500 text-lg md:text-2xl tracking-wide">
+                          [{grade}{classNum}{studentNumber?.padStart(2, '0')}]
+                        </div>
+                        <div className="text-black text-base md:text-xl">
+                          선택과목을 입력하세요
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
-                  <thead>
-                    <tr>
-                      <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
-                      {weekdayNames.map((day, idx) => {
-                        const currentDate = toDateString(weekDates[idx]);
-                        const todayStr = toDateString(new Date());
-                        const isPast = currentDate < todayStr;
-
-                        return (
-                          <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70" : ""}`}>
-                            <div className="text-sm font-semibold">{day}</div>
-                            <div className="text-[10px] md:text-xs text-gray-500 font-normal">
-                              {formatDate(weekDates[idx])}
-                            </div>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.from({ length: 7 }, (_, i) => i + 1).map((classTime) => (
-                      <tr key={classTime}>
-                        <td className="border p-1 md:p-2 text-center font-medium bg-gray-50 text-sm w-8 md:w-10">
-                          {classTime}
-                        </td>
-                        {Array.from({ length: 5 }, (_, weekdayIdx) => {
-                          const dayItems = timetableByDay[weekdayIdx] || [];
-                          const item = dayItems.find((t) => t.classTime === classTime);
-                          const currentDate = toDateString(weekDates[weekdayIdx]);
-
-                          // 오늘 날짜인지 확인
-                          const today = new Date();
-                          const todayStr = toDateString(today);
-                          const isToday = todayStr === currentDate;
+                  <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
+                    <thead>
+                      <tr>
+                        <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
+                        {weekdayNames.map((day, idx) => {
+                          const currentDate = toDateString(weekDates[idx]);
+                          const todayStr = toDateString(new Date());
                           const isPast = currentDate < todayStr;
 
-                          // 해당 날짜와 교시에 수행평가가 있는지 확인
-                          const cellAssessments = assessments ? assessments.filter(a => {
-                            if (settings?.hide_past_assessments && isPast) return false;
-
-                            // Check item subject if it exists, otherwise check if group is active
-                            const group = computedGroups[`${weekdayIdx}-${classTime}`];
-                            const electiveSelection = currentProfile?.electives?.[group];
-                            const matchSubject = group && electiveSelection ? (electiveSelection.fullSubjectName || electiveSelection.subject) : (item ? item.subject : null);
-
-                            return matchSubject &&
-                              a.subject.trim() === matchSubject.trim() &&
-                              a.dueDate === currentDate &&
-                              a.classTime === classTime &&
-                              !a.isDone;
-                          }) : [];
-
-                          // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
-                          const bgColor = cellAssessments.length > 0
-                            ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
-                            : isToday
-                              ? "bg-red-50 hover:bg-red-100"
-                              : "bg-yellow-50 hover:bg-yellow-100";
-
-                          // 과거 날짜 스타일
-                          const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400" : "";
-
-                          // 선택된 셀 스타일
-                          const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
-                          const selectionStyle = isSelected ? "ring-2 ring-blue-500 ring-inset z-10" : "";
-
-                          // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
-                          const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
-
-                          const group = computedGroups[`${weekdayIdx}-${classTime}`];
-                          const electiveSelection = currentProfile?.electives?.[group];
-                          let displaySubject = item ? item.subject : "-";
-                          let displayTeacher = item ? item.teacher : "";
-                          // displaySubject가 항상 문자열이도록 보장 (elective 데이터 손상 방어)
-
-                          let isElectiveActive = false;
-                          let isCancelledByFreePeriod = false;
-                          let displayClassName = ""; // 반(반이름) 표시용
-                          if (group && electiveSelection) {
-                            displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject || displaySubject;
-                            isElectiveActive = true;
-
-                            const electiveTeachers = electiveSelection.teacher
-                              ? electiveSelection.teacher.split(",").map((t: string) => t.trim()).filter(Boolean)
-                              : [];
-                            const slotItems = allClassesTimetable.filter(
-                              t => t.weekday === weekdayIdx && t.classTime === classTime
-                            );
-
-                            const matchingSlot = slotItems.find(
-                              t => t.subject.trim() === electiveSelection.subject.trim()
-                            );
-
-                            // 선택과목이 없고 빈교실/공강만 있으면 취소선 표시
-                            const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free"];
-                            const hasFreePeriodSlot = slotItems.some(t =>
-                              FREE_KEYWORDS.some(k => t.subject.trim().includes(k))
-                            );
-                            if (!matchingSlot && hasFreePeriodSlot) {
-                              isCancelledByFreePeriod = true;
-                            }
-
-                            if (matchingSlot) {
-                              displayTeacher = matchingSlot.teacher;
-                            } else if (electiveTeachers.length > 0) {
-                              displayTeacher = electiveTeachers[0];
-                            } else {
-                              displayTeacher = item ? item.teacher : "";
-                            }
-
-                            // 반(className): electiveConfigs에서 group+subject로 조회
-                            const configEntry = (electiveConfigs || []).find((c: any) =>
-                              c.subject === electiveSelection.subject &&
-                              c.classCode?.split(",").map((s: string) => s.trim()).includes(group)
-                            );
-                            displayClassName = (configEntry as any)?.className || "";
-                          }
-
                           return (
-                            <td
-                              key={weekdayIdx}
-                              id={`cell-${weekdayIdx}-${classTime}`}
-                              onClick={() => {
-                                if (item || isElectiveActive) {
-                                  if (isSubjectDisabled && !isElectiveActive) {
-                                    toast.error(`${item.subject}은(는) 선택할 수 없습니다.`);
-                                    return;
-                                  }
-                                  if (!isPast || cellAssessments.length > 0) {
-                                    handleCellClick(weekdayIdx, classTime, displaySubject, weekDates[weekdayIdx], cellAssessments);
-                                  }
-                                }
-                              }}
-                              className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors overflow-hidden
-                                ${bgColor} ${pastStyle} ${selectionStyle}
-                                ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
-                              `}
-                            >
-                              {isElectiveActive && group && (
-                                <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400" : "bg-orange-100 text-orange-800"}`}>
-                                  {group}<span className="hidden md:inline">그룹</span>
-                                </div>
-                              )}
-                              {item || isElectiveActive ? (
-                                <div className="flex flex-col items-center justify-center h-full min-h-0">
-                                  <div
-                                    className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}
-                                    style={{
-                                      fontSize: (displaySubject || "").length > 6 ? '9px' : (displaySubject || "").length > 4 ? '11px' : undefined,
-                                      wordBreak: (displaySubject || "").length > 6 ? 'keep-all' : undefined,
-                                    }}
-                                  >
-                                    <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
-                                      {isCancelledByFreePeriod ? (
-                                        <span>
-                                          <span className="line-through opacity-60">{displaySubject}</span>
-                                          <span className={`ml-1 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"}`}>(공강)</span>
-                                        </span>
-                                      ) : displaySubject}
-                                    </span>
-                                  </div>
-                                  <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">
-                                    {displayClassName
-                                      ? <>{displayClassName}{displayTeacher ? <span className="ml-1 opacity-60">{displayTeacher}</span> : null}</>
-                                      : displayTeacher}
-                                  </div>
-                                  {cellAssessments.length > 0 && (
-                                    <div className="mt-0.5 flex-shrink-0">
-                                      <div className="flex flex-wrap gap-0.5 justify-center">
-                                        {cellAssessments.map(a => (
-                                          <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"}`}>
-                                            {a.description && a.description.includes("차") ? a.description : '평가'}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-gray-300 text-sm">-</span>
-                              )}
-                            </td>
+                            <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70" : ""}`}>
+                              <div className="text-sm font-semibold">{day}</div>
+                              <div className="text-[10px] md:text-xs text-gray-500 font-normal">
+                                {formatDate(weekDates[idx])}
+                              </div>
+                            </th>
                           );
                         })}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: 7 }, (_, i) => i + 1).map((classTime) => (
+                        <tr key={classTime}>
+                          <td className="border p-1 md:p-2 text-center font-medium bg-gray-50 text-sm w-8 md:w-10">
+                            {classTime}
+                          </td>
+                          {Array.from({ length: 5 }, (_, weekdayIdx) => {
+                            const dayItems = timetableByDay[weekdayIdx] || [];
+                            const item = dayItems.find((t) => t.classTime === classTime);
+                            const currentDate = toDateString(weekDates[weekdayIdx]);
+
+                            // 오늘 날짜인지 확인
+                            const today = new Date();
+                            const todayStr = toDateString(today);
+                            const isToday = todayStr === currentDate;
+                            const isPast = currentDate < todayStr;
+
+                            // 해당 날짜와 교시에 수행평가가 있는지 확인
+                            const cellAssessments = assessments ? assessments.filter(a => {
+                              if (settings?.hide_past_assessments && isPast) return false;
+
+                              // Check item subject if it exists, otherwise check if group is active
+                              const group = computedGroups[`${weekdayIdx}-${classTime}`];
+                              const electiveSelection = currentProfile?.electives?.[group];
+                              const matchSubject = group && electiveSelection ? (electiveSelection.fullSubjectName || electiveSelection.subject) : (item ? item.subject : null);
+
+                              return matchSubject &&
+                                a.subject.trim() === matchSubject.trim() &&
+                                a.dueDate === currentDate &&
+                                a.classTime === classTime &&
+                                !a.isDone;
+                            }) : [];
+
+                            // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
+                            const bgColor = cellAssessments.length > 0
+                              ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
+                              : isToday
+                                ? "bg-red-50 hover:bg-red-100"
+                                : "bg-yellow-50 hover:bg-yellow-100";
+
+                            // 과거 날짜 스타일
+                            const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400" : "";
+
+                            // 선택된 셀 스타일
+                            const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
+                            const selectionStyle = isSelected ? "ring-2 ring-blue-500 ring-inset z-10" : "";
+
+                            // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
+                            const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
+
+                            const group = computedGroups[`${weekdayIdx}-${classTime}`];
+                            const electiveSelection = currentProfile?.electives?.[group];
+                            let displaySubject = item ? item.subject : "-";
+                            let displayTeacher = item ? item.teacher : "";
+                            // displaySubject가 항상 문자열이도록 보장 (elective 데이터 손상 방어)
+
+                            let isElectiveActive = false;
+                            let isCancelledByFreePeriod = false;
+                            let displayClassName = ""; // 반(반이름) 표시용
+                            if (group && electiveSelection) {
+                              displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject || displaySubject;
+                              isElectiveActive = true;
+
+                              const electiveTeachers = electiveSelection.teacher
+                                ? electiveSelection.teacher.split(",").map((t: string) => t.trim()).filter(Boolean)
+                                : [];
+                              const slotItems = allClassesTimetable.filter(
+                                t => t.weekday === weekdayIdx && t.classTime === classTime
+                              );
+
+                              const matchingSlot = slotItems.find(
+                                t => t.subject.trim() === electiveSelection.subject.trim()
+                              );
+
+                              // 선택과목이 없고 빈교실/공강만 있으면 취소선 표시
+                              const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free"];
+                              const hasFreePeriodSlot = slotItems.some(t =>
+                                FREE_KEYWORDS.some(k => t.subject.trim().includes(k))
+                              );
+                              if (!matchingSlot && hasFreePeriodSlot) {
+                                isCancelledByFreePeriod = true;
+                              }
+
+                              if (matchingSlot) {
+                                displayTeacher = matchingSlot.teacher;
+                              } else if (electiveTeachers.length > 0) {
+                                displayTeacher = electiveTeachers[0];
+                              } else {
+                                displayTeacher = item ? item.teacher : "";
+                              }
+
+                              // 반(className): electiveConfigs에서 group+subject로 조회
+                              const configEntry = (electiveConfigs || []).find((c: any) =>
+                                c.subject === electiveSelection.subject &&
+                                c.classCode?.split(",").map((s: string) => s.trim()).includes(group)
+                              );
+                              displayClassName = (configEntry as any)?.className || "";
+                            }
+
+                            return (
+                              <td
+                                key={weekdayIdx}
+                                id={`cell-${weekdayIdx}-${classTime}`}
+                                onClick={() => {
+                                  if (item || isElectiveActive) {
+                                    if (isSubjectDisabled && !isElectiveActive) {
+                                      toast.error(`${item.subject}은(는) 선택할 수 없습니다.`);
+                                      return;
+                                    }
+                                    if (!isPast || cellAssessments.length > 0) {
+                                      handleCellClick(weekdayIdx, classTime, displaySubject, weekDates[weekdayIdx], cellAssessments);
+                                    }
+                                  }
+                                }}
+                                className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors overflow-hidden
+                                ${bgColor} ${pastStyle} ${selectionStyle}
+                                ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
+                              `}
+                              >
+                                {isElectiveActive && group && (
+                                  <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400" : "bg-orange-100 text-orange-800"}`}>
+                                    {group}<span className="hidden md:inline">그룹</span>
+                                  </div>
+                                )}
+                                {item || isElectiveActive ? (
+                                  <div className="flex flex-col items-center justify-center h-full min-h-0">
+                                    <div
+                                      className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}
+                                      style={{
+                                        fontSize: (displaySubject || "").length > 6 ? '9px' : (displaySubject || "").length > 4 ? '11px' : undefined,
+                                        wordBreak: (displaySubject || "").length > 6 ? 'keep-all' : undefined,
+                                      }}
+                                    >
+                                      <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
+                                        {isCancelledByFreePeriod ? (
+                                          <span>
+                                            <span className="line-through opacity-60">{displaySubject}</span>
+                                            <span className={`ml-1 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"}`}>(공강)</span>
+                                          </span>
+                                        ) : displaySubject}
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">
+                                      {displayClassName
+                                        ? <>{displayClassName}{displayTeacher ? <span className="ml-1 opacity-60">{displayTeacher}</span> : null}</>
+                                        : displayTeacher}
+                                    </div>
+                                    {cellAssessments.length > 0 && (
+                                      <div className="mt-0.5 flex-shrink-0">
+                                        <div className="flex flex-wrap gap-0.5 justify-center">
+                                          {cellAssessments.map(a => (
+                                            <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"}`}>
+                                              {a.description && a.description.includes("차") ? a.description : '평가'}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-300 text-sm">-</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </CardContent>
           </Card>
         )}
       </div>
+
+      {/* Print Options Dialog */}
+      <Dialog open={showPrintOptions} onOpenChange={setShowPrintOptions}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>시간표 내보내기</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <Button onClick={handleDownloadPng} className="w-full flex items-center justify-center gap-2 h-12">
+              <ImageIcon className="w-5 h-5" />
+              이미지(PNG)로 저장
+            </Button>
+            <Button onClick={handlePrint} variant="outline" className="w-full flex items-center justify-center gap-2 h-12">
+              <Printer className="w-5 h-5" />
+              프린터로 출력
+            </Button>
+            <p className="text-xs font-medium text-gray-500 text-center mt-2 flex flex-col items-center">
+              <span>* 수행평가는 <strong>현재 보고 있는 주차</strong> 기준으로만 표시됩니다.</span>
+              <span className="text-red-500 mt-1">* <strong>A4 용지</strong> 비율(정사각형)에 맞추어 출력됩니다.</span>
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 수행평가 추가 다이얼로그 */}
       < Dialog open={showAddDialog} onOpenChange={(open) => {
