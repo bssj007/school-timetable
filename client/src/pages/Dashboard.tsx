@@ -707,12 +707,19 @@ export default function Dashboard() {
 
   const handleEditClick = (assessment: AssessmentItem) => {
     setEditingAssessment(assessment);
+
+    // Parse the stored sequence/round number back from the description ("1차" -> "1")
+    let parsedRound = "1";
+    if (assessment.description && assessment.description.includes("차")) {
+      parsedRound = assessment.description.replace("차", "").trim();
+    }
+
     setFormData({
       assessmentDate: assessment.dueDate,
       subject: assessment.subject,
       content: assessment.title,
       classTime: assessment.classTime?.toString() || "",
-      round: assessment.round?.toString() || "1",
+      round: parsedRound,
     });
     setShowViewDialog(false);
     setShowEditDialog(true);
@@ -728,7 +735,7 @@ export default function Dashboard() {
         title: formData.content,
         dueDate: formData.assessmentDate,
         classTime: formData.classTime ? parseInt(formData.classTime) : undefined,
-        round: parseInt(formData.round || "1"),
+        description: formData.round ? `${formData.round}차` : "",
       });
     } catch (error) {
       console.error("수행평가 수정 실패:", error);
@@ -1409,7 +1416,7 @@ export default function Dashboard() {
                                 >
                                   {isElectiveActive && group && (
                                     <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400" : "bg-orange-100 text-orange-800"}`}>
-                                      {group}<span className="hidden md:inline">그룹</span>
+                                      <span>{group}</span><span className="hidden md:inline">그룹</span>
                                     </div>
                                   )}
                                   {item || isElectiveActive ? (
@@ -1427,13 +1434,13 @@ export default function Dashboard() {
                                               <span className="line-through opacity-60">{displaySubject}</span>
                                               <span className={`ml-1 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"}`}>(공강)</span>
                                             </span>
-                                          ) : displaySubject}
+                                          ) : <span>{displaySubject}</span>}
                                         </span>
                                       </div>
                                       <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">
                                         {displayClassName
-                                          ? <>{displayClassName}{displayTeacher ? <span className="ml-1 opacity-60">{displayTeacher}</span> : null}</>
-                                          : displayTeacher}
+                                          ? <><span>{displayClassName}</span>{displayTeacher ? <span className="ml-1 opacity-60">{displayTeacher}</span> : null}</>
+                                          : <span>{displayTeacher}</span>}
                                       </div>
                                       {includeAssessments && cellAssessments.length > 0 && (
                                         <div className="mt-0.5 flex-shrink-0">
