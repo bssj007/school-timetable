@@ -38,11 +38,13 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
     const [data, setData] = useState<IPProfile | null>(null);
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
     const [selectedLogDate, setSelectedLogDate] = useState<string>("all");
+    const [isLogModalOpen, setIsLogModalOpen] = useState(false);
 
     useEffect(() => {
         if (isOpen && initialData) {
             setData(initialData);
             setSelectedLogDate("all"); // Reset filter on new open
+            setIsLogModalOpen(false); // Close log modal on re-open
             if (!initialData.detailsLoaded) {
                 fetchFullProfile(initialData.ip);
             }
@@ -154,7 +156,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                 {data ? (
                     <div className="flex-1 overflow-hidden flex flex-col gap-4">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="bg-blue-50 p-4 rounded-lg flex flex-col gap-1 border border-blue-100">
+                            <div className="bg-blue-50 p-4 rounded-lg flex flex-col gap-1 border border-blue-100 relative">
                                 <span className="text-xs text-blue-600 font-bold flex items-center gap-1"><FileText className="w-3 h-3" /> 수정 기여</span>
                                 <span className="text-2xl font-bold">{data.modificationCount}회</span>
                             </div>
@@ -176,29 +178,22 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                     )) : <span className="text-xs text-gray-400">-</span>}
                                 </div>
                             </div>
-                            {(data.grade === "2" || data.grade === "3" || data.electives) && (
-                                <div className="bg-purple-50 p-4 rounded-lg flex flex-col gap-1 border border-purple-100 md:col-span-3">
-                                    <span className="text-xs text-purple-700 font-bold flex items-center gap-1"><FileText className="w-3 h-3" /> 선택과목 현황</span>
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                        {data.electives && Object.keys(data.electives).length > 0 ? (
-                                            Object.entries(data.electives).map(([group, subData]: [string, any], i) => {
-                                                const subjectName = typeof subData === 'object' && subData !== null ? (subData.fullSubjectName || subData.subject) : subData;
-                                                return (
-                                                    <Badge key={i} className="bg-purple-100 text-purple-800 text-xs border border-purple-200 mb-1 hover:bg-purple-200">
-                                                        {group}: {subjectName}
-                                                    </Badge>
-                                                );
-                                            })
-                                        ) : <span className="text-xs text-gray-400">선택과목 데이터 없음</span>}
-                                    </div>
-                                </div>
-                            )}
+                            <div className="col-span-1 md:col-span-3 flex justify-end">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setIsLogModalOpen(true)}
+                                    className="bg-white"
+                                >
+                                    접속 로그 열람 ({data.logs?.length || 0})
+                                </Button>
+                            </div>
                         </div>
 
                         <Tabs defaultValue="assessments" className="flex-1 flex flex-col min-h-0">
                             <TabsList>
                                 <TabsTrigger value="assessments">수행평가 ({data.assessments?.length || 0})</TabsTrigger>
-                                <TabsTrigger value="logs">로그 ({data.logs?.length || 0})</TabsTrigger>
+                                <TabsTrigger value="electives">선택과목 현황</TabsTrigger>
                                 <TabsTrigger value="devices">접속 환경</TabsTrigger>
                             </TabsList>
                             <TabsContent value="assessments" className="flex-1 min-h-0 border rounded mt-2">
@@ -216,44 +211,23 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                     ) : <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-300" /></div>}
                                 </ScrollArea>
                             </TabsContent>
-                            <TabsContent value="logs" className="flex-1 min-h-0 border rounded mt-2 flex flex-col">
-                                <div className="p-2 border-b bg-gray-50 flex items-center justify-between shrink-0">
-                                    <span className="text-xs font-semibold text-gray-600">날짜 필터 ({filteredLogs.length}건)</span>
-                                    <select
-                                        className="text-xs border rounded p-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                        value={selectedLogDate}
-                                        onChange={(e) => setSelectedLogDate(e.target.value)}
-                                    >
-                                        <option value="all">전체보기</option>
-                                        {uniqueLogDates.map(date => (
-                                            <option key={date} value={date}>{date}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <ScrollArea className="flex-1 p-4 h-[260px]">
-                                    {data.detailsLoaded ? (
-                                        groupedLogs.length > 0 ? (
-                                            groupedLogs.map((l: any, i: number) => (
-                                                <div key={i} className="flex justify-between items-start text-xs py-2 border-b">
-                                                    <div className="flex gap-2 items-start">
-                                                        <Badge variant="outline" className="h-5 shrink-0">{l.method}</Badge>
-                                                        <div className="flex flex-col">
-                                                            <span className="break-all max-w-[200px] font-medium text-gray-800">{l.endpoint}</span>
-                                                            {l.count > 1 && (
-                                                                <span className="text-[10px] text-blue-600 font-bold mt-0.5">연속 {l.count}회 호출 패턴</span>
-                                                            )}
+                            <TabsContent value="electives" className="flex-1 min-h-0 border rounded mt-2 bg-purple-50">
+                                <ScrollArea className="h-[300px] p-4">
+                                    {(data.grade === "2" || data.grade === "3" || data.electives) ? (
+                                        <div className="flex flex-col gap-2">
+                                            {data.electives && Object.keys(data.electives).length > 0 ? (
+                                                Object.entries(data.electives).map(([group, subData]: [string, any], i) => {
+                                                    const subjectName = typeof subData === 'object' && subData !== null ? (subData.fullSubjectName || subData.subject) : subData;
+                                                    return (
+                                                        <div key={i} className="flex justify-between items-center p-2 bg-white rounded border border-purple-100">
+                                                            <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-200 px-3">{group}</Badge>
+                                                            <span className="font-bold text-sm">{subjectName}</span>
                                                         </div>
-                                                    </div>
-                                                    <div className="flex flex-col items-end shrink-0 pl-2">
-                                                        <span className="text-gray-500 font-mono text-[10px]">{new Date(l.accessedAt + 'Z').toLocaleTimeString('ko-KR')}</span>
-                                                        {l.count > 1 && (
-                                                            <span className="text-gray-400 font-mono text-[9px]">부터 {new Date(l.accessedAtStart + 'Z').toLocaleTimeString('ko-KR')}</span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : <div className="text-center text-gray-400 py-8">선택된 날짜의 로그가 없습니다</div>
-                                    ) : <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-300" /></div>}
+                                                    );
+                                                })
+                                            ) : <div className="text-center text-gray-400 py-8">선택과목 데이터가 등록되지 않았습니다.</div>}
+                                        </div>
+                                    ) : <div className="text-center text-gray-400 py-8">선택과목 적용 학년이 아닙니다.</div>}
                                 </ScrollArea>
                             </TabsContent>
                             <TabsContent value="devices" className="flex-1 min-h-0 border rounded mt-2">
@@ -299,6 +273,68 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                     <Button variant="secondary" onClick={onClose}>닫기</Button>
                 </DialogFooter>
             </DialogContent>
+
+            {/* Sub-modal: Expanded Logs Viewer */}
+            <Dialog open={isLogModalOpen} onOpenChange={setIsLogModalOpen}>
+                <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0 overflow-hidden">
+                    <DialogHeader className="p-6 pb-2 shrink-0 border-b">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <DialogTitle className="text-xl">접속 로그 상세 열람</DialogTitle>
+                                <DialogDescription>{data?.ip} - 총 {data?.logs?.length || 0}건의 기록</DialogDescription>
+                            </div>
+                            <select
+                                className="text-sm border rounded p-1.5 px-3 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                                value={selectedLogDate}
+                                onChange={(e) => setSelectedLogDate(e.target.value)}
+                            >
+                                <option value="all">전체보기 ({data?.logs?.length || 0})</option>
+                                {uniqueLogDates.map(date => (
+                                    <option key={date} value={date}>{date}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-hidden flex flex-col bg-gray-50/50">
+                        <ScrollArea className="flex-1 p-6">
+                            {data?.detailsLoaded ? (
+                                groupedLogs.length > 0 ? (
+                                    <div className="flex flex-col gap-2">
+                                        {groupedLogs.map((l: any, i: number) => (
+                                            <div key={i} className="flex justify-between items-center text-sm p-3 bg-white border rounded-lg shadow-sm hover:border-gray-300 transition-colors">
+                                                <div className="flex gap-4 items-center flex-1 min-w-0">
+                                                    <Badge variant="outline" className={`h-6 shrink-0 w-16 justify-center ${l.method === 'GET' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                            l.method === 'POST' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                                l.method === 'PATCH' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                                    l.method === 'DELETE' ? 'bg-red-50 text-red-700 border-red-200' : ''
+                                                        }`}>{l.method}</Badge>
+                                                    <div className="flex flex-col min-w-0 flex-1">
+                                                        <span className="truncate font-mono text-gray-700" title={l.endpoint}>{l.endpoint}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4 shrink-0 pl-4">
+                                                    {l.count > 1 && (
+                                                        <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border-indigo-200 font-bold px-2 py-0.5">
+                                                            연속 {l.count}회
+                                                        </Badge>
+                                                    )}
+                                                    <div className="flex flex-col items-end w-32">
+                                                        <span className="text-gray-900 font-mono text-xs">{new Date(l.accessedAt + 'Z').toLocaleTimeString('ko-KR')}</span>
+                                                        {l.count > 1 && (
+                                                            <span className="text-gray-400 font-mono text-[10px]">~ {new Date(l.accessedAtStart + 'Z').toLocaleTimeString('ko-KR')}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : <div className="text-center text-gray-500 py-12">선택된 날짜의 로그 내역이 존재하지 않습니다.</div>
+                            ) : <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-300 w-8 h-8" /></div>}
+                        </ScrollArea>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </Dialog>
     );
 }
