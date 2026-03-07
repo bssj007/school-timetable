@@ -1059,8 +1059,8 @@ export default function Dashboard() {
               )}
 
               {/* Mobile Print Button */}
-              <div className="absolute right-0 -translate-x-[10px] top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center md:hidden z-20 pointer-events-none">
-                <div className="pointer-events-auto relative">
+              <div className="absolute right-0 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-end md:hidden z-20 pointer-events-none">
+                <div className="pointer-events-auto relative mr-1 md:mr-0">
                   <Button
                     variant="outline"
                     size="sm"
