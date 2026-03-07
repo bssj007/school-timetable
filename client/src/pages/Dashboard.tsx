@@ -810,6 +810,7 @@ export default function Dashboard() {
 
   const isElectiveMissingImmediate = !isElectiveEntered && (grade === "2" || grade === "3") && !!classNum && !!studentNumber;
   const isElectiveMissing = isElectiveMissingImmediate && showElectiveWarning;
+  const shouldShowPrintButton = !((grade === "2" || grade === "3") && !isElectiveEntered);
 
   const gradeColors: Record<string, string> = {
     "1": "#a6ff00",
@@ -825,21 +826,27 @@ export default function Dashboard() {
       <div className="hidden md:flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
           <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
-            <span className="text-blue-600">수행 일정공유</span>
+            {settings?.site_title_html ? (
+              <span dangerouslySetInnerHTML={{ __html: settings.site_title_html }} />
+            ) : (
+              <span className="text-blue-600">수행 일정공유</span>
+            )}
           </Link>
 
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="hidden md:flex h-9 rounded-full px-4 font-bold text-xs gap-2 border-gray-200 hover:bg-gray-50 shadow-sm"
-            onClick={() => setShowPrintOptions(true)}
-          >
-            <Printer className="w-4 h-4" />
-            내보내기 / 인쇄
-          </Button>
+          {shouldShowPrintButton && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden md:flex h-9 rounded-full px-4 font-bold text-xs gap-2 border-gray-200 hover:bg-gray-50 shadow-sm"
+              onClick={() => setShowPrintOptions(true)}
+            >
+              <Printer className="w-4 h-4" />
+              내보내기 / 인쇄
+            </Button>
+          )}
           {isBugReportEnabled && (
             <Button
               variant="default"
@@ -1059,24 +1066,26 @@ export default function Dashboard() {
               )}
 
               {/* Mobile Print Button */}
-              <div className="absolute right-0 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-end md:hidden z-20 pointer-events-none">
-                <div className="pointer-events-auto relative mr-1 md:mr-0">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-10 px-3 bg-white shadow-sm border-gray-200 gap-1 font-bold text-sm"
-                    onClick={() => setShowPrintOptions(true)}
-                    title="내보내기 / 인쇄"
-                  >
-                    <Printer className="w-4 h-4 text-gray-500" />
-                    인쇄
-                  </Button>
+              {shouldShowPrintButton && (
+                <div className="absolute right-0 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-end md:hidden z-20 pointer-events-none">
+                  <div className="pointer-events-auto relative mr-1 md:mr-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-10 px-3 bg-white shadow-sm border-gray-200 gap-1 font-bold text-sm"
+                      onClick={() => setShowPrintOptions(true)}
+                      title="내보내기 / 인쇄"
+                    >
+                      <Printer className="w-4 h-4 text-gray-500" />
+                      인쇄/저장
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Week Navigation */}
               <div className="flex flex-col items-center justify-center gap-1 w-full -translate-x-1 md:translate-x-0 md:w-auto shrink-0 z-10 relative">
-                <div className="flex items-center gap-2 md:gap-1">
+                <div className="flex items-center gap-0 md:gap-1">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1086,12 +1095,13 @@ export default function Dashboard() {
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <span className="text-sm md:text-sm font-normal text-gray-600 min-w-[80px] md:min-w-[90px] text-center">
+                  <span className="text-sm md:text-sm font-normal text-gray-600 min-w-[80px] md:min-w-[90px] text-center px-1">
                     {weekRangeText}
                   </span>
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-10 h-8 p-0"
                     onClick={() => setWeekOffset(weekOffset + 1)}
                   >
                     <ChevronRight className="h-4 w-4" />

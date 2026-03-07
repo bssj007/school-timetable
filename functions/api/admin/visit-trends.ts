@@ -38,7 +38,8 @@ export const onRequest = async (context: any) => {
                 excludeBinds.push(g, c, n);
                 return "(COALESCE(al.grade, sp.grade) = ? AND COALESCE(al.classNum, sp.classNum) = ? AND COALESCE(al.studentNumber, sp.studentNumber) = ?)";
             });
-            excludeClause = `AND NOT (${conditions.join(" OR ")})`;
+            // Ensure anonymous IPs (NULL grade) are not stripped by NOT (NULL=val) evaluating to NULL
+            excludeClause = `AND (COALESCE(al.grade, sp.grade) IS NULL OR NOT (${conditions.join(" OR ")}))`;
         }
 
         // Determine time range and bucket format
@@ -77,8 +78,15 @@ export const onRequest = async (context: any) => {
 
         // Query 1: Unique students per bucket
         // Uses COALESCE to fill NULL grade/classNum/studentNumber from ip_profile → student_profile
-        // This ensures IPv6 users (and any user whose request lacked cookies) are still counted.
+        // Uses CTE to ensure 1:1 join with ip_profiles (takes the most recently seen student per IP) to prevent JOIN explosion
         const uniqueQuery = `
+            WITH RankedIPs AS (
+                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY last_seen DESC) as rn
+                FROM ip_profiles
+            ),
+            LatestIPs AS (
+                SELECT ip, student_profile_id FROM RankedIPs WHERE rn = 1
+            )
             SELECT 
                 ${bucketExpr} as bucket,
                 COUNT(DISTINCT (
@@ -87,7 +95,7 @@ export const onRequest = async (context: any) => {
                     COALESCE(al.studentNumber, sp.studentNumber)
                 )) as uniqueStudents
             FROM access_logs al
-            LEFT JOIN ip_profiles ip ON al.ip = ip.ip
+            LEFT JOIN LatestIPs ip ON al.ip = ip.ip
             LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
             WHERE
                 COALESCE(al.grade, sp.grade) IS NOT NULL AND
@@ -99,24 +107,31 @@ export const onRequest = async (context: any) => {
             ORDER BY bucket ASC
         `;
 
-        // Query 2: Total visits per bucket (excluding 기타접속)
-        // A "visit" = one student+sessionHour combination, deduplicated.
-        // Uses COALESCE so IPv6 / cookie-less requests are still counted via ip_profiles.
-        const totalQuery = `
+        // Query 2: Total visits per bucket (Student-based)
+        // Counts all GET accesses to the main page that resolve to a student profile.
+        const totalStudentQuery = `
+            WITH RankedIPs AS (
+                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY last_seen DESC) as rn
+                FROM ip_profiles
+            ),
+            LatestIPs AS (
+                SELECT ip, student_profile_id FROM RankedIPs WHERE rn = 1
+            )
             SELECT 
                 _bucket as bucket,
-                COUNT(*) as totalVisits
+                COUNT(*) as totalVisitsStudent
             FROM (
                 SELECT DISTINCT
                     ${bucketExpr} as _bucket,
                     COALESCE(al.grade, sp.grade) as grade,
                     COALESCE(al.classNum, sp.classNum) as classNum,
                     COALESCE(al.studentNumber, sp.studentNumber) as studentNumber,
-                    strftime('%Y-%m-%d %H', al.accessedAt) as sessionHour
+                    strftime('%Y-%m-%d %H:', al.accessedAt) || (CAST(strftime('%M', al.accessedAt) AS INTEGER) / 10) as session10Min
                 FROM access_logs al
-                LEFT JOIN ip_profiles ip ON al.ip = ip.ip
+                LEFT JOIN LatestIPs ip ON al.ip = ip.ip
                 LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
                 WHERE
+                    al.method = 'GET' AND al.endpoint IN ('/', '/index.html') AND
                     COALESCE(al.grade, sp.grade) IS NOT NULL AND
                     COALESCE(al.classNum, sp.classNum) IS NOT NULL AND
                     COALESCE(al.studentNumber, sp.studentNumber) IS NOT NULL
@@ -127,14 +142,51 @@ export const onRequest = async (context: any) => {
             ORDER BY _bucket ASC
         `;
 
+        // Query 2.5: Total visits per bucket (IP-based)
+        // Counts all GET accesses to the main page regardless of student profile mapping.
+        const totalIpQuery = `
+            WITH RankedIPs AS (
+                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY last_seen DESC) as rn
+                FROM ip_profiles
+            ),
+            LatestIPs AS (
+                SELECT ip, student_profile_id FROM RankedIPs WHERE rn = 1
+            )
+            SELECT 
+                _bucket as bucket,
+                COUNT(*) as totalVisitsIP
+            FROM (
+                SELECT DISTINCT
+                    ${bucketExpr} as _bucket,
+                    al.ip,
+                    strftime('%Y-%m-%d %H:', al.accessedAt) || (CAST(strftime('%M', al.accessedAt) AS INTEGER) / 10) as session10Min
+                FROM access_logs al
+                LEFT JOIN LatestIPs ip ON al.ip = ip.ip
+                LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
+                WHERE
+                    al.method = 'GET' AND al.endpoint IN ('/', '/index.html')
+                ${timeFilter}
+                ${excludeClause}
+            )
+            GROUP BY _bucket
+            ORDER BY _bucket ASC
+        `;
+
         // Query 3: Unique IPs per bucket
-        // Counts distinct IPs that belong to known students (via COALESCE).
+        // Uses CTE for ip_profiles to prevent JOIN explosion.
         const uniqueIpQuery = `
+            WITH RankedIPs AS (
+                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY last_seen DESC) as rn
+                FROM ip_profiles
+            ),
+            LatestIPs AS (
+                SELECT ip, student_profile_id FROM RankedIPs WHERE rn = 1
+            )
             SELECT 
                 ${bucketExpr} as bucket,
                 COUNT(DISTINCT al.ip) as uniqueIPs
             FROM access_logs al
-            LEFT JOIN ip_profiles ip ON al.ip = ip.ip
+            LEFT JOIN LatestIPs ip ON al.ip = ip.ip
             LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
             WHERE
                 COALESCE(al.grade, sp.grade) IS NOT NULL AND
@@ -150,39 +202,57 @@ export const onRequest = async (context: any) => {
         const totalBinds = [...excludeBinds];
         const ipBinds = [...excludeBinds];
 
-        const [uniqueResult, totalResult, ipResult] = await Promise.all([
+        const [uniqueResult, totalStudentResult, totalIpResult, uniqueIpResult] = await Promise.all([
             env.DB.prepare(uniqueQuery).bind(...uniqueBinds).all(),
-            env.DB.prepare(totalQuery).bind(...totalBinds).all(),
+            env.DB.prepare(totalStudentQuery).bind(...totalBinds).all(),
+            env.DB.prepare(totalIpQuery).bind(...totalBinds).all(),
             env.DB.prepare(uniqueIpQuery).bind(...ipBinds).all(),
         ]);
 
         // Merge into unified buckets
-        const bucketMap = new Map<string, { label: string; uniqueStudents: number; uniqueIPs: number; totalVisits: number }>();
+        const bucketMap = new Map<string, { label: string; uniqueStudents: number; uniqueIPs: number; totalVisitsStudent: number; totalVisitsIP: number }>();
 
         for (const row of (uniqueResult.results || [])) {
             bucketMap.set(row.bucket as string, {
                 label: row.bucket as string,
                 uniqueStudents: row.uniqueStudents as number,
                 uniqueIPs: 0,
-                totalVisits: 0,
+                totalVisitsStudent: 0,
+                totalVisitsIP: 0,
             });
         }
 
-        for (const row of (totalResult.results || [])) {
+        for (const row of (totalStudentResult.results || [])) {
             const existing = bucketMap.get(row.bucket as string);
             if (existing) {
-                existing.totalVisits = row.totalVisits as number;
+                existing.totalVisitsStudent = row.totalVisitsStudent as number;
             } else {
                 bucketMap.set(row.bucket as string, {
                     label: row.bucket as string,
                     uniqueStudents: 0,
                     uniqueIPs: 0,
-                    totalVisits: row.totalVisits as number,
+                    totalVisitsStudent: row.totalVisitsStudent as number,
+                    totalVisitsIP: 0,
                 });
             }
         }
 
-        for (const row of (ipResult.results || [])) {
+        for (const row of (totalIpResult.results || [])) {
+            const existing = bucketMap.get(row.bucket as string);
+            if (existing) {
+                existing.totalVisitsIP = row.totalVisitsIP as number;
+            } else {
+                bucketMap.set(row.bucket as string, {
+                    label: row.bucket as string,
+                    uniqueStudents: 0,
+                    uniqueIPs: 0,
+                    totalVisitsStudent: 0,
+                    totalVisitsIP: row.totalVisitsIP as number,
+                });
+            }
+        }
+
+        for (const row of (uniqueIpResult.results || [])) {
             const existing = bucketMap.get(row.bucket as string);
             if (existing) {
                 existing.uniqueIPs = row.uniqueIPs as number;
@@ -191,7 +261,8 @@ export const onRequest = async (context: any) => {
                     label: row.bucket as string,
                     uniqueStudents: 0,
                     uniqueIPs: row.uniqueIPs as number,
-                    totalVisits: 0,
+                    totalVisitsStudent: 0,
+                    totalVisitsIP: 0,
                 });
             }
         }

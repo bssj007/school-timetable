@@ -1905,6 +1905,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
 function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
     const [siteTitle, setSiteTitle] = useState("");
+    const [siteTitleHtml, setSiteTitleHtml] = useState("");
     const [siteFaviconUrl, setSiteFaviconUrl] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
@@ -1925,6 +1926,7 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     useEffect(() => {
         if (currentSettings && !isInitialized) {
             setSiteTitle(currentSettings.site_title || '');
+            setSiteTitleHtml(currentSettings.site_title_html || '');
             setSiteFaviconUrl(currentSettings.site_favicon_url || '');
             setIsInitialized(true);
         }
@@ -1941,6 +1943,7 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 },
                 body: JSON.stringify({
                     site_title: siteTitle,
+                    site_title_html: siteTitleHtml,
                     site_favicon_url: siteFaviconUrl
                 })
             });
@@ -1958,12 +1961,14 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
 
     const handleCancel = () => {
         setSiteTitle(currentSettings?.site_title || '');
+        setSiteTitleHtml(currentSettings?.site_title_html || '');
         setSiteFaviconUrl(currentSettings?.site_favicon_url || '');
     };
 
     const savedTitle = currentSettings?.site_title || '';
+    const savedTitleHtml = currentSettings?.site_title_html || '';
     const savedFavicon = currentSettings?.site_favicon_url || '';
-    const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon;
+    const hasChanges = siteTitle !== savedTitle || siteTitleHtml !== savedTitleHtml || siteFaviconUrl !== savedFavicon;
 
     if (isLoading) {
         return <div className="p-8 text-center text-gray-400">설정을 불러오는 중...</div>;
@@ -2084,6 +2089,7 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
     const [unit, setUnit] = useState<string>("day");
     const [excludeInput, setExcludeInput] = useState("");
     const [excludeApplied, setExcludeApplied] = useState("");
+    const [totalMetric, setTotalMetric] = useState<"student" | "ip">("student");
 
     const { data: trendData, isLoading, isError, error } = useQuery({
         queryKey: ['admin', 'visitor-trends', unit, excludeApplied],
@@ -2229,7 +2235,32 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
 
                     {/* Graph 2: Total Visits */}
                     <div>
-                        <h4 className="text-sm font-semibold text-gray-600 mb-3">총 접속 횟수</h4>
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-semibold text-gray-600">총 접속 횟수</h4>
+                                <span className="text-xs text-gray-400 font-normal shadow-none">(10분당 1회 제한)</span>
+                            </div>
+                            <div className="flex bg-gray-100 rounded-md p-0.5">
+                                <button
+                                    onClick={() => setTotalMetric("student")}
+                                    className={`px-2 py-1 text-xs rounded-sm transition-colors ${totalMetric === "student"
+                                        ? 'bg-white shadow-sm text-blue-600 font-bold'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    학번 기준
+                                </button>
+                                <button
+                                    onClick={() => setTotalMetric("ip")}
+                                    className={`px-2 py-1 text-xs rounded-sm transition-colors ${totalMetric === "ip"
+                                        ? 'bg-white shadow-sm text-purple-600 font-bold'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    IP 기준
+                                </button>
+                            </div>
+                        </div>
                         <div className="h-64 w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={buckets}>
@@ -2238,9 +2269,14 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                                     <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                                     <Tooltip
                                         labelFormatter={(v) => `구간: ${v}`}
-                                        formatter={(v: number) => [`${v}회`, '접속 횟수']}
+                                        formatter={(v: number) => [`${v}회`, totalMetric === 'student' ? '접속 횟수 (학번 매핑됨)' : '접속 횟수 (모든 IP)']}
                                     />
-                                    <Bar dataKey="totalVisits" fill="#10b981" radius={[4, 4, 0, 0]} name="접속 횟수" />
+                                    <Bar
+                                        dataKey={totalMetric === "student" ? "totalVisitsStudent" : "totalVisitsIP"}
+                                        fill={totalMetric === "student" ? "#10b981" : "#f59e0b"}
+                                        radius={[4, 4, 0, 0]}
+                                        name="접속 횟수"
+                                    />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
