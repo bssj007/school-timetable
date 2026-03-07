@@ -723,19 +723,6 @@ export default function Dashboard() {
     });
   }
 
-  // For print export (moved above early returns)
-  const formattedStudentId = useMemo(() => {
-    return `${grade}${classNum}${studentNumber?.padStart(2, '0') || '00'}`;
-  }, [grade, classNum, studentNumber]);
-
-  const electiveSummary = useMemo(() => {
-    if (!currentProfile?.electives) return "";
-    return Object.values(currentProfile.electives)
-      .map(e => e.subject)
-      .filter(Boolean)
-      .join(", ");
-  }, [currentProfile]);
-
   const isLoading = timetableLoading || assessmentLoading;
 
   if (isLoading) {
@@ -807,6 +794,19 @@ export default function Dashboard() {
   };
   const currentGradeColor = grade ? gradeColors[grade] : undefined;
   const selectorStyle = currentGradeColor ? { borderColor: currentGradeColor, borderWidth: '2px' } : {};
+
+  // For print export
+  const formattedStudentId = useMemo(() => {
+    return `${grade}${classNum}${studentNumber?.padStart(2, '0') || '00'}`;
+  }, [grade, classNum, studentNumber]);
+
+  const electiveSummary = useMemo(() => {
+    if (!currentProfile?.electives) return "";
+    return Object.values(currentProfile.electives)
+      .map(e => e.subject)
+      .filter(Boolean)
+      .join(", ");
+  }, [currentProfile]);
 
   return (
     <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-2">
