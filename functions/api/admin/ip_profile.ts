@@ -52,9 +52,9 @@ export const onRequest = async (context: any) => {
             "SELECT id, subject, title, grade, classNum, dueDate, createdAt FROM performance_assessments WHERE lastModifiedIp = ? ORDER BY id DESC LIMIT 50"
         ).bind(targetIp).all();
 
-        // F. Detailed Logs (Top 50)
+        // F. Detailed Logs (All)
         const { results: recentLogs } = await env.DB.prepare(
-            "SELECT * FROM access_logs WHERE ip = ? ORDER BY accessedAt DESC LIMIT 50"
+            "SELECT * FROM access_logs WHERE ip = ? ORDER BY accessedAt DESC"
         ).bind(targetIp).all();
 
         // G. Recent User Agents (Distinct)
@@ -65,10 +65,32 @@ export const onRequest = async (context: any) => {
 
         // H. Grade/Class Info (Best Guess from Access Logs)
         const gradeClassResult = await env.DB.prepare(
-            "SELECT grade, classNum FROM access_logs WHERE ip = ? AND grade IS NOT NULL AND classNum IS NOT NULL ORDER BY accessedAt DESC LIMIT 1"
+            "SELECT grade, classNum, studentNumber FROM access_logs WHERE ip = ? AND grade IS NOT NULL AND classNum IS NOT NULL ORDER BY accessedAt DESC LIMIT 1"
         ).bind(targetIp).first();
         const grade = gradeClassResult?.grade;
         const classNum = gradeClassResult?.classNum;
+        const studentNumber = gradeClassResult?.studentNumber;
+
+        // I. Fetch Electives
+        let electives = null;
+        if (grade && classNum && studentNumber) {
+            const profileResult = await env.DB.prepare(
+                "SELECT electives FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?"
+            ).bind(grade, classNum, studentNumber).first();
+            if (profileResult?.electives) {
+                try {
+                    electives = JSON.parse(profileResult.electives);
+                } catch (e) {
+                    electives = profileResult.electives;
+                }
+
+                if (typeof electives === "string") {
+                    try {
+                        electives = JSON.parse(electives);
+                    } catch (e) { }
+                }
+            }
+        }
 
         // 3. Construct Response (Matching IPProfile interface)
         const responseData = {
@@ -77,6 +99,8 @@ export const onRequest = async (context: any) => {
 
             grade,
             classNum,
+            studentNumber,
+            electives,
 
             isBlocked: !!blockEntry,
             blockReason: blockEntry?.reason || null,

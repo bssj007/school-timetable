@@ -128,9 +128,9 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                 <span className="text-2xl font-bold">{data.modificationCount}회</span>
                             </div>
                             <div className="bg-green-50 p-4 rounded-lg flex flex-col gap-1 border border-green-200">
-                                <span className="text-xs text-green-600 font-bold flex items-center gap-1"><User className="w-3 h-3" /> 학년 / 반</span>
+                                <span className="text-xs text-green-600 font-bold flex items-center gap-1"><User className="w-3 h-3" /> 학년/반/번호</span>
                                 <span className="text-2xl font-bold">
-                                    {data.grade && data.classNum ? `${data.grade}학년 ${data.classNum}반` : <span className="text-gray-400 text-lg">-</span>}
+                                    {data.grade && data.classNum ? `${data.grade}학년 ${data.classNum}반 ${data.studentNumber ? data.studentNumber + '번' : ''}` : <span className="text-gray-400 text-lg">-</span>}
                                 </span>
                             </div>
                             <div className="bg-gray-50 p-4 rounded-lg flex flex-col gap-1 border border-gray-200">
@@ -145,6 +145,23 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                     )) : <span className="text-xs text-gray-400">-</span>}
                                 </div>
                             </div>
+                            {(data.grade === "2" || data.grade === "3" || data.electives) && (
+                                <div className="bg-purple-50 p-4 rounded-lg flex flex-col gap-1 border border-purple-100 md:col-span-3">
+                                    <span className="text-xs text-purple-700 font-bold flex items-center gap-1"><FileText className="w-3 h-3" /> 선택과목 현황</span>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                        {data.electives && Object.keys(data.electives).length > 0 ? (
+                                            Object.entries(data.electives).map(([group, subData]: [string, any], i) => {
+                                                const subjectName = typeof subData === 'object' && subData !== null ? (subData.fullSubjectName || subData.subject) : subData;
+                                                return (
+                                                    <Badge key={i} className="bg-purple-100 text-purple-800 text-xs border border-purple-200 mb-1 hover:bg-purple-200">
+                                                        {group}: {subjectName}
+                                                    </Badge>
+                                                );
+                                            })
+                                        ) : <span className="text-xs text-gray-400">선택과목 데이터 없음</span>}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <Tabs defaultValue="assessments" className="flex-1 flex flex-col min-h-0">
