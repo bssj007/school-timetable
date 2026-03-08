@@ -190,6 +190,9 @@ export default function Dashboard() {
     // Close dialog first to ensure it's not in the way
     setShowPrintOptions(false);
 
+    // Track download metric
+    fetch('/api/action/download', { method: 'POST' }).catch(() => { });
+
     try {
       // Small delay to let dialog close animation finish
       await new Promise(r => setTimeout(r, 300));
@@ -229,6 +232,10 @@ export default function Dashboard() {
   // 인쇄 핸들러
   const handlePrint = () => {
     setShowPrintOptions(false);
+
+    // Track print metric
+    fetch('/api/action/print', { method: 'POST' }).catch(() => { });
+
     setTimeout(() => {
       window.print();
       resetPrintOptions();

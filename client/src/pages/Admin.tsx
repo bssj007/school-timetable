@@ -3412,6 +3412,8 @@ export default function Admin() {
                                         studentNumber: number | null;
                                         ips: IPProfile[];
                                         modificationCount: number;
+                                        printCount: number;
+                                        downloadCount: number;
                                         lastAccess: string | null;
                                         kakaoAccounts: { kakaoId: string; kakaoNickname: string }[];
                                         isBlocked: boolean;
@@ -3427,6 +3429,8 @@ export default function Admin() {
                                         if (existing) {
                                             existing.ips.push(user);
                                             existing.modificationCount += user.modificationCount || 0;
+                                            existing.printCount += user.printCount || 0;
+                                            existing.downloadCount += user.downloadCount || 0;
                                             if (!existing.lastAccess || (user.lastAccess && user.lastAccess > existing.lastAccess)) {
                                                 existing.lastAccess = user.lastAccess;
                                             }
@@ -3445,6 +3449,8 @@ export default function Admin() {
                                                 studentNumber: user.studentNumber ?? null,
                                                 ips: [user],
                                                 modificationCount: user.modificationCount || 0,
+                                                printCount: user.printCount || 0,
+                                                downloadCount: user.downloadCount || 0,
                                                 lastAccess: user.lastAccess,
                                                 kakaoAccounts: [...(user.kakaoAccounts || [])],
                                                 isBlocked: !!user.isBlocked,
@@ -3529,6 +3535,16 @@ export default function Admin() {
                                             <TableCell>
                                                 {user.modificationCount > 0
                                                     ? <Badge variant="secondary" className="font-mono text-xs">{user.modificationCount}회</Badge>
+                                                    : <span className="text-gray-300">-</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                {user.printCount && user.printCount > 0
+                                                    ? <Badge variant="secondary" className="font-mono text-xs bg-blue-50 text-blue-700 border-blue-200">{user.printCount}회</Badge>
+                                                    : <span className="text-gray-300">-</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                {user.downloadCount && user.downloadCount > 0
+                                                    ? <Badge variant="secondary" className="font-mono text-xs bg-green-50 text-green-700 border-green-200">{user.downloadCount}회</Badge>
                                                     : <span className="text-gray-300">-</span>}
                                             </TableCell>
                                             <TableCell className="text-slate-400">
@@ -3617,6 +3633,16 @@ export default function Admin() {
                                                         ) : <span className="text-gray-400 text-xs">-</span>}
                                                     </TableCell>
                                                     <TableCell>
+                                                        {group.printCount > 0 ? (
+                                                            <Badge variant="secondary" className="font-mono bg-blue-50 text-blue-700 border-blue-200">{group.printCount}회</Badge>
+                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {group.downloadCount > 0 ? (
+                                                            <Badge variant="secondary" className="font-mono bg-green-50 text-green-700 border-green-200">{group.downloadCount}회</Badge>
+                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                    </TableCell>
+                                                    <TableCell>
                                                         {group.lastAccess ? new Date(group.lastAccess + 'Z').toLocaleString() : '-'}
                                                     </TableCell>
                                                     <TableCell onClick={e => e.stopPropagation()}>
@@ -3677,17 +3703,19 @@ export default function Admin() {
 
                                     return (
                                         <div className="space-y-6">
-                                            <div className="rounded-md border">
-                                                <Table>
+                                            <div className="rounded-md border overflow-x-auto">
+                                                <Table className="min-w-[1000px]">
                                                     <TableHeader>
                                                         <TableRow>
-                                                            <TableHead>IP 주소</TableHead>
-                                                            <SortHeader col="id" label="학년/반/번호" className="w-[120px]" />
-                                                            <TableHead>카카오 계정</TableHead>
-                                                            <SortHeader col="modCount" label="수정 횟수" />
-                                                            <SortHeader col="lastAccess" label="마지막 접속" />
-                                                            <TableHead className="w-[100px]">알림</TableHead>
-                                                            <TableHead className="w-[100px]">관리</TableHead>
+                                                            <TableHead className="min-w-[120px]">IP 주소</TableHead>
+                                                            <SortHeader col="id" label="학년/반/번호" className="min-w-[140px]" />
+                                                            <TableHead className="min-w-[100px]">카카오 계정</TableHead>
+                                                            <SortHeader col="modCount" label="수정 횟수" className="min-w-[100px]" />
+                                                            <TableHead className="min-w-[80px]">출력</TableHead>
+                                                            <TableHead className="min-w-[80px]">다운로드</TableHead>
+                                                            <SortHeader col="lastAccess" label="마지막 접속" className="min-w-[150px]" />
+                                                            <TableHead className="min-w-[100px]">알림</TableHead>
+                                                            <TableHead className="min-w-[100px]">관리</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
@@ -3718,8 +3746,8 @@ export default function Admin() {
                                                         <span className="text-xs text-gray-500">학년/반 미기입 또는 브라우저 불분명</span>
                                                     </div>
                                                     {isOthersExpanded && (
-                                                        <div className="bg-gray-50 border-t">
-                                                            <Table>
+                                                        <div className="bg-gray-50 border-t overflow-x-auto">
+                                                            <Table className="min-w-[1000px]">
                                                                 <TableBody>
                                                                     {unknownUsers.map((user: IPProfile, idx: number) => (
                                                                         <TableRow key={idx}>
@@ -3738,6 +3766,16 @@ export default function Admin() {
                                                                             <TableCell>
                                                                                 {user.modificationCount > 0 ? (
                                                                                     <Badge variant="secondary" className="font-mono">{user.modificationCount}회</Badge>
+                                                                                ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                            </TableCell>
+                                                                            <TableCell>
+                                                                                {user.printCount && user.printCount > 0 ? (
+                                                                                    <Badge variant="secondary" className="font-mono bg-blue-50 text-blue-700 border-blue-200">{user.printCount}회</Badge>
+                                                                                ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                            </TableCell>
+                                                                            <TableCell>
+                                                                                {user.downloadCount && user.downloadCount > 0 ? (
+                                                                                    <Badge variant="secondary" className="font-mono bg-green-50 text-green-700 border-green-200">{user.downloadCount}회</Badge>
                                                                                 ) : <span className="text-gray-400 text-xs">-</span>}
                                                                             </TableCell>
                                                                             <TableCell>{user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}</TableCell>

@@ -172,20 +172,26 @@ export const onRequest = async (context: any) => {
             // 3. Update IP Profile (Link to student_profile_id)
             const updateIpProfile = async () => {
                 const isEditAction = (['POST', 'DELETE', 'PATCH', 'PUT'].includes(request.method) && url.pathname.startsWith('/api/assessment'));
+                const isPrintAction = url.pathname === '/api/action/print';
+                const isDownloadAction = url.pathname === '/api/action/download';
 
                 const query = `
-                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent)
-                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?)
+                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent, printCount, downloadCount)
+                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)
                     ON CONFLICT(ip) DO UPDATE SET
                         lastAccess = datetime('now'),
                         userAgent = excluded.userAgent,
                         student_profile_id = excluded.student_profile_id,
                         kakaoId = COALESCE(excluded.kakaoId, ip_profiles.kakaoId),
                         kakaoNickname = COALESCE(excluded.kakaoNickname, ip_profiles.kakaoNickname),
-                        modificationCount = ip_profiles.modificationCount + ?
+                        modificationCount = ip_profiles.modificationCount + ?,
+                        printCount = ip_profiles.printCount + ?,
+                        downloadCount = ip_profiles.downloadCount + ?
                 `;
 
                 const increment = isEditAction ? 1 : 0;
+                const printIncrement = isPrintAction ? 1 : 0;
+                const downloadIncrement = isDownloadAction ? 1 : 0;
 
                 const executeLink = async (profileId: number | null) => {
                     await env.DB.prepare(query).bind(
@@ -195,7 +201,11 @@ export const onRequest = async (context: any) => {
                         kakaoNickname,
                         increment, // Initial value
                         userAgent,
-                        increment // Increment value for update
+                        printIncrement,
+                        downloadIncrement,
+                        increment, // Increment value for update
+                        printIncrement,
+                        downloadIncrement
                     ).run();
                 };
 

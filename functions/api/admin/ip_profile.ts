@@ -92,6 +92,13 @@ export const onRequest = async (context: any) => {
             }
         }
 
+        // J. Fetch Print and Download Counts from ip_profiles
+        const ipProfileRowResult = await env.DB.prepare(
+            "SELECT printCount, downloadCount FROM ip_profiles WHERE ip = ?"
+        ).bind(targetIp).first();
+        const printCount = ipProfileRowResult?.printCount || 0;
+        const downloadCount = ipProfileRowResult?.downloadCount || 0;
+
         // 3. Construct Response (Matching IPProfile interface)
         const responseData = {
             ip: targetIp,
@@ -107,6 +114,8 @@ export const onRequest = async (context: any) => {
             blockId: blockEntry?.id,
 
             modificationCount,
+            printCount,
+            downloadCount,
             lastAccess,
             recentUserAgents,
 

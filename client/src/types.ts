@@ -10,6 +10,8 @@ export interface IPProfile {
 
     // --- Stats ---
     modificationCount: number;
+    printCount?: number;
+    downloadCount?: number;
     lastAccess: string | null; // ISO Date string
     recentUserAgents: string[];
     grade?: string | null;
