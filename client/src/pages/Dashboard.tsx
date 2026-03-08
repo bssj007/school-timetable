@@ -1245,7 +1245,7 @@ export default function Dashboard() {
                   <div className="capture-only mb-1.5 p-1.5 border rounded-md text-black flex flex-col gap-0.5">
                     <div className="flex justify-between items-end border-b pb-0.5 mb-0.5">
                       <div className="text-sm font-bold leading-none">
-                        [학생용] {schoolName} {grade}학년 {classNum}반
+                        {grade}학년 {classNum}반 {studentNumber || '?'}번
                       </div>
                       <div className="text-[10px] text-gray-600 leading-none">
                         발급일자: {new Date().toLocaleDateString('ko-KR')} (수행평가는 출력 시점 기준)
