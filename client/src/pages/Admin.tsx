@@ -3707,15 +3707,15 @@ export default function Admin() {
                                                 <Table className="min-w-[1000px]">
                                                     <TableHeader>
                                                         <TableRow>
-                                                            <TableHead className="min-w-[120px]">IP 주소</TableHead>
-                                                            <SortHeader col="id" label="학년/반/번호" className="min-w-[140px]" />
-                                                            <TableHead className="min-w-[100px]">카카오 계정</TableHead>
-                                                            <SortHeader col="modCount" label="수정 횟수" className="min-w-[100px]" />
-                                                            <TableHead className="min-w-[80px]">출력</TableHead>
-                                                            <TableHead className="min-w-[80px]">다운로드</TableHead>
-                                                            <SortHeader col="lastAccess" label="마지막 접속" className="min-w-[150px]" />
-                                                            <TableHead className="min-w-[100px]">알림</TableHead>
-                                                            <TableHead className="min-w-[100px]">관리</TableHead>
+                                                            <TableHead className="w-[120px] min-w-[120px]">IP 주소</TableHead>
+                                                            <SortHeader col="id" label="학년/반/번호" className="w-[140px] min-w-[140px]" />
+                                                            <TableHead className="w-[180px] min-w-[180px]">카카오 계정</TableHead>
+                                                            <SortHeader col="modCount" label="수정 횟수" className="w-[100px] min-w-[100px]" />
+                                                            <TableHead className="w-[80px] min-w-[80px]">출력</TableHead>
+                                                            <TableHead className="w-[80px] min-w-[80px]">다운로드</TableHead>
+                                                            <SortHeader col="lastAccess" label="마지막 접속" className="w-[160px] min-w-[160px]" />
+                                                            <TableHead className="w-[160px] min-w-[160px]">알림</TableHead>
+                                                            <TableHead className="w-[160px] min-w-[160px]">관리</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
@@ -3812,10 +3812,10 @@ export default function Admin() {
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                <TableHead>대상 (IP/ID)</TableHead>
+                                                <TableHead className="w-[180px] min-w-[180px]">대상 (IP/ID)</TableHead>
                                                 <TableHead>사유</TableHead>
-                                                <TableHead>차단 일시</TableHead>
-                                                <TableHead className="w-[100px]">관리</TableHead>
+                                                <TableHead className="w-[160px] min-w-[160px]">차단 일시</TableHead>
+                                                <TableHead className="w-[100px] min-w-[100px]">관리</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>

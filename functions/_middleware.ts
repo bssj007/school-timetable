@@ -239,8 +239,21 @@ export const onRequest = async (context: any) => {
                     } catch (migrationError) {
                         console.error("[Middleware] Migration Failed for ip_profiles:", migrationError);
                     }
-                } else if (e.message && e.message.includes("has no column named")) {
-                    console.warn("[Middleware] ip_profiles schema mismatch:", e.message);
+                } else if (e.message && (e.message.includes("has no column named") || e.message.includes("no column named"))) {
+                    console.warn("[Middleware] ip_profiles schema mismatch detected. Attempting safe ALTER...");
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN printCount INTEGER DEFAULT 0").run();
+                    } catch (_) { /* already exists */ }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN downloadCount INTEGER DEFAULT 0").run();
+                    } catch (_) { /* already exists */ }
+
+                    // Retry update
+                    try {
+                        await updateIpProfile();
+                    } catch (retryError) {
+                        console.error("[Middleware] Retry failed after ALTER:", retryError);
+                    }
                 } else {
                     console.error("IP Profile Update Error", e);
                 }

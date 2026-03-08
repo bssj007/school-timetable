@@ -76,6 +76,18 @@ export const onRequest = async (context: any) => {
                     // Retry
                     const { results } = await env.DB.prepare(query).all();
                     profiles = results;
+                } else if (e.message && (e.message.includes("no such column") || e.message.includes("has no column named") || e.message.includes("no column named"))) {
+                    console.log("[Admin API] Schema mismatch for printCount/downloadCount. Running safe ALTER TABLE...");
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN printCount INTEGER DEFAULT 0").run();
+                    } catch (_) { }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN downloadCount INTEGER DEFAULT 0").run();
+                    } catch (_) { }
+
+                    // Retry
+                    const { results } = await env.DB.prepare(query).all();
+                    profiles = results;
                 } else {
                     throw e;
                 }

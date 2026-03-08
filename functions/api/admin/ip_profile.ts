@@ -93,11 +93,28 @@ export const onRequest = async (context: any) => {
         }
 
         // J. Fetch Print and Download Counts from ip_profiles
-        const ipProfileRowResult = await env.DB.prepare(
-            "SELECT printCount, downloadCount FROM ip_profiles WHERE ip = ?"
-        ).bind(targetIp).first();
-        const printCount = ipProfileRowResult?.printCount || 0;
-        const downloadCount = ipProfileRowResult?.downloadCount || 0;
+        let printCount = 0;
+        let downloadCount = 0;
+        try {
+            const ipProfileRowResult = await env.DB.prepare(
+                "SELECT printCount, downloadCount FROM ip_profiles WHERE ip = ?"
+            ).bind(targetIp).first();
+            printCount = ipProfileRowResult?.printCount || 0;
+            downloadCount = ipProfileRowResult?.downloadCount || 0;
+        } catch (e: any) {
+            if (e.message && (e.message.includes("no such column") || e.message.includes("has no column named") || e.message.includes("no column named"))) {
+                console.log("[Admin API] Schema mismatch for printCount/downloadCount. Running safe ALTER TABLE...");
+                try {
+                    await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN printCount INTEGER DEFAULT 0").run();
+                } catch (_) { }
+                try {
+                    await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN downloadCount INTEGER DEFAULT 0").run();
+                } catch (_) { }
+                // Keep printCount/downloadCount as 0 for this request
+            } else {
+                throw e;
+            }
+        }
 
         // 3. Construct Response (Matching IPProfile interface)
         const responseData = {
