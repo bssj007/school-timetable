@@ -5377,8 +5377,8 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
                             <SelectValue placeholder="과목명 크기 선택" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="large">크게 (1단계 설정)</SelectItem>
-                            <SelectItem value="medium">조금 크게 (2단계 설정, 권장)</SelectItem>
+                            <SelectItem value="medium">조금 크게 (1단계 설정)</SelectItem>
+                            <SelectItem value="large">매우 크게 (2단계 설정, 기본값)</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
