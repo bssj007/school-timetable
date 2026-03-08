@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
-    BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp
+    BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -3475,7 +3475,6 @@ export default function Admin() {
                 </TabsContent>
 
                 <TabsContent value="users">
-                    {/* ... existing users content ... */}
                     <div className="grid gap-6">
                         <div className="flex justify-end">
                             <Select value={timeRange} onValueChange={(value: any) => setTimeRange(value)}>
@@ -3493,21 +3492,16 @@ export default function Admin() {
                             <CardHeader>
                                 <CardTitle>활성 사용자 ({timeRange === '24h' ? '최근 24시간' : timeRange === '7d' ? '최근 1주일' : '전체 사용자'})</CardTitle>
                                 <CardDescription>
-                                    최근 접속한 IP 및 카카오 계정 목록입니다.
+                                    최근 접속한 IP 및 카카오 계정 목록입니다. 같은 학번의 여러 IP는 하나의 항목으로 묶입니다.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
                                 {(() => {
-                                    // Helper to classify users
                                     const isKnownUser = (user: IPProfile) => {
-                                        // 1. Check User Agent
                                         if (!user.recentUserAgents || user.recentUserAgents.length === 0) return false;
                                         const knownKeywords = ['Mozilla', 'Chrome', 'Safari', 'Firefox', 'Edge', 'Opera', 'Whale', 'Kakao', 'iPhone', 'Android'];
                                         const hasKnownUA = user.recentUserAgents.some(ua => knownKeywords.some(keyword => ua.includes(keyword)));
-
-                                        // 2. Check Grade/Class (Must be present per user request)
                                         const hasInfo = !!(user.grade && user.classNum);
-
                                         return hasKnownUA && hasInfo;
                                     };
 
@@ -3629,31 +3623,24 @@ export default function Admin() {
                                             <TableCell className="pl-8 font-mono text-slate-500">
                                                 <Button
                                                     variant="link"
-                                                    className="p-0 h-auto font-mono text-blue-600 hover:text-blue-800 underline decoration-dotted"
+                                                    className="p-0 h-auto font-mono text-blue-500 hover:text-blue-700 text-xs underline decoration-dotted"
                                                     onClick={() => setSelectedProfile(user)}
                                                 >
-                                                    {user.ip}
+                                                    ↳ {user.ip}
                                                 </Button>
                                             </TableCell>
+                                            <TableCell />
                                             <TableCell>
-                                                {user.grade && user.classNum ? (
-                                                    <Badge variant="outline" className="font-mono text-green-600 border-green-200 bg-green-50">
-                                                        {user.grade}-{user.classNum}{user.studentNumber ? `-${user.studentNumber}` : ''}
-                                                    </Badge>
-                                                ) : (
-                                                    <span className="text-gray-300 text-xs">-</span>
-                                                )}
+                                                {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
+                                                    user.kakaoAccounts.map((k, i) => (
+                                                        <span key={i} className="text-xs text-slate-500">{k.kakaoNickname}</span>
+                                                    ))
+                                                ) : <span className="text-gray-300">-</span>}
                                             </TableCell>
                                             <TableCell>
-                                                <div className="flex flex-col gap-1">
-                                                    {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
-                                                        user.kakaoAccounts.map((k, i) => (
-                                                            <span key={i} className="font-bold text-xs">{k.kakaoNickname}</span>
-                                                        ))
-                                                    ) : (
-                                                        <span className="text-gray-400 text-xs">-</span>
-                                                    )}
-                                                </div>
+                                                {user.modificationCount > 0
+                                                    ? <Badge variant="secondary" className="font-mono text-xs">{user.modificationCount}회</Badge>
+                                                    : <span className="text-gray-300">-</span>}
                                             </TableCell>
                                             <TableCell>
                                                 {user.printCount && user.printCount > 0
@@ -3673,148 +3660,24 @@ export default function Admin() {
                                             <TableCell className="text-slate-400">
                                                 {user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}
                                             </TableCell>
-                                            <TableCell>{user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}</TableCell>
-
+                                            <TableCell />
                                             <TableCell>
-                                                {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
-                                                    <div className="flex gap-2">
+                                                {user.isBlocked
+                                                    ? <Badge variant="destructive" className="text-xs">차단됨</Badge>
+                                                    : (
                                                         <Button
-                                                            variant="outline"
+                                                            variant="ghost"
                                                             size="sm"
-                                                            className="text-purple-500 hover:text-purple-600 hover:bg-purple-50"
-                                                            onClick={async () => {
-                                                                if (!confirm("이 사용자에게 '수행평가 알림' 캘린더 일정을 등록하시겠습니까?\n(1분 후 시작, 10분간 지속, 즉시 알림)")) return;
-
-                                                                const targetKakaoId = user.kakaoAccounts![0].kakaoId;
-                                                                try {
-                                                                    const response = await fetch('/api/admin/users/calendar', {
-                                                                        method: 'POST',
-                                                                        headers: {
-                                                                            'Content-Type': 'application/json',
-                                                                            'X-Admin-Password': password
-                                                                        },
-                                                                        body: JSON.stringify({
-                                                                            kakaoId: targetKakaoId,
-                                                                            title: "🔔 수행평가 확인 알림",
-                                                                            description: "관리자가 보낸 수행평가 확인 알림입니다."
-                                                                        })
-                                                                    });
-                                                                    const data = await response.json();
-                                                                    if (response.ok && data.success) {
-                                                                        alert('캘린더 일정이 등록되었습니다. (카카오톡 알림 발송됨)');
-                                                                    } else {
-                                                                        const errorMessage = data.error || data.message || JSON.stringify(data);
-                                                                        const errorDetails = data.details ? `\n상세: ${JSON.stringify(data.details)}` : '';
-                                                                        alert(`실패: ${errorMessage}${errorDetails}`);
-                                                                    }
-                                                                } catch (error: any) {
-                                                                    const msg = error instanceof Error ? error.message : String(error);
-                                                                    alert(`오류 발생: ${msg}`);
-                                                                    console.error(error);
+                                                            className="text-red-400 hover:text-red-600 hover:bg-red-50 h-7 px-2 text-xs"
+                                                            onClick={() => {
+                                                                if (confirm(`IP ${user.ip}를 차단하시겠습니까?`)) {
+                                                                    blockUserMutation.mutate({ identifier: user.ip, type: 'IP' });
                                                                 }
                                                             }}
                                                         >
-                                                            <Calendar className="h-4 w-4 mr-1" />
-                                                            캘린더
+                                                            <Ban className="h-3 w-3 mr-1" />차단
                                                         </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="text-blue-500 hover:text-blue-600 hover:bg-blue-50"
-                                                            title="할 일(Task) 등록"
-                                                            onClick={async () => {
-                                                                if (!confirm("이 사용자에게 '수행평가 태스크'를 등록하시겠습니까?\n(내일 오전 9시 알림 설정됨)")) return;
-
-                                                                const targetKakaoId = user.kakaoAccounts![0].kakaoId;
-                                                                try {
-                                                                    const response = await fetch('/api/admin/users/task', {
-                                                                        method: 'POST',
-                                                                        headers: {
-                                                                            'Content-Type': 'application/json',
-                                                                            'X-Admin-Password': password
-                                                                        },
-                                                                        body: JSON.stringify({
-                                                                            kakaoId: targetKakaoId,
-                                                                            title: "🔔 수행평가 할 일 체크",
-                                                                            description: "관리자 할 일(Task) 등록 테스트"
-                                                                        })
-                                                                    });
-                                                                    const data = await response.json();
-                                                                    if (response.ok && data.success) {
-                                                                        alert('태스크(할 일)가 등록되었습니다.');
-                                                                    } else {
-                                                                        const errorMessage = data.error || data.message || JSON.stringify(data);
-                                                                        const errorDetails = data.details ? `\n상세: ${JSON.stringify(data.details)}` : '';
-                                                                        alert(`실패: ${errorMessage}${errorDetails}`);
-                                                                    }
-                                                                } catch (error: any) {
-                                                                    const msg = error instanceof Error ? error.message : String(error);
-                                                                    alert(`오류 발생: ${msg}`);
-                                                                    console.error(error);
-                                                                }
-                                                            }}
-                                                        >
-                                                            <CheckSquare className="h-4 w-4 mr-1" />
-                                                            태스크
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="text-blue-500 hover:text-blue-600 hover:bg-blue-50"
-                                                            onClick={async () => {
-                                                                const message = prompt("전송할 메시지를 입력하세요:");
-                                                                if (!message) return;
-                                                                const targetKakaoId = user.kakaoAccounts![0].kakaoId;
-
-                                                                try {
-                                                                    const response = await fetch('/api/admin/users/notify', {
-                                                                        method: 'POST',
-                                                                        headers: {
-                                                                            'Content-Type': 'application/json',
-                                                                            'X-Admin-Password': password
-                                                                        },
-                                                                        body: JSON.stringify({
-                                                                            ip: user.ip,
-                                                                            kakaoId: targetKakaoId,
-                                                                            message
-                                                                        })
-                                                                    });
-                                                                    const data = await response.json();
-                                                                    if (data.success) {
-                                                                        alert('알림이 전송되었습니다 (개발중)');
-                                                                    } else {
-                                                                        alert('알림 전송에 실패했습니다: ' + data.error);
-                                                                    }
-                                                                } catch (error) {
-                                                                    alert('알림 전송 중 오류가 발생했습니다.');
-                                                                }
-                                                            }}
-                                                        >
-                                                            📱 알림
-                                                        </Button>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-gray-400 text-xs">-</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                {user.isBlocked ? (
-                                                    <Badge variant="destructive">차단됨</Badge>
-                                                ) : (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                                                        onClick={() => {
-                                                            if (confirm(`IP ${user.ip}를 차단하시겠습니까?`)) {
-                                                                blockUserMutation.mutate({ identifier: user.ip, type: 'IP' });
-                                                            }
-                                                        }}
-                                                    >
-                                                        <Ban className="h-4 w-4 mr-1" />
-                                                        차단
-                                                    </Button>
-                                                )}
+                                                    )}
                                             </TableCell>
                                         </TableRow>
                                     );
@@ -3972,10 +3835,10 @@ export default function Admin() {
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
-                                                        {knownUsers.map((user: IPProfile, idx: number) => (
-                                                            <UserRow key={idx} user={user} />
+                                                        {groups.map((group) => (
+                                                            <GroupRow key={group.key} group={group} />
                                                         ))}
-                                                        {knownUsers.length === 0 && (
+                                                        {groups.length === 0 && (
                                                             <TableRow>
                                                                 <TableCell colSpan={10} className="h-24 text-center text-gray-500">
                                                                     일반 접속 기록이 없습니다.
@@ -3986,7 +3849,6 @@ export default function Admin() {
                                                 </Table>
                                             </div>
 
-                                            {/* Unknown/Others Section */}
                                             {unknownUsers.length > 0 && (
                                                 <div className="border rounded-md overflow-hidden">
                                                     <div
@@ -3997,11 +3859,8 @@ export default function Admin() {
                                                             {isOthersExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                                                             기타 접속 ({unknownUsers.length})
                                                         </div>
-                                                        <span className="text-xs text-gray-500">
-                                                            학년/반 미기입 또는 브라우저 불분명
-                                                        </span>
+                                                        <span className="text-xs text-gray-500">학년/반 미기입 또는 브라우저 불분명</span>
                                                     </div>
-
                                                     {isOthersExpanded && (
                                                         <div className="bg-gray-50 border-t overflow-x-auto">
                                                             <Table className="min-w-[1000px]">
@@ -4067,9 +3926,7 @@ export default function Admin() {
                         <Card>
                             <CardHeader>
                                 <CardTitle>차단된 사용자 목록</CardTitle>
-                                <CardDescription>
-                                    현재 차단 중인 대상입니다.
-                                </CardDescription>
+                                <CardDescription>현재 차단 중인 대상입니다.</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <div className="rounded-md border">
@@ -4092,36 +3949,23 @@ export default function Admin() {
                                                     <TableCell>{blocked.reason}</TableCell>
                                                     <TableCell>{new Date(blocked.createdAt).toLocaleString()}</TableCell>
                                                     <TableCell>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                                            onClick={() => {
-                                                                if (confirm("차단을 해제하시겠습니까?")) {
-                                                                    unblockUserMutation.mutate(blocked.id);
-                                                                }
-                                                            }}
-                                                        >
-                                                            <ShieldCheck className="h-4 w-4 mr-1" />
-                                                            해제
+                                                        <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                                            onClick={() => { if (confirm("차단을 해제하시겠습니까?")) unblockUserMutation.mutate(blocked.id); }}>
+                                                            <ShieldCheck className="h-4 w-4 mr-1" />해제
                                                         </Button>
                                                     </TableCell>
                                                 </TableRow>
                                             ))}
                                             {(!userData?.blockedUsers || userData.blockedUsers.length === 0) && (
                                                 <TableRow>
-                                                    <TableCell colSpan={4} className="h-24 text-center text-gray-500">
-                                                        차단된 사용자가 없습니다.
-                                                    </TableCell>
+                                                    <TableCell colSpan={4} className="h-24 text-center text-gray-500">차단된 사용자가 없습니다.</TableCell>
                                                 </TableRow>
                                             )}
                                         </TableBody>
                                     </Table>
                                 </div>
-
                             </CardContent>
                         </Card>
-
                     </div>
                 </TabsContent>
 
@@ -4168,7 +4012,7 @@ export default function Admin() {
                 <TabsContent value="etc" className="space-y-6">
                     <EtcManager adminPassword={password} />
                 </TabsContent>
-            </Tabs>
+            </Tabs >
 
             <IPProfileViewer
                 initialData={selectedProfile}
@@ -4219,7 +4063,7 @@ export default function Admin() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     );
 }
 
