@@ -183,7 +183,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
 
                 {data ? (
                     <div className="flex-1 overflow-hidden flex flex-col gap-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="bg-blue-50 p-4 rounded-lg flex flex-col gap-1 border border-blue-100 relative">
                                 <span className="text-xs text-blue-600 font-bold flex items-center gap-1"><FileText className="w-3 h-3" /> 수정 기여</span>
                                 <span className="text-2xl font-bold">{data.modificationCount}회</span>
@@ -198,7 +198,13 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                 <span className="text-xs text-gray-500 font-bold flex items-center gap-1"><Clock className="w-3 h-3" /> 마지막 접속</span>
                                 <span className="text-sm font-mono">{data.lastAccess ? new Date(data.lastAccess + 'Z').toLocaleString() : '-'}</span>
                             </div>
-                            <div className="bg-yellow-50 p-4 rounded-lg flex flex-col gap-1 border border-yellow-100 md:col-span-3">
+                            <div className="bg-purple-50 p-4 rounded-lg flex flex-col gap-1 border border-purple-200">
+                                <span className="text-xs text-purple-600 font-bold flex items-center gap-1"><Smartphone className="w-3 h-3" /> PWA 앱 설치</span>
+                                <span className="text-2xl font-bold">
+                                    {data.isStandalone ? <span className="text-purple-600">설치됨</span> : <span className="text-gray-400 text-lg">미사용</span>}
+                                </span>
+                            </div>
+                            <div className="bg-yellow-50 p-4 rounded-lg flex flex-col gap-1 border border-yellow-100 md:col-span-4">
                                 <span className="text-xs text-yellow-700 font-bold flex items-center gap-1"><User className="w-3 h-3" /> 카카오 계정</span>
                                 <div className="flex flex-wrap gap-1 mt-1">
                                     {data.kakaoAccounts?.length > 0 ? data.kakaoAccounts.map((k: { kakaoId: string; kakaoNickname: string }, i: number) => (
@@ -206,7 +212,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                     )) : <span className="text-xs text-gray-400">-</span>}
                                 </div>
                             </div>
-                            <div className="col-span-1 md:col-span-3 flex justify-end">
+                            <div className="col-span-1 md:col-span-4 flex justify-end">
                                 <Button
                                     variant="outline"
                                     size="sm"

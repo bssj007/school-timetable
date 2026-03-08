@@ -33,6 +33,7 @@ export const onRequest = async (context: any) => {
                     ip_profiles.instructionDismissed,
                     ip_profiles.printCount,
                     ip_profiles.downloadCount,
+                    ip_profiles.isStandalone,
                     (SELECT COUNT(*) FROM performance_assessments WHERE lastModifiedIp = ip_profiles.ip) as modificationCount,
                     student_profiles.grade as profileGrade,
                     student_profiles.classNum as profileClassNum,

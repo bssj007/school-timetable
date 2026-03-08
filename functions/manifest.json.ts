@@ -19,6 +19,7 @@ export const onRequest = async (context: any) => {
         const appIconUrl = settings['pwa_app_icon_url'] || settings['site_favicon_url'] || '/icon.svg';
 
         const manifest = {
+            "id": "/?source=pwa",
             "name": appTitle,
             "short_name": appTitle,
             "description": "부산성지고등학교 시간표 및 수행평가 관리 서비스",
@@ -29,7 +30,13 @@ export const onRequest = async (context: any) => {
             "icons": [
                 {
                     "src": appIconUrl,
-                    "sizes": "192x192 512x512",
+                    "sizes": "192x192",
+                    "type": appIconUrl.startsWith('data:image/svg') ? 'image/svg+xml' : (appIconUrl.startsWith('data:image/png') ? 'image/png' : 'image/png'),
+                    "purpose": "any maskable"
+                },
+                {
+                    "src": appIconUrl,
+                    "sizes": "512x512",
                     "type": appIconUrl.startsWith('data:image/svg') ? 'image/svg+xml' : (appIconUrl.startsWith('data:image/png') ? 'image/png' : 'image/png'),
                     "purpose": "any maskable"
                 }

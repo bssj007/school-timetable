@@ -95,12 +95,14 @@ export const onRequest = async (context: any) => {
         // J. Fetch Print and Download Counts from ip_profiles
         let printCount = 0;
         let downloadCount = 0;
+        let isStandalone = 0;
         try {
             const ipProfileRowResult = await env.DB.prepare(
-                "SELECT printCount, downloadCount FROM ip_profiles WHERE ip = ?"
+                "SELECT printCount, downloadCount, isStandalone FROM ip_profiles WHERE ip = ?"
             ).bind(targetIp).first();
             printCount = ipProfileRowResult?.printCount || 0;
             downloadCount = ipProfileRowResult?.downloadCount || 0;
+            isStandalone = ipProfileRowResult?.isStandalone || 0;
         } catch (e: any) {
             if (e.message && (e.message.includes("no such column") || e.message.includes("has no column named") || e.message.includes("no column named"))) {
                 console.log("[Admin API] Schema mismatch for printCount/downloadCount. Running safe ALTER TABLE...");
@@ -110,7 +112,10 @@ export const onRequest = async (context: any) => {
                 try {
                     await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN downloadCount INTEGER DEFAULT 0").run();
                 } catch (_) { }
-                // Keep printCount/downloadCount as 0 for this request
+                try {
+                    await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN isStandalone INTEGER DEFAULT 0").run();
+                } catch (_) { }
+                // Keep printCount/downloadCount/isStandalone as 0 for this request
             } else {
                 throw e;
             }
@@ -133,6 +138,7 @@ export const onRequest = async (context: any) => {
             modificationCount,
             printCount,
             downloadCount,
+            isStandalone: isStandalone === 1,
             lastAccess,
             recentUserAgents,
 

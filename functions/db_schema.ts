@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS ip_profiles (
     instructionDismissed INTEGER DEFAULT 0,
     printCount INTEGER DEFAULT 0,
     downloadCount INTEGER DEFAULT 0,
+    isStandalone INTEGER DEFAULT 0,
     FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
 );
 `;

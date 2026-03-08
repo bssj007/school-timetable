@@ -29,26 +29,35 @@ if (typeof window !== 'undefined') {
   const isInAppBrowser = /KAKAOTALK|NAVER|FBAN|FBAV|Instagram|Line|Twitter|DaumApp/i.test(navigator.userAgent);
   const isSamsungBrowser = /SamsungBrowser/i.test(navigator.userAgent);
 
-  // If on Android, in a standard browser, and not already standalone, attempt to launch intent
-  // Note: Modern browsers require a user gesture to fire an intent, but we can try opening the fallback intent implicitly
-  // which prompts "Open in App" or auto-intercepts if the WebAPK is strongly bound.
-  // We exclude SamsungBrowser because forcing package=com.android.chrome kicks them out of their browser entirely.
-  if (isAndroid && !isStandalone && !isInAppBrowser && !isSamsungBrowser) {
-    // Only attempt once per session to avoid annoying the user if they explicitly chose to stay in Chrome
-    if (!sessionStorage.getItem('pwa_redirect_attempted')) {
-      sessionStorage.setItem('pwa_redirect_attempted', 'true');
-      const currentUrl = encodeURIComponent(window.location.href);
-      // Constructing an Android intent. host=www.example.com etc isn't perfectly dynamic without parsing location
-      const fallbackUrl = encodeURIComponent(window.location.href);
-      const host = window.location.host;
-      // Provide an intent link. Note package is generic Chrome since WebAPK packages are randomized hash names,
-      // but Chrome handles the intent resolution and pops open the PWA if matched.
-      const intentUrl = `intent://${host}/#Intent;scheme=${window.location.protocol.replace(':', '')};package=com.android.chrome;S.browser_fallback_url=${fallbackUrl};end`;
+  const hasPwaCookie = typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1');
 
-      // Briefly wait for DOM to be ready just in case
-      setTimeout(() => {
-        window.location.href = intentUrl;
-      }, 500);
+  // Track PWA Installation Status
+  if (isStandalone) {
+    document.cookie = "pwa_standalone=1; max-age=31536000; path=/";
+  }
+
+  // If on Android, in a standard browser, and not already standalone, attempt to launch intent
+  if (isAndroid && !isStandalone && !isInAppBrowser) {
+    const attempted = sessionStorage.getItem('pwa_redirect_attempted');
+
+    // If we KNOW they installed it (has cookie), or if it's their first time loading in Chrome
+    if (hasPwaCookie || (!attempted && !isSamsungBrowser)) {
+      if (!attempted) {
+        sessionStorage.setItem('pwa_redirect_attempted', 'true');
+        const fallbackUrl = encodeURIComponent(window.location.href);
+        const host = window.location.host;
+        const protocol = window.location.protocol.replace(':', '');
+
+        // If we know they have it, we use a generic intent to let Android pick the WebAPK regardless of browser (Chrome/Samsung).
+        // If we don't know, we target Chrome specifically to handle the "Add to Homescreen" prompt seamlessly.
+        const intentUrl = hasPwaCookie
+          ? `intent://${host}/#Intent;scheme=${protocol};S.browser_fallback_url=${fallbackUrl};end`
+          : `intent://${host}/#Intent;scheme=${protocol};package=com.android.chrome;S.browser_fallback_url=${fallbackUrl};end`;
+
+        setTimeout(() => {
+          window.location.href = intentUrl;
+        }, 100);
+      }
     }
   }
 }

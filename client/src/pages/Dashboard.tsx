@@ -148,10 +148,12 @@ export default function Dashboard() {
 
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalling, setIsInstalling] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const isIOS = typeof window !== 'undefined' ? /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) : false;
   const isSamsungBrowser = typeof window !== 'undefined' ? /SamsungBrowser/i.test(navigator.userAgent) : false;
   const isInAppBrowser = typeof window !== 'undefined' ? /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent) : false;
+  const hasPwaCookie = typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1');
 
   useEffect(() => {
     const standsAlone = window.matchMedia('(display-mode: standalone)').matches || ('standalone' in navigator && (navigator as any).standalone) === true;
@@ -169,8 +171,10 @@ export default function Dashboard() {
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
+      setIsInstalling(true);
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
+      setIsInstalling(false);
       if (outcome === 'accepted') {
         setDeferredPrompt(null);
       }
@@ -1949,19 +1953,39 @@ export default function Dashboard() {
                 카카오톡 등 인앱 브라우저는 해당 기능을 지원하지 않습니다. 외부 브라우저(Safari, Chrome 등)를 권장합니다.
               </p>
             </>
+          ) : hasPwaCookie ? (
+            <>
+              <Button
+                disabled
+                className="w-full h-14 bg-gray-100 text-gray-500 font-bold text-lg rounded-xl shadow-inner flex items-center justify-center gap-2 cursor-not-allowed border border-gray-200"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-green-500">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                </svg>
+                이미 설치됨
+              </Button>
+              <p className="text-center text-xs text-gray-500 font-medium">
+                스마트폰에 앱이 이미 설치되어 있습니다. 앱을 실행해주세요!
+              </p>
+            </>
           ) : (
             <>
               <Button
                 onClick={handleInstallClick}
-                className="w-full h-14 bg-[#3DDC84] hover:bg-[#35c073] text-black font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
+                disabled={isInstalling}
+                className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
-                  <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
-                </svg>
-                앱 다운로드 (홈 화면 추가)
+                {isInstalling ? (
+                  <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
+                    <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
+                  </svg>
+                )}
+                {isInstalling ? '설치 중...' : '앱 다운로드 (홈 화면 및 앱 창 추가)'}
               </Button>
               <p className="text-center text-xs text-gray-500 font-medium">
-                터치 한 번으로 바탕화면에 앱을 설치하세요!
+                터치 한 번으로 스마트폰에 앱을 설치하세요!
               </p>
             </>
           )}

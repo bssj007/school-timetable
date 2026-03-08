@@ -35,6 +35,7 @@ export const onRequest = async (context: any) => {
             // Parse Other Cookies
             let grade = null, classNum = null, studentNumber = null;
             let kakaoId = null, kakaoNickname = null;
+            let isStandalone = 0;
 
             if (cookies) {
                 const configMatch = cookies.match(new RegExp('(^| )school_timetable_config=([^;]+)'));
@@ -54,6 +55,11 @@ export const onRequest = async (context: any) => {
                         kakaoId = kakaoData.id?.toString();
                         kakaoNickname = kakaoData.nickname;
                     } catch (e) { }
+                }
+
+                const pwaMatch = cookies.match(new RegExp('(^| )pwa_standalone=([^;]+)'));
+                if (pwaMatch && pwaMatch[2] === '1') {
+                    isStandalone = 1;
                 }
             }
 
@@ -176,8 +182,8 @@ export const onRequest = async (context: any) => {
                 const isDownloadAction = url.pathname === '/api/action/download';
 
                 const query = `
-                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent, printCount, downloadCount)
-                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)
+                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent, printCount, downloadCount, isStandalone)
+                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?)
                     ON CONFLICT(ip) DO UPDATE SET
                         lastAccess = datetime('now'),
                         userAgent = excluded.userAgent,
@@ -186,7 +192,8 @@ export const onRequest = async (context: any) => {
                         kakaoNickname = COALESCE(excluded.kakaoNickname, ip_profiles.kakaoNickname),
                         modificationCount = ip_profiles.modificationCount + ?,
                         printCount = ip_profiles.printCount + ?,
-                        downloadCount = ip_profiles.downloadCount + ?
+                        downloadCount = ip_profiles.downloadCount + ?,
+                        isStandalone = CASE WHEN excluded.isStandalone = 1 THEN 1 ELSE ip_profiles.isStandalone END
                 `;
 
                 const increment = isEditAction ? 1 : 0;
@@ -203,6 +210,7 @@ export const onRequest = async (context: any) => {
                         userAgent,
                         printIncrement,
                         downloadIncrement,
+                        isStandalone,
                         increment, // Increment value for update
                         printIncrement,
                         downloadIncrement
@@ -247,8 +255,11 @@ export const onRequest = async (context: any) => {
                     try {
                         await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN downloadCount INTEGER DEFAULT 0").run();
                     } catch (_) { /* already exists */ }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN isStandalone INTEGER DEFAULT 0").run();
+                    } catch (_) { /* already exists */ }
 
-                    // Retry update
+                    // Retry update after ALTER
                     try {
                         await updateIpProfile();
                     } catch (retryError) {

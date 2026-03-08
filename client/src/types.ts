@@ -14,6 +14,7 @@ export interface IPProfile {
     downloadCount?: number;
     lastAccess: string | null; // ISO Date string
     recentUserAgents: string[];
+    isStandalone?: boolean;
     grade?: string | null;
     classNum?: string | null;
     studentNumber?: string | null;

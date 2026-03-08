@@ -3633,6 +3633,11 @@ export default function Admin() {
                                                     ? <Badge variant="secondary" className="font-mono text-xs bg-green-50 text-green-700 border-green-200">{user.downloadCount}회</Badge>
                                                     : <span className="text-gray-300">-</span>}
                                             </TableCell>
+                                            <TableCell>
+                                                {user.isStandalone
+                                                    ? <Badge variant="secondary" className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200">설치됨</Badge>
+                                                    : <span className="text-gray-300">-</span>}
+                                            </TableCell>
                                             <TableCell className="text-slate-400">
                                                 {user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}
                                             </TableCell>
@@ -3729,6 +3734,11 @@ export default function Admin() {
                                                         ) : <span className="text-gray-400 text-xs">-</span>}
                                                     </TableCell>
                                                     <TableCell>
+                                                        {group.ips.some(ip => ip.isStandalone) ? (
+                                                            <Badge variant="secondary" className="font-mono bg-purple-50 text-purple-700 border-purple-200">설치됨</Badge>
+                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                    </TableCell>
+                                                    <TableCell>
                                                         {group.lastAccess ? new Date(group.lastAccess + 'Z').toLocaleString() : '-'}
                                                     </TableCell>
                                                     <TableCell onClick={e => e.stopPropagation()}>
@@ -3799,6 +3809,7 @@ export default function Admin() {
                                                             <SortHeader col="modCount" label="수정 횟수" className="w-[100px] min-w-[100px]" />
                                                             <TableHead className="w-[80px] min-w-[80px]">출력</TableHead>
                                                             <TableHead className="w-[80px] min-w-[80px]">다운로드</TableHead>
+                                                            <TableHead className="w-[80px] min-w-[80px]">앱설치</TableHead>
                                                             <SortHeader col="lastAccess" label="마지막 접속" className="w-[160px] min-w-[160px]" />
                                                             <TableHead className="w-[160px] min-w-[160px]">알림</TableHead>
                                                             <TableHead className="w-[160px] min-w-[160px]">관리</TableHead>
@@ -3810,7 +3821,7 @@ export default function Admin() {
                                                         ))}
                                                         {groups.length === 0 && (
                                                             <TableRow>
-                                                                <TableCell colSpan={7} className="h-24 text-center text-gray-500">
+                                                                <TableCell colSpan={10} className="h-24 text-center text-gray-500">
                                                                     일반 접속 기록이 없습니다.
                                                                 </TableCell>
                                                             </TableRow>
@@ -3862,6 +3873,11 @@ export default function Admin() {
                                                                             <TableCell>
                                                                                 {user.downloadCount && user.downloadCount > 0 ? (
                                                                                     <Badge variant="secondary" className="font-mono bg-green-50 text-green-700 border-green-200">{user.downloadCount}회</Badge>
+                                                                                ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                            </TableCell>
+                                                                            <TableCell>
+                                                                                {user.isStandalone ? (
+                                                                                    <Badge variant="secondary" className="font-mono bg-purple-50 text-purple-700 border-purple-200">설치됨</Badge>
                                                                                 ) : <span className="text-gray-400 text-xs">-</span>}
                                                                             </TableCell>
                                                                             <TableCell>{user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}</TableCell>
