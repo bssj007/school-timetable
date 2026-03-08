@@ -1262,7 +1262,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto relative">
+                  <div className="overflow-x-auto relative h-full flex flex-col">
                     {/* Select Electives Warning Overlay */}
                     {isElectiveMissingImmediate && (
                       <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
@@ -1281,7 +1281,7 @@ export default function Dashboard() {
                       </div>
                     )}
 
-                    <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
+                    <table className={`w-full min-h-full h-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
                       <thead>
                         <tr>
                           <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
@@ -1452,7 +1452,7 @@ export default function Dashboard() {
                                         <div className="mt-0.5 flex-shrink-0">
                                           <div className="flex flex-wrap gap-0.5 justify-center">
                                             {cellAssessments.map(a => (
-                                              <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white print:bg-gray-200 print:text-gray-700 print:font-bold border print:border-gray-400"}`} style={{ fontSize: 'var(--print-badge-size, inherit)' }}>
+                                              <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1.2cqh] print:font-bold border print:border-gray-400`}>
                                                 {a.description && a.description.includes("차") ? a.description : '평가'}
                                               </span>
                                             ))}
