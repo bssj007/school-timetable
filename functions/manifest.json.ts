@@ -40,25 +40,25 @@ export const onRequest = async (context: any) => {
             "theme_color": "#ffffff",
             "icons": [
                 {
-                    "src": appIconUrl,
+                    "src": "/api/app-icon",
                     "sizes": "192x192",
                     "type": iconType,
                     "purpose": "any"
                 },
                 {
-                    "src": appIconUrl,
+                    "src": "/api/app-icon",
                     "sizes": "512x512",
                     "type": iconType,
                     "purpose": "any"
                 },
                 {
-                    "src": appIconUrl,
+                    "src": "/api/app-icon",
                     "sizes": "192x192",
                     "type": iconType,
                     "purpose": "maskable"
                 },
                 {
-                    "src": appIconUrl,
+                    "src": "/api/app-icon",
                     "sizes": "512x512",
                     "type": iconType,
                     "purpose": "maskable"
