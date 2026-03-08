@@ -1,4 +1,4 @@
-const CACHE_NAME = 'school-timetable-v1';
+const CACHE_NAME = 'school-timetable-v2';
 const urlsToCache = [
     '/',
     '/index.html',

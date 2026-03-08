@@ -284,27 +284,39 @@ export const onRequest = async (context: any) => {
     context.waitUntil(Promise.all([logTrace(), runBackgroundTasks()]));
 
     // Edge HTML Rewriting for Dynamic Site Title
+    const pathname = url.pathname;
+    // Check if the route is an API, static asset, or file extension
+    const isApiRoute = pathname.startsWith('/api/');
+    const isAssetRoute = pathname.startsWith('/assets/') || pathname.match(/\.(js|css|png|jpe?g|gif|ico|svg|json|webmanifest)$/i);
     const contentType = response.headers.get("content-type") || "";
-    // Match any SPA path (no extension) or explicit HTML files
-    const isHtmlRoute = contentType.includes("text/html") || url.pathname === "/" || url.pathname.endsWith(".html") || !url.pathname.includes(".");
+
+    // Cloudflare Pages often serves SPA routes without an explicit .html extension.
+    // If it's not an API and not a static asset, it's highly likely an HTML page (like index.html).
+    const isHtmlRoute = !isApiRoute && !isAssetRoute && (contentType.includes("text/html") || pathname === "/" || !pathname.includes("."));
 
     if (env.DB && isHtmlRoute) {
         try {
             const titleRow = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'site_title'").first();
             const siteTitle = (titleRow && titleRow.value) ? (titleRow.value as string) : '수행 일정공유';
 
-            // Clone response to modify headers
-            const newResponse = new HTMLRewriter().on("title", {
+            // Transform the response stream first
+            const transformedResponse = new HTMLRewriter().on("title", {
                 element(element: any) {
                     element.setInnerContent(siteTitle);
                 }
+            }).on("head", {
+                element(element: any) {
+                    // Fallback: This correctly avoids overwriting existing title but appends if missing? 
+                    // Actually, appending blindly to head might duplicate. Let's stick to modifying <title>.
+                }
             }).transform(response);
 
-            // Add debug headers
-            newResponse.headers.set("X-Edge-Title-Injected", "true");
-            newResponse.headers.set("X-Edge-Title-Value", encodeURIComponent(siteTitle));
+            // Clone to modify headers safely
+            const finalResponse = new Response(transformedResponse.body, transformedResponse);
+            finalResponse.headers.set("X-Edge-Title-Injected", "true");
+            finalResponse.headers.set("X-Edge-Title-Value", encodeURIComponent(siteTitle));
 
-            return newResponse;
+            return finalResponse;
         } catch (e) {
             console.error("[Middleware] HTMLRewriter title injection failed:", e);
         }
