@@ -342,10 +342,16 @@
   }
 
   /* Print Themes */
-  #timetable-container[data-print-theme="color"] table,
-  #timetable-container[data-print-theme="pink"] table {
+  #timetable-container[data-print-theme="color"] *,
+  #timetable-container[data-print-theme="pink"] * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Simple Theme Overrides (Grayscale) */
+  #timetable-container[data-print-theme="simple"] table {
+    filter: grayscale(100%) !important;
   }
 
   /* Pink Theme Overrides */

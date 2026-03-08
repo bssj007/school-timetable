@@ -160,7 +160,7 @@ export default function Dashboard() {
   const PRINT_THEMES = [
     { id: 'simple', label: '심플' },
     { id: 'color', label: '컬러' },
-    { id: 'pink', label: '핑크' },
+    { id: 'pink', label: '핫핑크' },
   ];
   const [printPreset, setPrintPreset] = useState<string>('desk');
   const [printTheme, setPrintTheme] = useState<string>('simple');
@@ -173,6 +173,15 @@ export default function Dashboard() {
   const basePrintHeightCm = 27;
   const printScaleX = (parseFloat(printWidth) || basePrintWidthCm) / basePrintWidthCm;
   const printScaleY = (parseFloat(printHeight) || basePrintHeightCm) / basePrintHeightCm;
+
+  const resetPrintOptions = () => {
+    setPrintMode('select');
+    setIncludeAssessments(true);
+    setPrintPreset('desk');
+    setPrintTheme('simple');
+    setPrintWidth('9');
+    setPrintHeight('11');
+  };
 
   // PNG 다운로드 핸들러
   const handleDownloadPng = async () => {
@@ -208,10 +217,12 @@ export default function Dashboard() {
       link.click();
 
       toast.success("시간표 이미지가 저장되었습니다.");
+      resetPrintOptions();
     } catch (err) {
       document.body.classList.remove('capturing');
       console.error("이미지 저장 실패:", err);
       toast.error("이미지 저장 중 오류가 발생했습니다.");
+      resetPrintOptions();
     }
   };
 
@@ -220,6 +231,7 @@ export default function Dashboard() {
     setShowPrintOptions(false);
     setTimeout(() => {
       window.print();
+      resetPrintOptions();
     }, 100);
   };
 
@@ -1493,20 +1505,9 @@ export default function Dashboard() {
       <Dialog open={showPrintOptions} onOpenChange={(open) => {
         setShowPrintOptions(open);
         if (open) {
-          setPrintMode('select');
-          setIncludeAssessments(true);
-          setPrintPreset('desk');
-          setPrintTheme('simple');
-          setPrintWidth('9');
-          setPrintHeight('11');
+          resetPrintOptions();
         } else {
-          setTimeout(() => {
-            setPrintMode('select');
-            setPrintPreset('desk');
-            setPrintTheme('simple');
-            setPrintWidth('9');
-            setPrintHeight('11');
-          }, 300);
+          setTimeout(resetPrintOptions, 300);
         }
       }}>
         <DialogContent className="sm:max-w-[425px]">
