@@ -1955,9 +1955,11 @@ export default function Dashboard() {
                 )}
                 {isInstalling ? '설치 중...' : '성지수행 앱 다운로드'}
               </Button>
-              <p className="text-center text-xs text-gray-500 font-medium">
-                기기에 전용 앱으로 설치되며 앱 보관함에 추가됩니다!
-              </p>
+              {isSamsungBrowser && (
+                <p className="text-center text-[11px] text-red-500 font-medium">
+                  보안 경고창이 뜨면 <span className="font-bold underline">"세부정보 {'>'} 무시하고 설치"</span>를 누르면 됩니다.
+                </p>
+              )}
             </>
           )}
         </div>

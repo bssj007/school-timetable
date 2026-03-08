@@ -1,3 +1,4 @@
+/// <reference types="@cloudflare/workers-types" />
 import { createStudentProfilesTable, createIpProfilesTable } from "./db_schema";
 
 interface Env {
@@ -282,9 +283,23 @@ export const onRequest = async (context: any) => {
 
     context.waitUntil(Promise.all([logTrace(), runBackgroundTasks()]));
 
-    // Set Cookie if new
-    // Cookie setting removed as per user request
-    // if (newClientDetails) ...
+    // Edge HTML Rewriting for Dynamic Site Title
+    const contentType = response.headers.get("content-type");
+    if (env.DB && ((contentType && contentType.includes("text/html")) || url.pathname === "/" || url.pathname === "/index.html")) {
+        try {
+            const titleRow = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'site_title'").first();
+            if (titleRow && titleRow.value) {
+                const siteTitle = titleRow.value as string;
+                return new HTMLRewriter().on("title", {
+                    element(element: any) {
+                        element.setInnerContent(siteTitle);
+                    }
+                }).transform(response);
+            }
+        } catch (e) {
+            console.error("[Middleware] HTMLRewriter title injection failed:", e);
+        }
+    }
 
     return response;
 };
