@@ -909,7 +909,8 @@ export default function Dashboard() {
 
   const isElectiveMissingImmediate = !isElectiveEntered && (grade === "2" || grade === "3") && !!classNum && !!studentNumber;
   const isElectiveMissing = isElectiveMissingImmediate && showElectiveWarning;
-  const shouldShowPrintButton = !((grade === "2" || grade === "3") && !isElectiveEntered);
+  const isGradeAllowedToPrint = settings?.allow_print_by_grade?.includes(Number(grade)) ?? true;
+  const shouldShowPrintButton = !((grade === "2" || grade === "3") && !isElectiveEntered) && isGradeAllowedToPrint;
 
   const gradeColors: Record<string, string> = {
     "1": "#a6ff00",
@@ -1511,10 +1512,19 @@ export default function Dashboard() {
                                         <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
                                           {isCancelledByFreePeriod ? (
                                             <span className="print:flex print:flex-col print:items-center">
-                                              <span className="line-through opacity-60">{displaySubject}</span>
-                                              <span className={`ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
+                                              <span className="line-through opacity-60 flex-shrink-0 whitespace-nowrap">{displaySubject}</span>
+                                              <span className={`block md:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
                                             </span>
-                                          ) : <span>{displaySubject}</span>}
+                                          ) : (
+                                            displaySubject?.includes("공강") && displaySubject !== "공강" ? (
+                                              <span className="flex flex-col md:inline md:flex-row items-center">
+                                                <span>{displaySubject.replace("공강", "")}</span>
+                                                <span className="block md:inline md:ml-1">공강</span>
+                                              </span>
+                                            ) : (
+                                              <span>{displaySubject}</span>
+                                            )
+                                          )}
                                         </span>
                                       </div>
                                       <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">
@@ -1568,12 +1578,10 @@ export default function Dashboard() {
           <div className="flex flex-col gap-4 py-4">
             {printMode === 'select' ? (
               <>
-                {settings?.allow_png_download !== false && (
-                  <Button onClick={handleDownloadPng} className="w-full flex items-center justify-center gap-2 h-12">
-                    <ImageIcon className="w-5 h-5" />
-                    이미지(PNG)로 저장
-                  </Button>
-                )}
+                <Button onClick={handleDownloadPng} className="w-full flex items-center justify-center gap-2 h-12">
+                  <ImageIcon className="w-5 h-5" />
+                  이미지(PNG)로 저장
+                </Button>
                 <Button onClick={() => setPrintMode('printer')} variant="outline" className="w-full flex items-center justify-center gap-2 h-12">
                   <Printer className="w-5 h-5" />
                   프린터로 출력

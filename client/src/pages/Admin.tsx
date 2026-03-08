@@ -5436,7 +5436,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
 
 function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
-    const [allowDownload, setAllowDownload] = useState(true);
+    const [allowedGrades, setAllowedGrades] = useState<number[]>([1, 2, 3]);
     const [printSubjectFontSize, setPrintSubjectFontSize] = useState("large");
 
     const settingsQuery = useQuery({
@@ -5452,7 +5452,11 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
 
     const resetState = () => {
         if (settingsQuery.data) {
-            setAllowDownload(settingsQuery.data.allow_png_download !== 'false');
+            setAllowedGrades(
+                settingsQuery.data.allow_print_by_grade
+                    ? JSON.parse(settingsQuery.data.allow_print_by_grade)
+                    : [1, 2, 3]
+            );
             setPrintSubjectFontSize(settingsQuery.data.print_subject_font_size || 'large');
         }
     };
@@ -5486,9 +5490,17 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
 
     if (settingsQuery.isLoading) return <div className="p-4">설정을 불러오는 중...</div>;
 
-    const savedValue = settingsQuery.data?.allow_png_download !== 'false';
+    const savedValue = settingsQuery.data?.allow_print_by_grade
+        ? JSON.parse(settingsQuery.data.allow_print_by_grade)
+        : [1, 2, 3];
     const savedFontSize = settingsQuery.data?.print_subject_font_size || 'large';
-    const isDirty = (savedValue !== allowDownload) || (savedFontSize !== printSubjectFontSize);
+    const isDirty = (JSON.stringify(savedValue.sort()) !== JSON.stringify(allowedGrades.sort())) || (savedFontSize !== printSubjectFontSize);
+
+    const toggleGrade = (grade: number) => {
+        setAllowedGrades(prev =>
+            prev.includes(grade) ? prev.filter(g => g !== grade) : [...prev, grade]
+        );
+    };
 
     return (
         <Card className="w-full max-w-2xl">
@@ -5499,15 +5511,26 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-                <div className="flex items-center space-x-2 pt-4">
-                    <Switch
-                        id="allow-download"
-                        checked={allowDownload}
-                        onCheckedChange={setAllowDownload}
-                    />
-                    <Label htmlFor="allow-download" className="font-medium text-sm">
-                        시간표 이미지(PNG) 내려받기 기능 활성화
-                    </Label>
+                <div className="space-y-3 pt-4">
+                    <Label className="font-medium text-sm">인쇄/저장 허용 학년</Label>
+                    <p className="text-xs text-gray-500 mb-2">체크된 학년의 사용자만 메인 대시보드에서 시간표 인쇄 및 이미지(PNG) 저장 기능을 사용할 수 있습니다.</p>
+                    <div className="flex flex-col gap-3">
+                        {[1, 2, 3].map((grade) => (
+                            <div key={grade} className="flex items-center space-x-2">
+                                <Checkbox
+                                    id={`allow-print-grade-${grade}`}
+                                    checked={allowedGrades.includes(grade)}
+                                    onCheckedChange={() => toggleGrade(grade)}
+                                />
+                                <label
+                                    htmlFor={`allow-print-grade-${grade}`}
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                    {grade}학년 인쇄/저장 허용
+                                </label>
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="space-y-2 pt-4 border-t border-slate-100">
@@ -5528,7 +5551,7 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
                         변경 취소
                     </Button>
                     <Button onClick={() => saveMutation.mutate({
-                        allow_png_download: String(allowDownload),
+                        allow_print_by_grade: JSON.stringify(allowedGrades),
                         print_subject_font_size: printSubjectFontSize
                     })} disabled={!isDirty || saveMutation.isPending}>
                         {saveMutation.isPending ? "저장 중..." : "설정 저장"}

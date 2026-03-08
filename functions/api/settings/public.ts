@@ -7,7 +7,7 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size')").all();
+        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade')").all();
 
         const settings: any = {};
         if (rows && rows.results) {
@@ -46,7 +46,8 @@ export const onRequest = async (context: any) => {
             site_favicon_url: settings['site_favicon_url'] || '',
             pwa_app_title: settings['pwa_app_title'] || '성지수행',
             pwa_app_icon_url: settings['pwa_app_icon_url'] || settings['site_favicon_url'] || '/icon.svg',
-            allow_png_download: settings['allow_png_download'] !== 'false', // default true
+            allow_png_download: settings['allow_png_download'] !== 'false', // legacy
+            allow_print_by_grade: settings['allow_print_by_grade'] ? JSON.parse(settings['allow_print_by_grade']) : [1, 2, 3],
             print_subject_font_size: settings['print_subject_font_size'] || 'large',
         }), {
             headers: { 'Content-Type': 'application/json' }

@@ -18,6 +18,11 @@ export const onRequest = async (context: any) => {
         const appTitle = settings['pwa_app_title'] || '성지수행';
         const appIconUrl = settings['pwa_app_icon_url'] || settings['site_favicon_url'] || '/icon.svg';
 
+        // For SVG icons, the "sizes": "any" is the most robust way to ensure WebAPK accepts it.
+        // For PNGs, 192x192 and 512x512 are strictly required.
+        const isSvg = appIconUrl.startsWith('data:image/svg') || appIconUrl.endsWith('.svg');
+        const iconType = isSvg ? 'image/svg+xml' : 'image/png';
+
         const manifest = {
             "id": "/?source=pwa",
             "name": appTitle,
@@ -25,20 +30,42 @@ export const onRequest = async (context: any) => {
             "description": "부산성지고등학교 시간표 및 수행평가 관리 서비스",
             "start_url": "/?source=pwa",
             "display": "standalone",
+            "orientation": "portrait",
+            "categories": ["education", "productivity"],
+            "prefer_related_applications": false,
             "background_color": "#ffffff",
             "theme_color": "#ffffff",
-            "icons": [
+            "icons": isSvg ? [
+                {
+                    "src": appIconUrl,
+                    "sizes": "192x192 512x512 any",
+                    "type": "image/svg+xml",
+                    "purpose": "any maskable"
+                }
+            ] : [
                 {
                     "src": appIconUrl,
                     "sizes": "192x192",
-                    "type": appIconUrl.startsWith('data:image/svg') ? 'image/svg+xml' : (appIconUrl.startsWith('data:image/png') ? 'image/png' : 'image/png'),
-                    "purpose": "any maskable"
+                    "type": "image/png",
+                    "purpose": "any"
                 },
                 {
                     "src": appIconUrl,
                     "sizes": "512x512",
-                    "type": appIconUrl.startsWith('data:image/svg') ? 'image/svg+xml' : (appIconUrl.startsWith('data:image/png') ? 'image/png' : 'image/png'),
-                    "purpose": "any maskable"
+                    "type": "image/png",
+                    "purpose": "any"
+                },
+                {
+                    "src": appIconUrl,
+                    "sizes": "192x192",
+                    "type": "image/png",
+                    "purpose": "maskable"
+                },
+                {
+                    "src": appIconUrl,
+                    "sizes": "512x512",
+                    "type": "image/png",
+                    "purpose": "maskable"
                 }
             ]
         };
