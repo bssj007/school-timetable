@@ -1944,14 +1944,12 @@ export default function Dashboard() {
       </Dialog >
 
       {/* 모바일 전용 PWA 앱 다운로드 버튼 (설치 상태 및 환경에 따라 상태 변경) */}
-      {!isInAppBrowser && (
+      {!isInAppBrowser && settings?.pwa_install_button_visible !== false && (
         <div className="md:hidden mt-6 mb-2 space-y-2">
           {/* App Download for Normal Browsers (Chrome, etc.) vs Add to Home Screen for Samsung/In-App */}
           {isSamsungBrowser ? (
-            // For Samsung browsers (which have a buggy native PWA prompt),
-            // hide it ONLY if we are 100% sure they are inside the installed app (hasPwaCookie).
-            // We bypass `!isStandalone` here because some mobile browsers misreport standalone mode.
-            !hasPwaCookie && (
+            // For Samsung browsers: respect admin toggle from '미해결 문제' settings
+            !hasPwaCookie && settings?.samsung_install_button_visible !== false && (
               <>
                 <Button
                   onClick={handleInstallClick}

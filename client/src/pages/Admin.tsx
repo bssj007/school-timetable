@@ -2674,6 +2674,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <Download className="w-4 h-4 mr-2" />
                     내려받기 허용
                 </Button>
+                <Button
+                    variant={selectedMenu === "unresolved-issues" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-orange-600 hover:text-orange-700"
+                    onClick={() => setSelectedMenu("unresolved-issues")}
+                >
+                    <AlertCircle className="w-4 h-4 mr-2" />
+                    미해결 문제
+                </Button>
                 {/* Additional list items can go here later */}
             </div>
 
@@ -2833,6 +2841,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <AllowDownloadSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "unresolved-issues" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-orange-600">⚠️ 미해결 문제</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <SamsungInstallSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -5580,5 +5599,132 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
                 </div>
             </CardContent>
         </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
+// SamsungInstallSettings - Controls Samsung Internet PWA button visibility
+// Located under: 기타 > 미해결 문제
+// ----------------------------------------------------------------------
+function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    const { data: settingsData, isLoading } = useQuery({
+        queryKey: ["admin", "samsungInstallSettings"],
+        queryFn: async () => {
+            const res = await fetch("/api/settings/public");
+            if (!res.ok) throw new Error("설정 불러오기 실패");
+            return res.json();
+        }
+    });
+
+    const isSamsungButtonVisible = settingsData?.samsung_install_button_visible !== false;
+    const isPwaButtonVisible = settingsData?.pwa_install_button_visible !== false;
+
+    const saveSettingMutation = useMutation({
+        mutationFn: async (payload: Record<string, string>) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("저장 실패");
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "samsungInstallSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            toast.success("설정이 저장되었습니다.");
+        },
+        onError: () => {
+            toast.error("설정 저장에 실패했습니다.");
+        }
+    });
+
+    if (isLoading) {
+        return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
+    }
+
+    return (
+        <div className="space-y-6 p-1">
+            <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
+                <p className="font-semibold mb-1">⚠️ 미해결 문제: 삼성 인터넷 홈 화면 추가</p>
+                <p className="text-orange-700">
+                    삼성 인터넷에서 <strong>beforeinstallprompt</strong> 이벤트가 일관성 없이 발생합니다.
+                    현재 <code className="bg-orange-100 px-1 rounded">display: minimal-ui + display_override</code> 방식으로
+                    "Add to apps" / "Add to Home screen" 두 옵션을 제공 중입니다.
+                    버튼이 작동하지 않는 경우 아래에서 버튼을 숨길 수 있습니다.
+                </p>
+            </div>
+
+            {/* Global toggle - hides button for ALL browsers */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">앱 다운로드 버튼 전체 표시 (모든 브라우저)</CardTitle>
+                    <CardDescription>
+                        모든 브라우저에서 홈 화면 추가 / 앱 다운로드 버튼 표시 여부를 전체적으로 제어합니다.
+                        OFF 시 삼성 인터넷 토글은 무의미합니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center gap-4">
+                        <Switch
+                            id="pwa-install-button-toggle"
+                            checked={isPwaButtonVisible}
+                            onCheckedChange={(checked) => saveSettingMutation.mutate({ pwa_install_button_visible: checked ? "true" : "false" })}
+                            disabled={saveSettingMutation.isPending}
+                        />
+                        <Label htmlFor="pwa-install-button-toggle" className="cursor-pointer">
+                            {isPwaButtonVisible
+                                ? <span className="text-green-700 font-medium">✅ 버튼 표시 중 (전체 브라우저)</span>
+                                : <span className="text-gray-500 font-medium">🔴 전체 숨김</span>
+                            }
+                        </Label>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Samsung-specific toggle */}
+            <Card className={!isPwaButtonVisible ? "opacity-50 pointer-events-none" : ""}>
+                <CardHeader>
+                    <CardTitle className="text-base">삼성 인터넷 홈 화면 추가 버튼</CardTitle>
+                    <CardDescription>
+                        삼성 인터넷 사용자에게만 "홈 화면에 성지수행 추가" 버튼 표시 여부를 설정합니다.
+                        위의 전체 토글이 OFF이면 이 설정은 무시됩니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center gap-4">
+                        <Switch
+                            id="samsung-install-button-toggle"
+                            checked={isSamsungButtonVisible}
+                            onCheckedChange={(checked) => saveSettingMutation.mutate({ samsung_install_button_visible: checked ? "true" : "false" })}
+                            disabled={saveSettingMutation.isPending}
+                        />
+                        <Label htmlFor="samsung-install-button-toggle" className="cursor-pointer">
+                            {isSamsungButtonVisible
+                                ? <span className="text-green-700 font-medium">✅ 버튼 표시 중 (삼성 인터넷 사용자에게 보임)</span>
+                                : <span className="text-gray-500 font-medium">🔴 버튼 숨김</span>
+                            }
+                        </Label>
+                    </div>
+                    {saveSettingMutation.isPending && <p className="text-sm text-gray-400 mt-2">저장 중...</p>}
+                </CardContent>
+            </Card>
+
+            <Card className="border-dashed border-gray-300 bg-gray-50">
+                <CardContent className="pt-4">
+                    <p className="text-xs text-gray-500 font-semibold mb-2">📌 기술적 한계</p>
+                    <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
+                        <li><code>display: standalone</code> → "Add to apps" (WebAPK, Play Protect 경고 위험)</li>
+                        <li><code>display: minimal-ui</code>만 → 이벤트 발화 안 됨</li>
+                        <li><code>display_override: [standalone, minimal-ui]</code> → 두 옵션 표시 (현재)</li>
+                        <li>삼성 인터넷 버전/기기에 따라 결과가 다를 수 있음</li>
+                    </ul>
+                </CardContent>
+            </Card>
+        </div>
     );
 }
