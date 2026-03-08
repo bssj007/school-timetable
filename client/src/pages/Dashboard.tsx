@@ -1939,65 +1939,54 @@ export default function Dashboard() {
       </Dialog >
 
       {/* 모바일 전용 PWA 앱 다운로드 버튼 (설치 상태 및 환경에 따라 상태 변경) */}
-      <div className="md:hidden mt-6 mb-2 space-y-2">
-        {/* App Download for Normal Browsers (Chrome, etc.) vs Add to Home Screen for Samsung/In-App */}
-        {isSamsungBrowser || isInAppBrowser ? (
-          // For Samsung and In-App browsers (which don't support native PWA prompts well),
-          // hide it ONLY if we are 100% sure they are inside the installed app (hasPwaCookie).
-          // We bypass `!isStandalone` here because some mobile browsers misreport standalone mode.
-          !hasPwaCookie && (
-            <>
-              <Button
-                onClick={() => {
-                  toast("홈 화면에 추가 방법", {
-                    description: (
-                      <div className="mt-2 space-y-2 text-sm">
-                        <p>현재 브라우저는 앱 자동 설치를 지원하지 않습니다.</p>
-                        <p className="font-semibold text-blue-600">
-                          브라우저 메뉴(三 또는 ⋮) ➔ '홈 화면에 추가' 또는 '앱 화면에 추가'
-                        </p>
-                        <p>를 눌러 바탕화면에 바로가기를 생성해주세요.</p>
-                      </div>
-                    ),
-                    duration: 6000,
-                  });
-                }}
-                className="w-full h-14 bg-[#3DDC84] hover:bg-[#35c073] text-black font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 outline-none">
-                  <path d="M11 17h2v-6h-2v6Zm1-8q.425 0 .713-.288T13 8q0-.425-.288-.713T12 7q-.425 0-.713.288T11 8q0 .425.288.713T12 9Zm0 13q-2.075 0-3.9-.788t-3.175-2.137q-1.35-1.35-2.137-3.175T2 12q0-2.075.788-3.9t2.137-3.175q1.35-1.35 3.175-2.137T12 2q2.075 0 3.9.788t3.175 2.137q1.35 1.35 2.137 3.175T22 12q0 2.075-.788 3.9t-2.137 3.175q-1.35 1.35-3.175 2.137T12 22Z" />
-                </svg>
-                <span>{isSamsungBrowser ? '홈 화면에 성지수행 추가' : '성지수행 바로가기 추가'}</span>
-              </Button>
-              {isSamsungBrowser && (
-                <p className="text-center text-[11px] text-gray-500 font-medium">
-                  삼성 인터넷 사용자는 위 버튼을 눌러 추가 방법을 확인하세요.
-                </p>
-              )}
-            </>
-          )
-        ) : (
-          // Normal PWA Prompt (Chrome, Safari, etc.)
-          !hasPwaCookie && !isStandalone && (
-            <>
-              <Button
-                onClick={handleInstallClick}
-                disabled={isInstalling}
-                className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
-              >
-                {isInstalling ? (
-                  <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
-                ) : (
-                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
-                    <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
-                  </svg>
-                )}
-                <span>{isInstalling ? '설치 중...' : '성지수행 앱 다운로드'}</span>
-              </Button>
-            </>
-          )
-        )}
-      </div>
+      {!isInAppBrowser && (
+        <div className="md:hidden mt-6 mb-2 space-y-2">
+          {/* App Download for Normal Browsers (Chrome, etc.) vs Add to Home Screen for Samsung/In-App */}
+          {isSamsungBrowser ? (
+            // For Samsung browsers (which have a buggy native PWA prompt),
+            // hide it ONLY if we are 100% sure they are inside the installed app (hasPwaCookie).
+            // We bypass `!isStandalone` here because some mobile browsers misreport standalone mode.
+            !hasPwaCookie && (
+              <>
+                <Button
+                  onClick={handleInstallClick}
+                  disabled={isInstalling}
+                  className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
+                >
+                  {isInstalling ? (
+                    <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 outline-none">
+                      <path d="M11 17h2v-6h-2v6Zm1-8q.425 0 .713-.288T13 8q0-.425-.288-.713T12 7q-.425 0-.713.288T11 8q0 .425.288.713T12 9Zm0 13q-2.075 0-3.9-.788t-3.175-2.137q-1.35-1.35-2.137-3.175T2 12q0-2.075.788-3.9t2.137-3.175q1.35-1.35 3.175-2.137T12 2q2.075 0 3.9.788t3.175 2.137q1.35 1.35 2.137 3.175T22 12q0 2.075-.788 3.9t-2.137 3.175q-1.35 1.35-3.175 2.137T12 22Z" />
+                    </svg>
+                  )}
+                  <span>{isInstalling ? '설치 중...' : '홈 화면에 성지수행 추가'}</span>
+                </Button>
+              </>
+            )
+          ) : (
+            // Normal PWA Prompt (Chrome, Safari, etc.)
+            !hasPwaCookie && !isStandalone && (
+              <>
+                <Button
+                  onClick={handleInstallClick}
+                  disabled={isInstalling}
+                  className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
+                >
+                  {isInstalling ? (
+                    <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
+                      <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
+                    </svg>
+                  )}
+                  <span>{isInstalling ? '설치 중...' : '성지수행 앱 다운로드'}</span>
+                </Button>
+              </>
+            )
+          )}
+        </div>
+      )}
       {/* 수행평가 목록 */}
       <Card className="mt-8">
         <CardHeader>
