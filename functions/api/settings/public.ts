@@ -7,7 +7,7 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url')").all();
+        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'allow_png_download')").all();
 
         const settings: any = {};
         if (rows && rows.results) {
@@ -44,6 +44,7 @@ export const onRequest = async (context: any) => {
             site_title: settings['site_title'] || '',
             site_title_html: settings['site_title_html'] || '',
             site_favicon_url: settings['site_favicon_url'] || '',
+            allow_png_download: settings['allow_png_download'] !== 'false', // default true
         }), {
             headers: { 'Content-Type': 'application/json' }
         });

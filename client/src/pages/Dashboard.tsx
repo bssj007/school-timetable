@@ -1517,10 +1517,12 @@ export default function Dashboard() {
           <div className="flex flex-col gap-4 py-4">
             {printMode === 'select' ? (
               <>
-                <Button onClick={handleDownloadPng} className="w-full flex items-center justify-center gap-2 h-12">
-                  <ImageIcon className="w-5 h-5" />
-                  이미지(PNG)로 저장
-                </Button>
+                {settings?.allow_png_download !== false && (
+                  <Button onClick={handleDownloadPng} className="w-full flex items-center justify-center gap-2 h-12">
+                    <ImageIcon className="w-5 h-5" />
+                    이미지(PNG)로 저장
+                  </Button>
+                )}
                 <Button onClick={() => setPrintMode('printer')} variant="outline" className="w-full flex items-center justify-center gap-2 h-12">
                   <Printer className="w-5 h-5" />
                   프린터로 출력
