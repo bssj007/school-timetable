@@ -153,7 +153,7 @@ export default function Dashboard() {
   const isIOS = typeof window !== 'undefined' ? /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) : false;
   const isSamsungBrowser = typeof window !== 'undefined' ? /SamsungBrowser/i.test(navigator.userAgent) : false;
   const isInAppBrowser = typeof window !== 'undefined' ? /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent) : false;
-  const hasPwaCookie = typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1');
+  const [hasPwaCookie, setHasPwaCookie] = useState(typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1'));
 
   useEffect(() => {
     const standsAlone = window.matchMedia('(display-mode: standalone)').matches || ('standalone' in navigator && (navigator as any).standalone) === true;
@@ -162,6 +162,12 @@ export default function Dashboard() {
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      // Chrome fires this event natively ONLY if the app is NOT installed.
+      // If they uninstalled the app from the OS, clear any lingering standalone cookies immediately.
+      if (typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1')) {
+        document.cookie = "pwa_standalone=; max-age=0; path=/";
+        setHasPwaCookie(false);
+      }
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => {
@@ -1964,16 +1970,22 @@ export default function Dashboard() {
           ) : hasPwaCookie ? (
             <>
               <Button
-                disabled
-                className="w-full h-14 bg-gray-100 text-gray-500 font-bold text-lg rounded-xl shadow-inner flex items-center justify-center gap-2 cursor-not-allowed border border-gray-200"
+                onClick={() => {
+                  if (typeof document !== 'undefined') {
+                    document.cookie = "pwa_standalone=; max-age=0; path=/";
+                    setHasPwaCookie(false);
+                    toast.success("앱 다운로드 버튼이 다시 활성화되었습니다.");
+                  }
+                }}
+                className="w-full h-14 bg-gray-100 hover:bg-red-50 text-gray-500 hover:text-red-500 font-bold text-lg rounded-xl shadow-inner flex items-center justify-center gap-2 border border-gray-200 transition-colors"
               >
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-green-500">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                 </svg>
-                이미 설치됨
+                이미 설치됨 (버튼 다시 표시)
               </Button>
-              <p className="text-center text-xs text-gray-500 font-medium">
-                스마트폰에 앱이 이미 설치되어 있습니다. 앱을 실행해주세요!
+              <p className="text-center text-[11px] text-gray-500 font-medium">
+                스마트폰에 앱이 이미 깔려있다면 실행해주시고, 지웠다면 위 버튼을 눌러 상태를 초기화하세요.
               </p>
             </>
           ) : (

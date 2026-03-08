@@ -23,7 +23,10 @@ export const onRequest = async (context: any) => {
         const isSvg = appIconUrl.startsWith('data:image/svg') || appIconUrl.endsWith('.svg');
         const iconType = isSvg ? 'image/svg+xml' : 'image/png';
 
-        const manifest = {
+        const userAgent = context.request.headers.get('user-agent') || context.request.headers.get('User-Agent') || '';
+        const isSamsungBrowser = /SamsungBrowser/i.test(userAgent);
+
+        const manifest: any = {
             "id": "/?source=pwa",
             "name": appTitle,
             "short_name": appTitle,
@@ -69,6 +72,8 @@ export const onRequest = async (context: any) => {
                 }
             ]
         };
+
+
 
         return new Response(JSON.stringify(manifest), {
             headers: {
