@@ -187,11 +187,11 @@ export default function Dashboard() {
     } else {
       // Fallback instructions if native prompt is not available
       if (isIOS) {
-        toast.info("Safari 하단의 [공유] 버튼을 탭한 후 '홈 화면에 추가'를 선택해 PWA 앱을 설치해 주세요.", { duration: 5000 });
+        toast.info("Safari 하단의 [공유] 버튼을 탭한 후 '홈 화면에 추가'를 선택하면 앱 보관함에 설치됩니다.", { duration: 5000 });
       } else if (isSamsungBrowser) {
-        toast.info("화면 하단 메뉴(三)에서 '현재 페이지 추가' -> '홈 화면'을 선택해 PWA 앱을 설치해 주세요.", { duration: 6000 });
+        toast.info("화면 하단 메뉴(三)에서 '현재 페이지 추가' -> '앱 화면'을 선택해 전용 앱으로 기기에 설치해주세요.", { duration: 6000 });
       } else {
-        toast.info("크롬 우측 상단(⋮) 메뉴에서 '홈 화면에 추가' 또는 '앱 설치'를 클릭해 PWA 앱을 설치해 주세요.", { duration: 6000 });
+        toast.info("크롬 우측 상단(⋮) 메뉴에서 '앱 설치'를 클릭해 기기에 앱을 설치해주세요.", { duration: 6000 });
       }
     }
   };
@@ -2005,7 +2005,7 @@ export default function Dashboard() {
                 {isInstalling ? '설치 중...' : '성지수행 앱 다운로드'}
               </Button>
               <p className="text-center text-xs text-gray-500 font-medium">
-                홈 화면에 추가하면 전용 PWA 앱으로 설치됩니다!
+                기기에 전용 앱으로 설치되며 바탕화면 및 앱 보관함에 추가됩니다!
               </p>
             </>
           )}

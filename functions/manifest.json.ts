@@ -27,47 +27,40 @@ export const onRequest = async (context: any) => {
         const isSamsungBrowser = /SamsungBrowser/i.test(userAgent);
 
         const manifest: any = {
-            "id": "/?source=pwa",
+            "id": "/",
             "name": appTitle,
             "short_name": appTitle,
             "description": "부산성지고등학교 시간표 및 수행평가 관리 서비스",
-            "start_url": "/?source=pwa",
+            "start_url": "/",
             "display": "standalone",
             "orientation": "portrait",
             "categories": ["education", "productivity"],
             "prefer_related_applications": false,
             "background_color": "#ffffff",
             "theme_color": "#ffffff",
-            "icons": isSvg ? [
-                {
-                    "src": appIconUrl,
-                    "sizes": "192x192 512x512 any",
-                    "type": "image/svg+xml",
-                    "purpose": "any maskable"
-                }
-            ] : [
+            "icons": [
                 {
                     "src": appIconUrl,
                     "sizes": "192x192",
-                    "type": "image/png",
+                    "type": iconType,
                     "purpose": "any"
                 },
                 {
                     "src": appIconUrl,
                     "sizes": "512x512",
-                    "type": "image/png",
+                    "type": iconType,
                     "purpose": "any"
                 },
                 {
                     "src": appIconUrl,
                     "sizes": "192x192",
-                    "type": "image/png",
+                    "type": iconType,
                     "purpose": "maskable"
                 },
                 {
                     "src": appIconUrl,
                     "sizes": "512x512",
-                    "type": "image/png",
+                    "type": iconType,
                     "purpose": "maskable"
                 }
             ]
