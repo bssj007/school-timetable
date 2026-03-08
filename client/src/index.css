@@ -395,12 +395,32 @@
     --print-badge-size: 1.2cqh;
   }
 
-  #timetable-container td .text-\[11px\],
+  /* Performance Badges */
+  #timetable-container td .print\:text-\[1cqh\] {
+    font-size: 1.2cqh !important;
+  }
+
+  /* Teacher and class names */
   #timetable-container td .text-\[10px\],
-  #timetable-container td .text-\[9px\],
-  #timetable-container td .text-xs,
-  #timetable-container td .text-sm {
+  #timetable-container td .text-xs {
     font-size: 2cqh !important;
+    line-height: normal !important;
+  }
+
+  /* Subject names dynamically sized by Character Length */
+  #timetable-container td .text-\[9px\] {
+    font-size: 2.4cqh !important;
+    line-height: normal !important;
+  }
+
+  #timetable-container td .text-\[11px\] {
+    font-size: 2.8cqh !important;
+    line-height: normal !important;
+  }
+
+  #timetable-container td .text-sm,
+  #timetable-container td .md\:text-base {
+    font-size: 3.2cqh !important;
     line-height: normal !important;
   }
 
