@@ -231,8 +231,29 @@
 
 /* Print Styles */
 @media print {
+
+  html,
+  body {
+    width: 100% !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
   body * {
     visibility: hidden;
+  }
+
+  /* Ensure all parents implicitly have 100% height for stretch to work */
+  #root {
+    width: 100% !important;
+    height: 100vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex-grow: 1 !important;
   }
 
   #print-wrapper,
@@ -241,25 +262,36 @@
   }
 
   #print-wrapper {
-    position: absolute;
-    left: 0;
-    top: 0;
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
     width: var(--print-width, 19cm) !important;
+    min-height: var(--print-height, 27cm) !important;
     height: var(--print-height, 27cm) !important;
-    overflow: hidden;
+    max-height: var(--print-height, 27cm) !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: grid !important;
+    grid-template-rows: 1fr !important;
+    box-sizing: border-box !important;
   }
 
   #timetable-container {
-    width: 19cm !important;
-    height: 27cm !important;
-    transform: scaleX(var(--scale-x, 1)) scaleY(var(--scale-y, 1));
-    transform-origin: top left;
-    padding: 0.5cm;
+    container-type: size;
+    container-name: timetable;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    padding: 3cqh;
     background: white;
     box-shadow: none !important;
     border: none !important;
-    display: flex !important;
-    flex-direction: column;
+    display: grid !important;
+    grid-template-rows: auto 1fr !important;
+    /* Header vs Table area */
+    align-items: stretch !important;
+    box-sizing: border-box !important;
   }
 
   .no-print {
@@ -267,22 +299,20 @@
   }
 
   /* Exclude visual effects for printing as requested, but keep assessment backgrounds */
-  #timetable-container td,
-  #timetable-container div,
-  #timetable-container .bg-red-50,
-  #timetable-container .bg-yellow-50,
-  #timetable-container .bg-gray-200 {
+  #timetable-container[data-print-theme="simple"] td,
+  #timetable-container[data-print-theme="simple"] div,
+  #timetable-container[data-print-theme="simple"] .bg-red-50,
+  #timetable-container[data-print-theme="simple"] .bg-yellow-50,
+  #timetable-container[data-print-theme="simple"] .bg-gray-200 {
     background-color: transparent !important;
     box-shadow: none !important;
     animation: none !important;
   }
 
   /* Keep blue background for assessments during print */
-  #timetable-container .bg-blue-100 {
+  #timetable-container[data-print-theme="simple"] .bg-blue-100 {
     background-color: #dbeafe !important;
-    /* Tailwind blue-100 */
     border-color: #93c5fd !important;
-    /* Tailwind blue-300 */
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     box-shadow: none !important;
@@ -291,19 +321,140 @@
 
   #timetable-container table {
     width: 100% !important;
-    height: calc(100% - 3cm) !important;
+    height: 100% !important;
+    flex-grow: 1 !important;
     border-collapse: collapse !important;
+    table-layout: fixed !important;
+  }
+
+  #timetable-container tbody tr {
+    height: 14.285% !important;
+    /* Distribute evenly across 7 periods */
   }
 
   #timetable-container th,
   #timetable-container td {
     border: 1px solid black !important;
     color: black !important;
+    height: 4cqh !important;
+    /* Min height buffer */
+    padding: 0.5cqh !important;
+  }
+
+  /* Print Themes */
+  #timetable-container[data-print-theme="color"] *,
+  #timetable-container[data-print-theme="pink"] * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Simple Theme Overrides (Grayscale) */
+  #timetable-container[data-print-theme="simple"] table {
+    filter: grayscale(100%) !important;
+  }
+
+  /* Pink Theme Overrides */
+  #timetable-container[data-print-theme="pink"] th,
+  #timetable-container[data-print-theme="pink"] td {
+    border: 1px solid #f9a8d4 !important;
+    background-color: #fdf2f8 !important;
+    color: #831843 !important;
+  }
+
+  #timetable-container[data-print-theme="pink"] th {
+    background-color: #fce7f3 !important;
+    color: #9d174d !important;
+  }
+
+  #timetable-container[data-print-theme="pink"] td span.print\:bg-gray-200 {
+    background-color: #fbcfe8 !important;
+    color: #831843 !important;
+    border-color: #f9a8d4 !important;
+  }
+
+  /* Fluid typography proportional to the container's height */
+  #timetable-container th .text-sm {
+    font-size: 3cqh !important;
+    line-height: normal !important;
+  }
+
+  #timetable-container th .text-\[10px\],
+  #timetable-container th .text-xs {
+    font-size: 1.8cqh !important;
+    line-height: normal !important;
+  }
+
+  #timetable-container td .font-bold {
+    font-size: 2.8cqh !important;
+    line-height: normal !important;
+  }
+
+  /* Target dynamically sized badge under teacher */
+  #timetable-container td span {
+    --print-badge-size: 1.2cqh;
+  }
+
+  /* Performance Badges */
+  #timetable-container td .print\:text-\[1cqh\] {
+    font-size: 1.2cqh !important;
+  }
+
+  /* Teacher and class names */
+  #timetable-container td .text-\[10px\],
+  #timetable-container td .text-xs {
+    font-size: 2cqh !important;
+    line-height: normal !important;
+  }
+
+  /* Subject names dynamically sized by Character Length - MEDIUM (조금 크게) */
+  #timetable-container[data-print-font-size="medium"] td .text-\[9px\] {
+    font-size: 2.2cqh !important;
+    line-height: normal !important;
+  }
+
+  #timetable-container[data-print-font-size="medium"] td .text-\[11px\] {
+    font-size: 2.4cqh !important;
+    line-height: normal !important;
+  }
+
+  #timetable-container[data-print-font-size="medium"] td .text-sm,
+  #timetable-container[data-print-font-size="medium"] td .md\:text-base {
+    font-size: 2.6cqh !important;
+    line-height: normal !important;
+  }
+
+  /* Subject names dynamically sized by Character Length - LARGE (크게) */
+  #timetable-container[data-print-font-size="large"] td .text-\[9px\] {
+    font-size: 2.4cqh !important;
+    line-height: normal !important;
+  }
+
+  #timetable-container[data-print-font-size="large"] td .text-\[11px\] {
+    font-size: 2.8cqh !important;
+    line-height: normal !important;
+  }
+
+  #timetable-container[data-print-font-size="large"] td .text-sm,
+  #timetable-container[data-print-font-size="large"] td .md\:text-base {
+    font-size: 3.2cqh !important;
+    line-height: normal !important;
   }
 
   .capture-only {
     display: block !important;
-    margin-bottom: 0.5cm;
+    margin-bottom: 2cqh !important;
+  }
+
+  .capture-only .text-sm {
+    font-size: 3cqh !important;
+    line-height: normal !important;
+  }
+
+  .capture-only .text-\[10px\],
+  .capture-only .text-xs {
+    font-size: 1.8cqh !important;
+    line-height: normal !important;
   }
 }
 
@@ -335,6 +486,15 @@ body.capturing #timetable-container {
   z-index: 9999 !important;
   pointer-events: none !important;
   /* Prevent hover state capture */
+}
+
+/* Print/Capturing inline display utilities */
+body.capturing .hide-in-print {
+  display: none !important;
+}
+
+body.capturing .show-in-print {
+  display: inline-block !important;
 }
 
 /* Suppress all hover effects during capture */

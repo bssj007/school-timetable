@@ -150,8 +150,22 @@ export default function Dashboard() {
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printMode, setPrintMode] = useState<'select' | 'printer'>('select');
   const [includeAssessments, setIncludeAssessments] = useState(true);
-  const [printWidth, setPrintWidth] = useState<string>(DEFAULT_PRINT_WIDTH);
-  const [printHeight, setPrintHeight] = useState<string>(DEFAULT_PRINT_HEIGHT);
+
+  // Preset Constants
+  const PRINT_PRESETS = [
+    { id: 'desk', label: '책상용', width: '9', height: '11' },
+    { id: 'pencil', label: '필통용', width: '9', height: '8' },
+    { id: 'large', label: '대형', width: '17', height: '20' },
+  ];
+  const PRINT_THEMES = [
+    { id: 'simple', label: '심플' },
+    { id: 'color', label: '컬러' },
+    { id: 'pink', label: '핫핑크' },
+  ];
+  const [printPreset, setPrintPreset] = useState<string>('desk');
+  const [printTheme, setPrintTheme] = useState('color');
+  const [printWidth, setPrintWidth] = useState<string>('9');
+  const [printHeight, setPrintHeight] = useState<string>('11');
   const timetableRef = useRef<HTMLDivElement>(null);
 
   // Compute print scales relative to a standard printable A4 area (roughly 19cm x 27cm)
@@ -159,6 +173,15 @@ export default function Dashboard() {
   const basePrintHeightCm = 27;
   const printScaleX = (parseFloat(printWidth) || basePrintWidthCm) / basePrintWidthCm;
   const printScaleY = (parseFloat(printHeight) || basePrintHeightCm) / basePrintHeightCm;
+
+  const resetPrintOptions = () => {
+    setPrintMode('select');
+    setIncludeAssessments(true);
+    setPrintPreset('desk');
+    setPrintTheme('color');
+    setPrintWidth('9');
+    setPrintHeight('11');
+  };
 
   // PNG 다운로드 핸들러
   const handleDownloadPng = async () => {
@@ -194,10 +217,12 @@ export default function Dashboard() {
       link.click();
 
       toast.success("시간표 이미지가 저장되었습니다.");
+      resetPrintOptions();
     } catch (err) {
       document.body.classList.remove('capturing');
       console.error("이미지 저장 실패:", err);
       toast.error("이미지 저장 중 오류가 발생했습니다.");
+      resetPrintOptions();
     }
   };
 
@@ -206,6 +231,7 @@ export default function Dashboard() {
     setShowPrintOptions(false);
     setTimeout(() => {
       window.print();
+      resetPrintOptions();
     }, 100);
   };
 
@@ -375,7 +401,7 @@ export default function Dashboard() {
         if (typeof data.electives === 'string') {
           try {
             data.electives = JSON.parse(data.electives);
-          } catch (e) { }
+          } catch { }
         }
       }
       return data;
@@ -762,9 +788,10 @@ export default function Dashboard() {
 
   const electiveSummary = useMemo(() => {
     if (!currentProfile?.electives) return "";
-    return Object.values(currentProfile.electives)
-      .map(e => e.subject)
-      .filter(Boolean)
+    return Object.entries(currentProfile.electives)
+      .filter(([_, e]: [string, any]) => e && e.subject)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([group, e]: [string, any]) => `${group}: ${e.subject}`)
       .join(", ");
   }, [currentProfile]);
 
@@ -1229,24 +1256,30 @@ export default function Dashboard() {
             <CardContent className="px-1 pb-1 md:px-2 md:pb-2">
               <div id="print-wrapper" style={{
                 '--print-width': `${parseFloat(printWidth) || 10}cm`,
-                '--print-height': `${parseFloat(printHeight) || 10}cm`,
-                '--scale-x': printScaleX,
-                '--scale-y': printScaleY
+                '--print-height': `${parseFloat(printHeight) || 10}cm`
               } as React.CSSProperties}>
-                <div ref={timetableRef} id="timetable-container">
+                <style type="text/css" media="print">
+                  {`
+                    @page {
+                      size: ${parseFloat(printWidth) || 10}cm ${parseFloat(printHeight) || 10}cm;
+                      margin: 0;
+                    }
+                  `}
+                </style>
+                <div ref={timetableRef} id="timetable-container" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
                   {/* Print Capture Header */}
                   <div className="capture-only mb-1.5 p-1.5 border rounded-md text-black flex flex-col gap-0.5">
                     <div className="flex justify-between items-end border-b pb-0.5 mb-0.5">
                       <div className="text-sm font-bold leading-none">
-                        [학생용] {schoolName} {grade}학년 {classNum}반
+                        {grade}학년 {classNum}반 {studentNumber || '?'}번
                       </div>
                       <div className="text-[10px] text-gray-600 leading-none">
-                        발급일시: {new Date().toLocaleString('ko-KR')} (수행평가는 출력 시점 기준)
+                        발급일자: {new Date().toLocaleDateString('ko-KR')} (수행평가는 출력 시점 기준)
                       </div>
                     </div>
                     <div className="flex justify-between items-center">
                       <div className="text-xs font-medium leading-none">
-                        이름 (학번): _______________ ({formattedStudentId})
+                        학번: {formattedStudentId}
                       </div>
                       {grade !== "1" && (
                         <div className="text-[10px] text-gray-700 leading-none truncate max-w-[50%] text-right">
@@ -1256,7 +1289,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto relative">
+                  <div className="overflow-x-auto relative h-full flex flex-col">
                     {/* Select Electives Warning Overlay */}
                     {isElectiveMissingImmediate && (
                       <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
@@ -1275,7 +1308,7 @@ export default function Dashboard() {
                       </div>
                     )}
 
-                    <table className={`w-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
+                    <table className={`w-full min-h-full h-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
                       <thead>
                         <tr>
                           <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
@@ -1329,7 +1362,7 @@ export default function Dashboard() {
                               }) : [];
 
                               // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
-                              const bgColor = cellAssessments.length > 0
+                              const bgColor = (includeAssessments && cellAssessments.length > 0)
                                 ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
                                 : isToday
                                   ? "bg-red-50 hover:bg-red-100"
@@ -1422,17 +1455,13 @@ export default function Dashboard() {
                                   {item || isElectiveActive ? (
                                     <div className="flex flex-col items-center justify-center h-full min-h-0">
                                       <div
-                                        className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}
-                                        style={{
-                                          fontSize: (displaySubject || "").length > 6 ? '9px' : (displaySubject || "").length > 4 ? '11px' : undefined,
-                                          wordBreak: (displaySubject || "").length > 6 ? 'keep-all' : undefined,
-                                        }}
+                                        className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"} ${(displaySubject || "").length > 6 ? 'text-[9px] break-keep' : (displaySubject || "").length > 4 ? 'text-[11px]' : ''}`}
                                       >
                                         <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
                                           {isCancelledByFreePeriod ? (
-                                            <span>
+                                            <span className="print:flex print:flex-col print:items-center">
                                               <span className="line-through opacity-60">{displaySubject}</span>
-                                              <span className={`ml-1 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"}`}>(공강)</span>
+                                              <span className={`ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
                                             </span>
                                           ) : <span>{displaySubject}</span>}
                                         </span>
@@ -1446,7 +1475,7 @@ export default function Dashboard() {
                                         <div className="mt-0.5 flex-shrink-0">
                                           <div className="flex flex-wrap gap-0.5 justify-center">
                                             {cellAssessments.map(a => (
-                                              <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"}`}>
+                                              <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
                                                 {a.description && a.description.includes("차") ? a.description : '평가'}
                                               </span>
                                             ))}
@@ -1475,8 +1504,10 @@ export default function Dashboard() {
       {/* Print Options Dialog */}
       <Dialog open={showPrintOptions} onOpenChange={(open) => {
         setShowPrintOptions(open);
-        if (!open) {
-          setTimeout(() => setPrintMode('select'), 300);
+        if (open) {
+          resetPrintOptions();
+        } else {
+          setTimeout(resetPrintOptions, 300);
         }
       }}>
         <DialogContent className="sm:max-w-[425px]">
@@ -1486,10 +1517,12 @@ export default function Dashboard() {
           <div className="flex flex-col gap-4 py-4">
             {printMode === 'select' ? (
               <>
-                <Button onClick={handleDownloadPng} className="w-full flex items-center justify-center gap-2 h-12">
-                  <ImageIcon className="w-5 h-5" />
-                  이미지(PNG)로 저장
-                </Button>
+                {settings?.allow_png_download !== false && (
+                  <Button onClick={handleDownloadPng} className="w-full flex items-center justify-center gap-2 h-12">
+                    <ImageIcon className="w-5 h-5" />
+                    이미지(PNG)로 저장
+                  </Button>
+                )}
                 <Button onClick={() => setPrintMode('printer')} variant="outline" className="w-full flex items-center justify-center gap-2 h-12">
                   <Printer className="w-5 h-5" />
                   프린터로 출력
@@ -1516,13 +1549,31 @@ export default function Dashboard() {
               </>
             ) : (
               <>
+                <div className="flex gap-2 justify-center mb-4">
+                  {PRINT_PRESETS.map(preset => (
+                    <button
+                      key={preset.id}
+                      onClick={() => {
+                        setPrintPreset(preset.id);
+                        setPrintWidth(preset.width);
+                        setPrintHeight(preset.height);
+                      }}
+                      className={`px-4 py-1.5 rounded-full text-xs font-bold border transition-colors ${printPreset === preset.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
                 <div className="flex gap-4 items-center">
                   <div className="flex-1 space-y-1">
                     <label className="text-sm font-medium">가로 크기 (cm)</label>
                     <Input
                       type="number"
                       value={printWidth}
-                      onChange={(e) => setPrintWidth(e.target.value)}
+                      onChange={(e) => {
+                        setPrintWidth(e.target.value);
+                        setPrintPreset('custom');
+                      }}
                       step="0.1"
                     />
                   </div>
@@ -1531,12 +1582,31 @@ export default function Dashboard() {
                     <Input
                       type="number"
                       value={printHeight}
-                      onChange={(e) => setPrintHeight(e.target.value)}
+                      onChange={(e) => {
+                        setPrintHeight(e.target.value);
+                        setPrintPreset('custom');
+                      }}
                       step="0.1"
                     />
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-4 items-center">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-sm font-medium">디자인 테마</label>
+                    <div className="flex bg-gray-100 rounded-lg p-1 border">
+                      {PRINT_THEMES.map(theme => (
+                        <button
+                          key={theme.id}
+                          onClick={() => setPrintTheme(theme.id)}
+                          className={`flex-1 flex items-center justify-center py-1.5 text-xs font-bold rounded-md transition-colors ${printTheme === theme.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                          {theme.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4">
                   <Button variant="outline" onClick={() => setPrintMode('select')} className="flex-1 h-12">
                     이전
                   </Button>
@@ -1546,7 +1616,7 @@ export default function Dashboard() {
                   </Button>
                 </div>
                 <p className="text-xs font-medium text-gray-500 text-center mt-2 flex flex-col items-center">
-                  <span className="text-red-500 mt-1">* 기본 <strong>{DEFAULT_PRINT_WIDTH}x{DEFAULT_PRINT_HEIGHT}cm</strong> 기준. 숫자를 조절하여 여백을 맞출 수 있습니다.</span>
+                  <span className="text-red-500 mt-1">* 수동으로 숫자를 조절하여 여백을 맞출 수 있습니다.</span>
                 </p>
               </>
             )}

@@ -2580,6 +2580,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <TrendingUp className="w-4 h-4 mr-2" />
                     접속자 추이
                 </Button>
+                <Button
+                    variant={selectedMenu === "allow-download-settings" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("allow-download-settings")}
+                >
+                    <Download className="w-4 h-4 mr-2" />
+                    내려받기 허용
+                </Button>
                 {/* Additional list items can go here later */}
             </div>
 
@@ -2728,6 +2736,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <VisitorTrends adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "allow-download-settings" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">프린트 및 내려받기 설정</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <AllowDownloadSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -5272,5 +5291,110 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [allowDownload, setAllowDownload] = useState(true);
+    const [printSubjectFontSize, setPrintSubjectFontSize] = useState("large");
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "allowDownload"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        },
+    });
+
+    const resetState = () => {
+        if (settingsQuery.data) {
+            setAllowDownload(settingsQuery.data.allow_png_download !== 'false');
+            setPrintSubjectFontSize(settingsQuery.data.print_subject_font_size || 'large');
+        }
+    };
+
+    useEffect(() => {
+        resetState();
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (newData: any) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(newData),
+            });
+            if (!res.ok) throw new Error("Failed to save settings");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("프린트 및 내려받기 설정이 저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+        },
+        onError: (err) => {
+            toast.error(`저장 실패: ${err.message}`);
+        },
+    });
+
+    if (settingsQuery.isLoading) return <div className="p-4">설정을 불러오는 중...</div>;
+
+    const savedValue = settingsQuery.data?.allow_png_download !== 'false';
+    const savedFontSize = settingsQuery.data?.print_subject_font_size || 'large';
+    const isDirty = (savedValue !== allowDownload) || (savedFontSize !== printSubjectFontSize);
+
+    return (
+        <Card className="w-full max-w-2xl">
+            <CardHeader>
+                <CardTitle>프린트 및 내려받기 설정</CardTitle>
+                <CardDescription>
+                    일반 사용자가 메인 대시보드에서 시간표를 이미지(PNG)로 저장할 수 있도록 허용할지 여부와 인쇄 시 적용할 글꼴 크기를 설정합니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="flex items-center space-x-2 pt-4">
+                    <Switch
+                        id="allow-download"
+                        checked={allowDownload}
+                        onCheckedChange={setAllowDownload}
+                    />
+                    <Label htmlFor="allow-download" className="font-medium text-sm">
+                        시간표 이미지(PNG) 내려받기 기능 활성화
+                    </Label>
+                </div>
+
+                <div className="space-y-2 pt-4 border-t border-slate-100">
+                    <Label className="font-medium text-sm">프린트 과목명 글자 크기</Label>
+                    <Select value={printSubjectFontSize} onValueChange={setPrintSubjectFontSize}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="과목명 크기 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="medium">조금 크게 (1단계 설정)</SelectItem>
+                            <SelectItem value="large">매우 크게 (2단계 설정, 기본값)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                    <Button variant="outline" onClick={resetState} disabled={!isDirty || saveMutation.isPending}>
+                        변경 취소
+                    </Button>
+                    <Button onClick={() => saveMutation.mutate({
+                        allow_png_download: String(allowDownload),
+                        print_subject_font_size: printSubjectFontSize
+                    })} disabled={!isDirty || saveMutation.isPending}>
+                        {saveMutation.isPending ? "저장 중..." : "설정 저장"}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
     );
 }
