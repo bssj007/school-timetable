@@ -284,18 +284,27 @@ export const onRequest = async (context: any) => {
     context.waitUntil(Promise.all([logTrace(), runBackgroundTasks()]));
 
     // Edge HTML Rewriting for Dynamic Site Title
-    const contentType = response.headers.get("content-type");
-    if (env.DB && ((contentType && contentType.includes("text/html")) || url.pathname === "/" || url.pathname === "/index.html")) {
+    const contentType = response.headers.get("content-type") || "";
+    // Match any SPA path (no extension) or explicit HTML files
+    const isHtmlRoute = contentType.includes("text/html") || url.pathname === "/" || url.pathname.endsWith(".html") || !url.pathname.includes(".");
+
+    if (env.DB && isHtmlRoute) {
         try {
             const titleRow = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'site_title'").first();
-            if (titleRow && titleRow.value) {
-                const siteTitle = titleRow.value as string;
-                return new HTMLRewriter().on("title", {
-                    element(element: any) {
-                        element.setInnerContent(siteTitle);
-                    }
-                }).transform(response);
-            }
+            const siteTitle = (titleRow && titleRow.value) ? (titleRow.value as string) : '수행 일정공유';
+
+            // Clone response to modify headers
+            const newResponse = new HTMLRewriter().on("title", {
+                element(element: any) {
+                    element.setInnerContent(siteTitle);
+                }
+            }).transform(response);
+
+            // Add debug headers
+            newResponse.headers.set("X-Edge-Title-Injected", "true");
+            newResponse.headers.set("X-Edge-Title-Value", encodeURIComponent(siteTitle));
+
+            return newResponse;
         } catch (e) {
             console.error("[Middleware] HTMLRewriter title injection failed:", e);
         }
