@@ -131,6 +131,7 @@ export const onRequest = async (context: any) => {
                     modificationCount: p.modificationCount || 0,
                     printCount: p.printCount || 0,
                     downloadCount: p.downloadCount || 0,
+                    isStandalone: p.isStandalone === 1,
                     lastAccess: p.lastAccess,
                     recentUserAgents: p.userAgent ? [p.userAgent] : [],
                     grade: p.profileGrade || null,

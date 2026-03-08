@@ -22,43 +22,13 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Android WebAPK Auto-Redirect (Only fires in non-standalone browser mode to avoid infinite loops)
+// Detect Android environment for specific behaviors if needed later
 if (typeof window !== 'undefined') {
-  const isAndroid = /android/i.test(navigator.userAgent);
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
-  const isInAppBrowser = /KAKAOTALK|NAVER|FBAN|FBAV|Instagram|Line|Twitter|DaumApp/i.test(navigator.userAgent);
-  const isSamsungBrowser = /SamsungBrowser/i.test(navigator.userAgent);
-
-  const hasPwaCookie = typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1');
 
   // Track PWA Installation Status
   if (isStandalone) {
     document.cookie = "pwa_standalone=1; max-age=31536000; path=/";
-  }
-
-  // If on Android, in a standard browser, and not already standalone, attempt to launch intent
-  if (isAndroid && !isStandalone && !isInAppBrowser) {
-    const attempted = sessionStorage.getItem('pwa_redirect_attempted');
-
-    // If we KNOW they installed it (has cookie), or if it's their first time loading in Chrome
-    if (hasPwaCookie || (!attempted && !isSamsungBrowser)) {
-      if (!attempted) {
-        sessionStorage.setItem('pwa_redirect_attempted', 'true');
-        const fallbackUrl = encodeURIComponent(window.location.href);
-        const host = window.location.host;
-        const protocol = window.location.protocol.replace(':', '');
-
-        // If we know they have it, we use a generic intent to let Android pick the WebAPK regardless of browser (Chrome/Samsung).
-        // If we don't know, we target Chrome specifically to handle the "Add to Homescreen" prompt seamlessly.
-        const intentUrl = hasPwaCookie
-          ? `intent://${host}/#Intent;scheme=${protocol};S.browser_fallback_url=${fallbackUrl};end`
-          : `intent://${host}/#Intent;scheme=${protocol};package=com.android.chrome;S.browser_fallback_url=${fallbackUrl};end`;
-
-        setTimeout(() => {
-          window.location.href = intentUrl;
-        }, 100);
-      }
-    }
   }
 }
 
