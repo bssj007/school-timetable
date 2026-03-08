@@ -231,6 +231,16 @@
 
 /* Print Styles */
 @media print {
+
+  html,
+  body {
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   body * {
     visibility: hidden;
   }
@@ -241,12 +251,14 @@
   }
 
   #print-wrapper {
-    position: absolute;
-    left: 0;
-    top: 0;
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
     width: var(--print-width, 19cm) !important;
     height: var(--print-height, 27cm) !important;
-    overflow: hidden;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   #timetable-container {
@@ -289,8 +301,14 @@
 
   #timetable-container table {
     width: 100% !important;
+    height: auto !important;
     flex-grow: 1;
     border-collapse: collapse !important;
+  }
+
+  #timetable-container tbody tr {
+    height: 14.285% !important;
+    /* Distribute evenly across 7 periods */
   }
 
   #timetable-container th,
@@ -372,6 +390,15 @@ body.capturing #timetable-container {
   z-index: 9999 !important;
   pointer-events: none !important;
   /* Prevent hover state capture */
+}
+
+/* Print/Capturing inline display utilities */
+body.capturing .hide-in-print {
+  display: none !important;
+}
+
+body.capturing .show-in-print {
+  display: inline-block !important;
 }
 
 /* Suppress all hover effects during capture */
