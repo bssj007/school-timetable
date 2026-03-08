@@ -1461,7 +1461,7 @@ export default function Dashboard() {
                                           {isCancelledByFreePeriod ? (
                                             <span className="print:flex print:flex-col print:items-center">
                                               <span className="line-through opacity-60">{displaySubject}</span>
-                                              <span className={`ml-1 print:ml-0 text-sm font-normal ${isPast ? "text-gray-400" : "text-blue-500"} print:block print:mt-1`}>(공강)</span>
+                                              <span className={`ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
                                             </span>
                                           ) : <span>{displaySubject}</span>}
                                         </span>
