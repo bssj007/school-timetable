@@ -5437,6 +5437,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
 function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
     const [allowedGrades, setAllowedGrades] = useState<number[]>([1, 2, 3]);
+    const [allowPngDownload, setAllowPngDownload] = useState(true);
     const [printSubjectFontSize, setPrintSubjectFontSize] = useState("large");
 
     const settingsQuery = useQuery({
@@ -5457,6 +5458,7 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
                     ? JSON.parse(settingsQuery.data.allow_print_by_grade)
                     : [1, 2, 3]
             );
+            setAllowPngDownload(settingsQuery.data.allow_png_download !== 'false');
             setPrintSubjectFontSize(settingsQuery.data.print_subject_font_size || 'large');
         }
     };
@@ -5493,8 +5495,9 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
     const savedValue = settingsQuery.data?.allow_print_by_grade
         ? JSON.parse(settingsQuery.data.allow_print_by_grade)
         : [1, 2, 3];
+    const savedPngAllow = settingsQuery.data?.allow_png_download !== 'false';
     const savedFontSize = settingsQuery.data?.print_subject_font_size || 'large';
-    const isDirty = (JSON.stringify(savedValue.sort()) !== JSON.stringify(allowedGrades.sort())) || (savedFontSize !== printSubjectFontSize);
+    const isDirty = (JSON.stringify(savedValue.sort()) !== JSON.stringify(allowedGrades.sort())) || (savedPngAllow !== allowPngDownload) || (savedFontSize !== printSubjectFontSize);
 
     const toggleGrade = (grade: number) => {
         setAllowedGrades(prev =>
@@ -5512,6 +5515,23 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
             </CardHeader>
             <CardContent className="space-y-6">
                 <div className="space-y-3 pt-4">
+                    <Label className="font-medium text-sm">전체 PNG 저장 기능 허용</Label>
+                    <div className="flex items-center space-x-2">
+                        <Checkbox
+                            id="allow-png-download"
+                            checked={allowPngDownload}
+                            onCheckedChange={(c) => setAllowPngDownload(!!c)}
+                        />
+                        <label
+                            htmlFor="allow-png-download"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                            시간표 내려받기 (이미지 저장) 허용
+                        </label>
+                    </div>
+                </div>
+
+                <div className="space-y-3 pt-4 border-t border-slate-100">
                     <Label className="font-medium text-sm">인쇄/저장 허용 학년</Label>
                     <p className="text-xs text-gray-500 mb-2">체크된 학년의 사용자만 메인 대시보드에서 시간표 인쇄 및 이미지(PNG) 저장 기능을 사용할 수 있습니다.</p>
                     <div className="flex flex-col gap-3">
@@ -5552,6 +5572,7 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
                     </Button>
                     <Button onClick={() => saveMutation.mutate({
                         allow_print_by_grade: JSON.stringify(allowedGrades),
+                        allow_png_download: allowPngDownload ? "true" : "false",
                         print_subject_font_size: printSubjectFontSize
                     })} disabled={!isDirty || saveMutation.isPending}>
                         {saveMutation.isPending ? "저장 중..." : "설정 저장"}
