@@ -1266,7 +1266,7 @@ export default function Dashboard() {
                     }
                   `}
                 </style>
-                <div ref={timetableRef} id="timetable-container" data-print-theme={printTheme}>
+                <div ref={timetableRef} id="timetable-container" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
                   {/* Print Capture Header */}
                   <div className="capture-only mb-1.5 p-1.5 border rounded-md text-black flex flex-col gap-0.5">
                     <div className="flex justify-between items-end border-b pb-0.5 mb-0.5">
