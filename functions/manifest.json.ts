@@ -75,6 +75,8 @@ export const onRequest = async (context: any) => {
             "description": "부산성지고등학교 시간표 및 수행평가 관리 서비스",
             "start_url": "/",
             "display": isSamsungBrowser ? "minimal-ui" : "standalone",
+            // display_override lets Samsung Internet offer both "Add to apps" and "Add to Home screen"
+            ...(isSamsungBrowser ? { "display_override": ["standalone", "minimal-ui"] } : {}),
             "orientation": "portrait",
             "categories": ["education", "productivity"],
             "prefer_related_applications": false,
