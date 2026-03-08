@@ -1279,7 +1279,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex justify-between items-center">
                       <div className="text-xs font-medium leading-none">
-                        이름 (학번): _______________ ({formattedStudentId})
+                        학번: {formattedStudentId}
                       </div>
                       {grade !== "1" && (
                         <div className="text-[10px] text-gray-700 leading-none truncate max-w-[50%] text-right">
@@ -1459,9 +1459,9 @@ export default function Dashboard() {
                                       >
                                         <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
                                           {isCancelledByFreePeriod ? (
-                                            <span>
+                                            <span className="print:flex print:flex-col print:items-center">
                                               <span className="line-through opacity-60">{displaySubject}</span>
-                                              <span className={`ml-1 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"}`}>(공강)</span>
+                                              <span className={`ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"} print:block print:mt-0.5`}>(공강)</span>
                                             </span>
                                           ) : <span>{displaySubject}</span>}
                                         </span>
