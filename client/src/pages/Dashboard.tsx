@@ -1428,11 +1428,7 @@ export default function Dashboard() {
                                   {item || isElectiveActive ? (
                                     <div className="flex flex-col items-center justify-center h-full min-h-0">
                                       <div
-                                        className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"}`}
-                                        style={{
-                                          fontSize: (displaySubject || "").length > 6 ? '9px' : (displaySubject || "").length > 4 ? '11px' : undefined,
-                                          wordBreak: (displaySubject || "").length > 6 ? 'keep-all' : undefined,
-                                        }}
+                                        className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"} ${(displaySubject || "").length > 6 ? 'text-[9px] break-keep' : (displaySubject || "").length > 4 ? 'text-[11px]' : ''}`}
                                       >
                                         <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
                                           {isCancelledByFreePeriod ? (

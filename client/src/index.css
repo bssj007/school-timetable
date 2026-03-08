@@ -363,6 +363,7 @@
     --print-badge-size: 1.2cqh;
   }
 
+  #timetable-container td .text-\[11px\],
   #timetable-container td .text-\[10px\],
   #timetable-container td .text-\[9px\],
   #timetable-container td .text-xs,
