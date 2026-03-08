@@ -150,8 +150,22 @@ export default function Dashboard() {
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printMode, setPrintMode] = useState<'select' | 'printer'>('select');
   const [includeAssessments, setIncludeAssessments] = useState(true);
-  const [printWidth, setPrintWidth] = useState<string>(DEFAULT_PRINT_WIDTH);
-  const [printHeight, setPrintHeight] = useState<string>(DEFAULT_PRINT_HEIGHT);
+
+  // Preset Constants
+  const PRINT_PRESETS = [
+    { id: 'desk', label: '책상용', width: '9', height: '11' },
+    { id: 'pencil', label: '필통용', width: '9', height: '8' },
+    { id: 'large', label: '대형', width: '17', height: '20' },
+  ];
+  const PRINT_THEMES = [
+    { id: 'simple', label: '심플' },
+    { id: 'color', label: '컬러' },
+    { id: 'pink', label: '핑크' },
+  ];
+  const [printPreset, setPrintPreset] = useState<string>('desk');
+  const [printTheme, setPrintTheme] = useState<string>('simple');
+  const [printWidth, setPrintWidth] = useState<string>('9');
+  const [printHeight, setPrintHeight] = useState<string>('11');
   const timetableRef = useRef<HTMLDivElement>(null);
 
   // Compute print scales relative to a standard printable A4 area (roughly 19cm x 27cm)
@@ -1240,7 +1254,7 @@ export default function Dashboard() {
                     }
                   `}
                 </style>
-                <div ref={timetableRef} id="timetable-container">
+                <div ref={timetableRef} id="timetable-container" data-print-theme={printTheme}>
                   {/* Print Capture Header */}
                   <div className="capture-only mb-1.5 p-1.5 border rounded-md text-black flex flex-col gap-0.5">
                     <div className="flex justify-between items-end border-b pb-0.5 mb-0.5">
@@ -1481,10 +1495,18 @@ export default function Dashboard() {
         if (open) {
           setPrintMode('select');
           setIncludeAssessments(true);
-          setPrintWidth(DEFAULT_PRINT_WIDTH);
-          setPrintHeight(DEFAULT_PRINT_HEIGHT);
+          setPrintPreset('desk');
+          setPrintTheme('simple');
+          setPrintWidth('9');
+          setPrintHeight('11');
         } else {
-          setTimeout(() => setPrintMode('select'), 300);
+          setTimeout(() => {
+            setPrintMode('select');
+            setPrintPreset('desk');
+            setPrintTheme('simple');
+            setPrintWidth('9');
+            setPrintHeight('11');
+          }, 300);
         }
       }}>
         <DialogContent className="sm:max-w-[425px]">
@@ -1524,13 +1546,31 @@ export default function Dashboard() {
               </>
             ) : (
               <>
+                <div className="flex gap-2 justify-center mb-4">
+                  {PRINT_PRESETS.map(preset => (
+                    <button
+                      key={preset.id}
+                      onClick={() => {
+                        setPrintPreset(preset.id);
+                        setPrintWidth(preset.width);
+                        setPrintHeight(preset.height);
+                      }}
+                      className={`px-4 py-1.5 rounded-full text-xs font-bold border transition-colors ${printPreset === preset.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
                 <div className="flex gap-4 items-center">
                   <div className="flex-1 space-y-1">
                     <label className="text-sm font-medium">가로 크기 (cm)</label>
                     <Input
                       type="number"
                       value={printWidth}
-                      onChange={(e) => setPrintWidth(e.target.value)}
+                      onChange={(e) => {
+                        setPrintWidth(e.target.value);
+                        setPrintPreset('custom');
+                      }}
                       step="0.1"
                     />
                   </div>
@@ -1539,12 +1579,31 @@ export default function Dashboard() {
                     <Input
                       type="number"
                       value={printHeight}
-                      onChange={(e) => setPrintHeight(e.target.value)}
+                      onChange={(e) => {
+                        setPrintHeight(e.target.value);
+                        setPrintPreset('custom');
+                      }}
                       step="0.1"
                     />
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-4 items-center">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-sm font-medium">디자인 테마</label>
+                    <div className="flex bg-gray-100 rounded-lg p-1 border">
+                      {PRINT_THEMES.map(theme => (
+                        <button
+                          key={theme.id}
+                          onClick={() => setPrintTheme(theme.id)}
+                          className={`flex-1 flex items-center justify-center py-1.5 text-xs font-bold rounded-md transition-colors ${printTheme === theme.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                          {theme.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4">
                   <Button variant="outline" onClick={() => setPrintMode('select')} className="flex-1 h-12">
                     이전
                   </Button>
@@ -1554,7 +1613,7 @@ export default function Dashboard() {
                   </Button>
                 </div>
                 <p className="text-xs font-medium text-gray-500 text-center mt-2 flex flex-col items-center">
-                  <span className="text-red-500 mt-1">* 기본 <strong>{DEFAULT_PRINT_WIDTH}x{DEFAULT_PRINT_HEIGHT}cm</strong> 기준. 숫자를 조절하여 여백을 맞출 수 있습니다.</span>
+                  <span className="text-red-500 mt-1">* 수동으로 숫자를 조절하여 여백을 맞출 수 있습니다.</span>
                 </p>
               </>
             )}

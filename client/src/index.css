@@ -341,6 +341,32 @@
     padding: 0.5cqh !important;
   }
 
+  /* Print Themes */
+  #timetable-container[data-print-theme="color"] table,
+  #timetable-container[data-print-theme="pink"] table {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Pink Theme Overrides */
+  #timetable-container[data-print-theme="pink"] th,
+  #timetable-container[data-print-theme="pink"] td {
+    border: 1px solid #f9a8d4 !important;
+    background-color: #fdf2f8 !important;
+    color: #831843 !important;
+  }
+
+  #timetable-container[data-print-theme="pink"] th {
+    background-color: #fce7f3 !important;
+    color: #9d174d !important;
+  }
+
+  #timetable-container[data-print-theme="pink"] td span.print\:bg-gray-200 {
+    background-color: #fbcfe8 !important;
+    color: #831843 !important;
+    border-color: #f9a8d4 !important;
+  }
+
   /* Fluid typography proportional to the container's height */
   #timetable-container th .text-sm {
     font-size: 3cqh !important;
