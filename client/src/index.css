@@ -299,18 +299,18 @@
   }
 
   /* Exclude visual effects for printing as requested, but keep assessment backgrounds */
-  #timetable-container td,
-  #timetable-container div,
-  #timetable-container .bg-red-50,
-  #timetable-container .bg-yellow-50,
-  #timetable-container .bg-gray-200 {
+  #timetable-container[data-print-theme="simple"] td,
+  #timetable-container[data-print-theme="simple"] div,
+  #timetable-container[data-print-theme="simple"] .bg-red-50,
+  #timetable-container[data-print-theme="simple"] .bg-yellow-50,
+  #timetable-container[data-print-theme="simple"] .bg-gray-200 {
     background-color: transparent !important;
     box-shadow: none !important;
     animation: none !important;
   }
 
   /* Keep blue background for assessments during print */
-  #timetable-container .bg-blue-100 {
+  #timetable-container[data-print-theme="simple"] .bg-blue-100 {
     background-color: #dbeafe !important;
     border-color: #93c5fd !important;
     -webkit-print-color-adjust: exact !important;
