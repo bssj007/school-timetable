@@ -343,19 +343,19 @@
 
   /* Fluid typography proportional to the container's height */
   #timetable-container th .text-sm {
-    font-size: 2.5cqh !important;
+    font-size: 3.8cqh !important;
     line-height: normal !important;
   }
 
   #timetable-container th .text-\[10px\],
   #timetable-container th .text-xs {
-    font-size: 1.5cqh !important;
+    font-size: 2.5cqh !important;
     line-height: normal !important;
   }
 
   #timetable-container td .font-bold {
-    font-size: 2.2cqh !important;
-    line-height: normal !important;
+    font-size: 3.8cqh !important;
+    line-height: 1.2 !important;
   }
 
   /* Target dynamically sized badge under teacher */
@@ -368,7 +368,7 @@
   #timetable-container td .text-\[9px\],
   #timetable-container td .text-xs,
   #timetable-container td .text-sm {
-    font-size: 1.6cqh !important;
+    font-size: 2.8cqh !important;
     line-height: normal !important;
   }
 
@@ -378,13 +378,13 @@
   }
 
   .capture-only .text-sm {
-    font-size: 3cqh !important;
+    font-size: 4cqh !important;
     line-height: normal !important;
   }
 
   .capture-only .text-\[10px\],
   .capture-only .text-xs {
-    font-size: 1.8cqh !important;
+    font-size: 2.5cqh !important;
     line-height: normal !important;
   }
 }

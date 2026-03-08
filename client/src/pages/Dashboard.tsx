@@ -762,9 +762,10 @@ export default function Dashboard() {
 
   const electiveSummary = useMemo(() => {
     if (!currentProfile?.electives) return "";
-    return Object.values(currentProfile.electives)
-      .map((e: any) => e.subject)
-      .filter(Boolean)
+    return Object.entries(currentProfile.electives)
+      .filter(([_, e]) => (e as any).subject)
+      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+      .map(([key, e]) => `${key}: ${(e as any).subject}`)
       .join(", ");
   }, [currentProfile]);
 
@@ -1247,7 +1248,7 @@ export default function Dashboard() {
                         [학생용] {schoolName} {grade}학년 {classNum}반
                       </div>
                       <div className="text-[10px] text-gray-600 leading-none">
-                        발급일시: {new Date().toLocaleString('ko-KR')} (수행평가는 출력 시점 기준)
+                        발급일시: {new Date().toLocaleDateString('ko-KR')} (수행평가는 출력 시점 기준)
                       </div>
                     </div>
                     <div className="flex justify-between items-center">
@@ -1448,7 +1449,7 @@ export default function Dashboard() {
                                         <div className="mt-0.5 flex-shrink-0">
                                           <div className="flex flex-wrap gap-0.5 justify-center">
                                             {cellAssessments.map(a => (
-                                              <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1.2cqh] print:font-bold border print:border-gray-400`}>
+                                              <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1.5cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
                                                 {a.description && a.description.includes("차") ? a.description : '평가'}
                                               </span>
                                             ))}
