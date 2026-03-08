@@ -44,8 +44,8 @@ export const onRequest = async (context: any) => {
             site_title: settings['site_title'] || '',
             site_title_html: settings['site_title_html'] || '',
             site_favicon_url: settings['site_favicon_url'] || '',
-            pwa_app_title: settings['pwa_app_title'] || '성지고 시간표',
-            pwa_app_icon_url: settings['pwa_app_icon_url'] || '/icon.svg',
+            pwa_app_title: settings['pwa_app_title'] || '성지수행',
+            pwa_app_icon_url: settings['pwa_app_icon_url'] || settings['site_favicon_url'] || '/icon.svg',
             allow_png_download: settings['allow_png_download'] !== 'false', // default true
             print_subject_font_size: settings['print_subject_font_size'] || 'large',
         }), {

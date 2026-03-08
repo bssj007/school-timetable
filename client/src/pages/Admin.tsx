@@ -1935,8 +1935,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                     titleHtmlRef.current.innerHTML = currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
                 }
                 setSiteFaviconUrl(currentSettings.site_favicon_url || '');
-                setPwaAppTitle(currentSettings.pwa_app_title || '성지고 시간표');
-                setPwaAppIconUrl(currentSettings.pwa_app_icon_url || '');
+                setPwaAppTitle(currentSettings.pwa_app_title || '성지수행');
+                setPwaAppIconUrl(currentSettings.pwa_app_icon_url || currentSettings.site_favicon_url || '');
                 setIsInitialized(true);
                 setHtmlChanged(false);
             } else if (!htmlChanged) {
@@ -1946,8 +1946,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                     titleHtmlRef.current.innerHTML = currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
                 }
                 setSiteFaviconUrl(currentSettings.site_favicon_url || '');
-                setPwaAppTitle(currentSettings.pwa_app_title || '성지고 시간표');
-                setPwaAppIconUrl(currentSettings.pwa_app_icon_url || '');
+                setPwaAppTitle(currentSettings.pwa_app_title || '성지수행');
+                setPwaAppIconUrl(currentSettings.pwa_app_icon_url || currentSettings.site_favicon_url || '');
             }
         }
     }, [currentSettings, isInitialized, htmlChanged]);
@@ -2023,15 +2023,15 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
             titleHtmlRef.current.innerHTML = currentSettings?.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
         }
         setSiteFaviconUrl(currentSettings?.site_favicon_url || '');
-        setPwaAppTitle(currentSettings?.pwa_app_title || '성지고 시간표');
-        setPwaAppIconUrl(currentSettings?.pwa_app_icon_url || '');
+        setPwaAppTitle(currentSettings?.pwa_app_title || '성지수행');
+        setPwaAppIconUrl(currentSettings?.pwa_app_icon_url || currentSettings?.site_favicon_url || '');
         setHtmlChanged(false);
     };
 
     const savedTitle = currentSettings?.site_title || '';
     const savedFavicon = currentSettings?.site_favicon_url || '';
-    const savedPwaTitle = currentSettings?.pwa_app_title || '성지고 시간표';
-    const savedPwaIcon = currentSettings?.pwa_app_icon_url || '';
+    const savedPwaTitle = currentSettings?.pwa_app_title || '성지수행';
+    const savedPwaIcon = currentSettings?.pwa_app_icon_url || currentSettings?.site_favicon_url || '';
     const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon || htmlChanged || pwaAppTitle !== savedPwaTitle || pwaAppIconUrl !== savedPwaIcon;
 
     if (isLoading) {

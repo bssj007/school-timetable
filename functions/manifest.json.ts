@@ -6,7 +6,7 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('pwa_app_title', 'pwa_app_icon_url')").all();
+        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('pwa_app_title', 'pwa_app_icon_url', 'site_favicon_url')").all();
 
         const settings: any = {};
         if (rows && rows.results) {
@@ -15,8 +15,8 @@ export const onRequest = async (context: any) => {
             });
         }
 
-        const appTitle = settings['pwa_app_title'] || '성지고 시간표';
-        const appIconUrl = settings['pwa_app_icon_url'] || '/icon.svg';
+        const appTitle = settings['pwa_app_title'] || '성지수행';
+        const appIconUrl = settings['pwa_app_icon_url'] || settings['site_favicon_url'] || '/icon.svg';
 
         const manifest = {
             "name": appTitle,
