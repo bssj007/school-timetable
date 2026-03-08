@@ -1907,6 +1907,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
     const [siteTitle, setSiteTitle] = useState("");
     const [siteFaviconUrl, setSiteFaviconUrl] = useState("");
+    const [pwaAppTitle, setPwaAppTitle] = useState("");
+    const [pwaAppIconUrl, setPwaAppIconUrl] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
     const titleHtmlRef = React.useRef<HTMLDivElement>(null);
@@ -1933,6 +1935,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                     titleHtmlRef.current.innerHTML = currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
                 }
                 setSiteFaviconUrl(currentSettings.site_favicon_url || '');
+                setPwaAppTitle(currentSettings.pwa_app_title || '성지고 시간표');
+                setPwaAppIconUrl(currentSettings.pwa_app_icon_url || '');
                 setIsInitialized(true);
                 setHtmlChanged(false);
             } else if (!htmlChanged) {
@@ -1942,6 +1946,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                     titleHtmlRef.current.innerHTML = currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
                 }
                 setSiteFaviconUrl(currentSettings.site_favicon_url || '');
+                setPwaAppTitle(currentSettings.pwa_app_title || '성지고 시간표');
+                setPwaAppIconUrl(currentSettings.pwa_app_icon_url || '');
             }
         }
     }, [currentSettings, isInitialized, htmlChanged]);
@@ -1983,18 +1989,22 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 body: JSON.stringify({
                     site_title: siteTitle,
                     site_title_html: finalHtml,
-                    site_favicon_url: siteFaviconUrl
+                    site_favicon_url: siteFaviconUrl,
+                    pwa_app_title: pwaAppTitle,
+                    pwa_app_icon_url: pwaAppIconUrl
                 })
             });
             if (!res.ok) throw new Error('Failed to save');
-            toast.success('사이트 디자인 설정이 저장되었습니다.');
+            toast.success('사이트 설정이 저장되었습니다.');
 
             // Optimistically update the cache to prevent the input from reverting to old data momentarily
             queryClient.setQueryData(['admin', 'settings', 'site-design'], (old: any) => ({
                 ...old,
                 site_title: siteTitle,
                 site_title_html: finalHtml,
-                site_favicon_url: siteFaviconUrl
+                site_favicon_url: siteFaviconUrl,
+                pwa_app_title: pwaAppTitle,
+                pwa_app_icon_url: pwaAppIconUrl
             }));
 
             queryClient.invalidateQueries({ queryKey: ['admin', 'settings', 'site-design'] });
@@ -2013,12 +2023,16 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
             titleHtmlRef.current.innerHTML = currentSettings?.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
         }
         setSiteFaviconUrl(currentSettings?.site_favicon_url || '');
+        setPwaAppTitle(currentSettings?.pwa_app_title || '성지고 시간표');
+        setPwaAppIconUrl(currentSettings?.pwa_app_icon_url || '');
         setHtmlChanged(false);
     };
 
     const savedTitle = currentSettings?.site_title || '';
     const savedFavicon = currentSettings?.site_favicon_url || '';
-    const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon || htmlChanged;
+    const savedPwaTitle = currentSettings?.pwa_app_title || '성지고 시간표';
+    const savedPwaIcon = currentSettings?.pwa_app_icon_url || '';
+    const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon || htmlChanged || pwaAppTitle !== savedPwaTitle || pwaAppIconUrl !== savedPwaIcon;
 
     if (isLoading) {
         return <div className="p-8 text-center text-gray-400">설정을 불러오는 중...</div>;
@@ -2120,6 +2134,78 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                     )}
                 </div>
                 <p className="text-xs text-gray-400">브라우저 탭에 표시되는 아이콘입니다. PNG, ICO, SVG 형식 권장 (최대 1MB).</p>
+            </div>
+
+            <hr className="my-6 border-slate-200" />
+
+            {/* PWA 앱 제목 */}
+            <div className="space-y-2">
+                <Label className="text-sm font-semibold text-green-700">PWA 앱 설치 이름 (바탕화면용)</Label>
+                <Input
+                    value={pwaAppTitle}
+                    onChange={(e) => setPwaAppTitle(e.target.value)}
+                    placeholder="예: 성지고 시간표"
+                    className="max-w-md"
+                />
+                <p className="text-xs text-gray-400">모바일 기기 바탕화면에 추가될 때 표시되는 앱 이름입니다.</p>
+            </div>
+
+            {/* PWA 앱 아이콘 업로드 */}
+            <div className="space-y-2">
+                <Label className="text-sm font-semibold text-green-700">PWA 앱 아이콘 (바탕화면용)</Label>
+                <div className="flex items-center gap-3">
+                    <input
+                        type="file"
+                        accept="image/png,image/x-icon,image/svg+xml,image/jpeg,image/webp"
+                        className="hidden"
+                        id="pwa-icon-upload"
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (file.size > 1024 * 1024) {
+                                toast.error('파일 크기가 1MB를 초과합니다.');
+                                return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                                const dataUrl = ev.target?.result as string;
+                                if (dataUrl) setPwaAppIconUrl(dataUrl);
+                            };
+                            reader.readAsDataURL(file);
+                            e.target.value = ''; // reset for re-upload
+                        }}
+                    />
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => document.getElementById('pwa-icon-upload')?.click()}
+                        className="shrink-0 border-green-200 text-green-700 hover:bg-green-50"
+                    >
+                        <Upload className="w-4 h-4 mr-1.5" />
+                        아이콘 업로드
+                    </Button>
+                    {pwaAppIconUrl && (
+                        <>
+                            <div className="shrink-0 w-10 h-10 rounded-lg border bg-white flex items-center justify-center overflow-hidden">
+                                <img
+                                    src={pwaAppIconUrl}
+                                    alt="PWA icon preview"
+                                    className="w-10 h-10 object-cover"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-500 hover:text-red-700 px-2"
+                                onClick={() => setPwaAppIconUrl('')}
+                            >
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </>
+                    )}
+                </div>
+                <p className="text-xs text-gray-400">모바일 앱 설치 시 표시되는 아이콘입니다. 정사각형(1:1)의 PNG 권장. 미지정시 기본 이미지(/icon.svg)가 적용됩니다.</p>
             </div>
 
             {/* 미리보기 */}

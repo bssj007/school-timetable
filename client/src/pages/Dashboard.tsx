@@ -150,6 +150,8 @@ export default function Dashboard() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const isIOS = typeof window !== 'undefined' ? /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) : false;
+  const isSamsungBrowser = typeof window !== 'undefined' ? /SamsungBrowser/i.test(navigator.userAgent) : false;
+  const isInAppBrowser = typeof window !== 'undefined' ? /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent) : false;
 
   useEffect(() => {
     const standsAlone = window.matchMedia('(display-mode: standalone)').matches || ('standalone' in navigator && (navigator as any).standalone) === true;
@@ -176,8 +178,10 @@ export default function Dashboard() {
       // Fallback instructions if native prompt is not available
       if (isIOS) {
         toast.info("Safari 하단의 [공유] 버튼을 탭한 후 '홈 화면에 추가'를 선택해주세요.", { duration: 5000 });
+      } else if (isSamsungBrowser) {
+        toast.info("화면 하단 또는 상단 메뉴(三)에서 '현재 페이지 추가' -> '홈 화면'을 선택해주세요.", { duration: 6000 });
       } else {
-        toast.info("브라우저 우측 상단 메뉴(⋮)에서 '홈 화면에 추가' 또는 '앱 설치'를 선택해주세요.", { duration: 5000 });
+        toast.info("브라우저 우측 상단 메뉴(⋮)에서 '홈 화면에 추가' 또는 '앱 설치'를 클릭해주세요.", { duration: 5000 });
       }
     }
   };
@@ -1920,25 +1924,10 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog >
 
-      {/* 모바일 전용 PWA 앱 다운로드 버튼 (설치 가능한 경우 활성, 미지원은 비활성으로 표시) */}
+      {/* 모바일 전용 PWA 앱 다운로드 버튼 (설치 상태 및 환경에 따라 상태 변경) */}
       {!isStandalone && (
         <div className="md:hidden mt-6 mb-2 space-y-2">
-          {deferredPrompt || isIOS ? (
-            <>
-              <Button
-                onClick={handleInstallClick}
-                className="w-full h-14 bg-[#3DDC84] hover:bg-[#35c073] text-black font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
-                  <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
-                </svg>
-                앱 다운로드 (홈 화면 추가)
-              </Button>
-              <p className="text-center text-xs text-gray-500 font-medium">
-                터치 한 번으로 바탕화면에 앱을 설치하세요!
-              </p>
-            </>
-          ) : (
+          {isInAppBrowser ? (
             <>
               <Button
                 disabled
@@ -1958,6 +1947,21 @@ export default function Dashboard() {
               </Button>
               <p className="text-center text-[11px] text-gray-400 font-medium">
                 카카오톡 등 인앱 브라우저는 해당 기능을 지원하지 않습니다. 외부 브라우저(Safari, Chrome 등)를 권장합니다.
+              </p>
+            </>
+          ) : (
+            <>
+              <Button
+                onClick={handleInstallClick}
+                className="w-full h-14 bg-[#3DDC84] hover:bg-[#35c073] text-black font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
+                  <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
+                </svg>
+                앱 다운로드 (홈 화면 추가)
+              </Button>
+              <p className="text-center text-xs text-gray-500 font-medium">
+                터치 한 번으로 바탕화면에 앱을 설치하세요!
               </p>
             </>
           )}
