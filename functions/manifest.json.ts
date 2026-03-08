@@ -26,6 +26,48 @@ export const onRequest = async (context: any) => {
         const userAgent = context.request.headers.get('user-agent') || context.request.headers.get('User-Agent') || '';
         const isSamsungBrowser = /SamsungBrowser/i.test(userAgent);
 
+        const icons = isSvg
+            ? [
+                {
+                    "src": "/api/app-icon",
+                    "sizes": "any",
+                    "type": "image/svg+xml",
+                    "purpose": "any"
+                },
+                {
+                    "src": "/api/app-icon",
+                    "sizes": "any",
+                    "type": "image/svg+xml",
+                    "purpose": "maskable"
+                }
+            ]
+            : [
+                {
+                    "src": "/api/app-icon",
+                    "sizes": "192x192",
+                    "type": "image/png",
+                    "purpose": "any"
+                },
+                {
+                    "src": "/api/app-icon",
+                    "sizes": "512x512",
+                    "type": "image/png",
+                    "purpose": "any"
+                },
+                {
+                    "src": "/api/app-icon",
+                    "sizes": "192x192",
+                    "type": "image/png",
+                    "purpose": "maskable"
+                },
+                {
+                    "src": "/api/app-icon",
+                    "sizes": "512x512",
+                    "type": "image/png",
+                    "purpose": "maskable"
+                }
+            ];
+
         const manifest: any = {
             "id": "/",
             "name": appTitle,
@@ -38,32 +80,7 @@ export const onRequest = async (context: any) => {
             "prefer_related_applications": false,
             "background_color": "#ffffff",
             "theme_color": "#ffffff",
-            "icons": [
-                {
-                    "src": "/api/app-icon",
-                    "sizes": "192x192",
-                    "type": iconType,
-                    "purpose": "any"
-                },
-                {
-                    "src": "/api/app-icon",
-                    "sizes": "512x512",
-                    "type": iconType,
-                    "purpose": "any"
-                },
-                {
-                    "src": "/api/app-icon",
-                    "sizes": "192x192",
-                    "type": iconType,
-                    "purpose": "maskable"
-                },
-                {
-                    "src": "/api/app-icon",
-                    "sizes": "512x512",
-                    "type": iconType,
-                    "purpose": "maskable"
-                }
-            ]
+            "icons": icons
         };
 
 
