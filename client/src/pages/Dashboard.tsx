@@ -1442,12 +1442,6 @@ export default function Dashboard() {
                                             </span>
                                           ) : <span>{displaySubject}</span>}
                                         </span>
-                                        {/* Print-only inline indicator */}
-                                        {includeAssessments && cellAssessments.length > 0 && (
-                                          <span className="hidden print:inline-block show-in-print ml-1 font-bold text-gray-700 align-top rounded-full bg-gray-200 px-[0.4em] py-[0.1em]" style={{ fontSize: '1.6cqh', lineHeight: 1 }}>
-                                            {cellAssessments.map(a => a.description && a.description.includes("차") ? a.description : '평가').join(',')}
-                                          </span>
-                                        )}
                                       </div>
                                       <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">
                                         {displayClassName
@@ -1455,10 +1449,10 @@ export default function Dashboard() {
                                           : <span>{displayTeacher}</span>}
                                       </div>
                                       {includeAssessments && cellAssessments.length > 0 && (
-                                        <div className="mt-0.5 flex-shrink-0 print:hidden hide-in-print">
+                                        <div className="mt-0.5 flex-shrink-0">
                                           <div className="flex flex-wrap gap-0.5 justify-center">
                                             {cellAssessments.map(a => (
-                                              <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"}`}>
+                                              <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white print:bg-gray-200 print:text-gray-700 print:font-bold border print:border-gray-400"}`} style={{ fontSize: 'var(--print-badge-size, inherit)' }}>
                                                 {a.description && a.description.includes("차") ? a.description : '평가'}
                                               </span>
                                             ))}
@@ -1487,7 +1481,12 @@ export default function Dashboard() {
       {/* Print Options Dialog */}
       <Dialog open={showPrintOptions} onOpenChange={(open) => {
         setShowPrintOptions(open);
-        if (!open) {
+        if (open) {
+          setPrintMode('select');
+          setIncludeAssessments(true);
+          setPrintWidth(DEFAULT_PRINT_WIDTH);
+          setPrintHeight(DEFAULT_PRINT_HEIGHT);
+        } else {
           setTimeout(() => setPrintMode('select'), 300);
         }
       }}>

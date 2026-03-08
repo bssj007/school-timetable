@@ -245,6 +245,13 @@
     visibility: hidden;
   }
 
+  /* Ensure all parents implicitly have 100% height for stretch to work */
+  #root {
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+  }
+
   #print-wrapper,
   #print-wrapper * {
     visibility: visible;
@@ -256,22 +263,31 @@
     top: 0 !important;
     width: var(--print-width, 19cm) !important;
     height: var(--print-height, 27cm) !important;
+    max-height: var(--print-height, 27cm) !important;
     overflow: hidden !important;
     margin: 0 !important;
     padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
   }
 
   #timetable-container {
     container-type: size;
     container-name: timetable;
     width: 100% !important;
-    height: 100% !important;
+    height: 100vh !important;
+    /* Force to viewport height of the printed page */
+    max-height: 100vh !important;
+    flex-grow: 1 !important;
     padding: 3cqh;
     background: white;
     box-shadow: none !important;
     border: none !important;
     display: flex !important;
-    flex-direction: column;
+    flex-direction: column !important;
+    justify-content: stretch !important;
+    box-sizing: border-box !important;
   }
 
   .no-print {
@@ -301,9 +317,10 @@
 
   #timetable-container table {
     width: 100% !important;
-    height: auto !important;
-    flex-grow: 1;
+    height: 100% !important;
+    flex-grow: 1 !important;
     border-collapse: collapse !important;
+    table-layout: fixed !important;
   }
 
   #timetable-container tbody tr {
@@ -315,8 +332,8 @@
   #timetable-container td {
     border: 1px solid black !important;
     color: black !important;
-    height: auto !important;
-    /* Allow rows to stretch evenly */
+    height: 4cqh !important;
+    /* Min height buffer */
     padding: 0.5cqh !important;
   }
 
@@ -335,6 +352,11 @@
   #timetable-container td .font-bold {
     font-size: 2.2cqh !important;
     line-height: normal !important;
+  }
+
+  /* Target dynamically sized badge under teacher */
+  #timetable-container td span {
+    --print-badge-size: 1.2cqh;
   }
 
   #timetable-container td .text-\[10px\],
