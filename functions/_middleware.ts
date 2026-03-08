@@ -1,3 +1,4 @@
+/// <reference types="@cloudflare/workers-types" />
 import { createStudentProfilesTable, createIpProfilesTable } from "./db_schema";
 
 interface Env {
@@ -35,6 +36,7 @@ export const onRequest = async (context: any) => {
             // Parse Other Cookies
             let grade = null, classNum = null, studentNumber = null;
             let kakaoId = null, kakaoNickname = null;
+            let isStandalone = 0;
 
             if (cookies) {
                 const configMatch = cookies.match(new RegExp('(^| )school_timetable_config=([^;]+)'));
@@ -54,6 +56,11 @@ export const onRequest = async (context: any) => {
                         kakaoId = kakaoData.id?.toString();
                         kakaoNickname = kakaoData.nickname;
                     } catch (e) { }
+                }
+
+                const pwaMatch = cookies.match(new RegExp('(^| )pwa_standalone=([^;]+)'));
+                if (pwaMatch && pwaMatch[2] === '1') {
+                    isStandalone = 1;
                 }
             }
 
@@ -172,20 +179,27 @@ export const onRequest = async (context: any) => {
             // 3. Update IP Profile (Link to student_profile_id)
             const updateIpProfile = async () => {
                 const isEditAction = (['POST', 'DELETE', 'PATCH', 'PUT'].includes(request.method) && url.pathname.startsWith('/api/assessment'));
+                const isPrintAction = url.pathname === '/api/action/print';
+                const isDownloadAction = url.pathname === '/api/action/download';
 
                 const query = `
-                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent)
-                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?)
+                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent, printCount, downloadCount, isStandalone)
+                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?)
                     ON CONFLICT(ip) DO UPDATE SET
                         lastAccess = datetime('now'),
                         userAgent = excluded.userAgent,
                         student_profile_id = excluded.student_profile_id,
                         kakaoId = COALESCE(excluded.kakaoId, ip_profiles.kakaoId),
                         kakaoNickname = COALESCE(excluded.kakaoNickname, ip_profiles.kakaoNickname),
-                        modificationCount = ip_profiles.modificationCount + ?
+                        modificationCount = ip_profiles.modificationCount + ?,
+                        printCount = ip_profiles.printCount + ?,
+                        downloadCount = ip_profiles.downloadCount + ?,
+                        isStandalone = CASE WHEN excluded.isStandalone = 1 THEN 1 ELSE ip_profiles.isStandalone END
                 `;
 
                 const increment = isEditAction ? 1 : 0;
+                const printIncrement = isPrintAction ? 1 : 0;
+                const downloadIncrement = isDownloadAction ? 1 : 0;
 
                 const executeLink = async (profileId: number | null) => {
                     await env.DB.prepare(query).bind(
@@ -195,7 +209,12 @@ export const onRequest = async (context: any) => {
                         kakaoNickname,
                         increment, // Initial value
                         userAgent,
-                        increment // Increment value for update
+                        printIncrement,
+                        downloadIncrement,
+                        isStandalone,
+                        increment, // Increment value for update
+                        printIncrement,
+                        downloadIncrement
                     ).run();
                 };
 
@@ -229,8 +248,24 @@ export const onRequest = async (context: any) => {
                     } catch (migrationError) {
                         console.error("[Middleware] Migration Failed for ip_profiles:", migrationError);
                     }
-                } else if (e.message && e.message.includes("has no column named")) {
-                    console.warn("[Middleware] ip_profiles schema mismatch:", e.message);
+                } else if (e.message && (e.message.includes("has no column named") || e.message.includes("no column named"))) {
+                    console.warn("[Middleware] ip_profiles schema mismatch detected. Attempting safe ALTER...");
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN printCount INTEGER DEFAULT 0").run();
+                    } catch (_) { /* already exists */ }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN downloadCount INTEGER DEFAULT 0").run();
+                    } catch (_) { /* already exists */ }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN isStandalone INTEGER DEFAULT 0").run();
+                    } catch (_) { /* already exists */ }
+
+                    // Retry update after ALTER
+                    try {
+                        await updateIpProfile();
+                    } catch (retryError) {
+                        console.error("[Middleware] Retry failed after ALTER:", retryError);
+                    }
                 } else {
                     console.error("IP Profile Update Error", e);
                 }
@@ -248,9 +283,48 @@ export const onRequest = async (context: any) => {
 
     context.waitUntil(Promise.all([logTrace(), runBackgroundTasks()]));
 
-    // Set Cookie if new
-    // Cookie setting removed as per user request
-    // if (newClientDetails) ...
+    // Edge HTML Rewriting for Dynamic Site Title
+    const pathname = url.pathname;
+    // Check if the route is an API, static asset, or file extension
+    const isApiRoute = pathname.startsWith('/api/');
+    const isAssetRoute = pathname.startsWith('/assets/') || pathname.match(/\.(js|css|png|jpe?g|gif|ico|svg|json|webmanifest)$/i);
+    const contentType = response.headers.get("content-type") || "";
+
+    // Cloudflare Pages often serves SPA routes without an explicit .html extension.
+    // If it's not an API and not a static asset, it's highly likely an HTML page (like index.html).
+    const isHtmlRoute = !isApiRoute && !isAssetRoute && (contentType.includes("text/html") || pathname === "/" || !pathname.includes("."));
+
+    if (env.DB && isHtmlRoute) {
+        try {
+            const titleRow = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'site_title'").first();
+            const siteTitle = (titleRow && titleRow.value) ? (titleRow.value as string) : '수행 일정공유';
+
+            const htmlRow = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'site_title_html'").first();
+            const siteTitleHtml = (htmlRow && htmlRow.value) ? (htmlRow.value as string) : '';
+
+            // Transform the response stream first
+            const transformedResponse = new HTMLRewriter().on("title", {
+                element(element: any) {
+                    element.setInnerContent(siteTitle);
+                }
+            }).on("head", {
+                element(element: any) {
+                    if (siteTitleHtml) {
+                        element.append(`<script>window.__INITIAL_SITE_TITLE_HTML__ = ${JSON.stringify(siteTitleHtml)};</script>`, { html: true });
+                    }
+                }
+            }).transform(response);
+
+            // Clone to modify headers safely
+            const finalResponse = new Response(transformedResponse.body, transformedResponse);
+            finalResponse.headers.set("X-Edge-Title-Injected", "true");
+            finalResponse.headers.set("X-Edge-Title-Value", encodeURIComponent(siteTitle));
+
+            return finalResponse;
+        } catch (e) {
+            console.error("[Middleware] HTMLRewriter title injection failed:", e);
+        }
+    }
 
     return response;
 };

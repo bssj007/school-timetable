@@ -31,6 +31,9 @@ export const onRequest = async (context: any) => {
                     ip_profiles.lastAccess, 
                     ip_profiles.userAgent,
                     ip_profiles.instructionDismissed,
+                    ip_profiles.printCount,
+                    ip_profiles.downloadCount,
+                    ip_profiles.isStandalone,
                     (SELECT COUNT(*) FROM performance_assessments WHERE lastModifiedIp = ip_profiles.ip) as modificationCount,
                     student_profiles.grade as profileGrade,
                     student_profiles.classNum as profileClassNum,
@@ -74,6 +77,18 @@ export const onRequest = async (context: any) => {
                     // Retry
                     const { results } = await env.DB.prepare(query).all();
                     profiles = results;
+                } else if (e.message && (e.message.includes("no such column") || e.message.includes("has no column named") || e.message.includes("no column named"))) {
+                    console.log("[Admin API] Schema mismatch for printCount/downloadCount. Running safe ALTER TABLE...");
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN printCount INTEGER DEFAULT 0").run();
+                    } catch (_) { }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN downloadCount INTEGER DEFAULT 0").run();
+                    } catch (_) { }
+
+                    // Retry
+                    const { results } = await env.DB.prepare(query).all();
+                    profiles = results;
                 } else {
                     throw e;
                 }
@@ -114,6 +129,9 @@ export const onRequest = async (context: any) => {
                     isBlocked: false,
                     blockReason: null,
                     modificationCount: p.modificationCount || 0,
+                    printCount: p.printCount || 0,
+                    downloadCount: p.downloadCount || 0,
+                    isStandalone: p.isStandalone === 1,
                     lastAccess: p.lastAccess,
                     recentUserAgents: p.userAgent ? [p.userAgent] : [],
                     grade: p.profileGrade || null,

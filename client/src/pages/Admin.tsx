@@ -1907,6 +1907,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
     const [siteTitle, setSiteTitle] = useState("");
     const [siteFaviconUrl, setSiteFaviconUrl] = useState("");
+    const [pwaAppTitle, setPwaAppTitle] = useState("");
+    const [pwaAppIconUrl, setPwaAppIconUrl] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
     const titleHtmlRef = React.useRef<HTMLDivElement>(null);
@@ -1933,6 +1935,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                     titleHtmlRef.current.innerHTML = currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
                 }
                 setSiteFaviconUrl(currentSettings.site_favicon_url || '');
+                setPwaAppTitle(currentSettings.pwa_app_title || '성지수행');
+                setPwaAppIconUrl(currentSettings.pwa_app_icon_url || currentSettings.site_favicon_url || '');
                 setIsInitialized(true);
                 setHtmlChanged(false);
             } else if (!htmlChanged) {
@@ -1942,6 +1946,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                     titleHtmlRef.current.innerHTML = currentSettings.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
                 }
                 setSiteFaviconUrl(currentSettings.site_favicon_url || '');
+                setPwaAppTitle(currentSettings.pwa_app_title || '성지수행');
+                setPwaAppIconUrl(currentSettings.pwa_app_icon_url || currentSettings.site_favicon_url || '');
             }
         }
     }, [currentSettings, isInitialized, htmlChanged]);
@@ -1983,18 +1989,22 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 body: JSON.stringify({
                     site_title: siteTitle,
                     site_title_html: finalHtml,
-                    site_favicon_url: siteFaviconUrl
+                    site_favicon_url: siteFaviconUrl,
+                    pwa_app_title: pwaAppTitle,
+                    pwa_app_icon_url: pwaAppIconUrl
                 })
             });
             if (!res.ok) throw new Error('Failed to save');
-            toast.success('사이트 디자인 설정이 저장되었습니다.');
+            toast.success('사이트 설정이 저장되었습니다.');
 
             // Optimistically update the cache to prevent the input from reverting to old data momentarily
             queryClient.setQueryData(['admin', 'settings', 'site-design'], (old: any) => ({
                 ...old,
                 site_title: siteTitle,
                 site_title_html: finalHtml,
-                site_favicon_url: siteFaviconUrl
+                site_favicon_url: siteFaviconUrl,
+                pwa_app_title: pwaAppTitle,
+                pwa_app_icon_url: pwaAppIconUrl
             }));
 
             queryClient.invalidateQueries({ queryKey: ['admin', 'settings', 'site-design'] });
@@ -2013,12 +2023,16 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
             titleHtmlRef.current.innerHTML = currentSettings?.site_title_html || '<span style="color: #2563eb">수행 일정공유</span>';
         }
         setSiteFaviconUrl(currentSettings?.site_favicon_url || '');
+        setPwaAppTitle(currentSettings?.pwa_app_title || '성지수행');
+        setPwaAppIconUrl(currentSettings?.pwa_app_icon_url || currentSettings?.site_favicon_url || '');
         setHtmlChanged(false);
     };
 
     const savedTitle = currentSettings?.site_title || '';
     const savedFavicon = currentSettings?.site_favicon_url || '';
-    const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon || htmlChanged;
+    const savedPwaTitle = currentSettings?.pwa_app_title || '성지수행';
+    const savedPwaIcon = currentSettings?.pwa_app_icon_url || currentSettings?.site_favicon_url || '';
+    const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon || htmlChanged || pwaAppTitle !== savedPwaTitle || pwaAppIconUrl !== savedPwaIcon;
 
     if (isLoading) {
         return <div className="p-8 text-center text-gray-400">설정을 불러오는 중...</div>;
@@ -2120,6 +2134,78 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                     )}
                 </div>
                 <p className="text-xs text-gray-400">브라우저 탭에 표시되는 아이콘입니다. PNG, ICO, SVG 형식 권장 (최대 1MB).</p>
+            </div>
+
+            <hr className="my-6 border-slate-200" />
+
+            {/* PWA 앱 제목 */}
+            <div className="space-y-2">
+                <Label className="text-sm font-semibold text-green-700">PWA 앱 설치 이름 (바탕화면용)</Label>
+                <Input
+                    value={pwaAppTitle}
+                    onChange={(e) => setPwaAppTitle(e.target.value)}
+                    placeholder="예: 성지고 시간표"
+                    className="max-w-md"
+                />
+                <p className="text-xs text-gray-400">모바일 기기 바탕화면에 추가될 때 표시되는 앱 이름입니다.</p>
+            </div>
+
+            {/* PWA 앱 아이콘 업로드 */}
+            <div className="space-y-2">
+                <Label className="text-sm font-semibold text-green-700">PWA 앱 아이콘 (바탕화면용)</Label>
+                <div className="flex items-center gap-3">
+                    <input
+                        type="file"
+                        accept="image/png,image/x-icon,image/svg+xml,image/jpeg,image/webp"
+                        className="hidden"
+                        id="pwa-icon-upload"
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (file.size > 1024 * 1024) {
+                                toast.error('파일 크기가 1MB를 초과합니다.');
+                                return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                                const dataUrl = ev.target?.result as string;
+                                if (dataUrl) setPwaAppIconUrl(dataUrl);
+                            };
+                            reader.readAsDataURL(file);
+                            e.target.value = ''; // reset for re-upload
+                        }}
+                    />
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => document.getElementById('pwa-icon-upload')?.click()}
+                        className="shrink-0 border-green-200 text-green-700 hover:bg-green-50"
+                    >
+                        <Upload className="w-4 h-4 mr-1.5" />
+                        아이콘 업로드
+                    </Button>
+                    {pwaAppIconUrl && (
+                        <>
+                            <div className="shrink-0 w-10 h-10 rounded-lg border bg-white flex items-center justify-center overflow-hidden">
+                                <img
+                                    src={pwaAppIconUrl}
+                                    alt="PWA icon preview"
+                                    className="w-10 h-10 object-cover"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-500 hover:text-red-700 px-2"
+                                onClick={() => setPwaAppIconUrl('')}
+                            >
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </>
+                    )}
+                </div>
+                <p className="text-xs text-gray-400">모바일 앱 설치 시 표시되는 아이콘입니다. 정사각형(1:1)의 PNG 권장. 미지정시 기본 이미지(/icon.svg)가 적용됩니다.</p>
             </div>
 
             {/* 미리보기 */}
@@ -2588,6 +2674,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <Download className="w-4 h-4 mr-2" />
                     내려받기 허용
                 </Button>
+                <Button
+                    variant={selectedMenu === "unresolved-issues" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-orange-600 hover:text-orange-700"
+                    onClick={() => setSelectedMenu("unresolved-issues")}
+                >
+                    <AlertCircle className="w-4 h-4 mr-2" />
+                    미해결 문제
+                </Button>
                 {/* Additional list items can go here later */}
             </div>
 
@@ -2747,6 +2841,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <AllowDownloadSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "unresolved-issues" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-orange-600">⚠️ 미해결 문제</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <SamsungInstallSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -3412,6 +3517,8 @@ export default function Admin() {
                                         studentNumber: number | null;
                                         ips: IPProfile[];
                                         modificationCount: number;
+                                        printCount: number;
+                                        downloadCount: number;
                                         lastAccess: string | null;
                                         kakaoAccounts: { kakaoId: string; kakaoNickname: string }[];
                                         isBlocked: boolean;
@@ -3427,6 +3534,8 @@ export default function Admin() {
                                         if (existing) {
                                             existing.ips.push(user);
                                             existing.modificationCount += user.modificationCount || 0;
+                                            existing.printCount += user.printCount || 0;
+                                            existing.downloadCount += user.downloadCount || 0;
                                             if (!existing.lastAccess || (user.lastAccess && user.lastAccess > existing.lastAccess)) {
                                                 existing.lastAccess = user.lastAccess;
                                             }
@@ -3445,6 +3554,8 @@ export default function Admin() {
                                                 studentNumber: user.studentNumber ?? null,
                                                 ips: [user],
                                                 modificationCount: user.modificationCount || 0,
+                                                printCount: user.printCount || 0,
+                                                downloadCount: user.downloadCount || 0,
                                                 lastAccess: user.lastAccess,
                                                 kakaoAccounts: [...(user.kakaoAccounts || [])],
                                                 isBlocked: !!user.isBlocked,
@@ -3529,6 +3640,21 @@ export default function Admin() {
                                             <TableCell>
                                                 {user.modificationCount > 0
                                                     ? <Badge variant="secondary" className="font-mono text-xs">{user.modificationCount}회</Badge>
+                                                    : <span className="text-gray-300">-</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                {user.printCount && user.printCount > 0
+                                                    ? <Badge variant="secondary" className="font-mono text-xs bg-blue-50 text-blue-700 border-blue-200">{user.printCount}회</Badge>
+                                                    : <span className="text-gray-300">-</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                {user.downloadCount && user.downloadCount > 0
+                                                    ? <Badge variant="secondary" className="font-mono text-xs bg-green-50 text-green-700 border-green-200">{user.downloadCount}회</Badge>
+                                                    : <span className="text-gray-300">-</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                {user.isStandalone
+                                                    ? <Badge variant="secondary" className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200">설치됨</Badge>
                                                     : <span className="text-gray-300">-</span>}
                                             </TableCell>
                                             <TableCell className="text-slate-400">
@@ -3617,6 +3743,21 @@ export default function Admin() {
                                                         ) : <span className="text-gray-400 text-xs">-</span>}
                                                     </TableCell>
                                                     <TableCell>
+                                                        {group.printCount > 0 ? (
+                                                            <Badge variant="secondary" className="font-mono bg-blue-50 text-blue-700 border-blue-200">{group.printCount}회</Badge>
+                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {group.downloadCount > 0 ? (
+                                                            <Badge variant="secondary" className="font-mono bg-green-50 text-green-700 border-green-200">{group.downloadCount}회</Badge>
+                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {group.ips.some(ip => ip.isStandalone) ? (
+                                                            <Badge variant="secondary" className="font-mono bg-purple-50 text-purple-700 border-purple-200">설치됨</Badge>
+                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                    </TableCell>
+                                                    <TableCell>
                                                         {group.lastAccess ? new Date(group.lastAccess + 'Z').toLocaleString() : '-'}
                                                     </TableCell>
                                                     <TableCell onClick={e => e.stopPropagation()}>
@@ -3677,17 +3818,20 @@ export default function Admin() {
 
                                     return (
                                         <div className="space-y-6">
-                                            <div className="rounded-md border">
-                                                <Table>
+                                            <div className="rounded-md border overflow-x-auto">
+                                                <Table className="min-w-[1000px]">
                                                     <TableHeader>
                                                         <TableRow>
-                                                            <TableHead>IP 주소</TableHead>
-                                                            <SortHeader col="id" label="학년/반/번호" className="w-[120px]" />
-                                                            <TableHead>카카오 계정</TableHead>
-                                                            <SortHeader col="modCount" label="수정 횟수" />
-                                                            <SortHeader col="lastAccess" label="마지막 접속" />
-                                                            <TableHead className="w-[100px]">알림</TableHead>
-                                                            <TableHead className="w-[100px]">관리</TableHead>
+                                                            <TableHead className="w-[120px] min-w-[120px]">IP 주소</TableHead>
+                                                            <SortHeader col="id" label="학년/반/번호" className="w-[140px] min-w-[140px]" />
+                                                            <TableHead className="w-[180px] min-w-[180px]">카카오 계정</TableHead>
+                                                            <SortHeader col="modCount" label="수정 횟수" className="w-[100px] min-w-[100px]" />
+                                                            <TableHead className="w-[80px] min-w-[80px]">출력</TableHead>
+                                                            <TableHead className="w-[80px] min-w-[80px]">다운로드</TableHead>
+                                                            <TableHead className="w-[80px] min-w-[80px]">앱설치</TableHead>
+                                                            <SortHeader col="lastAccess" label="마지막 접속" className="w-[160px] min-w-[160px]" />
+                                                            <TableHead className="w-[160px] min-w-[160px]">알림</TableHead>
+                                                            <TableHead className="w-[160px] min-w-[160px]">관리</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
@@ -3696,7 +3840,7 @@ export default function Admin() {
                                                         ))}
                                                         {groups.length === 0 && (
                                                             <TableRow>
-                                                                <TableCell colSpan={7} className="h-24 text-center text-gray-500">
+                                                                <TableCell colSpan={10} className="h-24 text-center text-gray-500">
                                                                     일반 접속 기록이 없습니다.
                                                                 </TableCell>
                                                             </TableRow>
@@ -3718,8 +3862,8 @@ export default function Admin() {
                                                         <span className="text-xs text-gray-500">학년/반 미기입 또는 브라우저 불분명</span>
                                                     </div>
                                                     {isOthersExpanded && (
-                                                        <div className="bg-gray-50 border-t">
-                                                            <Table>
+                                                        <div className="bg-gray-50 border-t overflow-x-auto">
+                                                            <Table className="min-w-[1000px]">
                                                                 <TableBody>
                                                                     {unknownUsers.map((user: IPProfile, idx: number) => (
                                                                         <TableRow key={idx}>
@@ -3738,6 +3882,21 @@ export default function Admin() {
                                                                             <TableCell>
                                                                                 {user.modificationCount > 0 ? (
                                                                                     <Badge variant="secondary" className="font-mono">{user.modificationCount}회</Badge>
+                                                                                ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                            </TableCell>
+                                                                            <TableCell>
+                                                                                {user.printCount && user.printCount > 0 ? (
+                                                                                    <Badge variant="secondary" className="font-mono bg-blue-50 text-blue-700 border-blue-200">{user.printCount}회</Badge>
+                                                                                ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                            </TableCell>
+                                                                            <TableCell>
+                                                                                {user.downloadCount && user.downloadCount > 0 ? (
+                                                                                    <Badge variant="secondary" className="font-mono bg-green-50 text-green-700 border-green-200">{user.downloadCount}회</Badge>
+                                                                                ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                            </TableCell>
+                                                                            <TableCell>
+                                                                                {user.isStandalone ? (
+                                                                                    <Badge variant="secondary" className="font-mono bg-purple-50 text-purple-700 border-purple-200">설치됨</Badge>
                                                                                 ) : <span className="text-gray-400 text-xs">-</span>}
                                                                             </TableCell>
                                                                             <TableCell>{user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}</TableCell>
@@ -3774,10 +3933,10 @@ export default function Admin() {
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                <TableHead>대상 (IP/ID)</TableHead>
+                                                <TableHead className="w-[180px] min-w-[180px]">대상 (IP/ID)</TableHead>
                                                 <TableHead>사유</TableHead>
-                                                <TableHead>차단 일시</TableHead>
-                                                <TableHead className="w-[100px]">관리</TableHead>
+                                                <TableHead className="w-[160px] min-w-[160px]">차단 일시</TableHead>
+                                                <TableHead className="w-[100px] min-w-[100px]">관리</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -5296,7 +5455,8 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
 
 function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
-    const [allowDownload, setAllowDownload] = useState(true);
+    const [allowedGrades, setAllowedGrades] = useState<number[]>([1, 2, 3]);
+    const [allowPngDownload, setAllowPngDownload] = useState(true);
     const [printSubjectFontSize, setPrintSubjectFontSize] = useState("large");
 
     const settingsQuery = useQuery({
@@ -5312,7 +5472,12 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
 
     const resetState = () => {
         if (settingsQuery.data) {
-            setAllowDownload(settingsQuery.data.allow_png_download !== 'false');
+            setAllowedGrades(
+                settingsQuery.data.allow_print_by_grade
+                    ? JSON.parse(settingsQuery.data.allow_print_by_grade)
+                    : [1, 2, 3]
+            );
+            setAllowPngDownload(settingsQuery.data.allow_png_download !== 'false');
             setPrintSubjectFontSize(settingsQuery.data.print_subject_font_size || 'large');
         }
     };
@@ -5346,9 +5511,18 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
 
     if (settingsQuery.isLoading) return <div className="p-4">설정을 불러오는 중...</div>;
 
-    const savedValue = settingsQuery.data?.allow_png_download !== 'false';
+    const savedValue = settingsQuery.data?.allow_print_by_grade
+        ? JSON.parse(settingsQuery.data.allow_print_by_grade)
+        : [1, 2, 3];
+    const savedPngAllow = settingsQuery.data?.allow_png_download !== 'false';
     const savedFontSize = settingsQuery.data?.print_subject_font_size || 'large';
-    const isDirty = (savedValue !== allowDownload) || (savedFontSize !== printSubjectFontSize);
+    const isDirty = (JSON.stringify(savedValue.sort()) !== JSON.stringify(allowedGrades.sort())) || (savedPngAllow !== allowPngDownload) || (savedFontSize !== printSubjectFontSize);
+
+    const toggleGrade = (grade: number) => {
+        setAllowedGrades(prev =>
+            prev.includes(grade) ? prev.filter(g => g !== grade) : [...prev, grade]
+        );
+    };
 
     return (
         <Card className="w-full max-w-2xl">
@@ -5359,15 +5533,43 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-                <div className="flex items-center space-x-2 pt-4">
-                    <Switch
-                        id="allow-download"
-                        checked={allowDownload}
-                        onCheckedChange={setAllowDownload}
-                    />
-                    <Label htmlFor="allow-download" className="font-medium text-sm">
-                        시간표 이미지(PNG) 내려받기 기능 활성화
-                    </Label>
+                <div className="space-y-3 pt-4">
+                    <Label className="font-medium text-sm">전체 PNG 저장 기능 허용</Label>
+                    <div className="flex items-center space-x-2">
+                        <Checkbox
+                            id="allow-png-download"
+                            checked={allowPngDownload}
+                            onCheckedChange={(c) => setAllowPngDownload(!!c)}
+                        />
+                        <label
+                            htmlFor="allow-png-download"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                            시간표 내려받기 (이미지 저장) 허용
+                        </label>
+                    </div>
+                </div>
+
+                <div className="space-y-3 pt-4 border-t border-slate-100">
+                    <Label className="font-medium text-sm">인쇄/저장 허용 학년</Label>
+                    <p className="text-xs text-gray-500 mb-2">체크된 학년의 사용자만 메인 대시보드에서 시간표 인쇄 및 이미지(PNG) 저장 기능을 사용할 수 있습니다.</p>
+                    <div className="flex flex-col gap-3">
+                        {[1, 2, 3].map((grade) => (
+                            <div key={grade} className="flex items-center space-x-2">
+                                <Checkbox
+                                    id={`allow-print-grade-${grade}`}
+                                    checked={allowedGrades.includes(grade)}
+                                    onCheckedChange={() => toggleGrade(grade)}
+                                />
+                                <label
+                                    htmlFor={`allow-print-grade-${grade}`}
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                    {grade}학년 인쇄/저장 허용
+                                </label>
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="space-y-2 pt-4 border-t border-slate-100">
@@ -5388,7 +5590,8 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
                         변경 취소
                     </Button>
                     <Button onClick={() => saveMutation.mutate({
-                        allow_png_download: String(allowDownload),
+                        allow_print_by_grade: JSON.stringify(allowedGrades),
+                        allow_png_download: allowPngDownload ? "true" : "false",
                         print_subject_font_size: printSubjectFontSize
                     })} disabled={!isDirty || saveMutation.isPending}>
                         {saveMutation.isPending ? "저장 중..." : "설정 저장"}
@@ -5396,5 +5599,132 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
                 </div>
             </CardContent>
         </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
+// SamsungInstallSettings - Controls Samsung Internet PWA button visibility
+// Located under: 기타 > 미해결 문제
+// ----------------------------------------------------------------------
+function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    const { data: settingsData, isLoading } = useQuery({
+        queryKey: ["admin", "samsungInstallSettings"],
+        queryFn: async () => {
+            const res = await fetch("/api/settings/public");
+            if (!res.ok) throw new Error("설정 불러오기 실패");
+            return res.json();
+        }
+    });
+
+    const isSamsungButtonVisible = settingsData?.samsung_install_button_visible !== false;
+    const isPwaButtonVisible = settingsData?.pwa_install_button_visible !== false;
+
+    const saveSettingMutation = useMutation({
+        mutationFn: async (payload: Record<string, string>) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("저장 실패");
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "samsungInstallSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            toast.success("설정이 저장되었습니다.");
+        },
+        onError: () => {
+            toast.error("설정 저장에 실패했습니다.");
+        }
+    });
+
+    if (isLoading) {
+        return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
+    }
+
+    return (
+        <div className="space-y-6 p-1">
+            <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
+                <p className="font-semibold mb-1">⚠️ 미해결 문제: 삼성 인터넷 홈 화면 추가</p>
+                <p className="text-orange-700">
+                    삼성 인터넷에서 <strong>beforeinstallprompt</strong> 이벤트가 일관성 없이 발생합니다.
+                    현재 <code className="bg-orange-100 px-1 rounded">display: minimal-ui + display_override</code> 방식으로
+                    "Add to apps" / "Add to Home screen" 두 옵션을 제공 중입니다.
+                    버튼이 작동하지 않는 경우 아래에서 버튼을 숨길 수 있습니다.
+                </p>
+            </div>
+
+            {/* Global toggle - hides button for ALL browsers */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">앱 다운로드 버튼 전체 표시 (모든 브라우저)</CardTitle>
+                    <CardDescription>
+                        모든 브라우저에서 홈 화면 추가 / 앱 다운로드 버튼 표시 여부를 전체적으로 제어합니다.
+                        OFF 시 삼성 인터넷 토글은 무의미합니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center gap-4">
+                        <Switch
+                            id="pwa-install-button-toggle"
+                            checked={isPwaButtonVisible}
+                            onCheckedChange={(checked) => saveSettingMutation.mutate({ pwa_install_button_visible: checked ? "true" : "false" })}
+                            disabled={saveSettingMutation.isPending}
+                        />
+                        <Label htmlFor="pwa-install-button-toggle" className="cursor-pointer">
+                            {isPwaButtonVisible
+                                ? <span className="text-green-700 font-medium">✅ 버튼 표시 중 (전체 브라우저)</span>
+                                : <span className="text-gray-500 font-medium">🔴 전체 숨김</span>
+                            }
+                        </Label>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Samsung-specific toggle */}
+            <Card className={!isPwaButtonVisible ? "opacity-50 pointer-events-none" : ""}>
+                <CardHeader>
+                    <CardTitle className="text-base">삼성 인터넷 홈 화면 추가 버튼</CardTitle>
+                    <CardDescription>
+                        삼성 인터넷 사용자에게만 "홈 화면에 성지수행 추가" 버튼 표시 여부를 설정합니다.
+                        위의 전체 토글이 OFF이면 이 설정은 무시됩니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center gap-4">
+                        <Switch
+                            id="samsung-install-button-toggle"
+                            checked={isSamsungButtonVisible}
+                            onCheckedChange={(checked) => saveSettingMutation.mutate({ samsung_install_button_visible: checked ? "true" : "false" })}
+                            disabled={saveSettingMutation.isPending}
+                        />
+                        <Label htmlFor="samsung-install-button-toggle" className="cursor-pointer">
+                            {isSamsungButtonVisible
+                                ? <span className="text-green-700 font-medium">✅ 버튼 표시 중 (삼성 인터넷 사용자에게 보임)</span>
+                                : <span className="text-gray-500 font-medium">🔴 버튼 숨김</span>
+                            }
+                        </Label>
+                    </div>
+                    {saveSettingMutation.isPending && <p className="text-sm text-gray-400 mt-2">저장 중...</p>}
+                </CardContent>
+            </Card>
+
+            <Card className="border-dashed border-gray-300 bg-gray-50">
+                <CardContent className="pt-4">
+                    <p className="text-xs text-gray-500 font-semibold mb-2">📌 기술적 한계</p>
+                    <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
+                        <li><code>display: standalone</code> → "Add to apps" (WebAPK, Play Protect 경고 위험)</li>
+                        <li><code>display: minimal-ui</code>만 → 이벤트 발화 안 됨</li>
+                        <li><code>display_override: [standalone, minimal-ui]</code> → 두 옵션 표시 (현재)</li>
+                        <li>삼성 인터넷 버전/기기에 따라 결과가 다를 수 있음</li>
+                    </ul>
+                </CardContent>
+            </Card>
+        </div>
     );
 }

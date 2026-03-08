@@ -12,6 +12,35 @@ import "./index.css";
 // 글로벌 오류 핸들러 등록 (앱 마운트 전)
 initGlobalErrorHandlers();
 
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then(registration => {
+      console.log('SW registered: ', registration);
+    }).catch(registrationError => {
+      console.log('SW registration failed: ', registrationError);
+    });
+  });
+}
+
+// Detect Android environment for specific behaviors if needed later
+if (typeof window !== 'undefined') {
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
+
+  // Track PWA Installation Status
+  if (isStandalone) {
+    document.cookie = "pwa_standalone=1; max-age=31536000; path=/";
+  }
+
+  // Register beforeinstallprompt as early as possible, BEFORE React renders.
+  // Samsung Internet fires this event very early on page load.
+  // If we only listen inside a useEffect, the event will already be gone by the time
+  // React mounts. Storing it globally guarantees Dashboard can always access it.
+  window.addEventListener('beforeinstallprompt', (e: any) => {
+    e.preventDefault();
+    (window as any).__deferredPwaPrompt = e;
+  });
+}
+
 const queryClient = new QueryClient();
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {

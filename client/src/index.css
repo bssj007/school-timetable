@@ -486,6 +486,8 @@ body.capturing #timetable-container {
   z-index: 9999 !important;
   pointer-events: none !important;
   /* Prevent hover state capture */
+  container-type: size !important;
+  container-name: timetable !important;
 }
 
 /* Print/Capturing inline display utilities */
@@ -530,4 +532,75 @@ body.capturing .opacity-60 {
 /* Hide the elective warning overlay during capture if it exists */
 body.capturing .absolute.inset-0.z-20 {
   display: none !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Fluid typography proportional to the container's height for PNG Capture    */
+/* 1cqh = 8px (since height is 800px)                                         */
+/* -------------------------------------------------------------------------- */
+
+body.capturing #timetable-container th .text-sm {
+  font-size: 3cqh !important;
+  line-height: normal !important;
+}
+
+body.capturing #timetable-container th .text-\[10px\],
+body.capturing #timetable-container th .text-xs {
+  font-size: 1.8cqh !important;
+  line-height: normal !important;
+}
+
+body.capturing #timetable-container td .font-bold {
+  font-size: 2.8cqh !important;
+  line-height: normal !important;
+}
+
+body.capturing #timetable-container td span {
+  --print-badge-size: 1.2cqh;
+}
+
+body.capturing #timetable-container td .print\:text-\[1cqh\] {
+  font-size: 1.2cqh !important;
+}
+
+body.capturing #timetable-container td .text-\[10px\],
+body.capturing #timetable-container td .text-xs {
+  font-size: 2cqh !important;
+  line-height: normal !important;
+}
+
+/* -------------------------------------------------------------------------- */
+
+/* MEDIUM (조금 크게) */
+body.capturing #timetable-container[data-print-font-size="medium"] td .text-\[9px\] {
+  font-size: 2.2cqh !important;
+  line-height: normal !important;
+}
+
+body.capturing #timetable-container[data-print-font-size="medium"] td .text-\[11px\] {
+  font-size: 2.4cqh !important;
+  line-height: normal !important;
+}
+
+body.capturing #timetable-container[data-print-font-size="medium"] td .text-sm,
+body.capturing #timetable-container[data-print-font-size="medium"] td .md\:text-base {
+  font-size: 2.6cqh !important;
+  line-height: normal !important;
+}
+
+/* LARGE (크게) */
+body.capturing #timetable-container[data-print-font-size="large"] td .text-\[9px\] {
+  font-size: 2.4cqh !important;
+  line-height: normal !important;
+}
+
+body.capturing #timetable-container[data-print-font-size="large"] td .text-\[11px\] {
+  font-size: 2.8cqh !important;
+  line-height: normal !important;
+}
+
+body.capturing #timetable-container[data-print-font-size="large"] td .text-sm,
+body.capturing #timetable-container[data-print-font-size="large"] td .md\:text-base {
+  font-size: 3.2cqh !important;
+  line-height: normal !important;
 }

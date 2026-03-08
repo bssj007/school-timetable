@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS ip_profiles (
     modificationCount INTEGER DEFAULT 0,
     userAgent TEXT,
     instructionDismissed INTEGER DEFAULT 0,
+    printCount INTEGER DEFAULT 0,
+    downloadCount INTEGER DEFAULT 0,
+    isStandalone INTEGER DEFAULT 0,
     FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
 );
 `;
@@ -48,6 +51,8 @@ CREATE TABLE IF NOT EXISTS cookie_profiles (
     grade INTEGER,
     classNum INTEGER,
     studentNumber INTEGER,
+    printCount INTEGER DEFAULT 0,
+    downloadCount INTEGER DEFAULT 0,
     FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
 );
 `;

@@ -29,7 +29,7 @@ import { useEffect } from "react";
 function App() {
   const [location] = useLocation();
 
-  // 사이트 디자인설정 동적 적용 (제목 + 파비콘)
+  // 사이트 디자인설정 동적 적용 (제목 + 파비콘 + PWA 아이콘)
   useEffect(() => {
     fetch('/api/settings/public')
       .then(res => res.ok ? res.json() : null)
@@ -48,6 +48,16 @@ function App() {
             document.head.appendChild(link);
           }
           link.href = settings.site_favicon_url;
+        }
+        // PWA (Apple-touch) 아이콘 적용
+        if (settings.pwa_app_icon_url) {
+          let appleLink = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
+          if (!appleLink) {
+            appleLink = document.createElement('link');
+            appleLink.rel = 'apple-touch-icon';
+            document.head.appendChild(appleLink);
+          }
+          appleLink.href = settings.pwa_app_icon_url;
         }
       })
       .catch(() => { }); // 실패 시 기본값 유지

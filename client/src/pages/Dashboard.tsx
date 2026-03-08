@@ -146,6 +146,55 @@ export default function Dashboard() {
   const [bugReportMessage, setBugReportMessage] = useState("");
   const [isBugReportSending, setIsBugReportSending] = useState(false);
 
+  // PWA Install Prompt State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalling, setIsInstalling] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const isIOS = typeof window !== 'undefined' ? /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) : false;
+  const isSamsungBrowser = typeof window !== 'undefined' ?
+    /SamsungBrowser/i.test(navigator.userAgent) ||
+    (/Android/i.test(navigator.userAgent) && /SM-|SAMSUNG/i.test(navigator.userAgent) && !/Chrome\/[.0-9]* Mobile/i.test(navigator.userAgent)) // Catch edge cases where it's a Samsung device but not standard Chrome
+    : false;
+  const isInAppBrowser = typeof window !== 'undefined' ? /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent) : false;
+  const isAndroid = typeof window !== 'undefined' ? /Android/i.test(navigator.userAgent) : false;
+  const [hasPwaCookie, setHasPwaCookie] = useState(typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1'));
+
+  useEffect(() => {
+    const standsAlone = window.matchMedia('(display-mode: standalone)').matches || ('standalone' in navigator && (navigator as any).standalone) === true;
+    setIsStandalone(standsAlone);
+
+    // Immediately pick up the prompt if it was already captured in main.tsx
+    // (Samsung Internet fires beforeinstallprompt very early, before React mounts)
+    if ((window as any).__deferredPwaPrompt) {
+      setDeferredPrompt((window as any).__deferredPwaPrompt);
+    }
+
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      (window as any).__deferredPwaPrompt = e;
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      setIsInstalling(true);
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      setIsInstalling(false);
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    } else {
+      // Do nothing: User requested no alternative instructions when installation fails or is bypassed.
+    }
+  };
+
   // 인쇄 / 내보내기 state
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printMode, setPrintMode] = useState<'select' | 'printer'>('select');
@@ -190,6 +239,9 @@ export default function Dashboard() {
     // Close dialog first to ensure it's not in the way
     setShowPrintOptions(false);
 
+    // Track download metric
+    fetch('/api/action/download', { method: 'POST' }).catch(() => { });
+
     try {
       // Small delay to let dialog close animation finish
       await new Promise(r => setTimeout(r, 300));
@@ -229,6 +281,10 @@ export default function Dashboard() {
   // 인쇄 핸들러
   const handlePrint = () => {
     setShowPrintOptions(false);
+
+    // Track print metric
+    fetch('/api/action/print', { method: 'POST' }).catch(() => { });
+
     setTimeout(() => {
       window.print();
       resetPrintOptions();
@@ -858,7 +914,8 @@ export default function Dashboard() {
 
   const isElectiveMissingImmediate = !isElectiveEntered && (grade === "2" || grade === "3") && !!classNum && !!studentNumber;
   const isElectiveMissing = isElectiveMissingImmediate && showElectiveWarning;
-  const shouldShowPrintButton = !((grade === "2" || grade === "3") && !isElectiveEntered);
+  const isGradeAllowedToPrint = settings?.allow_print_by_grade?.includes(Number(grade)) ?? true;
+  const shouldShowPrintButton = !((grade === "2" || grade === "3") && !isElectiveEntered) && isGradeAllowedToPrint;
 
   const gradeColors: Record<string, string> = {
     "1": "#a6ff00",
@@ -1460,10 +1517,19 @@ export default function Dashboard() {
                                         <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
                                           {isCancelledByFreePeriod ? (
                                             <span className="print:flex print:flex-col print:items-center">
-                                              <span className="line-through opacity-60">{displaySubject}</span>
-                                              <span className={`ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
+                                              <span className="line-through opacity-60 flex-shrink-0 whitespace-nowrap">{displaySubject}</span>
+                                              <span className={`block md:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
                                             </span>
-                                          ) : <span>{displaySubject}</span>}
+                                          ) : (
+                                            displaySubject?.includes("공강") && displaySubject !== "공강" ? (
+                                              <span className="flex flex-col md:inline md:flex-row items-center">
+                                                <span>{displaySubject.replace("공강", "")}</span>
+                                                <span className="block md:inline md:ml-1">공강</span>
+                                              </span>
+                                            ) : (
+                                              <span>{displaySubject}</span>
+                                            )
+                                          )}
                                         </span>
                                       </div>
                                       <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">
@@ -1877,10 +1943,59 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog >
 
+      {/* 모바일 전용 PWA 앱 다운로드 버튼 (설치 상태 및 환경에 따라 상태 변경) */}
+      {!isInAppBrowser && settings?.pwa_install_button_visible !== false && (
+        <div className="md:hidden mt-6 mb-2 space-y-2">
+          {/* App Download for Normal Browsers (Chrome, etc.) vs Add to Home Screen for Samsung/In-App */}
+          {isSamsungBrowser ? (
+            // For Samsung browsers: respect admin toggle from '미해결 문제' settings
+            !hasPwaCookie && settings?.samsung_install_button_visible !== false && (
+              <>
+                <Button
+                  onClick={handleInstallClick}
+                  disabled={isInstalling}
+                  className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
+                >
+                  {isInstalling ? (
+                    <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 outline-none">
+                      <path d="M11 17h2v-6h-2v6Zm1-8q.425 0 .713-.288T13 8q0-.425-.288-.713T12 7q-.425 0-.713.288T11 8q0 .425.288.713T12 9Zm0 13q-2.075 0-3.9-.788t-3.175-2.137q-1.35-1.35-2.137-3.175T2 12q0-2.075.788-3.9t2.137-3.175q1.35-1.35 3.175-2.137T12 2q2.075 0 3.9.788t3.175 2.137q1.35 1.35 2.137 3.175T22 12q0 2.075-.788 3.9t-2.137 3.175q-1.35 1.35-3.175 2.137T12 22Z" />
+                    </svg>
+                  )}
+                  <span>{isInstalling ? '설치 중...' : '홈 화면에 성지수행 추가'}</span>
+                </Button>
+              </>
+            )
+          ) : (
+            // Normal PWA Prompt (Chrome, Safari, etc.)
+            !hasPwaCookie && !isStandalone && (
+              <>
+                <Button
+                  onClick={handleInstallClick}
+                  disabled={isInstalling}
+                  className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
+                >
+                  {isInstalling ? (
+                    <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
+                      <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
+                    </svg>
+                  )}
+                  <span>{isInstalling ? '설치 중...' : '성지수행 앱 다운로드'}</span>
+                </Button>
+              </>
+            )
+          )}
+        </div>
+      )}
       {/* 수행평가 목록 */}
-      < Card className="mt-8" >
+      <Card className="mt-8">
         <CardHeader>
-          <CardTitle>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`} 수행평가 ({weekRangeText})</CardTitle>
+          <CardTitle>
+            <span>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}</span> 수행평가 ({weekRangeText})
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
