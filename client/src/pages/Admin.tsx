@@ -2743,7 +2743,7 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 {selectedMenu === "allow-download-settings" && (
                     <div className="flex flex-col h-full gap-4">
                         <div className="flex gap-2 items-center pb-4 border-b">
-                            <h3 className="text-lg font-bold flex-1">내려받기 허용 설정</h3>
+                            <h3 className="text-lg font-bold flex-1">프린트 및 내려받기 설정</h3>
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <AllowDownloadSettings adminPassword={adminPassword} />
@@ -5297,6 +5297,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
 function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
     const [allowDownload, setAllowDownload] = useState(true);
+    const [printSubjectFontSize, setPrintSubjectFontSize] = useState("large");
 
     const settingsQuery = useQuery({
         queryKey: ["admin", "settings", "allowDownload"],
@@ -5312,6 +5313,7 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
     const resetState = () => {
         if (settingsQuery.data) {
             setAllowDownload(settingsQuery.data.allow_png_download !== 'false');
+            setPrintSubjectFontSize(settingsQuery.data.print_subject_font_size || 'large');
         }
     };
 
@@ -5333,7 +5335,7 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
             return res.json();
         },
         onSuccess: () => {
-            toast.success("내려받기 허용 설정이 저장되었습니다.");
+            toast.success("프린트 및 내려받기 설정이 저장되었습니다.");
             queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
             queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
         },
@@ -5345,14 +5347,15 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
     if (settingsQuery.isLoading) return <div className="p-4">설정을 불러오는 중...</div>;
 
     const savedValue = settingsQuery.data?.allow_png_download !== 'false';
-    const isDirty = savedValue !== allowDownload;
+    const savedFontSize = settingsQuery.data?.print_subject_font_size || 'large';
+    const isDirty = (savedValue !== allowDownload) || (savedFontSize !== printSubjectFontSize);
 
     return (
         <Card className="w-full max-w-2xl">
             <CardHeader>
-                <CardTitle>내려받기 허용 설정</CardTitle>
+                <CardTitle>프린트 및 내려받기 설정</CardTitle>
                 <CardDescription>
-                    일반 사용자가 메인 대시보드에서 시간표를 이미지(PNG)로 저장할 수 있도록 허용할지 여부를 설정합니다.
+                    일반 사용자가 메인 대시보드에서 시간표를 이미지(PNG)로 저장할 수 있도록 허용할지 여부와 인쇄 시 적용할 글꼴 크기를 설정합니다.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -5367,11 +5370,27 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
                     </Label>
                 </div>
 
+                <div className="space-y-2 pt-4 border-t border-slate-100">
+                    <Label className="font-medium text-sm">프린트 과목명 글자 크기</Label>
+                    <Select value={printSubjectFontSize} onValueChange={setPrintSubjectFontSize}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="과목명 크기 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="large">크게 (1단계 설정)</SelectItem>
+                            <SelectItem value="medium">조금 크게 (2단계 설정, 권장)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
                 <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                     <Button variant="outline" onClick={resetState} disabled={!isDirty || saveMutation.isPending}>
                         변경 취소
                     </Button>
-                    <Button onClick={() => saveMutation.mutate({ allow_png_download: String(allowDownload) })} disabled={!isDirty || saveMutation.isPending}>
+                    <Button onClick={() => saveMutation.mutate({
+                        allow_png_download: String(allowDownload),
+                        print_subject_font_size: printSubjectFontSize
+                    })} disabled={!isDirty || saveMutation.isPending}>
                         {saveMutation.isPending ? "저장 중..." : "설정 저장"}
                     </Button>
                 </div>

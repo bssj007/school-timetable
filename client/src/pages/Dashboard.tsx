@@ -163,7 +163,7 @@ export default function Dashboard() {
     { id: 'pink', label: '핫핑크' },
   ];
   const [printPreset, setPrintPreset] = useState<string>('desk');
-  const [printTheme, setPrintTheme] = useState<string>('simple');
+  const [printTheme, setPrintTheme] = useState('color');
   const [printWidth, setPrintWidth] = useState<string>('9');
   const [printHeight, setPrintHeight] = useState<string>('11');
   const timetableRef = useRef<HTMLDivElement>(null);
@@ -178,7 +178,7 @@ export default function Dashboard() {
     setPrintMode('select');
     setIncludeAssessments(true);
     setPrintPreset('desk');
-    setPrintTheme('simple');
+    setPrintTheme('color');
     setPrintWidth('9');
     setPrintHeight('11');
   };
