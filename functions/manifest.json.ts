@@ -32,7 +32,7 @@ export const onRequest = async (context: any) => {
             "short_name": appTitle,
             "description": "부산성지고등학교 시간표 및 수행평가 관리 서비스",
             "start_url": "/",
-            "display": isSamsungBrowser ? "browser" : "standalone",
+            "display": isSamsungBrowser ? "minimal-ui" : "standalone",
             "orientation": "portrait",
             "categories": ["education", "productivity"],
             "prefer_related_applications": false,
