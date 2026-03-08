@@ -250,11 +250,11 @@
   }
 
   #timetable-container {
-    width: 19cm !important;
-    height: 27cm !important;
-    transform: scaleX(var(--scale-x, 1)) scaleY(var(--scale-y, 1));
-    transform-origin: top left;
-    padding: 0.5cm;
+    container-type: size;
+    container-name: timetable;
+    width: 100% !important;
+    height: 100% !important;
+    padding: 3cqh;
     background: white;
     box-shadow: none !important;
     border: none !important;
@@ -280,9 +280,7 @@
   /* Keep blue background for assessments during print */
   #timetable-container .bg-blue-100 {
     background-color: #dbeafe !important;
-    /* Tailwind blue-100 */
     border-color: #93c5fd !important;
-    /* Tailwind blue-300 */
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     box-shadow: none !important;
@@ -291,7 +289,7 @@
 
   #timetable-container table {
     width: 100% !important;
-    height: calc(100% - 3cm) !important;
+    flex-grow: 1;
     border-collapse: collapse !important;
   }
 
@@ -299,11 +297,50 @@
   #timetable-container td {
     border: 1px solid black !important;
     color: black !important;
+    height: auto !important;
+    /* Allow rows to stretch evenly */
+    padding: 0.5cqh !important;
+  }
+
+  /* Fluid typography proportional to the container's height */
+  #timetable-container th .text-sm {
+    font-size: 2.5cqh !important;
+    line-height: normal !important;
+  }
+
+  #timetable-container th .text-\[10px\],
+  #timetable-container th .text-xs {
+    font-size: 1.5cqh !important;
+    line-height: normal !important;
+  }
+
+  #timetable-container td .font-bold {
+    font-size: 2.2cqh !important;
+    line-height: normal !important;
+  }
+
+  #timetable-container td .text-\[10px\],
+  #timetable-container td .text-\[9px\],
+  #timetable-container td .text-xs,
+  #timetable-container td .text-sm {
+    font-size: 1.6cqh !important;
+    line-height: normal !important;
   }
 
   .capture-only {
     display: block !important;
-    margin-bottom: 0.5cm;
+    margin-bottom: 2cqh !important;
+  }
+
+  .capture-only .text-sm {
+    font-size: 3cqh !important;
+    line-height: normal !important;
+  }
+
+  .capture-only .text-\[10px\],
+  .capture-only .text-xs {
+    font-size: 1.8cqh !important;
+    line-height: normal !important;
   }
 }
 

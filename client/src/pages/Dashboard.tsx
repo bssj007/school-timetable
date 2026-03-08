@@ -375,7 +375,7 @@ export default function Dashboard() {
         if (typeof data.electives === 'string') {
           try {
             data.electives = JSON.parse(data.electives);
-          } catch (e) { }
+          } catch { }
         }
       }
       return data;
@@ -763,7 +763,7 @@ export default function Dashboard() {
   const electiveSummary = useMemo(() => {
     if (!currentProfile?.electives) return "";
     return Object.values(currentProfile.electives)
-      .map(e => e.subject)
+      .map((e: any) => e.subject)
       .filter(Boolean)
       .join(", ");
   }, [currentProfile]);
@@ -1229,10 +1229,16 @@ export default function Dashboard() {
             <CardContent className="px-1 pb-1 md:px-2 md:pb-2">
               <div id="print-wrapper" style={{
                 '--print-width': `${parseFloat(printWidth) || 10}cm`,
-                '--print-height': `${parseFloat(printHeight) || 10}cm`,
-                '--scale-x': printScaleX,
-                '--scale-y': printScaleY
+                '--print-height': `${parseFloat(printHeight) || 10}cm`
               } as React.CSSProperties}>
+                <style type="text/css" media="print">
+                  {`
+                    @page {
+                      size: ${parseFloat(printWidth) || 10}cm ${parseFloat(printHeight) || 10}cm;
+                      margin: 0;
+                    }
+                  `}
+                </style>
                 <div ref={timetableRef} id="timetable-container">
                   {/* Print Capture Header */}
                   <div className="capture-only mb-1.5 p-1.5 border rounded-md text-black flex flex-col gap-0.5">
