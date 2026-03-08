@@ -30,6 +30,15 @@ if (typeof window !== 'undefined') {
   if (isStandalone) {
     document.cookie = "pwa_standalone=1; max-age=31536000; path=/";
   }
+
+  // Register beforeinstallprompt as early as possible, BEFORE React renders.
+  // Samsung Internet fires this event very early on page load.
+  // If we only listen inside a useEffect, the event will already be gone by the time
+  // React mounts. Storing it globally guarantees Dashboard can always access it.
+  window.addEventListener('beforeinstallprompt', (e: any) => {
+    e.preventDefault();
+    (window as any).__deferredPwaPrompt = e;
+  });
 }
 
 const queryClient = new QueryClient();

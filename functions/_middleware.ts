@@ -299,6 +299,9 @@ export const onRequest = async (context: any) => {
             const titleRow = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'site_title'").first();
             const siteTitle = (titleRow && titleRow.value) ? (titleRow.value as string) : '수행 일정공유';
 
+            const htmlRow = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'site_title_html'").first();
+            const siteTitleHtml = (htmlRow && htmlRow.value) ? (htmlRow.value as string) : '';
+
             // Transform the response stream first
             const transformedResponse = new HTMLRewriter().on("title", {
                 element(element: any) {
@@ -306,8 +309,9 @@ export const onRequest = async (context: any) => {
                 }
             }).on("head", {
                 element(element: any) {
-                    // Fallback: This correctly avoids overwriting existing title but appends if missing? 
-                    // Actually, appending blindly to head might duplicate. Let's stick to modifying <title>.
+                    if (siteTitleHtml) {
+                        element.append(`<script>window.__INITIAL_SITE_TITLE_HTML__ = ${JSON.stringify(siteTitleHtml)};</script>`, { html: true });
+                    }
                 }
             }).transform(response);
 

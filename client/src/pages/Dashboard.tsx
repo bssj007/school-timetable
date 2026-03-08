@@ -163,11 +163,16 @@ export default function Dashboard() {
     const standsAlone = window.matchMedia('(display-mode: standalone)').matches || ('standalone' in navigator && (navigator as any).standalone) === true;
     setIsStandalone(standsAlone);
 
+    // Immediately pick up the prompt if it was already captured in main.tsx
+    // (Samsung Internet fires beforeinstallprompt very early, before React mounts)
+    if ((window as any).__deferredPwaPrompt) {
+      setDeferredPrompt((window as any).__deferredPwaPrompt);
+    }
+
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
+      (window as any).__deferredPwaPrompt = e;
       setDeferredPrompt(e);
-      // Chrome fires this event natively ONLY if the app is NOT installed.
-      // Removed: the auto-reset cookie logic so the "Already Installed" state persists, per user request.
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => {
