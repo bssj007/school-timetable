@@ -153,6 +153,7 @@ export default function Dashboard() {
   const isIOS = typeof window !== 'undefined' ? /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) : false;
   const isSamsungBrowser = typeof window !== 'undefined' ? /SamsungBrowser/i.test(navigator.userAgent) : false;
   const isInAppBrowser = typeof window !== 'undefined' ? /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent) : false;
+  const isAndroid = typeof window !== 'undefined' ? /Android/i.test(navigator.userAgent) : false;
   const [hasPwaCookie, setHasPwaCookie] = useState(typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1'));
 
   useEffect(() => {
@@ -174,6 +175,38 @@ export default function Dashboard() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, []);
+
+  // Android WebAPK Auto-Redirect
+  useEffect(() => {
+    // Only attempt redirect if on Android, not already inside the app, and we known they have the app installed
+    if (isAndroid && hasPwaCookie && !isStandalone) {
+      // Use sessionStorage to ensure we only try to redirect once per tab session
+      // This prevents infinite redirect loops if the intent fails and falls back to the browser
+      const hasAttemptedRedirect = sessionStorage.getItem('pwa_redirect_attempted');
+
+      if (!hasAttemptedRedirect) {
+        sessionStorage.setItem('pwa_redirect_attempted', 'true');
+
+        // Fallback timeout in case intent fails silently
+        const fallbackTimer = setTimeout(() => {
+          console.log("Intent redirect may have failed, falling back to browser.");
+        }, 2000);
+
+        // the host is the actual current host (e.g. bssj.pages.dev)
+        const host = window.location.host;
+        const scheme = window.location.protocol.replace(':', '');
+
+        // WebAPK intents require the scheme and host to match the manifest exactly
+        // We do not specify the exact org.chromium.webapk package because it's unpredictable
+        // Just triggering the URL intent will prompt the OS to open the default handler (our WebAPK)
+        const intentUrl = `intent://${host}/#Intent;scheme=${scheme};action=android.intent.action.VIEW;end;`;
+
+        window.location.replace(intentUrl);
+
+        return () => clearTimeout(fallbackTimer);
+      }
+    }
+  }, [isAndroid, hasPwaCookie, isStandalone]);
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
