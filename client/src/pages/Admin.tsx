@@ -175,6 +175,18 @@ function ElectiveManager({ password }: { password: string }) {
                 }
             });
 
+            // Sort: Alphabetical (ㄱㄴㄷ) but push "빈교실", "공강", etc. to the bottom
+            const FREE_KEYWORDS = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"];
+            merged.sort((a, b) => {
+                const aFree = FREE_KEYWORDS.some(k => a.subject.trim().includes(k));
+                const bFree = FREE_KEYWORDS.some(k => b.subject.trim().includes(k));
+
+                if (aFree && !bFree) return 1;
+                if (!aFree && bFree) return -1;
+
+                return a.subject.localeCompare(b.subject, 'ko-KR');
+            });
+
             setSubjects(merged);
             setOriginalSubjects(JSON.parse(JSON.stringify(merged)));
         } catch (error: any) {
@@ -391,13 +403,13 @@ function ElectiveManager({ password }: { password: string }) {
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-auto border rounded-md">
-                    <Table>
+                <div className="flex-1 overflow-auto border rounded-md [&>div]:overflow-visible">
+                    <Table className="w-full min-w-[900px] md:min-w-[1000px]">
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[150px]">과목명</TableHead>
+                                <TableHead className="w-[80px] md:w-[90px]">과목명</TableHead>
                                 <TableHead className="w-[150px]">과목 풀네임</TableHead>
-                                <TableHead className="w-[100px]">원래 선생님</TableHead>
+                                <TableHead className="w-[60px] md:w-[70px]">원래 쌤</TableHead>
                                 <TableHead className="w-[150px]">분반 (A/B/C...)</TableHead>
                                 <TableHead>선생님 성함 (전체)</TableHead>
                                 <TableHead className="w-[150px]">이동 수업 여부</TableHead>
@@ -523,7 +535,7 @@ function ElectiveManager({ password }: { password: string }) {
                                                         className={`h-7 text-xs px-2 ${!item.isMovingClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isFreePeriod ? "pointer-events-none" : ""}`}
                                                         onClick={() => {
                                                             handleInputChange(originalIndex, "isMovingClass", false);
-                                                            handleInputChange(originalIndex, "className", ""); // clear className when turned off
+                                                            handleInputChange(originalIndex, "className", "{}"); // clear className when turned off
                                                         }}
                                                         disabled={isFreePeriod || isDeleted}
                                                     >
@@ -532,13 +544,61 @@ function ElectiveManager({ password }: { password: string }) {
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                <Input
-                                                    value={item.className || ""}
-                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(originalIndex, "className", e.target.value)}
-                                                    placeholder="예: 1,2,3"
-                                                    className={`max-w-[100px] ${(!item.isMovingClass || isFreePeriod) ? "bg-gray-100 pointer-events-none text-gray-400" : ""}`}
-                                                    disabled={!item.isMovingClass || isFreePeriod || isDeleted}
-                                                />
+                                                {(() => {
+                                                    const isDisabled = !item.isMovingClass || isFreePeriod || isDeleted;
+                                                    let classCodes = (item.classCode || "").split(",").filter(Boolean);
+
+                                                    // Parse className JSON safely
+                                                    let parsedClassNames: Record<string, string> = {};
+                                                    if (item.className) {
+                                                        try {
+                                                            parsedClassNames = JSON.parse(item.className);
+                                                        } catch (e) {
+                                                            // Legacy string fallback - assign to all current groups
+                                                            if (classCodes.length > 0) {
+                                                                classCodes.forEach((code: string) => {
+                                                                    parsedClassNames[code] = item.className;
+                                                                });
+                                                            } else {
+                                                                parsedClassNames["_global"] = item.className;
+                                                            }
+                                                        }
+                                                    }
+
+                                                    const handleGroupClassNameChange = (groupCode: string, newValue: string) => {
+                                                        const newParsed = { ...parsedClassNames, [groupCode]: newValue };
+                                                        handleInputChange(originalIndex, "className", JSON.stringify(newParsed));
+                                                    };
+
+                                                    if (classCodes.length === 0) {
+                                                        return (
+                                                            <Input
+                                                                value={parsedClassNames["_global"] || ""}
+                                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleGroupClassNameChange("_global", e.target.value)}
+                                                                placeholder="예: 1,2,3"
+                                                                className={`max-w-[100px] ${isDisabled ? "bg-gray-100 pointer-events-none text-gray-400" : ""}`}
+                                                                disabled={isDisabled}
+                                                            />
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <div className="flex flex-col gap-1 w-full max-w-[120px]">
+                                                            {classCodes.map((code: string) => (
+                                                                <div key={code} className="flex items-center gap-1">
+                                                                    <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1 py-0.5 rounded shrink-0">{code}</span>
+                                                                    <Input
+                                                                        value={parsedClassNames[code] || ""}
+                                                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleGroupClassNameChange(code, e.target.value)}
+                                                                        placeholder="예: 1,2"
+                                                                        className={`h-7 text-xs ${isDisabled ? "bg-gray-100 pointer-events-none text-gray-400" : ""}`}
+                                                                        disabled={isDisabled}
+                                                                    />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-1">
@@ -1158,48 +1218,102 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
     const tableRows = useMemo(() => {
         const grouped: Record<string, { subject: string; fullSubjectName?: string; className?: string; freePeriods: string[] }[]> = {};
 
+        if (!allSlots || allSlots.length === 0) return [];
+
         configs.forEach((c: any) => {
             const isFreePeriod = FREE_KEYWORDS.some(k => (c.subject || "").includes(k));
-            if (c.isMovingClass === 0 && !isFreePeriod) return;
+            if (isFreePeriod) return;
+            if (c.isMovingClass === 0) return;
             if (!c.classCode) return;
             const codes = (c.classCode as string).split(",").map(s => s.trim()).filter(Boolean);
             codes.forEach(code => {
                 if (!grouped[code]) grouped[code] = [];
                 if (grouped[code].some(r => r.subject === c.subject)) return;
 
-                // Find all slots where this subject appears
-                const subjectSlots = allSlots.filter((s: any) =>
-                    s.subject && s.subject.trim() === c.subject.trim()
-                );
-
-                // For each subject slot, check if there's a free period in ANY class
-                // at the same weekday+classTime (indicating a parallel free period exists)
                 const freePeriodSet = new Set<string>();
-                subjectSlots.forEach((ss: any) => {
-                    const sameTimeSlots = allSlots.filter((s: any) =>
-                        s.weekday === ss.weekday &&
-                        s.classTime === ss.classTime
-                    );
-                    const hasFreePeriod = sameTimeSlots.some((s: any) =>
-                        FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
-                    );
-                    if (hasFreePeriod) {
-                        // weekday is 0-indexed (0=Mon, 4=Fri)
-                        const label = `${WEEKDAY_LABELS[ss.weekday]}${ss.classTime}`;
-                        freePeriodSet.add(label);
+
+                // Parse class number and grade Robustly
+                let codeGrade = parseInt(grade as string, 10);
+                let codeClassNum = parseInt(code, 10);
+                if (code.includes("-")) {
+                    const parts = code.split("-");
+                    codeGrade = parseInt(parts[0], 10);
+                    codeClassNum = parseInt(parts[1], 10);
+                }
+
+                // All class codes belonging to the SAME group as c
+                const groupCodes = (c.classCode as string).split(",").map((s: string) => s.trim()).filter(Boolean);
+
+                // Iterate through all 5 days and 7 periods
+                for (let wd = 0; wd < 5; wd++) {
+                    for (let ct = 1; ct <= 7; ct++) {
+                        const sameTimeSlots = allSlots.filter((s: any) =>
+                            s.weekday === wd &&
+                            s.classTime === ct
+                        );
+
+                        // Is this class specifically scheduled for a free period at this time?
+                        const isClassFreeAtTime = sameTimeSlots.some((s: any) =>
+                            parseInt(s.class) === codeClassNum &&
+                            parseInt(s.grade) === codeGrade &&
+                            FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
+                        );
+
+                        if (isClassFreeAtTime) {
+                            // Verify that this timeslot actually belongs to this group –
+                            // i.e., some OTHER subject from the same group IS being taught at this time
+                            const isGroupTimeslot = configs.some((otherC: any) => {
+                                if (!otherC.classCode) return false;
+                                const otherCodes = (otherC.classCode as string).split(",").map((x: string) => x.trim());
+                                const sharesGroup = groupCodes.some(gc => otherCodes.includes(gc));
+                                if (!sharesGroup) return false;
+                                return sameTimeSlots.some((s: any) =>
+                                    s.subject && s.subject.trim() === otherC.subject.trim()
+                                );
+                            });
+
+                            if (isGroupTimeslot) {
+                                // If this class has a "Free" slot in a group period, check if our subject is taught ANYWHERE in the grade
+                                const isSubjectTaughtAnywhere = sameTimeSlots.some((s: any) =>
+                                    s.subject && s.subject.trim() === c.subject.trim()
+                                );
+
+                                if (!isSubjectTaughtAnywhere) {
+                                    const label = `${WEEKDAY_LABELS[wd]}${ct}`;
+                                    freePeriodSet.add(label);
+                                }
+                            }
+                        }
                     }
-                });
+                }
+
+                let parsedClassName = c.className || "";
+                try {
+                    const parsed = JSON.parse(c.className);
+                    parsedClassName = parsed[code] || parsed["_global"] || "";
+                } catch {
+                    // Fallback to legacy string
+                }
 
                 grouped[code].push({
                     subject: c.subject,
                     fullSubjectName: c.fullSubjectName,
-                    className: c.className,
+                    className: parsedClassName,
                     freePeriods: Array.from(freePeriodSet).sort(),
                 });
             });
         });
 
-        return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+        return Object.entries(grouped)
+            .map(([code, subjects]) => {
+                // Final safety check to strip out standalone free period rows
+                const filteredSubjects = subjects.filter(
+                    s => !FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
+                );
+                return [code, filteredSubjects] as [string, typeof subjects];
+            })
+            .filter(([_, subjects]) => subjects.length > 0)
+            .sort(([a], [b]) => a.localeCompare(b));
     }, [configs, allSlots]);
 
     const isLoading = settingsQuery.isLoading || electiveConfigQuery.isLoading || timetableQuery.isLoading;
@@ -1380,6 +1494,64 @@ function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string })
                     </Button>
                 </div>
             </CardContent>
+        </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
+// 6.8 Target Class Display Settings (대상 반 표시 여부)
+// ----------------------------------------------------------------------
+function TargetClassDisplaySettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "targetClassDisplay"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        }
+    });
+
+    // Default to true if not explicitly set to false
+    const isTargetClassEnabled = settingsQuery.data?.show_target_class_main_menu !== 'false';
+
+    const toggleMutation = useMutation({
+        mutationFn: async (enabled: boolean) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ show_target_class_main_menu: enabled ? 'true' : 'false' })
+            });
+            if (!res.ok) throw new Error("Failed to update setting");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            toast.success("설정이 변경되었습니다.");
+        },
+        onError: () => toast.error("변경에 실패했습니다.")
+    });
+
+    return (
+        <Card className="w-full max-w-lg mb-6">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <div className="space-y-1">
+                    <CardTitle className="text-base font-semibold">메인페이지 대상 반 표시</CardTitle>
+                    <CardDescription>메인 화면 시간표에 대상 반(예: 2-3)을 표시합니다.</CardDescription>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Switch
+                        checked={isTargetClassEnabled}
+                        onCheckedChange={(c) => toggleMutation.mutate(c)}
+                        disabled={toggleMutation.isPending || settingsQuery.isLoading}
+                    />
+                    <label className="text-sm font-medium leading-none cursor-pointer">
+                        {isTargetClassEnabled ? "표시" : "숨김"}
+                    </label>
+                </div>
+            </CardHeader>
         </Card>
     );
 }
@@ -2675,6 +2847,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     내려받기 허용
                 </Button>
                 <Button
+                    variant={selectedMenu === "promotion-settings" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("promotion-settings")}
+                >
+                    <Info className="w-4 h-4 mr-2" />
+                    수행평가 팝업 설정
+                </Button>
+                <Button
                     variant={selectedMenu === "unresolved-issues" ? "default" : "ghost"}
                     className="justify-start whitespace-nowrap text-left text-orange-600 hover:text-orange-700"
                     onClick={() => setSelectedMenu("unresolved-issues")}
@@ -2845,12 +3025,24 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     </div>
                 )}
 
+                {selectedMenu === "promotion-settings" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">수행평가 팝업 설정</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <PromotionSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
                 {selectedMenu === "unresolved-issues" && (
                     <div className="flex flex-col h-full gap-4">
                         <div className="flex gap-2 items-center pb-4 border-b">
                             <h3 className="text-lg font-bold flex-1 text-orange-600">⚠️ 미해결 문제</h3>
                         </div>
                         <div className="flex-1 overflow-y-auto">
+                            <TargetClassDisplaySettings adminPassword={adminPassword} />
                             <SamsungInstallSettings adminPassword={adminPassword} />
                         </div>
                     </div>
@@ -3253,6 +3445,26 @@ export default function Admin() {
         onError: () => toast.error("해제 실패"),
     });
 
+    const resetDismissMutation = useMutation({
+        mutationFn: async (ip: string) => {
+            const res = await fetch("/api/admin/users/reset-dismiss", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": password,
+                },
+                body: JSON.stringify({ ip }),
+            });
+            if (!res.ok) throw new Error("Failed to reset popup status");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("해당 사용자의 홍보 팝업 닫음 상태가 초기화되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+        },
+        onError: () => toast.error("상태 초기화 실패"),
+    });
+
 
 
     if (!isAuthenticated) {
@@ -3523,6 +3735,7 @@ export default function Admin() {
                                         kakaoAccounts: { kakaoId: string; kakaoNickname: string }[];
                                         isBlocked: boolean;
                                         hasElectives?: boolean;
+                                        instructionDismissed: boolean;
                                     };
 
                                     const groupMap = new Map<string, UserGroup>();
@@ -3546,6 +3759,7 @@ export default function Admin() {
                                             }
                                             if (user.isBlocked) existing.isBlocked = true;
                                             if (user.hasElectives) existing.hasElectives = true;
+                                            if (user.instructionDismissed) existing.instructionDismissed = true;
                                         } else {
                                             groupMap.set(key, {
                                                 key,
@@ -3560,6 +3774,7 @@ export default function Admin() {
                                                 kakaoAccounts: [...(user.kakaoAccounts || [])],
                                                 isBlocked: !!user.isBlocked,
                                                 hasElectives: !!user.hasElectives,
+                                                instructionDismissed: !!user.instructionDismissed,
                                             });
                                         }
                                     }
@@ -3794,19 +4009,34 @@ export default function Admin() {
                                                         ) : <span className="text-gray-400 text-xs">{hasMultiple ? '(펼쳐서 확인)' : '-'}</span>}
                                                     </TableCell>
                                                     <TableCell onClick={e => e.stopPropagation()}>
-                                                        {group.isBlocked ? (
-                                                            <Badge variant="destructive">차단됨</Badge>
-                                                        ) : (
-                                                            <Button
-                                                                variant="outline" size="sm"
-                                                                className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                                                                onClick={() => {
-                                                                    if (confirm(`IP ${representativeUser.ip}를 차단하시겠습니까?`)) {
-                                                                        blockUserMutation.mutate({ identifier: representativeUser.ip, type: 'IP' });
-                                                                    }
-                                                                }}
-                                                            ><Ban className="h-4 w-4 mr-1" />차단</Button>
-                                                        )}
+                                                        <div className="flex gap-2">
+                                                            {group.instructionDismissed && (
+                                                                <Button
+                                                                    variant="outline" size="sm"
+                                                                    className="text-orange-500 hover:text-orange-600 hover:bg-orange-50"
+                                                                    onClick={() => {
+                                                                        if (confirm(`선택한 사용자의 '홍보 팝업 다시보지 않기' 상태를 강제로 초기화하시겠습니까?`)) {
+                                                                            resetDismissMutation.mutate(representativeUser.ip);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <TriangleAlert className="h-4 w-4 mr-1" />팝업 리셋
+                                                                </Button>
+                                                            )}
+                                                            {group.isBlocked ? (
+                                                                <Badge variant="destructive">차단됨</Badge>
+                                                            ) : (
+                                                                <Button
+                                                                    variant="outline" size="sm"
+                                                                    className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                                                    onClick={() => {
+                                                                        if (confirm(`IP ${representativeUser.ip}를 차단하시겠습니까?`)) {
+                                                                            blockUserMutation.mutate({ identifier: representativeUser.ip, type: 'IP' });
+                                                                        }
+                                                                    }}
+                                                                ><Ban className="h-4 w-4 mr-1" />차단</Button>
+                                                            )}
+                                                        </div>
                                                     </TableCell>
                                                 </TableRow>
                                                 {hasMultiple && isExpanded && group.ips.map((user, idx) => (
@@ -5595,6 +5825,108 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
                         print_subject_font_size: printSubjectFontSize
                     })} disabled={!isDirty || saveMutation.isPending}>
                         {saveMutation.isPending ? "저장 중..." : "설정 저장"}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
+// PromotionSettings - Controls when to reset the assessment instruction popup
+// Located under: 기타 > 홍보
+// ----------------------------------------------------------------------
+function PromotionSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [resetDays, setResetDays] = useState<number | null>(null);
+
+    const { data: settingsData, isLoading } = useQuery({
+        queryKey: ["admin", "promotionSettings"],
+        queryFn: async () => {
+            const res = await fetch("/api/settings/public");
+            if (!res.ok) throw new Error("설정 불러오기 실패");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsData && settingsData.promotion_reset_days !== undefined) {
+            setResetDays(parseInt(settingsData.promotion_reset_days, 10));
+        } else if (settingsData) {
+            setResetDays(0);
+        }
+    }, [settingsData]);
+
+    const saveSettingMutation = useMutation({
+        mutationFn: async (payload: Record<string, string>) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("저장 실패");
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "promotionSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            toast.success("홍보 설정이 저장되었습니다.");
+        },
+        onError: () => {
+            toast.error("설정 저장에 실패했습니다.");
+        }
+    });
+
+    if (isLoading || resetDays === null) {
+        return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
+    }
+
+    const originalDays = settingsData?.promotion_reset_days !== undefined ? parseInt(settingsData.promotion_reset_days, 10) : 0;
+    const isDirty = resetDays !== originalDays;
+
+    return (
+        <Card className="w-full max-w-2xl mt-8">
+            <CardHeader>
+                <CardTitle>수행평가 입력 독려 (홍보) 팝업 설정</CardTitle>
+                <CardDescription>
+                    일반 사용자가 수행평가를 적극적으로 입력하도록 유도하는 "수행평가 추가" 도움말 팝업의 재구동 시점을 설정합니다.<br />
+                    설정한 기간(일) 동안 앱 전체에 새로운 수행평가가 올라오지 않으면, 이전에 팝업을 닫았던 사용자라도 다시 팝업이 노출됩니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="space-y-3 pt-4">
+                    <Label className="font-medium text-sm">팝업 초기화 기준일 (미등록 기간)</Label>
+                    <div className="flex items-center space-x-2">
+                        <Input
+                            type="number"
+                            min={0}
+                            value={resetDays}
+                            onChange={(e) => setResetDays(parseInt(e.target.value) || 0)}
+                            className="w-24"
+                        />
+                        <span className="text-sm font-medium">일 동안 새 수행평가 등록이 없으면 팝업 다시 표시</span>
+                    </div>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
+                    <p>💡 <strong>0일</strong>로 설정 시 이 기능이 <strong>비활성화</strong>되며, 사용자가 한 번 팝업을 닫으면 다시는 표시되지 않습니다.</p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                    <Button
+                        variant="outline"
+                        onClick={() => setResetDays(originalDays)}
+                        disabled={!isDirty || saveSettingMutation.isPending}
+                    >
+                        변경 취소
+                    </Button>
+                    <Button
+                        onClick={() => saveSettingMutation.mutate({ promotion_reset_days: resetDays.toString() })}
+                        disabled={!isDirty || saveSettingMutation.isPending}
+                    >
+                        {saveSettingMutation.isPending ? "저장 중..." : "설정 저장"}
                     </Button>
                 </div>
             </CardContent>

@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant capturing (&:is(body.capturing *));
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -349,6 +350,8 @@
     color-adjust: exact !important;
   }
 
+
+
   /* Simple Theme Overrides (Grayscale) */
   #timetable-container[data-print-theme="simple"] table {
     filter: grayscale(100%) !important;
@@ -518,6 +521,8 @@ body.capturing #timetable-container table {
 body.capturing .no-print {
   display: none !important;
 }
+
+
 
 body.capturing .blur-\[3px\] {
   filter: none !important;

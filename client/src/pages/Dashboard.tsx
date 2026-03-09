@@ -171,8 +171,11 @@ export default function Dashboard() {
 
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
-      (window as any).__deferredPwaPrompt = e;
-      setDeferredPrompt(e);
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|SamsungBrowser/i.test(navigator.userAgent);
+      if (isMobile) {
+        (window as any).__deferredPwaPrompt = e;
+        setDeferredPrompt(e);
+      }
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => {
@@ -1323,7 +1326,7 @@ export default function Dashboard() {
                     }
                   `}
                 </style>
-                <div ref={timetableRef} id="timetable-container" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
+                <div ref={timetableRef} id="timetable-container" className="group" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
                   {/* Print Capture Header */}
                   <div className="capture-only mb-1.5 p-1.5 border rounded-md text-black flex flex-col gap-0.5">
                     <div className="flex justify-between items-end border-b pb-0.5 mb-0.5">
@@ -1375,7 +1378,7 @@ export default function Dashboard() {
                             const isPast = currentDate < todayStr;
 
                             return (
-                              <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70" : ""}`}>
+                              <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70 print:!opacity-100 capturing:!opacity-100" : ""}`}>
                                 <div className="text-sm font-semibold">{day}</div>
                                 <div className="text-[10px] md:text-xs text-gray-500 font-normal">
                                   {formatDate(weekDates[idx])}
@@ -1422,11 +1425,11 @@ export default function Dashboard() {
                               const bgColor = (includeAssessments && cellAssessments.length > 0)
                                 ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
                                 : isToday
-                                  ? "bg-red-50 hover:bg-red-100"
+                                  ? "bg-red-50 hover:bg-red-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50"
                                   : "bg-yellow-50 hover:bg-yellow-100";
 
                               // 과거 날짜 스타일
-                              const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400" : "";
+                              const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400 print:!opacity-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 print:!text-gray-900 capturing:!opacity-100 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50 capturing:!text-gray-900" : "";
 
                               // 선택된 셀 스타일
                               const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
@@ -1481,7 +1484,15 @@ export default function Dashboard() {
                                   c.subject === electiveSelection.subject &&
                                   c.classCode?.split(",").map((s: string) => s.trim()).includes(group)
                                 );
-                                displayClassName = (configEntry as any)?.className || "";
+
+                                let rawClassName = (configEntry as any)?.className || "";
+                                try {
+                                  const parsed = JSON.parse(rawClassName);
+                                  displayClassName = parsed[group] || parsed["_global"] || "";
+                                } catch (e) {
+                                  // Fallback to legacy string if it wasn't JSON
+                                  displayClassName = rawClassName;
+                                }
                               }
 
                               return (
@@ -1505,37 +1516,42 @@ export default function Dashboard() {
                               `}
                                 >
                                   {isElectiveActive && group && (
-                                    <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400" : "bg-orange-100 text-orange-800"}`}>
+                                    <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400 print:!bg-orange-100 print:!text-orange-800 capturing:!bg-orange-100 capturing:!text-orange-800" : "bg-orange-100 text-orange-800"}`}>
                                       <span>{group}</span><span className="hidden md:inline">그룹</span>
                                     </div>
                                   )}
                                   {item || isElectiveActive ? (
-                                    <div className="flex flex-col items-center justify-center h-full min-h-0">
+                                    <div key="active-cell" className="flex flex-col items-center justify-center h-full min-h-0">
                                       <div
-                                        className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"} ${(displaySubject || "").length > 6 ? 'text-[9px] break-keep' : (displaySubject || "").length > 4 ? 'text-[11px]' : ''}`}
+                                        className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400 print:!text-gray-900 capturing:!text-gray-900" : "text-gray-900"} ${(displaySubject || "").length > 6 ? 'text-[9px] break-keep' : (displaySubject || "").length > 4 ? 'text-[11px]' : ''}`}
                                       >
                                         <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
                                           {isCancelledByFreePeriod ? (
-                                            <span className="print:flex print:flex-col print:items-center">
+                                            <span key="cancelled-subj" className="print:flex print:flex-col print:items-center">
                                               <span className="line-through opacity-60 flex-shrink-0 whitespace-nowrap">{displaySubject}</span>
-                                              <span className={`block md:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
+                                              <span className={`block md:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400 print:!text-blue-500 capturing:!text-blue-500" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
                                             </span>
                                           ) : (
                                             displaySubject?.includes("공강") && displaySubject !== "공강" ? (
-                                              <span className="flex flex-col md:inline md:flex-row items-center">
+                                              <span key="partial-free-subj" className="flex flex-col md:inline md:flex-row items-center">
                                                 <span>{displaySubject.replace("공강", "")}</span>
                                                 <span className="block md:inline md:ml-1">공강</span>
                                               </span>
                                             ) : (
-                                              <span>{displaySubject}</span>
+                                              <span key="normal-subj">{displaySubject}</span>
                                             )
                                           )}
                                         </span>
                                       </div>
-                                      <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">
-                                        {displayClassName
-                                          ? <><span>{displayClassName}</span>{displayTeacher ? <span className="ml-1 opacity-60">{displayTeacher}</span> : null}</>
-                                          : <span>{displayTeacher}</span>}
+                                      <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-col md:flex-row print:flex-row print:flex-nowrap items-center md:justify-center print:justify-center overflow-hidden leading-tight md:leading-normal print:leading-tight">
+                                        {!isCancelledByFreePeriod && displayTeacher ? (
+                                          <span key="teacher-span" className="truncate shrink min-w-0 max-w-full print:text-[1.8cqh]">{displayTeacher}</span>
+                                        ) : null}
+                                        {(settings?.show_target_class_main_menu !== false && displayClassName) ? (
+                                          <span key="class-span" className={`truncate shrink min-w-0 max-w-full font-medium text-gray-600 print:text-[1.8cqh] print:!text-gray-500 ${!isCancelledByFreePeriod && displayTeacher ? "md:ml-1.5 print:ml-1" : ""}`}>
+                                            {displayClassName}
+                                          </span>
+                                        ) : null}
                                       </div>
                                       {includeAssessments && cellAssessments.length > 0 && (
                                         <div className="mt-0.5 flex-shrink-0">
@@ -1550,7 +1566,7 @@ export default function Dashboard() {
                                       )}
                                     </div>
                                   ) : (
-                                    <span className="text-gray-300 text-sm">-</span>
+                                    <span key="empty-cell" className="text-gray-300 text-sm">-</span>
                                   )}
                                 </td>
                               );
@@ -2095,12 +2111,17 @@ export default function Dashboard() {
         showInstructionTooltip && !showElectiveDialog && !useUserConfig().instructionDismissedV2 && (
           <div className="fixed bottom-4 right-4 z-[9999] bg-white dark:bg-gray-800 border border-orange-200 shadow-lg rounded-lg p-6 md:p-8 max-w-[90vw] md:max-w-xl animate-in slide-in-from-bottom-2 fade-in duration-300">
             <div className="flex flex-col gap-4 md:gap-6">
-              <p
-                className="font-bold text-base md:text-xl leading-relaxed bg-clip-text text-transparent"
-                style={{ backgroundImage: 'linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet)' }}
-              >
-                표의 칸을 클릭해서 수행평가를 추가하십쇼
-              </p>
+              <div className="flex flex-col gap-1 md:gap-2">
+                <p
+                  className="font-bold text-base md:text-xl leading-relaxed bg-clip-text text-transparent"
+                  style={{ backgroundImage: 'linear-gradient(to right, red, orange, green, blue, indigo, violet)' }}
+                >
+                  표의 칸을 클릭해서 수행평가를 추가하십쇼
+                </p>
+                <p className="text-sm md:text-base font-semibold text-green-600">
+                  입력하면 큰 도움이 됩니다 ^^
+                </p>
+              </div>
               <Button
                 size="lg"
                 className="bg-orange-500 hover:bg-orange-600 text-white border-none w-full text-lg md:text-xl py-3 md:py-4 font-['Gungsuh',_serif]"

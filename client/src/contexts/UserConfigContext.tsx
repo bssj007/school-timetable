@@ -38,7 +38,11 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
         if (typeof document === "undefined") return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissedV2: false };
         const match = document.cookie.match(new RegExp('(^| )' + COOKIE_NAME + '=([^;]+)'));
         if (match) {
-            try { return JSON.parse(decodeURIComponent(match[2])); } catch { }
+            try {
+                const data = JSON.parse(decodeURIComponent(match[2]));
+                data.instructionDismissedV2 = false; // Never rely on cookie for this
+                return data;
+            } catch { }
         }
         return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissedV2: false };
     });
@@ -63,14 +67,26 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         refreshKakaoUser();
+
+        // Prepare params to check if THIS specific user profile has dismissed the instruction
+        const params = new URLSearchParams();
+        if (config.grade) params.append('grade', config.grade);
+        if (config.classNum) params.append('classNum', config.classNum);
+        if (config.studentNumber) params.append('studentNumber', config.studentNumber);
+
         // Check server-side dismissal status
-        fetch('/api/dismiss-instruction')
+        fetch(`/api/dismiss-instruction?${params.toString()}`)
             .then(res => res.json())
             .then(data => {
                 if (data.dismissed) {
                     setConfigState(prev => {
                         if (prev.instructionDismissedV2) return prev; // Already true
                         return { ...prev, instructionDismissedV2: true };
+                    });
+                } else {
+                    setConfigState(prev => {
+                        if (!prev.instructionDismissedV2) return prev;
+                        return { ...prev, instructionDismissedV2: false };
                     });
                 }
             })
@@ -80,14 +96,26 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     const setConfig = (newConfig: Partial<UserConfig>) => {
         const updated = { ...config, ...newConfig };
         setConfigState(updated);
-        // 쿠키 저장 (만료 1년)
+
+        // 쿠키 저장 (만료 1년) - dismiss 상태는 쿠키에 절대 저장하지 않음!
+        const cookieData = { ...updated };
+        delete cookieData.instructionDismissedV2;
+
         const expires = new Date();
         expires.setFullYear(expires.getFullYear() + 1);
-        document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(updated))}; expires=${expires.toUTCString()}; path=/`;
+        document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(cookieData))}; expires=${expires.toUTCString()}; path=/`;
 
-        // If dismissing instruction, sync to server
+        // If dismissing instruction, sync to server with profile
         if (newConfig.instructionDismissedV2) {
-            fetch('/api/dismiss-instruction', { method: 'POST' }).catch(err => console.error(err));
+            fetch('/api/dismiss-instruction', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    grade: updated.grade,
+                    classNum: updated.classNum,
+                    studentNumber: updated.studentNumber
+                })
+            }).catch(err => console.error(err));
         }
     };
 

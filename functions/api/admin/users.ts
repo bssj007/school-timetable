@@ -30,7 +30,7 @@ export const onRequest = async (context: any) => {
                     ip_profiles.kakaoNickname, 
                     ip_profiles.lastAccess, 
                     ip_profiles.userAgent,
-                    ip_profiles.instructionDismissed,
+                    COALESCE(student_profiles.instructionDismissed, ip_profiles.instructionDismissed) as instructionDismissed,
                     ip_profiles.printCount,
                     ip_profiles.downloadCount,
                     ip_profiles.isStandalone,
