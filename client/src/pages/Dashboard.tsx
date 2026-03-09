@@ -1326,7 +1326,7 @@ export default function Dashboard() {
                     }
                   `}
                 </style>
-                <div ref={timetableRef} id="timetable-container" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
+                <div ref={timetableRef} id="timetable-container" className="group" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
                   {/* Print Capture Header */}
                   <div className="capture-only mb-1.5 p-1.5 border rounded-md text-black flex flex-col gap-0.5">
                     <div className="flex justify-between items-end border-b pb-0.5 mb-0.5">
@@ -1425,11 +1425,11 @@ export default function Dashboard() {
                               const bgColor = (includeAssessments && cellAssessments.length > 0)
                                 ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
                                 : isToday
-                                  ? "bg-red-50 hover:bg-red-100 print:!bg-yellow-50 capturing:!bg-yellow-50"
+                                  ? "bg-red-50 hover:bg-red-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50"
                                   : "bg-yellow-50 hover:bg-yellow-100";
 
                               // 과거 날짜 스타일
-                              const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400 print:!opacity-100 print:!bg-yellow-50 print:!text-gray-900 capturing:!opacity-100 capturing:!bg-yellow-50 capturing:!text-gray-900" : "";
+                              const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400 print:!opacity-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 print:!text-gray-900 capturing:!opacity-100 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50 capturing:!text-gray-900" : "";
 
                               // 선택된 셀 스타일
                               const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
