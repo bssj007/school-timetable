@@ -202,7 +202,6 @@ export default function Dashboard() {
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printMode, setPrintMode] = useState<'select' | 'printer'>('select');
   const [includeAssessments, setIncludeAssessments] = useState(true);
-  const [isExporting, setIsExporting] = useState(false);
 
   // Preset Constants
   const PRINT_PRESETS = [
@@ -247,8 +246,7 @@ export default function Dashboard() {
     fetch('/api/action/download', { method: 'POST' }).catch(() => { });
 
     try {
-      setIsExporting(true);
-      // Small delay to let dialog close animation finish and React state to apply
+      // Small delay to let dialog close animation finish
       await new Promise(r => setTimeout(r, 300));
 
       document.body.classList.add('capturing');
@@ -267,7 +265,6 @@ export default function Dashboard() {
       });
 
       document.body.classList.remove('capturing');
-      setIsExporting(false);
 
       const link = document.createElement('a');
       link.download = `${grade}학년_${classNum}반_시간표.png`;
@@ -278,7 +275,6 @@ export default function Dashboard() {
       resetPrintOptions();
     } catch (err) {
       document.body.classList.remove('capturing');
-      setIsExporting(false);
       console.error("이미지 저장 실패:", err);
       toast.error("이미지 저장 중 오류가 발생했습니다.");
       resetPrintOptions();
@@ -288,17 +284,13 @@ export default function Dashboard() {
   // 인쇄 핸들러
   const handlePrint = () => {
     setShowPrintOptions(false);
-    setIsExporting(true);
 
     // Track print metric
     fetch('/api/action/print', { method: 'POST' }).catch(() => { });
 
     setTimeout(() => {
       window.print();
-      setTimeout(() => {
-        setIsExporting(false);
-        resetPrintOptions();
-      }, 500);
+      resetPrintOptions();
     }, 100);
   };
 
@@ -1386,7 +1378,7 @@ export default function Dashboard() {
                             const isPast = currentDate < todayStr;
 
                             return (
-                              <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70" : ""}`}>
+                              <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70 print:!opacity-100 capturing:!opacity-100" : ""}`}>
                                 <div className="text-sm font-semibold">{day}</div>
                                 <div className="text-[10px] md:text-xs text-gray-500 font-normal">
                                   {formatDate(weekDates[idx])}
@@ -1432,12 +1424,12 @@ export default function Dashboard() {
                               // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
                               const bgColor = (includeAssessments && cellAssessments.length > 0)
                                 ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
-                                : (isToday && !isExporting)
-                                  ? "bg-red-50 hover:bg-red-100"
+                                : isToday
+                                  ? "bg-red-50 hover:bg-red-100 print:!bg-yellow-50 capturing:!bg-yellow-50"
                                   : "bg-yellow-50 hover:bg-yellow-100";
 
                               // 과거 날짜 스타일
-                              const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400" : "";
+                              const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400 print:!opacity-100 print:!bg-yellow-50 print:!text-gray-900 capturing:!opacity-100 capturing:!bg-yellow-50 capturing:!text-gray-900" : "";
 
                               // 선택된 셀 스타일
                               const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
@@ -1516,20 +1508,20 @@ export default function Dashboard() {
                               `}
                                 >
                                   {isElectiveActive && group && (
-                                    <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400" : "bg-orange-100 text-orange-800"}`}>
+                                    <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400 print:!bg-orange-100 print:!text-orange-800 capturing:!bg-orange-100 capturing:!text-orange-800" : "bg-orange-100 text-orange-800"}`}>
                                       <span>{group}</span><span className="hidden md:inline">그룹</span>
                                     </div>
                                   )}
                                   {item || isElectiveActive ? (
                                     <div className="flex flex-col items-center justify-center h-full min-h-0">
                                       <div
-                                        className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400" : "text-gray-900"} ${(displaySubject || "").length > 6 ? 'text-[9px] break-keep' : (displaySubject || "").length > 4 ? 'text-[11px]' : ''}`}
+                                        className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400 print:!text-gray-900 capturing:!text-gray-900" : "text-gray-900"} ${(displaySubject || "").length > 6 ? 'text-[9px] break-keep' : (displaySubject || "").length > 4 ? 'text-[11px]' : ''}`}
                                       >
                                         <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
                                           {isCancelledByFreePeriod ? (
                                             <span className="print:flex print:flex-col print:items-center">
                                               <span className="line-through opacity-60 flex-shrink-0 whitespace-nowrap">{displaySubject}</span>
-                                              <span className={`block md:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
+                                              <span className={`block md:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400 print:!text-blue-500 capturing:!text-blue-500" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
                                             </span>
                                           ) : (
                                             displaySubject?.includes("공강") && displaySubject !== "공강" ? (
