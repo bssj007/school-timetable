@@ -1239,7 +1239,7 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                 const freePeriodSet = new Set<string>();
 
                 // Get all teachers for THIS subject
-                const subjectTeachers = [...new Set(configs.filter((cfg: any) => cfg.subject === c.subject).map((cfg: any) => cfg.originalTeacher).filter(Boolean))];
+                const subjectTeachers = Array.from(new Set(configs.filter((cfg: any) => cfg.subject === c.subject).map((cfg: any) => cfg.originalTeacher).filter(Boolean)));
 
                 subjectSlots.forEach((ss: any) => {
                     const sameTimeSlots = allSlots.filter((s: any) =>
@@ -1263,10 +1263,18 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                     }
                 });
 
+                let parsedClassName = c.className || "";
+                try {
+                    const parsed = JSON.parse(c.className);
+                    parsedClassName = parsed[code] || parsed["_global"] || "";
+                } catch {
+                    // Fallback to legacy string
+                }
+
                 grouped[code].push({
                     subject: c.subject,
                     fullSubjectName: c.fullSubjectName,
-                    className: c.className,
+                    className: parsedClassName,
                     freePeriods: Array.from(freePeriodSet).sort(),
                 });
             });
