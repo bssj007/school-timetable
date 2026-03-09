@@ -1234,29 +1234,35 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                 const codeClassNum = parseInt(code.split("-")[1] || code, 10);
                 const codeGrade = parseInt(code.split("-")[0] || grade, 10);
 
-                // Find all slots where THIS specific class has a free period keyword
-                const classFreeSlots = allSlots.filter((s: any) =>
-                    parseInt(s.class) === codeClassNum &&
-                    parseInt(s.grade) === codeGrade &&
-                    FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
-                );
-
                 // All class codes belonging to the SAME group as c
                 const groupCodes = (c.classCode as string).split(",").map((s: string) => s.trim()).filter(Boolean);
 
-                classFreeSlots.forEach((ss: any) => {
+                // Retrieve all schedule slots for THIS specific class to iterate through their week
+                const classSlots = allSlots.filter((s: any) =>
+                    parseInt(s.class) === codeClassNum &&
+                    parseInt(s.grade) === codeGrade
+                );
+
+                classSlots.forEach((ss: any) => {
                     const sameTimeSlots = allSlots.filter((s: any) =>
                         s.weekday === ss.weekday &&
                         s.classTime === ss.classTime
                     );
 
-                    // If this subject is actively taught anywhere in the school at this time, it's not a cancellation
-                    const isSubjectTaughtAnywhere = sameTimeSlots.some((s: any) =>
+                    // Dashboard Logic 1: Is the subject actually being taught at this time?
+                    const matchingSlot = sameTimeSlots.some((s: any) =>
                         s.subject && s.subject.trim() === c.subject.trim()
                     );
-                    if (isSubjectTaughtAnywhere) return;
 
-                    // Verify that this timeslot actually belongs to this group –
+                    // Dashboard Logic 2: Is there a free period happening anywhere in the school?
+                    const hasFreePeriodSlot = sameTimeSlots.some((t: any) =>
+                        FREE_KEYWORDS.some(k => (t.subject || "").trim().includes(k))
+                    );
+
+                    // Dashboard Logic 3: The Dashboard considers it cancelled ONLY IF there is a free period AND the subject is missing.
+                    if (matchingSlot || !hasFreePeriodSlot) return;
+
+                    // Extra Admin Logic: Verify that this timeslot actually belongs to this group –
                     // i.e., some OTHER subject from the same group IS being taught at this time
                     const isGroupTimeslot = configs.some((otherC: any) => {
                         if (!otherC.classCode) return false;
