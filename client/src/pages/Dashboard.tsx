@@ -1547,7 +1547,7 @@ export default function Dashboard() {
                                         {!isCancelledByFreePeriod && displayTeacher ? (
                                           <span key="teacher-span" className="truncate shrink min-w-0 max-w-full print:text-[1.8cqh]">{displayTeacher}</span>
                                         ) : null}
-                                        {(settings?.show_target_class_main_menu !== "false" && displayClassName) ? (
+                                        {(settings?.show_target_class_main_menu !== false && displayClassName) ? (
                                           <span key="class-span" className={`truncate shrink min-w-0 max-w-full font-medium text-gray-600 print:text-[1.8cqh] print:!text-gray-500 ${!isCancelledByFreePeriod && displayTeacher ? "md:ml-1.5 print:ml-1" : ""}`}>
                                             {displayClassName}
                                           </span>

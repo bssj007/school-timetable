@@ -1498,6 +1498,7 @@ function TargetClassDisplaySettings({ adminPassword }: { adminPassword: string }
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
             toast.success("설정이 변경되었습니다.");
         },
         onError: () => toast.error("변경에 실패했습니다.")
