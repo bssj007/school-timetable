@@ -409,7 +409,7 @@ function ElectiveManager({ password }: { password: string }) {
                             <TableRow>
                                 <TableHead className="w-[80px] md:w-[90px]">과목명</TableHead>
                                 <TableHead className="w-[150px]">과목 풀네임</TableHead>
-                                <TableHead className="w-[100px]">원래 선생님</TableHead>
+                                <TableHead className="w-[60px] md:w-[70px]">원래 쌤</TableHead>
                                 <TableHead className="w-[150px]">분반 (A/B/C...)</TableHead>
                                 <TableHead>선생님 성함 (전체)</TableHead>
                                 <TableHead className="w-[150px]">이동 수업 여부</TableHead>
