@@ -1227,41 +1227,36 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                 if (!grouped[code]) grouped[code] = [];
                 if (grouped[code].some(r => r.subject === c.subject)) return;
 
-                // Find all slots where this subject appears
-                const subjectSlots = allSlots.filter((s: any) =>
-                    s.subject && s.subject.trim() === c.subject.trim()
-                );
-
-                // For each subject slot, check if it's considered a true "Free Period" (공강)
+                // Check every possible class period (Mon-Fri, 1-7 period)
                 // A true free period means:
-                // 1. None of the teachers assigned to this specific subject are teaching at this time
-                // 2. There is a free period (빈교실, 공강, etc) in at least one class during this time
+                // 1. There is a free period (빈교실, 공강, etc) in at least one class during this time block
+                // 2. No class slot exists in this period with the exact same subject name
                 const freePeriodSet = new Set<string>();
 
-                // Get all teachers for THIS subject
-                const subjectTeachers = Array.from(new Set(configs.filter((cfg: any) => cfg.subject === c.subject).map((cfg: any) => cfg.originalTeacher).filter(Boolean)));
+                for (let weekday = 0; weekday <= 4; weekday++) {
+                    for (let classTime = 1; classTime <= 7; classTime++) {
+                        const sameTimeSlots = allSlots.filter((s: any) =>
+                            s.weekday === weekday &&
+                            s.classTime === classTime
+                        );
 
-                subjectSlots.forEach((ss: any) => {
-                    const sameTimeSlots = allSlots.filter((s: any) =>
-                        s.weekday === ss.weekday &&
-                        s.classTime === ss.classTime
-                    );
+                        if (sameTimeSlots.length === 0) continue;
 
-                    const isAnyAssignedTeacherTeaching = sameTimeSlots.some((s: any) =>
-                        subjectTeachers.includes(s.teacher)
-                    );
+                        const matchingSlot = sameTimeSlots.find((s: any) =>
+                            s.subject && s.subject.trim() === c.subject.trim()
+                        );
 
-                    const hasFreePeriod = sameTimeSlots.some((s: any) =>
-                        FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
-                    );
+                        const hasFreePeriodSlot = sameTimeSlots.some((s: any) =>
+                            FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
+                        );
 
-                    // IF there is a free period slot AND none of our subject's teachers are active, it's a true free period for THIS group.
-                    if (hasFreePeriod && !isAnyAssignedTeacherTeaching) {
-                        // weekday is 0-indexed (0=Mon, 4=Fri)
-                        const label = `${WEEKDAY_LABELS[ss.weekday]}${ss.classTime}`;
-                        freePeriodSet.add(label);
+                        if (hasFreePeriodSlot && !matchingSlot) {
+                            // Weekdays are 0-4 (Mon-Fri) in comcigan
+                            const label = `${WEEKDAY_LABELS[weekday]}${classTime}`;
+                            freePeriodSet.add(label);
+                        }
                     }
-                });
+                }
 
                 let parsedClassName = c.className || "";
                 try {
