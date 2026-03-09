@@ -2847,6 +2847,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     내려받기 허용
                 </Button>
                 <Button
+                    variant={selectedMenu === "promotion-settings" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("promotion-settings")}
+                >
+                    <Info className="w-4 h-4 mr-2" />
+                    수행평가 팝업 설정
+                </Button>
+                <Button
                     variant={selectedMenu === "unresolved-issues" ? "default" : "ghost"}
                     className="justify-start whitespace-nowrap text-left text-orange-600 hover:text-orange-700"
                     onClick={() => setSelectedMenu("unresolved-issues")}
@@ -3013,6 +3021,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <AllowDownloadSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "promotion-settings" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">수행평가 팝업 설정</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <PromotionSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -3426,6 +3445,26 @@ export default function Admin() {
         onError: () => toast.error("해제 실패"),
     });
 
+    const resetDismissMutation = useMutation({
+        mutationFn: async (ip: string) => {
+            const res = await fetch("/api/admin/users/reset-dismiss", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": password,
+                },
+                body: JSON.stringify({ ip }),
+            });
+            if (!res.ok) throw new Error("Failed to reset popup status");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("해당 사용자의 홍보 팝업 닫음 상태가 초기화되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+        },
+        onError: () => toast.error("상태 초기화 실패"),
+    });
+
 
 
     if (!isAuthenticated) {
@@ -3696,6 +3735,7 @@ export default function Admin() {
                                         kakaoAccounts: { kakaoId: string; kakaoNickname: string }[];
                                         isBlocked: boolean;
                                         hasElectives?: boolean;
+                                        instructionDismissed: boolean;
                                     };
 
                                     const groupMap = new Map<string, UserGroup>();
@@ -3719,6 +3759,7 @@ export default function Admin() {
                                             }
                                             if (user.isBlocked) existing.isBlocked = true;
                                             if (user.hasElectives) existing.hasElectives = true;
+                                            if (user.instructionDismissed) existing.instructionDismissed = true;
                                         } else {
                                             groupMap.set(key, {
                                                 key,
@@ -3733,6 +3774,7 @@ export default function Admin() {
                                                 kakaoAccounts: [...(user.kakaoAccounts || [])],
                                                 isBlocked: !!user.isBlocked,
                                                 hasElectives: !!user.hasElectives,
+                                                instructionDismissed: !!user.instructionDismissed,
                                             });
                                         }
                                     }
@@ -3967,19 +4009,34 @@ export default function Admin() {
                                                         ) : <span className="text-gray-400 text-xs">{hasMultiple ? '(펼쳐서 확인)' : '-'}</span>}
                                                     </TableCell>
                                                     <TableCell onClick={e => e.stopPropagation()}>
-                                                        {group.isBlocked ? (
-                                                            <Badge variant="destructive">차단됨</Badge>
-                                                        ) : (
-                                                            <Button
-                                                                variant="outline" size="sm"
-                                                                className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                                                                onClick={() => {
-                                                                    if (confirm(`IP ${representativeUser.ip}를 차단하시겠습니까?`)) {
-                                                                        blockUserMutation.mutate({ identifier: representativeUser.ip, type: 'IP' });
-                                                                    }
-                                                                }}
-                                                            ><Ban className="h-4 w-4 mr-1" />차단</Button>
-                                                        )}
+                                                        <div className="flex gap-2">
+                                                            {group.instructionDismissed && (
+                                                                <Button
+                                                                    variant="outline" size="sm"
+                                                                    className="text-orange-500 hover:text-orange-600 hover:bg-orange-50"
+                                                                    onClick={() => {
+                                                                        if (confirm(`선택한 사용자의 '홍보 팝업 다시보지 않기' 상태를 강제로 초기화하시겠습니까?`)) {
+                                                                            resetDismissMutation.mutate(representativeUser.ip);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <TriangleAlert className="h-4 w-4 mr-1" />팝업 리셋
+                                                                </Button>
+                                                            )}
+                                                            {group.isBlocked ? (
+                                                                <Badge variant="destructive">차단됨</Badge>
+                                                            ) : (
+                                                                <Button
+                                                                    variant="outline" size="sm"
+                                                                    className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                                                    onClick={() => {
+                                                                        if (confirm(`IP ${representativeUser.ip}를 차단하시겠습니까?`)) {
+                                                                            blockUserMutation.mutate({ identifier: representativeUser.ip, type: 'IP' });
+                                                                        }
+                                                                    }}
+                                                                ><Ban className="h-4 w-4 mr-1" />차단</Button>
+                                                            )}
+                                                        </div>
                                                     </TableCell>
                                                 </TableRow>
                                                 {hasMultiple && isExpanded && group.ips.map((user, idx) => (
@@ -5768,6 +5825,98 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
                         print_subject_font_size: printSubjectFontSize
                     })} disabled={!isDirty || saveMutation.isPending}>
                         {saveMutation.isPending ? "저장 중..." : "설정 저장"}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
+// PromotionSettings - Controls when to reset the assessment instruction popup
+// Located under: 기타 > 홍보
+// ----------------------------------------------------------------------
+function PromotionSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [resetDays, setResetDays] = useState<number | null>(null);
+
+    const { data: settingsData, isLoading } = useQuery({
+        queryKey: ["admin", "promotionSettings"],
+        queryFn: async () => {
+            const res = await fetch("/api/settings/public");
+            if (!res.ok) throw new Error("설정 불러오기 실패");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsData && settingsData.promotion_reset_days !== undefined) {
+            setResetDays(parseInt(settingsData.promotion_reset_days, 10));
+        } else if (settingsData) {
+            setResetDays(0);
+        }
+    }, [settingsData]);
+
+    const saveSettingMutation = useMutation({
+        mutationFn: async (payload: Record<string, string>) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("저장 실패");
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "promotionSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            toast.success("홍보 설정이 저장되었습니다.");
+        },
+        onError: () => {
+            toast.error("설정 저장에 실패했습니다.");
+        }
+    });
+
+    if (isLoading || resetDays === null) {
+        return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
+    }
+
+    return (
+        <Card className="w-full max-w-2xl mt-8">
+            <CardHeader>
+                <CardTitle>수행평가 입력 독려 (홍보) 팝업 설정</CardTitle>
+                <CardDescription>
+                    일반 사용자가 수행평가를 적극적으로 입력하도록 유도하는 "수행평가 추가" 도움말 팝업의 재구동 시점을 설정합니다.<br />
+                    설정한 기간(일) 동안 앱 전체에 새로운 수행평가가 올라오지 않으면, 이전에 팝업을 닫았던 사용자라도 다시 팝업이 노출됩니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="space-y-3 pt-4">
+                    <Label className="font-medium text-sm">팝업 초기화 기준일 (미등록 기간)</Label>
+                    <div className="flex items-center space-x-2">
+                        <Input
+                            type="number"
+                            min={0}
+                            value={resetDays}
+                            onChange={(e) => setResetDays(parseInt(e.target.value) || 0)}
+                            className="w-24"
+                        />
+                        <span className="text-sm font-medium">일 동안 새 수행평가 등록이 없으면 팝업 다시 표시</span>
+                    </div>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
+                    <p>💡 <strong>0일</strong>로 설정 시 이 기능이 <strong>비활성화</strong>되며, 사용자가 한 번 팝업을 닫으면 다시는 표시되지 않습니다.</p>
+                </div>
+
+                <div className="flex justify-end pt-4">
+                    <Button
+                        onClick={() => saveSettingMutation.mutate({ promotion_reset_days: resetDays.toString() })}
+                        disabled={saveSettingMutation.isPending || (settingsData?.promotion_reset_days && parseInt(settingsData.promotion_reset_days) === resetDays)}
+                    >
+                        {saveSettingMutation.isPending ? "저장 중..." : "설정 저장"}
                     </Button>
                 </div>
             </CardContent>

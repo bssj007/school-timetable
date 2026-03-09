@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS student_profiles (
     classNum INTEGER NOT NULL,
     studentNumber INTEGER,
     electives TEXT, -- JSON string for electives
+    instructionDismissed INTEGER DEFAULT 0,
     updatedAt TEXT DEFAULT (datetime('now')),
     UNIQUE(grade, classNum, studentNumber)
 );

@@ -43,6 +43,7 @@ export const onRequest = async (context: any) => {
                     studentNumber INTEGER,
                     electives TEXT,
                     dataset TEXT DEFAULT '',
+                    instructionDismissed INTEGER DEFAULT 0,
                     updatedAt TEXT DEFAULT (datetime('now')),
                     UNIQUE(grade, classNum, studentNumber)
                 )
@@ -51,6 +52,13 @@ export const onRequest = async (context: any) => {
             // Ensure dataset column exists (safe ALTER — ignore if already exists)
             try {
                 await env.DB.prepare("ALTER TABLE student_profiles ADD COLUMN dataset TEXT DEFAULT ''").run();
+            } catch (_) {
+                // Column already exists, ignore
+            }
+
+            // Ensure instructionDismissed column exists
+            try {
+                await env.DB.prepare("ALTER TABLE student_profiles ADD COLUMN instructionDismissed INTEGER DEFAULT 0").run();
             } catch (_) {
                 // Column already exists, ignore
             }

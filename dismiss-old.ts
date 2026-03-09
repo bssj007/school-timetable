@@ -18,28 +18,18 @@ export const onRequest = async (context: any) => {
             let cGrade = reqGrade;
             let cClassNum = reqClassNum;
             let cStudentNum = reqStudentNum;
-            let dismissedTimestamp = 0;
 
             if (!reqGrade || !reqClassNum || !reqStudentNum) {
                 // Try to infer from ip_profiles if not fully logged in
-                const result = await env.DB.prepare(`
-                    SELECT sp.grade, sp.classNum, sp.studentNumber, ip.instructionDismissed, ip.lastAccess 
-                    FROM ip_profiles ip
-                    LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
-                    WHERE ip.ip = ?
-                `).bind(ip).first();
+                const result = await env.DB.prepare(
+                    "SELECT grade, classNum, studentNumber, instructionDismissed FROM ip_profiles WHERE ip = ?"
+                ).bind(ip).first();
 
                 if (result) {
                     cGrade = reqGrade || result.grade;
                     cClassNum = reqClassNum || result.classNum;
                     cStudentNum = reqStudentNum || result.studentNumber;
                     dismissed = !!result.instructionDismissed;
-
-                    const val = Number(result.instructionDismissed);
-                    if (!isNaN(val) && val > 0) {
-                        // If it's the old boolean '1', treat it as newly dismissed to prevent instant loop reset
-                        dismissedTimestamp = val === 1 ? Date.now() : val;
-                    }
                 }
             }
 
@@ -60,12 +50,6 @@ export const onRequest = async (context: any) => {
 
                 if (studentResult) {
                     dismissed = !!studentResult.instructionDismissed;
-
-                    const val = Number(studentResult.instructionDismissed);
-                    if (!isNaN(val) && val > 0) {
-                        // Same logic: if legacy '1', treat as just dismissed to prevent instant wipe
-                        dismissedTimestamp = val === 1 ? Date.now() : val;
-                    }
                 }
             }
 
@@ -87,14 +71,10 @@ export const onRequest = async (context: any) => {
                             SELECT MAX(updatedAt) as latestUpdate 
                             FROM performance_assessments 
                             WHERE lastModifiedIp IN (
-                                SELECT ip FROM cookie_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
-                                UNION
-                                SELECT ip FROM ip_profiles WHERE student_profile_id = (
-                                    SELECT id FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
-                                )
+                                SELECT ip FROM ip_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
                             )
                         `;
-                        lastModifiedParams = [cGrade, cClassNum, cStudentNum, cGrade, cClassNum, cStudentNum];
+                        lastModifiedParams = [cGrade, cClassNum, cStudentNum];
                     } else {
                         // If no student number, just check their current IP
                         lastModifiedSql = `
@@ -106,26 +86,19 @@ export const onRequest = async (context: any) => {
                     }
 
                     const latestRow = await env.DB.prepare(lastModifiedSql).bind(...lastModifiedParams).first();
-                    const now = Date.now();
-
-                    // We only reset if the user hasn't DIMSISSED recently as well.
-                    // If they dismissed it 1 hour ago (profileDiffDays = 0), we DO NOT reset it yet!
-                    const profileDiffDays = dismissedTimestamp > 0 ? Math.floor((now - dismissedTimestamp) / (1000 * 60 * 60 * 24)) : 9999;
 
                     if (latestRow && latestRow.latestUpdate) {
-                        const latestDate = new Date(latestRow.latestUpdate as string + 'Z').getTime();
-                        const diffTime = now - latestDate;
-                        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                        const latestDate = new Date(latestRow.latestUpdate as string + 'Z');
+                        const now = new Date();
+                        const diffTime = Math.abs(now.getTime() - latestDate.getTime());
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                        if (diffDays >= resetDays && profileDiffDays >= resetDays) {
+                        if (diffDays > resetDays) {
                             dismissed = false;
                         }
                     } else {
                         // If they have NEVER modified an assessment, they definitely should see the popup
-                        // UNLESS they literally just dismissed it within the reset period.
-                        if (profileDiffDays >= resetDays) {
-                            dismissed = false;
-                        }
+                        dismissed = false;
                     }
 
                     // Apply the reset state to the DB for this group if it was triggered
@@ -136,9 +109,7 @@ export const onRequest = async (context: any) => {
                             ).bind(cGrade, cClassNum, cStudentNum).run();
                             // Also clear IP profiles just in case
                             await env.DB.prepare(
-                                `UPDATE ip_profiles SET instructionDismissed = 0 WHERE student_profile_id = (
-                                    SELECT id FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
-                                )`
+                                "UPDATE ip_profiles SET instructionDismissed = 0 WHERE grade = ? AND classNum = ? AND studentNumber = ?"
                             ).bind(cGrade, cClassNum, cStudentNum).run();
                         } else {
                             await env.DB.prepare(
@@ -158,9 +129,9 @@ export const onRequest = async (context: any) => {
                 headers: { "Content-Type": "application/json" }
             });
         } catch (e: any) {
-            // Table might not exist yet -> do not force false, let client rely on local config
+            // Table might not exist yet -> treat as not dismissed
             console.error("GET dismiss error:", e.message);
-            return new Response(JSON.stringify({ error: e.message }), { status: 200 });
+            return new Response(JSON.stringify({ dismissed: false }), { status: 200 });
         }
     }
 
@@ -175,30 +146,34 @@ export const onRequest = async (context: any) => {
             if (grade && classNum && studentNumber) {
                 // Upsert into student_profiles
                 await env.DB.prepare(`
-                    INSERT INTO student_profiles (grade, classNum, studentNumber, instructionDismissed)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO student_profiles (grade, classNum, studentNumber, instructionDismissed, updatedAt)
+                    VALUES (?, ?, ?, 1, datetime('now'))
                     ON CONFLICT(grade, classNum, studentNumber) DO UPDATE SET 
-                        instructionDismissed = ?
-                `).bind(grade, classNum, studentNumber, Date.now(), Date.now()).run();
+                        instructionDismissed = 1,
+                        updatedAt = datetime('now')
+                `).bind(grade, classNum, studentNumber).run();
 
                 // Also update ip_profiles
                 await env.DB.prepare(`
-                    INSERT INTO ip_profiles (ip, instructionDismissed, lastAccess)
-                    VALUES (?, ?, datetime('now'))
+                    INSERT INTO ip_profiles (ip, instructionDismissed, lastAccess, grade, classNum, studentNumber)
+                    VALUES (?, 1, datetime('now'), ?, ?, ?)
                     ON CONFLICT(ip) DO UPDATE SET 
-                        instructionDismissed = ?,
-                        lastAccess = datetime('now')
-                `).bind(ip, Date.now(), Date.now()).run();
+                        instructionDismissed = 1,
+                        lastAccess = datetime('now'),
+                        grade = COALESCE(?, grade),
+                        classNum = COALESCE(?, classNum),
+                        studentNumber = COALESCE(?, studentNumber)
+                `).bind(ip, grade, classNum, studentNumber, grade, classNum, studentNumber).run();
 
             } else {
-                // Also update ip_profiles using IP only (fallback for unidentified users)
+                // Upsert into ip_profiles using IP only (fallback for unidentified users)
                 await env.DB.prepare(`
                     INSERT INTO ip_profiles (ip, instructionDismissed, lastAccess)
-                    VALUES (?, ?, datetime('now'))
+                    VALUES (?, 1, datetime('now'))
                     ON CONFLICT(ip) DO UPDATE SET 
-                        instructionDismissed = ?,
+                        instructionDismissed = 1,
                         lastAccess = datetime('now')
-                `).bind(ip, Date.now(), Date.now()).run();
+                `).bind(ip).run();
             }
 
             return new Response(JSON.stringify({ success: true }), {
@@ -206,12 +181,7 @@ export const onRequest = async (context: any) => {
             });
         } catch (e: any) {
             console.error("POST dismiss error:", e.message);
-            // Even if DB fails (e.g., column missing), tell the client we succeeded
-            // so they don't get stuck in an infinite pop-up loop.
-            return new Response(JSON.stringify({ success: true, warning: e.message }), {
-                status: 200,
-                headers: { "Content-Type": "application/json" }
-            });
+            return new Response(JSON.stringify({ error: e.message }), { status: 500 });
         }
     }
 
