@@ -1228,39 +1228,30 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                 if (!grouped[code]) grouped[code] = [];
                 if (grouped[code].some(r => r.subject === c.subject)) return;
 
-                // Find all slots where this subject appears
-                // We only care about timeslots where this subject is scheduled SOMEWHERE in the timetable
-                const subjectSlots = allSlots.filter((s: any) =>
-                    s.subject && s.subject.trim() === c.subject.trim()
-                );
-
                 const freePeriodSet = new Set<string>();
 
-                // Gather all configs for the current subject to know which classes belong to which groups
-                const subjectConfigs = configs.filter((cfg: any) => cfg.subject === c.subject);
+                const classFreeSlots = allSlots.filter((s: any) =>
+                    s.classNum === code && FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
+                );
 
-                subjectSlots.forEach((ss: any) => {
+                classFreeSlots.forEach((ss: any) => {
                     const sameTimeSlots = allSlots.filter((s: any) =>
                         s.weekday === ss.weekday &&
                         s.classTime === ss.classTime
                     );
 
-                    // Check if there is ANY free period keyword in THIS specific timeslot
-                    const hasFreePeriodSlot = sameTimeSlots.some((s: any) =>
-                        FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
-                    );
-
-                    if (!hasFreePeriodSlot) return; // If no free period anywhere at this time, it's not a free period for anyone.
-
-                    // To match Dashboard's logic exactly:
-                    // A class is cancelled (공강) if there is a free period in the school,
-                    // AND the specific subject (c.subject) is NOT being taught ANYWHERE in the school at this time.
                     const isSubjectTaughtAnywhere = sameTimeSlots.some((s: any) =>
                         s.subject && s.subject.trim() === c.subject.trim()
                     );
+                    if (isSubjectTaughtAnywhere) return;
 
-                    // If a free period exists AND the subject is not taught anywhere, it's a true free period.
-                    if (!isSubjectTaughtAnywhere) {
+                    const isGroupTimeslot = configs.some((otherC: any) =>
+                        otherC.classCode && c.classCode &&
+                        otherC.classCode.trim() === c.classCode.trim() &&
+                        sameTimeSlots.some((s: any) => s.subject && s.subject.trim() === otherC.subject.trim())
+                    );
+
+                    if (isGroupTimeslot) {
                         const label = `${WEEKDAY_LABELS[ss.weekday]}${ss.classTime}`;
                         freePeriodSet.add(label);
                     }
