@@ -38,7 +38,11 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
         if (typeof document === "undefined") return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissedV2: false };
         const match = document.cookie.match(new RegExp('(^| )' + COOKIE_NAME + '=([^;]+)'));
         if (match) {
-            try { return JSON.parse(decodeURIComponent(match[2])); } catch { }
+            try {
+                const data = JSON.parse(decodeURIComponent(match[2]));
+                data.instructionDismissedV2 = false; // Never rely on cookie for this
+                return data;
+            } catch { }
         }
         return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissedV2: false };
     });
@@ -79,16 +83,11 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
                         if (prev.instructionDismissedV2) return prev; // Already true
                         return { ...prev, instructionDismissedV2: true };
                     });
-                } else if (data.dismissed === false && config.instructionDismissedV2) {
-                    // If server explicitly says it's NOT dismissed (e.g., reset by promotion feature)
-                    // we must enforce server state
+                } else {
                     setConfigState(prev => {
+                        if (!prev.instructionDismissedV2) return prev;
                         return { ...prev, instructionDismissedV2: false };
                     });
-
-                    const expires = new Date();
-                    expires.setFullYear(expires.getFullYear() + 1);
-                    document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify({ ...config, instructionDismissedV2: false }))}; expires=${expires.toUTCString()}; path=/`;
                 }
             })
             .catch(err => console.error("Failed to fetch instruction status", err));
@@ -97,10 +96,14 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     const setConfig = (newConfig: Partial<UserConfig>) => {
         const updated = { ...config, ...newConfig };
         setConfigState(updated);
-        // 쿠키 저장 (만료 1년)
+
+        // 쿠키 저장 (만료 1년) - dismiss 상태는 쿠키에 절대 저장하지 않음!
+        const cookieData = { ...updated };
+        delete cookieData.instructionDismissedV2;
+
         const expires = new Date();
         expires.setFullYear(expires.getFullYear() + 1);
-        document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(updated))}; expires=${expires.toUTCString()}; path=/`;
+        document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(cookieData))}; expires=${expires.toUTCString()}; path=/`;
 
         // If dismissing instruction, sync to server with profile
         if (newConfig.instructionDismissedV2) {

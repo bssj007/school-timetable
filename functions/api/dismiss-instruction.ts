@@ -31,8 +31,11 @@ export const onRequest = async (context: any) => {
                     cClassNum = reqClassNum || result.classNum;
                     cStudentNum = reqStudentNum || result.studentNumber;
                     dismissed = !!result.instructionDismissed;
-                    if (typeof result.instructionDismissed === 'number' && result.instructionDismissed > 1) {
-                        dismissedTimestamp = result.instructionDismissed;
+
+                    const val = Number(result.instructionDismissed);
+                    if (!isNaN(val) && val > 0) {
+                        // If it's the old boolean '1', treat it as newly dismissed to prevent instant loop reset
+                        dismissedTimestamp = val === 1 ? Date.now() : val;
                     }
                 }
             }
@@ -54,8 +57,11 @@ export const onRequest = async (context: any) => {
 
                 if (studentResult) {
                     dismissed = !!studentResult.instructionDismissed;
-                    if (typeof studentResult.instructionDismissed === 'number' && studentResult.instructionDismissed > 1) {
-                        dismissedTimestamp = studentResult.instructionDismissed;
+
+                    const val = Number(studentResult.instructionDismissed);
+                    if (!isNaN(val) && val > 0) {
+                        // Same logic: if legacy '1', treat as just dismissed to prevent instant wipe
+                        dismissedTimestamp = val === 1 ? Date.now() : val;
                     }
                 }
             }
@@ -143,9 +149,9 @@ export const onRequest = async (context: any) => {
                 headers: { "Content-Type": "application/json" }
             });
         } catch (e: any) {
-            // Table might not exist yet -> treat as not dismissed
+            // Table might not exist yet -> do not force false, let client rely on local config
             console.error("GET dismiss error:", e.message);
-            return new Response(JSON.stringify({ dismissed: false }), { status: 200 });
+            return new Response(JSON.stringify({ error: e.message }), { status: 200 });
         }
     }
 
@@ -179,7 +185,7 @@ export const onRequest = async (context: any) => {
                 `).bind(ip, Date.now(), grade, classNum, studentNumber, Date.now(), grade, classNum, studentNumber).run();
 
             } else {
-                // Upsert into ip_profiles using IP only (fallback for unidentified users)
+                // Also update ip_profiles using IP only (fallback for unidentified users)
                 await env.DB.prepare(`
                     INSERT INTO ip_profiles (ip, instructionDismissed, lastAccess)
                     VALUES (?, ?, datetime('now'))
@@ -194,7 +200,12 @@ export const onRequest = async (context: any) => {
             });
         } catch (e: any) {
             console.error("POST dismiss error:", e.message);
-            return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+            // Even if DB fails (e.g., column missing), tell the client we succeeded
+            // so they don't get stuck in an infinite pop-up loop.
+            return new Response(JSON.stringify({ success: true, warning: e.message }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
         }
     }
 
