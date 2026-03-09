@@ -15,9 +15,9 @@ export const onRequest = async (context: any) => {
             const reqStudentNum = url.searchParams.get("studentNumber");
 
             let dismissed = false;
-            let cGrade = reqGrade;
-            let cClassNum = reqClassNum;
-            let cStudentNum = reqStudentNum;
+            let cGrade = reqGrade ? Number(reqGrade) : null;
+            let cClassNum = reqClassNum ? Number(reqClassNum) : null;
+            let cStudentNum = reqStudentNum ? Number(reqStudentNum) : null;
             let dismissedTimestamp = 0;
 
             // Only check dismissal for fully authenticated users (with a student number)
@@ -115,9 +115,9 @@ export const onRequest = async (context: any) => {
     if (request.method === "POST") {
         try {
             const body = await request.json().catch(() => ({}));
-            const grade = body.grade || null;
-            const classNum = body.classNum || null;
-            const studentNumber = body.studentNumber || null;
+            const grade = body.grade ? Number(body.grade) : null;
+            const classNum = body.classNum ? Number(body.classNum) : null;
+            const studentNumber = body.studentNumber ? Number(body.studentNumber) : null;
 
             if (grade && classNum && studentNumber) {
                 // Upsert into student_profiles
