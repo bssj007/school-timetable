@@ -1543,12 +1543,12 @@ export default function Dashboard() {
                                           )}
                                         </span>
                                       </div>
-                                      <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-col md:flex-row md:flex-wrap items-center md:justify-center overflow-hidden leading-tight md:leading-normal">
+                                      <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-col md:flex-row print:flex-row print:flex-nowrap items-center md:justify-center print:justify-center overflow-hidden leading-tight md:leading-normal print:leading-tight">
                                         {!isCancelledByFreePeriod && displayTeacher ? (
-                                          <span key="teacher-span" className="truncate max-w-full">{displayTeacher}</span>
+                                          <span key="teacher-span" className="truncate shrink min-w-0 max-w-full print:text-[1.8cqh]">{displayTeacher}</span>
                                         ) : null}
                                         {(settings?.show_target_class_main_menu !== "false" && displayClassName) ? (
-                                          <span key="class-span" className={`truncate max-w-full font-medium text-gray-600 ${!isCancelledByFreePeriod && displayTeacher ? "md:ml-1.5" : ""}`}>
+                                          <span key="class-span" className={`truncate shrink min-w-0 max-w-full font-medium text-gray-600 print:text-[1.8cqh] print:!text-gray-500 ${!isCancelledByFreePeriod && displayTeacher ? "md:ml-1.5 print:ml-1" : ""}`}>
                                             {displayClassName}
                                           </span>
                                         ) : null}
