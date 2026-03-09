@@ -1543,11 +1543,16 @@ export default function Dashboard() {
                                           )}
                                         </span>
                                       </div>
-                                      <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate w-full px-1">
-                                        {displayClassName
-                                          ? <><span>{displayClassName}</span>{displayTeacher ? <span className="ml-1 opacity-60">{displayTeacher}</span> : null}</>
-                                          : <span>{displayTeacher}</span>}
-                                      </div>
+                                      {!isCancelledByFreePeriod && (
+                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-col md:flex-row items-center md:justify-center overflow-hidden leading-tight md:leading-normal">
+                                          <span className="truncate max-w-full">{displayTeacher}</span>
+                                          {(settings?.show_target_class_main_menu !== "false" && displayClassName) && (
+                                            <span className="truncate opacity-60 max-w-full md:ml-1">
+                                              {displayClassName}
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
                                       {includeAssessments && cellAssessments.length > 0 && (
                                         <div className="mt-0.5 flex-shrink-0">
                                           <div className="flex flex-wrap gap-0.5 justify-center">

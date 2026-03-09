@@ -1220,43 +1220,51 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
 
         configs.forEach((c: any) => {
             const isFreePeriod = FREE_KEYWORDS.some(k => (c.subject || "").includes(k));
-            if (c.isMovingClass === 0 && !isFreePeriod) return;
+            if (isFreePeriod) return;
+            if (c.isMovingClass === 0) return;
             if (!c.classCode) return;
             const codes = (c.classCode as string).split(",").map(s => s.trim()).filter(Boolean);
             codes.forEach(code => {
                 if (!grouped[code]) grouped[code] = [];
                 if (grouped[code].some(r => r.subject === c.subject)) return;
 
-                // Check every possible class period (Mon-Fri, 1-7 period)
-                // A true free period means:
-                // 1. There is a free period (빈교실, 공강, etc) in at least one class during this time block
-                // 2. No class slot exists in this period with the exact same subject name
+                // Find all slots where this subject appears
+                // We only care about timeslots where this subject is scheduled SOMEWHERE in the timetable
+                const subjectSlots = allSlots.filter((s: any) =>
+                    s.subject && s.subject.trim() === c.subject.trim()
+                );
+
                 const freePeriodSet = new Set<string>();
 
-                for (let weekday = 0; weekday <= 4; weekday++) {
-                    for (let classTime = 1; classTime <= 7; classTime++) {
-                        const sameTimeSlots = allSlots.filter((s: any) =>
-                            s.weekday === weekday &&
-                            s.classTime === classTime
-                        );
+                // Gather all configs for the current subject to know which classes belong to which groups
+                const subjectConfigs = configs.filter((cfg: any) => cfg.subject === c.subject);
 
-                        if (sameTimeSlots.length === 0) continue;
+                subjectSlots.forEach((ss: any) => {
+                    const sameTimeSlots = allSlots.filter((s: any) =>
+                        s.weekday === ss.weekday &&
+                        s.classTime === ss.classTime
+                    );
 
-                        const matchingSlot = sameTimeSlots.find((s: any) =>
-                            s.subject && s.subject.trim() === c.subject.trim()
-                        );
+                    // Check if there is ANY free period keyword in THIS specific timeslot
+                    const hasFreePeriodSlot = sameTimeSlots.some((s: any) =>
+                        FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
+                    );
 
-                        const hasFreePeriodSlot = sameTimeSlots.some((s: any) =>
-                            FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
-                        );
+                    if (!hasFreePeriodSlot) return; // If no free period anywhere at this time, it's not a free period for anyone.
 
-                        if (hasFreePeriodSlot && !matchingSlot) {
-                            // Weekdays are 0-4 (Mon-Fri) in comcigan
-                            const label = `${WEEKDAY_LABELS[weekday]}${classTime}`;
-                            freePeriodSet.add(label);
-                        }
+                    // To match Dashboard's logic exactly:
+                    // A class is cancelled (공강) if there is a free period in the school,
+                    // AND the specific subject (c.subject) is NOT being taught ANYWHERE in the school at this time.
+                    const isSubjectTaughtAnywhere = sameTimeSlots.some((s: any) =>
+                        s.subject && s.subject.trim() === c.subject.trim()
+                    );
+
+                    // If a free period exists AND the subject is not taught anywhere, it's a true free period.
+                    if (!isSubjectTaughtAnywhere) {
+                        const label = `${WEEKDAY_LABELS[ss.weekday]}${ss.classTime}`;
+                        freePeriodSet.add(label);
                     }
-                }
+                });
 
                 let parsedClassName = c.className || "";
                 try {
@@ -1456,6 +1464,63 @@ function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string })
                     </Button>
                 </div>
             </CardContent>
+        </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
+// 6.8 Target Class Display Settings (대상 반 표시 여부)
+// ----------------------------------------------------------------------
+function TargetClassDisplaySettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "targetClassDisplay"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        }
+    });
+
+    // Default to true if not explicitly set to false
+    const isTargetClassEnabled = settingsQuery.data?.show_target_class_main_menu !== 'false';
+
+    const toggleMutation = useMutation({
+        mutationFn: async (enabled: boolean) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ show_target_class_main_menu: enabled ? 'true' : 'false' })
+            });
+            if (!res.ok) throw new Error("Failed to update setting");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            toast.success("설정이 변경되었습니다.");
+        },
+        onError: () => toast.error("변경에 실패했습니다.")
+    });
+
+    return (
+        <Card className="w-full max-w-lg mb-6">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <div className="space-y-1">
+                    <CardTitle className="text-base font-semibold">메인페이지 대상 반 표시</CardTitle>
+                    <CardDescription>메인 화면 시간표에 대상 반(예: 2-3)을 표시합니다.</CardDescription>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Switch
+                        checked={isTargetClassEnabled}
+                        onCheckedChange={(c) => toggleMutation.mutate(c)}
+                        disabled={toggleMutation.isPending || settingsQuery.isLoading}
+                    />
+                    <label className="text-sm font-medium leading-none cursor-pointer">
+                        {isTargetClassEnabled ? "표시" : "숨김"}
+                    </label>
+                </div>
+            </CardHeader>
         </Card>
     );
 }
@@ -2927,6 +2992,7 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                             <h3 className="text-lg font-bold flex-1 text-orange-600">⚠️ 미해결 문제</h3>
                         </div>
                         <div className="flex-1 overflow-y-auto">
+                            <TargetClassDisplaySettings adminPassword={adminPassword} />
                             <SamsungInstallSettings adminPassword={adminPassword} />
                         </div>
                     </div>
