@@ -22,9 +22,12 @@ export const onRequest = async (context: any) => {
 
             if (!reqGrade || !reqClassNum || !reqStudentNum) {
                 // Try to infer from ip_profiles if not fully logged in
-                const result = await env.DB.prepare(
-                    "SELECT grade, classNum, studentNumber, instructionDismissed, lastAccess FROM ip_profiles WHERE ip = ?"
-                ).bind(ip).first();
+                const result = await env.DB.prepare(`
+                    SELECT sp.grade, sp.classNum, sp.studentNumber, ip.instructionDismissed, ip.lastAccess 
+                    FROM ip_profiles ip
+                    LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
+                    WHERE ip.ip = ?
+                `).bind(ip).first();
 
                 if (result) {
                     cGrade = reqGrade || result.grade;
@@ -84,10 +87,14 @@ export const onRequest = async (context: any) => {
                             SELECT MAX(updatedAt) as latestUpdate 
                             FROM performance_assessments 
                             WHERE lastModifiedIp IN (
-                                SELECT ip FROM ip_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
+                                SELECT ip FROM cookie_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
+                                UNION
+                                SELECT ip FROM ip_profiles WHERE student_profile_id = (
+                                    SELECT id FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
+                                )
                             )
                         `;
-                        lastModifiedParams = [cGrade, cClassNum, cStudentNum];
+                        lastModifiedParams = [cGrade, cClassNum, cStudentNum, cGrade, cClassNum, cStudentNum];
                     } else {
                         // If no student number, just check their current IP
                         lastModifiedSql = `
@@ -129,7 +136,9 @@ export const onRequest = async (context: any) => {
                             ).bind(cGrade, cClassNum, cStudentNum).run();
                             // Also clear IP profiles just in case
                             await env.DB.prepare(
-                                "UPDATE ip_profiles SET instructionDismissed = 0 WHERE grade = ? AND classNum = ? AND studentNumber = ?"
+                                `UPDATE ip_profiles SET instructionDismissed = 0 WHERE student_profile_id = (
+                                    SELECT id FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
+                                )`
                             ).bind(cGrade, cClassNum, cStudentNum).run();
                         } else {
                             await env.DB.prepare(
@@ -174,15 +183,12 @@ export const onRequest = async (context: any) => {
 
                 // Also update ip_profiles
                 await env.DB.prepare(`
-                    INSERT INTO ip_profiles (ip, instructionDismissed, lastAccess, grade, classNum, studentNumber)
-                    VALUES (?, ?, datetime('now'), ?, ?, ?)
+                    INSERT INTO ip_profiles (ip, instructionDismissed, lastAccess)
+                    VALUES (?, ?, datetime('now'))
                     ON CONFLICT(ip) DO UPDATE SET 
                         instructionDismissed = ?,
-                        lastAccess = datetime('now'),
-                        grade = COALESCE(?, grade),
-                        classNum = COALESCE(?, classNum),
-                        studentNumber = COALESCE(?, studentNumber)
-                `).bind(ip, Date.now(), grade, classNum, studentNumber, Date.now(), grade, classNum, studentNumber).run();
+                        lastAccess = datetime('now')
+                `).bind(ip, Date.now(), Date.now()).run();
 
             } else {
                 // Also update ip_profiles using IP only (fallback for unidentified users)
