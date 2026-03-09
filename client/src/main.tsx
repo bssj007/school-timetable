@@ -37,7 +37,10 @@ if (typeof window !== 'undefined') {
   // React mounts. Storing it globally guarantees Dashboard can always access it.
   window.addEventListener('beforeinstallprompt', (e: any) => {
     e.preventDefault();
-    (window as any).__deferredPwaPrompt = e;
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|SamsungBrowser/i.test(navigator.userAgent);
+    if (isMobile) {
+      (window as any).__deferredPwaPrompt = e;
+    }
   });
 }
 

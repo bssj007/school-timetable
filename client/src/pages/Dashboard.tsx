@@ -171,8 +171,11 @@ export default function Dashboard() {
 
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
-      (window as any).__deferredPwaPrompt = e;
-      setDeferredPrompt(e);
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|SamsungBrowser/i.test(navigator.userAgent);
+      if (isMobile) {
+        (window as any).__deferredPwaPrompt = e;
+        setDeferredPrompt(e);
+      }
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => {
@@ -199,6 +202,7 @@ export default function Dashboard() {
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printMode, setPrintMode] = useState<'select' | 'printer'>('select');
   const [includeAssessments, setIncludeAssessments] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Preset Constants
   const PRINT_PRESETS = [
@@ -243,7 +247,8 @@ export default function Dashboard() {
     fetch('/api/action/download', { method: 'POST' }).catch(() => { });
 
     try {
-      // Small delay to let dialog close animation finish
+      setIsExporting(true);
+      // Small delay to let dialog close animation finish and React state to apply
       await new Promise(r => setTimeout(r, 300));
 
       document.body.classList.add('capturing');
@@ -262,6 +267,7 @@ export default function Dashboard() {
       });
 
       document.body.classList.remove('capturing');
+      setIsExporting(false);
 
       const link = document.createElement('a');
       link.download = `${grade}학년_${classNum}반_시간표.png`;
@@ -272,6 +278,7 @@ export default function Dashboard() {
       resetPrintOptions();
     } catch (err) {
       document.body.classList.remove('capturing');
+      setIsExporting(false);
       console.error("이미지 저장 실패:", err);
       toast.error("이미지 저장 중 오류가 발생했습니다.");
       resetPrintOptions();
@@ -281,13 +288,17 @@ export default function Dashboard() {
   // 인쇄 핸들러
   const handlePrint = () => {
     setShowPrintOptions(false);
+    setIsExporting(true);
 
     // Track print metric
     fetch('/api/action/print', { method: 'POST' }).catch(() => { });
 
     setTimeout(() => {
       window.print();
-      resetPrintOptions();
+      setTimeout(() => {
+        setIsExporting(false);
+        resetPrintOptions();
+      }, 500);
     }, 100);
   };
 
@@ -1421,7 +1432,7 @@ export default function Dashboard() {
                               // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
                               const bgColor = (includeAssessments && cellAssessments.length > 0)
                                 ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
-                                : isToday
+                                : (isToday && !isExporting)
                                   ? "bg-red-50 hover:bg-red-100"
                                   : "bg-yellow-50 hover:bg-yellow-100";
 
