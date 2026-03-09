@@ -1232,18 +1232,31 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                     s.subject && s.subject.trim() === c.subject.trim()
                 );
 
-                // For each subject slot, check if there's a free period in ANY class
-                // at the same weekday+classTime (indicating a parallel free period exists)
+                // For each subject slot, check if it's considered a true "Free Period" (공강)
+                // A true free period means:
+                // 1. None of the teachers assigned to this specific subject are teaching at this time
+                // 2. There is a free period (빈교실, 공강, etc) in at least one class during this time
                 const freePeriodSet = new Set<string>();
+
+                // Get all teachers for THIS subject
+                const subjectTeachers = [...new Set(configs.filter((cfg: any) => cfg.subject === c.subject).map((cfg: any) => cfg.originalTeacher).filter(Boolean))];
+
                 subjectSlots.forEach((ss: any) => {
                     const sameTimeSlots = allSlots.filter((s: any) =>
                         s.weekday === ss.weekday &&
                         s.classTime === ss.classTime
                     );
+
+                    const isAnyAssignedTeacherTeaching = sameTimeSlots.some((s: any) =>
+                        subjectTeachers.includes(s.teacher)
+                    );
+
                     const hasFreePeriod = sameTimeSlots.some((s: any) =>
                         FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
                     );
-                    if (hasFreePeriod) {
+
+                    // IF there is a free period slot AND none of our subject's teachers are active, it's a true free period for THIS group.
+                    if (hasFreePeriod && !isAnyAssignedTeacherTeaching) {
                         // weekday is 0-indexed (0=Mon, 4=Fri)
                         const label = `${WEEKDAY_LABELS[ss.weekday]}${ss.classTime}`;
                         freePeriodSet.add(label);
