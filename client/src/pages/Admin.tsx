@@ -1214,9 +1214,12 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
     const allSlots: any[] = useMemo(() => timetableQuery.data || [], [timetableQuery.data]);
 
     const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free"];
+    const WEEKDAY_LABELS = ["월", "화", "수", "목", "금"];
 
     const tableRows = useMemo(() => {
         const grouped: Record<string, { subject: string; fullSubjectName?: string; className?: string; freePeriods: string[] }[]> = {};
+
+        if (!allSlots || allSlots.length === 0) return [];
 
         configs.forEach((c: any) => {
             const isFreePeriod = FREE_KEYWORDS.some(k => (c.subject || "").includes(k));
@@ -1234,38 +1237,34 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                 const codeClassNum = parseInt(code.split("-")[1] || code, 10);
                 const codeGrade = parseInt(code.split("-")[0] || grade, 10);
 
-                // All class codes belonging to the SAME group as c
-                const groupCodes = (c.classCode as string).split(",").map((s: string) => s.trim()).filter(Boolean);
+                // Iterate through all 5 days and 7 periods
+                for (let wd = 0; wd < 5; wd++) {
+                    for (let ct = 1; ct <= 7; ct++) {
+                        const sameTimeSlots = allSlots.filter((s: any) =>
+                            s.weekday === wd &&
+                            s.classTime === ct
+                        );
 
-                // Retrieve all schedule slots for THIS specific class to iterate through their week
-                const classSlots = allSlots.filter((s: any) =>
-                    parseInt(s.class) === codeClassNum &&
-                    parseInt(s.grade) === codeGrade
-                );
+                        // Is this class specifically scheduled for a free period at this time?
+                        const isClassFreeAtTime = sameTimeSlots.some((s: any) =>
+                            parseInt(s.class) === codeClassNum &&
+                            parseInt(s.grade) === codeGrade &&
+                            FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
+                        );
 
-                classSlots.forEach((ss: any) => {
-                    const sameTimeSlots = allSlots.filter((s: any) =>
-                        s.weekday === ss.weekday &&
-                        s.classTime === ss.classTime
-                    );
+                        if (isClassFreeAtTime) {
+                            // If this class has a "Free" slot, check if our subject is taught ANYWHERE in the grade
+                            const isSubjectTaughtAnywhere = sameTimeSlots.some((s: any) =>
+                                s.subject && s.subject.trim() === c.subject.trim()
+                            );
 
-                    // Dashboard Logic 1: Is the subject actually being taught at this time?
-                    const matchingSlot = sameTimeSlots.some((s: any) =>
-                        s.subject && s.subject.trim() === c.subject.trim()
-                    );
-
-                    // Dashboard Logic 2: Is there a free period happening anywhere in the school?
-                    const hasFreePeriodSlot = sameTimeSlots.some((t: any) =>
-                        FREE_KEYWORDS.some(k => (t.subject || "").trim().includes(k))
-                    );
-
-                    // Dashboard Logic 3: The Dashboard considers it cancelled ONLY IF there is a free period AND the subject is missing.
-                    if (matchingSlot || !hasFreePeriodSlot) return;
-
-                    // Add free period label directly (no group check needed)
-                    const label = `${WEEKDAY_LABELS[ss.weekday]}${ss.classTime}`;
-                    freePeriodSet.add(label);
-                });
+                            if (!isSubjectTaughtAnywhere) {
+                                const label = `${WEEKDAY_LABELS[wd]}${ct}`;
+                                freePeriodSet.add(label);
+                            }
+                        }
+                    }
+                }
 
                 let parsedClassName = c.className || "";
                 try {
