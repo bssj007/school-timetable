@@ -18,12 +18,11 @@ export const onRequest = async (context: any) => {
             let cGrade = reqGrade;
             let cClassNum = reqClassNum;
             let cStudentNum = reqStudentNum;
-            let dismissedTimestamp = 0;
 
             if (!reqGrade || !reqClassNum || !reqStudentNum) {
                 // Try to infer from ip_profiles if not fully logged in
                 const result = await env.DB.prepare(
-                    "SELECT grade, classNum, studentNumber, instructionDismissed, lastAccess FROM ip_profiles WHERE ip = ?"
+                    "SELECT grade, classNum, studentNumber, instructionDismissed FROM ip_profiles WHERE ip = ?"
                 ).bind(ip).first();
 
                 if (result) {
@@ -31,9 +30,6 @@ export const onRequest = async (context: any) => {
                     cClassNum = reqClassNum || result.classNum;
                     cStudentNum = reqStudentNum || result.studentNumber;
                     dismissed = !!result.instructionDismissed;
-                    if (typeof result.instructionDismissed === 'number' && result.instructionDismissed > 1) {
-                        dismissedTimestamp = result.instructionDismissed;
-                    }
                 }
             }
 
@@ -54,9 +50,6 @@ export const onRequest = async (context: any) => {
 
                 if (studentResult) {
                     dismissed = !!studentResult.instructionDismissed;
-                    if (typeof studentResult.instructionDismissed === 'number' && studentResult.instructionDismissed > 1) {
-                        dismissedTimestamp = studentResult.instructionDismissed;
-                    }
                 }
             }
 
@@ -93,26 +86,19 @@ export const onRequest = async (context: any) => {
                     }
 
                     const latestRow = await env.DB.prepare(lastModifiedSql).bind(...lastModifiedParams).first();
-                    const now = Date.now();
-
-                    // We only reset if the user hasn't DIMSISSED recently as well.
-                    // If they dismissed it 1 hour ago (profileDiffDays = 0), we DO NOT reset it yet!
-                    const profileDiffDays = dismissedTimestamp > 0 ? Math.floor((now - dismissedTimestamp) / (1000 * 60 * 60 * 24)) : 9999;
 
                     if (latestRow && latestRow.latestUpdate) {
-                        const latestDate = new Date(latestRow.latestUpdate as string + 'Z').getTime();
-                        const diffTime = now - latestDate;
-                        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                        const latestDate = new Date(latestRow.latestUpdate as string + 'Z');
+                        const now = new Date();
+                        const diffTime = Math.abs(now.getTime() - latestDate.getTime());
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                        if (diffDays >= resetDays && profileDiffDays >= resetDays) {
+                        if (diffDays > resetDays) {
                             dismissed = false;
                         }
                     } else {
                         // If they have NEVER modified an assessment, they definitely should see the popup
-                        // UNLESS they literally just dismissed it within the reset period.
-                        if (profileDiffDays >= resetDays) {
-                            dismissed = false;
-                        }
+                        dismissed = false;
                     }
 
                     // Apply the reset state to the DB for this group if it was triggered
@@ -160,33 +146,34 @@ export const onRequest = async (context: any) => {
             if (grade && classNum && studentNumber) {
                 // Upsert into student_profiles
                 await env.DB.prepare(`
-                    INSERT INTO student_profiles (grade, classNum, studentNumber, instructionDismissed)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO student_profiles (grade, classNum, studentNumber, instructionDismissed, updatedAt)
+                    VALUES (?, ?, ?, 1, datetime('now'))
                     ON CONFLICT(grade, classNum, studentNumber) DO UPDATE SET 
-                        instructionDismissed = ?
-                `).bind(grade, classNum, studentNumber, Date.now(), Date.now()).run();
+                        instructionDismissed = 1,
+                        updatedAt = datetime('now')
+                `).bind(grade, classNum, studentNumber).run();
 
                 // Also update ip_profiles
                 await env.DB.prepare(`
                     INSERT INTO ip_profiles (ip, instructionDismissed, lastAccess, grade, classNum, studentNumber)
-                    VALUES (?, ?, datetime('now'), ?, ?, ?)
+                    VALUES (?, 1, datetime('now'), ?, ?, ?)
                     ON CONFLICT(ip) DO UPDATE SET 
-                        instructionDismissed = ?,
+                        instructionDismissed = 1,
                         lastAccess = datetime('now'),
                         grade = COALESCE(?, grade),
                         classNum = COALESCE(?, classNum),
                         studentNumber = COALESCE(?, studentNumber)
-                `).bind(ip, Date.now(), grade, classNum, studentNumber, Date.now(), grade, classNum, studentNumber).run();
+                `).bind(ip, grade, classNum, studentNumber, grade, classNum, studentNumber).run();
 
             } else {
                 // Upsert into ip_profiles using IP only (fallback for unidentified users)
                 await env.DB.prepare(`
                     INSERT INTO ip_profiles (ip, instructionDismissed, lastAccess)
-                    VALUES (?, ?, datetime('now'))
+                    VALUES (?, 1, datetime('now'))
                     ON CONFLICT(ip) DO UPDATE SET 
-                        instructionDismissed = ?,
+                        instructionDismissed = 1,
                         lastAccess = datetime('now')
-                `).bind(ip, Date.now(), Date.now()).run();
+                `).bind(ip).run();
             }
 
             return new Response(JSON.stringify({ success: true }), {
