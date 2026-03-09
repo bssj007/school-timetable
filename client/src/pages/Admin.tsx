@@ -1283,7 +1283,16 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
             });
         });
 
-        return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+        return Object.entries(grouped)
+            .map(([code, subjects]) => {
+                // Final safety check to strip out standalone free period rows
+                const filteredSubjects = subjects.filter(
+                    s => !FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
+                );
+                return [code, filteredSubjects] as [string, typeof subjects];
+            })
+            .filter(([_, subjects]) => subjects.length > 0)
+            .sort(([a], [b]) => a.localeCompare(b));
     }, [configs, allSlots]);
 
     const isLoading = settingsQuery.isLoading || electiveConfigQuery.isLoading || timetableQuery.isLoading;
