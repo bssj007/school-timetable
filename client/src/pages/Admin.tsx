@@ -1232,9 +1232,17 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
 
                 const freePeriodSet = new Set<string>();
 
-                // `code` is a display string like "2-3". Extract the raw class number from it.
-                const codeClassNum = parseInt(code.split("-")[1] || code, 10);
-                const codeGrade = parseInt(code.split("-")[0] || grade, 10);
+                // Parse class number and grade Robustly
+                let codeGrade = parseInt(grade as string, 10);
+                let codeClassNum = parseInt(code, 10);
+                if (code.includes("-")) {
+                    const parts = code.split("-");
+                    codeGrade = parseInt(parts[0], 10);
+                    codeClassNum = parseInt(parts[1], 10);
+                }
+
+                // All class codes belonging to the SAME group as c
+                const groupCodes = (c.classCode as string).split(",").map((s: string) => s.trim()).filter(Boolean);
 
                 // Iterate through all 5 days and 7 periods
                 for (let wd = 0; wd < 5; wd++) {
@@ -1252,14 +1260,28 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                         );
 
                         if (isClassFreeAtTime) {
-                            // If this class has a "Free" slot, check if our subject is taught ANYWHERE in the grade
-                            const isSubjectTaughtAnywhere = sameTimeSlots.some((s: any) =>
-                                s.subject && s.subject.trim() === c.subject.trim()
-                            );
+                            // Verify that this timeslot actually belongs to this group –
+                            // i.e., some OTHER subject from the same group IS being taught at this time
+                            const isGroupTimeslot = configs.some((otherC: any) => {
+                                if (!otherC.classCode) return false;
+                                const otherCodes = (otherC.classCode as string).split(",").map((x: string) => x.trim());
+                                const sharesGroup = groupCodes.some(gc => otherCodes.includes(gc));
+                                if (!sharesGroup) return false;
+                                return sameTimeSlots.some((s: any) =>
+                                    s.subject && s.subject.trim() === otherC.subject.trim()
+                                );
+                            });
 
-                            if (!isSubjectTaughtAnywhere) {
-                                const label = `${WEEKDAY_LABELS[wd]}${ct}`;
-                                freePeriodSet.add(label);
+                            if (isGroupTimeslot) {
+                                // If this class has a "Free" slot in a group period, check if our subject is taught ANYWHERE in the grade
+                                const isSubjectTaughtAnywhere = sameTimeSlots.some((s: any) =>
+                                    s.subject && s.subject.trim() === c.subject.trim()
+                                );
+
+                                if (!isSubjectTaughtAnywhere) {
+                                    const label = `${WEEKDAY_LABELS[wd]}${ct}`;
+                                    freePeriodSet.add(label);
+                                }
                             }
                         }
                     }
