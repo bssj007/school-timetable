@@ -1230,9 +1230,19 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
 
                 const freePeriodSet = new Set<string>();
 
+                // `code` is a display string like "2-3". Extract the raw class number from it.
+                const codeClassNum = parseInt(code.split("-")[1] || code, 10);
+                const codeGrade = parseInt(code.split("-")[0] || grade, 10);
+
+                // Find all slots where THIS specific class has a free period keyword
                 const classFreeSlots = allSlots.filter((s: any) =>
-                    s.classNum === code && FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
+                    parseInt(s.classNum) === codeClassNum &&
+                    parseInt(s.grade) === codeGrade &&
+                    FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
                 );
+
+                // All class codes belonging to the SAME group as c
+                const groupCodes = (c.classCode as string).split(",").map((s: string) => s.trim()).filter(Boolean);
 
                 classFreeSlots.forEach((ss: any) => {
                     const sameTimeSlots = allSlots.filter((s: any) =>
@@ -1240,16 +1250,23 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                         s.classTime === ss.classTime
                     );
 
+                    // If this subject is actively taught anywhere in the school at this time, it's not a cancellation
                     const isSubjectTaughtAnywhere = sameTimeSlots.some((s: any) =>
                         s.subject && s.subject.trim() === c.subject.trim()
                     );
                     if (isSubjectTaughtAnywhere) return;
 
-                    const isGroupTimeslot = configs.some((otherC: any) =>
-                        otherC.classCode && c.classCode &&
-                        otherC.classCode.trim() === c.classCode.trim() &&
-                        sameTimeSlots.some((s: any) => s.subject && s.subject.trim() === otherC.subject.trim())
-                    );
+                    // Verify that this timeslot actually belongs to this group –
+                    // i.e., some OTHER subject from the same group IS being taught at this time
+                    const isGroupTimeslot = configs.some((otherC: any) => {
+                        if (!otherC.classCode) return false;
+                        const otherCodes = (otherC.classCode as string).split(",").map((x: string) => x.trim());
+                        const sharesGroup = groupCodes.some(gc => otherCodes.includes(gc));
+                        if (!sharesGroup) return false;
+                        return sameTimeSlots.some((s: any) =>
+                            s.subject && s.subject.trim() === otherC.subject.trim()
+                        );
+                    });
 
                     if (isGroupTimeslot) {
                         const label = `${WEEKDAY_LABELS[ss.weekday]}${ss.classTime}`;
