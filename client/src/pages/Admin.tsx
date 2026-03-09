@@ -175,6 +175,18 @@ function ElectiveManager({ password }: { password: string }) {
                 }
             });
 
+            // Sort: Alphabetical (ㄱㄴㄷ) but push "빈교실", "공강", etc. to the bottom
+            const FREE_KEYWORDS = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"];
+            merged.sort((a, b) => {
+                const aFree = FREE_KEYWORDS.some(k => a.subject.trim().includes(k));
+                const bFree = FREE_KEYWORDS.some(k => b.subject.trim().includes(k));
+
+                if (aFree && !bFree) return 1;
+                if (!aFree && bFree) return -1;
+
+                return a.subject.localeCompare(b.subject, 'ko-KR');
+            });
+
             setSubjects(merged);
             setOriginalSubjects(JSON.parse(JSON.stringify(merged)));
         } catch (error: any) {
