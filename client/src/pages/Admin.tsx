@@ -5883,6 +5883,9 @@ function PromotionSettings({ adminPassword }: { adminPassword: string }) {
         return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
     }
 
+    const originalDays = settingsData?.promotion_reset_days !== undefined ? parseInt(settingsData.promotion_reset_days, 10) : 0;
+    const isDirty = resetDays !== originalDays;
+
     return (
         <Card className="w-full max-w-2xl mt-8">
             <CardHeader>
@@ -5911,10 +5914,17 @@ function PromotionSettings({ adminPassword }: { adminPassword: string }) {
                     <p>💡 <strong>0일</strong>로 설정 시 이 기능이 <strong>비활성화</strong>되며, 사용자가 한 번 팝업을 닫으면 다시는 표시되지 않습니다.</p>
                 </div>
 
-                <div className="flex justify-end pt-4">
+                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                    <Button
+                        variant="outline"
+                        onClick={() => setResetDays(originalDays)}
+                        disabled={!isDirty || saveSettingMutation.isPending}
+                    >
+                        변경 취소
+                    </Button>
                     <Button
                         onClick={() => saveSettingMutation.mutate({ promotion_reset_days: resetDays.toString() })}
-                        disabled={saveSettingMutation.isPending || (settingsData?.promotion_reset_days && parseInt(settingsData.promotion_reset_days) === resetDays)}
+                        disabled={!isDirty || saveSettingMutation.isPending}
                     >
                         {saveSettingMutation.isPending ? "저장 중..." : "설정 저장"}
                     </Button>

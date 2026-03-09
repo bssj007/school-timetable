@@ -52,6 +52,7 @@ export const onRequest = async (context: any) => {
             samsung_install_button_visible: settings['samsung_install_button_visible'] !== 'false', // default true
             pwa_install_button_visible: settings['pwa_install_button_visible'] !== 'false', // default true
             show_target_class_main_menu: settings['show_target_class_main_menu'] !== 'false', // default true
+            promotion_reset_days: settings['promotion_reset_days'] || '0'
         }), {
             headers: { 'Content-Type': 'application/json' }
         });

@@ -20,43 +20,12 @@ export const onRequest = async (context: any) => {
             let cStudentNum = reqStudentNum;
             let dismissedTimestamp = 0;
 
-            if (!reqGrade || !reqClassNum || !reqStudentNum) {
-                // Try to infer from ip_profiles if not fully logged in
-                const result = await env.DB.prepare(`
-                    SELECT sp.grade, sp.classNum, sp.studentNumber, ip.instructionDismissed, ip.lastAccess 
-                    FROM ip_profiles ip
-                    LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
-                    WHERE ip.ip = ?
-                `).bind(ip).first();
-
-                if (result) {
-                    cGrade = reqGrade || result.grade;
-                    cClassNum = reqClassNum || result.classNum;
-                    cStudentNum = reqStudentNum || result.studentNumber;
-                    dismissed = !!result.instructionDismissed;
-
-                    const val = Number(result.instructionDismissed);
-                    if (!isNaN(val) && val > 0) {
-                        // If it's the old boolean '1', treat it as newly dismissed to prevent instant loop reset
-                        dismissedTimestamp = val === 1 ? Date.now() : val;
-                    }
-                }
-            }
-
-            // Check if THIS student dismissed it via student_profiles
-            if (cGrade && cClassNum) {
+            // Only check dismissal for fully authenticated users (with a student number)
+            // Users without a student number are admins or guests, we don't save their dismissal state.
+            if (cGrade && cClassNum && cStudentNum) {
                 // Use student_profiles as the single source of truth for logged-in/identified users
-                let profileQuery = "SELECT instructionDismissed FROM student_profiles WHERE grade = ? AND classNum = ?";
-                let profileParams = [cGrade, cClassNum];
-
-                if (cStudentNum) {
-                    profileQuery += " AND studentNumber = ?";
-                    profileParams.push(cStudentNum);
-                } else {
-                    profileQuery += " AND (studentNumber IS NULL OR studentNumber = '')";
-                }
-
-                const studentResult = await env.DB.prepare(profileQuery).bind(...profileParams).first();
+                const profileQuery = "SELECT instructionDismissed FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?";
+                const studentResult = await env.DB.prepare(profileQuery).bind(cGrade, cClassNum, cStudentNum).first();
 
                 if (studentResult) {
                     dismissed = !!studentResult.instructionDismissed;
@@ -70,7 +39,7 @@ export const onRequest = async (context: any) => {
             }
 
             // Check if Promotion Reset is enabled
-            if (dismissed && cGrade && cClassNum) {
+            if (dismissed && cGrade && cClassNum && cStudentNum) {
                 const settingRow = await env.DB.prepare(
                     "SELECT value FROM system_settings WHERE key = 'promotion_reset_days'"
                 ).first();
@@ -79,31 +48,18 @@ export const onRequest = async (context: any) => {
 
                 if (resetDays > 0) {
                     // Check the latest assessment modification for all IPs belonging to this student
-                    let lastModifiedSql = "";
-                    let lastModifiedParams: any[] = [];
-
-                    if (cStudentNum) {
-                        lastModifiedSql = `
-                            SELECT MAX(updatedAt) as latestUpdate 
-                            FROM performance_assessments 
-                            WHERE lastModifiedIp IN (
-                                SELECT ip FROM cookie_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
-                                UNION
-                                SELECT ip FROM ip_profiles WHERE student_profile_id = (
-                                    SELECT id FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
-                                )
+                    const lastModifiedSql = `
+                        SELECT MAX(updatedAt) as latestUpdate 
+                        FROM performance_assessments 
+                        WHERE lastModifiedIp IN (
+                            SELECT ip FROM cookie_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
+                            UNION
+                            SELECT ip FROM ip_profiles WHERE student_profile_id = (
+                                SELECT id FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
                             )
-                        `;
-                        lastModifiedParams = [cGrade, cClassNum, cStudentNum, cGrade, cClassNum, cStudentNum];
-                    } else {
-                        // If no student number, just check their current IP
-                        lastModifiedSql = `
-                            SELECT MAX(updatedAt) as latestUpdate 
-                            FROM performance_assessments 
-                            WHERE lastModifiedIp = ?
-                        `;
-                        lastModifiedParams = [ip];
-                    }
+                        )
+                    `;
+                    const lastModifiedParams = [cGrade, cClassNum, cStudentNum, cGrade, cClassNum, cStudentNum];
 
                     const latestRow = await env.DB.prepare(lastModifiedSql).bind(...lastModifiedParams).first();
                     const now = Date.now();
@@ -130,24 +86,15 @@ export const onRequest = async (context: any) => {
 
                     // Apply the reset state to the DB for this group if it was triggered
                     if (!dismissed) {
-                        if (cStudentNum) {
-                            await env.DB.prepare(
-                                "UPDATE student_profiles SET instructionDismissed = 0 WHERE grade = ? AND classNum = ? AND studentNumber = ?"
-                            ).bind(cGrade, cClassNum, cStudentNum).run();
-                            // Also clear IP profiles just in case
-                            await env.DB.prepare(
-                                `UPDATE ip_profiles SET instructionDismissed = 0 WHERE student_profile_id = (
-                                    SELECT id FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
-                                )`
-                            ).bind(cGrade, cClassNum, cStudentNum).run();
-                        } else {
-                            await env.DB.prepare(
-                                "UPDATE student_profiles SET instructionDismissed = 0 WHERE grade = ? AND classNum = ? AND (studentNumber IS NULL OR studentNumber = '')"
-                            ).bind(cGrade, cClassNum).run();
-                            await env.DB.prepare(
-                                "UPDATE ip_profiles SET instructionDismissed = 0 WHERE ip = ?"
-                            ).bind(ip).run();
-                        }
+                        await env.DB.prepare(
+                            "UPDATE student_profiles SET instructionDismissed = 0 WHERE grade = ? AND classNum = ? AND studentNumber = ?"
+                        ).bind(cGrade, cClassNum, cStudentNum).run();
+                        // Also clear IP profiles just in case
+                        await env.DB.prepare(
+                            `UPDATE ip_profiles SET instructionDismissed = 0 WHERE student_profile_id = (
+                                SELECT id FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
+                            )`
+                        ).bind(cGrade, cClassNum, cStudentNum).run();
                     }
                 }
             }
@@ -175,31 +122,22 @@ export const onRequest = async (context: any) => {
             if (grade && classNum && studentNumber) {
                 // Upsert into student_profiles
                 await env.DB.prepare(`
-                    INSERT INTO student_profiles (grade, classNum, studentNumber, instructionDismissed)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO student_profiles(grade, classNum, studentNumber, instructionDismissed)
+                    VALUES(?, ?, ?, ?)
                     ON CONFLICT(grade, classNum, studentNumber) DO UPDATE SET 
                         instructionDismissed = ?
-                `).bind(grade, classNum, studentNumber, Date.now(), Date.now()).run();
+                                    `).bind(grade, classNum, studentNumber, Date.now(), Date.now()).run();
 
                 // Also update ip_profiles
                 await env.DB.prepare(`
-                    INSERT INTO ip_profiles (ip, instructionDismissed, lastAccess)
-                    VALUES (?, ?, datetime('now'))
+                    INSERT INTO ip_profiles(ip, instructionDismissed, lastAccess)
+                    VALUES(?, ?, datetime('now'))
                     ON CONFLICT(ip) DO UPDATE SET 
                         instructionDismissed = ?,
-                        lastAccess = datetime('now')
-                `).bind(ip, Date.now(), Date.now()).run();
-
-            } else {
-                // Also update ip_profiles using IP only (fallback for unidentified users)
-                await env.DB.prepare(`
-                    INSERT INTO ip_profiles (ip, instructionDismissed, lastAccess)
-                    VALUES (?, ?, datetime('now'))
-                    ON CONFLICT(ip) DO UPDATE SET 
-                        instructionDismissed = ?,
-                        lastAccess = datetime('now')
-                `).bind(ip, Date.now(), Date.now()).run();
+                                lastAccess = datetime('now')
+                                    `).bind(ip, Date.now(), Date.now()).run();
             }
+            // For administrators/guests without a student number, we simply do nothing.
 
             return new Response(JSON.stringify({ success: true }), {
                 headers: { "Content-Type": "application/json" }
