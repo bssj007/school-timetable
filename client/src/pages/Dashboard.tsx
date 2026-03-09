@@ -1521,24 +1521,24 @@ export default function Dashboard() {
                                     </div>
                                   )}
                                   {item || isElectiveActive ? (
-                                    <div className="flex flex-col items-center justify-center h-full min-h-0">
+                                    <div key="active-cell" className="flex flex-col items-center justify-center h-full min-h-0">
                                       <div
                                         className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400 print:!text-gray-900 capturing:!text-gray-900" : "text-gray-900"} ${(displaySubject || "").length > 6 ? 'text-[9px] break-keep' : (displaySubject || "").length > 4 ? 'text-[11px]' : ''}`}
                                       >
                                         <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
                                           {isCancelledByFreePeriod ? (
-                                            <span className="print:flex print:flex-col print:items-center">
+                                            <span key="cancelled-subj" className="print:flex print:flex-col print:items-center">
                                               <span className="line-through opacity-60 flex-shrink-0 whitespace-nowrap">{displaySubject}</span>
                                               <span className={`block md:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400 print:!text-blue-500 capturing:!text-blue-500" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
                                             </span>
                                           ) : (
                                             displaySubject?.includes("공강") && displaySubject !== "공강" ? (
-                                              <span className="flex flex-col md:inline md:flex-row items-center">
+                                              <span key="partial-free-subj" className="flex flex-col md:inline md:flex-row items-center">
                                                 <span>{displaySubject.replace("공강", "")}</span>
                                                 <span className="block md:inline md:ml-1">공강</span>
                                               </span>
                                             ) : (
-                                              <span>{displaySubject}</span>
+                                              <span key="normal-subj">{displaySubject}</span>
                                             )
                                           )}
                                         </span>
@@ -1566,7 +1566,7 @@ export default function Dashboard() {
                                       )}
                                     </div>
                                   ) : (
-                                    <span className="text-gray-300 text-sm">-</span>
+                                    <span key="empty-cell" className="text-gray-300 text-sm">-</span>
                                   )}
                                 </td>
                               );
