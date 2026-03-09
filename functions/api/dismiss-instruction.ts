@@ -8,13 +8,13 @@ export const onRequest = async (context: any) => {
 
     // GET: Check status
     if (request.method === "GET") {
+        let dismissed = false;
         try {
             const url = new URL(request.url);
             const reqGrade = url.searchParams.get("grade");
             const reqClassNum = url.searchParams.get("classNum");
             const reqStudentNum = url.searchParams.get("studentNumber");
 
-            let dismissed = false;
             let cGrade = reqGrade ? Number(reqGrade) : null;
             let cClassNum = reqClassNum ? Number(reqClassNum) : null;
             let cStudentNum = reqStudentNum ? Number(reqStudentNum) : null;
@@ -47,41 +47,15 @@ export const onRequest = async (context: any) => {
                 const resetDays = settingRow && settingRow.value ? parseInt(settingRow.value, 10) : 0;
 
                 if (resetDays > 0) {
-                    // Check the latest assessment modification for all IPs belonging to this student
-                    const lastModifiedSql = `
-                        SELECT MAX(updatedAt) as latestUpdate 
-                        FROM performance_assessments 
-                        WHERE lastModifiedIp IN (
-                            SELECT ip FROM cookie_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
-                            UNION
-                            SELECT ip FROM ip_profiles WHERE student_profile_id = (
-                                SELECT id FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?
-                            )
-                        )
-                    `;
-                    const lastModifiedParams = [cGrade, cClassNum, cStudentNum, cGrade, cClassNum, cStudentNum];
-
-                    const latestRow = await env.DB.prepare(lastModifiedSql).bind(...lastModifiedParams).first();
                     const now = Date.now();
 
-                    // We only reset if the user hasn't DIMSISSED recently as well.
-                    // If they dismissed it 1 hour ago (profileDiffDays = 0), we DO NOT reset it yet!
+                    // Check if they dismissed it more than `resetDays` ago
                     const profileDiffDays = dismissedTimestamp > 0 ? Math.floor((now - dismissedTimestamp) / (1000 * 60 * 60 * 24)) : 9999;
 
-                    if (latestRow && latestRow.latestUpdate) {
-                        const latestDate = new Date(latestRow.latestUpdate as string + 'Z').getTime();
-                        const diffTime = now - latestDate;
-                        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-                        if (diffDays >= resetDays && profileDiffDays >= resetDays) {
-                            dismissed = false;
-                        }
-                    } else {
-                        // If they have NEVER modified an assessment, they definitely should see the popup
-                        // UNLESS they literally just dismissed it within the reset period.
-                        if (profileDiffDays >= resetDays) {
-                            dismissed = false;
-                        }
+                    // Additionally, if we had a system-wide last_assessment_update in system_settings, we would check it here.
+                    // For now, if the user dismissed it longer ago than the reset days, we show it again.
+                    if (profileDiffDays >= resetDays) {
+                        dismissed = false;
                     }
 
                     // Apply the reset state to the DB for this group if it was triggered
@@ -107,7 +81,9 @@ export const onRequest = async (context: any) => {
         } catch (e: any) {
             // Table might not exist yet -> do not force false, let client rely on local config
             console.error("GET dismiss error:", e.message);
-            return new Response(JSON.stringify({ error: e.message }), { status: 200 });
+            // Return whatever `dismissed` state we had before the error, rather than just the error message,
+            // so the frontend doesn't evaluate data.dismissed as undefined -> false.
+            return new Response(JSON.stringify({ dismissed: dismissed, _error: e.message }), { status: 200 });
         }
     }
 
