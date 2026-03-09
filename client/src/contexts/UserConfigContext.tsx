@@ -63,8 +63,15 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         refreshKakaoUser();
+
+        // Prepare params to check if THIS specific user profile has dismissed the instruction
+        const params = new URLSearchParams();
+        if (config.grade) params.append('grade', config.grade);
+        if (config.classNum) params.append('classNum', config.classNum);
+        if (config.studentNumber) params.append('studentNumber', config.studentNumber);
+
         // Check server-side dismissal status
-        fetch('/api/dismiss-instruction')
+        fetch(`/api/dismiss-instruction?${params.toString()}`)
             .then(res => res.json())
             .then(data => {
                 if (data.dismissed) {
@@ -72,6 +79,16 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
                         if (prev.instructionDismissedV2) return prev; // Already true
                         return { ...prev, instructionDismissedV2: true };
                     });
+                } else if (data.dismissed === false && config.instructionDismissedV2) {
+                    // If server explicitly says it's NOT dismissed (e.g., reset by promotion feature)
+                    // we must enforce server state
+                    setConfigState(prev => {
+                        return { ...prev, instructionDismissedV2: false };
+                    });
+
+                    const expires = new Date();
+                    expires.setFullYear(expires.getFullYear() + 1);
+                    document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify({ ...config, instructionDismissedV2: false }))}; expires=${expires.toUTCString()}; path=/`;
                 }
             })
             .catch(err => console.error("Failed to fetch instruction status", err));
@@ -85,9 +102,17 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
         expires.setFullYear(expires.getFullYear() + 1);
         document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(updated))}; expires=${expires.toUTCString()}; path=/`;
 
-        // If dismissing instruction, sync to server
+        // If dismissing instruction, sync to server with profile
         if (newConfig.instructionDismissedV2) {
-            fetch('/api/dismiss-instruction', { method: 'POST' }).catch(err => console.error(err));
+            fetch('/api/dismiss-instruction', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    grade: updated.grade,
+                    classNum: updated.classNum,
+                    studentNumber: updated.studentNumber
+                })
+            }).catch(err => console.error(err));
         }
     };
 

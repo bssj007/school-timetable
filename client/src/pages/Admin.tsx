@@ -5776,6 +5776,98 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
+// PromotionSettings - Controls when to reset the assessment instruction popup
+// Located under: 기타 > 홍보
+// ----------------------------------------------------------------------
+function PromotionSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [resetDays, setResetDays] = useState<number | null>(null);
+
+    const { data: settingsData, isLoading } = useQuery({
+        queryKey: ["admin", "promotionSettings"],
+        queryFn: async () => {
+            const res = await fetch("/api/settings/public");
+            if (!res.ok) throw new Error("설정 불러오기 실패");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsData && settingsData.promotion_reset_days !== undefined) {
+            setResetDays(parseInt(settingsData.promotion_reset_days, 10));
+        } else if (settingsData) {
+            setResetDays(0);
+        }
+    }, [settingsData]);
+
+    const saveSettingMutation = useMutation({
+        mutationFn: async (payload: Record<string, string>) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("저장 실패");
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "promotionSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            toast.success("홍보 설정이 저장되었습니다.");
+        },
+        onError: () => {
+            toast.error("설정 저장에 실패했습니다.");
+        }
+    });
+
+    if (isLoading || resetDays === null) {
+        return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
+    }
+
+    return (
+        <Card className="w-full max-w-2xl mt-8">
+            <CardHeader>
+                <CardTitle>수행평가 입력 독려 (홍보) 팝업 설정</CardTitle>
+                <CardDescription>
+                    일반 사용자가 수행평가를 적극적으로 입력하도록 유도하는 "수행평가 추가" 도움말 팝업의 재구동 시점을 설정합니다.<br />
+                    설정한 기간(일) 동안 앱 전체에 새로운 수행평가가 올라오지 않으면, 이전에 팝업을 닫았던 사용자라도 다시 팝업이 노출됩니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="space-y-3 pt-4">
+                    <Label className="font-medium text-sm">팝업 초기화 기준일 (미등록 기간)</Label>
+                    <div className="flex items-center space-x-2">
+                        <Input
+                            type="number"
+                            min={0}
+                            value={resetDays}
+                            onChange={(e) => setResetDays(parseInt(e.target.value) || 0)}
+                            className="w-24"
+                        />
+                        <span className="text-sm font-medium">일 동안 새 수행평가 등록이 없으면 팝업 다시 표시</span>
+                    </div>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
+                    <p>💡 <strong>0일</strong>로 설정 시 이 기능이 <strong>비활성화</strong>되며, 사용자가 한 번 팝업을 닫으면 다시는 표시되지 않습니다.</p>
+                </div>
+
+                <div className="flex justify-end pt-4">
+                    <Button
+                        onClick={() => saveSettingMutation.mutate({ promotion_reset_days: resetDays.toString() })}
+                        disabled={saveSettingMutation.isPending || (settingsData?.promotion_reset_days && parseInt(settingsData.promotion_reset_days) === resetDays)}
+                    >
+                        {saveSettingMutation.isPending ? "저장 중..." : "설정 저장"}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
 // SamsungInstallSettings - Controls Samsung Internet PWA button visibility
 // Located under: 기타 > 미해결 문제
 // ----------------------------------------------------------------------
