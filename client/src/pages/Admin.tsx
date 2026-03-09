@@ -1236,7 +1236,7 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
 
                 // Find all slots where THIS specific class has a free period keyword
                 const classFreeSlots = allSlots.filter((s: any) =>
-                    parseInt(s.classNum) === codeClassNum &&
+                    parseInt(s.class) === codeClassNum &&
                     parseInt(s.grade) === codeGrade &&
                     FREE_KEYWORDS.some(k => (s.subject || "").includes(k))
                 );
