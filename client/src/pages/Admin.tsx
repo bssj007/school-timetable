@@ -1262,22 +1262,9 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                     // Dashboard Logic 3: The Dashboard considers it cancelled ONLY IF there is a free period AND the subject is missing.
                     if (matchingSlot || !hasFreePeriodSlot) return;
 
-                    // Extra Admin Logic: Verify that this timeslot actually belongs to this group –
-                    // i.e., some OTHER subject from the same group IS being taught at this time
-                    const isGroupTimeslot = configs.some((otherC: any) => {
-                        if (!otherC.classCode) return false;
-                        const otherCodes = (otherC.classCode as string).split(",").map((x: string) => x.trim());
-                        const sharesGroup = groupCodes.some(gc => otherCodes.includes(gc));
-                        if (!sharesGroup) return false;
-                        return sameTimeSlots.some((s: any) =>
-                            s.subject && s.subject.trim() === otherC.subject.trim()
-                        );
-                    });
-
-                    if (isGroupTimeslot) {
-                        const label = `${WEEKDAY_LABELS[ss.weekday]}${ss.classTime}`;
-                        freePeriodSet.add(label);
-                    }
+                    // Add free period label directly (no group check needed)
+                    const label = `${WEEKDAY_LABELS[ss.weekday]}${ss.classTime}`;
+                    freePeriodSet.add(label);
                 });
 
                 let parsedClassName = c.className || "";
