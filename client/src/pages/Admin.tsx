@@ -1214,7 +1214,6 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
     const allSlots: any[] = useMemo(() => timetableQuery.data || [], [timetableQuery.data]);
 
     const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free"];
-    const WEEKDAY_LABELS = ["월", "화", "수", "목", "금"];
 
     const tableRows = useMemo(() => {
         const grouped: Record<string, { subject: string; fullSubjectName?: string; className?: string; freePeriods: string[] }[]> = {};
