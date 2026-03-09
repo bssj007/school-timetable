@@ -392,7 +392,7 @@ function ElectiveManager({ password }: { password: string }) {
                 </div>
 
                 <div className="flex-1 overflow-auto border rounded-md">
-                    <Table>
+                    <Table className="w-full min-w-[1000px]">
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[150px]">과목명</TableHead>
@@ -523,7 +523,7 @@ function ElectiveManager({ password }: { password: string }) {
                                                         className={`h-7 text-xs px-2 ${!item.isMovingClass ? "bg-red-600 hover:bg-red-700" : "text-gray-400"} ${isFreePeriod ? "pointer-events-none" : ""}`}
                                                         onClick={() => {
                                                             handleInputChange(originalIndex, "isMovingClass", false);
-                                                            handleInputChange(originalIndex, "className", ""); // clear className when turned off
+                                                            handleInputChange(originalIndex, "className", "{}"); // clear className when turned off
                                                         }}
                                                         disabled={isFreePeriod || isDeleted}
                                                     >
@@ -532,13 +532,61 @@ function ElectiveManager({ password }: { password: string }) {
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                <Input
-                                                    value={item.className || ""}
-                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(originalIndex, "className", e.target.value)}
-                                                    placeholder="예: 1,2,3"
-                                                    className={`max-w-[100px] ${(!item.isMovingClass || isFreePeriod) ? "bg-gray-100 pointer-events-none text-gray-400" : ""}`}
-                                                    disabled={!item.isMovingClass || isFreePeriod || isDeleted}
-                                                />
+                                                {(() => {
+                                                    const isDisabled = !item.isMovingClass || isFreePeriod || isDeleted;
+                                                    let classCodes = (item.classCode || "").split(",").filter(Boolean);
+
+                                                    // Parse className JSON safely
+                                                    let parsedClassNames: Record<string, string> = {};
+                                                    if (item.className) {
+                                                        try {
+                                                            parsedClassNames = JSON.parse(item.className);
+                                                        } catch (e) {
+                                                            // Legacy string fallback - assign to all current groups
+                                                            if (classCodes.length > 0) {
+                                                                classCodes.forEach((code: string) => {
+                                                                    parsedClassNames[code] = item.className;
+                                                                });
+                                                            } else {
+                                                                parsedClassNames["_global"] = item.className;
+                                                            }
+                                                        }
+                                                    }
+
+                                                    const handleGroupClassNameChange = (groupCode: string, newValue: string) => {
+                                                        const newParsed = { ...parsedClassNames, [groupCode]: newValue };
+                                                        handleInputChange(originalIndex, "className", JSON.stringify(newParsed));
+                                                    };
+
+                                                    if (classCodes.length === 0) {
+                                                        return (
+                                                            <Input
+                                                                value={parsedClassNames["_global"] || ""}
+                                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleGroupClassNameChange("_global", e.target.value)}
+                                                                placeholder="예: 1,2,3"
+                                                                className={`max-w-[100px] ${isDisabled ? "bg-gray-100 pointer-events-none text-gray-400" : ""}`}
+                                                                disabled={isDisabled}
+                                                            />
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <div className="flex flex-col gap-1 w-full max-w-[120px]">
+                                                            {classCodes.map((code: string) => (
+                                                                <div key={code} className="flex items-center gap-1">
+                                                                    <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1 py-0.5 rounded shrink-0">{code}</span>
+                                                                    <Input
+                                                                        value={parsedClassNames[code] || ""}
+                                                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleGroupClassNameChange(code, e.target.value)}
+                                                                        placeholder="예: 1,2"
+                                                                        className={`h-7 text-xs ${isDisabled ? "bg-gray-100 pointer-events-none text-gray-400" : ""}`}
+                                                                        disabled={isDisabled}
+                                                                    />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-1">

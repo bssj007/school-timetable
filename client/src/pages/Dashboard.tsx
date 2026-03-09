@@ -1484,7 +1484,15 @@ export default function Dashboard() {
                                   c.subject === electiveSelection.subject &&
                                   c.classCode?.split(",").map((s: string) => s.trim()).includes(group)
                                 );
-                                displayClassName = (configEntry as any)?.className || "";
+
+                                let rawClassName = (configEntry as any)?.className || "";
+                                try {
+                                  const parsed = JSON.parse(rawClassName);
+                                  displayClassName = parsed[group] || parsed["_global"] || "";
+                                } catch (e) {
+                                  // Fallback to legacy string if it wasn't JSON
+                                  displayClassName = rawClassName;
+                                }
                               }
 
                               return (
