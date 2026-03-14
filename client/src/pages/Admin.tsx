@@ -332,27 +332,45 @@ function ElectiveManager({ password }: { password: string }) {
     const autoLabel = `자동 (현재: ${activeTimetable || '없음'})`;
 
     return (
-        <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
-            {/* Sidebar */}
-            <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
+        <div className="flex flex-col gap-0 w-full">
+            <CardHeader className="flex flex-row justify-between items-start md:items-center gap-4 px-6 pt-6 pb-2">
+                <div>
+                    <CardTitle>선택과목 관리</CardTitle>
+                    <CardDescription>
+                        2, 3학년 선택과목의 반 코드(A, B, C...)와 선생님 성함을 관리합니다.
+                    </CardDescription>
+                </div>
                 <Button
-                    variant={selectedGrade === 2 ? "default" : "ghost"}
-                    className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
-                    onClick={() => setSelectedGrade(2)}
+                    variant="secondary"
+                    className="bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200"
+                    onClick={() => setShowEasyABC(true)}
                 >
-                    2학년
+                    <Wand2 className="w-4 h-4 mr-2" />
+                    Easy ABC 그룹입력
                 </Button>
-                <Button
-                    variant={selectedGrade === 3 ? "default" : "ghost"}
-                    className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
-                    onClick={() => setSelectedGrade(3)}
-                >
-                    3학년
-                </Button>
-            </div>
+            </CardHeader>
+            <CardContent className="pt-2">
+                <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
+                    {/* Sidebar */}
+                    <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
+                        <Button
+                            variant={selectedGrade === 2 ? "default" : "ghost"}
+                            className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
+                            onClick={() => setSelectedGrade(2)}
+                        >
+                            2학년
+                        </Button>
+                        <Button
+                            variant={selectedGrade === 3 ? "default" : "ghost"}
+                            className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
+                            onClick={() => setSelectedGrade(3)}
+                        >
+                            3학년
+                        </Button>
+                    </div>
 
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col gap-4 overflow-hidden pr-2">
+                    {/* Main Content */}
+                    <div className="flex-1 flex flex-col gap-4 overflow-hidden pr-2">
                 <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                     <div className="flex items-center gap-4 shrink-0">
                         <h3 className="text-lg font-bold flex items-center gap-2">
@@ -390,24 +408,6 @@ function ElectiveManager({ password }: { password: string }) {
                     </div>
 
                     <div className="flex gap-2 justify-end w-full xl:w-auto shrink-0 mt-2 xl:mt-0">
-                        <Button
-                            variant="secondary"
-                            className="bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200"
-                            onClick={() => {
-                                // Initialize tempGroups with current single-group values (excluding multi-groups for safety)
-                                const initialTempGroups: Record<string, string> = {};
-                                subjects.forEach(s => {
-                                    if (s.isMovingClass && s.classCode && !s.classCode.includes(",")) {
-                                        initialTempGroups[`${s.subject}|${s.teacher}`] = s.classCode.trim();
-                                    }
-                                });
-                                setTempGroups(initialTempGroups);
-                                setShowEasyABC(true);
-                            }}
-                        >
-                            <Wand2 className="w-4 h-4 mr-2" />
-                            Easy ABC 그룹입력
-                        </Button>
                         <Button
                             variant="outline"
                             disabled={!hasChanges || isSaving}
@@ -669,99 +669,104 @@ function ElectiveManager({ password }: { password: string }) {
                 </div >
 
                 <Dialog open={showEasyABC} onOpenChange={setShowEasyABC}>
-                    <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+                    <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-4 md:p-6 bg-slate-50">
                         <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2">
+                            <DialogTitle className="flex items-center gap-2 mb-2">
                                 <Wand2 className="w-5 h-5 text-purple-600" />
-                                Easy ABC 그룹입력
+                                Easy ABC 분반 설정
                             </DialogTitle>
                             <DialogDescription>
-                                아래 표에서 그룹이 될 이동수업 과목에 A, B, C 등 식별 코드를 입력하세요. <br />
-                                실행완료를 누르면 <strong>현재 활성화된 데이터셋/학년 설정화면(본창)에 즉각 적용</strong>되며, 변경 사항을 검토한 후 본창 상단의 <strong>[확인 및 저장하기]</strong>를 클릭해야 DB에 최종 저장됩니다.<br/>
-                                <span className="text-red-500 font-bold">* 입력창에 값이 존재하면 자동으로 해당 과목의 [이동수업 O]가 체크됩니다. 비워두면 이동X로 변환되지 않고 기존 값을 유지합니다.</span>
+                                아래 칸에 그룹(A, B, C...)을 입력하면 <strong>메인 화면에 즉시 자동 반영</strong>되며, 
+                                그룹이 할당된 과목은 자동으로 '이동 수업(이동 O)' 처리됩니다. <br />
+                                입력을 마치면 창을 닫고 메인 화면 상단의 <strong>[확인 및 저장하기]</strong>를 클릭하세요.
                             </DialogDescription>
                         </DialogHeader>
 
-                        <div className="flex-1 overflow-auto border rounded-md">
-                            <Table className="relative min-w-[700px]">
-                                <TableHeader className="sticky top-0 bg-gray-100 z-10 shadow-sm">
-                                    <TableRow>
-                                        <TableHead className="w-[120px] font-bold text-center text-gray-700 bg-gray-100 dark:bg-gray-800">과목명</TableHead>
-                                        <TableHead className="w-[200px] font-bold text-center text-gray-700 bg-gray-100 dark:bg-gray-800">선생님 (원래 / 전체)</TableHead>
-                                        <TableHead className="w-[120px] font-bold text-center text-purple-700 bg-purple-50">그룹 기호 입력</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {subjects.map((item: any) => {
+                        <div className="flex-1 overflow-auto border border-slate-300 rounded-md bg-white">
+                            <table className="w-full text-sm border-collapse">
+                                <thead className="sticky top-0 z-10">
+                                    <tr className="bg-slate-100 text-slate-700">
+                                        <th className="border border-slate-300 px-3 py-2.5 font-bold text-center w-24">그룹 (입력)</th>
+                                        <th className="border border-slate-300 px-3 py-2.5 font-bold text-center">선택과목 및 선생님</th>
+                                        <th className="border border-slate-300 px-3 py-2.5 font-bold text-center w-32">강의실</th>
+                                        <th className="border border-slate-300 px-3 py-2.5 font-bold text-center w-28">비고</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {subjects.map((item: any, originalIndex: number) => {
                                         const isFreePeriod = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
                                         const isDeleted = Boolean(item.isDeleted);
                                         if (isFreePeriod || isDeleted) return null;
 
-                                        const key = `${item.subject}|${item.teacher}`;
+                                        const key = `${item.subject}-${item.teacher}`;
+                                        const currentGroup = item.classCode || "";
+                                        
+                                        // safely parse className
+                                        let globalClassName = "";
+                                        try {
+                                            if (item.className) {
+                                                const parsed = JSON.parse(item.className);
+                                                globalClassName = parsed["_global"] || Object.values(parsed)[0] || "";
+                                            }
+                                        } catch {
+                                            globalClassName = item.className || "";
+                                        }
 
                                         return (
-                                            <TableRow key={key} className="hover:bg-purple-50/30 transition-colors">
-                                                <TableCell className="text-center font-medium bg-white">{item.subject}</TableCell>
-                                                <TableCell className="text-center bg-white text-gray-600">
-                                                    {item.fullTeacherName ? (
-                                                        <span><span className="font-semibold text-gray-900">{item.fullTeacherName}</span> <span className="text-xs text-gray-400">({item.teacher})</span></span>
-                                                    ) : (
-                                                        <span className="font-semibold text-gray-900">{item.teacher}</span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="bg-purple-50/50 p-2 border-l border-purple-100">
+                                            <tr key={key} className="hover:bg-slate-50 transition-colors">
+                                                <td className="border border-slate-300 px-2 py-2 text-center bg-purple-50/40">
                                                     <Input
-                                                        value={tempGroups[key] || ""}
+                                                        value={currentGroup}
                                                         onChange={(e) => {
                                                             const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 3);
-                                                            setTempGroups(prev => ({ ...prev, [key]: val }));
+                                                            handleInputChange(originalIndex, 'classCode', val);
+                                                            if (val && !item.isMovingClass) {
+                                                                handleInputChange(originalIndex, 'isMovingClass', true);
+                                                            }
                                                         }}
                                                         placeholder="예: A"
-                                                        className="h-9 font-bold text-center text-purple-700 border-purple-300 focus-visible:ring-purple-500 max-w-[100px] mx-auto uppercase placeholder:font-normal placeholder:text-gray-400"
+                                                        className="h-8 font-bold text-center text-purple-700 border-slate-300 focus-visible:ring-purple-400 max-w-[70px] mx-auto uppercase placeholder:font-normal placeholder:text-gray-300"
                                                     />
-                                                </TableCell>
-                                            </TableRow>
+                                                </td>
+                                                <td className="border border-slate-300 px-3 py-2 text-center font-medium">
+                                                    {item.subject} 
+                                                    <span className="text-gray-500 font-normal ml-2">
+                                                        ({item.fullTeacherName || item.teacher})
+                                                    </span>
+                                                </td>
+                                                <td className="border border-slate-300 px-2 py-2 text-center">
+                                                    <Input
+                                                        value={globalClassName}
+                                                        onChange={(e) => {
+                                                            // Simplified: If edit from this modal, it sets it globally for this subject
+                                                            const newClassNameStr = JSON.stringify({ "_global": e.target.value });
+                                                            handleInputChange(originalIndex, 'className', newClassNameStr);
+                                                        }}
+                                                        placeholder="강의실 (선택)"
+                                                        className="h-8 text-center border-slate-300 text-sm placeholder:text-gray-300"
+                                                    />
+                                                </td>
+                                                <td className="border border-slate-300 px-3 py-2 text-center text-gray-400 text-xs">
+                                                    {item.isMovingClass ? "이동수업 O" : "-"}
+                                                </td>
+                                            </tr>
                                         );
                                     })}
-                                </TableBody>
-                            </Table>
+                                </tbody>
+                            </table>
                         </div>
                         <DialogFooter className="mt-4 border-t pt-4">
-                            <Button variant="outline" onClick={() => setShowEasyABC(false)}>취소</Button>
-                            <Button 
-                                className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
-                                onClick={() => {
-                                    const nextSubjects = [...subjects];
-                                    let applyCount = 0;
-                                    
-                                    Object.entries(tempGroups).forEach(([key, val]) => {
-                                        const trimmedVal = val.trim();
-                                        if (!trimmedVal) return; // Do not overwrite with empty strings
-                                        
-                                        const idx = nextSubjects.findIndex(s => `${s.subject}|${s.teacher}` === key);
-                                        if (idx !== -1) {
-                                            nextSubjects[idx] = {
-                                                ...nextSubjects[idx],
-                                                classCode: trimmedVal,
-                                                isMovingClass: true // Auto-set moving class
-                                            };
-                                            applyCount++;
-                                        }
-                                    });
-
-                                    setSubjects(nextSubjects);
-                                    setShowEasyABC(false);
-                                    toast.success(`${applyCount}개의 과목에 그룹이 적용되었습니다. 잊지말고 [확인 및 저장하기]를 눌러주세요!`);
-                                }}
-                            >
-                                <Check className="w-4 h-4" />
-                                메인 화면에 적용
+                            <Button className="w-full sm:w-auto" onClick={() => setShowEasyABC(false)}>
+                                <Check className="w-4 h-4 mr-2" />
+                                닫기 (메인 화면에서 변경사항 저장)
                             </Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
-            </div >
-        </div >
+                    </div> {/* End Main Content */}
+                </div> {/* End flex row */}
+        </CardContent>
+        </div>
     );
 }
 
@@ -4763,15 +4768,7 @@ export default function Admin() {
 
                 <TabsContent value="electives" className="space-y-6">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>선택과목 관리</CardTitle>
-                            <CardDescription>
-                                2, 3학년 선택과목의 반 코드(A, B, C...)와 선생님 성함을 관리합니다.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <ElectiveManager password={password} />
-                        </CardContent>
+                        <ElectiveManager password={password} />
                     </Card>
                 </TabsContent>
 
