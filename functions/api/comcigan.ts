@@ -258,28 +258,22 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 });
             }
 
+            // Determine what the effective dataset WOULD BE without IP overrides
+            const originalEffectiveDataset = grade === 1
+                ? (datasetSelectedGrade1 === null ? datasetSelected : datasetSelectedGrade1)
+                : datasetSelected;
+
             // 1. Check IP Override first
             if (clientIp !== 'unknown' && ipOverridesFound[clientIp]) {
                 const overrideConfig = ipOverridesFound[clientIp];
                 console.log(`[Comcigan Debug] Applying IP Override for ${clientIp}:`, overrideConfig);
                 
-                const originalGrade1 = datasetSelectedGrade1;
-                const originalDefault = datasetSelected;
-
-                // If override config provides specifically Grade 1, override datasetSelectedGrade1.
-                // Otherwise fallback to default override if provided
+                // Pure Override Assignment (strict isolation: grade1 strictly overrides grade1, default strictly overrides default)
                 if (overrideConfig.grade1 !== undefined && overrideConfig.grade1 !== null) {
                     datasetSelectedGrade1 = overrideConfig.grade1;
-                    if (grade === 1 && overrideConfig.grade1 !== originalGrade1) ipOverrideApplied = "1학년";
-                } else if (overrideConfig.default !== undefined && overrideConfig.default !== null) {
-                    datasetSelectedGrade1 = overrideConfig.default;
-                    if (grade === 1 && overrideConfig.default !== originalGrade1) ipOverrideApplied = "1학년";
                 }
-                
-                // Override Default Grade 2/3
                 if (overrideConfig.default !== undefined && overrideConfig.default !== null) {
                     datasetSelected = overrideConfig.default;
-                    if (grade !== 1 && overrideConfig.default !== originalDefault) ipOverrideApplied = "2/3학년";
                 }
             }
 
@@ -288,14 +282,19 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             //   datasetSelectedGrade1 === ''    → user explicitly set 자동; auto-detect independently for grade 1
             //   datasetSelectedGrade1 === 'xxx' → specific dataset chosen; use it
             // Grade 2/3: always use comcigan_dataset_selected ('' = auto-detect)
-            const effectiveDataset = grade === 1
+            const newEffectiveDataset = grade === 1
                 ? (datasetSelectedGrade1 === null ? datasetSelected : datasetSelectedGrade1)
                 : datasetSelected;
+
+            // Check if the IP override actually changed the active dataset for the CURRENTLY REQUESTED grade
+            if (clientIp !== 'unknown' && ipOverridesFound[clientIp] && originalEffectiveDataset !== newEffectiveDataset) {
+                ipOverrideApplied = grade === 1 ? "1학년" : "2/3학년";
+            }
 
             if (datasetOverride && datasetOverride !== ('_auto_')) {
                 datasetSelected = datasetOverride;
             } else {
-                datasetSelected = effectiveDataset;
+                datasetSelected = newEffectiveDataset;
             }
 
             if (datasetSelected === 'MANUAL_PLAN') {
