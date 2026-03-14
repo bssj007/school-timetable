@@ -389,7 +389,7 @@ function ElectiveManager({ password }: { password: string }) {
                         </div>
                     </div>
 
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex gap-2 justify-end w-full xl:w-auto shrink-0 mt-2 xl:mt-0">
                         <Button
                             variant="secondary"
                             className="bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200"
