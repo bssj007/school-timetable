@@ -259,42 +259,37 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             }
 
             // Determine what the effective dataset WOULD BE without IP overrides
-            const originalEffectiveDataset = grade === 1
+            const effectiveDatasetNoOverride = grade === 1
                 ? (datasetSelectedGrade1 === null ? datasetSelected : datasetSelectedGrade1)
                 : datasetSelected;
+
+            let finalDataset: string | null = effectiveDatasetNoOverride;
 
             // 1. Check IP Override first
             if (clientIp !== 'unknown' && ipOverridesFound[clientIp]) {
                 const overrideConfig = ipOverridesFound[clientIp];
                 console.log(`[Comcigan Debug] Applying IP Override for ${clientIp}:`, overrideConfig);
                 
-                // Pure Override Assignment (strict isolation: grade1 strictly overrides grade1, default strictly overrides default)
-                if (overrideConfig.grade1 !== undefined && overrideConfig.grade1 !== null) {
-                    datasetSelectedGrade1 = overrideConfig.grade1;
-                }
-                if (overrideConfig.default !== undefined && overrideConfig.default !== null) {
-                    datasetSelected = overrideConfig.default;
+                if (grade === 1) {
+                    if (overrideConfig.grade1 !== undefined && overrideConfig.grade1 !== null) {
+                        finalDataset = overrideConfig.grade1;
+                    }
+                } else {
+                    if (overrideConfig.default !== undefined && overrideConfig.default !== null) {
+                        finalDataset = overrideConfig.default;
+                    }
                 }
             }
 
-            // Grade 1 dataset resolution:
-            //   datasetSelectedGrade1 === null  → key never in DB; fall back to grade 2/3 setting (backward compat)
-            //   datasetSelectedGrade1 === ''    → user explicitly set 자동; auto-detect independently for grade 1
-            //   datasetSelectedGrade1 === 'xxx' → specific dataset chosen; use it
-            // Grade 2/3: always use comcigan_dataset_selected ('' = auto-detect)
-            const newEffectiveDataset = grade === 1
-                ? (datasetSelectedGrade1 === null ? datasetSelected : datasetSelectedGrade1)
-                : datasetSelected;
-
             // Check if the IP override actually changed the active dataset for the CURRENTLY REQUESTED grade
-            if (clientIp !== 'unknown' && ipOverridesFound[clientIp] && originalEffectiveDataset !== newEffectiveDataset) {
+            if (clientIp !== 'unknown' && ipOverridesFound[clientIp] && finalDataset !== effectiveDatasetNoOverride) {
                 ipOverrideApplied = grade === 1 ? "1학년" : "2/3학년";
             }
 
             if (datasetOverride && datasetOverride !== ('_auto_')) {
-                datasetSelected = datasetOverride;
+                datasetSelected = datasetOverride; // From the dashboard manual selector
             } else {
-                datasetSelected = newEffectiveDataset;
+                datasetSelected = finalDataset;
             }
 
             if (datasetSelected === 'MANUAL_PLAN') {

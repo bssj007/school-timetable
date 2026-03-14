@@ -263,7 +263,13 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             Array.isArray(toSubjectsQuery.data) && toSubjectsQuery.data.length > 0;
 
         const currentFroms = mappingFields.map(m => m.from).slice().sort().join(",");
-        const fetchedFroms = Array.isArray(fromSubjectsQuery.data) ? fromSubjectsQuery.data.slice().sort().join(",") : "";
+        
+        const excludedSubjects = ["창체", "채플"];
+        const fetchedFromsArr = Array.isArray(fromSubjectsQuery.data) ? fromSubjectsQuery.data.filter(subj => {
+            const parsed = parseSubject(subj);
+            return !excludedSubjects.some(ex => parsed.subj.includes(ex));
+        }) : [];
+        const fetchedFroms = fetchedFromsArr.slice().sort().join(",");
 
         const currentSig = `${fromDataset}-${toDataset}-${targetGrade}`;
         const hasSigChanged = lastGenSig.current !== currentSig;
