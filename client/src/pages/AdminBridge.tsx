@@ -60,13 +60,26 @@ function calculateSimilarity(str1: string, str2: string) {
     const subjSim = Math.round(((maxSubjLen - subjDist) / maxSubjLen) * 100);
 
     let tchrSim = 0;
-    if (p1.tchr && p2.tchr) {
-        if (p1.tchr === p2.tchr) tchrSim = 100;
-        else {
-            if (p1.tchr.includes(p2.tchr) || p2.tchr.includes(p1.tchr)) tchrSim = 50;
+    const t1 = p1.tchr.replace(/[^가-힣a-zA-Z0-9]/g, '');
+    const t2 = p2.tchr.replace(/[^가-힣a-zA-Z0-9]/g, '');
+
+    if (t1 && t2) {
+        if (t1 === t2) {
+            tchrSim = 100;
+        } else if (t1.includes(t2) || t2.includes(t1)) {
+            tchrSim = 80;
+        } else {
+            let overlap = 0;
+            const minLen = Math.min(t1.length, t2.length);
+            for (let i = 0; i < minLen; i++) {
+                if (t1[i] === t2[i]) overlap++;
+            }
+            tchrSim = Math.round((overlap / Math.max(t1.length, t2.length)) * 50);
         }
-    } else if (!p1.tchr && !p2.tchr) {
+    } else if (!t1 && !t2) {
         tchrSim = 100;
+    } else {
+        tchrSim = 0;
     }
 
     return {
@@ -239,6 +252,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                          if (b.score.tchrSim !== a.score.tchrSim) return b.score.tchrSim - a.score.tchrSim;
                          return b.score.total - a.score.total;
                     });
+                    
                     matchedTo = exactSubjectMatches[0].cand;
                     bestScore = exactSubjectMatches[0].score.total;
                 } else if (maxTotalSimilarity < 30) {
@@ -273,13 +287,15 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
 
         const currentSig = `${fromDataset}-${toDataset}-${targetGrade}`;
         const hasSigChanged = lastGenSig.current !== currentSig;
+        const mappingMismatch = currentFroms !== fetchedFroms;
 
-        if (isCreating && canGenerate && hasSigChanged) {
+        // If from list changed, OR manual trigger via sig change (meaning toDataset changed)
+        if (isCreating && canGenerate && (mappingMismatch || hasSigChanged)) {
             lastGenSig.current = currentSig;
             generateAutoMappings(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fromSubjectsQuery.data, toSubjectsQuery.data, isCreating, fromDataset, toDataset, targetGrade]);
+    }, [fromSubjectsQuery.data, toSubjectsQuery.data, isCreating, mappingFields, fromDataset, toDataset, targetGrade]);
 
     const { data: bridges, isLoading } = useQuery({
         queryKey: ["admin", "bridges"],
