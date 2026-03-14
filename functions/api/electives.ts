@@ -28,11 +28,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         // Proactively ensure all tables exist (optimistic check)
         await ensureAllTables(env.DB);
 
-        // 1. Fetch Student Profile
+        // 1. Fetch Student Profile (dataset-aware)
         if (type === "student") {
             const gradeStr = url.searchParams.get("grade");
             const classNumStr = url.searchParams.get("classNum");
             const studentNumberStr = url.searchParams.get("studentNumber");
+            const dataset = url.searchParams.get("dataset") ?? '';
 
             if (!gradeStr || !classNumStr || !studentNumberStr) {
                 return new Response(JSON.stringify({ error: "Missing parameters" }), { status: 400 });
@@ -44,38 +45,32 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
             try {
                 const profile = await env.DB.prepare(
-                    "SELECT * FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?"
-                ).bind(grade, classNum, studentNumber).first();
+                    "SELECT * FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ? AND dataset = ?"
+                ).bind(grade, classNum, studentNumber, dataset).first();
                 return new Response(JSON.stringify(profile || null), { headers: { "Content-Type": "application/json" } });
             } catch (e: any) {
-                // Handle missing column (schema mismatch only, table is already ensured)
                 if (e.message && e.message.includes("no column named")) {
-                    console.log("Schema mismatch detected (" + e.message + "). Attempting safe ALTER...");
-                    // Try adding missing columns safely instead of dropping all tables
-                    try {
-                        await env.DB.prepare("ALTER TABLE student_profiles ADD COLUMN dataset TEXT DEFAULT ''").run();
-                    } catch (_) { /* column may already exist */ }
-
-                    // Retry
+                    try { await env.DB.prepare("ALTER TABLE student_profiles ADD COLUMN dataset TEXT DEFAULT ''").run(); } catch (_) {}
                     const profile = await env.DB.prepare(
-                        "SELECT * FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?"
-                    ).bind(grade, classNum, studentNumber).first();
+                        "SELECT * FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ? AND dataset = ?"
+                    ).bind(grade, classNum, studentNumber, dataset).first();
                     return new Response(JSON.stringify(profile || null), { headers: { "Content-Type": "application/json" } });
                 }
                 throw e;
             }
         }
 
-        // 2. Fetch ALL student profiles for a grade (admin pre-entry)
+        // 2. Fetch ALL student profiles for a grade (admin pre-entry, dataset-aware)
         if (type === "all-students") {
             const gradeStr = url.searchParams.get("grade");
+            const dataset = url.searchParams.get("dataset") ?? '';
             if (!gradeStr) {
                 return new Response(JSON.stringify({ error: "Grade is required" }), { status: 400 });
             }
             const grade = parseInt(gradeStr);
             const profiles = await env.DB.prepare(
-                "SELECT * FROM student_profiles WHERE grade = ? ORDER BY classNum, studentNumber"
-            ).bind(grade).all();
+                "SELECT * FROM student_profiles WHERE grade = ? AND dataset = ? ORDER BY classNum, studentNumber"
+            ).bind(grade, dataset).all();
             return new Response(JSON.stringify(profiles.results || []), { headers: { "Content-Type": "application/json" } });
         }
 
@@ -120,15 +115,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             return new Response(JSON.stringify({ error: "electives must be a non-empty object" }), { status: 400 });
         }
 
-        // Upsert student_profiles
-        // Note: dataset added implicitly to avoid breaking schema immediately if not needed for constraints
-        // For actual dataset tied user profiles, we should add a dataset column if requested.
-        // The plan mentions "Let's add `dataset` to `student_profiles` too."
+        // Upsert student_profiles (dataset-aware — UNIQUE includes dataset after schema migration)
         const query = `
         INSERT INTO student_profiles (grade, classNum, studentNumber, electives, dataset, updatedAt)
         VALUES (?, ?, ?, ?, ?, datetime('now'))
-        ON CONFLICT(grade, classNum, studentNumber) 
-        DO UPDATE SET electives = excluded.electives, dataset = excluded.dataset, updatedAt = excluded.updatedAt
+        ON CONFLICT(grade, classNum, studentNumber, dataset)
+        DO UPDATE SET electives = excluded.electives, updatedAt = excluded.updatedAt
         `;
 
         try {
@@ -168,18 +160,16 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
         const grade = url.searchParams.get("grade");
         const classNum = url.searchParams.get("classNum");
         const studentNumber = url.searchParams.get("studentNumber");
+        const dataset = url.searchParams.get("dataset") ?? '';
 
         if (!grade || !classNum || !studentNumber) {
             return new Response(JSON.stringify({ error: "Missing parameters for deletion" }), { status: 400 });
         }
 
-        // Delete the student profile
-        const query = `
-        DELETE FROM student_profiles 
-        WHERE grade = ? AND classNum = ? AND studentNumber = ?
-        `;
-
-        await env.DB.prepare(query).bind(grade, classNum, studentNumber).run();
+        // Delete the student profile for this specific dataset
+        await env.DB.prepare(
+            "DELETE FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ? AND dataset = ?"
+        ).bind(grade, classNum, studentNumber, dataset).run();
 
         return new Response(JSON.stringify({ success: true, message: "Electives reset successfully" }), { headers: { "Content-Type": "application/json" } });
 

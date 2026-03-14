@@ -1956,12 +1956,12 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
 
     // Fetch all student profiles for the grade — real-time refresh when no pending changes
     const profilesQuery = useQuery({
-        queryKey: ["admin", "allStudentProfiles", selectedGrade],
+        queryKey: ["admin", "allStudentProfiles", selectedGrade, resolvedDataset],
         queryFn: async () => {
-            const res = await fetch(`/api/electives?type=all-students&grade=${selectedGrade}`);
+            const res = await fetch(`/api/electives?type=all-students&grade=${selectedGrade}&dataset=${encodeURIComponent(resolvedDataset)}`);
             return res.json();
         },
-        enabled: !!selectedGrade,
+        enabled: !!selectedGrade && !!resolvedDataset,
         refetchInterval: hasPendingChanges ? false : 5000, // 5s auto-refresh when no edits
     });
 
