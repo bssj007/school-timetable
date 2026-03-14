@@ -377,14 +377,37 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
     return (
         <div className="h-[calc(100vh-200px)] min-h-[600px] md:h-[700px] flex flex-col">
             {/* DB Usage Tracker */}
-            <div className="mb-4">
-                <div className="flex justify-between items-end mb-1">
-                    <span className="text-sm font-semibold text-gray-700">DB 저장 공간</span>
-                    <span className="text-xs text-gray-500 font-mono">
-                        {dbSizeMB} MB / {maxDbSizeMB} MB ({dbSizePercentage.toFixed(1)}%)
-                    </span>
+            <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <div className="flex justify-between items-end mb-1">
+                        <span className="text-sm font-semibold text-gray-700">DB 저장 공간</span>
+                        <span className="text-[10px] text-gray-500 font-mono">
+                            {dbSizeMB} MB / {maxDbSizeMB} MB ({dbSizePercentage.toFixed(1)}%)
+                        </span>
+                    </div>
+                    <Progress value={dbSizePercentage} className="h-2" />
                 </div>
-                <Progress value={dbSizePercentage} className="h-2" />
+                
+                {/* Visual placeholder for D1 Row limits since raw tracking needs external API */}
+                <div>
+                    <div className="flex justify-between items-end mb-1">
+                        <span className="text-sm font-semibold text-gray-700">읽은 행 수 (오늘)</span>
+                        <span className="text-[10px] text-gray-500 font-mono">
+                            0 / 5,000,000 (0.0%)
+                        </span>
+                    </div>
+                    <Progress value={0} className="h-2 [&>div]:bg-blue-500 bg-blue-100" />
+                </div>
+
+                <div>
+                    <div className="flex justify-between items-end mb-1">
+                        <span className="text-sm font-semibold text-gray-700">쓴 행 수 (오늘)</span>
+                        <span className="text-[10px] text-gray-500 font-mono">
+                            0 / 100,000 (0.0%)
+                        </span>
+                    </div>
+                    <Progress value={0} className="h-2 [&>div]:bg-green-500 bg-green-100" />
+                </div>
             </div>
 
             {/* Main Content Area with Tabs */}

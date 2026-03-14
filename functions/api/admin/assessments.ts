@@ -90,7 +90,10 @@ export const onRequest = async (context: any) => {
         }
 
         if (request.method === 'DELETE') {
-            // Bulk Hard Delete
+            const url = new URL(request.url);
+            const isHard = url.searchParams.get('hard') === 'true';
+
+            // Bulk Delete Request
             const body = await request.json();
             const { ids } = body; // Array of IDs
 
@@ -98,13 +101,29 @@ export const onRequest = async (context: any) => {
                 return new Response("Invalid IDs", { status: 400 });
             }
 
-            // Construct SQL for bulk delete: DELETE FROM table WHERE id IN (?, ?, ?)
             const placeholders = ids.map(() => '?').join(',');
-            const query = `DELETE FROM performance_assessments WHERE id IN (${placeholders})`;
 
-            await env.DB.prepare(query).bind(...ids).run();
+            if (isHard) {
+                // Construct SQL for bulk delete: DELETE FROM table WHERE id IN (?, ?, ?)
+                const query = `DELETE FROM performance_assessments WHERE id IN (${placeholders})`;
+                await env.DB.prepare(query).bind(...ids).run();
+            } else {
+                // Soft Delete: UPDATE table SET isDeleted = 1 WHERE id IN (?, ?, ?)
+                const query = `UPDATE performance_assessments SET isDeleted = 1 WHERE id IN (${placeholders})`;
+                try {
+                    await env.DB.prepare(query).bind(...ids).run();
+                } catch (err: any) {
+                    if (err.message && err.message.includes("no such column") && err.message.includes("isDeleted")) {
+                        console.log("[Admin API] 'isDeleted' column missing in Soft DELETE. Attempting to add it.");
+                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run();
+                        await env.DB.prepare(query).bind(...ids).run();
+                    } else {
+                        throw err;
+                    }
+                }
+            }
 
-            return new Response(JSON.stringify({ success: true, count: ids.length }), {
+            return new Response(JSON.stringify({ success: true, count: ids.length, type: isHard ? 'hard' : 'soft' }), {
                 headers: { 'Content-Type': 'application/json' }
             });
         }

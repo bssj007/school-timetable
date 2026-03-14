@@ -20,6 +20,8 @@ export const onRequest = async (context: any) => {
         const url = new URL(request.url);
         const unit = url.searchParams.get("unit") || "day"; // hour | day | week | month | all
         const excludeParam = url.searchParams.get("exclude") || "";
+        const startDate = url.searchParams.get("startDate");
+        const endDate = url.searchParams.get("endDate");
 
         // Parse exclude list: "2101,2305" → [{grade:2,classNum:1,studentNumber:1}, ...]
         const excludeIds = excludeParam
@@ -46,30 +48,37 @@ export const onRequest = async (context: any) => {
         let bucketExpr: string;
         let labelFormat: string;
 
+        // Custom start/end dates handling overrides default relative windows
+        let customDateFilter = "";
+        if (startDate && endDate) {
+            // Include entire end date by adding 1 day (assumes endDate is YYYY-MM-DD format)
+            customDateFilter = `AND datetime(al.accessedAt, '+9 hours') >= datetime('${startDate}') AND datetime(al.accessedAt, '+9 hours') < datetime('${endDate}', '+1 day')`;
+        }
+
         switch (unit) {
             case "hour":
-                timeFilter = "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-24 hours')";
+                timeFilter = customDateFilter || "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-24 hours')";
                 bucketExpr = "strftime('%Y-%m-%d %H:00', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "hour";
                 break;
             case "day":
-                timeFilter = "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-7 days')";
+                timeFilter = customDateFilter || "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-7 days')";
                 bucketExpr = "strftime('%Y-%m-%d', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "day";
                 break;
             case "week":
-                timeFilter = "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-28 days')";
+                timeFilter = customDateFilter || "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-28 days')";
                 bucketExpr = "strftime('%Y-W%W', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "week";
                 break;
             case "month":
-                timeFilter = "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-12 months')";
+                timeFilter = customDateFilter || "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-12 months')";
                 bucketExpr = "strftime('%Y-%m', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "month";
                 break;
             case "all":
             default:
-                timeFilter = "";
+                timeFilter = customDateFilter || "";
                 bucketExpr = "strftime('%Y-%m', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "month";
                 break;

@@ -1,4 +1,4 @@
-﻿
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -298,30 +298,7 @@ export default function Dashboard() {
   // Extract datasetId early for use in effects
   const datasetId = (queryClient.getQueryData(['timetable', schoolName, grade, classNum]) as any)?.datasetId || '';
 
-  // 2, 3학년 선택과목 설정 확인
-  useEffect(() => {
-    if ((grade === "2" || grade === "3") && classNum && studentNumber && datasetId) {
-      // Check if electives are already set for this dataset
-      fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&dataset=${datasetId}`)
-        .then(res => res.json())
-        .then(data => {
-          // If no profile or no electives, show dialog
-          if (!data || !data.electives || Object.keys(data.electives).length === 0) {
-            setIsElectiveEntered(false);
-            setShowElectiveWarning(true);
-          } else {
-            setIsElectiveEntered(true);
-            setShowElectiveWarning(false);
-          }
-        })
-        .catch(err => {
-          console.error("Failed to check electives", err);
-        });
-    } else {
-      setIsElectiveEntered(true);
-      setShowElectiveWarning(false);
-    }
-  }, [grade, classNum, studentNumber, datasetId]);
+
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
@@ -480,6 +457,42 @@ export default function Dashboard() {
     }
     return lastValidProfileRef.current; // retain only if undefined (e.g. background fetch just started, though usually data stays populated)
   }, [studentProfile, grade]);
+
+  // 2, 3학년 선택과목 완벽 입력 상태 확인 logic
+  useEffect(() => {
+    if (grade !== "2" && grade !== "3") {
+      setIsElectiveEntered(true);
+      setShowElectiveWarning(false);
+      return;
+    }
+
+    if (!classNum || !studentNumber || !datasetId || !electiveConfigs) {
+      // Still loading necessary contexts
+      return;
+    }
+
+    // Determine the required groups from electiveConfigs for this grade
+    const requiredGroups: string[] = Array.from(new Set(electiveConfigs.map((c: any) => c.classCode).filter(Boolean))) as string[];
+    
+    // If no configs are found, block if it's required (but since we don't know, we'll assume not fully entered to be safe or maybe let it pass if setup is incomplete)
+    if (requiredGroups.length === 0) {
+      // Empty configs scenario: usually means electives aren't actively defined yet. Let pass?
+      // Better to assume true to not block the Dashboard if the admin hasn't set anything up.
+      setIsElectiveEntered(true);
+      setShowElectiveWarning(false);
+      return;
+    }
+
+    // Verify current profile
+    const electives: Record<string, any> = currentProfile?.electives || {};
+    
+    // Check if every single required group has a valid subject selected
+    const isFullyEntered = requiredGroups.every(group => electives[group] && electives[group].subject && electives[group].subject.trim() !== "");
+
+    setIsElectiveEntered(isFullyEntered);
+    setShowElectiveWarning(!isFullyEntered);
+
+  }, [grade, classNum, studentNumber, datasetId, currentProfile, electiveConfigs]);
 
   const { timetableData, allClassesTimetable } = useMemo(() => {
     if (!rawTimetableData) return { timetableData: [], allClassesTimetable: [] };

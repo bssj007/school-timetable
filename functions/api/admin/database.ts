@@ -258,8 +258,8 @@ export const onRequest = async (context: any) => {
                 env.DB.prepare(
                     "SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') ORDER BY name;"
                 ).all(),
-                env.DB.prepare("PRAGMA page_count").first(),
-                env.DB.prepare("PRAGMA page_size").first()
+                env.DB.prepare("PRAGMA page_count").first().catch((e:any) => { console.warn("page_count failed:", e.message); return null; }),
+                env.DB.prepare("PRAGMA page_size").first().catch((e:any) => { console.warn("page_size failed:", e.message); return null; })
             ]);
             
             const tables = tablesResult.results.map((r: any) => r.name);
@@ -267,7 +267,9 @@ export const onRequest = async (context: any) => {
             // Calculate DB Size in bytes
             let dbSizeBytes = 0;
             if (pageCountResult && pageSizeResult) {
-                dbSizeBytes = (pageCountResult.page_count as number) * (pageSizeResult.page_size as number);
+                const pc = Object.values(pageCountResult)[0] as number || 0;
+                const ps = Object.values(pageSizeResult)[0] as number || 0;
+                dbSizeBytes = pc * ps;
             }
 
             return new Response(JSON.stringify({ tables, dbSizeBytes }), { headers: { "Content-Type": "application/json" } });

@@ -1922,6 +1922,17 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
     const isLoading = electiveConfigQuery.isLoading || profilesQuery.isLoading;
     const changedStudentCount = Object.keys(pendingChanges).length;
 
+    // Calculate how many students have completely filled all groups
+    const completedCount = useMemo(() => {
+        if (groupCodes.length === 0) return 0;
+        return studentRows.filter(row => {
+            return groupCodes.every(code => {
+                const val = getDisplayElective(row.key, code);
+                return val && val !== "_empty_" && val.trim() !== "";
+            });
+        }).length;
+    }, [studentRows, groupCodes, profilesQuery.data, pendingChanges]);
+
     return (
         <div className="flex flex-col h-full gap-4">
             {/* Header Controls */}
@@ -2047,10 +2058,9 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                 )}
             </div>
 
-            {/* Status Bar */}
             <div className="flex justify-between items-center text-xs pt-1 border-t">
-                <span className="text-gray-400">
-                    총 {studentRows.length}명 ·
+                <span className="text-gray-400 font-medium">
+                    총 {studentRows.length}명 중 {completedCount}명 완료 ({studentRows.length > 0 ? Math.round((completedCount / studentRows.length) * 100) : 0}%) · 
                     저장된 프로필: {profilesQuery.data?.length || 0}개
                     {!hasPendingChanges && <span className="ml-2 text-green-500">● 실시간 동기화 중</span>}
                 </span>
@@ -2425,11 +2435,17 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
     const [excludeApplied, setExcludeApplied] = useState("");
     const [totalMetric, setTotalMetric] = useState<"student" | "ip">("student");
 
+    const [startDate, setStartDate] = useState<string>("");
+    const [endDate, setEndDate] = useState<string>("");
+
     const { data: trendData, isLoading, isError, error } = useQuery({
-        queryKey: ['admin', 'visitor-trends', unit, excludeApplied],
+        queryKey: ['admin', 'visitor-trends', unit, excludeApplied, startDate, endDate],
         queryFn: async () => {
             const params = new URLSearchParams({ unit });
             if (excludeApplied) params.set('exclude', excludeApplied);
+            if (startDate) params.set('startDate', startDate);
+            if (endDate) params.set('endDate', endDate);
+            
             const res = await fetch(`/api/admin/visit-trends?${params}`, {
                 headers: { 'X-Admin-Password': adminPassword },
                 cache: 'no-store'
@@ -2449,8 +2465,10 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
         }
         if (unit === 'day') {
             // "2026-03-05" → "3/5"
-            const [, m, d] = label.split('-');
-            return `${parseInt(m)}/${parseInt(d)}`;
+            const [y, m, d] = label.split('-');
+            const dateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+            const days = ['일', '월', '화', '수', '목', '금', '토'];
+            return `${parseInt(m)}/${parseInt(d)}(${days[dateObj.getDay()]})`;
         }
         if (unit === 'week') {
             return label.replace(/^\d{4}-/, '');
@@ -2529,19 +2547,46 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                     ))}
                 </div>
 
+                {/* Date range inputs */}
+                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-1 border shadow-sm h-10">
+                    <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="text-sm border-none focus:ring-0 text-gray-700 bg-transparent w-32"
+                    />
+                    <span className="text-gray-400">~</span>
+                    <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="text-sm border-none focus:ring-0 text-gray-700 bg-transparent w-32"
+                    />
+                    {(startDate || endDate) && (
+                        <button
+                            onClick={() => { setStartDate(""); setEndDate(""); }}
+                            className="ml-2 text-xs text-red-500 hover:bg-red-50 p-1 rounded transition-colors"
+                            title="기간 초기화"
+                        >
+                            <X className="w-3 h-3" />
+                        </button>
+                    )}
+                </div>
+
                 {/* Exclude input */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 h-10">
                     <Input
                         value={excludeInput}
                         onChange={(e) => setExcludeInput(e.target.value)}
                         placeholder="제외 학번 (예: 2101,2305)"
-                        className="w-[200px] h-9 text-sm"
+                        className="w-[200px] h-full text-sm"
                         onKeyDown={(e) => { if (e.key === 'Enter') setExcludeApplied(excludeInput); }}
                     />
                     <Button
                         size="sm"
                         variant="outline"
                         onClick={() => setExcludeApplied(excludeInput)}
+                        className="h-full"
                     >
                         적용
                     </Button>
@@ -2550,9 +2595,9 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                             size="sm"
                             variant="ghost"
                             onClick={() => { setExcludeInput(''); setExcludeApplied(''); }}
-                            className="text-red-500 px-2"
+                            className="text-red-500 px-2 h-full"
                         >
-                            <X className="w-3 h-3" />
+                            <X className="w-4 h-4" />
                         </Button>
                     )}
                 </div>
@@ -2739,7 +2784,7 @@ function TrashManager({ adminPassword }: { adminPassword: string }) {
 
     const hardDeleteMutation = useMutation({
         mutationFn: async (ids: number[]) => {
-            const res = await fetch("/api/admin/assessments", {
+            const res = await fetch("/api/admin/assessments?hard=true", {
                 method: "DELETE",
                 headers: {
                     "Content-Type": "application/json",
@@ -3553,6 +3598,8 @@ export default function Admin() {
 
     // --- Assessment Management ---
     const [selectedAssessments, setSelectedAssessments] = useState<number[]>([]);
+    const [assessmentSortField, setAssessmentSortField] = useState<string>('dueDate');
+    const [assessmentSortOrder, setAssessmentSortOrder] = useState<'asc' | 'desc'>('asc');
     const [selectedProfile, setSelectedProfile] = useState<IPProfile | null>(null);
     const [selectedIp, setSelectedIp] = useState<string | null>(null);
     const [isOthersExpanded, setIsOthersExpanded] = useState(false);
@@ -3768,12 +3815,6 @@ export default function Admin() {
             <Tabs defaultValue="assessments" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 mb-8 h-auto">
                     <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
-                    <TabsTrigger
-                        value="trash"
-                        className="data-[state=active]:bg-red-100 data-[state=active]:text-red-800"
-                    >
-                        휴지통
-                    </TabsTrigger>
                     <TabsTrigger value="users">사용자 관리</TabsTrigger>
                     <TabsTrigger value="electives">선택과목</TabsTrigger>
                     <TabsTrigger
@@ -3781,6 +3822,12 @@ export default function Admin() {
                         className="data-[state=active]:bg-green-100 data-[state=active]:text-green-800"
                     >
                         DB 관리
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="trash"
+                        className="data-[state=active]:bg-red-100 data-[state=active]:text-red-800"
+                    >
+                        휴지통
                     </TabsTrigger>
                     <TabsTrigger
                         value="datatransfer"
@@ -3837,65 +3884,194 @@ export default function Admin() {
                             )}
                         </CardHeader>
                         <CardContent>
-                            <div className="rounded-md border">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="w-[50px] text-center">
-                                                <Checkbox
-                                                    checked={assessments?.length > 0 && selectedAssessments.length === assessments.length}
-                                                    onCheckedChange={(checked) => {
-                                                        if (checked) {
-                                                            setSelectedAssessments(assessments.map((a: any) => a.id));
-                                                        } else {
-                                                            setSelectedAssessments([]);
-                                                        }
-                                                    }}
-                                                />
-                                            </TableHead>
-                                            <TableHead className="w-[80px] text-center">학년</TableHead>
-                                            <TableHead className="w-[80px] text-center">반</TableHead>
-                                            <TableHead>과목</TableHead>
-                                            <TableHead>제목</TableHead>
-                                            <TableHead className="w-[120px]">마감일</TableHead>
-                                            <TableHead className="w-[120px]">수정 IP</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {assessments?.map((assessment: any) => (
-                                            <TableRow key={assessment.id}>
-                                                <TableCell className="text-center">
+                            {(() => {
+                                const now = new Date();
+
+                                const SortableHeader = ({ field, label, className = "" }: { field: string, label: string, className?: string }) => {
+                                    const isActive = assessmentSortField === field;
+                                    return (
+                                        <TableHead 
+                                            className={`cursor-pointer hover:bg-gray-100 transition-colors select-none ${className}`}
+                                            onClick={() => {
+                                                if (isActive) {
+                                                    setAssessmentSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                                                } else {
+                                                    setAssessmentSortField(field);
+                                                    setAssessmentSortOrder('desc'); // Default to desc (newer first) if changing field
+                                                }
+                                            }}
+                                        >
+                                            <div className="flex items-center justify-center gap-1">
+                                                {label}
+                                                <span className="text-gray-400 text-xs w-3">
+                                                    {isActive ? (assessmentSortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                                                </span>
+                                            </div>
+                                        </TableHead>
+                                    );
+                                };
+
+                                const sortedAssessments = [...(assessments || [])].sort((a: any, b: any) => {
+                                    let valA = a[assessmentSortField];
+                                    let valB = b[assessmentSortField];
+
+                                    if (assessmentSortField === 'dueDate') {
+                                        valA = new Date(valA).getTime();
+                                        valB = new Date(valB).getTime();
+                                    } else if (typeof valA === 'string') {
+                                        valA = valA.toLowerCase();
+                                        valB = valB.toLowerCase();
+                                    }
+
+                                    if (valA < valB) return assessmentSortOrder === 'asc' ? -1 : 1;
+                                    if (valA > valB) return assessmentSortOrder === 'asc' ? 1 : -1;
+                                    return 0;
+                                });
+
+                                const activeAssessments = sortedAssessments.filter((a: any) => new Date(a.dueDate + 'T23:59:59') >= now);
+                                const expiredAssessments = sortedAssessments.filter((a: any) => new Date(a.dueDate + 'T23:59:59') < now);
+
+                                return (
+                                    <div className="space-y-6">
+                                        <div className="rounded-md border">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead className="w-[50px] text-center">
+                                                            <Checkbox
+                                                                checked={activeAssessments.length > 0 && activeAssessments.every((a: any) => selectedAssessments.includes(a.id))}
+                                                                onCheckedChange={(checked) => {
+                                                                    if (checked) {
+                                                                        const newSelected = [...selectedAssessments];
+                                                                        activeAssessments.forEach((a: any) => {
+                                                                            if (!newSelected.includes(a.id)) newSelected.push(a.id);
+                                                                        });
+                                                                        setSelectedAssessments(newSelected);
+                                                                    } else {
+                                                                        setSelectedAssessments(selectedAssessments.filter(id => !activeAssessments.find((a: any) => a.id === id)));
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </TableHead>
+                                                        <SortableHeader field="grade" label="학년" className="w-[80px]" />
+                                                        <SortableHeader field="classNum" label="반" className="w-[80px]" />
+                                                        <SortableHeader field="subject" label="과목" />
+                                                        <SortableHeader field="title" label="제목" />
+                                                        <SortableHeader field="dueDate" label="마감일" className="w-[120px]" />
+                                                        <SortableHeader field="lastModifiedIp" label="수정 IP" className="w-[120px]" />
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {activeAssessments.map((assessment: any) => (
+                                                        <TableRow key={assessment.id}>
+                                                            <TableCell className="text-center">
+                                                                <Checkbox
+                                                                    checked={selectedAssessments.includes(assessment.id)}
+                                                                    onCheckedChange={(checked) => {
+                                                                        if (checked) {
+                                                                            setSelectedAssessments([...selectedAssessments, assessment.id]);
+                                                                        } else {
+                                                                            setSelectedAssessments(selectedAssessments.filter((id) => id !== assessment.id));
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell className="text-center font-bold">{assessment.grade}</TableCell>
+                                                            <TableCell className="text-center">{assessment.classNum}</TableCell>
+                                                            <TableCell>{assessment.subject}</TableCell>
+                                                            <TableCell>{assessment.title}</TableCell>
+                                                            <TableCell>{assessment.dueDate}</TableCell>
+                                                            <TableCell className="text-xs font-mono text-gray-500">
+                                                                {assessment.lastModifiedIp || '-'}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                    {(!activeAssessments || activeAssessments.length === 0) && (
+                                                        <TableRow>
+                                                            <TableCell colSpan={7} className="h-24 text-center">
+                                                                등록된 진행중인 수행평가가 없습니다.
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    )}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+
+                                        {expiredAssessments.length > 0 && (
+                                            <div className="relative">
+                                                <details className="group border rounded-md bg-gray-50/50">
+                                                    <summary className="flex items-center p-3 font-medium cursor-pointer list-none hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md">
+                                                        <div className="flex items-center gap-2">
+                                                            <ChevronRight className="w-5 h-5 text-gray-400 group-open:rotate-90 transition-transform" />
+                                                            <span className="text-gray-700">만료된 수행평가 ({expiredAssessments.length})</span>
+                                                        </div>
+                                                    </summary>
+                                                    <div className="border-t bg-white">
+                                                        <Table>
+                                                            <TableHeader>
+                                                                <TableRow>
+                                                                    <TableHead className="w-[50px] text-center"></TableHead>
+                                                                    <SortableHeader field="grade" label="학년" className="w-[80px]" />
+                                                                    <SortableHeader field="classNum" label="반" className="w-[80px]" />
+                                                                    <SortableHeader field="subject" label="과목" />
+                                                                    <SortableHeader field="title" label="제목" />
+                                                                    <SortableHeader field="dueDate" label="마감일" className="w-[120px]" />
+                                                                    <SortableHeader field="lastModifiedIp" label="수정 IP" className="w-[120px]" />
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {expiredAssessments.map((assessment: any) => (
+                                                                    <TableRow key={assessment.id} className="opacity-75 bg-gray-50/50 hover:bg-gray-50 transition-colors">
+                                                                        <TableCell className="w-[50px] text-center border-r">
+                                                                            <Checkbox
+                                                                                checked={selectedAssessments.includes(assessment.id)}
+                                                                                onCheckedChange={(checked) => {
+                                                                                    if (checked) {
+                                                                                        setSelectedAssessments([...selectedAssessments, assessment.id]);
+                                                                                    } else {
+                                                                                        setSelectedAssessments(selectedAssessments.filter((id) => id !== assessment.id));
+                                                                                    }
+                                                                                }}
+                                                                            />
+                                                                        </TableCell>
+                                                                        <TableCell className="w-[80px] text-center font-bold">{assessment.grade}</TableCell>
+                                                                        <TableCell className="w-[80px] text-center">{assessment.classNum}</TableCell>
+                                                                        <TableCell>{assessment.subject}</TableCell>
+                                                                        <TableCell>{assessment.title}</TableCell>
+                                                                        <TableCell className="w-[120px] line-through text-gray-400">{assessment.dueDate}</TableCell>
+                                                                        <TableCell className="w-[120px] text-xs font-mono text-gray-400">
+                                                                            {assessment.lastModifiedIp || '-'}
+                                                                        </TableCell>
+                                                                    </TableRow>
+                                                                ))}
+                                                            </TableBody>
+                                                        </Table>
+                                                    </div>
+                                                </details>
+                                                
+                                                {/* Batch Select Checkbox for Expired Assessments */}
+                                                <div className="absolute top-2.5 right-4 flex items-center gap-2 z-10 px-2 py-1 bg-gray-50/90 rounded border shadow-sm">
+                                                    <span className="text-sm font-normal text-gray-600">일괄 선택 ({expiredAssessments.filter((a: any) => selectedAssessments.includes(a.id)).length})</span>
                                                     <Checkbox
-                                                        checked={selectedAssessments.includes(assessment.id)}
+                                                        checked={expiredAssessments.length > 0 && expiredAssessments.every((a: any) => selectedAssessments.includes(a.id))}
                                                         onCheckedChange={(checked) => {
                                                             if (checked) {
-                                                                setSelectedAssessments([...selectedAssessments, assessment.id]);
+                                                                const newSelected = [...selectedAssessments];
+                                                                expiredAssessments.forEach((a: any) => {
+                                                                    if (!newSelected.includes(a.id)) newSelected.push(a.id);
+                                                                });
+                                                                setSelectedAssessments(newSelected);
                                                             } else {
-                                                                setSelectedAssessments(selectedAssessments.filter((id) => id !== assessment.id));
+                                                                setSelectedAssessments(selectedAssessments.filter(id => !expiredAssessments.find((a: any) => a.id === id)));
                                                             }
                                                         }}
                                                     />
-                                                </TableCell>
-                                                <TableCell className="text-center font-bold">{assessment.grade}</TableCell>
-                                                <TableCell className="text-center">{assessment.classNum}</TableCell>
-                                                <TableCell>{assessment.subject}</TableCell>
-                                                <TableCell>{assessment.title}</TableCell>
-                                                <TableCell>{assessment.dueDate}</TableCell>
-                                                <TableCell className="text-xs font-mono text-gray-500">
-                                                    {assessment.lastModifiedIp || '-'}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {(!assessments || assessments.length === 0) && (
-                                            <TableRow>
-                                                <TableCell colSpan={6} className="h-24 text-center">
-                                                    등록된 수행평가가 없습니다.
-                                                </TableCell>
-                                            </TableRow>
+                                                </div>
+                                            </div>
                                         )}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                                    </div>
+                                );
+                            })()}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -4073,15 +4249,21 @@ export default function Admin() {
                                                 ) : <span className="text-gray-300">-</span>}
                                             </TableCell>
                                             <TableCell>
-                                                <div className="flex flex-col gap-1 items-start">
-                                                    {(user.modificationCount > 0 || user.addCount! > 0 || user.deleteCount! > 0) ? (
-                                                        <>
-                                                            {user.addCount! > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-blue-100 text-blue-800 px-1 py-0 h-4">추가 {user.addCount}회</Badge>}
-                                                            {user.deleteCount! > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-red-100 text-red-800 px-1 py-0 h-4">삭제 {user.deleteCount}회</Badge>}
-                                                            {(user.addCount === 0 && user.deleteCount === 0) && <Badge variant="secondary" className="font-mono text-xs">{user.modificationCount}회</Badge>}
-                                                        </>
-                                                    ) : <span className="text-gray-300">-</span>}
-                                                </div>
+                                                    <div className="flex flex-col gap-1 items-start">
+                                                        {(() => {
+                                                            const adds = user.addCount || 0;
+                                                            const dels = user.deleteCount || 0;
+                                                            const pureMods = Math.max(0, (user.modificationCount || 0) - adds - dels);
+                                                            if (adds === 0 && dels === 0 && pureMods === 0) return <span className="text-gray-300">-</span>;
+                                                            return (
+                                                                <>
+                                                                    {adds > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-blue-100 text-blue-800 px-1 py-0 h-4">추가 {adds}회</Badge>}
+                                                                    {dels > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-red-100 text-red-800 px-1 py-0 h-4">삭제 {dels}회</Badge>}
+                                                                    {pureMods > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-gray-100 text-gray-800 px-1 py-0 h-4">수정 {pureMods}회</Badge>}
+                                                                </>
+                                                            );
+                                                        })()}
+                                                    </div>
                                             </TableCell>
                                             <TableCell>
                                                 {user.printCount && user.printCount > 0
@@ -4180,13 +4362,19 @@ export default function Admin() {
                                                     </TableCell>
                                                     <TableCell>
                                                         <div className="flex flex-col gap-1 items-start">
-                                                            {(group.modificationCount > 0 || group.addCount > 0 || group.deleteCount > 0) ? (
-                                                                <>
-                                                                    {group.addCount > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-blue-100 text-blue-800 px-1 py-0 h-4">추가 {group.addCount}회</Badge>}
-                                                                    {group.deleteCount > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-red-100 text-red-800 px-1 py-0 h-4">삭제 {group.deleteCount}회</Badge>}
-                                                                    {(group.addCount === 0 && group.deleteCount === 0) && <Badge variant="secondary" className="font-mono text-xs">{group.modificationCount}회</Badge>}
-                                                                </>
-                                                            ) : <span className="text-gray-400 text-xs">-</span>}
+                                                            {(() => {
+                                                                const adds = group.addCount || 0;
+                                                                const dels = group.deleteCount || 0;
+                                                                const pureMods = Math.max(0, (group.modificationCount || 0) - adds - dels);
+                                                                if (adds === 0 && dels === 0 && pureMods === 0) return <span className="text-gray-400 text-xs">-</span>;
+                                                                return (
+                                                                    <>
+                                                                        {adds > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-blue-100 text-blue-800 px-1 py-0 h-4">추가 {adds}회</Badge>}
+                                                                        {dels > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-red-100 text-red-800 px-1 py-0 h-4">삭제 {dels}회</Badge>}
+                                                                        {pureMods > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-gray-100 text-gray-800 px-1 py-0 h-4">수정 {pureMods}회</Badge>}
+                                                                    </>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
@@ -4287,7 +4475,7 @@ export default function Admin() {
                                                             <TableHead className="w-[120px] min-w-[120px]">IP 주소</TableHead>
                                                             <SortHeader col="id" label="학년/반/번호" className="w-[140px] min-w-[140px]" />
                                                             <TableHead className="w-[180px] min-w-[180px]">카카오 계정</TableHead>
-                                                            <SortHeader col="modCount" label="수정 횟수" className="w-[100px] min-w-[100px]" />
+                                                            <SortHeader col="modCount" label="수정/추가/삭제" className="w-[120px] min-w-[120px]" />
                                                             <TableHead className="w-[80px] min-w-[80px]">출력</TableHead>
                                                             <TableHead className="w-[80px] min-w-[80px]">다운로드</TableHead>
                                                             <TableHead className="w-[80px] min-w-[80px]">앱설치</TableHead>
@@ -4343,13 +4531,19 @@ export default function Admin() {
                                                                             </TableCell>
                                                                             <TableCell>
                                                                                 <div className="flex flex-col gap-1 items-start">
-                                                                                    {(user.modificationCount > 0 || user.addCount! > 0 || user.deleteCount! > 0) ? (
-                                                                                        <>
-                                                                                            {user.addCount! > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-blue-100 text-blue-800 px-1 py-0 h-4">추가 {user.addCount}회</Badge>}
-                                                                                            {user.deleteCount! > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-red-100 text-red-800 px-1 py-0 h-4">삭제 {user.deleteCount}회</Badge>}
-                                                                                            {(user.addCount === 0 && user.deleteCount === 0) && <Badge variant="secondary" className="font-mono text-xs">{user.modificationCount}회</Badge>}
-                                                                                        </>
-                                                                                    ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                                    {(() => {
+                                                                                        const adds = user.addCount || 0;
+                                                                                        const dels = user.deleteCount || 0;
+                                                                                        const pureMods = Math.max(0, (user.modificationCount || 0) - adds - dels);
+                                                                                        if (adds === 0 && dels === 0 && pureMods === 0) return <span className="text-gray-400 text-xs">-</span>;
+                                                                                        return (
+                                                                                            <>
+                                                                                                {adds > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-blue-100 text-blue-800 px-1 py-0 h-4">추가 {adds}회</Badge>}
+                                                                                                {dels > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-red-100 text-red-800 px-1 py-0 h-4">삭제 {dels}회</Badge>}
+                                                                                                {pureMods > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-gray-100 text-gray-800 px-1 py-0 h-4">수정 {pureMods}회</Badge>}
+                                                                                            </>
+                                                                                        );
+                                                                                    })()}
                                                                                 </div>
                                                                             </TableCell>
                                                                             <TableCell>
