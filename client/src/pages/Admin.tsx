@@ -284,6 +284,7 @@ function ElectiveManager({ password }: { password: string }) {
         }
     };
 
+
     const [searchTerm, setSearchTerm] = useState("");
 
     const handleCancel = () => {
@@ -823,24 +824,27 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
         },
     });
 
-    const [overrides, setOverrides] = useState<Record<string, Record<string, string>>>({
-        "2": {},
-        "3": {},
-    });
+    const [globalOverrides, setGlobalOverrides] = useState<Record<string, Record<string, Record<string, string>>>>({});
+    const [currentDatasetId, setCurrentDatasetId] = useState<string>('');
+    const [selectedDataset, setSelectedDataset] = useState<string>('_auto_');
 
     useEffect(() => {
         if (settingsQuery.data?.elective_group_overrides) {
             try {
-                const parsed = JSON.parse(settingsQuery.data.elective_group_overrides);
-                setOverrides({
-                    "2": parsed["2"] || {},
-                    "3": parsed["3"] || {},
-                });
+                let parsed = settingsQuery.data.elective_group_overrides;
+                if (typeof parsed === 'string') {
+                    parsed = JSON.parse(parsed);
+                }
+                setGlobalOverrides(parsed || {});
             } catch (e) {
                 console.error("Failed to parse elective_group_overrides", e);
             }
         }
     }, [settingsQuery.data]);
+
+    // Derived overrides string for isDirty check
+    const currentDatasetKey = currentDatasetId || '_auto_';
+    const currentOverrides = globalOverrides[currentDatasetKey] || { "2": {}, "3": {} };
 
     const saveMutation = useMutation({
         mutationFn: async (newData: any) => {
@@ -867,18 +871,19 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
 
     const handleSave = () => {
         saveMutation.mutate({
-            elective_group_overrides: JSON.stringify(overrides),
+            elective_group_overrides: JSON.stringify(globalOverrides),
         });
     };
 
     const handleClearOverrides = () => {
-        if (confirm("정말로 모든 그룹 강제 지정을 초기화하시겠습니까?")) {
-            setOverrides({ "2": {}, "3": {} });
+        if (confirm(`정말로 [${currentDatasetKey}] 데이터셋의 모든 그룹 강제 지정을 초기화하시겠습니까?`)) {
+            setGlobalOverrides(prev => {
+                const next = { ...prev };
+                next[currentDatasetKey] = { "2": {}, "3": {} };
+                return next;
+            });
         }
     };
-
-    const [currentDatasetId, setCurrentDatasetId] = useState<string>('');
-    const [selectedDataset, setSelectedDataset] = useState<string>('_auto_');
 
     const adminRawQuery = useQuery({
         queryKey: ["admin", "rawComcigan_GroupChecker"],
@@ -990,13 +995,19 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
         return cellGroups;
     }, [rawDataQuery.data, dbData?.electiveSubjects, grade]);
 
-    const isDirty = JSON.stringify(overrides) !== (settingsQuery.data?.elective_group_overrides || '{"2":{},"3":{}}');
+    // Stringify current selection for dirtiness check
+    const originalParsed = typeof settingsQuery.data?.elective_group_overrides === 'string' 
+        ? JSON.parse(settingsQuery.data.elective_group_overrides || '{}') 
+        : (settingsQuery.data?.elective_group_overrides || {});
+        
+    const isDirty = JSON.stringify(globalOverrides) !== JSON.stringify(originalParsed);
 
     const handleOverrideChange = (w: number, p: number, val: string) => {
         const cellKey = `${w}-${p}`;
-        setOverrides(prev => {
+        setGlobalOverrides(prev => {
             const next = { ...prev };
-            const gradeOverrides = { ...(next[grade] || {}) };
+            const datasetOverrides = { ...(next[currentDatasetKey] || { "2": {}, "3": {} }) };
+            const gradeOverrides = { ...(datasetOverrides[grade] || {}) };
 
             if (val === "AUTO") {
                 delete gradeOverrides[cellKey];
@@ -1004,7 +1015,8 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
                 gradeOverrides[cellKey] = val;
             }
 
-            next[grade] = gradeOverrides;
+            datasetOverrides[grade] = gradeOverrides;
+            next[currentDatasetKey] = datasetOverrides;
             return next;
         });
     };
@@ -1071,7 +1083,7 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
                                 {[0, 1, 2, 3, 4].map(w => {
                                     const cellKey = `${w}-${p}`;
                                     const autoGroup = computedBaseGroups[cellKey] || null;
-                                    const overrideValue = overrides[grade]?.[cellKey];
+                                    const overrideValue = currentOverrides[grade]?.[cellKey];
 
                                     const isNone = overrideValue === "NONE";
                                     const finalGroup = isNone ? null : (overrideValue || autoGroup);
@@ -1115,7 +1127,12 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
                     <Button variant="outline" onClick={handleClearOverrides} className="text-red-500 hover:text-red-600 mr-auto">
                         전체 초기화 (All Clear)
                     </Button>
-                    <Button variant="outline" onClick={() => setOverrides(JSON.parse(settingsQuery.data?.elective_group_overrides || '{"2":{},"3":{}}'))} disabled={!isDirty || saveMutation.isPending}>
+                    <Button variant="outline" onClick={() => {
+                        const parsed = typeof settingsQuery.data?.elective_group_overrides === 'string'
+                            ? JSON.parse(settingsQuery.data.elective_group_overrides || '{}')
+                            : (settingsQuery.data?.elective_group_overrides || {});
+                        setGlobalOverrides(parsed);
+                    }} disabled={!isDirty || saveMutation.isPending}>
                         저장 취소
                     </Button>
                     <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
@@ -4735,6 +4752,14 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     const [selectedProp, setSelectedProp] = useState<string>('');
     // Grade 1 dataset selection (separate)
     const [selectedPropGrade1, setSelectedPropGrade1] = useState<string>('');
+    // IP Overrides state
+    const [ipOverrides, setIpOverrides] = useState<Record<string, { grade1?: string, default?: string, memo?: string }>>({});
+    
+    // IP Override form state
+    const [newIp, setNewIp] = useState<string>('');
+    const [newIpGrade1, setNewIpGrade1] = useState<string>('');
+    const [newIpDefault, setNewIpDefault] = useState<string>('');
+    const [newIpMemo, setNewIpMemo] = useState<string>('');
 
     // Fetch current settings
     const settingsQuery = useQuery({
@@ -4754,6 +4779,17 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         if (settingsQuery.data) {
             setSelectedProp(settingsQuery.data.comcigan_dataset_selected || '_auto_');
             setSelectedPropGrade1(settingsQuery.data.comcigan_dataset_selected_grade1 || '_auto_');
+
+            if (settingsQuery.data.dataset_ip_overrides) {
+                try {
+                    setIpOverrides(JSON.parse(settingsQuery.data.dataset_ip_overrides));
+                } catch (e) {
+                    console.error("Failed to parse IP overrides", e);
+                    setIpOverrides({});
+                }
+            } else {
+                setIpOverrides({});
+            }
         }
     }, [settingsQuery.data]);
 
@@ -4800,12 +4836,13 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     const originalValueG1 = settingsQuery.data?.comcigan_dataset_selected_grade1 || '_auto_';
     const isDirtyG1 = displayValueG1 !== originalValueG1;
 
-    const DatasetDropdown = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    const DatasetDropdown = ({ value, onChange, emptyOption = false }: { value: string; onChange: (v: string) => void, emptyOption?: boolean }) => (
         <Select value={value} onValueChange={onChange}>
             <SelectTrigger className="w-full">
                 <SelectValue placeholder="데이터셋 선택" />
             </SelectTrigger>
             <SelectContent>
+                {emptyOption && <SelectItem value="_empty_">사용 안 함 (기본값 설정 따름)</SelectItem>}
                 <SelectItem value="_auto_">자동 (최신: {latestDatasetName})</SelectItem>
                 <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획 수동 입력)</SelectItem>
                 {timetableProps.map(prop => (
@@ -4815,7 +4852,54 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         </Select>
     );
 
+    const handleAddOverride = () => {
+        if (!newIp.trim()) {
+            toast.error("IP 주소를 입력해주세요.");
+            return;
+        }
+        
+        const newOverrides = { 
+            ...ipOverrides, 
+            [newIp.trim()]: {
+                grade1: newIpGrade1 === '_empty_' ? undefined : newIpGrade1,
+                default: newIpDefault === '_empty_' ? undefined : newIpDefault,
+                memo: newIpMemo
+            } 
+        };
+        
+        // Clean up undefined values cleanly for JSON stringify
+        if (!newOverrides[newIp.trim()].grade1) delete newOverrides[newIp.trim()].grade1;
+        if (!newOverrides[newIp.trim()].default) delete newOverrides[newIp.trim()].default;
+
+        setIpOverrides(newOverrides);
+        saveMutation.mutate({ dataset_ip_overrides: JSON.stringify(newOverrides) });
+        
+        // Reset form
+        setNewIp('');
+        setNewIpMemo('');
+        setNewIpGrade1('');
+        setNewIpDefault('');
+    };
+
+    const handleRemoveOverride = (ipToRemove: string) => {
+        const newOverrides = { ...ipOverrides };
+        delete newOverrides[ipToRemove];
+        setIpOverrides(newOverrides);
+        saveMutation.mutate({ dataset_ip_overrides: JSON.stringify(newOverrides) });
+    };
+
+    const fetchMyIp = async () => {
+        try {
+            const res = await fetch("/api/my-ip");
+            const data = await res.json();
+            if (data.ip) setNewIp(data.ip);
+        } catch (e) {
+            toast.error("IP를 가져오는데 실패했습니다.");
+        }
+    };
+
     return (
+        <>
         <Card className="w-full max-w-2xl">
             <CardHeader>
                 <CardTitle>출체 데이터셋 선택</CardTitle>
@@ -4861,7 +4945,96 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
 
             </CardContent>
         </Card>
-    );
+
+        {/* IP Override Manager */}
+        <Card className="w-full max-w-2xl mt-6">
+            <CardHeader>
+                <CardTitle>IP별 데이터셋 강제 지정 (Override)</CardTitle>
+                <CardDescription>
+                    특정 IP 주소에서 접속할 때 메인 화면에 표시할 데이터셋을 별도로 지정합니다.<br />
+                    1학년과 2/3학년을 구분하여 지정할 수 있습니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="space-y-4 border rounded-lg p-4 bg-slate-50">
+                    <div className="flex items-center justify-between pb-2 border-b">
+                        <span className="text-sm font-semibold text-slate-700">현재 오버라이드 목록</span>
+                    </div>
+                    {Object.keys(ipOverrides).length === 0 ? (
+                        <div className="text-sm text-center py-4 text-gray-500 bg-white border rounded">현재 설정된 IP 오버라이드가 없습니다.</div>
+                    ) : (
+                        <div className="overflow-x-auto rounded border">
+                            <Table className="bg-white min-w-[500px]">
+                                <TableHeader className="bg-slate-100">
+                                    <TableRow>
+                                        <TableHead className="w-[120px]">IP</TableHead>
+                                        <TableHead>1학년</TableHead>
+                                        <TableHead>2/3학년</TableHead>
+                                        <TableHead>메모</TableHead>
+                                        <TableHead className="w-[60px]"></TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {Object.entries(ipOverrides).map(([ip, config]) => (
+                                        <TableRow key={ip}>
+                                            <TableCell className="font-mono text-xs">{ip}</TableCell>
+                                            <TableCell className="text-xs text-blue-600 font-medium">
+                                                {config.grade1 === '_auto_' ? '자동' : (config.grade1 || <span className="text-gray-400">지정 안함</span>)}
+                                            </TableCell>
+                                            <TableCell className="text-xs text-green-600 font-medium">
+                                                {config.default === '_auto_' ? '자동' : (config.default || <span className="text-gray-400">지정 안함</span>)}
+                                            </TableCell>
+                                            <TableCell className="text-xs text-gray-500">{config.memo || '-'}</TableCell>
+                                            <TableCell>
+                                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleRemoveOverride(ip)}>
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </div>
+
+                <div className="space-y-4 border rounded-lg p-4 bg-white">
+                     <span className="text-sm font-semibold text-slate-700 block mb-2">새 오버라이드 추가</span>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                             <label className="text-xs font-medium text-gray-600">대상 IP 주소</label>
+                             <div className="flex gap-2">
+                                <Input value={newIp} onChange={e => setNewIp(e.target.value)} placeholder="예: 211.xxx.xxx.xxx" className="text-sm font-mono h-9" />
+                                <Button size="sm" variant="secondary" className="h-9 shrink-0 text-xs" onClick={fetchMyIp}>내 IP 가져오기</Button>
+                             </div>
+                        </div>
+                        <div className="space-y-2">
+                             <label className="text-xs font-medium text-gray-600">관리자 메모 (장소/사용자명 등)</label>
+                             <Input value={newIpMemo} onChange={e => setNewIpMemo(e.target.value)} placeholder="예: 교무실 공용PC" className="text-sm h-9" />
+                        </div>
+                     </div>
+
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                        <div className="space-y-2">
+                             <label className="text-xs font-medium text-gray-600">1학년 강제 지정 데이터셋</label>
+                             <DatasetDropdown value={newIpGrade1} onChange={setNewIpGrade1} emptyOption={true} />
+                        </div>
+                        <div className="space-y-2">
+                             <label className="text-xs font-medium text-gray-600">2/3학년 강제 지정 데이터셋</label>
+                             <DatasetDropdown value={newIpDefault} onChange={setNewIpDefault} emptyOption={true} />
+                        </div>
+                     </div>
+                     <div className="flex justify-end pt-2">
+                         <Button onClick={handleAddOverride} disabled={!newIp.trim() || saveMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
+                             목록에 추가
+                         </Button>
+                     </div>
+                </div>
+
+            </CardContent>
+        </Card>
+        </>
+    );    
 }
 
 function AutoFillAnalyzer({ data, adminPassword, onBack }: {

@@ -393,10 +393,12 @@ export default function Dashboard() {
           })) as TimetableItem[];
           // Attach datasetId for downstream queries
           (mappedData as any).datasetId = result.datasetId;
+          (mappedData as any).ipOverrideApplied = result.ipOverrideApplied;
           return mappedData;
         }
         const emptyArray = [] as TimetableItem[];
         (emptyArray as any).datasetId = result.datasetId;
+        (emptyArray as any).ipOverrideApplied = result.ipOverrideApplied;
         return emptyArray;
       } catch (e) {
         console.error('Failed to fetch timetable', e);
@@ -650,11 +652,12 @@ export default function Dashboard() {
 
   // 3. 수행평가 목록 조회
   const { data: allAssessments, isLoading: assessmentLoading } = useQuery({
-    queryKey: ['assessments', grade, classNum],
+    queryKey: ['assessments', grade, classNum, datasetId],
     queryFn: async () => {
       if (!grade || !classNum) return [];
       try {
-        const res = await fetch(`/api/assessment?grade=${grade}&classNum=${classNum}`);
+        const datasetQuery = datasetId ? `&dataset=${encodeURIComponent(datasetId)}` : '';
+        const res = await fetch(`/api/assessment?grade=${grade}&classNum=${classNum}${datasetQuery}`);
         if (!res.ok) {
           if (res.status === 404) return [];
           throw new Error(`API Error: ${res.status}`);
@@ -713,6 +716,7 @@ export default function Dashboard() {
           grade: parseInt(grade),
           classNum: parseInt(classNum),
           classTime: data.classTime ? parseInt(data.classTime) : null,
+          dataset: datasetId || '',
         }),
       });
 
@@ -749,7 +753,10 @@ export default function Dashboard() {
       const res = await fetch(`/api/assessment`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          dataset: datasetId || ''
+        }),
       });
 
       if (!res.ok) {
@@ -949,6 +956,24 @@ export default function Dashboard() {
 
   return (
     <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-2">
+      {/* Global Status Banners */}
+      {(settings?.is_whitelisted || (rawTimetableData as any)?.ipOverrideApplied) && (
+        <div className="flex flex-col gap-2 mb-4">
+          {settings?.is_whitelisted && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg flex items-center gap-2 text-sm font-medium">
+              <ShieldAlert className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span>[화이트리스트] 이 기기는 접속 제한 예외 처리되었습니다.</span>
+            </div>
+          )}
+          {(rawTimetableData as any)?.ipOverrideApplied && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg flex items-center gap-2 text-sm font-medium">
+              <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0" />
+              <span>[강제 지정됨] 현재 선택 학년에 맞게 Override된 데이터셋 ({(rawTimetableData as any)?.datasetId}) 표시 중</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* New Top Bar (Replaces Navigation on Desktop) */}
       <div className="hidden md:flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">

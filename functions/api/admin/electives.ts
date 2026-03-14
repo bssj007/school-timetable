@@ -122,9 +122,21 @@ export const onRequest = async (context: any) => {
     if (method === 'DELETE') {
         try {
             const url = new URL(request.url);
-            const id = url.searchParams.get('id');
-            const dataset = url.searchParams.get('dataset');
-            const grade = url.searchParams.get('grade');
+            let id = url.searchParams.get('id');
+            let dataset = url.searchParams.get('dataset');
+            let grade = url.searchParams.get('grade');
+
+            // Optionally read from body if not in query params
+            try {
+                const body = await request.json();
+                if (body) {
+                    if (!id && body.id) id = body.id;
+                    if (!dataset && body.dataset) dataset = body.dataset;
+                    if (body.grade) grade = body.grade; // grade alone isn't enough to delete, but useful for scoped deletion
+                }
+            } catch (e) {
+                // Ignore JSON parse errors for DELETE requests without body
+            }
 
             if (id) {
                 await env.DB.prepare("DELETE FROM elective_config WHERE id = ?").bind(id).run();

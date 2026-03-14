@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
+import DatasetManagerPanel from "./DatasetManagerPanel";
 
 interface DatabaseManagerProps {
     adminPassword: string;
@@ -424,6 +425,9 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                     <TabsList className="mb-2 w-full justify-start h-9">
                         <TabsTrigger value="manual" className="flex items-center gap-2 text-xs">
                             <Database className="w-3 h-3" /> 수동 관리
+                        </TabsTrigger>
+                        <TabsTrigger value="dataset" className="flex items-center gap-2 text-xs">
+                            <Database className="w-3 h-3" /> 데이터셋 관리
                         </TabsTrigger>
                         <TabsTrigger value="auto" className="flex items-center gap-2 text-xs">
                             <Settings className="w-3 h-3" /> 자동 관리

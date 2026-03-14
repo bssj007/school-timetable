@@ -21,10 +21,19 @@ interface BridgeMapping {
 
 // Levenshtein distance based string similarity (0 to 100)
 function calculateSimilarity(str1: string, str2: string): number {
-    const s1 = str1.replace(/\s+/g, '').toLowerCase();
-    const s2 = str2.replace(/\s+/g, '').toLowerCase();
+    if (str1 === str2) return 100;
 
-    if (s1 === s2) return 100;
+    const parse = (s: string) => {
+        const match = s.match(/(.+?) \((.+?)\)$/);
+        return match ? { subj: match[1], tchr: match[2] } : { subj: s, tchr: "" };
+    };
+
+    const p1 = parse(str1);
+    const p2 = parse(str2);
+
+    const s1 = p1.subj.replace(/\s+/g, '').toLowerCase();
+    const s2 = p2.subj.replace(/\s+/g, '').toLowerCase();
+
     if (s1.length === 0 || s2.length === 0) return 0;
 
     const matrix = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
@@ -42,9 +51,22 @@ function calculateSimilarity(str1: string, str2: string): number {
             );
         }
     }
-    const distance = matrix[s2.length][s1.length];
-    const maxLength = Math.max(s1.length, s2.length);
-    return Math.round(((maxLength - distance) / maxLength) * 100);
+    const subjDist = matrix[s2.length][s1.length];
+    const maxSubjLen = Math.max(s1.length, s2.length);
+    const subjSim = Math.round(((maxSubjLen - subjDist) / maxSubjLen) * 100);
+
+    let tchrSim = 0;
+    if (p1.tchr && p2.tchr) {
+        if (p1.tchr === p2.tchr) tchrSim = 100;
+        else {
+            // Partial match for teacher (e.g., if one is a substring of another)
+            if (p1.tchr.includes(p2.tchr) || p2.tchr.includes(p1.tchr)) tchrSim = 50;
+        }
+    } else if (!p1.tchr && !p2.tchr) {
+        tchrSim = 100;
+    }
+
+    return Math.round(subjSim * 0.9 + tchrSim * 0.1);
 }
 
 interface DatasetBridge {
@@ -117,7 +139,13 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${fetchDataset}`);
             if (res.ok) {
                 const data = await res.json();
-                data.forEach((s: any) => allSubjects.add(s.subject));
+                data.forEach((s: any) => {
+                    if (s.teacher) {
+                        allSubjects.add(`${s.subject} (${s.teacher})`);
+                    } else {
+                        allSubjects.add(s.subject);
+                    }
+                });
             }
 
             return Array.from(allSubjects).sort();
@@ -137,7 +165,13 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${fetchDataset}`);
             if (res.ok) {
                 const data = await res.json();
-                data.forEach((s: any) => allSubjects.add(s.subject));
+                data.forEach((s: any) => {
+                    if (s.teacher) {
+                        allSubjects.add(`${s.subject} (${s.teacher})`);
+                    } else {
+                        allSubjects.add(s.subject);
+                    }
+                });
             }
 
             return Array.from(allSubjects).sort();

@@ -55,6 +55,8 @@ export const onRequest = async (context: any) => {
             mappingDict = mappingData;
         }
 
+        // Helper map removed as per user request for strict mappings.
+
         // The flags indicated by user
         const { migrateElectiveConfig, migrateStudentProfiles, migrateAssessments } = options || {};
 
@@ -73,22 +75,72 @@ export const onRequest = async (context: any) => {
                 "SELECT * FROM elective_config WHERE dataset = ? AND grade = ?"
             ).bind(fromDataset, targetGrade).all();
 
+            // Fetch target teacher information to prevent duplicate Subject-Teacher mismatches
+            let targetSubjectsInfo: Record<string, string> = {};
+            try {
+                // Ensure request.url exists so we can derive origin. Since it's a Worker trigger, context.url or request.url is available.
+                const origin = new URL(request.url).origin;
+                const fetchUrl = `${origin}/api/admin/comcigan-subjects?grade=${targetGrade}&dataset=${toDataset}`;
+                
+                const subjRes = await fetch(fetchUrl, {
+                    headers: { "X-Admin-Password": adminPassword }
+                });
+                
+                if (subjRes.ok) {
+                    const subjData = await subjRes.json() as any[];
+                    subjData.forEach(item => {
+                        if (item.subject) {
+                            // Keep the first (or only) teacher found for this subject in the target dataset
+                            targetSubjectsInfo[item.subject] = item.teacher || "";
+                        }
+                    });
+                } else {
+                    console.warn(`Failed to fetch target subjects for resolving teacher mappings. Status: ${subjRes.status}`);
+                }
+            } catch (err) {
+                console.error("Error looking up target dataset subjects during migration:", err);
+            }
+
             // Delete old existing configs on toDataset for this targetGrade
             await env.DB.prepare("DELETE FROM elective_config WHERE dataset = ? AND grade = ?").bind(toDataset, targetGrade).run();
 
             const batchStatements = [];
             for (const config of sourceConfigs) {
-                // Apply mapping to subject name. Default to original if not found in dict.
-                const mappedSubject = mappingDict[config.subject] !== undefined ? mappingDict[config.subject] : config.subject;
+                const key = config.originalTeacher ? `${config.subject} (${config.originalTeacher})` : config.subject;
+                let mappedVal = mappingDict[key];
 
-                // If the mapping explicitly says "_none_", we skip duplicating this subject.
-                if (mappedSubject === "_none_") continue;
+                if (mappedVal === undefined) {
+                    mappedVal = mappingDict[config.subject]; // Try without teacher if that's how it was mapped
+                }
+
+                if (mappedVal === undefined) {
+                    mappedVal = config.subject;
+                }
+
+                if (mappedVal === "_none_") continue;
+
+                const mappedSubject = mappedVal.replace(/ \([^)]+\)$/, '');
+                const mappedTeacherMatch = mappedVal.match(/ \(([^)]+)\)$/);
+                const mappedTeacher = mappedTeacherMatch ? mappedTeacherMatch[1] : null;
+
+                let newTeacher = config.originalTeacher;
+                let newFullTeacherName = config.fullTeacherName;
+
+                if (mappedTeacher) {
+                    newTeacher = mappedTeacher;
+                } else if (targetSubjectsInfo[mappedSubject] !== undefined) {
+                    newTeacher = targetSubjectsInfo[mappedSubject];
+                }
+
+                if (newTeacher !== config.originalTeacher) {
+                    newFullTeacherName = ""; // Can be set manually by the admin later
+                }
 
                 batchStatements.push(env.DB.prepare(
                     "INSERT INTO elective_config (grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, isMovingClass, isCombinedClass, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 ).bind(
-                    config.grade, mappedSubject, config.originalTeacher, config.classCode,
-                    config.fullTeacherName, config.className, config.fullSubjectName,
+                    config.grade, mappedSubject, newTeacher, config.classCode,
+                    newFullTeacherName, config.className, config.fullSubjectName,
                     config.isMovingClass, config.isCombinedClass, toDataset, new Date().toISOString()
                 ));
             }
@@ -120,10 +172,11 @@ export const onRequest = async (context: any) => {
 
                     if (Array.isArray(electivesObj)) {
                         for (const subj of electivesObj) {
-                            const mapped = mappingDict[subj] !== undefined ? mappingDict[subj] : subj;
-                            if (mapped === "_none_") {
+                            const rawMapped = mappingDict[subj] !== undefined ? mappingDict[subj] : subj;
+                            if (rawMapped === "_none_") {
                                 changed = true; // Subject dropped
                             } else {
+                                const mapped = rawMapped.replace(/ \([^)]+\)$/, '');
                                 newElectives.push(mapped);
                                 if (mapped !== subj) changed = true;
                             }
@@ -137,23 +190,33 @@ export const onRequest = async (context: any) => {
                             if (typeof entry === 'object' && entry.subject) {
                                 // 현재 표준 형식: { subject, teacher, fullSubjectName }
                                 const oldSubject = entry.subject;
-                                const mapped = mappingDict[oldSubject] !== undefined ? mappingDict[oldSubject] : oldSubject;
-                                if (mapped === "_none_") {
+                                const oldKey = entry.teacher ? `${oldSubject} (${entry.teacher})` : oldSubject;
+                                let mappedVal = mappingDict[oldKey] !== undefined ? mappingDict[oldKey] : mappingDict[oldSubject];
+                                if (mappedVal === undefined) mappedVal = oldSubject;
+
+                                if (mappedVal === "_none_") {
                                     delete electivesObj[groupKey];
                                     changed = true;
-                                } else if (mapped !== oldSubject) {
-                                    electivesObj[groupKey] = { ...entry, subject: mapped, fullSubjectName: undefined };
+                                } else if (mappedVal !== oldSubject && mappedVal !== oldKey) {
+                                    const mappedSubject = mappedVal.replace(/ \([^)]+\)$/, '');
+                                    const mappedTeacherMatch = mappedVal.match(/ \(([^)]+)\)$/);
+                                    const mappedTeacher = mappedTeacherMatch ? mappedTeacherMatch[1] : entry.teacher;
+                                    
+                                    electivesObj[groupKey] = { ...entry, subject: mappedSubject, teacher: mappedTeacher, fullSubjectName: undefined };
                                     changed = true;
                                 }
                             } else if (typeof entry === 'string') {
                                 // 레거시 문자열 형식
-                                const mapped = mappingDict[entry] !== undefined ? mappingDict[entry] : entry;
-                                if (mapped === "_none_") {
+                                const rawMapped = mappingDict[entry] !== undefined ? mappingDict[entry] : entry;
+                                if (rawMapped === "_none_") {
                                     delete electivesObj[groupKey];
                                     changed = true;
-                                } else if (mapped !== entry) {
-                                    electivesObj[groupKey] = mapped;
-                                    changed = true;
+                                } else {
+                                    const mapped = rawMapped.replace(/ \([^)]+\)$/, '');
+                                    if (mapped !== entry) {
+                                        electivesObj[groupKey] = mapped;
+                                        changed = true;
+                                    }
                                 }
                             }
                         });
@@ -190,10 +253,12 @@ export const onRequest = async (context: any) => {
 
             const batchStatements = [];
             for (const assessment of assessments) {
-                if (mappingDict[assessment.subject] && mappingDict[assessment.subject] !== "_none_") {
+                const rawMapped = mappingDict[assessment.subject];
+                if (rawMapped && rawMapped !== "_none_") {
+                    const mappedSubject = rawMapped.replace(/ \([^)]+\)$/, '');
                     batchStatements.push(env.DB.prepare(
                         "UPDATE performance_assessments SET subject = ? WHERE id = ?"
-                    ).bind(mappingDict[assessment.subject], assessment.id));
+                    ).bind(mappedSubject, assessment.id));
                 }
             }
 

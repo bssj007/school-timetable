@@ -23,10 +23,18 @@ export const onRequest = async (context: any) => {
 
             let query = "SELECT * FROM performance_assessments WHERE grade = ? AND (classNum = ? OR classNum = 0) AND isDeleted = 0";
             const params: any[] = [grade, classNum];
-            query += " ORDER BY dueDate ASC, id DESC";
+
+            // Filter by dataset if provided, else filter by empty string (default manual)
+            const dataset = url.searchParams.get('dataset') || '';
+            query += " AND dataset = ?";
+            params.push(dataset);
+
+            query += " ORDER BY dueDate ASC";
 
             try {
-                const { results } = await env.DB.prepare(query).bind(...params).all();
+                const { results } = await env.DB.prepare(query)
+                    .bind(...params)
+                    .all();
 
                 return new Response(JSON.stringify(results), {
                     headers: { 'Content-Type': 'application/json' }
@@ -45,21 +53,38 @@ export const onRequest = async (context: any) => {
                           classNum INTEGER NOT NULL,
                           classTime INTEGER,
                           isDone INTEGER DEFAULT 0,
+                          dataset TEXT DEFAULT '',
                           createdAt TEXT DEFAULT (datetime('now')),
                           lastModifiedIp TEXT,
                           isDeleted INTEGER DEFAULT 0
                         )
                     `).run();
+                    // Add isDeleted column if missing (migration for older tables)
+                    try {
+                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run();
+                    } catch (createErr: any) {
+                        if (createErr.message && !createErr.message.includes("duplicate column")) {
+                            console.error("Migration error (isDeleted):", createErr);
+                        }
+                    }
+                    // Add dataset column if missing (migration for older tables)
+                    try {
+                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN dataset TEXT DEFAULT ''").run();
+                    } catch (createErr: any) {
+                        if (createErr.message && !createErr.message.includes("duplicate column")) {
+                            console.error("Migration error (dataset):", createErr);
+                        }
+                    }
                     return new Response(JSON.stringify([]), {
                         headers: { 'Content-Type': 'application/json' }
                     });
                 }
-                
+
                 // Column missing
                 if (e.message && e.message.includes("no such column") && e.message.includes("isDeleted")) {
                     console.log("[Assessment API] 'isDeleted' column missing in GET. Attempting to add it.");
                     await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run();
-                    
+
                     // Retry original query
                     const { results } = await env.DB.prepare(query).bind(...params).all();
 
@@ -67,7 +92,19 @@ export const onRequest = async (context: any) => {
                          headers: { 'Content-Type': 'application/json' }
                     });
                 }
-                
+                // Column missing: dataset
+                if (e.message && e.message.includes("no such column") && e.message.includes("dataset")) {
+                    console.log("[Assessment API] 'dataset' column missing in GET. Attempting to add it.");
+                    await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN dataset TEXT DEFAULT ''").run();
+
+                    // Retry original query
+                    const { results } = await env.DB.prepare(query).bind(...params).all();
+
+                    return new Response(JSON.stringify(results), {
+                         headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
                 return new Response(JSON.stringify({ error: `Failed query: ${e.message}` }), { status: 500 });
             }
         }
@@ -100,10 +137,13 @@ export const onRequest = async (context: any) => {
             }
 
             // 중복 체크: 같은 날짜, 같은 교시에 이미 수행평가가 있는지 확인
+            const dataset = body.dataset || '';
+
+            // 중복 체크
             if (classTime) {
                 const existing = await env.DB.prepare(
-                    "SELECT id FROM performance_assessments WHERE grade = ? AND classNum = ? AND dueDate = ? AND classTime = ?"
-                ).bind(grade, actualClassNum, dueDate, classTime).first();
+                    "SELECT id FROM performance_assessments WHERE grade = ? AND classNum = ? AND dueDate = ? AND classTime = ? AND dataset = ?"
+                ).bind(grade, actualClassNum, dueDate, classTime, dataset).first();
 
                 if (existing) {
                     return new Response(JSON.stringify({ error: "이미 해당 교시에 수행평가가 등록되어 있습니다." }), {
@@ -116,11 +156,11 @@ export const onRequest = async (context: any) => {
             const ip = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
 
             try {
-                // Try inserting with lastModifiedIp (New Schema)
+                // Try inserting with lastModifiedIp and dataset (New Schema)
                 const result = await env.DB.prepare(
-                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, lastModifiedIp) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
-                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, ip).run();
+                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
+                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip).run();
 
                 return new Response(JSON.stringify({ success: true, result }), {
                     headers: { 'Content-Type': 'application/json' }
@@ -141,28 +181,73 @@ export const onRequest = async (context: any) => {
                           classNum INTEGER NOT NULL,
                           classTime INTEGER,
                           isDone INTEGER DEFAULT 0,
+                          dataset TEXT DEFAULT '',
                           createdAt TEXT DEFAULT (datetime('now')),
                           lastModifiedIp TEXT,
                           isDeleted INTEGER DEFAULT 0
                         )
                     `).run();
+                    // Add isDeleted column if missing (migration for older tables)
+                    try {
+                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run();
+                    } catch (createErr: any) {
+                        if (createErr.message && !createErr.message.includes("duplicate column")) {
+                            console.error("Migration error (isDeleted):", createErr);
+                        }
+                    }
+                    // Add dataset column if missing (migration for older tables)
+                    try {
+                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN dataset TEXT DEFAULT ''").run();
+                    } catch (createErr: any) {
+                        if (createErr.message && !createErr.message.includes("duplicate column")) {
+                            console.error("Migration error (dataset):", createErr);
+                        }
+                    }
 
                     // Retry
                     const result = await env.DB.prepare(
-                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, lastModifiedIp) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
-                    ).bind(subject, title, description || '', dueDate, grade, classNum, classTime || null, ip).run();
+                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
+                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip).run();
 
                     return new Response(JSON.stringify({ success: true, result }), {
                         headers: { 'Content-Type': 'application/json' }
                     });
                 }
 
-                console.error("[Assessment API] Insert with IP failed, fallback to old schema:", insertError.message);
+                console.error("[Assessment API] Insert with IP/dataset failed, attempting fallback:", insertError.message);
 
-                // Fallback: Insert without lastModifiedIp (Old Schema)
+                // Fallback: Insert without lastModifiedIp and/or dataset (Old Schema)
+                // Check if 'dataset' column is missing
+                if (errorMsg.includes("no such column") && errorMsg.includes("dataset")) {
+                    console.log("[Assessment API] 'dataset' column missing in POST. Attempting to add it.");
+                    await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN dataset TEXT DEFAULT ''").run();
+                    // Retry with dataset, but potentially without lastModifiedIp if that was the original issue
+                    const result = await env.DB.prepare(
+                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
+                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip).run();
+                    return new Response(JSON.stringify({ success: true, result, warning: "Dataset column added and retried" }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+                // Check if 'lastModifiedIp' column is missing
+                if (errorMsg.includes("no such column") && errorMsg.includes("lastModifiedIp")) {
+                    console.log("[Assessment API] 'lastModifiedIp' column missing in POST. Attempting to add it.");
+                    await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN lastModifiedIp TEXT").run();
+                    // Retry with lastModifiedIp, but potentially without dataset if that was the original issue
+                    const result = await env.DB.prepare(
+                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
+                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip).run();
+                    return new Response(JSON.stringify({ success: true, result, warning: "lastModifiedIp column added and retried" }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
+                // Final fallback if both are missing or other error
                 const result = await env.DB.prepare(
-                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone) 
+                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone)
                      VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
                 ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null).run();
 
