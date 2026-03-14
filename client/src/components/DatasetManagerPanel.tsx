@@ -61,6 +61,10 @@ export default function DatasetManagerPanel({ adminPassword }: DatasetManagerPan
             if (res.ok) {
                 const data = await res.json();
                 setDatasets(data.datasets || []);
+            } else {
+                const errorText = await res.text();
+                console.error("Failed to fetch datasets:", res.status, errorText);
+                toast.error(`데이터셋 목록을 불러오지 못했습니다: ${res.status} ${errorText}`);
             }
         } catch (e) {
             console.error("Failed to fetch datasets", e);
