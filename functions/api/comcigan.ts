@@ -172,7 +172,7 @@ export const onRequest = async (context: any) => {
 }
 
 async function getTimetable(grade: number, classNumInput: number | 'all', db?: any, datasetOverride?: string | null, clientIp: string = 'unknown') {
-    let ipOverrideApplied = false;
+    let ipOverrideApplied: string | false = false;
     const prefix = await getPrefix();
     const { code1, code2 } = await getSchoolCode(prefix);
 
@@ -267,16 +267,16 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 // Otherwise fallback to default override if provided
                 if (overrideConfig.grade1 !== undefined && overrideConfig.grade1 !== null) {
                     datasetSelectedGrade1 = overrideConfig.grade1;
-                    if (grade === 1) ipOverrideApplied = true;
+                    if (grade === 1) ipOverrideApplied = "1학년";
                 } else if (overrideConfig.default !== undefined && overrideConfig.default !== null) {
                     datasetSelectedGrade1 = overrideConfig.default;
-                    if (grade === 1) ipOverrideApplied = true;
+                    if (grade === 1) ipOverrideApplied = "1학년";
                 }
                 
                 // Override Default Grade 2/3
                 if (overrideConfig.default !== undefined && overrideConfig.default !== null) {
                     datasetSelected = overrideConfig.default;
-                    if (grade !== 1) ipOverrideApplied = true;
+                    if (grade !== 1) ipOverrideApplied = "2/3학년";
                 }
             }
 

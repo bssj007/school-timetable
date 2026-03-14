@@ -20,12 +20,18 @@ export const onRequest = async (context: any) => {
                 // Also overrides from system_settings JSON keys
                 
                 // 1. Elective Subjects
-                const esQuery = await env.DB.prepare("SELECT DISTINCT datasetId FROM elective_subjects WHERE datasetId IS NOT NULL").all();
-                const esDatasets = (esQuery.results || []).map((r: any) => r.datasetId);
+                let esDatasets: string[] = [];
+                try {
+                    const esQuery = await env.DB.prepare("SELECT DISTINCT datasetId FROM elective_subjects WHERE datasetId IS NOT NULL").all();
+                    esDatasets = (esQuery.results || []).map((r: any) => r.datasetId);
+                } catch (e) {}
 
                 // 2. Student Profiles
-                const spQuery = await env.DB.prepare("SELECT DISTINCT datasetId FROM student_profiles WHERE datasetId IS NOT NULL").all();
-                const spDatasets = (spQuery.results || []).map((r: any) => r.datasetId);
+                let spDatasets: string[] = [];
+                try {
+                    const spQuery = await env.DB.prepare("SELECT DISTINCT datasetId FROM student_profiles WHERE datasetId IS NOT NULL").all();
+                    spDatasets = (spQuery.results || []).map((r: any) => r.datasetId);
+                } catch (e) {}
 
                 // 3. Performance Assessments
                 // In D1, the column might not exist if migration failed, wrap in try-catch
@@ -72,16 +78,20 @@ export const onRequest = async (context: any) => {
                 let assessments: Record<string, number> = { '1': 0, '2': 0, '3': 0 };
 
                 // 1. Elective Subjects Count
-                const esQuery = await env.DB.prepare("SELECT grade, COUNT(*) as count FROM elective_subjects WHERE datasetId = ? GROUP BY grade").bind(dataset).all();
-                (esQuery.results || []).forEach((r: any) => {
-                    if (r.grade) electiveConfigs[r.grade.toString()] = r.count;
-                });
+                try {
+                    const esQuery = await env.DB.prepare("SELECT grade, COUNT(*) as count FROM elective_subjects WHERE datasetId = ? GROUP BY grade").bind(dataset).all();
+                    (esQuery.results || []).forEach((r: any) => {
+                        if (r.grade) electiveConfigs[r.grade.toString()] = r.count;
+                    });
+                } catch (e) {}
 
                 // 2. Student Profiles Count
-                const spQuery = await env.DB.prepare("SELECT grade, COUNT(*) as count FROM student_profiles WHERE datasetId = ? GROUP BY grade").bind(dataset).all();
-                (spQuery.results || []).forEach((r: any) => {
-                    if (r.grade) studentProfiles[r.grade.toString()] = r.count;
-                });
+                try {
+                    const spQuery = await env.DB.prepare("SELECT grade, COUNT(*) as count FROM student_profiles WHERE datasetId = ? GROUP BY grade").bind(dataset).all();
+                    (spQuery.results || []).forEach((r: any) => {
+                        if (r.grade) studentProfiles[r.grade.toString()] = r.count;
+                    });
+                } catch (e) {}
 
                 // 3. Performance Assessments Count
                 try {

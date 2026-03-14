@@ -19,22 +19,26 @@ interface BridgeMapping {
     isManual?: boolean;
 }
 
-// Levenshtein distance based string similarity (0 to 100)
-function calculateSimilarity(str1: string, str2: string): number {
-    if (str1 === str2) return 100;
+function parseSubject(s: string) {
+    const match = s.match(/(.+?) \((.+?)\)$/);
+    return match ? { subj: match[1], tchr: match[2] } : { subj: s, tchr: "" };
+}
 
-    const parse = (s: string) => {
-        const match = s.match(/(.+?) \((.+?)\)$/);
-        return match ? { subj: match[1], tchr: match[2] } : { subj: s, tchr: "" };
+function calculateSimilarity(str1: string, str2: string) {
+    if (str1 === str2) return {
+        total: 100,
+        subjSim: 100,
+        tchrSim: 100,
+        isExactSubjectMatch: true
     };
 
-    const p1 = parse(str1);
-    const p2 = parse(str2);
+    const p1 = parseSubject(str1);
+    const p2 = parseSubject(str2);
 
     const s1 = p1.subj.replace(/\s+/g, '').toLowerCase();
     const s2 = p2.subj.replace(/\s+/g, '').toLowerCase();
 
-    if (s1.length === 0 || s2.length === 0) return 0;
+    if (s1.length === 0 || s2.length === 0) return { total: 0, subjSim: 0, tchrSim: 0, isExactSubjectMatch: false };
 
     const matrix = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
 
@@ -59,14 +63,18 @@ function calculateSimilarity(str1: string, str2: string): number {
     if (p1.tchr && p2.tchr) {
         if (p1.tchr === p2.tchr) tchrSim = 100;
         else {
-            // Partial match for teacher (e.g., if one is a substring of another)
             if (p1.tchr.includes(p2.tchr) || p2.tchr.includes(p1.tchr)) tchrSim = 50;
         }
     } else if (!p1.tchr && !p2.tchr) {
         tchrSim = 100;
     }
 
-    return Math.round(subjSim * 0.9 + tchrSim * 0.1);
+    return {
+        total: Math.round(subjSim * 0.9 + tchrSim * 0.1),
+        subjSim,
+        tchrSim,
+        isExactSubjectMatch: s1 === s2
+    };
 }
 
 interface DatasetBridge {
@@ -183,30 +191,66 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
     const generateAutoMappings = (isManualClick = true) => {
         if (!fromSubjectsQuery.data) return;
 
-        const defaultMappings = fromSubjectsQuery.data.map(subj => {
+        // Subjects to exclude from bridge
+        const excludedSubjects = ["창체", "채플"];
+
+        const filteredFromSubjects = fromSubjectsQuery.data.filter(subj => {
+            const parsed = parseSubject(subj);
+            return !excludedSubjects.some(ex => parsed.subj.includes(ex));
+        });
+
+        const defaultMappings = filteredFromSubjects.map(subj => {
             let matchedTo = "";
-            let maxSimilarity = 0;
+            let bestScore = 0;
+            // Additional fallback score if we only find a high similarity (but no exact match)
+            let maxTotalSimilarity = 0;
 
             if (toSubjectsQuery.data && Array.isArray(toSubjectsQuery.data)) {
-                // Find the best match using the similarity algorithm
-                for (const candidate of toSubjectsQuery.data) {
+                // 1. Filter target subjects array first to drop exclusions
+                const validCandidates = toSubjectsQuery.data.filter(cand => {
+                     const parsed = parseSubject(cand);
+                     return !excludedSubjects.some(ex => parsed.subj.includes(ex));
+                });
+
+                // Find the best match
+                // Priority 1: Exact subject match + Best teacher match
+                // Priority 2: Highest overall similarity score
+                let exactSubjectMatches: { cand: string, score: ReturnType<typeof calculateSimilarity> }[] = [];
+
+                for (const candidate of validCandidates) {
                     const score = calculateSimilarity(subj, candidate);
-                    if (score > maxSimilarity) {
-                        maxSimilarity = score;
-                        matchedTo = candidate;
+                    if (score.isExactSubjectMatch) {
+                        exactSubjectMatches.push({ cand: candidate, score });
+                    }
+                    if (score.total > maxTotalSimilarity) {
+                        maxTotalSimilarity = score.total;
+                        // Fallback best overall match
+                        if (maxTotalSimilarity >= 30 && exactSubjectMatches.length === 0) {
+                            matchedTo = candidate;
+                            bestScore = maxTotalSimilarity;
+                        }
                     }
                 }
-                // Only auto-match if there's at least a weak similarity (e.g. > 30%)
-                if (maxSimilarity < 30) {
+
+                // If exact subject matches exist, pick the one with the highest teacher similarity
+                if (exactSubjectMatches.length > 0) {
+                    // Sort by teacher similarity descending, then by total score
+                    exactSubjectMatches.sort((a, b) => {
+                         if (b.score.tchrSim !== a.score.tchrSim) return b.score.tchrSim - a.score.tchrSim;
+                         return b.score.total - a.score.total;
+                    });
+                    matchedTo = exactSubjectMatches[0].cand;
+                    bestScore = exactSubjectMatches[0].score.total;
+                } else if (maxTotalSimilarity < 30) {
                     matchedTo = "";
-                    maxSimilarity = 0;
+                    bestScore = 0;
                 }
             }
-            return { from: subj, to: matchedTo, similarity: maxSimilarity, isManual: false };
+            return { from: subj, to: matchedTo, similarity: bestScore, isManual: false };
         });
         setMappingFields(defaultMappings);
         if (isManualClick) {
-            toast.success("이름 기반 1:1 매핑 규칙이 생성되었습니다.");
+            toast.success("초기 자동 매핑 규칙이 생성되었습니다.");
         }
     };
 

@@ -608,6 +608,10 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                         </div>
                     </TabsContent>
 
+                    <TabsContent value="dataset" className="flex-1 mt-0">
+                        <DatasetManagerPanel adminPassword={adminPassword} />
+                    </TabsContent>
+
                     <TabsContent value="auto" className="flex-1 mt-0">
                         <Card>
                             <CardHeader>
