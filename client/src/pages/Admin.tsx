@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -2431,7 +2431,8 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
             const params = new URLSearchParams({ unit });
             if (excludeApplied) params.set('exclude', excludeApplied);
             const res = await fetch(`/api/admin/visit-trends?${params}`, {
-                headers: { 'X-Admin-Password': adminPassword }
+                headers: { 'X-Admin-Password': adminPassword },
+                cache: 'no-store'
             });
             if (!res.ok) throw new Error('Failed to fetch trends');
             return res.json();
@@ -2691,6 +2692,209 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------
+// ----------------------------------------------------------------------
+// 6.5. Trash Manager (Soft-deleted.isDeleted=1 assessments list)
+// ----------------------------------------------------------------------
+function TrashManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [selectedAssessments, setSelectedAssessments] = useState<number[]>([]);
+
+    const trashQuery = useQuery({
+        queryKey: ["admin", "assessments", "trash"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/assessments?trash=true", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("휴지통 항목을 불러올 수 없습니다");
+            return res.json();
+        },
+        refetchInterval: 10000,
+    });
+
+    const restoreMutation = useMutation({
+        mutationFn: async (ids: number[]) => {
+            const res = await fetch("/api/admin/assessments", {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({ ids })
+            });
+            if (!res.ok) throw new Error("복원 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("선택한 항목이 복원되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "assessments"] });
+            setSelectedAssessments([]);
+        },
+        onError: () => toast.error("복원에 실패했습니다.")
+    });
+
+    const hardDeleteMutation = useMutation({
+        mutationFn: async (ids: number[]) => {
+            const res = await fetch("/api/admin/assessments", {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({ ids })
+            });
+            if (!res.ok) throw new Error("영구 삭제 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("선택한 항목이 영구 삭제되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "assessments"] });
+            setSelectedAssessments([]);
+        },
+        onError: () => toast.error("항목 삭제에 실패했습니다.")
+    });
+
+    const toggleAll = (checked: boolean) => {
+        if (!trashQuery.data) return;
+        if (checked) {
+            setSelectedAssessments(trashQuery.data.map((a: any) => a.id));
+        } else {
+            setSelectedAssessments([]);
+        }
+    };
+
+    const toggleOne = (id: number, checked: boolean) => {
+        setSelectedAssessments(prev =>
+            checked ? [...prev, id] : prev.filter(x => x !== id)
+        );
+    };
+
+    return (
+        <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
+            {/* Sidebar List */}
+            <div className="w-full md:w-64 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
+                <Button
+                    variant="default"
+                    className="justify-start whitespace-nowrap text-left"
+                >
+                    <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center">
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            수행평가 휴지통
+                        </div>
+                        {trashQuery.data && (
+                            <span className="text-xs text-orange-200 font-bold ml-2">
+                                ({trashQuery.data.length})
+                            </span>
+                        )}
+                    </div>
+                </Button>
+            </div>
+
+            {/* Main Content Area */}
+            <div className="flex-1 p-2 md:p-6 overflow-y-auto">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle>수행평가 휴지통</CardTitle>
+                            <CardDescription>
+                                사용자가 임시 삭제한 항목들입니다. 일정 기한이 지나면 시스템 서버 관리에 의해 자동 영구 삭제됩니다.
+                            </CardDescription>
+                        </div>
+                        {selectedAssessments.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        if (confirm(`${selectedAssessments.length}개의 항목을 다시 목록으로 복원하시겠습니까?`)) {
+                                            restoreMutation.mutate(selectedAssessments);
+                                        }
+                                    }}
+                                >
+                                    <ArchiveRestore className="h-4 w-4 mr-2" />
+                                    선택 복원 ({selectedAssessments.length})
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => {
+                                        if (confirm(`경고: ${selectedAssessments.length}개의 항목을 영구 삭제합니다. 이 작업은 되돌릴 수 없습니다.\n정말 삭제하시겠습니까?`)) {
+                                            hardDeleteMutation.mutate(selectedAssessments);
+                                        }
+                                    }}
+                                >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    영구 삭제 ({selectedAssessments.length})
+                                </Button>
+                            </div>
+                        )}
+                    </CardHeader>
+                    <CardContent>
+                        {trashQuery.isLoading ? (
+                            <div className="py-8 text-center text-gray-500">휴지통을 불러오는 중...</div>
+                        ) : trashQuery.data?.length === 0 ? (
+                            <div className="py-12 flex flex-col items-center justify-center text-gray-400">
+                                <Trash2 className="w-12 h-12 mb-4 text-gray-300" />
+                                <p>휴지통이 비어 있습니다.</p>
+                            </div>
+                        ) : (
+                            <div className="rounded-md border overflow-x-auto">
+                                <Table className="min-w-[800px]">
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="w-[50px] text-center">
+                                                <Checkbox
+                                                    checked={trashQuery.data?.length > 0 && selectedAssessments.length === trashQuery.data.length}
+                                                    onCheckedChange={toggleAll}
+                                                />
+                                            </TableHead>
+                                            <TableHead className="w-[80px] text-center">학년</TableHead>
+                                            <TableHead className="w-[80px] text-center">반</TableHead>
+                                            <TableHead>과목</TableHead>
+                                            <TableHead>제목</TableHead>
+                                            <TableHead className="w-[120px]">마감일</TableHead>
+                                            <TableHead className="w-[120px]">삭제 IP</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {trashQuery.data?.map((assessment: any) => (
+                                            <TableRow key={assessment.id}>
+                                                <TableCell className="text-center">
+                                                    <Checkbox
+                                                        checked={selectedAssessments.includes(assessment.id)}
+                                                        onCheckedChange={(c) => toggleOne(assessment.id, !!c)}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="text-center font-bold text-gray-600">
+                                                    {assessment.grade}학년
+                                                </TableCell>
+                                                <TableCell className="text-center font-bold text-gray-600">
+                                                    {assessment.classNum === 0 ? "전체" : `${assessment.classNum}반`}
+                                                </TableCell>
+                                                <TableCell className="font-medium">
+                                                    <span className={`${assessment.classNum === 0 ? "text-blue-600" : ""}`}>
+                                                        {assessment.subject}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell>{assessment.title}</TableCell>
+                                                <TableCell>{assessment.dueDate}</TableCell>
+                                                <TableCell className="font-mono text-xs text-gray-500">
+                                                    {assessment.lastModifiedIp || "-"}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }
@@ -3562,8 +3766,14 @@ export default function Admin() {
             </div>
 
             <Tabs defaultValue="assessments" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 mb-8 h-auto">
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 mb-8 h-auto">
                     <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
+                    <TabsTrigger
+                        value="trash"
+                        className="data-[state=active]:bg-red-100 data-[state=active]:text-red-800"
+                    >
+                        휴지통
+                    </TabsTrigger>
                     <TabsTrigger value="users">사용자 관리</TabsTrigger>
                     <TabsTrigger value="electives">선택과목</TabsTrigger>
                     <TabsTrigger
@@ -3596,6 +3806,10 @@ export default function Admin() {
                         기타
                     </TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="trash" className="space-y-6">
+                    <TrashManager adminPassword={password} />
+                </TabsContent>
 
                 <TabsContent value="assessments">
                     {/* ... existing assessments content ... */}
@@ -3729,6 +3943,8 @@ export default function Admin() {
                                         studentNumber: number | null;
                                         ips: IPProfile[];
                                         modificationCount: number;
+                                        addCount: number;
+                                        deleteCount: number;
                                         printCount: number;
                                         downloadCount: number;
                                         lastAccess: string | null;
@@ -3747,6 +3963,8 @@ export default function Admin() {
                                         if (existing) {
                                             existing.ips.push(user);
                                             existing.modificationCount += user.modificationCount || 0;
+                                            existing.addCount += user.addCount || 0;
+                                            existing.deleteCount += user.deleteCount || 0;
                                             existing.printCount += user.printCount || 0;
                                             existing.downloadCount += user.downloadCount || 0;
                                             if (!existing.lastAccess || (user.lastAccess && user.lastAccess > existing.lastAccess)) {
@@ -3768,6 +3986,8 @@ export default function Admin() {
                                                 studentNumber: user.studentNumber ?? null,
                                                 ips: [user],
                                                 modificationCount: user.modificationCount || 0,
+                                                addCount: user.addCount || 0,
+                                                deleteCount: user.deleteCount || 0,
                                                 printCount: user.printCount || 0,
                                                 downloadCount: user.downloadCount || 0,
                                                 lastAccess: user.lastAccess,
@@ -3853,9 +4073,15 @@ export default function Admin() {
                                                 ) : <span className="text-gray-300">-</span>}
                                             </TableCell>
                                             <TableCell>
-                                                {user.modificationCount > 0
-                                                    ? <Badge variant="secondary" className="font-mono text-xs">{user.modificationCount}회</Badge>
-                                                    : <span className="text-gray-300">-</span>}
+                                                <div className="flex flex-col gap-1 items-start">
+                                                    {(user.modificationCount > 0 || user.addCount! > 0 || user.deleteCount! > 0) ? (
+                                                        <>
+                                                            {user.addCount! > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-blue-100 text-blue-800 px-1 py-0 h-4">추가 {user.addCount}회</Badge>}
+                                                            {user.deleteCount! > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-red-100 text-red-800 px-1 py-0 h-4">삭제 {user.deleteCount}회</Badge>}
+                                                            {(user.addCount === 0 && user.deleteCount === 0) && <Badge variant="secondary" className="font-mono text-xs">{user.modificationCount}회</Badge>}
+                                                        </>
+                                                    ) : <span className="text-gray-300">-</span>}
+                                                </div>
                                             </TableCell>
                                             <TableCell>
                                                 {user.printCount && user.printCount > 0
@@ -3953,9 +4179,15 @@ export default function Admin() {
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
-                                                        {group.modificationCount > 0 ? (
-                                                            <Badge variant="secondary" className="font-mono">{group.modificationCount}회</Badge>
-                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                        <div className="flex flex-col gap-1 items-start">
+                                                            {(group.modificationCount > 0 || group.addCount > 0 || group.deleteCount > 0) ? (
+                                                                <>
+                                                                    {group.addCount > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-blue-100 text-blue-800 px-1 py-0 h-4">추가 {group.addCount}회</Badge>}
+                                                                    {group.deleteCount > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-red-100 text-red-800 px-1 py-0 h-4">삭제 {group.deleteCount}회</Badge>}
+                                                                    {(group.addCount === 0 && group.deleteCount === 0) && <Badge variant="secondary" className="font-mono text-xs">{group.modificationCount}회</Badge>}
+                                                                </>
+                                                            ) : <span className="text-gray-400 text-xs">-</span>}
+                                                        </div>
                                                     </TableCell>
                                                     <TableCell>
                                                         {group.printCount > 0 ? (
@@ -4110,9 +4342,15 @@ export default function Admin() {
                                                                                 ) : <span className="text-gray-300 text-xs">-</span>}
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                {user.modificationCount > 0 ? (
-                                                                                    <Badge variant="secondary" className="font-mono">{user.modificationCount}회</Badge>
-                                                                                ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                                <div className="flex flex-col gap-1 items-start">
+                                                                                    {(user.modificationCount > 0 || user.addCount! > 0 || user.deleteCount! > 0) ? (
+                                                                                        <>
+                                                                                            {user.addCount! > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-blue-100 text-blue-800 px-1 py-0 h-4">추가 {user.addCount}회</Badge>}
+                                                                                            {user.deleteCount! > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-red-100 text-red-800 px-1 py-0 h-4">삭제 {user.deleteCount}회</Badge>}
+                                                                                            {(user.addCount === 0 && user.deleteCount === 0) && <Badge variant="secondary" className="font-mono text-xs">{user.modificationCount}회</Badge>}
+                                                                                        </>
+                                                                                    ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                                </div>
                                                                             </TableCell>
                                                                             <TableCell>
                                                                                 {user.printCount && user.printCount > 0 ? (

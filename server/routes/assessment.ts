@@ -15,7 +15,7 @@ router.get("/", async (req, res) => {
     try {
         const [results] = await db.execute(sql`
             SELECT * FROM performanceAssessments 
-            WHERE grade = ${grade} AND classNum = ${classNum} 
+            WHERE grade = ${grade} AND (classNum = ${classNum} OR classNum = 0) AND isDeleted = 0
             ORDER BY dueDate ASC, id DESC
         `);
         res.json(results);
@@ -87,7 +87,7 @@ router.delete("/", async (req, res) => {
     if (!id) return res.status(400).send("Missing ID");
 
     try {
-        await db.execute(sql`DELETE FROM performanceAssessments WHERE id = ${id}`);
+        await db.execute(sql`UPDATE performanceAssessments SET isDeleted = 1 WHERE id = ${id}`);
         res.json({ success: true });
 
         // Log access

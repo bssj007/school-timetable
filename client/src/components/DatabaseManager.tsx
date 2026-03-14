@@ -11,6 +11,7 @@ import { Loader2, Play, Database, RefreshCw, Trash2, Edit, Save, Settings, PlayC
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { Progress } from "@/components/ui/progress";
 
 interface DatabaseManagerProps {
     adminPassword: string;
@@ -23,6 +24,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
     const [results, setResults] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [dbSizeBytes, setDbSizeBytes] = useState<number>(0);
 
     // Filter tables
     const [showOthers, setShowOthers] = useState(false);
@@ -135,6 +137,9 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
             const data = await res.json();
             if (data.tables) {
                 setTables(data.tables);
+            }
+            if (data.dbSizeBytes !== undefined) {
+                setDbSizeBytes(data.dbSizeBytes);
             }
         } catch (e) {
             if (!background) toast.error("테이블 목록을 불러오지 못했습니다.");
@@ -364,8 +369,24 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
         }
     };
 
+    const dbSizeMB = (dbSizeBytes / (1024 * 1024)).toFixed(2);
+    // Assuming 500MB as a common free-tier limit for D1 / SQLite visual reference
+    const maxDbSizeMB = 500; 
+    const dbSizePercentage = Math.min((parseFloat(dbSizeMB) / maxDbSizeMB) * 100, 100);
+
     return (
         <div className="h-[calc(100vh-200px)] min-h-[600px] md:h-[700px] flex flex-col">
+            {/* DB Usage Tracker */}
+            <div className="mb-4">
+                <div className="flex justify-between items-end mb-1">
+                    <span className="text-sm font-semibold text-gray-700">DB 저장 공간</span>
+                    <span className="text-xs text-gray-500 font-mono">
+                        {dbSizeMB} MB / {maxDbSizeMB} MB ({dbSizePercentage.toFixed(1)}%)
+                    </span>
+                </div>
+                <Progress value={dbSizePercentage} className="h-2" />
+            </div>
+
             {/* Main Content Area with Tabs */}
             <div className="flex-1 min-h-0">
                 <Tabs defaultValue="manual" className="h-full flex flex-col">

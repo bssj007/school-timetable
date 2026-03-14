@@ -254,11 +254,23 @@ export const onRequest = async (context: any) => {
         if (action === "list_tables") {
             // SQLite specific query to list tables (and views)
             // We select ALL tables including internal ones (which might be useful for debugging)
-            const { results } = await env.DB.prepare(
-                "SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') ORDER BY name;"
-            ).all();
-            const tables = results.map((r: any) => r.name);
-            return new Response(JSON.stringify({ tables }), { headers: { "Content-Type": "application/json" } });
+            const [tablesResult, pageCountResult, pageSizeResult] = await Promise.all([
+                env.DB.prepare(
+                    "SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') ORDER BY name;"
+                ).all(),
+                env.DB.prepare("PRAGMA page_count").first(),
+                env.DB.prepare("PRAGMA page_size").first()
+            ]);
+            
+            const tables = tablesResult.results.map((r: any) => r.name);
+            
+            // Calculate DB Size in bytes
+            let dbSizeBytes = 0;
+            if (pageCountResult && pageSizeResult) {
+                dbSizeBytes = (pageCountResult.page_count as number) * (pageSizeResult.page_size as number);
+            }
+
+            return new Response(JSON.stringify({ tables, dbSizeBytes }), { headers: { "Content-Type": "application/json" } });
         }
 
         if (action === "query") {

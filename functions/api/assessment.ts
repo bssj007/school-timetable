@@ -21,15 +21,11 @@ export const onRequest = async (context: any) => {
             const grade = url.searchParams.get('grade') || '1';
             const classNum = url.searchParams.get('classNum') || '1';
 
+            let query = "SELECT * FROM performance_assessments WHERE grade = ? AND (classNum = ? OR classNum = 0) AND isDeleted = 0";
+            const params: any[] = [grade, classNum];
+            query += " ORDER BY dueDate ASC, id DESC";
+
             try {
-                let query = "SELECT * FROM performance_assessments WHERE grade = ? AND (classNum = ? OR classNum = 0)";
-                const params: any[] = [grade, classNum];
-
-                // hide_past_assessments logic moved to frontend to preserve timetable view
-
-
-                query += " ORDER BY dueDate ASC, id DESC";
-
                 const { results } = await env.DB.prepare(query).bind(...params).all();
 
                 return new Response(JSON.stringify(results), {
@@ -50,14 +46,29 @@ export const onRequest = async (context: any) => {
                           classTime INTEGER,
                           isDone INTEGER DEFAULT 0,
                           createdAt TEXT DEFAULT (datetime('now')),
-                          lastModifiedIp TEXT
+                          lastModifiedIp TEXT,
+                          isDeleted INTEGER DEFAULT 0
                         )
                     `).run();
                     return new Response(JSON.stringify([]), {
                         headers: { 'Content-Type': 'application/json' }
                     });
                 }
-                throw e;
+                
+                // Column missing
+                if (e.message && e.message.includes("no such column") && e.message.includes("isDeleted")) {
+                    console.log("[Assessment API] 'isDeleted' column missing in GET. Attempting to add it.");
+                    await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run();
+                    
+                    // Retry original query
+                    const { results } = await env.DB.prepare(query).bind(...params).all();
+
+                    return new Response(JSON.stringify(results), {
+                         headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+                
+                return new Response(JSON.stringify({ error: `Failed query: ${e.message}` }), { status: 500 });
             }
         }
 
@@ -131,7 +142,8 @@ export const onRequest = async (context: any) => {
                           classTime INTEGER,
                           isDone INTEGER DEFAULT 0,
                           createdAt TEXT DEFAULT (datetime('now')),
-                          lastModifiedIp TEXT
+                          lastModifiedIp TEXT,
+                          isDeleted INTEGER DEFAULT 0
                         )
                     `).run();
 
@@ -165,9 +177,23 @@ export const onRequest = async (context: any) => {
             const id = url.searchParams.get('id');
             if (!id) return new Response('Missing ID', { status: 400 });
 
-            await env.DB.prepare(
-                "DELETE FROM performance_assessments WHERE id = ?"
-            ).bind(id).run();
+            try {
+                await env.DB.prepare(
+                    "UPDATE performance_assessments SET isDeleted = 1 WHERE id = ?"
+                ).bind(id).run();
+            } catch (err: any) {
+                if (err.message && err.message.includes("no such column") && err.message.includes("isDeleted")) {
+                    console.log("[Assessment API] 'isDeleted' column missing in DELETE. Attempting to add it.");
+                    await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run();
+                    
+                    // Retry Soft Delete
+                    await env.DB.prepare(
+                        "UPDATE performance_assessments SET isDeleted = 1 WHERE id = ?"
+                    ).bind(id).run();
+                } else {
+                    throw err;
+                }
+            }
 
             return new Response(JSON.stringify({ success: true }), {
                 headers: { 'Content-Type': 'application/json' }
