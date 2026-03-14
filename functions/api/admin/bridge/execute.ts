@@ -176,108 +176,93 @@ export const onRequest = async (context: any) => {
         }
 
         // --- 2. Migrate Student Profiles ---
-        // Copy profiles from fromDataset → toDataset (with subject name remapping)
+        // student_profiles is a GLOBAL table (1 row per student) referenced by FK from ip_profiles/cookie_profiles.
+        // We must NOT delete rows. Instead, UPDATE electives in-place, translating subject names via BRIDGE mapping.
+        // The dataset column is updated to toDataset to reflect the migration.
         if (migrateStudentProfiles) {
-            // Select profiles only from the SOURCE dataset for this grade
+            // Fetch all profiles for this grade (profile is global, not per-dataset)
             const { results: profiles } = await env.DB.prepare(
-                "SELECT * FROM student_profiles WHERE grade = ? AND dataset = ?"
-            ).bind(targetGrade, fromDataset).all();
-
-            // Delete existing profiles in the TARGET dataset for this grade first
-            await env.DB.prepare(
-                "DELETE FROM student_profiles WHERE grade = ? AND dataset = ?"
-            ).bind(targetGrade, toDataset).run();
+                "SELECT * FROM student_profiles WHERE grade = ?"
+            ).bind(targetGrade).all();
 
             const batchStatements = [];
             for (const profile of profiles) {
-                let newElectivesJson = profile.electives;
+                if (!profile.electives) continue;
+                try {
+                    const electivesObj = JSON.parse(profile.electives);
+                    let changed = false;
+                    const newElectives: string[] = [];
 
-                if (profile.electives) {
-                    try {
-                        const electivesObj = JSON.parse(profile.electives);
-                        let changed = false;
-                        const newElectives: string[] = [];
-
-                        if (Array.isArray(electivesObj)) {
-                            for (const subj of electivesObj) {
-                                // Try full key first, then subject-only key
-                                const rawMapped =
-                                    mappingDict[subj] !== undefined ? mappingDict[subj] :
-                                    subjectOnlyMappingDict[subj] !== undefined ? subjectOnlyMappingDict[subj] :
-                                    subj;
-                                if (rawMapped === "_none_") {
-                                    changed = true; // Subject dropped
-                                } else {
-                                    const mapped = rawMapped.replace(/ \([^)]+\)$/, '');
-                                    newElectives.push(mapped);
-                                    if (mapped !== subj) changed = true;
-                                }
-                            }
-                            if (changed) {
-                                newElectivesJson = JSON.stringify(newElectives);
-                            }
-                        } else if (typeof electivesObj === 'object') {
-                            // Format: { "A": { subject, teacher, fullSubjectName }, "B": {...}, ... }
-                            Object.keys(electivesObj).forEach(groupKey => {
-                                const entry = electivesObj[groupKey];
-                                if (!entry) return;
-
-                                if (typeof entry === 'object' && entry.subject) {
-                                    // 현재 표준 형식: { subject, teacher, fullSubjectName }
-                                    const oldSubject = entry.subject;
-                                    const oldKey = entry.teacher ? `${oldSubject} (${entry.teacher})` : oldSubject;
-                                    // Try: full "subject (teacher)" key → plain subject key → subject-only mapping → no-op
-                                    const mappedVal: string =
-                                        mappingDict[oldKey] !== undefined ? mappingDict[oldKey] :
-                                        mappingDict[oldSubject] !== undefined ? mappingDict[oldSubject] :
-                                        subjectOnlyMappingDict[oldSubject] !== undefined ? subjectOnlyMappingDict[oldSubject] :
-                                        oldSubject;
-
-                                    if (mappedVal === "_none_") {
-                                        delete electivesObj[groupKey];
-                                        changed = true;
-                                    } else if (mappedVal !== oldSubject && mappedVal !== oldKey) {
-                                        const mappedSubject = mappedVal.replace(/ \([^)]+\)$/, '');
-                                        const mappedTeacherMatch = mappedVal.match(/ \(([^)]+)\)$/);
-                                        const mappedTeacher = mappedTeacherMatch ? mappedTeacherMatch[1] : entry.teacher;
-                                        electivesObj[groupKey] = { ...entry, subject: mappedSubject, teacher: mappedTeacher, fullSubjectName: undefined };
-                                        changed = true;
-                                    }
-                                } else if (typeof entry === 'string') {
-                                    // 레거시 문자열 형식
-                                    const rawMapped =
-                                        mappingDict[entry] !== undefined ? mappingDict[entry] :
-                                        subjectOnlyMappingDict[entry] !== undefined ? subjectOnlyMappingDict[entry] :
-                                        entry;
-                                    if (rawMapped === "_none_") {
-                                        delete electivesObj[groupKey];
-                                        changed = true;
-                                    } else {
-                                        const mapped = rawMapped.replace(/ \([^)]+\)$/, '');
-                                        if (mapped !== entry) {
-                                            electivesObj[groupKey] = mapped;
-                                            changed = true;
-                                        }
-                                    }
-                                }
-                            });
-                            if (changed) {
-                                newElectivesJson = JSON.stringify(electivesObj);
+                    if (Array.isArray(electivesObj)) {
+                        for (const subj of electivesObj) {
+                            const rawMapped =
+                                mappingDict[subj] !== undefined ? mappingDict[subj] :
+                                subjectOnlyMappingDict[subj] !== undefined ? subjectOnlyMappingDict[subj] :
+                                subj;
+                            if (rawMapped === "_none_") {
+                                changed = true; // Subject dropped
+                            } else {
+                                const mapped = rawMapped.replace(/ \([^)]+\)$/, '');
+                                newElectives.push(mapped);
+                                if (mapped !== subj) changed = true;
                             }
                         }
-                    } catch (e) {
-                        console.error("Failed to parse/map electives for profile", profile.id, e);
-                    }
-                }
+                        if (changed) {
+                            batchStatements.push(env.DB.prepare(
+                                "UPDATE student_profiles SET electives = ?, dataset = ?, updatedAt = ? WHERE id = ?"
+                            ).bind(JSON.stringify(newElectives), toDataset, new Date().toISOString(), profile.id));
+                        }
+                    } else if (typeof electivesObj === 'object') {
+                        // Format: { "A": { subject, teacher, fullSubjectName }, "B": {...}, ... }
+                        Object.keys(electivesObj).forEach(groupKey => {
+                            const entry = electivesObj[groupKey];
+                            if (!entry) return;
 
-                // INSERT the (mapped) profile into toDataset
-                batchStatements.push(env.DB.prepare(
-                    "INSERT OR REPLACE INTO student_profiles (grade, classNum, studentNumber, electives, instructionDismissed, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)"
-                ).bind(
-                    profile.grade, profile.classNum, profile.studentNumber,
-                    newElectivesJson, profile.instructionDismissed ?? 0,
-                    toDataset, new Date().toISOString()
-                ));
+                            if (typeof entry === 'object' && entry.subject) {
+                                const oldSubject = entry.subject;
+                                const oldKey = entry.teacher ? `${oldSubject} (${entry.teacher})` : oldSubject;
+                                const mappedVal: string =
+                                    mappingDict[oldKey] !== undefined ? mappingDict[oldKey] :
+                                    mappingDict[oldSubject] !== undefined ? mappingDict[oldSubject] :
+                                    subjectOnlyMappingDict[oldSubject] !== undefined ? subjectOnlyMappingDict[oldSubject] :
+                                    oldSubject;
+
+                                if (mappedVal === "_none_") {
+                                    delete electivesObj[groupKey];
+                                    changed = true;
+                                } else if (mappedVal !== oldSubject && mappedVal !== oldKey) {
+                                    const mappedSubject = mappedVal.replace(/ \([^)]+\)$/, '');
+                                    const mappedTeacherMatch = mappedVal.match(/ \(([^)]+)\)$/);
+                                    const mappedTeacher = mappedTeacherMatch ? mappedTeacherMatch[1] : entry.teacher;
+                                    electivesObj[groupKey] = { ...entry, subject: mappedSubject, teacher: mappedTeacher, fullSubjectName: undefined };
+                                    changed = true;
+                                }
+                            } else if (typeof entry === 'string') {
+                                const rawMapped =
+                                    mappingDict[entry] !== undefined ? mappingDict[entry] :
+                                    subjectOnlyMappingDict[entry] !== undefined ? subjectOnlyMappingDict[entry] :
+                                    entry;
+                                if (rawMapped === "_none_") {
+                                    delete electivesObj[groupKey];
+                                    changed = true;
+                                } else {
+                                    const mapped = rawMapped.replace(/ \([^)]+\)$/, '');
+                                    if (mapped !== entry) {
+                                        electivesObj[groupKey] = mapped;
+                                        changed = true;
+                                    }
+                                }
+                            }
+                        });
+                        if (changed) {
+                            batchStatements.push(env.DB.prepare(
+                                "UPDATE student_profiles SET electives = ?, dataset = ?, updatedAt = ? WHERE id = ?"
+                            ).bind(JSON.stringify(electivesObj), toDataset, new Date().toISOString(), profile.id));
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to parse/map electives for profile", profile.id, e);
+                }
             }
 
             if (batchStatements.length > 0) {
@@ -289,6 +274,7 @@ export const onRequest = async (context: any) => {
                 totalStudentProfilesUpdated = batchStatements.length;
             }
         }
+
 
 
         // --- 3. Migrate Assessments ---

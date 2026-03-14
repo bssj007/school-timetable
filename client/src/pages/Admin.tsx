@@ -51,6 +51,7 @@ function ElectiveManager({ password }: { password: string }) {
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showEasyABC, setShowEasyABC] = useState(false);
+    const [draftCodes, setDraftCodes] = useState<Record<string, string>>({}); // slot key → group code draft
 
     const WEEKDAY_LABELS = ['월', '화', '수', '목', '금'];
     const PERIOD_COUNT = 7;
@@ -717,29 +718,33 @@ function ElectiveManager({ password }: { password: string }) {
                     </Table >
                 </div >
 
-                <Dialog open={showEasyABC} onOpenChange={setShowEasyABC}>
-                    <DialogContent className="max-w-[95vw] w-full max-h-[90vh] flex flex-col p-4 md:p-6 bg-slate-50">
-                        <DialogHeader>
+
+                <Dialog open={showEasyABC} onOpenChange={(open) => {
+                    if (open) setDraftCodes({}); // Reset draft when opening
+                    setShowEasyABC(open);
+                }}>
+                    <DialogContent className="max-w-[98vw] w-full h-[85vh] flex flex-col p-4 md:p-6 bg-slate-50">
+                        <DialogHeader className="shrink-0">
                             <DialogTitle className="flex items-center gap-2 mb-1">
                                 <Wand2 className="w-5 h-5 text-purple-600" />
                                 Easy ABC 분반 설정 — {selectedGrade}학년
                             </DialogTitle>
                             <DialogDescription>
-                                교시 칸에 그룹(A, B, C...)을 입력하면 해당 시간대의 선택과목에 자동으로 반영되면서 <strong>이동수업(O)</strong>으로 자동 체크됩니다.
-                                완료 후 페이지 상단 <strong>[확인 및 저장하기]</strong>.
+                                각 교시 칸에서 그룹을 선택하면 해당 시간대의 <strong>모든 선택과목</strong>에 분반 기호가 자동 지정됩니다.
+                                <strong className="text-orange-700"> [실행]</strong>을 눌러 변경 대기사항에 반영한 뒤, 페이지 상단 <strong>[확인 및 저장하기]</strong>로 최종 저장하세요.
                             </DialogDescription>
                         </DialogHeader>
 
                         {timetableAllQuery.isLoading ? (
                             <div className="flex-1 flex items-center justify-center text-slate-400">시간표 로딩 중...</div>
                         ) : (
-                        <div className="flex-1 overflow-auto rounded-md border border-slate-300">
-                            <table className="w-full text-sm border-collapse">
+                        <div className="flex-1 overflow-auto rounded-md border border-slate-300 min-h-0">
+                            <table className="w-full text-sm border-collapse min-w-[700px]">
                                 <thead className="sticky top-0 z-10">
                                     <tr className="bg-slate-100 text-slate-600">
-                                        <th className="border border-slate-300 px-4 py-2.5 font-bold text-center w-16">교시</th>
+                                        <th className="border border-slate-300 px-3 py-3 font-bold text-center w-14 text-sm">교시</th>
                                         {WEEKDAY_LABELS.map(d => (
-                                            <th key={d} className="border border-slate-300 px-4 py-2.5 font-bold text-center">{d}</th>
+                                            <th key={d} className="border border-slate-300 px-3 py-3 font-bold text-center text-sm">{d}</th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -748,48 +753,50 @@ function ElectiveManager({ password }: { password: string }) {
                                         const period = pi + 1;
                                         return (
                                             <tr key={period}>
-                                                <td className="border border-slate-300 px-3 py-3 text-center font-bold text-slate-500 bg-slate-50">{period}</td>
+                                                <td className="border border-slate-300 px-3 py-4 text-center font-bold text-slate-500 bg-slate-50 text-base">{period}</td>
                                                 {WEEKDAY_LABELS.map((_, wdi) => {
                                                     const key = `${wdi}-${period}`;
                                                     const cellSubjects = slotSubjectsMap[key] || [];
-                                                    // Derive current group: if all matching subjects have the same code use it, else show mixed
-                                                    const codes = cellSubjects.map(e => subjects[e.idx]?.classCode || "");
-                                                    const uniqueCodes = Array.from(new Set(codes.filter(Boolean)));
-                                                    const displayCode = uniqueCodes.length === 1 ? uniqueCodes[0] : (uniqueCodes.length > 1 ? "혼합" : "");
                                                     const hasSubjects = cellSubjects.length > 0;
+                                                    const draftVal = draftCodes[key] ?? "";
+
+                                                    const GROUP_OPTIONS = [
+                                                        { value: "", label: "없음" },
+                                                        { value: "A", label: "A 지정" },
+                                                        { value: "B", label: "B 지정" },
+                                                        { value: "C", label: "C 지정" },
+                                                        { value: "D", label: "D 지정" },
+                                                        { value: "E", label: "E 지정" },
+                                                        { value: "F", label: "F 지정" },
+                                                    ];
 
                                                     return (
-                                                        <td key={wdi} className={`border border-slate-300 p-2 text-center align-top ${
+                                                        <td key={wdi} className={`border border-slate-300 p-3 text-center align-top ${
                                                             hasSubjects ? "bg-white" : "bg-slate-50/50"
                                                         }`}>
                                                             {hasSubjects ? (
-                                                                <div className="flex flex-col items-center gap-1.5">
-                                                                    <Input
-                                                                        value={displayCode === "혼합" ? "" : displayCode}
+                                                                <div className="flex flex-col items-center gap-2">
+                                                                    <select
+                                                                        value={draftVal}
                                                                         onChange={(e) => {
-                                                                            const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 3);
-                                                                            // Apply to all subjects in this slot
-                                                                            const newSubjects = [...subjects];
-                                                                            cellSubjects.forEach(({ idx }) => {
-                                                                                newSubjects[idx] = {
-                                                                                    ...newSubjects[idx],
-                                                                                    classCode: val,
-                                                                                    isMovingClass: val ? true : newSubjects[idx].isMovingClass
-                                                                                };
-                                                                            });
-                                                                            setSubjects(newSubjects);
+                                                                            setDraftCodes(prev => ({ ...prev, [key]: e.target.value }));
                                                                         }}
-                                                                        placeholder="없음"
-                                                                        className={`h-9 w-16 font-bold text-center text-blue-700 border-slate-300 focus-visible:ring-blue-400 mx-auto uppercase text-base placeholder:text-slate-300 placeholder:font-normal placeholder:text-sm ${
-                                                                            displayCode && displayCode !== "혼합" ? "border-blue-300 bg-blue-50/60" : ""
+                                                                        className={`h-10 w-full min-w-[90px] font-bold text-center border rounded-md cursor-pointer text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                                                                            draftVal
+                                                                                ? "border-blue-400 bg-blue-50 text-blue-700"
+                                                                                : "border-slate-300 bg-white text-slate-400"
                                                                         }`}
-                                                                    />
-                                                                    <div className="text-[10px] text-slate-400 leading-tight max-w-[80px] text-center">
+                                                                    >
+                                                                        {GROUP_OPTIONS.map(opt => (
+                                                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <div className="text-[10px] text-slate-400 leading-tight text-center px-1">
                                                                         {cellSubjects.map(e => e.subjectName).join(", ")}
                                                                     </div>
                                                                 </div>
                                                             ) : (
-                                                                <span className="text-slate-300 text-xs">해당없음</span>
+                                                                <span className="text-slate-200 text-xs">—</span>
                                                             )}
                                                         </td>
                                                     );
@@ -802,14 +809,37 @@ function ElectiveManager({ password }: { password: string }) {
                         </div>
                         )}
 
-                        <DialogFooter className="mt-3 border-t pt-3">
-                            <Button className="w-full sm:w-auto" onClick={() => setShowEasyABC(false)}>
+                        <DialogFooter className="mt-3 border-t pt-3 shrink-0 flex flex-row gap-2 justify-end">
+                            <Button variant="outline" onClick={() => setShowEasyABC(false)}>
+                                취소
+                            </Button>
+                            <Button
+                                className="bg-purple-600 hover:bg-purple-700 text-white"
+                                onClick={() => {
+                                    // Apply draftCodes to subjects state (pending changes, not yet saved)
+                                    const newSubjects = [...subjects];
+                                    Object.entries(draftCodes).forEach(([slotKey, code]) => {
+                                        if (code === "") return; // "없음" → skip (don't overwrite)
+                                        const cellSubjects = slotSubjectsMap[slotKey] || [];
+                                        cellSubjects.forEach(({ idx }) => {
+                                            newSubjects[idx] = {
+                                                ...newSubjects[idx],
+                                                classCode: code,
+                                                isMovingClass: true,
+                                            };
+                                        });
+                                    });
+                                    setSubjects(newSubjects);
+                                    setShowEasyABC(false);
+                                }}
+                            >
                                 <Check className="w-4 h-4 mr-2" />
-                                닫기 (메인 화면에서 확인 및 저장)
+                                실행 (변경 대기사항에 반영)
                             </Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
+
                     </div> {/* End Main Content */}
                 </div> {/* End flex row */}
         </CardContent>
