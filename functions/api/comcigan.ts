@@ -263,20 +263,23 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 const overrideConfig = ipOverridesFound[clientIp];
                 console.log(`[Comcigan Debug] Applying IP Override for ${clientIp}:`, overrideConfig);
                 
+                const originalGrade1 = datasetSelectedGrade1;
+                const originalDefault = datasetSelected;
+
                 // If override config provides specifically Grade 1, override datasetSelectedGrade1.
                 // Otherwise fallback to default override if provided
                 if (overrideConfig.grade1 !== undefined && overrideConfig.grade1 !== null) {
                     datasetSelectedGrade1 = overrideConfig.grade1;
-                    if (grade === 1) ipOverrideApplied = "1학년";
+                    if (grade === 1 && overrideConfig.grade1 !== originalGrade1) ipOverrideApplied = "1학년";
                 } else if (overrideConfig.default !== undefined && overrideConfig.default !== null) {
                     datasetSelectedGrade1 = overrideConfig.default;
-                    if (grade === 1) ipOverrideApplied = "1학년";
+                    if (grade === 1 && overrideConfig.default !== originalGrade1) ipOverrideApplied = "1학년";
                 }
                 
                 // Override Default Grade 2/3
                 if (overrideConfig.default !== undefined && overrideConfig.default !== null) {
                     datasetSelected = overrideConfig.default;
-                    if (grade !== 1) ipOverrideApplied = "2/3학년";
+                    if (grade !== 1 && overrideConfig.default !== originalDefault) ipOverrideApplied = "2/3학년";
                 }
             }
 

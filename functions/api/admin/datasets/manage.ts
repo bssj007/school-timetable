@@ -21,18 +21,18 @@ export const onRequest = async (context: any) => {
                 // Get datasets from elective_subjects, student_profiles, and performance_assessments
                 // Also overrides from system_settings JSON keys
                 
-                // 1. Elective Subjects
+                // 1. Elective Config (Elective Subjects)
                 let esDatasets: string[] = [];
                 try {
-                    const esQuery = await env.DB.prepare("SELECT DISTINCT datasetId FROM elective_subjects WHERE datasetId IS NOT NULL").all();
-                    esDatasets = (esQuery.results || []).map((r: any) => r.datasetId);
+                    const esQuery = await env.DB.prepare("SELECT DISTINCT dataset FROM elective_config WHERE dataset IS NOT NULL").all();
+                    esDatasets = (esQuery.results || []).map((r: any) => r.dataset);
                 } catch (e) {}
 
                 // 2. Student Profiles
                 let spDatasets: string[] = [];
                 try {
-                    const spQuery = await env.DB.prepare("SELECT DISTINCT datasetId FROM student_profiles WHERE datasetId IS NOT NULL").all();
-                    spDatasets = (spQuery.results || []).map((r: any) => r.datasetId);
+                    const spQuery = await env.DB.prepare("SELECT DISTINCT dataset FROM student_profiles WHERE dataset IS NOT NULL").all();
+                    spDatasets = (spQuery.results || []).map((r: any) => r.dataset);
                 } catch (e) {}
 
                 // 3. Performance Assessments
@@ -55,12 +55,12 @@ export const onRequest = async (context: any) => {
                         // If it's the new format, keys like '_auto_', 'MANUAL_PLAN' etc will be here.
                         // If it's old format, keys are '2', '3'. So if they are in the root, it means the old format is mixed.
                         if (parsed['2'] || parsed['3']) {
-                            ovDatasets.push('_auto_'); // Assume _auto_ has data
+                            // ovDatasets.push('_auto_'); // Kept out as user requested to hide _auto_
                         }
                     }
                 } catch (e) {}
 
-                const allDatasets = Array.from(new Set([...esDatasets, ...spDatasets, ...paDatasets, ...ovDatasets, "_auto_", ""]));
+                const allDatasets = Array.from(new Set([...esDatasets, ...spDatasets, ...paDatasets, ...ovDatasets, ""])).filter(d => d !== '_auto_');
                 
                 return new Response(JSON.stringify({ datasets: allDatasets }), {
                     headers: { 'Content-Type': 'application/json' }
@@ -79,9 +79,9 @@ export const onRequest = async (context: any) => {
                 let groupOverrides: Record<string, number> = { '2': 0, '3': 0 };
                 let assessments: Record<string, number> = { '1': 0, '2': 0, '3': 0 };
 
-                // 1. Elective Subjects Count
+                // 1. Elective Config Count
                 try {
-                    const esQuery = await env.DB.prepare("SELECT grade, COUNT(*) as count FROM elective_subjects WHERE datasetId = ? GROUP BY grade").bind(dataset).all();
+                    const esQuery = await env.DB.prepare("SELECT grade, COUNT(*) as count FROM elective_config WHERE dataset = ? GROUP BY grade").bind(dataset).all();
                     (esQuery.results || []).forEach((r: any) => {
                         if (r.grade) electiveConfigs[r.grade.toString()] = r.count;
                     });
@@ -89,7 +89,7 @@ export const onRequest = async (context: any) => {
 
                 // 2. Student Profiles Count
                 try {
-                    const spQuery = await env.DB.prepare("SELECT grade, COUNT(*) as count FROM student_profiles WHERE datasetId = ? GROUP BY grade").bind(dataset).all();
+                    const spQuery = await env.DB.prepare("SELECT grade, COUNT(*) as count FROM student_profiles WHERE dataset = ? GROUP BY grade").bind(dataset).all();
                     (spQuery.results || []).forEach((r: any) => {
                         if (r.grade) studentProfiles[r.grade.toString()] = r.count;
                     });
@@ -158,14 +158,14 @@ export const onRequest = async (context: any) => {
             // Delete Elective Subjects
             if (categories.electiveConfigs && categories.electiveConfigs.length > 0) {
                 const grades = categories.electiveConfigs;
-                const res = await env.DB.prepare(`DELETE FROM elective_subjects WHERE datasetId = ? AND grade ${buildInClause(grades)}`).bind(dataset).run();
+                const res = await env.DB.prepare(`DELETE FROM elective_config WHERE dataset = ? AND grade ${buildInClause(grades)}`).bind(dataset).run();
                 results.electiveConfigs = res.success;
             }
 
             // Delete Student Profiles
             if (categories.studentProfiles && categories.studentProfiles.length > 0) {
                 const grades = categories.studentProfiles;
-                const res = await env.DB.prepare(`DELETE FROM student_profiles WHERE datasetId = ? AND grade ${buildInClause(grades)}`).bind(dataset).run();
+                const res = await env.DB.prepare(`DELETE FROM student_profiles WHERE dataset = ? AND grade ${buildInClause(grades)}`).bind(dataset).run();
                 results.studentProfiles = res.success;
             }
 

@@ -161,7 +161,7 @@ export default function DatasetManagerPanel({ adminPassword }: DatasetManagerPan
     };
 
     return (
-        <Card className="w-full h-full max-w-4xl mx-auto border shadow-sm">
+        <Card className="w-full h-full border shadow-sm">
             <CardHeader className="border-b bg-gray-50/50">
                 <CardTitle>데이터셋 관리 (Dataset Management)</CardTitle>
                 <CardDescription>
@@ -173,7 +173,7 @@ export default function DatasetManagerPanel({ adminPassword }: DatasetManagerPan
                 <div className="space-y-3">
                     <label className="text-sm font-semibold flex flex-col gap-1">
                         관리할 데이터셋 선택
-                        <span className="text-xs font-normal text-gray-500">주의: "_auto_" 및 "" (수동) 데이터셋도 조작 가능합니다.</span>
+                        <span className="text-xs font-normal text-gray-500">주의: "" (수동 기본값) 데이터셋도 조작 가능합니다.</span>
                     </label>
                     <Select value={selectedDataset ?? undefined} onValueChange={setSelectedDataset}>
                         <SelectTrigger className="w-full md:w-[300px]">
