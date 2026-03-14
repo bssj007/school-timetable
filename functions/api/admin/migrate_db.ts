@@ -52,21 +52,66 @@ export const onRequest = async (context: any) => {
             // Ensure dataset column exists (safe ALTER — ignore if already exists)
             try {
                 await env.DB.prepare("ALTER TABLE student_profiles ADD COLUMN dataset TEXT DEFAULT ''").run();
-            } catch (_) {
-                // Column already exists, ignore
-            }
+            } catch (_) { /* Column already exists, ignore */ }
 
             // Ensure instructionDismissed column exists
             try {
                 await env.DB.prepare("ALTER TABLE student_profiles ADD COLUMN instructionDismissed INTEGER DEFAULT 0").run();
-            } catch (_) {
-                // Column already exists, ignore
-            }
+            } catch (_) { /* Column already exists, ignore */ }
 
-            results.push("Checked/Created student_profiles table (Safe Migration)");
+            // --- Schema Evolution: Upgrade UNIQUE constraint to include dataset ---
+            // SQLite does not allow ALTER TABLE to drop constraints, so we must
+            // recreate the table. Check if dataset is already in the unique index.
+            const idxRow = await env.DB.prepare(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='student_profiles'"
+            ).first() as any;
+            const tableSql: string = idxRow?.sql || "";
+            const needsUpgrade = tableSql.includes("UNIQUE(grade, classNum, studentNumber)") &&
+                !tableSql.includes("dataset");
+
+            if (needsUpgrade) {
+                // 1. Null out FK references to avoid constraint errors during drop
+                try {
+                    await env.DB.prepare("UPDATE ip_profiles SET student_profile_id = NULL WHERE student_profile_id IS NOT NULL").run();
+                } catch (_) {}
+                try {
+                    await env.DB.prepare("UPDATE cookie_profiles SET student_profile_id = NULL WHERE student_profile_id IS NOT NULL").run();
+                } catch (_) {}
+
+                // 2. Recreate table with new UNIQUE including dataset
+                await env.DB.prepare(`
+                    CREATE TABLE IF NOT EXISTS student_profiles_v2 (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        grade INTEGER NOT NULL,
+                        classNum INTEGER NOT NULL,
+                        studentNumber INTEGER,
+                        electives TEXT,
+                        dataset TEXT DEFAULT '',
+                        instructionDismissed INTEGER DEFAULT 0,
+                        updatedAt TEXT DEFAULT (datetime('now')),
+                        UNIQUE(grade, classNum, studentNumber, dataset)
+                    )
+                `).run();
+
+                // 3. Copy data — use INSERT OR IGNORE to skip any duplicates that might arise
+                await env.DB.prepare(`
+                    INSERT OR IGNORE INTO student_profiles_v2 (id, grade, classNum, studentNumber, electives, dataset, instructionDismissed, updatedAt)
+                    SELECT id, grade, classNum, studentNumber, electives, COALESCE(dataset, ''), COALESCE(instructionDismissed, 0), COALESCE(updatedAt, datetime('now'))
+                    FROM student_profiles
+                `).run();
+
+                // 4. Drop old table and rename
+                await env.DB.prepare("DROP TABLE student_profiles").run();
+                await env.DB.prepare("ALTER TABLE student_profiles_v2 RENAME TO student_profiles").run();
+
+                results.push("Upgraded student_profiles UNIQUE constraint to include dataset (table reconstructed)");
+            } else {
+                results.push("Checked/Created student_profiles table (Safe Migration)");
+            }
         } catch (e: any) {
             results.push(`Error creating student_profiles: ${e.message}`);
         }
+
 
         // 10. ip_profiles Table (DEPRECATED)
         // Logic removed to prevent dynamic creation as requested.
