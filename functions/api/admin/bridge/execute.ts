@@ -176,12 +176,54 @@ export const onRequest = async (context: any) => {
         }
 
         // --- 2. Migrate Student Profiles ---
-        // student_profiles now has UNIQUE(grade, classNum, studentNumber, dataset) after schema upgrade.
-        // We can safely have one row per student per dataset.
-        // Before deleting old toDataset profiles, NULL out FK references in ip_profiles / cookie_profiles.
+        // Ensure student_profiles UNIQUE constraint includes dataset before migrating.
+        // (Auto-upgrade so this works even if the admin hasn't manually run migrate_db)
         if (migrateStudentProfiles) {
-            // 0. Null out FK refs in ip_profiles/cookie_profiles pointing to toDataset profiles for this grade
-            // (prevents FK constraint failure when we delete them)
+            // ── Auto-upgrade schema if needed ──────────────────────────────
+            try {
+                const schemaRow = await env.DB.prepare(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='student_profiles'"
+                ).first() as any;
+                const schemaSql: string = schemaRow?.sql || "";
+                const hasDatasetInUnique = schemaSql.includes("dataset") &&
+                    (schemaSql.includes("UNIQUE(grade") || schemaSql.includes("UNIQUE (grade"));
+
+                if (!hasDatasetInUnique) {
+                    // Null out all FK refs to avoid constraint errors during table drop
+                    try { await env.DB.prepare("UPDATE ip_profiles SET student_profile_id = NULL WHERE student_profile_id IS NOT NULL").run(); } catch (_) {}
+                    try { await env.DB.prepare("UPDATE cookie_profiles SET student_profile_id = NULL WHERE student_profile_id IS NOT NULL").run(); } catch (_) {}
+
+                    await env.DB.prepare(`
+                        CREATE TABLE IF NOT EXISTS student_profiles_v2 (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            grade INTEGER NOT NULL,
+                            classNum INTEGER NOT NULL,
+                            studentNumber INTEGER,
+                            electives TEXT,
+                            dataset TEXT DEFAULT '',
+                            instructionDismissed INTEGER DEFAULT 0,
+                            updatedAt TEXT DEFAULT (datetime('now')),
+                            UNIQUE(grade, classNum, studentNumber, dataset)
+                        )
+                    `).run();
+
+                    await env.DB.prepare(`
+                        INSERT OR IGNORE INTO student_profiles_v2 (id, grade, classNum, studentNumber, electives, dataset, instructionDismissed, updatedAt)
+                        SELECT id, grade, classNum, studentNumber, electives, COALESCE(dataset, ''), COALESCE(instructionDismissed, 0), COALESCE(updatedAt, datetime('now'))
+                        FROM student_profiles
+                    `).run();
+
+                    await env.DB.prepare("DROP TABLE student_profiles").run();
+                    await env.DB.prepare("ALTER TABLE student_profiles_v2 RENAME TO student_profiles").run();
+
+                    console.log("[BRIDGE execute] Auto-upgraded student_profiles UNIQUE constraint to include dataset");
+                }
+            } catch (schemaErr) {
+                console.error("[BRIDGE execute] Schema upgrade failed:", schemaErr);
+                // Continue anyway — migration may still succeed if schema was already upgraded
+            }
+
+            // ── Null out FK refs for toDataset profiles (before deleting them) ─
             try {
                 await env.DB.prepare(`
                     UPDATE ip_profiles SET student_profile_id = NULL
@@ -199,19 +241,18 @@ export const onRequest = async (context: any) => {
                 `).bind(targetGrade, toDataset).run();
             } catch (_) {}
 
-            // 1. Delete existing profiles in the TARGET dataset for this grade
+            // ── Delete old toDataset profiles ──────────────────────────────
             await env.DB.prepare(
                 "DELETE FROM student_profiles WHERE grade = ? AND dataset = ?"
             ).bind(targetGrade, toDataset).run();
 
-            // 2. Read source profiles (fromDataset)
-            // Fall back to dataset='' (legacy profiles saved before dataset separation was implemented)
+            // ── Read source profiles ────────────────────────────────────────
+            // Prefer fromDataset; fall back to dataset='' (legacy data without dataset)
             let { results: profiles } = await env.DB.prepare(
                 "SELECT * FROM student_profiles WHERE grade = ? AND dataset = ?"
             ).bind(targetGrade, fromDataset).all();
 
             if (profiles.length === 0 && fromDataset !== '') {
-                // Fallback: legacy profiles saved with empty dataset string
                 const { results: legacyProfiles } = await env.DB.prepare(
                     "SELECT * FROM student_profiles WHERE grade = ? AND (dataset = '' OR dataset IS NULL)"
                 ).bind(targetGrade).all();
@@ -290,7 +331,7 @@ export const onRequest = async (context: any) => {
 
                 // 3. INSERT mapped profile into toDataset
                 batchStatements.push(env.DB.prepare(
-                    "INSERT OR IGNORE INTO student_profiles (grade, classNum, studentNumber, electives, instructionDismissed, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)"
+                    "INSERT OR REPLACE INTO student_profiles (grade, classNum, studentNumber, electives, instructionDismissed, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)"
                 ).bind(
                     profile.grade, profile.classNum, profile.studentNumber,
                     newElectivesJson, profile.instructionDismissed ?? 0,
