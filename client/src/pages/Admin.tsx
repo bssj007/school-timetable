@@ -723,7 +723,7 @@ function ElectiveManager({ password }: { password: string }) {
                     if (open) setDraftCodes({}); // Reset draft when opening
                     setShowEasyABC(open);
                 }}>
-                    <DialogContent className="max-w-[98vw] w-full h-[85vh] flex flex-col p-4 md:p-6 bg-slate-50">
+                    <DialogContent className="!max-w-none w-[99vw] h-[92vh] flex flex-col p-4 md:p-6 bg-slate-50">
                         <DialogHeader className="shrink-0">
                             <DialogTitle className="flex items-center gap-2 mb-1">
                                 <Wand2 className="w-5 h-5 text-purple-600" />

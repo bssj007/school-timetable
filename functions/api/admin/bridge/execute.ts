@@ -205,9 +205,18 @@ export const onRequest = async (context: any) => {
             ).bind(targetGrade, toDataset).run();
 
             // 2. Read source profiles (fromDataset)
-            const { results: profiles } = await env.DB.prepare(
+            // Fall back to dataset='' (legacy profiles saved before dataset separation was implemented)
+            let { results: profiles } = await env.DB.prepare(
                 "SELECT * FROM student_profiles WHERE grade = ? AND dataset = ?"
             ).bind(targetGrade, fromDataset).all();
+
+            if (profiles.length === 0 && fromDataset !== '') {
+                // Fallback: legacy profiles saved with empty dataset string
+                const { results: legacyProfiles } = await env.DB.prepare(
+                    "SELECT * FROM student_profiles WHERE grade = ? AND (dataset = '' OR dataset IS NULL)"
+                ).bind(targetGrade).all();
+                profiles = legacyProfiles;
+            }
 
             const batchStatements = [];
             for (const profile of profiles) {
