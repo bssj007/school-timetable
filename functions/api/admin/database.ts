@@ -254,25 +254,42 @@ export const onRequest = async (context: any) => {
         if (action === "list_tables") {
             // SQLite specific query to list tables (and views)
             // We select ALL tables including internal ones (which might be useful for debugging)
-            const [tablesResult, pageCountResult, pageSizeResult] = await Promise.all([
-                env.DB.prepare(
-                    "SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') ORDER BY name;"
-                ).all(),
-                env.DB.prepare("PRAGMA page_count").first().catch((e:any) => { console.warn("page_count failed:", e.message); return null; }),
-                env.DB.prepare("PRAGMA page_size").first().catch((e:any) => { console.warn("page_size failed:", e.message); return null; })
-            ]);
+            const tablesResult = await env.DB.prepare(
+                "SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') ORDER BY name;"
+            ).all();
             
             const tables = tablesResult.results.map((r: any) => r.name);
+            const totalTables = tables.length;
             
-            // Calculate DB Size in bytes
+            // Calculate DB Size in bytes using dbstat
             let dbSizeBytes = 0;
-            if (pageCountResult && pageSizeResult) {
-                const pc = Object.values(pageCountResult)[0] as number || 0;
-                const ps = Object.values(pageSizeResult)[0] as number || 0;
-                dbSizeBytes = pc * ps;
+            try {
+                const sizeResult = await env.DB.prepare("SELECT SUM(pgsize) as totalBytes FROM dbstat").first();
+                if (sizeResult && sizeResult.totalBytes) {
+                    dbSizeBytes = Number(sizeResult.totalBytes);
+                }
+            } catch (e: any) {
+                console.warn("dbstat query failed:", e.message);
+                // Fallback size if dbstat isn't accessible
+                dbSizeBytes = 0; 
             }
 
-            return new Response(JSON.stringify({ tables, dbSizeBytes }), { headers: { "Content-Type": "application/json" } });
+            // Calculate Total Rows across all user tables
+            let totalRows = 0;
+            const countPromises = tables.map(async (t: string) => {
+                try {
+                    // Quick count for each table
+                    const countResult = await env.DB.prepare(`SELECT COUNT(*) as c FROM "${t}"`).first();
+                    return Number((countResult as any)?.c) || 0;
+                } catch (e) {
+                    return 0; // Skip if table is unreadable (e.g., sqlite_schema itself sometimes)
+                }
+            });
+
+            const counts = await Promise.all(countPromises);
+            totalRows = counts.reduce((acc, curr) => acc + curr, 0);
+
+            return new Response(JSON.stringify({ tables, dbSizeBytes, totalRows, totalTables }), { headers: { "Content-Type": "application/json" } });
         }
 
         if (action === "query") {

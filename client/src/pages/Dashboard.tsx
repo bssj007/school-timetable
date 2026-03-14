@@ -472,7 +472,12 @@ export default function Dashboard() {
     }
 
     // Determine the required groups from electiveConfigs for this grade
-    const requiredGroups: string[] = Array.from(new Set(electiveConfigs.map((c: any) => c.classCode).filter(Boolean))) as string[];
+    const requiredGroups: string[] = Array.from(new Set(
+      electiveConfigs
+        .flatMap((c: any) => (c.classCode || "").split(","))
+        .map((code: string) => code.trim())
+        .filter(Boolean)
+    )) as string[];
     
     // If no configs are found, block if it's required (but since we don't know, we'll assume not fully entered to be safe or maybe let it pass if setup is incomplete)
     if (requiredGroups.length === 0) {

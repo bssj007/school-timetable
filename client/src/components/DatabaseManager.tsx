@@ -25,6 +25,8 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [dbSizeBytes, setDbSizeBytes] = useState<number>(0);
+    const [totalRows, setTotalRows] = useState<number>(0);
+    const [totalTables, setTotalTables] = useState<number>(0);
 
     // Filter tables
     const [showOthers, setShowOthers] = useState(false);
@@ -140,6 +142,12 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
             }
             if (data.dbSizeBytes !== undefined) {
                 setDbSizeBytes(data.dbSizeBytes);
+            }
+            if (data.totalRows !== undefined) {
+                setTotalRows(data.totalRows);
+            }
+            if (data.totalTables !== undefined) {
+                setTotalTables(data.totalTables);
             }
         } catch (e) {
             if (!background) toast.error("테이블 목록을 불러오지 못했습니다.");
@@ -388,25 +396,25 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                     <Progress value={dbSizePercentage} className="h-2" />
                 </div>
                 
-                {/* Visual placeholder for D1 Row limits since raw tracking needs external API */}
+                {/* Structural metrics replacing cloudflare raw rows */}
                 <div>
                     <div className="flex justify-between items-end mb-1">
-                        <span className="text-sm font-semibold text-gray-700">읽은 행 수 (오늘)</span>
+                        <span className="text-sm font-semibold text-gray-700">총 데이터 행 수</span>
                         <span className="text-[10px] text-gray-500 font-mono">
-                            0 / 5,000,000 (0.0%)
+                            {totalRows.toLocaleString()} / 500,000 ({Math.min((totalRows / 500000) * 100, 100).toFixed(1)}%)
                         </span>
                     </div>
-                    <Progress value={0} className="h-2 [&>div]:bg-blue-500 bg-blue-100" />
+                    <Progress value={Math.min((totalRows / 500000) * 100, 100)} className="h-2 [&>div]:bg-blue-500 bg-blue-100" />
                 </div>
 
                 <div>
                     <div className="flex justify-between items-end mb-1">
-                        <span className="text-sm font-semibold text-gray-700">쓴 행 수 (오늘)</span>
+                        <span className="text-sm font-semibold text-gray-700">전체 테이블 수</span>
                         <span className="text-[10px] text-gray-500 font-mono">
-                            0 / 100,000 (0.0%)
+                            {totalTables} / 50 ({Math.min((totalTables / 50) * 100, 100).toFixed(1)}%)
                         </span>
                     </div>
-                    <Progress value={0} className="h-2 [&>div]:bg-green-500 bg-green-100" />
+                    <Progress value={Math.min((totalTables / 50) * 100, 100)} className="h-2 [&>div]:bg-green-500 bg-green-100" />
                 </div>
             </div>
 
