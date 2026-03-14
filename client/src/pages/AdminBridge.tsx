@@ -274,14 +274,12 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         const currentSig = `${fromDataset}-${toDataset}-${targetGrade}`;
         const hasSigChanged = lastGenSig.current !== currentSig;
 
-        const mappingMismatch = currentFroms !== fetchedFroms || hasSigChanged;
-
-        if (isCreating && canGenerate && mappingMismatch) {
+        if (isCreating && canGenerate && hasSigChanged) {
             lastGenSig.current = currentSig;
             generateAutoMappings(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fromSubjectsQuery.data, toSubjectsQuery.data, isCreating, mappingFields, fromDataset, toDataset, targetGrade]);
+    }, [fromSubjectsQuery.data, toSubjectsQuery.data, isCreating, fromDataset, toDataset, targetGrade]);
 
     const { data: bridges, isLoading } = useQuery({
         queryKey: ["admin", "bridges"],
