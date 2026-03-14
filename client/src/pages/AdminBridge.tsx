@@ -291,7 +291,10 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         const mappingMismatch = currentFroms !== fetchedFroms;
 
         // If from list changed, OR manual trigger via sig change (meaning toDataset changed)
-        if (isCreating && canGenerate && (mappingMismatch || hasSigChanged)) {
+        // Create mode: regenerate on any mismatch or sig change
+        // Edit mode: only regenerate when the user explicitly changed dataset/grade (hasSigChanged)
+        const shouldRegenerate = canGenerate && (isCreating ? (mappingMismatch || hasSigChanged) : hasSigChanged);
+        if (shouldRegenerate) {
             lastGenSig.current = currentSig;
             generateAutoMappings(false);
         }
@@ -453,7 +456,11 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         setName(bridge.name);
         setFromDataset(bridge.fromDataset);
         setToDataset(bridge.toDataset);
-        setTargetGrade(bridge.targetGrade ? bridge.targetGrade.toString() : "");
+        const gradeStr = bridge.targetGrade ? bridge.targetGrade.toString() : "";
+        setTargetGrade(gradeStr);
+        // Set the lastGenSig to the current bridge config so that any change to grade
+        // is correctly detected as hasSigChanged in the useEffect
+        lastGenSig.current = `${bridge.fromDataset}-${bridge.toDataset}-${gradeStr}`;
         try {
             let parsed = JSON.parse(bridge.mappingData);
             if (typeof parsed === "string") {

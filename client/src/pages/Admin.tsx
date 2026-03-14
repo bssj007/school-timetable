@@ -718,7 +718,7 @@ function ElectiveManager({ password }: { password: string }) {
                 </div >
 
                 <Dialog open={showEasyABC} onOpenChange={setShowEasyABC}>
-                    <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-4 md:p-6 bg-slate-50">
+                    <DialogContent className="max-w-[95vw] w-full max-h-[90vh] flex flex-col p-4 md:p-6 bg-slate-50">
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2 mb-1">
                                 <Wand2 className="w-5 h-5 text-purple-600" />
@@ -731,13 +731,13 @@ function ElectiveManager({ password }: { password: string }) {
                         </DialogHeader>
 
                         {timetableAllQuery.isLoading ? (
-                            <div className="flex-1 flex items-center justify-center text-slate-400">\uc2dc\uac04\ud45c \ub85c\ub529 \uc911...</div>
+                            <div className="flex-1 flex items-center justify-center text-slate-400">시간표 로딩 중...</div>
                         ) : (
                         <div className="flex-1 overflow-auto rounded-md border border-slate-300">
                             <table className="w-full text-sm border-collapse">
                                 <thead className="sticky top-0 z-10">
                                     <tr className="bg-slate-100 text-slate-600">
-                                        <th className="border border-slate-300 px-4 py-2.5 font-bold text-center w-16">교\uc2dc</th>
+                                        <th className="border border-slate-300 px-4 py-2.5 font-bold text-center w-16">교시</th>
                                         {WEEKDAY_LABELS.map(d => (
                                             <th key={d} className="border border-slate-300 px-4 py-2.5 font-bold text-center">{d}</th>
                                         ))}
@@ -755,7 +755,7 @@ function ElectiveManager({ password }: { password: string }) {
                                                     // Derive current group: if all matching subjects have the same code use it, else show mixed
                                                     const codes = cellSubjects.map(e => subjects[e.idx]?.classCode || "");
                                                     const uniqueCodes = Array.from(new Set(codes.filter(Boolean)));
-                                                    const displayCode = uniqueCodes.length === 1 ? uniqueCodes[0] : (uniqueCodes.length > 1 ? "\ud63c\ud568" : "");
+                                                    const displayCode = uniqueCodes.length === 1 ? uniqueCodes[0] : (uniqueCodes.length > 1 ? "혼합" : "");
                                                     const hasSubjects = cellSubjects.length > 0;
 
                                                     return (
@@ -765,7 +765,7 @@ function ElectiveManager({ password }: { password: string }) {
                                                             {hasSubjects ? (
                                                                 <div className="flex flex-col items-center gap-1.5">
                                                                     <Input
-                                                                        value={displayCode === "\ud63c\ud568" ? "" : displayCode}
+                                                                        value={displayCode === "혼합" ? "" : displayCode}
                                                                         onChange={(e) => {
                                                                             const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 3);
                                                                             // Apply to all subjects in this slot
@@ -779,9 +779,9 @@ function ElectiveManager({ password }: { password: string }) {
                                                                             });
                                                                             setSubjects(newSubjects);
                                                                         }}
-                                                                        placeholder="\uc5c6\uc74c"
+                                                                        placeholder="없음"
                                                                         className={`h-9 w-16 font-bold text-center text-blue-700 border-slate-300 focus-visible:ring-blue-400 mx-auto uppercase text-base placeholder:text-slate-300 placeholder:font-normal placeholder:text-sm ${
-                                                                            displayCode && displayCode !== "\ud63c\ud568" ? "border-blue-300 bg-blue-50/60" : ""
+                                                                            displayCode && displayCode !== "혼합" ? "border-blue-300 bg-blue-50/60" : ""
                                                                         }`}
                                                                     />
                                                                     <div className="text-[10px] text-slate-400 leading-tight max-w-[80px] text-center">
@@ -789,7 +789,7 @@ function ElectiveManager({ password }: { password: string }) {
                                                                     </div>
                                                                 </div>
                                                             ) : (
-                                                                <span className="text-slate-300 text-xs">\ud574\ub2f9\uc5c6\uc74c</span>
+                                                                <span className="text-slate-300 text-xs">해당없음</span>
                                                             )}
                                                         </td>
                                                     );
@@ -805,7 +805,7 @@ function ElectiveManager({ password }: { password: string }) {
                         <DialogFooter className="mt-3 border-t pt-3">
                             <Button className="w-full sm:w-auto" onClick={() => setShowEasyABC(false)}>
                                 <Check className="w-4 h-4 mr-2" />
-                                \ub2eb\uae30 (\uba54\uc778 \ud654\uba74\uc5d0\uc11c \ud655\uc778 \ubc0f \uc800\uc7a5)
+                                닫기 (메인 화면에서 확인 및 저장)
                             </Button>
                         </DialogFooter>
                     </DialogContent>
