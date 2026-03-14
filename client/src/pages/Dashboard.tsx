@@ -968,7 +968,7 @@ export default function Dashboard() {
           {(rawTimetableData as any)?.ipOverrideApplied && (
             <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg flex items-center gap-2 text-sm font-medium">
               <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0" />
-              <span>[강제 지정됨] 현재 선택 학년에 맞게 {(rawTimetableData as any)?.ipOverrideApplied} Override된 데이터셋 ({(rawTimetableData as any)?.datasetId}) 표시 중</span>
+              <span>[강제 지정됨] {(rawTimetableData as any)?.ipOverrideApplied} Override된 데이터셋 ({(rawTimetableData as any)?.datasetId}) 표시 중</span>
             </div>
           )}
         </div>
