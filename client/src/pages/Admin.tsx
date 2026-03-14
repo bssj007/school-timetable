@@ -51,7 +51,9 @@ function ElectiveManager({ password }: { password: string }) {
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showEasyABC, setShowEasyABC] = useState(false);
-    const [tempGroups, setTempGroups] = useState<Record<string, string>>({});
+
+    const WEEKDAY_LABELS = ['월', '화', '수', '목', '금'];
+    const PERIOD_COUNT = 7;
 
     // Fetch current setting to determine default "Auto" dataset if needed
     const settingsQuery = useQuery({
@@ -86,6 +88,53 @@ function ElectiveManager({ password }: { password: string }) {
             return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
         });
     }, [rawDataQuery.data]);
+
+    // Timetable query for Easy ABC modal (all classes)
+    const timetableAllQuery = useQuery({
+        queryKey: ["admin", "timetableAll", selectedGrade, selectedDataset],
+        queryFn: async () => {
+            let targetDataset = selectedDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : selectedDataset;
+            if (!targetDataset && timetableProps && timetableProps.length > 0) targetDataset = timetableProps[0];
+            if (!targetDataset) return [];
+            const url = `/api/comcigan?type=timetable&grade=${selectedGrade}&classNum=all` +
+                (targetDataset !== '_auto_' ? `&dataset=${targetDataset}` : '');
+            const res = await fetch(url);
+            if (!res.ok) return [];
+            const json = await res.json();
+            return json.data || [];
+        },
+        enabled: !!selectedDataset && showEasyABC,
+    });
+
+    // Build slot -> subjects mapping: { "wd-period": [{ subjectIdx, subjectName, teacher }] }
+    const slotSubjectsMap = useMemo(() => {
+        const allSlots: any[] = timetableAllQuery.data || [];
+        const FREE_KEYWORDS = ["\ube48\uad50\uc2e4", "\uacf5\uac15", "\ucc3d\uccb4", "\uc790\uc2b5", "\ub3d9\uc544\ub9ac", "\uc810\uc2ec\uc2dc\uac04", "Empty", "Free"];
+        const map: Record<string, { idx: number; subjectName: string; teacher: string }[]> = {};
+
+        subjects.forEach((item: any, idx: number) => {
+            const isFreePeriod = FREE_KEYWORDS.some(ex => item.subject.trim().includes(ex));
+            const isDeleted = Boolean(item.isDeleted);
+            if (isFreePeriod || isDeleted) return;
+
+            // Find all slots where this subject is taught
+            allSlots.forEach((slot: any) => {
+                if (!slot.subject) return;
+                if (slot.subject.trim() !== item.subject.trim()) return;
+                const wd = slot.weekday; // 0=Mon...4=Fri
+                const period = slot.classTime;
+                if (wd === undefined || period === undefined) return;
+                const key = `${wd}-${period}`;
+                if (!map[key]) map[key] = [];
+                // Deduplicate by subjectName+teacher
+                if (!map[key].some(e => e.idx === idx)) {
+                    map[key].push({ idx, subjectName: item.subject, teacher: item.fullTeacherName || item.teacher });
+                }
+            });
+        });
+
+        return map;
+    }, [timetableAllQuery.data, subjects]);
 
     useEffect(() => {
         if (settingsQuery.data) {
@@ -669,96 +718,94 @@ function ElectiveManager({ password }: { password: string }) {
                 </div >
 
                 <Dialog open={showEasyABC} onOpenChange={setShowEasyABC}>
-                    <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-4 md:p-6 bg-slate-50">
+                    <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-4 md:p-6 bg-slate-50">
                         <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2 mb-2">
+                            <DialogTitle className="flex items-center gap-2 mb-1">
                                 <Wand2 className="w-5 h-5 text-purple-600" />
-                                Easy ABC 분반 설정
+                                Easy ABC 분반 설정 — {selectedGrade}학년
                             </DialogTitle>
                             <DialogDescription>
-                                아래 칸에 그룹(A, B, C...)을 입력하면 <strong>메인 화면에 즉시 자동 반영</strong>되며, 
-                                그룹이 할당된 과목은 자동으로 '이동 수업(이동 O)' 처리됩니다. <br />
-                                입력을 마치면 창을 닫고 메인 화면 상단의 <strong>[확인 및 저장하기]</strong>를 클릭하세요.
+                                교시 칸에 그룹(A, B, C...)을 입력하면 해당 시간대의 선택과목에 자동으로 반영되면서 <strong>이동수업(O)</strong>으로 자동 체크됩니다.
+                                완료 후 페이지 상단 <strong>[확인 및 저장하기]</strong>.
                             </DialogDescription>
                         </DialogHeader>
 
-                        <div className="flex-1 overflow-auto border border-slate-300 rounded-md bg-white">
+                        {timetableAllQuery.isLoading ? (
+                            <div className="flex-1 flex items-center justify-center text-slate-400">\uc2dc\uac04\ud45c \ub85c\ub529 \uc911...</div>
+                        ) : (
+                        <div className="flex-1 overflow-auto rounded-md border border-slate-300">
                             <table className="w-full text-sm border-collapse">
                                 <thead className="sticky top-0 z-10">
-                                    <tr className="bg-slate-100 text-slate-700">
-                                        <th className="border border-slate-300 px-3 py-2.5 font-bold text-center w-24">그룹 (입력)</th>
-                                        <th className="border border-slate-300 px-3 py-2.5 font-bold text-center">선택과목 및 선생님</th>
-                                        <th className="border border-slate-300 px-3 py-2.5 font-bold text-center w-32">강의실</th>
-                                        <th className="border border-slate-300 px-3 py-2.5 font-bold text-center w-28">비고</th>
+                                    <tr className="bg-slate-100 text-slate-600">
+                                        <th className="border border-slate-300 px-4 py-2.5 font-bold text-center w-16">교\uc2dc</th>
+                                        {WEEKDAY_LABELS.map(d => (
+                                            <th key={d} className="border border-slate-300 px-4 py-2.5 font-bold text-center">{d}</th>
+                                        ))}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {subjects.map((item: any, originalIndex: number) => {
-                                        const isFreePeriod = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
-                                        const isDeleted = Boolean(item.isDeleted);
-                                        if (isFreePeriod || isDeleted) return null;
-
-                                        const key = `${item.subject}-${item.teacher}`;
-                                        const currentGroup = item.classCode || "";
-                                        
-                                        // safely parse className
-                                        let globalClassName = "";
-                                        try {
-                                            if (item.className) {
-                                                const parsed = JSON.parse(item.className);
-                                                globalClassName = parsed["_global"] || Object.values(parsed)[0] || "";
-                                            }
-                                        } catch {
-                                            globalClassName = item.className || "";
-                                        }
-
+                                    {Array.from({ length: PERIOD_COUNT }, (_, pi) => {
+                                        const period = pi + 1;
                                         return (
-                                            <tr key={key} className="hover:bg-slate-50 transition-colors">
-                                                <td className="border border-slate-300 px-2 py-2 text-center bg-purple-50/40">
-                                                    <Input
-                                                        value={currentGroup}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 3);
-                                                            handleInputChange(originalIndex, 'classCode', val);
-                                                            if (val && !item.isMovingClass) {
-                                                                handleInputChange(originalIndex, 'isMovingClass', true);
-                                                            }
-                                                        }}
-                                                        placeholder="예: A"
-                                                        className="h-8 font-bold text-center text-purple-700 border-slate-300 focus-visible:ring-purple-400 max-w-[70px] mx-auto uppercase placeholder:font-normal placeholder:text-gray-300"
-                                                    />
-                                                </td>
-                                                <td className="border border-slate-300 px-3 py-2 text-center font-medium">
-                                                    {item.subject} 
-                                                    <span className="text-gray-500 font-normal ml-2">
-                                                        ({item.fullTeacherName || item.teacher})
-                                                    </span>
-                                                </td>
-                                                <td className="border border-slate-300 px-2 py-2 text-center">
-                                                    <Input
-                                                        value={globalClassName}
-                                                        onChange={(e) => {
-                                                            // Simplified: If edit from this modal, it sets it globally for this subject
-                                                            const newClassNameStr = JSON.stringify({ "_global": e.target.value });
-                                                            handleInputChange(originalIndex, 'className', newClassNameStr);
-                                                        }}
-                                                        placeholder="강의실 (선택)"
-                                                        className="h-8 text-center border-slate-300 text-sm placeholder:text-gray-300"
-                                                    />
-                                                </td>
-                                                <td className="border border-slate-300 px-3 py-2 text-center text-gray-400 text-xs">
-                                                    {item.isMovingClass ? "이동수업 O" : "-"}
-                                                </td>
+                                            <tr key={period}>
+                                                <td className="border border-slate-300 px-3 py-3 text-center font-bold text-slate-500 bg-slate-50">{period}</td>
+                                                {WEEKDAY_LABELS.map((_, wdi) => {
+                                                    const key = `${wdi}-${period}`;
+                                                    const cellSubjects = slotSubjectsMap[key] || [];
+                                                    // Derive current group: if all matching subjects have the same code use it, else show mixed
+                                                    const codes = cellSubjects.map(e => subjects[e.idx]?.classCode || "");
+                                                    const uniqueCodes = Array.from(new Set(codes.filter(Boolean)));
+                                                    const displayCode = uniqueCodes.length === 1 ? uniqueCodes[0] : (uniqueCodes.length > 1 ? "\ud63c\ud568" : "");
+                                                    const hasSubjects = cellSubjects.length > 0;
+
+                                                    return (
+                                                        <td key={wdi} className={`border border-slate-300 p-2 text-center align-top ${
+                                                            hasSubjects ? "bg-white" : "bg-slate-50/50"
+                                                        }`}>
+                                                            {hasSubjects ? (
+                                                                <div className="flex flex-col items-center gap-1.5">
+                                                                    <Input
+                                                                        value={displayCode === "\ud63c\ud568" ? "" : displayCode}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 3);
+                                                                            // Apply to all subjects in this slot
+                                                                            const newSubjects = [...subjects];
+                                                                            cellSubjects.forEach(({ idx }) => {
+                                                                                newSubjects[idx] = {
+                                                                                    ...newSubjects[idx],
+                                                                                    classCode: val,
+                                                                                    isMovingClass: val ? true : newSubjects[idx].isMovingClass
+                                                                                };
+                                                                            });
+                                                                            setSubjects(newSubjects);
+                                                                        }}
+                                                                        placeholder="\uc5c6\uc74c"
+                                                                        className={`h-9 w-16 font-bold text-center text-blue-700 border-slate-300 focus-visible:ring-blue-400 mx-auto uppercase text-base placeholder:text-slate-300 placeholder:font-normal placeholder:text-sm ${
+                                                                            displayCode && displayCode !== "\ud63c\ud568" ? "border-blue-300 bg-blue-50/60" : ""
+                                                                        }`}
+                                                                    />
+                                                                    <div className="text-[10px] text-slate-400 leading-tight max-w-[80px] text-center">
+                                                                        {cellSubjects.map(e => e.subjectName).join(", ")}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-slate-300 text-xs">\ud574\ub2f9\uc5c6\uc74c</span>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
                                             </tr>
                                         );
                                     })}
                                 </tbody>
                             </table>
                         </div>
-                        <DialogFooter className="mt-4 border-t pt-4">
+                        )}
+
+                        <DialogFooter className="mt-3 border-t pt-3">
                             <Button className="w-full sm:w-auto" onClick={() => setShowEasyABC(false)}>
                                 <Check className="w-4 h-4 mr-2" />
-                                닫기 (메인 화면에서 변경사항 저장)
+                                \ub2eb\uae30 (\uba54\uc778 \ud654\uba74\uc5d0\uc11c \ud655\uc778 \ubc0f \uc800\uc7a5)
                             </Button>
                         </DialogFooter>
                     </DialogContent>
@@ -5307,8 +5354,19 @@ function AutoFillAnalyzer({ data, adminPassword, onBack }: {
                     targetSubjectName = parts.length > 0 ? parts[0] : mSubj;
                     matchedTeacher = manualTeacherName;
                 } else {
-                    // Look up BRIDGE mappings instead of local 'mappings' state
-                    const bridgeRule = bridgeMappingRules.find(r => r.from === baseSubjectName);
+                    // Look up BRIDGE mappings. r.from is stored as "과목명 (선생님)" or just "과목명".
+                    // Extract just the subject part from r.from for comparison.
+                    const extractSubjectFromBridgeFrom = (from: string): string => {
+                        const parenIdx = from.indexOf(' (');
+                        return parenIdx !== -1 ? from.slice(0, parenIdx).trim() : from.trim();
+                    };
+
+                    const bridgeRule = bridgeMappingRules.find(r => {
+                        const rSubj = extractSubjectFromBridgeFrom(r.from);
+                        // Match by subject name (stripped), or try matching full mSubj
+                        return rSubj === baseSubjectName || r.from === mSubj;
+                    });
+
                     if (!bridgeRule || !bridgeRule.to) {
                         throw new Error(`[${mSubj}]의 기본 과목명인 [${baseSubjectName}] 과목이 BRIDGE 매핑 규칙에 지정되어 있지 않습니다.`);
                     }

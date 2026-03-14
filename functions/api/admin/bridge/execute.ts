@@ -45,10 +45,26 @@ export const onRequest = async (context: any) => {
         // or an Array of { from: string, to: string }. We'll support Array for clarity.
 
         let mappingDict: Record<string, string> = {};
+        // Also build a subject-only lookup (stripping "(teacher)") for student profile lookups
+        let subjectOnlyMappingDict: Record<string, string> = {};
+
+        const extractSubjectFromBridgeKey = (key: string): string => {
+            const parenIdx = key.indexOf(' (');
+            return parenIdx !== -1 ? key.slice(0, parenIdx).trim() : key.trim();
+        };
+
         if (Array.isArray(mappingData)) {
             mappingData.forEach((row: any) => {
                 if (row.from) {
-                    mappingDict[row.from] = (!row.to || row.to === "_none_") ? "_none_" : row.to;
+                    const fullKey = row.from;
+                    const mappedTo = (!row.to || row.to === "_none_") ? "_none_" : row.to;
+                    mappingDict[fullKey] = mappedTo;
+                    // Also map by subject name only (stripped of teacher)
+                    const subjOnly = extractSubjectFromBridgeKey(fullKey);
+                    // Only set if not yet set by a more specific key
+                    if (!subjectOnlyMappingDict[subjOnly]) {
+                        subjectOnlyMappingDict[subjOnly] = mappedTo;
+                    }
                 }
             });
         } else if (typeof mappingData === 'object') {
@@ -176,7 +192,11 @@ export const onRequest = async (context: any) => {
 
                     if (Array.isArray(electivesObj)) {
                         for (const subj of electivesObj) {
-                            const rawMapped = mappingDict[subj] !== undefined ? mappingDict[subj] : subj;
+                            // Try full key first, then subject-only key
+                            const rawMapped =
+                                mappingDict[subj] !== undefined ? mappingDict[subj] :
+                                subjectOnlyMappingDict[subj] !== undefined ? subjectOnlyMappingDict[subj] :
+                                subj;
                             if (rawMapped === "_none_") {
                                 changed = true; // Subject dropped
                             } else {
@@ -195,8 +215,12 @@ export const onRequest = async (context: any) => {
                                 // 현재 표준 형식: { subject, teacher, fullSubjectName }
                                 const oldSubject = entry.subject;
                                 const oldKey = entry.teacher ? `${oldSubject} (${entry.teacher})` : oldSubject;
-                                let mappedVal = mappingDict[oldKey] !== undefined ? mappingDict[oldKey] : mappingDict[oldSubject];
-                                if (mappedVal === undefined) mappedVal = oldSubject;
+                                // Try: full "subject (teacher)" key → plain subject key → subject-only mapping → no-op
+                                const mappedVal: string =
+                                    mappingDict[oldKey] !== undefined ? mappingDict[oldKey] :
+                                    mappingDict[oldSubject] !== undefined ? mappingDict[oldSubject] :
+                                    subjectOnlyMappingDict[oldSubject] !== undefined ? subjectOnlyMappingDict[oldSubject] :
+                                    oldSubject;
 
                                 if (mappedVal === "_none_") {
                                     delete electivesObj[groupKey];
@@ -211,7 +235,10 @@ export const onRequest = async (context: any) => {
                                 }
                             } else if (typeof entry === 'string') {
                                 // 레거시 문자열 형식
-                                const rawMapped = mappingDict[entry] !== undefined ? mappingDict[entry] : entry;
+                                const rawMapped =
+                                    mappingDict[entry] !== undefined ? mappingDict[entry] :
+                                    subjectOnlyMappingDict[entry] !== undefined ? subjectOnlyMappingDict[entry] :
+                                    entry;
                                 if (rawMapped === "_none_") {
                                     delete electivesObj[groupKey];
                                     changed = true;
