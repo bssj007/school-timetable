@@ -1515,19 +1515,21 @@ export default function Dashboard() {
                                   isCancelledByFreePeriod = true;
                                 }
 
-                                if (matchingSlot) {
+                                // 반(className): electiveConfigs에서 group+subject로 조회
+                                const configEntry = (electiveConfigs || []).find((c: any) =>
+                                  c.subject === electiveSelection.subject &&
+                                  c.classCode?.split(",").map((s: string) => s.trim()).includes(group)
+                                );
+
+                                if (configEntry?.fullTeacherName) {
+                                  displayTeacher = configEntry.fullTeacherName;
+                                } else if (matchingSlot) {
                                   displayTeacher = matchingSlot.teacher;
                                 } else if (electiveTeachers.length > 0) {
                                   displayTeacher = electiveTeachers[0];
                                 } else {
                                   displayTeacher = item ? item.teacher : "";
                                 }
-
-                                // 반(className): electiveConfigs에서 group+subject로 조회
-                                const configEntry = (electiveConfigs || []).find((c: any) =>
-                                  c.subject === electiveSelection.subject &&
-                                  c.classCode?.split(",").map((s: string) => s.trim()).includes(group)
-                                );
 
                                 let rawClassName = (configEntry as any)?.className || "";
                                 try {
@@ -1536,6 +1538,17 @@ export default function Dashboard() {
                                 } catch (e) {
                                   // Fallback to legacy string if it wasn't JSON
                                   displayClassName = rawClassName;
+                                }
+                              } else {
+                                // For non-elective regular subjects, try to find full name override
+                                if (item && electiveConfigs) {
+                                  const subjectMatch = electiveConfigs.find((c: any) => 
+                                    c.subject === item.subject && 
+                                    c.originalTeacher === item.teacher
+                                  );
+                                  if (subjectMatch && subjectMatch.fullTeacherName) {
+                                    displayTeacher = subjectMatch.fullTeacherName;
+                                  }
                                 }
                               }
 

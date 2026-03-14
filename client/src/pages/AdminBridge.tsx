@@ -101,7 +101,7 @@ interface DatasetBridge {
     updatedAt: string;
 }
 
-export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPassword: string, goAutoFillAnalysis: (bridgeInfo: { grade: number, fromDataset: string, toDataset: string, mappingRules: any[] }) => void }) {
+export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPassword: string, goAutoFillAnalysis: (bridgeInfo: { grade: number, fromDataset: string, toDataset: string, mappingRules: any[], copyFullName?: boolean }) => void }) {
     const queryClient = useQueryClient();
     const [selectedBridgeId, setSelectedBridgeId] = useState<number | null>(null);
     const [editingBridge, setEditingBridge] = useState<DatasetBridge | null>(null);
@@ -123,6 +123,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
     const [execProfiles, setExecProfiles] = useState(true);
     const [execAssessments, setExecAssessments] = useState(true);
     const [execOverrides, setExecOverrides] = useState(false);
+    const [execCopyFullName, setExecCopyFullName] = useState(true);
     const [isExecuting, setIsExecuting] = useState(false);
 
     // 1. Fetch Datasets
@@ -735,10 +736,17 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                     variant="outline"
                                                     className="w-full text-purple-700 border-purple-200 hover:bg-purple-50 mt-2"
                                                     disabled={hasMappingChanges() || !toDataset}
-                                                    onClick={() => goAutoFillAnalysis({ grade: parseInt(targetGrade), fromDataset, toDataset, mappingRules: mappingFields })}
+                                                    onClick={() => goAutoFillAnalysis({ grade: parseInt(targetGrade), fromDataset, toDataset, mappingRules: mappingFields, copyFullName: execCopyFullName })}
                                                 >
                                                     자동 채우기 연계 분석 시작
                                                 </Button>
+                                                <label className="flex flex-row items-center justify-between border-t border-slate-200 p-2 mt-3 cursor-pointer hover:bg-slate-50">
+                                                    <div className="space-y-0.5">
+                                                        <p className="font-medium text-sm text-slate-700">전체 교사 성함 풀네임 덮어쓰기</p>
+                                                        <p className="text-[11px] text-slate-500">학기별 계획에 기입된 선생님 실명 전송</p>
+                                                    </div>
+                                                    <Checkbox checked={execCopyFullName} onCheckedChange={(v) => setExecCopyFullName(!!v)} className="scale-90" />
+                                                </label>
                                             </div>
                                         )}
 
@@ -754,6 +762,16 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                     </div>
                                                     <Checkbox checked={targetGrade !== '1' && execElectives} disabled={targetGrade === '1'} onCheckedChange={(v) => setExecElectives(!!v)} />
                                                 </label>
+
+                                                {targetGrade !== '1' && execElectives && (
+                                                    <label className="flex flex-row items-center justify-between border-b border-x border-slate-200 p-2 px-4 rounded-b-lg -mt-3 pt-4 mb-2 bg-slate-50/50 cursor-pointer hover:bg-slate-100">
+                                                        <div className="space-y-0.5 ml-2">
+                                                            <p className="font-medium text-sm text-slate-700">└ 전체 교사 성함 풀네임 덮어쓰기</p>
+                                                            <p className="text-[11px] text-slate-500">출발 데이터셋에 입력된 선생님 실명(Full Name) 전송</p>
+                                                        </div>
+                                                        <Checkbox checked={execCopyFullName} onCheckedChange={(v) => setExecCopyFullName(!!v)} className="scale-90" />
+                                                    </label>
+                                                )}
 
                                                 <label className={`flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer ${targetGrade === '1' ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-50'}`}>
                                                     <div className="space-y-0.5">

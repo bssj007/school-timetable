@@ -58,7 +58,7 @@ export const onRequest = async (context: any) => {
         // Helper map removed as per user request for strict mappings.
 
         // The flags indicated by user
-        const { migrateElectiveConfig, migrateStudentProfiles, migrateAssessments } = options || {};
+        const { migrateElectiveConfig, migrateStudentProfiles, migrateAssessments, copyFullName = true } = options || {};
 
         if (targetGrade === 1 && (migrateElectiveConfig || migrateStudentProfiles)) {
             return new Response(JSON.stringify({ error: "1학년은 선택과목 데이터 복제 및 프로필 과목 변경을 지원하지 않습니다." }), { status: 400 });
@@ -132,8 +132,12 @@ export const onRequest = async (context: any) => {
                     newTeacher = targetSubjectsInfo[mappedSubject];
                 }
 
-                if (newTeacher !== config.originalTeacher) {
-                    newFullTeacherName = ""; // Can be set manually by the admin later
+                // User Request: Preserve the original teacher (which we correctly resolved above)
+                // BUT always transfer the fullTeacherName from the source config. Fallback to originalTeacher if missing.
+                if (copyFullName) {
+                    newFullTeacherName = config.fullTeacherName || config.originalTeacher;
+                } else {
+                    newFullTeacherName = ""; // Or we could keep target's existing if we had it, but this is a fresh copy so "" is proper if disabled
                 }
 
                 batchStatements.push(env.DB.prepare(
@@ -246,19 +250,29 @@ export const onRequest = async (context: any) => {
 
         // --- 3. Migrate Assessments ---
         if (migrateAssessments) {
-            // Apply mappings only to assessments belonging to the targetGrade
+            // Delete old existing assessments on toDataset for this targetGrade
+            await env.DB.prepare("DELETE FROM performance_assessments WHERE dataset = ? AND grade = ?").bind(toDataset, targetGrade).run();
+
+            // Fetch assessments from the fromDataset
             const { results: assessments } = await env.DB.prepare(
-                "SELECT id, subject FROM performance_assessments WHERE grade = ?"
-            ).bind(targetGrade).all();
+                "SELECT * FROM performance_assessments WHERE grade = ? AND dataset = ? AND isDeleted = 0"
+            ).bind(targetGrade, fromDataset).all();
 
             const batchStatements = [];
             for (const assessment of assessments) {
-                const rawMapped = mappingDict[assessment.subject];
-                if (rawMapped && rawMapped !== "_none_") {
-                    const mappedSubject = rawMapped.replace(/ \([^)]+\)$/, '');
+                let mappedVal = mappingDict[assessment.subject];
+                
+                if (mappedVal === undefined) {
+                    mappedVal = assessment.subject; // Keep original if no explicit mapping
+                }
+
+                if (mappedVal !== "_none_") {
+                    const mappedSubject = mappedVal.replace(/ \([^)]+\)$/, '');
                     batchStatements.push(env.DB.prepare(
-                        "UPDATE performance_assessments SET subject = ? WHERE id = ?"
-                    ).bind(mappedSubject, assessment.id));
+                        "INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    ).bind(
+                        mappedSubject, assessment.title, assessment.description, assessment.dueDate, assessment.grade, assessment.classNum, assessment.classTime, assessment.isDone, toDataset, assessment.lastModifiedIp, assessment.createdAt
+                    ));
                 }
             }
 

@@ -50,6 +50,8 @@ function ElectiveManager({ password }: { password: string }) {
     const [originalSubjects, setOriginalSubjects] = useState<any[]>([]); // To track changes
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [showEasyABC, setShowEasyABC] = useState(false);
+    const [tempGroups, setTempGroups] = useState<Record<string, string>>({});
 
     // Fetch current setting to determine default "Auto" dataset if needed
     const settingsQuery = useQuery({
@@ -389,6 +391,24 @@ function ElectiveManager({ password }: { password: string }) {
 
                     <div className="flex gap-2 shrink-0">
                         <Button
+                            variant="secondary"
+                            className="bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200"
+                            onClick={() => {
+                                // Initialize tempGroups with current single-group values (excluding multi-groups for safety)
+                                const initialTempGroups: Record<string, string> = {};
+                                subjects.forEach(s => {
+                                    if (s.isMovingClass && s.classCode && !s.classCode.includes(",")) {
+                                        initialTempGroups[`${s.subject}|${s.teacher}`] = s.classCode.trim();
+                                    }
+                                });
+                                setTempGroups(initialTempGroups);
+                                setShowEasyABC(true);
+                            }}
+                        >
+                            <Wand2 className="w-4 h-4 mr-2" />
+                            Easy ABC 그룹입력
+                        </Button>
+                        <Button
                             variant="outline"
                             disabled={!hasChanges || isSaving}
                             onClick={handleCancel}
@@ -647,6 +667,99 @@ function ElectiveManager({ password }: { password: string }) {
                         </TableBody >
                     </Table >
                 </div >
+
+                <Dialog open={showEasyABC} onOpenChange={setShowEasyABC}>
+                    <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <Wand2 className="w-5 h-5 text-purple-600" />
+                                Easy ABC 그룹입력
+                            </DialogTitle>
+                            <DialogDescription>
+                                아래 표에서 그룹이 될 이동수업 과목에 A, B, C 등 식별 코드를 입력하세요. <br />
+                                실행완료를 누르면 <strong>현재 활성화된 데이터셋/학년 설정화면(본창)에 즉각 적용</strong>되며, 변경 사항을 검토한 후 본창 상단의 <strong>[확인 및 저장하기]</strong>를 클릭해야 DB에 최종 저장됩니다.<br/>
+                                <span className="text-red-500 font-bold">* 입력창에 값이 존재하면 자동으로 해당 과목의 [이동수업 O]가 체크됩니다. 비워두면 이동X로 변환되지 않고 기존 값을 유지합니다.</span>
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="flex-1 overflow-auto border rounded-md">
+                            <Table className="relative min-w-[700px]">
+                                <TableHeader className="sticky top-0 bg-gray-100 z-10 shadow-sm">
+                                    <TableRow>
+                                        <TableHead className="w-[120px] font-bold text-center text-gray-700 bg-gray-100 dark:bg-gray-800">과목명</TableHead>
+                                        <TableHead className="w-[200px] font-bold text-center text-gray-700 bg-gray-100 dark:bg-gray-800">선생님 (원래 / 전체)</TableHead>
+                                        <TableHead className="w-[120px] font-bold text-center text-purple-700 bg-purple-50">그룹 기호 입력</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {subjects.map((item: any) => {
+                                        const isFreePeriod = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
+                                        const isDeleted = Boolean(item.isDeleted);
+                                        if (isFreePeriod || isDeleted) return null;
+
+                                        const key = `${item.subject}|${item.teacher}`;
+
+                                        return (
+                                            <TableRow key={key} className="hover:bg-purple-50/30 transition-colors">
+                                                <TableCell className="text-center font-medium bg-white">{item.subject}</TableCell>
+                                                <TableCell className="text-center bg-white text-gray-600">
+                                                    {item.fullTeacherName ? (
+                                                        <span><span className="font-semibold text-gray-900">{item.fullTeacherName}</span> <span className="text-xs text-gray-400">({item.teacher})</span></span>
+                                                    ) : (
+                                                        <span className="font-semibold text-gray-900">{item.teacher}</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="bg-purple-50/50 p-2 border-l border-purple-100">
+                                                    <Input
+                                                        value={tempGroups[key] || ""}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 3);
+                                                            setTempGroups(prev => ({ ...prev, [key]: val }));
+                                                        }}
+                                                        placeholder="예: A"
+                                                        className="h-9 font-bold text-center text-purple-700 border-purple-300 focus-visible:ring-purple-500 max-w-[100px] mx-auto uppercase placeholder:font-normal placeholder:text-gray-400"
+                                                    />
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </div>
+                        <DialogFooter className="mt-4 border-t pt-4">
+                            <Button variant="outline" onClick={() => setShowEasyABC(false)}>취소</Button>
+                            <Button 
+                                className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
+                                onClick={() => {
+                                    const nextSubjects = [...subjects];
+                                    let applyCount = 0;
+                                    
+                                    Object.entries(tempGroups).forEach(([key, val]) => {
+                                        const trimmedVal = val.trim();
+                                        if (!trimmedVal) return; // Do not overwrite with empty strings
+                                        
+                                        const idx = nextSubjects.findIndex(s => `${s.subject}|${s.teacher}` === key);
+                                        if (idx !== -1) {
+                                            nextSubjects[idx] = {
+                                                ...nextSubjects[idx],
+                                                classCode: trimmedVal,
+                                                isMovingClass: true // Auto-set moving class
+                                            };
+                                            applyCount++;
+                                        }
+                                    });
+
+                                    setSubjects(nextSubjects);
+                                    setShowEasyABC(false);
+                                    toast.success(`${applyCount}개의 과목에 그룹이 적용되었습니다. 잊지말고 [확인 및 저장하기]를 눌러주세요!`);
+                                }}
+                            >
+                                <Check className="w-4 h-4" />
+                                메인 화면에 적용
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div >
         </div >
     );
@@ -5038,7 +5151,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
 }
 
 function AutoFillAnalyzer({ data, adminPassword, onBack }: {
-    data: { grade: number, fromDataset: string, toDataset: string, mappingRules: any[] },
+    data: { grade: number, fromDataset: string, toDataset: string, mappingRules: any[], copyFullName?: boolean },
     adminPassword: string,
     onBack: () => void
 }) {
@@ -5046,6 +5159,7 @@ function AutoFillAnalyzer({ data, adminPassword, onBack }: {
     const grade = data.grade;
     const bridgeMappingRules = data.mappingRules || [];
     const targetDataset = data.toDataset;
+    const copyFullName = data.copyFullName !== false; // Default true if undefined
 
     // Fetch current setting to determine default
     const settingsQuery = useQuery({
@@ -5240,6 +5354,7 @@ function AutoFillAnalyzer({ data, adminPassword, onBack }: {
                         subject: subj,
                         originalTeacher: teacher,
                         classCode: allCodes.sort().join(","),
+                        fullTeacherName: copyFullName ? (manualTeacherName || teacher) : "",
                         isMovingClass: !isExcluded && !isNoGroup,
                         isCombinedClass: false,
                         dataset: targetDataset
