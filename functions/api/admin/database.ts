@@ -261,16 +261,27 @@ export const onRequest = async (context: any) => {
             const tables = tablesResult.results.map((r: any) => r.name);
             const totalTables = tables.length;
             
-            // Calculate DB Size in bytes using dbstat
+            // Calculate DB Size in bytes with multi-layered fallback appropriate for D1
             let dbSizeBytes = 0;
             try {
-                const sizeResult = await env.DB.prepare("SELECT SUM(pgsize) as totalBytes FROM dbstat").first();
-                if (sizeResult && sizeResult.totalBytes) {
-                    dbSizeBytes = Number(sizeResult.totalBytes);
+                // Strategy 1: Standard PRAGMA with naive parsing
+                const pcObj = await env.DB.prepare("PRAGMA page_count").first() as any;
+                const psObj = await env.DB.prepare("PRAGMA page_size").first() as any;
+                
+                const pc = pcObj ? (pcObj.page_count ?? Object.values(pcObj)[0]) : 0;
+                const ps = psObj ? (psObj.page_size ?? Object.values(psObj)[0]) : 0;
+                
+                dbSizeBytes = Number(pc || 0) * Number(ps || 0);
+
+                // Strategy 2: dbstat (if PRAGMA failed or returned 0)
+                if (!dbSizeBytes || isNaN(dbSizeBytes)) {
+                    const sizeResult = await env.DB.prepare("SELECT SUM(pgsize) as totalBytes FROM dbstat").first() as any;
+                    if (sizeResult && sizeResult.totalBytes) {
+                        dbSizeBytes = Number(sizeResult.totalBytes);
+                    }
                 }
             } catch (e: any) {
-                console.warn("dbstat query failed:", e.message);
-                // Fallback size if dbstat isn't accessible
+                console.warn("DB size computation failed entirely:", e.message);
                 dbSizeBytes = 0; 
             }
 

@@ -406,6 +406,7 @@ export default function Dashboard() {
     enabled: !!grade && !!classNum && !!schoolName,
     retry: true, // 무한 재시도
     retryDelay: 3000, // 3초 간격
+    staleTime: 5000, // 5초 동안은 데이터를 신선한 상태로 유지하여, 캐싱 반영 및 UI 깜빡임 최소화
   });
 
   // 1.5 선택과목 데이터 및 프로필 조회 (2, 3학년용)

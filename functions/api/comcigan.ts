@@ -490,5 +490,10 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             teachersCount: teachers.length,
             parsedSamples
         }
-    }), { headers: { 'Content-Type': 'application/json' } });
+    }), {
+        headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=30, s-maxage=60'
+        }
+    });
 }
