@@ -720,7 +720,7 @@ function ElectiveManager({ password }: { password: string }) {
 
 
                 <Dialog open={showEasyABC} onOpenChange={(open) => {
-                    if (open) setDraftCodes({}); // Reset draft when opening
+                    if (!open) setDraftCodes({}); // Reset draft on any close (Cancel, X, ESC)
                     setShowEasyABC(open);
                 }}>
                     <DialogContent className="!max-w-none w-[99vw] h-[92vh] flex flex-col p-4 md:p-6 bg-slate-50">
