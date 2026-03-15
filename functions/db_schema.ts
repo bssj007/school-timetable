@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS ip_profiles (
     printCount INTEGER DEFAULT 0,
     downloadCount INTEGER DEFAULT 0,
     isStandalone INTEGER DEFAULT 0,
-    FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
+    FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id) ON DELETE SET NULL
 );
 `;
 
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS cookie_profiles (
     studentNumber INTEGER,
     printCount INTEGER DEFAULT 0,
     downloadCount INTEGER DEFAULT 0,
-    FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
+    FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id) ON DELETE SET NULL
 );
 `;
 
