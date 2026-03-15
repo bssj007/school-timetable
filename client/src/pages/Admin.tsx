@@ -393,7 +393,10 @@ function ElectiveManager({ password }: { password: string }) {
                 <Button
                     variant="secondary"
                     className="bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200"
-                    onClick={() => setShowEasyABC(true)}
+                    onClick={() => {
+                        setDraftCodes({});
+                        setShowEasyABC(true);
+                    }}
                 >
                     <Wand2 className="w-4 h-4 mr-2" />
                     Easy ABC 그룹입력
@@ -822,9 +825,16 @@ function ElectiveManager({ password }: { password: string }) {
                                         if (code === "") return; // "없음" → skip (don't overwrite)
                                         const cellSubjects = slotSubjectsMap[slotKey] || [];
                                         cellSubjects.forEach(({ idx }) => {
+                                            const currentSubject = newSubjects[idx];
+                                            const existingCodes = (currentSubject.classCode || "").split(",").filter(Boolean);
+                                            
+                                            if (!existingCodes.includes(code)) {
+                                                existingCodes.push(code);
+                                            }
+
                                             newSubjects[idx] = {
-                                                ...newSubjects[idx],
-                                                classCode: code,
+                                                ...currentSubject,
+                                                classCode: existingCodes.sort().join(","),
                                                 isMovingClass: true,
                                             };
                                         });

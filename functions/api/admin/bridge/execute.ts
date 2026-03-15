@@ -188,13 +188,19 @@ export const onRequest = async (context: any) => {
                 const hasDatasetInUnique = schemaSql.includes("dataset") &&
                     (schemaSql.includes("UNIQUE(grade") || schemaSql.includes("UNIQUE (grade"));
 
-                if (!hasDatasetInUnique) {
-                    // Null out all FK refs to avoid constraint errors during table drop
-                    try { await env.DB.prepare("UPDATE ip_profiles SET student_profile_id = NULL WHERE student_profile_id IS NOT NULL").run(); } catch (_) {}
-                    try { await env.DB.prepare("UPDATE cookie_profiles SET student_profile_id = NULL WHERE student_profile_id IS NOT NULL").run(); } catch (_) {}
+                    // 1. Drop any lingering old tables to prevent rename collisions
+                    try { await env.DB.prepare("DROP TABLE IF EXISTS cookie_profiles_old").run(); } catch (_) {}
+                    try { await env.DB.prepare("DROP TABLE IF EXISTS ip_profiles_old").run(); } catch (_) {}
+                    try { await env.DB.prepare("DROP TABLE IF EXISTS student_profiles_old").run(); } catch (_) {}
 
+                    // 2. Rename existing tables to _old
+                    await env.DB.prepare("ALTER TABLE ip_profiles RENAME TO ip_profiles_old").run();
+                    await env.DB.prepare("ALTER TABLE cookie_profiles RENAME TO cookie_profiles_old").run();
+                    await env.DB.prepare("ALTER TABLE student_profiles RENAME TO student_profiles_old").run();
+
+                    // 3. Create new tables with the updated schema (Dataset in UNIQUE for student_profiles)
                     await env.DB.prepare(`
-                        CREATE TABLE IF NOT EXISTS student_profiles_v2 (
+                        CREATE TABLE student_profiles (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             grade INTEGER NOT NULL,
                             classNum INTEGER NOT NULL,
@@ -208,15 +214,62 @@ export const onRequest = async (context: any) => {
                     `).run();
 
                     await env.DB.prepare(`
-                        INSERT OR IGNORE INTO student_profiles_v2 (id, grade, classNum, studentNumber, electives, dataset, instructionDismissed, updatedAt)
-                        SELECT id, grade, classNum, studentNumber, electives, COALESCE(dataset, ''), COALESCE(instructionDismissed, 0), COALESCE(updatedAt, datetime('now'))
-                        FROM student_profiles
+                        CREATE TABLE ip_profiles (
+                            ip TEXT PRIMARY KEY,
+                            student_profile_id INTEGER,
+                            kakaoId TEXT,
+                            kakaoNickname TEXT,
+                            lastAccess TEXT,
+                            modificationCount INTEGER DEFAULT 0,
+                            addCount INTEGER DEFAULT 0,
+                            deleteCount INTEGER DEFAULT 0,
+                            userAgent TEXT,
+                            instructionDismissed INTEGER DEFAULT 0,
+                            printCount INTEGER DEFAULT 0,
+                            downloadCount INTEGER DEFAULT 0,
+                            isStandalone INTEGER DEFAULT 0,
+                            FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
+                        )
                     `).run();
 
-                    await env.DB.prepare("DROP TABLE student_profiles").run();
-                    await env.DB.prepare("ALTER TABLE student_profiles_v2 RENAME TO student_profiles").run();
+                    await env.DB.prepare(`
+                        CREATE TABLE cookie_profiles (
+                            client_id TEXT PRIMARY KEY,
+                            student_profile_id INTEGER,
+                            kakaoId TEXT,
+                            kakaoNickname TEXT,
+                            lastAccess TEXT,
+                            modificationCount INTEGER DEFAULT 0,
+                            addCount INTEGER DEFAULT 0,
+                            deleteCount INTEGER DEFAULT 0,
+                            userAgent TEXT,
+                            instructionDismissed INTEGER DEFAULT 0,
+                            ip TEXT,
+                            grade INTEGER,
+                            classNum INTEGER,
+                            studentNumber INTEGER,
+                            printCount INTEGER DEFAULT 0,
+                            downloadCount INTEGER DEFAULT 0,
+                            FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
+                        )
+                    `).run();
 
-                    console.log("[BRIDGE execute] Auto-upgraded student_profiles UNIQUE constraint to include dataset");
+                    // 4. Migrate data from _old to new tables
+                    await env.DB.prepare(`
+                        INSERT OR IGNORE INTO student_profiles (id, grade, classNum, studentNumber, electives, dataset, instructionDismissed, updatedAt)
+                        SELECT id, grade, classNum, studentNumber, electives, COALESCE(dataset, ''), COALESCE(instructionDismissed, 0), COALESCE(updatedAt, datetime('now'))
+                        FROM student_profiles_old
+                    `).run();
+
+                    await env.DB.prepare("INSERT OR IGNORE INTO ip_profiles SELECT * FROM ip_profiles_old").run();
+                    await env.DB.prepare("INSERT OR IGNORE INTO cookie_profiles SELECT * FROM cookie_profiles_old").run();
+
+                    // 5. Safely drop _old tables (drop children first to avoid FK errors)
+                    await env.DB.prepare("DROP TABLE cookie_profiles_old").run();
+                    await env.DB.prepare("DROP TABLE ip_profiles_old").run();
+                    await env.DB.prepare("DROP TABLE student_profiles_old").run();
+
+                    console.log("[BRIDGE execute] 3-Table Rebuild: Auto-upgraded student_profiles UNIQUE constraint to include dataset");
                 }
             } catch (schemaErr) {
                 console.error("[BRIDGE execute] Schema upgrade failed:", schemaErr);
