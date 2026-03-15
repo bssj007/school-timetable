@@ -28,11 +28,24 @@ export const onRequest = async (context: any) => {
                     esDatasets = (esQuery.results || []).map((r: any) => r.dataset);
                 } catch (e) {}
 
-                // 2. Student Profiles
+                // 2. Student Profiles (dataset column may be a JSON array or plain string)
                 let spDatasets: string[] = [];
                 try {
                     const spQuery = await env.DB.prepare("SELECT DISTINCT dataset FROM student_profiles WHERE dataset IS NOT NULL").all();
-                    spDatasets = (spQuery.results || []).map((r: any) => r.dataset);
+                    for (const r of (spQuery.results || [])) {
+                        const raw = (r as any).dataset;
+                        if (!raw) continue;
+                        try {
+                            const parsed = JSON.parse(raw);
+                            if (Array.isArray(parsed)) {
+                                spDatasets.push(...parsed);
+                            } else {
+                                spDatasets.push(raw);
+                            }
+                        } catch {
+                            spDatasets.push(raw);
+                        }
+                    }
                 } catch (e) {}
 
                 // 3. Performance Assessments
@@ -87,12 +100,23 @@ export const onRequest = async (context: any) => {
                     });
                 } catch (e) {}
 
-                // 2. Student Profiles Count
+                // 2. Student Profiles Count (dataset may be stored inside a JSON array)
                 try {
-                    const spQuery = await env.DB.prepare("SELECT grade, COUNT(*) as count FROM student_profiles WHERE dataset = ? GROUP BY grade").bind(dataset).all();
-                    (spQuery.results || []).forEach((r: any) => {
-                        if (r.grade) studentProfiles[r.grade.toString()] = r.count;
-                    });
+                    const spQuery = await env.DB.prepare("SELECT grade, dataset FROM student_profiles").all();
+                    for (const r of (spQuery.results || [])) {
+                        const raw = (r as any).dataset;
+                        let datasets: string[];
+                        try {
+                            const parsed = JSON.parse(raw);
+                            datasets = Array.isArray(parsed) ? parsed : [raw || ''];
+                        } catch {
+                            datasets = [raw || ''];
+                        }
+                        if (datasets.includes(dataset) && (r as any).grade) {
+                            const gKey = (r as any).grade.toString();
+                            studentProfiles[gKey] = (studentProfiles[gKey] || 0) + 1;
+                        }
+                    }
                 } catch (e) {}
 
                 // 3. Performance Assessments Count
@@ -162,11 +186,50 @@ export const onRequest = async (context: any) => {
                 results.electiveConfigs = res.success;
             }
 
-            // Delete Student Profiles
+            // Delete Student Profiles (remove dataset slot from array, or delete row if plain match)
             if (categories.studentProfiles && categories.studentProfiles.length > 0) {
                 const grades = categories.studentProfiles;
-                const res = await env.DB.prepare(`DELETE FROM student_profiles WHERE dataset = ? AND grade ${buildInClause(grades)}`).bind(dataset).run();
-                results.studentProfiles = res.success;
+                // For array-format datasets, we need to remove the specific dataset slot
+                const { results: spRows } = await env.DB.prepare(
+                    `SELECT id, electives, dataset FROM student_profiles WHERE grade ${buildInClause(grades)}`
+                ).all();
+
+                let deletedCount = 0;
+                for (const row of (spRows || [])) {
+                    const raw = (row as any).dataset;
+                    let datasets: string[];
+                    try {
+                        const parsed = JSON.parse(raw);
+                        datasets = Array.isArray(parsed) ? parsed : [raw || ''];
+                    } catch {
+                        datasets = [raw || ''];
+                    }
+
+                    const idx = datasets.indexOf(dataset);
+                    if (idx === -1) continue;
+
+                    if (datasets.length <= 1) {
+                        // Only dataset → delete entire row
+                        await env.DB.prepare("DELETE FROM student_profiles WHERE id = ?").bind((row as any).id).run();
+                    } else {
+                        // Remove the specific slot from arrays
+                        let electivesArr: any[];
+                        try {
+                            const parsed = JSON.parse((row as any).electives);
+                            electivesArr = Array.isArray(parsed) ? parsed : [parsed];
+                        } catch {
+                            electivesArr = [null];
+                        }
+                        datasets.splice(idx, 1);
+                        electivesArr.splice(idx, 1);
+
+                        const finalElectives = datasets.length === 1 ? JSON.stringify(electivesArr[0]) : JSON.stringify(electivesArr);
+                        const finalDataset = datasets.length === 1 ? datasets[0] : JSON.stringify(datasets);
+                        await env.DB.prepare("UPDATE student_profiles SET electives = ?, dataset = ?, updatedAt = datetime('now') WHERE id = ?").bind(finalElectives, finalDataset, (row as any).id).run();
+                    }
+                    deletedCount++;
+                }
+                results.studentProfiles = deletedCount > 0;
             }
 
             // Delete Performance Assessments
