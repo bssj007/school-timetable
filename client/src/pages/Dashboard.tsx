@@ -2226,14 +2226,14 @@ export default function Dashboard() {
                       }}
                     >
                       <div className="flex justify-between items-center mb-2">
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-bold text-lg text-blue-600">
                             {assessment.subject}
                           </span>
                           <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                             {assessment.description}
                           </span>
-                          <span className={`text-sm font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
+                          <span className={`text-base font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
                             {dDay}
                           </span>
                         </div>
