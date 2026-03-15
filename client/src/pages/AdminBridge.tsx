@@ -415,6 +415,11 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             return;
         }
 
+        if (fromDataset === toDataset) {
+            toast.error("출발역과 도착역은 같을 수 없습니다.");
+            return;
+        }
+
         const validMapping = mappingFields.filter(m => m.from.trim() !== "");
 
         createBridgeMutation.mutate({

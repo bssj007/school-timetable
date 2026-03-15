@@ -36,6 +36,11 @@ export const onRequest = async (context: any) => {
         }
 
         const { fromDataset, toDataset, targetGrade, mappingData: mappingDataStr } = bridgeEntry;
+
+        if (fromDataset === toDataset) {
+            return new Response(JSON.stringify({ error: "출발역과 도착역은 같을 수 없습니다. (Source protection)" }), { status: 400 });
+        }
+
         const mappingData = JSON.parse(mappingDataStr); // Expected format: { "Math": "Mathematics 1", "Eng": "English 2" }
 
 
@@ -188,6 +193,7 @@ export const onRequest = async (context: any) => {
                 const hasDatasetInUnique = schemaSql.includes("dataset") &&
                     (schemaSql.includes("UNIQUE(grade") || schemaSql.includes("UNIQUE (grade"));
 
+                if (!hasDatasetInUnique) {
                     // 1. Drop any lingering old tables to prevent rename collisions
                     try { await env.DB.prepare("DROP TABLE IF EXISTS cookie_profiles_old").run(); } catch (_) {}
                     try { await env.DB.prepare("DROP TABLE IF EXISTS ip_profiles_old").run(); } catch (_) {}
