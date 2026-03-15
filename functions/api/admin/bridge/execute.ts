@@ -414,9 +414,9 @@ export const onRequest = async (context: any) => {
                     }
                 }
 
-                // 3. INSERT mapped profile into toDataset
+                // 3. UPSERT mapped profile into toDataset
                 batchStatements.push(env.DB.prepare(
-                    "INSERT OR REPLACE INTO student_profiles (grade, classNum, studentNumber, electives, instructionDismissed, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)"
+                    "INSERT INTO student_profiles (grade, classNum, studentNumber, electives, instructionDismissed, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(grade, classNum, studentNumber, dataset) DO UPDATE SET electives = excluded.electives, instructionDismissed = excluded.instructionDismissed, updatedAt = excluded.updatedAt"
                 ).bind(
                     profile.grade, profile.classNum, profile.studentNumber,
                     newElectivesJson, profile.instructionDismissed ?? 0,
