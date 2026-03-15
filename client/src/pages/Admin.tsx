@@ -3380,7 +3380,7 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
             <div className="bg-slate-50 border rounded-lg p-4 space-y-3">
                 <h4 className="text-sm font-bold text-slate-700">설정</h4>
                 <div className="flex items-center gap-2">
-                    <label className="text-xs font-medium text-slate-600 w-36">"못 믿겠음" 삭제 기준</label>
+                    <label className="text-xs font-medium text-slate-600 w-36">"가짜" 삭제 기준</label>
                     <Input type="number" value={threshold} onChange={e => setThreshold(Math.max(1, parseInt(e.target.value) || 1))} className="w-16 h-7 text-sm" min={1} />
                     <span className="text-xs text-slate-500">명 이상이면 삭제 가능</span>
                 </div>

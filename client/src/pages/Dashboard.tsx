@@ -2244,9 +2244,9 @@ export default function Dashboard() {
                           <span>{assessment.classTime}교시</span>
                         </div>
                         {grade && classNum && studentNumber && (
-                          <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
                             <button
-                              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
                                 votesData?.myVotes?.[String(assessment.id)] === 'helpful'
                                   ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
                                   : 'bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-green-600'
@@ -2254,12 +2254,12 @@ export default function Dashboard() {
                               onClick={() => voteMutation.mutate({ assessmentId: assessment.id, vote: 'helpful' })}
                               disabled={voteMutation.isPending}
                             >
-                              <ThumbsUp className="w-4 h-4" />
+                              <ThumbsUp className="w-3.5 h-3.5" />
                               <span>도움됨</span>
                               <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.helpful || 0}</span>
                             </button>
                             <button
-                              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
                                 votesData?.myVotes?.[String(assessment.id)] === 'distrust'
                                   ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
                                   : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600'
@@ -2267,8 +2267,8 @@ export default function Dashboard() {
                               onClick={() => voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' })}
                               disabled={voteMutation.isPending}
                             >
-                              <X className="w-4 h-4" />
-                              <span>못 믿겠음</span>
+                              <X className="w-3.5 h-3.5" />
+                              <span>가짜</span>
                               <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.distrust || 0}</span>
                             </button>
                           </div>
