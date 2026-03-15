@@ -159,16 +159,25 @@ export const onRequest = async (context: any) => {
                     // Mapping explicitly specifies target teacher
                     newTeacher = mappedTeacher;
                 } else {
-                    // No explicit teacher in mapping — try to find the matching teacher in target dataset
-                    // First: try exact subject+sourceTeacher match (same teacher exists in target)
-                    const exactKey = `${mappedSubject}|${config.originalTeacher || ""}`;
-                    if (targetSubjectTeacherMap[exactKey] !== undefined) {
-                        newTeacher = targetSubjectTeacherMap[exactKey];
-                    } else if (targetSubjectTeachers[mappedSubject]?.length === 1) {
-                        // Only one teacher for this subject in target — use it
-                        newTeacher = targetSubjectTeachers[mappedSubject][0];
+                    // No explicit teacher in mapping — find matching teacher in target dataset
+                    const sourceTeacher = (config.originalTeacher || "").replace(/\*$/, "");
+                    const targetTeachers = targetSubjectTeachers[mappedSubject] || [];
+
+                    if (targetTeachers.length === 1) {
+                        // Only one teacher for this subject — use it
+                        newTeacher = targetTeachers[0];
+                    } else if (targetTeachers.length > 1 && sourceTeacher) {
+                        // Multiple teachers: try prefix matching (comcigan truncates to 2 chars)
+                        // "김정원" should match "김정" and vice versa
+                        const cleanTargets = targetTeachers.map(t => t.replace(/\*$/, ""));
+                        const match = cleanTargets.findIndex(t =>
+                            t.startsWith(sourceTeacher) || sourceTeacher.startsWith(t)
+                        );
+                        if (match !== -1) {
+                            newTeacher = targetTeachers[match];
+                        }
+                        // No match found → keep original teacher name
                     }
-                    // If multiple teachers and no exact match, keep original teacher name
                 }
 
                 // Transfer fullTeacherName based on copyFullName flag

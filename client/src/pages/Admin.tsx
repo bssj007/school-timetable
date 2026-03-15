@@ -3839,7 +3839,8 @@ export default function Admin() {
     const [sortColumn, setSortColumn] = useState<'id' | 'modCount' | 'lastAccess'>('lastAccess');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-    const [assessmentDatasetFilter, setAssessmentDatasetFilter] = useState<string>('_auto_');
+    const [assessmentDsFilterG1, setAssessmentDsFilterG1] = useState<string>('_auto_');
+    const [assessmentDsFilterG23, setAssessmentDsFilterG23] = useState<string>('_auto_');
 
     // Settings query for dataset resolution
     const { data: adminSettings } = useQuery({
@@ -3852,7 +3853,7 @@ export default function Admin() {
         enabled: isAuthenticated,
     });
 
-    // Resolve auto dataset per grade (grade 1 uses grade1 setting, grade 2/3 uses main setting)
+    // Resolve auto dataset per grade
     const resolvedAutoDatasetGrade1 = adminSettings?.comcigan_dataset_selected_grade1 || '';
     const resolvedAutoDatasetGrade23 = adminSettings?.comcigan_dataset_selected || '';
 
@@ -3877,20 +3878,20 @@ export default function Admin() {
         return Array.from(ds).sort();
     }, [assessments]);
 
-    // Filter assessments by dataset
+    // Filter assessments by per-grade dataset selectors
     const datasetFilteredAssessments = useMemo(() => {
         if (!assessments || !Array.isArray(assessments)) return [];
-        if (assessmentDatasetFilter === '_all_') return assessments;
-        if (assessmentDatasetFilter === '_auto_') {
-            // Auto: filter each assessment based on its grade's resolved dataset
-            return assessments.filter((a: any) => {
-                const ds = a.grade === 1 ? resolvedAutoDatasetGrade1 : resolvedAutoDatasetGrade23;
+        return assessments.filter((a: any) => {
+            const isG1 = a.grade === 1;
+            const filter = isG1 ? assessmentDsFilterG1 : assessmentDsFilterG23;
+            if (filter === '_all_') return true;
+            if (filter === '_auto_') {
+                const ds = isG1 ? resolvedAutoDatasetGrade1 : resolvedAutoDatasetGrade23;
                 return (a.dataset || '') === ds;
-            });
-        }
-        // Specific dataset
-        return assessments.filter((a: any) => (a.dataset || '') === assessmentDatasetFilter);
-    }, [assessments, assessmentDatasetFilter, resolvedAutoDatasetGrade1, resolvedAutoDatasetGrade23]);
+            }
+            return (a.dataset || '') === filter;
+        });
+    }, [assessments, assessmentDsFilterG1, assessmentDsFilterG23, resolvedAutoDatasetGrade1, resolvedAutoDatasetGrade23]);
 
     const deleteAssessmentsMutation = useMutation({
         mutationFn: async (ids: number[]) => {
@@ -4140,18 +4141,35 @@ export default function Admin() {
                                     등록된 수행평가를 확인하고 일괄 삭제할 수 있습니다.
                                 </CardDescription>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <select
-                                    value={assessmentDatasetFilter}
-                                    onChange={(e) => { setAssessmentDatasetFilter(e.target.value); setSelectedAssessments([]); }}
-                                    className="border rounded px-2 py-1 text-sm bg-white"
-                                >
-                                    <option value="_auto_">자동 (활성 데이터셋)</option>
-                                    <option value="_all_">전체</option>
-                                    {assessmentDatasets.map((ds: string) => (
-                                        <option key={ds} value={ds}>{ds || '(빈 데이터셋)'}</option>
-                                    ))}
-                                </select>
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <div className="flex items-center gap-1">
+                                    <span className="text-xs text-slate-500 whitespace-nowrap">1학년</span>
+                                    <select
+                                        value={assessmentDsFilterG1}
+                                        onChange={(e) => { setAssessmentDsFilterG1(e.target.value); setSelectedAssessments([]); }}
+                                        className="border rounded px-2 py-1 text-sm bg-white min-w-[100px]"
+                                    >
+                                        <option value="_auto_">자동</option>
+                                        <option value="_all_">전체</option>
+                                        {assessmentDatasets.map((ds: string) => (
+                                            <option key={ds} value={ds}>{ds || '(빈 데이터셋)'}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-xs text-slate-500 whitespace-nowrap">2·3학년</span>
+                                    <select
+                                        value={assessmentDsFilterG23}
+                                        onChange={(e) => { setAssessmentDsFilterG23(e.target.value); setSelectedAssessments([]); }}
+                                        className="border rounded px-2 py-1 text-sm bg-white min-w-[100px]"
+                                    >
+                                        <option value="_auto_">자동</option>
+                                        <option value="_all_">전체</option>
+                                        {assessmentDatasets.map((ds: string) => (
+                                            <option key={ds} value={ds}>{ds || '(빈 데이터셋)'}</option>
+                                        ))}
+                                    </select>
+                                </div>
                                 {selectedAssessments.length > 0 && (
                                     <Button
                                         variant="destructive"
