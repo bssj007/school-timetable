@@ -41,6 +41,7 @@ interface AssessmentItem {
   classTime?: number;
   weekday?: number;
   round?: number; // 차수 추가
+  votes?: string; // JSON array of votes
 }
 
 // 주의 시작일 계산 (월요일 기준)
@@ -702,42 +703,47 @@ export default function Dashboard() {
     return filtered;
   }, [allAssessments, weekDates]);
 
-  // 3.5 수행평가 투표 데이터 조회
-  const assessmentIds = useMemo(() => assessments?.map(a => a.id) || [], [assessments]);
-  const { data: votesData } = useQuery({
-    queryKey: ['assessmentVotes', assessmentIds.join(','), grade, classNum, studentNumber],
-    queryFn: async () => {
-      if (assessmentIds.length === 0) return { votes: {}, myVotes: {} };
-      const params = new URLSearchParams({
-        assessmentIds: assessmentIds.join(','),
-        ...(grade && { grade }),
-        ...(classNum && { classNum }),
-        ...(studentNumber && { studentNumber }),
-      });
-      const res = await fetch(`/api/assessment-votes?${params}`);
-      if (!res.ok) return { votes: {}, myVotes: {} };
-      return res.json();
-    },
-    enabled: assessmentIds.length > 0,
-    refetchInterval: 10000,
-  });
+  // 3.5 수행평가 투표 데이터 (인라인 votes 필드에서 계산)
+  const votesData = useMemo(() => {
+    if (!assessments || assessments.length === 0) return { votes: {} as Record<string, { helpful: number; distrust: number }>, myVotes: {} as Record<string, string> };
+    const votes: Record<string, { helpful: number; distrust: number }> = {};
+    const myVotes: Record<string, string> = {};
+    for (const a of assessments) {
+      const aid = String(a.id);
+      let votesArr: { g: number; c: number; s: number; v: string }[] = [];
+      try { votesArr = JSON.parse(a.votes || '[]'); } catch { votesArr = []; }
+      const helpful = votesArr.filter(x => x.v === 'helpful').length;
+      const distrust = votesArr.filter(x => x.v === 'distrust').length;
+      if (helpful > 0 || distrust > 0) votes[aid] = { helpful, distrust };
+      // Find my vote
+      if (grade && classNum && studentNumber) {
+        const myVote = votesArr.find(x => x.g === parseInt(grade) && x.c === parseInt(classNum) && x.s === parseInt(studentNumber));
+        if (myVote) myVotes[aid] = myVote.v;
+      }
+    }
+    return { votes, myVotes };
+  }, [assessments, grade, classNum, studentNumber]);
 
   const voteMutation = useMutation({
     mutationFn: async ({ assessmentId, vote }: { assessmentId: number; vote: 'helpful' | 'distrust' }) => {
       const myCurrentVote = votesData?.myVotes?.[String(assessmentId)];
       if (myCurrentVote === vote) {
-        // Toggle off
-        await fetch(`/api/assessment-votes?assessmentId=${assessmentId}&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`, { method: 'DELETE' });
+        // Toggle off - send null vote
+        await fetch('/api/assessment?action=vote', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assessmentId, grade: parseInt(grade), classNum: parseInt(classNum), studentNumber: parseInt(studentNumber), vote: null }),
+        });
       } else {
-        await fetch('/api/assessment-votes', {
-          method: 'POST',
+        await fetch('/api/assessment?action=vote', {
+          method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ assessmentId, grade: parseInt(grade), classNum: parseInt(classNum), studentNumber: parseInt(studentNumber), vote }),
         });
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['assessmentVotes'] });
+      queryClient.invalidateQueries({ queryKey: ['assessments'] });
     },
   });
 
@@ -1505,11 +1511,42 @@ export default function Dashboard() {
                               }) : [];
 
                               // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
-                              const bgColor = (includeAssessments && cellAssessments.length > 0)
-                                ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
-                                : isToday
-                                  ? "bg-red-50 hover:bg-red-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50"
-                                  : "bg-yellow-50 hover:bg-yellow-100";
+                              let bgColor = "bg-yellow-50 hover:bg-yellow-100";
+                              let cellInlineStyle: React.CSSProperties | undefined;
+                              if (includeAssessments && cellAssessments.length > 0) {
+                                if (isPast) {
+                                  bgColor = "bg-gray-200 border-gray-300";
+                                } else if (settings?.assessment_timetable_color && votesData) {
+                                  // Apply vote-based color to timetable cell
+                                  const a = cellAssessments[0];
+                                  const vi = votesData?.votes?.[String(a.id)];
+                                  const net = vi ? (vi.helpful || 0) - (vi.distrust || 0) : 0;
+                                  const blendHex = (base: string, mix: string, ratio: number) => {
+                                    const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
+                                    const b = p(base), m = p(mix), r = ratio;
+                                    return '#' + b.map((c, i) => Math.round(c*(1-r)+m[i]*r).toString(16).padStart(2,'0')).join('');
+                                  };
+                                  if (net > 0) {
+                                    const mixColor = settings?.assessment_positive_color || '#22c55e';
+                                    const ratio = Math.min(100, parseInt(settings?.assessment_positive_ratio || '30')) / 100;
+                                    const scaled = Math.min(1, (vi?.helpful || 0) / 10) * ratio;
+                                    cellInlineStyle = { backgroundColor: blendHex('#dbeafe', mixColor, scaled) };
+                                    bgColor = "border-blue-300";
+                                  } else if (net < 0) {
+                                    const mixColor = settings?.assessment_negative_color || '#9ca3af';
+                                    const ratio = Math.min(100, parseInt(settings?.assessment_negative_ratio || '40')) / 100;
+                                    const scaled = Math.min(1, (vi?.distrust || 0) / 10) * ratio;
+                                    cellInlineStyle = { backgroundColor: blendHex('#dbeafe', mixColor, scaled) };
+                                    bgColor = "border-blue-300";
+                                  } else {
+                                    bgColor = "bg-blue-100 border-blue-300";
+                                  }
+                                } else {
+                                  bgColor = "bg-blue-100 border-blue-300";
+                                }
+                              } else if (isToday) {
+                                bgColor = "bg-red-50 hover:bg-red-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50";
+                              }
 
                               // 과거 날짜 스타일
                               const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400 print:!opacity-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 print:!text-gray-900 capturing:!opacity-100 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50 capturing:!text-gray-900" : "";
@@ -1610,6 +1647,7 @@ export default function Dashboard() {
                                 ${bgColor} ${pastStyle} ${selectionStyle}
                                 ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
+                                  style={cellInlineStyle}
                                 >
                                   {isElectiveActive && group && (
                                     <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400 print:!bg-orange-100 print:!text-orange-800 capturing:!bg-orange-100 capturing:!text-orange-800" : "bg-orange-100 text-orange-800"}`}>
@@ -2206,9 +2244,9 @@ export default function Dashboard() {
                           <span>{assessment.classTime}교시</span>
                         </div>
                         {grade && classNum && studentNumber && (
-                          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                             <button
-                              className={`flex items-center gap-0.5 px-2 py-1 rounded-full text-xs font-medium transition-all ${
+                              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                                 votesData?.myVotes?.[String(assessment.id)] === 'helpful'
                                   ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
                                   : 'bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-green-600'
@@ -2216,11 +2254,12 @@ export default function Dashboard() {
                               onClick={() => voteMutation.mutate({ assessmentId: assessment.id, vote: 'helpful' })}
                               disabled={voteMutation.isPending}
                             >
-                              <ThumbsUp className="w-3 h-3" />
-                              <span>{votesData?.votes?.[String(assessment.id)]?.helpful || 0}</span>
+                              <ThumbsUp className="w-4 h-4" />
+                              <span>도움됨</span>
+                              <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.helpful || 0}</span>
                             </button>
                             <button
-                              className={`flex items-center gap-0.5 px-2 py-1 rounded-full text-xs font-medium transition-all ${
+                              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                                 votesData?.myVotes?.[String(assessment.id)] === 'distrust'
                                   ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
                                   : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600'
@@ -2228,8 +2267,9 @@ export default function Dashboard() {
                               onClick={() => voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' })}
                               disabled={voteMutation.isPending}
                             >
-                              <X className="w-3 h-3" />
-                              <span>{votesData?.votes?.[String(assessment.id)]?.distrust || 0}</span>
+                              <X className="w-4 h-4" />
+                              <span>못 믿겠음</span>
+                              <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.distrust || 0}</span>
                             </button>
                           </div>
                         )}

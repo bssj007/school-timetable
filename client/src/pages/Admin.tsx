@@ -3204,6 +3204,7 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
     const [positiveRatio, setPositiveRatio] = useState(30);
     const [negativeColor, setNegativeColor] = useState("#9ca3af");
     const [negativeRatio, setNegativeRatio] = useState(40);
+    const [timetableColorEnabled, setTimetableColorEnabled] = useState(false);
 
     const settingsQuery = useQuery({
         queryKey: ["admin", "settings", "reliability"],
@@ -3222,6 +3223,7 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
             if (d.assessment_positive_ratio) setPositiveRatio(parseInt(d.assessment_positive_ratio) || 30);
             if (d.assessment_negative_color) setNegativeColor(d.assessment_negative_color);
             if (d.assessment_negative_ratio) setNegativeRatio(parseInt(d.assessment_negative_ratio) || 40);
+            setTimetableColorEnabled(d.assessment_timetable_color === 'true');
         }
     }, [settingsQuery.data]);
 
@@ -3275,18 +3277,21 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
         enabled: !!resolvedDataset,
     });
 
-    const assessmentIds = useMemo(() => (assessmentsQuery.data || []).map((a: any) => a.id), [assessmentsQuery.data]);
-    const votesQuery = useQuery({
-        queryKey: ["admin", "reliability_votes", assessmentIds.join(",")],
-        queryFn: async () => {
-            if (assessmentIds.length === 0) return { votes: {}, myVotes: {} };
-            const res = await fetch(`/api/assessment-votes?assessmentIds=${assessmentIds.join(",")}`);
-            if (!res.ok) return { votes: {}, myVotes: {} };
-            return res.json();
-        },
-        enabled: assessmentIds.length > 0,
-        refetchInterval: 10000,
-    });
+    const assessments = assessmentsQuery.data || [];
+
+    // Compute votes from inline assessment.votes JSON
+    const votes = useMemo(() => {
+        const result: Record<string, { helpful: number; distrust: number }> = {};
+        for (const a of assessments) {
+            let votesArr: { g: number; c: number; s: number; v: string }[] = [];
+            try { votesArr = JSON.parse((a as any).votes || '[]'); } catch { votesArr = []; }
+            result[String(a.id)] = {
+                helpful: votesArr.filter((x: any) => x.v === 'helpful').length,
+                distrust: votesArr.filter((x: any) => x.v === 'distrust').length,
+            };
+        }
+        return result;
+    }, [assessments]);
 
     const profilesQuery = useQuery({
         queryKey: ["admin", "reliability_profiles", selectedGrade, resolvedDataset],
@@ -3334,6 +3339,7 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
             assessment_positive_ratio: String(positiveRatio),
             assessment_negative_color: negativeColor,
             assessment_negative_ratio: String(negativeRatio),
+            assessment_timetable_color: timetableColorEnabled ? 'true' : 'false',
         });
     };
 
@@ -3346,12 +3352,8 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
         onSuccess: () => {
             toast.success("수행평가가 휴지통으로 이동되었습니다.");
             queryClient.invalidateQueries({ queryKey: ["admin", "reliability_assessments"] });
-            queryClient.invalidateQueries({ queryKey: ["admin", "reliability_votes"] });
         },
     });
-
-    const assessments = assessmentsQuery.data || [];
-    const votes = votesQuery.data?.votes || {};
 
     const tableRows = useMemo(() => {
         return assessments.map((a: any) => {
@@ -3362,7 +3364,7 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
         }).sort((a: any, b: any) => b.distrust - a.distrust);
     }, [assessments, votes, eligibleCounts, threshold]);
 
-    const isLoading = assessmentsQuery.isLoading || votesQuery.isLoading;
+    const isLoading = assessmentsQuery.isLoading;
 
     const blendHex = (base: string, mix: string, ratio: number) => {
         const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
@@ -3375,25 +3377,6 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
 
     return (
         <div className="space-y-5">
-            <div className="flex flex-wrap gap-3 items-end">
-                <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">학년</label>
-                    <select value={selectedGrade} onChange={e => setSelectedGrade(e.target.value)} className="border rounded px-2 py-1 text-sm">
-                        <option value="1">1학년</option>
-                        <option value="2">2학년</option>
-                        <option value="3">3학년</option>
-                    </select>
-                </div>
-                <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">데이터셋</label>
-                    <select value={selectedDataset} onChange={e => setSelectedDataset(e.target.value)} className="border rounded px-2 py-1 text-sm">
-                        <option value="_auto_">자동 (활성)</option>
-                        {timetableProps.map(tp => <option key={tp} value={tp}>{tp}</option>)}
-                    </select>
-                </div>
-                {resolvedDataset && <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-1 rounded self-end">{resolvedDataset}</span>}
-            </div>
-
             <div className="bg-slate-50 border rounded-lg p-4 space-y-3">
                 <h4 className="text-sm font-bold text-slate-700">설정</h4>
                 <div className="flex items-center gap-2">
@@ -3417,9 +3400,33 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
                     <span className="text-xs text-slate-500">%</span>
                     <div className="flex items-center gap-1 ml-1"><span className="text-xs text-slate-400">미리보기:</span><div className="w-12 h-5 rounded border" style={{ backgroundColor: previewNegative }} /></div>
                 </div>
+                <div className="flex items-center gap-2">
+                    <input type="checkbox" id="timetableColorToggle" checked={timetableColorEnabled} onChange={e => setTimetableColorEnabled(e.target.checked)} className="rounded" />
+                    <label htmlFor="timetableColorToggle" className="text-xs font-medium text-slate-600">시간표 셀에도 신뢰성 색상 반영</label>
+                </div>
                 <Button size="sm" className="h-8 text-xs" onClick={handleSaveAll} disabled={saveSettingsMutation.isPending}>
                     <Save className="w-3 h-3 mr-1" />설정 저장
                 </Button>
+            </div>
+
+            <div className="flex flex-wrap gap-3 items-end">
+                <div>
+                    <label className="text-xs font-medium text-slate-500 block mb-1">학년</label>
+                    <select value={selectedGrade} onChange={e => setSelectedGrade(e.target.value)} className="border rounded px-2 py-1 text-sm">
+                        <option value="1">1학년</option>
+                        <option value="2">2학년</option>
+                        <option value="3">3학년</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="text-xs font-medium text-slate-500 block mb-1">데이터셋</label>
+                    <select value={selectedDataset} onChange={e => setSelectedDataset(e.target.value)} className="border rounded px-2 py-1 text-sm">
+                        <option value="_auto_">자동 (활성)</option>
+                        <option value="MANUAL_PLAN">수동 시간표</option>
+                        {timetableProps.map(tp => <option key={tp} value={tp}>{tp}</option>)}
+                    </select>
+                </div>
+                {resolvedDataset && <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-1 rounded self-end">{resolvedDataset}</span>}
             </div>
 
             {isLoading ? (
