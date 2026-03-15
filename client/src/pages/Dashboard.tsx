@@ -2226,7 +2226,7 @@ export default function Dashboard() {
                       }}
                     >
                       <div className="flex justify-between items-center mb-2">
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-1 flex-wrap">
                           <span className="font-bold text-lg text-blue-600">
                             {assessment.subject}
                           </span>
