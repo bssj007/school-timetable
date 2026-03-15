@@ -293,6 +293,17 @@ export const onRequest = async (context: any) => {
                 // Continue anyway — migration may still succeed if schema was already upgraded
             }
 
+            // Re-check schema after upgrade attempt to determine correct ON CONFLICT clause
+            let schemaHasDataset = false;
+            try {
+                const recheckRow = await env.DB.prepare(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='student_profiles'"
+                ).first() as any;
+                const recheckSql: string = recheckRow?.sql || "";
+                schemaHasDataset = recheckSql.includes("dataset") &&
+                    (recheckSql.includes("UNIQUE(grade") || recheckSql.includes("UNIQUE (grade"));
+            } catch (_) {}
+
             // ── Null out FK refs for toDataset profiles (before deleting them) ─
             try {
                 const { results: profilesToDelete } = await env.DB.prepare(
@@ -415,9 +426,11 @@ export const onRequest = async (context: any) => {
                 }
 
                 // 3. UPSERT mapped profile into toDataset
-                batchStatements.push(env.DB.prepare(
-                    "INSERT INTO student_profiles (grade, classNum, studentNumber, electives, instructionDismissed, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(grade, classNum, studentNumber, dataset) DO UPDATE SET electives = excluded.electives, instructionDismissed = excluded.instructionDismissed, updatedAt = excluded.updatedAt"
-                ).bind(
+                // Dynamically choose ON CONFLICT clause based on actual DB schema
+                const upsertSql = schemaHasDataset
+                    ? "INSERT INTO student_profiles (grade, classNum, studentNumber, electives, instructionDismissed, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(grade, classNum, studentNumber, dataset) DO UPDATE SET electives = excluded.electives, instructionDismissed = excluded.instructionDismissed, updatedAt = excluded.updatedAt"
+                    : "INSERT INTO student_profiles (grade, classNum, studentNumber, electives, instructionDismissed, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(grade, classNum, studentNumber) DO UPDATE SET electives = excluded.electives, dataset = excluded.dataset, instructionDismissed = excluded.instructionDismissed, updatedAt = excluded.updatedAt";
+                batchStatements.push(env.DB.prepare(upsertSql).bind(
                     profile.grade, profile.classNum, profile.studentNumber,
                     newElectivesJson, profile.instructionDismissed ?? 0,
                     toDataset, new Date().toISOString()
