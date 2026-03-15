@@ -69,7 +69,13 @@ export const onRequest = async (context: any) => {
             const needsUpgrade = tableSql.includes("UNIQUE(grade, classNum, studentNumber)") &&
                 !tableSql.includes("dataset");
 
-            if (needsUpgrade) {
+            const ipSchemaRow = await env.DB.prepare(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='ip_profiles'"
+            ).first() as any;
+            const ipSchemaSql: string = ipSchemaRow?.sql || "";
+            const needsFkUpgrade = !ipSchemaSql.includes("SET NULL");
+
+            if (needsUpgrade || needsFkUpgrade) {
                 // 1. Drop any lingering old tables to prevent rename collisions
                 try { await env.DB.prepare("DROP TABLE IF EXISTS cookie_profiles_old").run(); } catch (_) {}
                 try { await env.DB.prepare("DROP TABLE IF EXISTS ip_profiles_old").run(); } catch (_) {}

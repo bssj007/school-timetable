@@ -193,7 +193,13 @@ export const onRequest = async (context: any) => {
                 const hasDatasetInUnique = schemaSql.includes("dataset") &&
                     (schemaSql.includes("UNIQUE(grade") || schemaSql.includes("UNIQUE (grade"));
 
-                if (!hasDatasetInUnique) {
+                const ipSchemaRow = await env.DB.prepare(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='ip_profiles'"
+                ).first() as any;
+                const ipSchemaSql: string = ipSchemaRow?.sql || "";
+                const hasSetNull = ipSchemaSql.includes("SET NULL");
+
+                if (!hasDatasetInUnique || !hasSetNull) {
                     // 1. Drop any lingering old tables to prevent rename collisions
                     try { await env.DB.prepare("DROP TABLE IF EXISTS cookie_profiles_old").run(); } catch (_) {}
                     try { await env.DB.prepare("DROP TABLE IF EXISTS ip_profiles_old").run(); } catch (_) {}
