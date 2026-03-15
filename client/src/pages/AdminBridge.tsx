@@ -203,10 +203,15 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
 
     // Manually trigger mapping generation
     const generateAutoMappings = (isManualClick = true) => {
-        if (!fromSubjectsQuery.data) return;
-
         // Subjects to exclude from bridge
         const excludedSubjects = ["창체", "채플"];
+
+        // 출발역 과목이 없으면 빈 리스트로 세팅 (변경된 출발역/도착역 반영)
+        if (!fromSubjectsQuery.data || fromSubjectsQuery.data.length === 0) {
+            setMappingFields([]);
+            if (isManualClick) toast.info("출발역에 추출된 과목이 없습니다. 목록이 초기화되었습니다.");
+            return;
+        }
 
         const filteredFromSubjects = fromSubjectsQuery.data.filter(subj => {
             const parsed = parseSubject(subj);
@@ -273,33 +278,32 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
 
     // Auto-populate when datasets/grade change and mapping fields are out of sync
     useEffect(() => {
-        // We need both subjects lists to be loaded to accurately calculate similarities
-        const canGenerate = Array.isArray(fromSubjectsQuery.data) && fromSubjectsQuery.data.length > 0 &&
-            Array.isArray(toSubjectsQuery.data) && toSubjectsQuery.data.length > 0;
+        const currentSig = `${fromDataset}-${toDataset}-${targetGrade}`;
+        const hasSigChanged = lastGenSig.current !== currentSig;
 
-        const currentFroms = mappingFields.map(m => m.from).slice().sort().join(",");
-        
+        if (!hasSigChanged) return;
+
+        // sig가 변경됐을 때: 과목 쿼리가 아직 로딩 중이면 대기
+        if (fromSubjectsQuery.isLoading || toSubjectsQuery.isLoading) return;
+
         const excludedSubjects = ["창체", "채플"];
+        const currentFroms = mappingFields.map(m => m.from).slice().sort().join(",");
         const fetchedFromsArr = Array.isArray(fromSubjectsQuery.data) ? fromSubjectsQuery.data.filter(subj => {
             const parsed = parseSubject(subj);
             return !excludedSubjects.some(ex => parsed.subj.includes(ex));
         }) : [];
         const fetchedFroms = fetchedFromsArr.slice().sort().join(",");
-
-        const currentSig = `${fromDataset}-${toDataset}-${targetGrade}`;
-        const hasSigChanged = lastGenSig.current !== currentSig;
         const mappingMismatch = currentFroms !== fetchedFroms;
 
-        // If from list changed, OR manual trigger via sig change (meaning toDataset changed)
-        // Create mode: regenerate on any mismatch or sig change
-        // Edit mode: only regenerate when the user explicitly changed dataset/grade (hasSigChanged)
-        const shouldRegenerate = canGenerate && (isCreating ? (mappingMismatch || hasSigChanged) : hasSigChanged);
+        // 신규 생성 모드: 과목 불일치 또는 sig 변경 시 재생성
+        // 편집 모드: sig 변경 시 재생성 (과목이 없어도 빈 목록으로 반영)
+        const shouldRegenerate = isCreating ? (mappingMismatch || hasSigChanged) : hasSigChanged;
         if (shouldRegenerate) {
             lastGenSig.current = currentSig;
             generateAutoMappings(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fromSubjectsQuery.data, toSubjectsQuery.data, isCreating, mappingFields, fromDataset, toDataset, targetGrade]);
+    }, [fromSubjectsQuery.data, fromSubjectsQuery.isLoading, toSubjectsQuery.data, toSubjectsQuery.isLoading, isCreating, mappingFields, fromDataset, toDataset, targetGrade]);
 
     const { data: bridges, isLoading } = useQuery({
         queryKey: ["admin", "bridges"],
@@ -580,7 +584,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         </div>
                                         <div className="col-span-12 sm:col-span-2">
                                             <label className="text-sm font-bold block mb-1">대상 학년</label>
-                                            <Select value={targetGrade} onValueChange={setTargetGrade}>
+                                            <Select value={targetGrade} onValueChange={setTargetGrade} disabled={!isCreating}>
                                                 <SelectTrigger className={!targetGrade ? "text-slate-500" : ""}>
                                                     <SelectValue placeholder="-선택-" />
                                                 </SelectTrigger>

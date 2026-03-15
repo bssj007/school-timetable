@@ -225,21 +225,36 @@ export const onRequest = async (context: any) => {
 
             // ── Null out FK refs for toDataset profiles (before deleting them) ─
             try {
-                await env.DB.prepare(`
-                    UPDATE ip_profiles SET student_profile_id = NULL
-                    WHERE student_profile_id IN (
-                        SELECT id FROM student_profiles WHERE grade = ? AND dataset = ?
-                    )
-                `).bind(targetGrade, toDataset).run();
-            } catch (_) {}
-            try {
-                await env.DB.prepare(`
-                    UPDATE cookie_profiles SET student_profile_id = NULL
-                    WHERE student_profile_id IN (
-                        SELECT id FROM student_profiles WHERE grade = ? AND dataset = ?
-                    )
-                `).bind(targetGrade, toDataset).run();
-            } catch (_) {}
+                const { results: profilesToDelete } = await env.DB.prepare(
+                    "SELECT id FROM student_profiles WHERE grade = ? AND dataset = ?"
+                ).bind(targetGrade, toDataset).all();
+
+                if (profilesToDelete && profilesToDelete.length > 0) {
+                    const ids = profilesToDelete.map((p: any) => p.id);
+                    const chunkSize = 50;
+                    
+                    for (let i = 0; i < ids.length; i += chunkSize) {
+                        const chunk = ids.slice(i, i + chunkSize);
+                        const placeholders = chunk.map(() => '?').join(',');
+                        
+                        try {
+                            await env.DB.prepare(`UPDATE ip_profiles SET student_profile_id = NULL WHERE student_profile_id IN (${placeholders})`)
+                                .bind(...chunk).run();
+                        } catch (e) {
+                            console.error("[BRIDGE execute] Failed to null ip_profiles FK:", e);
+                        }
+                        
+                        try {
+                            await env.DB.prepare(`UPDATE cookie_profiles SET student_profile_id = NULL WHERE student_profile_id IN (${placeholders})`)
+                                .bind(...chunk).run();
+                        } catch (e) {
+                            console.error("[BRIDGE execute] Failed to null cookie_profiles FK:", e);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("[BRIDGE execute] Failed during FK nullification fetch:", err);
+            }
 
             // ── Delete old toDataset profiles ──────────────────────────────
             await env.DB.prepare(

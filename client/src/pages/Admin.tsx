@@ -5401,15 +5401,39 @@ function AutoFillAnalyzer({ data, adminPassword, onBack }: {
                         throw new Error(`[${mSubj}]의 기본 과목명인 [${baseSubjectName}] 과목이 BRIDGE 매핑 규칙에 지정되어 있지 않습니다.`);
                     }
 
-                    targetSubjectName = bridgeRule.to;
+                    const extractSubjectFromBridgeTo = (to: string) => {
+                        const match = to.match(/(.+?) \((.+?)\)$/);
+                        return match ? { subj: match[1], tchr: match[2] } : { subj: to.trim(), tchr: "" };
+                    };
+
+                    const parsedTo = extractSubjectFromBridgeTo(bridgeRule.to);
+                    targetSubjectName = parsedTo.subj;
+                    const bridgeTeacher = parsedTo.tchr;
 
                     // Live Match extraction
-                    matchedTeacher = manualTeacherName;
+                    // 우선순위: 1. Bridge 매핑에 명시된 교사명 2. 수동 학기별계획 교사명 3. Live 검색 매칭
+                    if (bridgeTeacher) {
+                        matchedTeacher = bridgeTeacher;
+                    } else if (manualTeacherName) {
+                        matchedTeacher = manualTeacherName;
+                    }
+
                     if (liveSubjectsQuery.data) {
                         const liveMatches = liveSubjectsQuery.data.filter((ls: any) => ls.subject === targetSubjectName);
                         if (liveMatches.length > 0) {
-                            const exactMatch = liveMatches.find((ls: any) => ls.teacher === manualTeacherName);
-                            matchedTeacher = exactMatch ? exactMatch.teacher : liveMatches[0].teacher;
+                            // 명시된 교사가 라이브에 존재하는지 정확한 이름으로 검색 (이름에 * 등 축약이 있을 수 있으므로)
+                            let exactMatch = matchedTeacher ? liveMatches.find((ls: any) => ls.teacher === matchedTeacher) : undefined;
+                            
+                            // 만약 명시된 교사명이 라이브에서 정확히 매칭되지 않고,
+                            // 부분 문자열 포함 관계(* 제외)로 찾을 수 있는지 fallback 시도. 예: "김정*" -> "김정원"
+                            if (!exactMatch && matchedTeacher && matchedTeacher.includes("*")) {
+                                const baseName = matchedTeacher.replace('*', '');
+                                exactMatch = liveMatches.find((ls: any) => ls.teacher.startsWith(baseName));
+                            }
+                            
+                            // 여전히 매치는 안 되는데 bridge 교사명 또는 manual 교사명이 명시되어 있으면 그 명시된 이름 자체를 사용.
+                            // 아예 둘 다 명시가 없는 순수 과목만 매칭될 때는 라이브의 첫번째 과목 교사명.
+                            matchedTeacher = exactMatch ? exactMatch.teacher : (matchedTeacher || liveMatches[0].teacher);
                         }
                     }
                 }
