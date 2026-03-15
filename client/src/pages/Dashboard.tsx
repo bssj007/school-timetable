@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon } from "lucide-react";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon, ThumbsUp, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
@@ -701,6 +701,45 @@ export default function Dashboard() {
     });
     return filtered;
   }, [allAssessments, weekDates]);
+
+  // 3.5 수행평가 투표 데이터 조회
+  const assessmentIds = useMemo(() => assessments?.map(a => a.id) || [], [assessments]);
+  const { data: votesData } = useQuery({
+    queryKey: ['assessmentVotes', assessmentIds.join(','), grade, classNum, studentNumber],
+    queryFn: async () => {
+      if (assessmentIds.length === 0) return { votes: {}, myVotes: {} };
+      const params = new URLSearchParams({
+        assessmentIds: assessmentIds.join(','),
+        ...(grade && { grade }),
+        ...(classNum && { classNum }),
+        ...(studentNumber && { studentNumber }),
+      });
+      const res = await fetch(`/api/assessment-votes?${params}`);
+      if (!res.ok) return { votes: {}, myVotes: {} };
+      return res.json();
+    },
+    enabled: assessmentIds.length > 0,
+    refetchInterval: 10000,
+  });
+
+  const voteMutation = useMutation({
+    mutationFn: async ({ assessmentId, vote }: { assessmentId: number; vote: 'helpful' | 'distrust' }) => {
+      const myCurrentVote = votesData?.myVotes?.[String(assessmentId)];
+      if (myCurrentVote === vote) {
+        // Toggle off
+        await fetch(`/api/assessment-votes?assessmentId=${assessmentId}&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}`, { method: 'DELETE' });
+      } else {
+        await fetch('/api/assessment-votes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assessmentId, grade: parseInt(grade), classNum: parseInt(classNum), studentNumber: parseInt(studentNumber), vote }),
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assessmentVotes'] });
+    },
+  });
 
   // 4. 수행평가 추가
   const createMutation = useMutation({
@@ -2089,10 +2128,35 @@ export default function Dashboard() {
                   const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
                   const isToday = diffDate === 0;
 
+                  // Compute card background based on vote reliability
+                  const voteInfo = votesData?.votes?.[String(assessment.id)];
+                  let cardBg = isToday ? '#fef2f2' : '#ffffff'; // default: red-50 or white
+                  if (voteInfo && !isToday) {
+                    const net = (voteInfo.helpful || 0) - (voteInfo.distrust || 0);
+                    if (net > 0) {
+                      // Positive: blend bg-white with positive color
+                      const mixColor = settings?.assessment_positive_color || '#22c55e';
+                      const ratio = Math.min(100, parseInt(settings?.assessment_positive_ratio || '30')) / 100;
+                      const scaled = Math.min(1, (voteInfo.helpful || 0) / 10) * ratio;
+                      const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
+                      const b = p('#ffffff'), m = p(mixColor);
+                      cardBg = '#' + b.map((c, i) => Math.round(c*(1-scaled)+m[i]*scaled).toString(16).padStart(2,'0')).join('');
+                    } else if (net < 0) {
+                      // Negative: blend bg-white with negative color
+                      const mixColor = settings?.assessment_negative_color || '#9ca3af';
+                      const ratio = Math.min(100, parseInt(settings?.assessment_negative_ratio || '40')) / 100;
+                      const scaled = Math.min(1, (voteInfo.distrust || 0) / 10) * ratio;
+                      const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
+                      const b = p('#ffffff'), m = p(mixColor);
+                      cardBg = '#' + b.map((c, i) => Math.round(c*(1-scaled)+m[i]*scaled).toString(16).padStart(2,'0')).join('');
+                    }
+                  }
+
                   return (
                     <div
                       key={assessment.id}
-                      className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'bg-red-50 border-red-200' : 'bg-white'}`}
+                      className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'border-red-200' : ''}`}
+                      style={{ backgroundColor: cardBg }}
                       onClick={() => {
                         // Find the cell logic
                         const targetDate = new Date(assessment.dueDate); // This might be string 'YYYY-MM-DD'
@@ -2135,12 +2199,40 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <p className="text-gray-700 mb-2">{assessment.title}</p>
-                      <div className="flex items-center gap-2 mt-auto">
+                      <div className="flex items-center justify-between mt-auto">
                         <div className="flex items-center text-sm text-gray-500">
                           <span>{assessment.dueDate}</span>
                           <span className="mx-2">|</span>
                           <span>{assessment.classTime}교시</span>
                         </div>
+                        {grade && classNum && studentNumber && (
+                          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                            <button
+                              className={`flex items-center gap-0.5 px-2 py-1 rounded-full text-xs font-medium transition-all ${
+                                votesData?.myVotes?.[String(assessment.id)] === 'helpful'
+                                  ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
+                                  : 'bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-green-600'
+                              }`}
+                              onClick={() => voteMutation.mutate({ assessmentId: assessment.id, vote: 'helpful' })}
+                              disabled={voteMutation.isPending}
+                            >
+                              <ThumbsUp className="w-3 h-3" />
+                              <span>{votesData?.votes?.[String(assessment.id)]?.helpful || 0}</span>
+                            </button>
+                            <button
+                              className={`flex items-center gap-0.5 px-2 py-1 rounded-full text-xs font-medium transition-all ${
+                                votesData?.myVotes?.[String(assessment.id)] === 'distrust'
+                                  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
+                                  : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600'
+                              }`}
+                              onClick={() => voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' })}
+                              disabled={voteMutation.isPending}
+                            >
+                              <X className="w-3 h-3" />
+                              <span>{votesData?.votes?.[String(assessment.id)]?.distrust || 0}</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -2197,7 +2289,11 @@ export default function Dashboard() {
         classNum={classNum}
         studentNumber={studentNumber}
         datasetId={(rawTimetableData as any)?.datasetId || ''}
-        forceManualMode={settings?.elective_input_mode === 'manual'}
+        forceManualMode={
+          grade === '2'
+            ? (settings?.elective_input_mode_grade2 ?? settings?.elective_input_mode) === 'manual'
+            : (settings?.elective_input_mode_grade3 ?? settings?.elective_input_mode) === 'manual'
+        }
         onSaveSuccess={() => {
           setShowElectiveDialog(false);
           setIsElectiveEntered(true);

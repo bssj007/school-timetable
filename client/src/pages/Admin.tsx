@@ -1641,7 +1641,8 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
 // ----------------------------------------------------------------------
 function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
-    const [selectedMode, setSelectedMode] = useState<'auto' | 'manual'>('auto');
+    const [selectedMode2, setSelectedMode2] = useState<'auto' | 'manual'>('auto');
+    const [selectedMode3, setSelectedMode3] = useState<'auto' | 'manual'>('auto');
 
     const settingsQuery = useQuery({
         queryKey: ["admin", "settings", "electiveInputMode"],
@@ -1656,16 +1657,21 @@ function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string })
 
     useEffect(() => {
         if (settingsQuery.data) {
-            setSelectedMode((settingsQuery.data.elective_input_mode as 'auto' | 'manual') || 'auto');
+            const fallback = (settingsQuery.data.elective_input_mode as 'auto' | 'manual') || 'auto';
+            setSelectedMode2((settingsQuery.data.elective_input_mode_grade2 as 'auto' | 'manual') || fallback);
+            setSelectedMode3((settingsQuery.data.elective_input_mode_grade3 as 'auto' | 'manual') || fallback);
         }
     }, [settingsQuery.data]);
 
     const saveMutation = useMutation({
-        mutationFn: async (mode: string) => {
+        mutationFn: async (payload: { grade2: string; grade3: string }) => {
             const res = await fetch("/api/admin/settings", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
-                body: JSON.stringify({ elective_input_mode: mode }),
+                body: JSON.stringify({
+                    elective_input_mode_grade2: payload.grade2,
+                    elective_input_mode_grade3: payload.grade3,
+                }),
             });
             if (!res.ok) throw new Error("Failed to save");
             return res.json();
@@ -1677,52 +1683,60 @@ function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string })
         onError: (err: Error) => toast.error(`저장 실패: ${err.message}`),
     });
 
-    const originalMode = (settingsQuery.data?.elective_input_mode as 'auto' | 'manual') || 'auto';
-    const isDirty = selectedMode !== originalMode;
+    const fallbackOriginal = (settingsQuery.data?.elective_input_mode as 'auto' | 'manual') || 'auto';
+    const originalMode2 = (settingsQuery.data?.elective_input_mode_grade2 as 'auto' | 'manual') || fallbackOriginal;
+    const originalMode3 = (settingsQuery.data?.elective_input_mode_grade3 as 'auto' | 'manual') || fallbackOriginal;
+    const isDirty = selectedMode2 !== originalMode2 || selectedMode3 !== originalMode3;
+
+    const GradeModeSelector = ({ grade, selectedMode, setSelectedMode }: { grade: string; selectedMode: 'auto' | 'manual'; setSelectedMode: (m: 'auto' | 'manual') => void }) => (
+        <div className="space-y-2">
+            <p className="text-sm font-bold text-slate-700">{grade}학년</p>
+            <label
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedMode === 'auto' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}
+                onClick={() => setSelectedMode('auto')}
+            >
+                <input type="radio" className="mt-0.5" checked={selectedMode === 'auto'} onChange={() => setSelectedMode('auto')} />
+                <div>
+                    <p className="font-semibold text-sm">자동 탐색 (기본값)</p>
+                    <p className="text-xs text-slate-500">
+                        과목명 선택 → ABCD 조합 자동 탐색
+                    </p>
+                </div>
+            </label>
+            <label
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedMode === 'manual' ? 'border-orange-500 bg-orange-50' : 'border-slate-200 hover:bg-slate-50'}`}
+                onClick={() => setSelectedMode('manual')}
+            >
+                <input type="radio" className="mt-0.5" checked={selectedMode === 'manual'} onChange={() => setSelectedMode('manual')} />
+                <div>
+                    <p className="font-semibold text-sm">수동 입력</p>
+                    <p className="text-xs text-slate-500">
+                        ABCD 그룹별 직접 드롭다운 입력
+                    </p>
+                </div>
+            </label>
+        </div>
+    );
 
     return (
-        <Card className="w-full max-w-lg">
+        <Card className="w-full max-w-2xl">
             <CardHeader>
                 <CardTitle>학생 선택과목 입력방식</CardTitle>
                 <CardDescription>
-                    메인 화면의 선택과목 편집창에서 사용할 입력 방식을 선택합니다.
+                    메인 화면의 선택과목 편집창에서 사용할 입력 방식을 학년별로 선택합니다.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="space-y-3">
-                    <label
-                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedMode === 'auto' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}
-                        onClick={() => setSelectedMode('auto')}
-                    >
-                        <input type="radio" className="mt-0.5" checked={selectedMode === 'auto'} onChange={() => setSelectedMode('auto')} />
-                        <div>
-                            <p className="font-semibold text-sm">자동 탐색 (기본값)</p>
-                            <p className="text-xs text-slate-500">
-                                학생이 과목명만 선택하면 가능한 ABCD 조합을 자동으로 탐색합니다.
-                                조합이 하나이면 자동 배정, 여러 가지이면 선택 카드 표시.
-                            </p>
-                        </div>
-                    </label>
-
-                    <label
-                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedMode === 'manual' ? 'border-orange-500 bg-orange-50' : 'border-slate-200 hover:bg-slate-50'}`}
-                        onClick={() => setSelectedMode('manual')}
-                    >
-                        <input type="radio" className="mt-0.5" checked={selectedMode === 'manual'} onChange={() => setSelectedMode('manual')} />
-                        <div>
-                            <p className="font-semibold text-sm">수동 입력</p>
-                            <p className="text-xs text-slate-500">
-                                자동 탐색 없이 ABCD 그룹별로 직접 드롭다운으로 입력합니다.
-                            </p>
-                        </div>
-                    </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <GradeModeSelector grade="2" selectedMode={selectedMode2} setSelectedMode={setSelectedMode2} />
+                    <GradeModeSelector grade="3" selectedMode={selectedMode3} setSelectedMode={setSelectedMode3} />
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2 border-t">
-                    <Button variant="outline" onClick={() => setSelectedMode(originalMode)} disabled={!isDirty || saveMutation.isPending}>
+                    <Button variant="outline" onClick={() => { setSelectedMode2(originalMode2); setSelectedMode3(originalMode3); }} disabled={!isDirty || saveMutation.isPending}>
                         취소
                     </Button>
-                    <Button onClick={() => saveMutation.mutate(selectedMode)} disabled={!isDirty || saveMutation.isPending}>
+                    <Button onClick={() => saveMutation.mutate({ grade2: selectedMode2, grade3: selectedMode3 })} disabled={!isDirty || saveMutation.isPending}>
                         {saveMutation.isPending ? "저장 중..." : "저장"}
                     </Button>
                 </div>
@@ -3178,6 +3192,281 @@ function TrashManager({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
+// 6.99 Assessment Reliability Manager (수행평가 신뢰성)
+// ----------------------------------------------------------------------
+function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [selectedGrade, setSelectedGrade] = useState("2");
+    const [threshold, setThreshold] = useState(3);
+    const [selectedDataset, setSelectedDataset] = useState("_auto_");
+    const [resolvedDataset, setResolvedDataset] = useState("");
+    const [positiveColor, setPositiveColor] = useState("#22c55e");
+    const [positiveRatio, setPositiveRatio] = useState(30);
+    const [negativeColor, setNegativeColor] = useState("#9ca3af");
+    const [negativeRatio, setNegativeRatio] = useState(40);
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "reliability"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("settings error");
+            return res.json();
+        },
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            const d = settingsQuery.data;
+            if (d.assessment_distrust_threshold) setThreshold(parseInt(d.assessment_distrust_threshold) || 3);
+            if (d.assessment_positive_color) setPositiveColor(d.assessment_positive_color);
+            if (d.assessment_positive_ratio) setPositiveRatio(parseInt(d.assessment_positive_ratio) || 30);
+            if (d.assessment_negative_color) setNegativeColor(d.assessment_negative_color);
+            if (d.assessment_negative_ratio) setNegativeRatio(parseInt(d.assessment_negative_ratio) || 40);
+        }
+    }, [settingsQuery.data]);
+
+    const adminRawQuery = useQuery({
+        queryKey: ["admin", "rawComcigan_reliability"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/raw_comcigan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ schoolName: "부산성지고" })
+            });
+            const json = await res.json();
+            if (!res.ok || json?.error) return null;
+            return json.data;
+        }
+    });
+
+    const timetableProps = useMemo(() => {
+        const raw = adminRawQuery.data;
+        if (!raw) return [];
+        return Object.keys(raw).filter(k => {
+            const val = raw[k];
+            return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+        });
+    }, [adminRawQuery.data]);
+
+    useEffect(() => {
+        if (selectedDataset === "_auto_" && settingsQuery.data) {
+            setResolvedDataset(settingsQuery.data.comcigan_dataset_selected || "");
+        } else if (selectedDataset !== "_auto_") {
+            setResolvedDataset(selectedDataset);
+        }
+    }, [selectedDataset, settingsQuery.data]);
+
+    const assessmentsQuery = useQuery({
+        queryKey: ["admin", "reliability_assessments", selectedGrade, resolvedDataset],
+        queryFn: async () => {
+            if (!resolvedDataset) return [];
+            const allResults: any[] = [];
+            for (let c = 0; c <= 9; c++) {
+                const res = await fetch(`/api/assessment?grade=${selectedGrade}&classNum=${c}&dataset=${encodeURIComponent(resolvedDataset)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    for (const a of data) {
+                        if (!allResults.find((x: any) => x.id === a.id)) allResults.push(a);
+                    }
+                }
+            }
+            return allResults;
+        },
+        enabled: !!resolvedDataset,
+    });
+
+    const assessmentIds = useMemo(() => (assessmentsQuery.data || []).map((a: any) => a.id), [assessmentsQuery.data]);
+    const votesQuery = useQuery({
+        queryKey: ["admin", "reliability_votes", assessmentIds.join(",")],
+        queryFn: async () => {
+            if (assessmentIds.length === 0) return { votes: {}, myVotes: {} };
+            const res = await fetch(`/api/assessment-votes?assessmentIds=${assessmentIds.join(",")}`);
+            if (!res.ok) return { votes: {}, myVotes: {} };
+            return res.json();
+        },
+        enabled: assessmentIds.length > 0,
+        refetchInterval: 10000,
+    });
+
+    const profilesQuery = useQuery({
+        queryKey: ["admin", "reliability_profiles", selectedGrade, resolvedDataset],
+        queryFn: async () => {
+            if (!resolvedDataset) return [];
+            const res = await fetch(`/api/electives?type=all-students&grade=${selectedGrade}&dataset=${encodeURIComponent(resolvedDataset)}`);
+            if (!res.ok) return [];
+            return res.json();
+        },
+        enabled: !!resolvedDataset,
+    });
+
+    const eligibleCounts = useMemo(() => {
+        const profiles = profilesQuery.data || [];
+        const total = profiles.length;
+        const byClass: Record<number, number> = {};
+        for (const p of profiles) {
+            const cn = p.classNum as number;
+            byClass[cn] = (byClass[cn] || 0) + 1;
+        }
+        return { total, byClass };
+    }, [profilesQuery.data]);
+
+    const saveSettingsMutation = useMutation({
+        mutationFn: async (vals: Record<string, string>) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify(vals),
+            });
+            if (!res.ok) throw new Error("Failed to save");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("설정이 저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["settings"] });
+        },
+    });
+
+    const handleSaveAll = () => {
+        saveSettingsMutation.mutate({
+            assessment_distrust_threshold: String(threshold),
+            assessment_positive_color: positiveColor,
+            assessment_positive_ratio: String(positiveRatio),
+            assessment_negative_color: negativeColor,
+            assessment_negative_ratio: String(negativeRatio),
+        });
+    };
+
+    const deleteAssessmentMutation = useMutation({
+        mutationFn: async (id: number) => {
+            const res = await fetch(`/api/assessment?id=${id}`, { method: "DELETE" });
+            if (!res.ok) throw new Error("Failed to delete");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("수행평가가 휴지통으로 이동되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "reliability_assessments"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "reliability_votes"] });
+        },
+    });
+
+    const assessments = assessmentsQuery.data || [];
+    const votes = votesQuery.data?.votes || {};
+
+    const tableRows = useMemo(() => {
+        return assessments.map((a: any) => {
+            const v = votes[String(a.id)] || { helpful: 0, distrust: 0 };
+            const eligible = a.classNum === 0 ? eligibleCounts.total : (eligibleCounts.byClass[a.classNum] || 0);
+            const exceedsThreshold = v.distrust >= threshold;
+            return { ...a, helpful: v.helpful, distrust: v.distrust, eligible, exceedsThreshold };
+        }).sort((a: any, b: any) => b.distrust - a.distrust);
+    }, [assessments, votes, eligibleCounts, threshold]);
+
+    const isLoading = assessmentsQuery.isLoading || votesQuery.isLoading;
+
+    const blendHex = (base: string, mix: string, ratio: number) => {
+        const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
+        const b = p(base), m = p(mix), r = ratio / 100;
+        return '#' + b.map((c, i) => Math.round(c*(1-r)+m[i]*r).toString(16).padStart(2,'0')).join('');
+    };
+    const baseBlue = "#dbeafe";
+    const previewPositive = blendHex(baseBlue, positiveColor, positiveRatio);
+    const previewNegative = blendHex(baseBlue, negativeColor, negativeRatio);
+
+    return (
+        <div className="space-y-5">
+            <div className="flex flex-wrap gap-3 items-end">
+                <div>
+                    <label className="text-xs font-medium text-slate-500 block mb-1">학년</label>
+                    <select value={selectedGrade} onChange={e => setSelectedGrade(e.target.value)} className="border rounded px-2 py-1 text-sm">
+                        <option value="1">1학년</option>
+                        <option value="2">2학년</option>
+                        <option value="3">3학년</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="text-xs font-medium text-slate-500 block mb-1">데이터셋</label>
+                    <select value={selectedDataset} onChange={e => setSelectedDataset(e.target.value)} className="border rounded px-2 py-1 text-sm">
+                        <option value="_auto_">자동 (활성)</option>
+                        {timetableProps.map(tp => <option key={tp} value={tp}>{tp}</option>)}
+                    </select>
+                </div>
+                {resolvedDataset && <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-1 rounded self-end">{resolvedDataset}</span>}
+            </div>
+
+            <div className="bg-slate-50 border rounded-lg p-4 space-y-3">
+                <h4 className="text-sm font-bold text-slate-700">설정</h4>
+                <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-slate-600 w-36">"못 믿겠음" 삭제 기준</label>
+                    <Input type="number" value={threshold} onChange={e => setThreshold(Math.max(1, parseInt(e.target.value) || 1))} className="w-16 h-7 text-sm" min={1} />
+                    <span className="text-xs text-slate-500">명 이상이면 삭제 가능</span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <label className="text-xs font-medium text-slate-600 w-36">신뢰(+) 카드 색상</label>
+                    <input type="color" value={positiveColor} onChange={e => setPositiveColor(e.target.value)} className="w-7 h-7 rounded border cursor-pointer" />
+                    <span className="text-xs text-slate-500">비율</span>
+                    <Input type="number" value={positiveRatio} onChange={e => setPositiveRatio(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))} className="w-14 h-7 text-sm" min={0} max={100} />
+                    <span className="text-xs text-slate-500">%</span>
+                    <div className="flex items-center gap-1 ml-1"><span className="text-xs text-slate-400">미리보기:</span><div className="w-12 h-5 rounded border" style={{ backgroundColor: previewPositive }} /></div>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <label className="text-xs font-medium text-slate-600 w-36">불신(−) 카드 색상</label>
+                    <input type="color" value={negativeColor} onChange={e => setNegativeColor(e.target.value)} className="w-7 h-7 rounded border cursor-pointer" />
+                    <span className="text-xs text-slate-500">비율</span>
+                    <Input type="number" value={negativeRatio} onChange={e => setNegativeRatio(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))} className="w-14 h-7 text-sm" min={0} max={100} />
+                    <span className="text-xs text-slate-500">%</span>
+                    <div className="flex items-center gap-1 ml-1"><span className="text-xs text-slate-400">미리보기:</span><div className="w-12 h-5 rounded border" style={{ backgroundColor: previewNegative }} /></div>
+                </div>
+                <Button size="sm" className="h-8 text-xs" onClick={handleSaveAll} disabled={saveSettingsMutation.isPending}>
+                    <Save className="w-3 h-3 mr-1" />설정 저장
+                </Button>
+            </div>
+
+            {isLoading ? (
+                <div className="text-slate-400 py-6 text-center text-sm">로딩 중...</div>
+            ) : tableRows.length === 0 ? (
+                <div className="text-slate-400 text-sm py-4">해당 학년/데이터셋에 수행평가가 없습니다.</div>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                        <thead>
+                            <tr className="bg-slate-100 text-slate-700">
+                                <th className="border border-slate-300 px-3 py-2 font-bold text-center">과목</th>
+                                <th className="border border-slate-300 px-3 py-2 font-bold text-center">날짜</th>
+                                <th className="border border-slate-300 px-3 py-2 font-bold text-center">내용</th>
+                                <th className="border border-slate-300 px-3 py-2 font-bold text-center">👍</th>
+                                <th className="border border-slate-300 px-3 py-2 font-bold text-center">✕</th>
+                                <th className="border border-slate-300 px-3 py-2 font-bold text-center">대상</th>
+                                <th className="border border-slate-300 px-3 py-2 font-bold text-center">조치</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {tableRows.map((row: any) => (
+                                <tr key={row.id} className={`hover:bg-slate-50 ${row.exceedsThreshold ? 'bg-red-50' : ''}`}>
+                                    <td className="border border-slate-300 px-3 py-2 text-center font-medium">{row.subject}</td>
+                                    <td className="border border-slate-300 px-3 py-2 text-center text-xs">{row.dueDate}</td>
+                                    <td className="border border-slate-300 px-3 py-2 text-center text-xs truncate max-w-[150px]">{row.title}</td>
+                                    <td className="border border-slate-300 px-3 py-2 text-center text-green-600 font-bold">{row.helpful}</td>
+                                    <td className={`border border-slate-300 px-3 py-2 text-center font-bold ${row.exceedsThreshold ? 'text-red-600' : 'text-slate-600'}`}>{row.distrust}</td>
+                                    <td className="border border-slate-300 px-3 py-2 text-center text-slate-500">{row.eligible}</td>
+                                    <td className="border border-slate-300 px-3 py-2 text-center">
+                                        {row.exceedsThreshold && (
+                                            <Button variant="destructive" size="sm" className="h-7 text-xs"
+                                                onClick={() => { if (confirm(`"${row.subject} - ${row.title}" 을(를) 휴지통으로 이동하시겠습니까?`)) deleteAssessmentMutation.mutate(row.id); }}
+                                                disabled={deleteAssessmentMutation.isPending}
+                                            ><Trash2 className="w-3 h-3 mr-1" />휴지통</Button>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+}
+// ----------------------------------------------------------------------
 // 7. Etc Manager (Miscellaneous features like Raw Comcigan Data)
 // ----------------------------------------------------------------------
 function EtcManager({ adminPassword }: { adminPassword: string }) {
@@ -3278,6 +3567,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 >
                     <Grid2X2 className="w-4 h-4 mr-2" />
                     반 / 공강 확인기
+                </Button>
+                <Button
+                    variant={selectedMenu === "assessment-reliability" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("assessment-reliability")}
+                >
+                    <ShieldAlert className="w-4 h-4 mr-2" />
+                    수행평가 신뢰성
                 </Button>
                 <Button
                     variant={selectedMenu === "bug-report-manager" ? "default" : "ghost"}
@@ -3444,6 +3741,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <ElectiveInputModeSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "assessment-reliability" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">수행평가 신뢰성</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <AssessmentReliabilityManager adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}

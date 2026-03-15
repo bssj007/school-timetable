@@ -177,7 +177,7 @@ export const onRequest = async (context: any) => {
             };
 
             const updateIpProfile = async () => {
-                const isAssessmentApi = url.pathname.startsWith('/api/assessment');
+                const isAssessmentApi = url.pathname === '/api/assessment' || url.pathname === '/api/assessment/';
                 const isAddAction = isAssessmentApi && request.method === 'POST';
                 const isDeleteAction = isAssessmentApi && request.method === 'DELETE';
                 const isEditAction = isAssessmentApi && ['POST', 'DELETE', 'PATCH', 'PUT'].includes(request.method);
