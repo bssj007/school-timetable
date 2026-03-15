@@ -2245,7 +2245,7 @@ export default function Dashboard() {
                                   ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
                                   : 'bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-green-600'
                               }`}
-                              onClick={() => voteMutation.mutate({ assessmentId: assessment.id, vote: 'helpful' })}
+                              onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'helpful' }); e.currentTarget.blur(); }}
                               disabled={voteMutation.isPending}
                             >
                               <ThumbsUp className="w-4 h-4" />
@@ -2258,7 +2258,7 @@ export default function Dashboard() {
                                   ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
                                   : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600'
                               }`}
-                              onClick={() => voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' })}
+                              onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' }); e.currentTarget.blur(); }}
                               disabled={voteMutation.isPending}
                             >
                               <X className="w-4 h-4" />
