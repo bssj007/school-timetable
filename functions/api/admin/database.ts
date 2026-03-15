@@ -53,7 +53,7 @@ export const onRequest = async (context: any) => {
                 const dependencies: Record<string, string[]> = {};
 
                 // Initialize
-                tableNames.forEach(t => dependencies[t] = []);
+                tableNames.forEach((t: string) => dependencies[t] = []);
 
                 allTables.forEach((row: any) => {
                     const table = row.name;
@@ -96,7 +96,7 @@ export const onRequest = async (context: any) => {
                 const refCounts: Record<string, number> = {};
                 const refersToMe: Record<string, string[]> = {}; // Key: Parent, Value: [Children]
 
-                tableNames.forEach(t => {
+                tableNames.forEach((t: string) => {
                     refCounts[t] = 0;
                     refersToMe[t] = [];
                 });
@@ -112,7 +112,7 @@ export const onRequest = async (context: any) => {
 
                 // Queue of Droppable Tables (Refcount 0)
                 const dropQueue: string[] = [];
-                tableNames.forEach(t => {
+                tableNames.forEach((t: string) => {
                     if (refCounts[t] === 0) {
                         dropQueue.push(t);
                     }
@@ -144,7 +144,7 @@ export const onRequest = async (context: any) => {
 
                 // Check for cycles (Simpler: Just add any remaining tables that were not sorted)
                 // If cycle exists, they won't be in sortedDropOrder.
-                const remaining = tableNames.filter(t => !sortedDropOrder.includes(t));
+                const remaining = tableNames.filter((t: string) => !sortedDropOrder.includes(t));
                 if (remaining.length > 0) {
                     // Cycle detected or logic error. Just append remaining (Brute force will handle or they will fail)
                     console.warn("Cycle checking failed for:", remaining);

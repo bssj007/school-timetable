@@ -129,7 +129,7 @@ export const onRequest = async (context: any) => {
             // Just fetch the timetable and return it
             // D1 save will be handled client-side or later
             const timetableResponse = await getTimetable(grade, classNum, context.env ? context.env.DB : undefined);
-            const timetableJson = await timetableResponse.json();
+            const timetableJson: any = await timetableResponse.json();
 
             return new Response(JSON.stringify({
                 success: true,
