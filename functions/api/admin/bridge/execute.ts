@@ -96,10 +96,12 @@ export const onRequest = async (context: any) => {
                 "SELECT * FROM elective_config WHERE dataset = ? AND grade = ?"
             ).bind(fromDataset, targetGrade).all();
 
-            // Fetch target teacher information to prevent duplicate Subject-Teacher mismatches
-            let targetSubjectsInfo: Record<string, string> = {};
+            // Fetch target teacher information to map source teachers to target dataset teachers
+            // Key: "subject|sourceTeacher" → targetTeacher (for precise matching)
+            // Also keep "subject" → [teachers] for fallback
+            let targetSubjectTeacherMap: Record<string, string> = {}; // "subject|teacher" → targetTeacher
+            let targetSubjectTeachers: Record<string, string[]> = {}; // subject → [teachers]
             try {
-                // Ensure request.url exists so we can derive origin. Since it's a Worker trigger, context.url or request.url is available.
                 const origin = new URL(request.url).origin;
                 const fetchUrl = `${origin}/api/admin/comcigan-subjects?grade=${targetGrade}&dataset=${toDataset}`;
                 
@@ -111,8 +113,14 @@ export const onRequest = async (context: any) => {
                     const subjData = await subjRes.json() as any[];
                     subjData.forEach(item => {
                         if (item.subject) {
-                            // Keep the first (or only) teacher found for this subject in the target dataset
-                            targetSubjectsInfo[item.subject] = item.teacher || "";
+                            const teacher = item.teacher || "";
+                            // Map by subject+teacher pair
+                            targetSubjectTeacherMap[`${item.subject}|${teacher}`] = teacher;
+                            // Also collect all teachers per subject
+                            if (!targetSubjectTeachers[item.subject]) targetSubjectTeachers[item.subject] = [];
+                            if (!targetSubjectTeachers[item.subject].includes(teacher)) {
+                                targetSubjectTeachers[item.subject].push(teacher);
+                            }
                         }
                     });
                 } else {
@@ -148,17 +156,26 @@ export const onRequest = async (context: any) => {
                 let newFullTeacherName = config.fullTeacherName;
 
                 if (mappedTeacher) {
+                    // Mapping explicitly specifies target teacher
                     newTeacher = mappedTeacher;
-                } else if (targetSubjectsInfo[mappedSubject] !== undefined) {
-                    newTeacher = targetSubjectsInfo[mappedSubject];
+                } else {
+                    // No explicit teacher in mapping — try to find the matching teacher in target dataset
+                    // First: try exact subject+sourceTeacher match (same teacher exists in target)
+                    const exactKey = `${mappedSubject}|${config.originalTeacher || ""}`;
+                    if (targetSubjectTeacherMap[exactKey] !== undefined) {
+                        newTeacher = targetSubjectTeacherMap[exactKey];
+                    } else if (targetSubjectTeachers[mappedSubject]?.length === 1) {
+                        // Only one teacher for this subject in target — use it
+                        newTeacher = targetSubjectTeachers[mappedSubject][0];
+                    }
+                    // If multiple teachers and no exact match, keep original teacher name
                 }
 
-                // User Request: Preserve the original teacher (which we correctly resolved above)
-                // BUT always transfer the fullTeacherName from the source config. Fallback to originalTeacher if missing.
+                // Transfer fullTeacherName based on copyFullName flag
                 if (copyFullName) {
                     newFullTeacherName = config.fullTeacherName || config.originalTeacher;
                 } else {
-                    newFullTeacherName = ""; // Or we could keep target's existing if we had it, but this is a fresh copy so "" is proper if disabled
+                    newFullTeacherName = "";
                 }
 
                 batchStatements.push(env.DB.prepare(

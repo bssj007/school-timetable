@@ -52,6 +52,7 @@ function ElectiveManager({ password }: { password: string }) {
     const [isSaving, setIsSaving] = useState(false);
     const [showEasyABC, setShowEasyABC] = useState(false);
     const [draftCodes, setDraftCodes] = useState<Record<string, string>>({}); // slot key → group code draft
+    const [draftNotMoving, setDraftNotMoving] = useState<Record<string, boolean>>({}); // slot key → "이동수업 X" flag
 
     const WEEKDAY_LABELS = ['월', '화', '수', '목', '금'];
     const PERIOD_COUNT = 7;
@@ -723,7 +724,7 @@ function ElectiveManager({ password }: { password: string }) {
 
 
                 <Dialog open={showEasyABC} onOpenChange={(open) => {
-                    if (!open) setDraftCodes({}); // Reset draft on any close (Cancel, X, ESC)
+                    if (!open) { setDraftCodes({}); setDraftNotMoving({}); }
                     setShowEasyABC(open);
                 }}>
                     <DialogContent className="!max-w-none w-[99vw] h-[92vh] flex flex-col p-4 md:p-6 bg-slate-50">
@@ -795,6 +796,15 @@ function ElectiveManager({ password }: { password: string }) {
                                                                             <option key={opt.value} value={opt.value}>{opt.label}</option>
                                                                         ))}
                                                                     </select>
+                                                                    <label className="flex items-center gap-1 cursor-pointer mt-0.5">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={!!draftNotMoving[key]}
+                                                                            onChange={(e) => setDraftNotMoving(prev => ({ ...prev, [key]: e.target.checked }))}
+                                                                            className="w-3.5 h-3.5 accent-red-500"
+                                                                        />
+                                                                        <span className={`text-[10px] font-medium ${draftNotMoving[key] ? 'text-red-600' : 'text-slate-400'}`}>이동X</span>
+                                                                    </label>
                                                                     <div className="text-[10px] text-slate-400 leading-tight text-center px-1">
                                                                         {cellSubjects.map(e => e.subjectName).join(", ")}
                                                                     </div>
@@ -836,7 +846,7 @@ function ElectiveManager({ password }: { password: string }) {
                                             newSubjects[idx] = {
                                                 ...currentSubject,
                                                 classCode: existingCodes.sort().join(","),
-                                                isMovingClass: true,
+                                                isMovingClass: !draftNotMoving[slotKey],
                                             };
                                         });
                                     });
@@ -3829,6 +3839,22 @@ export default function Admin() {
     const [sortColumn, setSortColumn] = useState<'id' | 'modCount' | 'lastAccess'>('lastAccess');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+    const [assessmentDatasetFilter, setAssessmentDatasetFilter] = useState<string>('_auto_');
+
+    // Settings query for dataset resolution
+    const { data: adminSettings } = useQuery({
+        queryKey: ["admin", "settings", "main"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": password } });
+            if (!res.ok) throw new Error("settings fetch failed");
+            return res.json();
+        },
+        enabled: isAuthenticated,
+    });
+
+    // Resolve auto dataset per grade (grade 1 uses grade1 setting, grade 2/3 uses main setting)
+    const resolvedAutoDatasetGrade1 = adminSettings?.comcigan_dataset_selected_grade1 || '';
+    const resolvedAutoDatasetGrade23 = adminSettings?.comcigan_dataset_selected || '';
 
     const { data: assessments } = useQuery({
         queryKey: ["admin", "assessments"],
@@ -3842,6 +3868,29 @@ export default function Admin() {
         enabled: isAuthenticated,
         refetchInterval: 5000,
     });
+
+    // Get unique datasets present in assessments
+    const assessmentDatasets = useMemo(() => {
+        if (!assessments || !Array.isArray(assessments)) return [];
+        const ds = new Set<string>();
+        assessments.forEach((a: any) => { if (a.dataset !== undefined && a.dataset !== null) ds.add(a.dataset); });
+        return Array.from(ds).sort();
+    }, [assessments]);
+
+    // Filter assessments by dataset
+    const datasetFilteredAssessments = useMemo(() => {
+        if (!assessments || !Array.isArray(assessments)) return [];
+        if (assessmentDatasetFilter === '_all_') return assessments;
+        if (assessmentDatasetFilter === '_auto_') {
+            // Auto: filter each assessment based on its grade's resolved dataset
+            return assessments.filter((a: any) => {
+                const ds = a.grade === 1 ? resolvedAutoDatasetGrade1 : resolvedAutoDatasetGrade23;
+                return (a.dataset || '') === ds;
+            });
+        }
+        // Specific dataset
+        return assessments.filter((a: any) => (a.dataset || '') === assessmentDatasetFilter);
+    }, [assessments, assessmentDatasetFilter, resolvedAutoDatasetGrade1, resolvedAutoDatasetGrade23]);
 
     const deleteAssessmentsMutation = useMutation({
         mutationFn: async (ids: number[]) => {
@@ -4088,23 +4137,36 @@ export default function Admin() {
                             <div>
                                 <CardTitle>수행평가 목록</CardTitle>
                                 <CardDescription>
-                                    등록된 모든 수행평가를 확인하고 일괄 삭제할 수 있습니다.
+                                    등록된 수행평가를 확인하고 일괄 삭제할 수 있습니다.
                                 </CardDescription>
                             </div>
-                            {selectedAssessments.length > 0 && (
-                                <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => {
-                                        if (confirm(`${selectedAssessments.length}개의 항목을 삭제하시겠습니까?`)) {
-                                            deleteAssessmentsMutation.mutate(selectedAssessments);
-                                        }
-                                    }}
+                            <div className="flex items-center gap-2">
+                                <select
+                                    value={assessmentDatasetFilter}
+                                    onChange={(e) => { setAssessmentDatasetFilter(e.target.value); setSelectedAssessments([]); }}
+                                    className="border rounded px-2 py-1 text-sm bg-white"
                                 >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    선택 삭제 ({selectedAssessments.length})
-                                </Button>
-                            )}
+                                    <option value="_auto_">자동 (활성 데이터셋)</option>
+                                    <option value="_all_">전체</option>
+                                    {assessmentDatasets.map((ds: string) => (
+                                        <option key={ds} value={ds}>{ds || '(빈 데이터셋)'}</option>
+                                    ))}
+                                </select>
+                                {selectedAssessments.length > 0 && (
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => {
+                                            if (confirm(`${selectedAssessments.length}개의 항목을 삭제하시겠습니까?`)) {
+                                                deleteAssessmentsMutation.mutate(selectedAssessments);
+                                            }
+                                        }}
+                                    >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        선택 삭제 ({selectedAssessments.length})
+                                    </Button>
+                                )}
+                            </div>
                         </CardHeader>
                         <CardContent>
                             {(() => {
@@ -4134,7 +4196,7 @@ export default function Admin() {
                                     );
                                 };
 
-                                const sortedAssessments = [...(assessments || [])].sort((a: any, b: any) => {
+                                const sortedAssessments = [...(datasetFilteredAssessments || [])].sort((a: any, b: any) => {
                                     let valA = a[assessmentSortField];
                                     let valB = b[assessmentSortField];
 
