@@ -70,6 +70,7 @@ export default {
                 JOIN users u ON pa.userId = u.id
                 WHERE pa.dueDate = ?
                 AND pa.isDone = 0
+                AND pa.isDeleted = 0
                 AND u.notificationEnabled = 1
                 AND u.kakaoAccessToken IS NOT NULL`
             ).bind(tomorrowDate).all();

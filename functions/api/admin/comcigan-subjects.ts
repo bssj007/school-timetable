@@ -191,7 +191,7 @@ export const onRequest = async (context: any) => {
         const bunri = rawData['분리'] || 100;
 
         const uniqueSubjects = new Map<string, { subject: string, teacher: string }>();
-        const EXCLUDED = ["창체", "채플", "자습", "동아리"];
+        const EXCLUDED = ["창체", "채플"];
 
         // Iterate all classes in the grade
         const gradeData = data[grade];

@@ -20,6 +20,8 @@ export const onRequest = async (context: any) => {
         const url = new URL(request.url);
         const unit = url.searchParams.get("unit") || "day"; // hour | day | week | month | all
         const excludeParam = url.searchParams.get("exclude") || "";
+        const startDate = url.searchParams.get("startDate");
+        const endDate = url.searchParams.get("endDate");
 
         // Parse exclude list: "2101,2305" → [{grade:2,classNum:1,studentNumber:1}, ...]
         const excludeIds = excludeParam
@@ -36,10 +38,9 @@ export const onRequest = async (context: any) => {
                 const c = parseInt(id[1]);
                 const n = parseInt(id.slice(2));
                 excludeBinds.push(g, c, n);
-                return "(COALESCE(al.grade, sp.grade) = ? AND COALESCE(al.classNum, sp.classNum) = ? AND COALESCE(al.studentNumber, sp.studentNumber) = ?)";
+                return "(final_grade = ? AND final_classNum = ? AND final_studentNumber = ?)";
             });
-            // Ensure anonymous IPs (NULL grade) are not stripped by NOT (NULL=val) evaluating to NULL
-            excludeClause = `AND (COALESCE(al.grade, sp.grade) IS NULL OR NOT (${conditions.join(" OR ")}))`;
+            excludeClause = `AND NOT (${conditions.join(" OR ")})`;
         }
 
         // Determine time range and bucket format
@@ -47,232 +48,111 @@ export const onRequest = async (context: any) => {
         let bucketExpr: string;
         let labelFormat: string;
 
+        // Custom start/end dates handling overrides default relative windows
+        let customDateFilter = "";
+        if (startDate && endDate) {
+            // Include entire end date by adding 1 day (assumes endDate is YYYY-MM-DD format)
+            customDateFilter = `AND datetime(al.accessedAt, '+9 hours') >= datetime('${startDate}') AND datetime(al.accessedAt, '+9 hours') < datetime('${endDate}', '+1 day')`;
+        }
+
         switch (unit) {
             case "hour":
-                timeFilter = "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-24 hours')";
+                timeFilter = customDateFilter || "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-24 hours')";
                 bucketExpr = "strftime('%Y-%m-%d %H:00', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "hour";
                 break;
             case "day":
-                timeFilter = "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-7 days')";
+                timeFilter = customDateFilter || "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-7 days')";
                 bucketExpr = "strftime('%Y-%m-%d', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "day";
                 break;
             case "week":
-                timeFilter = "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-28 days')";
+                timeFilter = customDateFilter || "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-28 days')";
                 bucketExpr = "strftime('%Y-W%W', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "week";
                 break;
             case "month":
-                timeFilter = "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-12 months')";
+                timeFilter = customDateFilter || "AND datetime(al.accessedAt, '+9 hours') > datetime('now', '+9 hours', '-12 months')";
                 bucketExpr = "strftime('%Y-%m', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "month";
                 break;
             case "all":
             default:
-                timeFilter = "";
+                timeFilter = customDateFilter || "";
                 bucketExpr = "strftime('%Y-%m', datetime(al.accessedAt, '+9 hours'))";
                 labelFormat = "month";
                 break;
         }
 
-        // Query 1: Unique students per bucket
-        // Uses COALESCE to fill NULL grade/classNum/studentNumber from ip_profile → student_profile
+        // Uses a single optimized query with Conditional Aggregation instead of 4 separate queries
         // Uses CTE to ensure 1:1 join with ip_profiles (takes the most recently seen student per IP) to prevent JOIN explosion
-        const uniqueQuery = `
-            WITH RankedIPs AS (
-                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY lastAccess DESC) as rn
-                FROM ip_profiles
-            ),
-            LatestIPs AS (
-                SELECT ip, student_profile_id FROM RankedIPs WHERE rn = 1
-            )
-            SELECT 
-                ${bucketExpr} as bucket,
-                COUNT(DISTINCT (
-                    COALESCE(al.grade, sp.grade) || '-' ||
-                    COALESCE(al.classNum, sp.classNum) || '-' ||
-                    COALESCE(al.studentNumber, sp.studentNumber)
-                )) as uniqueStudents
-            FROM access_logs al
-            LEFT JOIN LatestIPs ip ON LOWER(al.ip) = LOWER(ip.ip)
-            LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
-            WHERE
-                al.method = 'GET' AND al.endpoint IN ('/', '/index.html') AND
-                COALESCE(al.grade, sp.grade) IS NOT NULL AND
-                COALESCE(al.classNum, sp.classNum) IS NOT NULL AND
-                COALESCE(al.studentNumber, sp.studentNumber) IS NOT NULL
-            ${timeFilter}
-            ${excludeClause}
-            GROUP BY bucket
-            ORDER BY bucket ASC
-        `;
-
-        // Query 2: Total visits per bucket (Student-based)
-        // Counts all GET accesses to the main page that resolve to a student profile.
-        const totalStudentQuery = `
-            WITH RankedIPs AS (
-                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY lastAccess DESC) as rn
-                FROM ip_profiles
-            ),
-            LatestIPs AS (
-                SELECT ip, student_profile_id FROM RankedIPs WHERE rn = 1
-            )
-            SELECT 
-                _bucket as bucket,
-                COUNT(*) as totalVisitsStudent
-            FROM (
-                SELECT DISTINCT
-                    ${bucketExpr} as _bucket,
-                    COALESCE(al.grade, sp.grade) as grade,
-                    COALESCE(al.classNum, sp.classNum) as classNum,
-                    COALESCE(al.studentNumber, sp.studentNumber) as studentNumber,
-                    strftime('%Y-%m-%d %H:', al.accessedAt) || (CAST(strftime('%M', al.accessedAt) AS INTEGER) / 10) as session10Min
-                FROM access_logs al
-                LEFT JOIN LatestIPs ip ON LOWER(al.ip) = LOWER(ip.ip)
-                LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
-                WHERE
-                    al.method = 'GET' AND al.endpoint IN ('/', '/index.html') AND
-                    COALESCE(al.grade, sp.grade) IS NOT NULL AND
-                    COALESCE(al.classNum, sp.classNum) IS NOT NULL AND
-                    COALESCE(al.studentNumber, sp.studentNumber) IS NOT NULL
-                ${timeFilter}
-                ${excludeClause}
-            )
-            GROUP BY _bucket
-            ORDER BY _bucket ASC
-        `;
-
-        // Query 2.5: Total visits per bucket (IP-based)
-        // Counts all GET accesses to the main page regardless of student profile mapping.
-        const totalIpQuery = `
-            WITH RankedIPs AS (
-                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY lastAccess DESC) as rn
-                FROM ip_profiles
-            ),
-            LatestIPs AS (
-                SELECT ip, student_profile_id FROM RankedIPs WHERE rn = 1
-            )
-            SELECT 
-                _bucket as bucket,
-                COUNT(*) as totalVisitsIP
-            FROM (
-                SELECT DISTINCT
-                    ${bucketExpr} as _bucket,
+        // Ranks IP profiles ONLY for IPs that appear in the time-filtered access logs (massive optimization for rows read)
+        const unifiedQuery = `
+            WITH FilteredLogs AS (
+                SELECT 
+                    ${bucketExpr} as bucket,
+                    al.accessedAt,
                     al.ip,
-                    strftime('%Y-%m-%d %H:', al.accessedAt) || (CAST(strftime('%M', al.accessedAt) AS INTEGER) / 10) as session10Min
+                    al.grade as al_grade,
+                    al.classNum as al_classNum,
+                    al.studentNumber as al_studentNumber
                 FROM access_logs al
-                LEFT JOIN LatestIPs ip ON LOWER(al.ip) = LOWER(ip.ip)
-                LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
-                WHERE
-                    al.method = 'GET' AND al.endpoint IN ('/', '/index.html') AND
-                    COALESCE(al.grade, sp.grade) IS NOT NULL AND
-                    COALESCE(al.classNum, sp.classNum) IS NOT NULL AND
-                    COALESCE(al.studentNumber, sp.studentNumber) IS NOT NULL
-                ${timeFilter}
-                ${excludeClause}
-            )
-            GROUP BY _bucket
-            ORDER BY _bucket ASC
-        `;
-
-        // Query 3: Unique IPs per bucket
-        // Uses CTE for ip_profiles to prevent JOIN explosion.
-        const uniqueIpQuery = `
-            WITH RankedIPs AS (
-                SELECT ip, student_profile_id, ROW_NUMBER() OVER(PARTITION BY ip ORDER BY lastAccess DESC) as rn
+                WHERE al.method = 'GET' 
+                  AND al.endpoint IN ('/', '/index.html')
+                  ${timeFilter}
+            ),
+            RankedIPs AS (
+                SELECT 
+                    ip, 
+                    student_profile_id, 
+                    ROW_NUMBER() OVER(PARTITION BY LOWER(ip) ORDER BY lastAccess DESC) as rn
                 FROM ip_profiles
+                WHERE LOWER(ip) IN (SELECT DISTINCT LOWER(ip) FROM FilteredLogs)
             ),
             LatestIPs AS (
-                SELECT ip, student_profile_id FROM RankedIPs WHERE rn = 1
+                SELECT LOWER(ip) as ip_lower, student_profile_id 
+                FROM RankedIPs 
+                WHERE rn = 1
+            ),
+            JoinedData AS (
+                SELECT 
+                    fl.bucket,
+                    COALESCE(fl.al_grade, sp.grade) as final_grade,
+                    COALESCE(fl.al_classNum, sp.classNum) as final_classNum,
+                    COALESCE(fl.al_studentNumber, sp.studentNumber) as final_studentNumber,
+                    LOWER(fl.ip) as ip_lower,
+                    strftime('%Y-%m-%d %H:', datetime(fl.accessedAt, '+9 hours')) || (CAST(strftime('%M', datetime(fl.accessedAt, '+9 hours')) AS INTEGER) / 10) as session10Min
+                FROM FilteredLogs fl
+                LEFT JOIN LatestIPs ip ON LOWER(fl.ip) = ip.ip_lower
+                LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
             )
             SELECT 
-                ${bucketExpr} as bucket,
-                COUNT(DISTINCT LOWER(al.ip)) as uniqueIPs
-            FROM access_logs al
-            LEFT JOIN LatestIPs ip ON LOWER(al.ip) = LOWER(ip.ip)
-            LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
-            WHERE
-                al.method = 'GET' AND al.endpoint IN ('/', '/index.html') AND
-                COALESCE(al.grade, sp.grade) IS NOT NULL AND
-                COALESCE(al.classNum, sp.classNum) IS NOT NULL AND
-                COALESCE(al.studentNumber, sp.studentNumber) IS NOT NULL
-            ${timeFilter}
-            ${excludeClause}
+                bucket as label,
+                
+                -- Unique Students
+                COUNT(DISTINCT (final_grade || '-' || final_classNum || '-' || final_studentNumber)) as uniqueStudents,
+                
+                -- Unique IPs
+                COUNT(DISTINCT ip_lower) as uniqueIPs,
+                
+                -- Total Visits (Student Sessions)
+                COUNT(DISTINCT (final_grade || '-' || final_classNum || '-' || final_studentNumber || '-' || session10Min)) as totalVisitsStudent,
+                
+                -- Total Visits (IP Sessions)
+                COUNT(DISTINCT (ip_lower || '-' || session10Min)) as totalVisitsIP
+                
+            FROM JoinedData
+            WHERE final_grade IS NOT NULL 
+              AND final_classNum IS NOT NULL 
+              AND final_studentNumber IS NOT NULL
+              ${excludeClause}
             GROUP BY bucket
             ORDER BY bucket ASC
         `;
 
-        const uniqueBinds = [...excludeBinds];
-        const totalBinds = [...excludeBinds];
-        const ipBinds = [...excludeBinds];
-
-        const [uniqueResult, totalStudentResult, totalIpResult, uniqueIpResult] = await Promise.all([
-            env.DB.prepare(uniqueQuery).bind(...uniqueBinds).all(),
-            env.DB.prepare(totalStudentQuery).bind(...totalBinds).all(),
-            env.DB.prepare(totalIpQuery).bind(...totalBinds).all(),
-            env.DB.prepare(uniqueIpQuery).bind(...ipBinds).all(),
-        ]);
-
-        // Merge into unified buckets
-        const bucketMap = new Map<string, { label: string; uniqueStudents: number; uniqueIPs: number; totalVisitsStudent: number; totalVisitsIP: number }>();
-
-        for (const row of (uniqueResult.results || [])) {
-            bucketMap.set(row.bucket as string, {
-                label: row.bucket as string,
-                uniqueStudents: row.uniqueStudents as number,
-                uniqueIPs: 0,
-                totalVisitsStudent: 0,
-                totalVisitsIP: 0,
-            });
-        }
-
-        for (const row of (totalStudentResult.results || [])) {
-            const existing = bucketMap.get(row.bucket as string);
-            if (existing) {
-                existing.totalVisitsStudent = row.totalVisitsStudent as number;
-            } else {
-                bucketMap.set(row.bucket as string, {
-                    label: row.bucket as string,
-                    uniqueStudents: 0,
-                    uniqueIPs: 0,
-                    totalVisitsStudent: row.totalVisitsStudent as number,
-                    totalVisitsIP: 0,
-                });
-            }
-        }
-
-        for (const row of (totalIpResult.results || [])) {
-            const existing = bucketMap.get(row.bucket as string);
-            if (existing) {
-                existing.totalVisitsIP = row.totalVisitsIP as number;
-            } else {
-                bucketMap.set(row.bucket as string, {
-                    label: row.bucket as string,
-                    uniqueStudents: 0,
-                    uniqueIPs: 0,
-                    totalVisitsStudent: 0,
-                    totalVisitsIP: row.totalVisitsIP as number,
-                });
-            }
-        }
-
-        for (const row of (uniqueIpResult.results || [])) {
-            const existing = bucketMap.get(row.bucket as string);
-            if (existing) {
-                existing.uniqueIPs = row.uniqueIPs as number;
-            } else {
-                bucketMap.set(row.bucket as string, {
-                    label: row.bucket as string,
-                    uniqueStudents: 0,
-                    uniqueIPs: row.uniqueIPs as number,
-                    totalVisitsStudent: 0,
-                    totalVisitsIP: 0,
-                });
-            }
-        }
-
-        const buckets = Array.from(bucketMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+        const result = await env.DB.prepare(unifiedQuery).bind(...excludeBinds).all();
+        
+        const buckets = result.results || [];
 
         return new Response(JSON.stringify({ buckets, unit: labelFormat }), {
             headers: { "Content-Type": "application/json" },

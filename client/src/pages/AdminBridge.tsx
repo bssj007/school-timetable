@@ -19,13 +19,26 @@ interface BridgeMapping {
     isManual?: boolean;
 }
 
-// Levenshtein distance based string similarity (0 to 100)
-function calculateSimilarity(str1: string, str2: string): number {
-    const s1 = str1.replace(/\s+/g, '').toLowerCase();
-    const s2 = str2.replace(/\s+/g, '').toLowerCase();
+function parseSubject(s: string) {
+    const match = s.match(/(.+?) \((.+?)\)$/);
+    return match ? { subj: match[1], tchr: match[2] } : { subj: s, tchr: "" };
+}
 
-    if (s1 === s2) return 100;
-    if (s1.length === 0 || s2.length === 0) return 0;
+function calculateSimilarity(str1: string, str2: string) {
+    if (str1 === str2) return {
+        total: 100,
+        subjSim: 100,
+        tchrSim: 100,
+        isExactSubjectMatch: true
+    };
+
+    const p1 = parseSubject(str1);
+    const p2 = parseSubject(str2);
+
+    const s1 = p1.subj.replace(/\s+/g, '').toLowerCase();
+    const s2 = p2.subj.replace(/\s+/g, '').toLowerCase();
+
+    if (s1.length === 0 || s2.length === 0) return { total: 0, subjSim: 0, tchrSim: 0, isExactSubjectMatch: false };
 
     const matrix = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
 
@@ -42,9 +55,39 @@ function calculateSimilarity(str1: string, str2: string): number {
             );
         }
     }
-    const distance = matrix[s2.length][s1.length];
-    const maxLength = Math.max(s1.length, s2.length);
-    return Math.round(((maxLength - distance) / maxLength) * 100);
+    const subjDist = matrix[s2.length][s1.length];
+    const maxSubjLen = Math.max(s1.length, s2.length);
+    const subjSim = Math.round(((maxSubjLen - subjDist) / maxSubjLen) * 100);
+
+    let tchrSim = 0;
+    const t1 = p1.tchr.replace(/[^가-힣a-zA-Z0-9]/g, '');
+    const t2 = p2.tchr.replace(/[^가-힣a-zA-Z0-9]/g, '');
+
+    if (t1 && t2) {
+        if (t1 === t2) {
+            tchrSim = 100;
+        } else if (t1.includes(t2) || t2.includes(t1)) {
+            tchrSim = 80;
+        } else {
+            let overlap = 0;
+            const minLen = Math.min(t1.length, t2.length);
+            for (let i = 0; i < minLen; i++) {
+                if (t1[i] === t2[i]) overlap++;
+            }
+            tchrSim = Math.round((overlap / Math.max(t1.length, t2.length)) * 50);
+        }
+    } else if (!t1 && !t2) {
+        tchrSim = 100;
+    } else {
+        tchrSim = 0;
+    }
+
+    return {
+        total: Math.round(subjSim * 0.9 + tchrSim * 0.1),
+        subjSim,
+        tchrSim,
+        isExactSubjectMatch: s1 === s2
+    };
 }
 
 interface DatasetBridge {
@@ -58,7 +101,7 @@ interface DatasetBridge {
     updatedAt: string;
 }
 
-export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPassword: string, goAutoFillAnalysis: (bridgeInfo: { grade: number, fromDataset: string, toDataset: string, mappingRules: any[] }) => void }) {
+export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPassword: string, goAutoFillAnalysis: (bridgeInfo: { grade: number, fromDataset: string, toDataset: string, mappingRules: any[], copyFullName?: boolean }) => void }) {
     const queryClient = useQueryClient();
     const [selectedBridgeId, setSelectedBridgeId] = useState<number | null>(null);
     const [editingBridge, setEditingBridge] = useState<DatasetBridge | null>(null);
@@ -80,6 +123,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
     const [execProfiles, setExecProfiles] = useState(true);
     const [execAssessments, setExecAssessments] = useState(true);
     const [execOverrides, setExecOverrides] = useState(false);
+    const [execCopyFullName, setExecCopyFullName] = useState(true);
     const [isExecuting, setIsExecuting] = useState(false);
 
     // 1. Fetch Datasets
@@ -117,7 +161,13 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${fetchDataset}`);
             if (res.ok) {
                 const data = await res.json();
-                data.forEach((s: any) => allSubjects.add(s.subject));
+                data.forEach((s: any) => {
+                    if (s.teacher) {
+                        allSubjects.add(`${s.subject} (${s.teacher})`);
+                    } else {
+                        allSubjects.add(s.subject);
+                    }
+                });
             }
 
             return Array.from(allSubjects).sort();
@@ -137,7 +187,13 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             const res = await fetch(`/api/admin/comcigan-subjects?grade=${grade}&dataset=${fetchDataset}`);
             if (res.ok) {
                 const data = await res.json();
-                data.forEach((s: any) => allSubjects.add(s.subject));
+                data.forEach((s: any) => {
+                    if (s.teacher) {
+                        allSubjects.add(`${s.subject} (${s.teacher})`);
+                    } else {
+                        allSubjects.add(s.subject);
+                    }
+                });
             }
 
             return Array.from(allSubjects).sort();
@@ -147,32 +203,74 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
 
     // Manually trigger mapping generation
     const generateAutoMappings = (isManualClick = true) => {
-        if (!fromSubjectsQuery.data) return;
+        // Subjects to exclude from bridge
+        const excludedSubjects = ["창체", "채플"];
 
-        const defaultMappings = fromSubjectsQuery.data.map(subj => {
+        // 출발역 과목이 없으면 빈 리스트로 세팅 (변경된 출발역/도착역 반영)
+        if (!fromSubjectsQuery.data || fromSubjectsQuery.data.length === 0) {
+            setMappingFields([]);
+            if (isManualClick) toast.info("출발역에 추출된 과목이 없습니다. 목록이 초기화되었습니다.");
+            return;
+        }
+
+        const filteredFromSubjects = fromSubjectsQuery.data.filter(subj => {
+            const parsed = parseSubject(subj);
+            return !excludedSubjects.some(ex => parsed.subj.includes(ex));
+        });
+
+        const defaultMappings = filteredFromSubjects.map(subj => {
             let matchedTo = "";
-            let maxSimilarity = 0;
+            let bestScore = 0;
+            // Additional fallback score if we only find a high similarity (but no exact match)
+            let maxTotalSimilarity = 0;
 
             if (toSubjectsQuery.data && Array.isArray(toSubjectsQuery.data)) {
-                // Find the best match using the similarity algorithm
-                for (const candidate of toSubjectsQuery.data) {
+                // 1. Filter target subjects array first to drop exclusions
+                const validCandidates = toSubjectsQuery.data.filter(cand => {
+                     const parsed = parseSubject(cand);
+                     return !excludedSubjects.some(ex => parsed.subj.includes(ex));
+                });
+
+                // Find the best match
+                // Priority 1: Exact subject match + Best teacher match
+                // Priority 2: Highest overall similarity score
+                let exactSubjectMatches: { cand: string, score: ReturnType<typeof calculateSimilarity> }[] = [];
+
+                for (const candidate of validCandidates) {
                     const score = calculateSimilarity(subj, candidate);
-                    if (score > maxSimilarity) {
-                        maxSimilarity = score;
-                        matchedTo = candidate;
+                    if (score.isExactSubjectMatch) {
+                        exactSubjectMatches.push({ cand: candidate, score });
+                    }
+                    if (score.total > maxTotalSimilarity) {
+                        maxTotalSimilarity = score.total;
+                        // Fallback best overall match
+                        if (maxTotalSimilarity >= 30 && exactSubjectMatches.length === 0) {
+                            matchedTo = candidate;
+                            bestScore = maxTotalSimilarity;
+                        }
                     }
                 }
-                // Only auto-match if there's at least a weak similarity (e.g. > 30%)
-                if (maxSimilarity < 30) {
+
+                // If exact subject matches exist, pick the one with the highest teacher similarity
+                if (exactSubjectMatches.length > 0) {
+                    // Sort by teacher similarity descending, then by total score
+                    exactSubjectMatches.sort((a, b) => {
+                         if (b.score.tchrSim !== a.score.tchrSim) return b.score.tchrSim - a.score.tchrSim;
+                         return b.score.total - a.score.total;
+                    });
+                    
+                    matchedTo = exactSubjectMatches[0].cand;
+                    bestScore = exactSubjectMatches[0].score.total;
+                } else if (maxTotalSimilarity < 30) {
                     matchedTo = "";
-                    maxSimilarity = 0;
+                    bestScore = 0;
                 }
             }
-            return { from: subj, to: matchedTo, similarity: maxSimilarity, isManual: false };
+            return { from: subj, to: matchedTo, similarity: bestScore, isManual: false };
         });
         setMappingFields(defaultMappings);
         if (isManualClick) {
-            toast.success("이름 기반 1:1 매핑 규칙이 생성되었습니다.");
+            toast.success("초기 자동 매핑 규칙이 생성되었습니다.");
         }
     };
 
@@ -180,24 +278,32 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
 
     // Auto-populate when datasets/grade change and mapping fields are out of sync
     useEffect(() => {
-        // We need both subjects lists to be loaded to accurately calculate similarities
-        const canGenerate = Array.isArray(fromSubjectsQuery.data) && fromSubjectsQuery.data.length > 0 &&
-            Array.isArray(toSubjectsQuery.data) && toSubjectsQuery.data.length > 0;
-
-        const currentFroms = mappingFields.map(m => m.from).slice().sort().join(",");
-        const fetchedFroms = Array.isArray(fromSubjectsQuery.data) ? fromSubjectsQuery.data.slice().sort().join(",") : "";
-
         const currentSig = `${fromDataset}-${toDataset}-${targetGrade}`;
         const hasSigChanged = lastGenSig.current !== currentSig;
 
-        const mappingMismatch = currentFroms !== fetchedFroms || hasSigChanged;
+        if (!hasSigChanged) return;
 
-        if (isCreating && canGenerate && mappingMismatch) {
+        // sig가 변경됐을 때: 과목 쿼리가 아직 로딩 중이면 대기
+        if (fromSubjectsQuery.isLoading || toSubjectsQuery.isLoading) return;
+
+        const excludedSubjects = ["창체", "채플"];
+        const currentFroms = mappingFields.map(m => m.from).slice().sort().join(",");
+        const fetchedFromsArr = Array.isArray(fromSubjectsQuery.data) ? fromSubjectsQuery.data.filter(subj => {
+            const parsed = parseSubject(subj);
+            return !excludedSubjects.some(ex => parsed.subj.includes(ex));
+        }) : [];
+        const fetchedFroms = fetchedFromsArr.slice().sort().join(",");
+        const mappingMismatch = currentFroms !== fetchedFroms;
+
+        // 신규 생성 모드: 과목 불일치 또는 sig 변경 시 재생성
+        // 편집 모드: sig 변경 시 재생성 (과목이 없어도 빈 목록으로 반영)
+        const shouldRegenerate = isCreating ? (mappingMismatch || hasSigChanged) : hasSigChanged;
+        if (shouldRegenerate) {
             lastGenSig.current = currentSig;
             generateAutoMappings(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fromSubjectsQuery.data, toSubjectsQuery.data, isCreating, mappingFields, fromDataset, toDataset, targetGrade]);
+    }, [fromSubjectsQuery.data, fromSubjectsQuery.isLoading, toSubjectsQuery.data, toSubjectsQuery.isLoading, isCreating, mappingFields, fromDataset, toDataset, targetGrade]);
 
     const { data: bridges, isLoading } = useQuery({
         queryKey: ["admin", "bridges"],
@@ -309,6 +415,11 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             return;
         }
 
+        if (fromDataset === toDataset) {
+            toast.error("출발역과 도착역은 같을 수 없습니다.");
+            return;
+        }
+
         const validMapping = mappingFields.filter(m => m.from.trim() !== "");
 
         createBridgeMutation.mutate({
@@ -354,7 +465,11 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
         setName(bridge.name);
         setFromDataset(bridge.fromDataset);
         setToDataset(bridge.toDataset);
-        setTargetGrade(bridge.targetGrade ? bridge.targetGrade.toString() : "");
+        const gradeStr = bridge.targetGrade ? bridge.targetGrade.toString() : "";
+        setTargetGrade(gradeStr);
+        // Set the lastGenSig to the current bridge config so that any change to grade
+        // is correctly detected as hasSigChanged in the useEffect
+        lastGenSig.current = `${bridge.fromDataset}-${bridge.toDataset}-${gradeStr}`;
         try {
             let parsed = JSON.parse(bridge.mappingData);
             if (typeof parsed === "string") {
@@ -474,7 +589,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                         </div>
                                         <div className="col-span-12 sm:col-span-2">
                                             <label className="text-sm font-bold block mb-1">대상 학년</label>
-                                            <Select value={targetGrade} onValueChange={setTargetGrade}>
+                                            <Select value={targetGrade} onValueChange={setTargetGrade} disabled={!isCreating}>
                                                 <SelectTrigger className={!targetGrade ? "text-slate-500" : ""}>
                                                     <SelectValue placeholder="-선택-" />
                                                 </SelectTrigger>
@@ -637,10 +752,17 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                     variant="outline"
                                                     className="w-full text-purple-700 border-purple-200 hover:bg-purple-50 mt-2"
                                                     disabled={hasMappingChanges() || !toDataset}
-                                                    onClick={() => goAutoFillAnalysis({ grade: parseInt(targetGrade), fromDataset, toDataset, mappingRules: mappingFields })}
+                                                    onClick={() => goAutoFillAnalysis({ grade: parseInt(targetGrade), fromDataset, toDataset, mappingRules: mappingFields, copyFullName: execCopyFullName })}
                                                 >
                                                     자동 채우기 연계 분석 시작
                                                 </Button>
+                                                <label className="flex flex-row items-center justify-between border-t border-slate-200 p-2 mt-3 cursor-pointer hover:bg-slate-50">
+                                                    <div className="space-y-0.5">
+                                                        <p className="font-medium text-sm text-slate-700">전체 교사 성함 풀네임 덮어쓰기</p>
+                                                        <p className="text-[11px] text-slate-500">학기별 계획에 기입된 선생님 실명 전송</p>
+                                                    </div>
+                                                    <Checkbox checked={execCopyFullName} onCheckedChange={(v) => setExecCopyFullName(!!v)} className="scale-90" />
+                                                </label>
                                             </div>
                                         )}
 
@@ -656,6 +778,16 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                     </div>
                                                     <Checkbox checked={targetGrade !== '1' && execElectives} disabled={targetGrade === '1'} onCheckedChange={(v) => setExecElectives(!!v)} />
                                                 </label>
+
+                                                {targetGrade !== '1' && execElectives && (
+                                                    <label className="flex flex-row items-center justify-between border-b border-x border-slate-200 p-2 px-4 rounded-b-lg -mt-3 pt-4 mb-2 bg-slate-50/50 cursor-pointer hover:bg-slate-100">
+                                                        <div className="space-y-0.5 ml-2">
+                                                            <p className="font-medium text-sm text-slate-700">└ 전체 교사 성함 풀네임 덮어쓰기</p>
+                                                            <p className="text-[11px] text-slate-500">출발 데이터셋에 입력된 선생님 실명(Full Name) 전송</p>
+                                                        </div>
+                                                        <Checkbox checked={execCopyFullName} onCheckedChange={(v) => setExecCopyFullName(!!v)} className="scale-90" />
+                                                    </label>
+                                                )}
 
                                                 <label className={`flex flex-row items-center justify-between border p-3 rounded-lg cursor-pointer ${targetGrade === '1' ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-50'}`}>
                                                     <div className="space-y-0.5">

@@ -11,6 +11,8 @@ import { Loader2, Play, Database, RefreshCw, Trash2, Edit, Save, Settings, PlayC
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { Progress } from "@/components/ui/progress";
+import DatasetManagerPanel from "./DatasetManagerPanel";
 
 interface DatabaseManagerProps {
     adminPassword: string;
@@ -23,6 +25,9 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
     const [results, setResults] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [dbSizeBytes, setDbSizeBytes] = useState<number>(0);
+    const [totalRows, setTotalRows] = useState<number>(0);
+    const [totalTables, setTotalTables] = useState<number>(0);
 
     // Filter tables
     const [showOthers, setShowOthers] = useState(false);
@@ -135,6 +140,15 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
             const data = await res.json();
             if (data.tables) {
                 setTables(data.tables);
+            }
+            if (data.dbSizeBytes !== undefined) {
+                setDbSizeBytes(data.dbSizeBytes);
+            }
+            if (data.totalRows !== undefined) {
+                setTotalRows(data.totalRows);
+            }
+            if (data.totalTables !== undefined) {
+                setTotalTables(data.totalTables);
             }
         } catch (e) {
             if (!background) toast.error("테이블 목록을 불러오지 못했습니다.");
@@ -364,14 +378,56 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
         }
     };
 
+    const dbSizeMB = (dbSizeBytes / (1024 * 1024)).toFixed(2);
+    // Assuming 500MB as a common free-tier limit for D1 / SQLite visual reference
+    const maxDbSizeMB = 500; 
+    const dbSizePercentage = Math.min((parseFloat(dbSizeMB) / maxDbSizeMB) * 100, 100);
+
     return (
         <div className="h-[calc(100vh-200px)] min-h-[600px] md:h-[700px] flex flex-col">
+            {/* DB Usage Tracker */}
+            <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <div className="flex justify-between items-end mb-1">
+                        <span className="text-sm font-semibold text-gray-700">DB 저장 공간</span>
+                        <span className="text-[10px] text-gray-500 font-mono">
+                            {dbSizeMB} MB / {maxDbSizeMB} MB ({dbSizePercentage.toFixed(1)}%)
+                        </span>
+                    </div>
+                    <Progress value={dbSizePercentage} className="h-2" />
+                </div>
+                
+                {/* Structural metrics replacing cloudflare raw rows */}
+                <div>
+                    <div className="flex justify-between items-end mb-1">
+                        <span className="text-sm font-semibold text-gray-700">총 데이터 행 수</span>
+                        <span className="text-[10px] text-gray-500 font-mono">
+                            {totalRows.toLocaleString()} / 500,000 ({Math.min((totalRows / 500000) * 100, 100).toFixed(1)}%)
+                        </span>
+                    </div>
+                    <Progress value={Math.min((totalRows / 500000) * 100, 100)} className="h-2 [&>div]:bg-blue-500 bg-blue-100" />
+                </div>
+
+                <div>
+                    <div className="flex justify-between items-end mb-1">
+                        <span className="text-sm font-semibold text-gray-700">전체 테이블 수</span>
+                        <span className="text-[10px] text-gray-500 font-mono">
+                            {totalTables} / 50 ({Math.min((totalTables / 50) * 100, 100).toFixed(1)}%)
+                        </span>
+                    </div>
+                    <Progress value={Math.min((totalTables / 50) * 100, 100)} className="h-2 [&>div]:bg-green-500 bg-green-100" />
+                </div>
+            </div>
+
             {/* Main Content Area with Tabs */}
             <div className="flex-1 min-h-0">
                 <Tabs defaultValue="manual" className="h-full flex flex-col">
                     <TabsList className="mb-2 w-full justify-start h-9">
                         <TabsTrigger value="manual" className="flex items-center gap-2 text-xs">
                             <Database className="w-3 h-3" /> 수동 관리
+                        </TabsTrigger>
+                        <TabsTrigger value="dataset" className="flex items-center gap-2 text-xs">
+                            <Database className="w-3 h-3" /> 데이터셋 관리
                         </TabsTrigger>
                         <TabsTrigger value="auto" className="flex items-center gap-2 text-xs">
                             <Settings className="w-3 h-3" /> 자동 관리
@@ -550,6 +606,10 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                 </CardContent>
                             </Card>
                         </div>
+                    </TabsContent>
+
+                    <TabsContent value="dataset" className="flex-1 mt-0">
+                        <DatasetManagerPanel adminPassword={adminPassword} />
                     </TabsContent>
 
                     <TabsContent value="auto" className="flex-1 mt-0">

@@ -19,14 +19,26 @@ export async function runMigrations() {
             console.log("[Migration] Added lastModifiedIp column.");
         } catch (e: any) {
             // ER_DUP_FIELDNAME code is 1060 in MySQL
-            if (e.code === 'ER_DUP_FIELDNAME' || e.errno === 1060 || e.message?.includes("Duplicate column name")) {
-                // console.log("[Migration] lastModifiedIp column already exists.");
+            if (e.message && e.message.includes('Duplicate column name')) {
+                console.log("[Migrate] lastModifiedIp column already exists.");
             } else {
-                console.error("[Migration] Failed to add lastModifiedIp:", e);
+                console.error("[Migrate] Failed to add lastModifiedIp:", e);
             }
         }
 
-        // 2. Add blocked_users table
+        // 2. Add isDeleted to performanceAssessments
+        try {
+            console.log("[Migrate] Checking for isDeleted column...");
+            await db.execute(sql`ALTER TABLE performanceAssessments ADD COLUMN isDeleted TINYINT(1) DEFAULT 0`);
+        } catch (e: any) {
+            if (e.message && e.message.includes('Duplicate column name')) {
+                console.log("[Migrate] isDeleted column already exists.");
+            } else {
+                console.error("[Migrate] Failed to add isDeleted:", e);
+            }
+        }
+
+        // 3. Add blocked_users table
         await db.execute(sql`
       CREATE TABLE IF NOT EXISTS blocked_users (
         id INT AUTO_INCREMENT PRIMARY KEY,

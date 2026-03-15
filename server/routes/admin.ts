@@ -35,14 +35,38 @@ router.get("/assessments", async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(500).json({ error: "DB Unavailable" });
 
+    const isTrash = req.query.trash === 'true';
+
     try {
-        const [results] = await db.execute(sql`
-            SELECT * FROM performanceAssessments 
-            ORDER BY grade ASC, classNum ASC, dueDate ASC
-        `);
+        const query = isTrash 
+            ? sql`SELECT * FROM performanceAssessments WHERE isDeleted = 1 ORDER BY grade ASC, classNum ASC, dueDate ASC`
+            : sql`SELECT * FROM performanceAssessments WHERE isDeleted = 0 ORDER BY grade ASC, classNum ASC, dueDate ASC`;
+
+        const [results] = await db.execute(query);
         res.json(results);
     } catch (err: any) {
         console.error("[Admin Assessments] Query failed:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PATCH /assessments: Restore from Trash
+router.patch("/assessments", async (req, res) => {
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: "DB Unavailable" });
+
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "Invalid IDs" });
+    }
+
+    try {
+        const inClause = ids.map((id: any) => Number(id)).filter((n: number) => !isNaN(n)).join(',');
+        await db.execute(sql.raw(`UPDATE performanceAssessments SET isDeleted = 0 WHERE id IN (${inClause})`));
+
+        res.json({ success: true, count: ids.length });
+    } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
 });

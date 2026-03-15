@@ -1,4 +1,4 @@
-﻿
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -298,30 +298,7 @@ export default function Dashboard() {
   // Extract datasetId early for use in effects
   const datasetId = (queryClient.getQueryData(['timetable', schoolName, grade, classNum]) as any)?.datasetId || '';
 
-  // 2, 3학년 선택과목 설정 확인
-  useEffect(() => {
-    if ((grade === "2" || grade === "3") && classNum && studentNumber && datasetId) {
-      // Check if electives are already set for this dataset
-      fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&dataset=${datasetId}`)
-        .then(res => res.json())
-        .then(data => {
-          // If no profile or no electives, show dialog
-          if (!data || !data.electives || Object.keys(data.electives).length === 0) {
-            setIsElectiveEntered(false);
-            setShowElectiveWarning(true);
-          } else {
-            setIsElectiveEntered(true);
-            setShowElectiveWarning(false);
-          }
-        })
-        .catch(err => {
-          console.error("Failed to check electives", err);
-        });
-    } else {
-      setIsElectiveEntered(true);
-      setShowElectiveWarning(false);
-    }
-  }, [grade, classNum, studentNumber, datasetId]);
+
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
@@ -416,10 +393,12 @@ export default function Dashboard() {
           })) as TimetableItem[];
           // Attach datasetId for downstream queries
           (mappedData as any).datasetId = result.datasetId;
+          (mappedData as any).ipOverrideApplied = result.ipOverrideApplied;
           return mappedData;
         }
         const emptyArray = [] as TimetableItem[];
         (emptyArray as any).datasetId = result.datasetId;
+        (emptyArray as any).ipOverrideApplied = result.ipOverrideApplied;
         return emptyArray;
       } catch (e) {
         console.error('Failed to fetch timetable', e);
@@ -429,6 +408,7 @@ export default function Dashboard() {
     enabled: !!grade && !!classNum && !!schoolName,
     retry: true, // 무한 재시도
     retryDelay: 3000, // 3초 간격
+    staleTime: 5000, // 5초 동안은 데이터를 신선한 상태로 유지하여, 캐싱 반영 및 UI 깜빡임 최소화
   });
 
   // 1.5 선택과목 데이터 및 프로필 조회 (2, 3학년용)
@@ -480,6 +460,47 @@ export default function Dashboard() {
     }
     return lastValidProfileRef.current; // retain only if undefined (e.g. background fetch just started, though usually data stays populated)
   }, [studentProfile, grade]);
+
+  // 2, 3학년 선택과목 완벽 입력 상태 확인 logic
+  useEffect(() => {
+    if (grade !== "2" && grade !== "3") {
+      setIsElectiveEntered(true);
+      setShowElectiveWarning(false);
+      return;
+    }
+
+    if (!classNum || !studentNumber || !datasetId || !electiveConfigs) {
+      // Still loading necessary contexts
+      return;
+    }
+
+    // Determine the required groups from electiveConfigs for this grade
+    const requiredGroups: string[] = Array.from(new Set(
+      electiveConfigs
+        .flatMap((c: any) => (c.classCode || "").split(","))
+        .map((code: string) => code.trim())
+        .filter(Boolean)
+    )) as string[];
+    
+    // If no configs are found, block if it's required (but since we don't know, we'll assume not fully entered to be safe or maybe let it pass if setup is incomplete)
+    if (requiredGroups.length === 0) {
+      // Empty configs scenario: usually means electives aren't actively defined yet. Let pass?
+      // Better to assume true to not block the Dashboard if the admin hasn't set anything up.
+      setIsElectiveEntered(true);
+      setShowElectiveWarning(false);
+      return;
+    }
+
+    // Verify current profile
+    const electives: Record<string, any> = currentProfile?.electives || {};
+    
+    // Check if every single required group has a valid subject selected
+    const isFullyEntered = requiredGroups.every(group => electives[group] && electives[group].subject && electives[group].subject.trim() !== "");
+
+    setIsElectiveEntered(isFullyEntered);
+    setShowElectiveWarning(!isFullyEntered);
+
+  }, [grade, classNum, studentNumber, datasetId, currentProfile, electiveConfigs]);
 
   const { timetableData, allClassesTimetable } = useMemo(() => {
     if (!rawTimetableData) return { timetableData: [], allClassesTimetable: [] };
@@ -631,11 +652,12 @@ export default function Dashboard() {
 
   // 3. 수행평가 목록 조회
   const { data: allAssessments, isLoading: assessmentLoading } = useQuery({
-    queryKey: ['assessments', grade, classNum],
+    queryKey: ['assessments', grade, classNum, datasetId],
     queryFn: async () => {
       if (!grade || !classNum) return [];
       try {
-        const res = await fetch(`/api/assessment?grade=${grade}&classNum=${classNum}`);
+        const datasetQuery = datasetId ? `&dataset=${encodeURIComponent(datasetId)}` : '';
+        const res = await fetch(`/api/assessment?grade=${grade}&classNum=${classNum}${datasetQuery}`);
         if (!res.ok) {
           if (res.status === 404) return [];
           throw new Error(`API Error: ${res.status}`);
@@ -694,6 +716,7 @@ export default function Dashboard() {
           grade: parseInt(grade),
           classNum: parseInt(classNum),
           classTime: data.classTime ? parseInt(data.classTime) : null,
+          dataset: datasetId || '',
         }),
       });
 
@@ -730,7 +753,10 @@ export default function Dashboard() {
       const res = await fetch(`/api/assessment`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          dataset: datasetId || ''
+        }),
       });
 
       if (!res.ok) {
@@ -930,6 +956,24 @@ export default function Dashboard() {
 
   return (
     <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-2">
+      {/* Global Status Banners */}
+      {(settings?.is_whitelisted || (rawTimetableData as any)?.ipOverrideApplied) && (
+        <div className="flex flex-col gap-2 mb-4">
+          {settings?.is_whitelisted && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg flex items-center gap-2 text-sm font-medium">
+              <ShieldAlert className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span>[화이트리스트] 이 기기는 접속 제한 예외 처리되었습니다.</span>
+            </div>
+          )}
+          {(rawTimetableData as any)?.ipOverrideApplied && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg flex items-center gap-2 text-sm font-medium">
+              <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0" />
+              <span>[강제 지정됨] {(rawTimetableData as any)?.ipOverrideApplied} Override된 데이터셋 ({(rawTimetableData as any)?.datasetId}) 표시 중</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* New Top Bar (Replaces Navigation on Desktop) */}
       <div className="hidden md:flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
@@ -1471,19 +1515,21 @@ export default function Dashboard() {
                                   isCancelledByFreePeriod = true;
                                 }
 
-                                if (matchingSlot) {
+                                // 반(className): electiveConfigs에서 group+subject로 조회
+                                const configEntry = (electiveConfigs || []).find((c: any) =>
+                                  c.subject === electiveSelection.subject &&
+                                  c.classCode?.split(",").map((s: string) => s.trim()).includes(group)
+                                );
+
+                                if (configEntry?.fullTeacherName) {
+                                  displayTeacher = configEntry.fullTeacherName;
+                                } else if (matchingSlot) {
                                   displayTeacher = matchingSlot.teacher;
                                 } else if (electiveTeachers.length > 0) {
                                   displayTeacher = electiveTeachers[0];
                                 } else {
                                   displayTeacher = item ? item.teacher : "";
                                 }
-
-                                // 반(className): electiveConfigs에서 group+subject로 조회
-                                const configEntry = (electiveConfigs || []).find((c: any) =>
-                                  c.subject === electiveSelection.subject &&
-                                  c.classCode?.split(",").map((s: string) => s.trim()).includes(group)
-                                );
 
                                 let rawClassName = (configEntry as any)?.className || "";
                                 try {
@@ -1492,6 +1538,17 @@ export default function Dashboard() {
                                 } catch (e) {
                                   // Fallback to legacy string if it wasn't JSON
                                   displayClassName = rawClassName;
+                                }
+                              } else {
+                                // For non-elective regular subjects, try to find full name override
+                                if (item && electiveConfigs) {
+                                  const subjectMatch = electiveConfigs.find((c: any) => 
+                                    c.subject === item.subject && 
+                                    c.originalTeacher === item.teacher
+                                  );
+                                  if (subjectMatch && subjectMatch.fullTeacherName) {
+                                    displayTeacher = subjectMatch.fullTeacherName;
+                                  }
                                 }
                               }
 

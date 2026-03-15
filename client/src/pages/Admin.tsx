@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -50,6 +50,12 @@ function ElectiveManager({ password }: { password: string }) {
     const [originalSubjects, setOriginalSubjects] = useState<any[]>([]); // To track changes
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [showEasyABC, setShowEasyABC] = useState(false);
+    const [draftCodes, setDraftCodes] = useState<Record<string, string>>({}); // slot key → group code draft
+    const [draftNotMoving, setDraftNotMoving] = useState<Record<string, boolean>>({}); // slot key → "이동수업 X" flag
+
+    const WEEKDAY_LABELS = ['월', '화', '수', '목', '금'];
+    const PERIOD_COUNT = 7;
 
     // Fetch current setting to determine default "Auto" dataset if needed
     const settingsQuery = useQuery({
@@ -84,6 +90,53 @@ function ElectiveManager({ password }: { password: string }) {
             return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
         });
     }, [rawDataQuery.data]);
+
+    // Timetable query for Easy ABC modal (all classes)
+    const timetableAllQuery = useQuery({
+        queryKey: ["admin", "timetableAll", selectedGrade, selectedDataset],
+        queryFn: async () => {
+            let targetDataset = selectedDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : selectedDataset;
+            if (!targetDataset && timetableProps && timetableProps.length > 0) targetDataset = timetableProps[0];
+            if (!targetDataset) return [];
+            const url = `/api/comcigan?type=timetable&grade=${selectedGrade}&classNum=all` +
+                (targetDataset !== '_auto_' ? `&dataset=${targetDataset}` : '');
+            const res = await fetch(url);
+            if (!res.ok) return [];
+            const json = await res.json();
+            return json.data || [];
+        },
+        enabled: !!selectedDataset && showEasyABC,
+    });
+
+    // Build slot -> subjects mapping: { "wd-period": [{ subjectIdx, subjectName, teacher }] }
+    const slotSubjectsMap = useMemo(() => {
+        const allSlots: any[] = timetableAllQuery.data || [];
+        const FREE_KEYWORDS = ["\ube48\uad50\uc2e4", "\uacf5\uac15", "\ucc3d\uccb4", "\uc790\uc2b5", "\ub3d9\uc544\ub9ac", "\uc810\uc2ec\uc2dc\uac04", "Empty", "Free"];
+        const map: Record<string, { idx: number; subjectName: string; teacher: string }[]> = {};
+
+        subjects.forEach((item: any, idx: number) => {
+            const isFreePeriod = FREE_KEYWORDS.some(ex => item.subject.trim().includes(ex));
+            const isDeleted = Boolean(item.isDeleted);
+            if (isFreePeriod || isDeleted) return;
+
+            // Find all slots where this subject is taught
+            allSlots.forEach((slot: any) => {
+                if (!slot.subject) return;
+                if (slot.subject.trim() !== item.subject.trim()) return;
+                const wd = slot.weekday; // 0=Mon...4=Fri
+                const period = slot.classTime;
+                if (wd === undefined || period === undefined) return;
+                const key = `${wd}-${period}`;
+                if (!map[key]) map[key] = [];
+                // Deduplicate by subjectName+teacher
+                if (!map[key].some(e => e.idx === idx)) {
+                    map[key].push({ idx, subjectName: item.subject, teacher: item.fullTeacherName || item.teacher });
+                }
+            });
+        });
+
+        return map;
+    }, [timetableAllQuery.data, subjects]);
 
     useEffect(() => {
         if (settingsQuery.data) {
@@ -284,6 +337,7 @@ function ElectiveManager({ password }: { password: string }) {
         }
     };
 
+
     const [searchTerm, setSearchTerm] = useState("");
 
     const handleCancel = () => {
@@ -329,27 +383,48 @@ function ElectiveManager({ password }: { password: string }) {
     const autoLabel = `자동 (현재: ${activeTimetable || '없음'})`;
 
     return (
-        <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
-            {/* Sidebar */}
-            <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
+        <div className="flex flex-col gap-0 w-full">
+            <CardHeader className="flex flex-row justify-between items-start md:items-center gap-4 px-6 pt-6 pb-2">
+                <div>
+                    <CardTitle>선택과목 관리</CardTitle>
+                    <CardDescription>
+                        2, 3학년 선택과목의 반 코드(A, B, C...)와 선생님 성함을 관리합니다.
+                    </CardDescription>
+                </div>
                 <Button
-                    variant={selectedGrade === 2 ? "default" : "ghost"}
-                    className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
-                    onClick={() => setSelectedGrade(2)}
+                    variant="secondary"
+                    className="bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200"
+                    onClick={() => {
+                        setDraftCodes({});
+                        setShowEasyABC(true);
+                    }}
                 >
-                    2학년
+                    <Wand2 className="w-4 h-4 mr-2" />
+                    Easy ABC 그룹입력
                 </Button>
-                <Button
-                    variant={selectedGrade === 3 ? "default" : "ghost"}
-                    className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
-                    onClick={() => setSelectedGrade(3)}
-                >
-                    3학년
-                </Button>
-            </div>
+            </CardHeader>
+            <CardContent className="pt-2">
+                <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
+                    {/* Sidebar */}
+                    <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
+                        <Button
+                            variant={selectedGrade === 2 ? "default" : "ghost"}
+                            className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
+                            onClick={() => setSelectedGrade(2)}
+                        >
+                            2학년
+                        </Button>
+                        <Button
+                            variant={selectedGrade === 3 ? "default" : "ghost"}
+                            className="justify-center md:justify-start flex-1 md:flex-none whitespace-nowrap"
+                            onClick={() => setSelectedGrade(3)}
+                        >
+                            3학년
+                        </Button>
+                    </div>
 
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col gap-4 overflow-hidden pr-2">
+                    {/* Main Content */}
+                    <div className="flex-1 flex flex-col gap-4 overflow-hidden pr-2">
                 <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                     <div className="flex items-center gap-4 shrink-0">
                         <h3 className="text-lg font-bold flex items-center gap-2">
@@ -386,7 +461,7 @@ function ElectiveManager({ password }: { password: string }) {
                         </div>
                     </div>
 
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex gap-2 justify-end w-full xl:w-auto shrink-0 mt-2 xl:mt-0">
                         <Button
                             variant="outline"
                             disabled={!hasChanges || isSaving}
@@ -646,8 +721,150 @@ function ElectiveManager({ password }: { password: string }) {
                         </TableBody >
                     </Table >
                 </div >
-            </div >
-        </div >
+
+
+                <Dialog open={showEasyABC} onOpenChange={(open) => {
+                    if (!open) { setDraftCodes({}); setDraftNotMoving({}); }
+                    setShowEasyABC(open);
+                }}>
+                    <DialogContent className="!max-w-none w-[99vw] h-[92vh] flex flex-col p-4 md:p-6 bg-slate-50">
+                        <DialogHeader className="shrink-0">
+                            <DialogTitle className="flex items-center gap-2 mb-1">
+                                <Wand2 className="w-5 h-5 text-purple-600" />
+                                Easy ABC 분반 설정 — {selectedGrade}학년
+                            </DialogTitle>
+                            <DialogDescription>
+                                각 교시 칸에서 그룹을 선택하면 해당 시간대의 <strong>모든 선택과목</strong>에 분반 기호가 자동 지정됩니다.
+                                <strong className="text-orange-700"> [실행]</strong>을 눌러 변경 대기사항에 반영한 뒤, 페이지 상단 <strong>[확인 및 저장하기]</strong>로 최종 저장하세요.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        {timetableAllQuery.isLoading ? (
+                            <div className="flex-1 flex items-center justify-center text-slate-400">시간표 로딩 중...</div>
+                        ) : (
+                        <div className="flex-1 overflow-auto rounded-md border border-slate-300 min-h-0">
+                            <table className="w-full text-sm border-collapse min-w-[700px]">
+                                <thead className="sticky top-0 z-10">
+                                    <tr className="bg-slate-100 text-slate-600">
+                                        <th className="border border-slate-300 px-3 py-3 font-bold text-center w-14 text-sm">교시</th>
+                                        {WEEKDAY_LABELS.map(d => (
+                                            <th key={d} className="border border-slate-300 px-3 py-3 font-bold text-center text-sm">{d}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {Array.from({ length: PERIOD_COUNT }, (_, pi) => {
+                                        const period = pi + 1;
+                                        return (
+                                            <tr key={period}>
+                                                <td className="border border-slate-300 px-3 py-4 text-center font-bold text-slate-500 bg-slate-50 text-base">{period}</td>
+                                                {WEEKDAY_LABELS.map((_, wdi) => {
+                                                    const key = `${wdi}-${period}`;
+                                                    const cellSubjects = slotSubjectsMap[key] || [];
+                                                    const hasSubjects = cellSubjects.length > 0;
+                                                    const draftVal = draftCodes[key] ?? "";
+
+                                                    const GROUP_OPTIONS = [
+                                                        { value: "", label: "없음" },
+                                                        { value: "A", label: "A 지정" },
+                                                        { value: "B", label: "B 지정" },
+                                                        { value: "C", label: "C 지정" },
+                                                        { value: "D", label: "D 지정" },
+                                                        { value: "E", label: "E 지정" },
+                                                        { value: "F", label: "F 지정" },
+                                                        { value: "G", label: "G 지정" },
+                                                    ];
+
+                                                    return (
+                                                        <td key={wdi} className={`border border-slate-300 p-3 text-center align-top ${
+                                                            hasSubjects ? "bg-white" : "bg-slate-50/50"
+                                                        }`}>
+                                                            {hasSubjects ? (
+                                                                <div className="flex flex-col items-center gap-2">
+                                                                    <select
+                                                                        value={draftVal}
+                                                                        onChange={(e) => {
+                                                                            setDraftCodes(prev => ({ ...prev, [key]: e.target.value }));
+                                                                        }}
+                                                                        className={`h-10 w-full min-w-[90px] font-bold text-center border rounded-md cursor-pointer text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                                                                            draftVal
+                                                                                ? "border-blue-400 bg-blue-50 text-blue-700"
+                                                                                : "border-slate-300 bg-white text-slate-400"
+                                                                        }`}
+                                                                    >
+                                                                        {GROUP_OPTIONS.map(opt => (
+                                                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <label className="flex items-center gap-1 cursor-pointer mt-0.5">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={!!draftNotMoving[key]}
+                                                                            onChange={(e) => setDraftNotMoving(prev => ({ ...prev, [key]: e.target.checked }))}
+                                                                            className="w-3.5 h-3.5 accent-red-500"
+                                                                        />
+                                                                        <span className={`text-[10px] font-medium ${draftNotMoving[key] ? 'text-red-600' : 'text-slate-400'}`}>이동X</span>
+                                                                    </label>
+                                                                    <div className="text-[10px] text-slate-400 leading-tight text-center px-1">
+                                                                        {cellSubjects.map(e => e.subjectName).join(", ")}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-slate-200 text-xs">—</span>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        )}
+
+                        <DialogFooter className="mt-3 border-t pt-3 shrink-0 flex flex-row gap-2 justify-end">
+                            <Button variant="outline" onClick={() => setShowEasyABC(false)}>
+                                취소
+                            </Button>
+                            <Button
+                                className="bg-purple-600 hover:bg-purple-700 text-white"
+                                onClick={() => {
+                                    // Apply draftCodes to subjects state (pending changes, not yet saved)
+                                    const newSubjects = [...subjects];
+                                    Object.entries(draftCodes).forEach(([slotKey, code]) => {
+                                        if (code === "") return; // "없음" → skip (don't overwrite)
+                                        const cellSubjects = slotSubjectsMap[slotKey] || [];
+                                        cellSubjects.forEach(({ idx }) => {
+                                            const currentSubject = newSubjects[idx];
+                                            const existingCodes = (currentSubject.classCode || "").split(",").filter(Boolean);
+                                            
+                                            if (!existingCodes.includes(code)) {
+                                                existingCodes.push(code);
+                                            }
+
+                                            newSubjects[idx] = {
+                                                ...currentSubject,
+                                                classCode: existingCodes.sort().join(","),
+                                                isMovingClass: !draftNotMoving[slotKey],
+                                            };
+                                        });
+                                    });
+                                    setSubjects(newSubjects);
+                                    setShowEasyABC(false);
+                                }}
+                            >
+                                <Check className="w-4 h-4 mr-2" />
+                                실행 (변경 대기사항에 반영)
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                    </div> {/* End Main Content */}
+                </div> {/* End flex row */}
+        </CardContent>
+        </div>
     );
 }
 
@@ -823,24 +1040,27 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
         },
     });
 
-    const [overrides, setOverrides] = useState<Record<string, Record<string, string>>>({
-        "2": {},
-        "3": {},
-    });
+    const [globalOverrides, setGlobalOverrides] = useState<Record<string, Record<string, Record<string, string>>>>({});
+    const [currentDatasetId, setCurrentDatasetId] = useState<string>('');
+    const [selectedDataset, setSelectedDataset] = useState<string>('_auto_');
 
     useEffect(() => {
         if (settingsQuery.data?.elective_group_overrides) {
             try {
-                const parsed = JSON.parse(settingsQuery.data.elective_group_overrides);
-                setOverrides({
-                    "2": parsed["2"] || {},
-                    "3": parsed["3"] || {},
-                });
+                let parsed = settingsQuery.data.elective_group_overrides;
+                if (typeof parsed === 'string') {
+                    parsed = JSON.parse(parsed);
+                }
+                setGlobalOverrides(parsed || {});
             } catch (e) {
                 console.error("Failed to parse elective_group_overrides", e);
             }
         }
     }, [settingsQuery.data]);
+
+    // Derived overrides string for isDirty check
+    const currentDatasetKey = currentDatasetId || '_auto_';
+    const currentOverrides = globalOverrides[currentDatasetKey] || { "2": {}, "3": {} };
 
     const saveMutation = useMutation({
         mutationFn: async (newData: any) => {
@@ -867,18 +1087,19 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
 
     const handleSave = () => {
         saveMutation.mutate({
-            elective_group_overrides: JSON.stringify(overrides),
+            elective_group_overrides: JSON.stringify(globalOverrides),
         });
     };
 
     const handleClearOverrides = () => {
-        if (confirm("정말로 모든 그룹 강제 지정을 초기화하시겠습니까?")) {
-            setOverrides({ "2": {}, "3": {} });
+        if (confirm(`정말로 [${currentDatasetKey}] 데이터셋의 모든 그룹 강제 지정을 초기화하시겠습니까?`)) {
+            setGlobalOverrides(prev => {
+                const next = { ...prev };
+                next[currentDatasetKey] = { "2": {}, "3": {} };
+                return next;
+            });
         }
     };
-
-    const [currentDatasetId, setCurrentDatasetId] = useState<string>('');
-    const [selectedDataset, setSelectedDataset] = useState<string>('_auto_');
 
     const adminRawQuery = useQuery({
         queryKey: ["admin", "rawComcigan_GroupChecker"],
@@ -990,13 +1211,19 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
         return cellGroups;
     }, [rawDataQuery.data, dbData?.electiveSubjects, grade]);
 
-    const isDirty = JSON.stringify(overrides) !== (settingsQuery.data?.elective_group_overrides || '{"2":{},"3":{}}');
+    // Stringify current selection for dirtiness check
+    const originalParsed = typeof settingsQuery.data?.elective_group_overrides === 'string' 
+        ? JSON.parse(settingsQuery.data.elective_group_overrides || '{}') 
+        : (settingsQuery.data?.elective_group_overrides || {});
+        
+    const isDirty = JSON.stringify(globalOverrides) !== JSON.stringify(originalParsed);
 
     const handleOverrideChange = (w: number, p: number, val: string) => {
         const cellKey = `${w}-${p}`;
-        setOverrides(prev => {
+        setGlobalOverrides(prev => {
             const next = { ...prev };
-            const gradeOverrides = { ...(next[grade] || {}) };
+            const datasetOverrides = { ...(next[currentDatasetKey] || { "2": {}, "3": {} }) };
+            const gradeOverrides = { ...(datasetOverrides[grade] || {}) };
 
             if (val === "AUTO") {
                 delete gradeOverrides[cellKey];
@@ -1004,7 +1231,8 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
                 gradeOverrides[cellKey] = val;
             }
 
-            next[grade] = gradeOverrides;
+            datasetOverrides[grade] = gradeOverrides;
+            next[currentDatasetKey] = datasetOverrides;
             return next;
         });
     };
@@ -1071,7 +1299,7 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
                                 {[0, 1, 2, 3, 4].map(w => {
                                     const cellKey = `${w}-${p}`;
                                     const autoGroup = computedBaseGroups[cellKey] || null;
-                                    const overrideValue = overrides[grade]?.[cellKey];
+                                    const overrideValue = currentOverrides[grade]?.[cellKey];
 
                                     const isNone = overrideValue === "NONE";
                                     const finalGroup = isNone ? null : (overrideValue || autoGroup);
@@ -1115,7 +1343,12 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
                     <Button variant="outline" onClick={handleClearOverrides} className="text-red-500 hover:text-red-600 mr-auto">
                         전체 초기화 (All Clear)
                     </Button>
-                    <Button variant="outline" onClick={() => setOverrides(JSON.parse(settingsQuery.data?.elective_group_overrides || '{"2":{},"3":{}}'))} disabled={!isDirty || saveMutation.isPending}>
+                    <Button variant="outline" onClick={() => {
+                        const parsed = typeof settingsQuery.data?.elective_group_overrides === 'string'
+                            ? JSON.parse(settingsQuery.data.elective_group_overrides || '{}')
+                            : (settingsQuery.data?.elective_group_overrides || {});
+                        setGlobalOverrides(parsed);
+                    }} disabled={!isDirty || saveMutation.isPending}>
                         저장 취소
                     </Button>
                     <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
@@ -1744,12 +1977,12 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
 
     // Fetch all student profiles for the grade — real-time refresh when no pending changes
     const profilesQuery = useQuery({
-        queryKey: ["admin", "allStudentProfiles", selectedGrade],
+        queryKey: ["admin", "allStudentProfiles", selectedGrade, resolvedDataset],
         queryFn: async () => {
-            const res = await fetch(`/api/electives?type=all-students&grade=${selectedGrade}`);
+            const res = await fetch(`/api/electives?type=all-students&grade=${selectedGrade}&dataset=${encodeURIComponent(resolvedDataset)}`);
             return res.json();
         },
-        enabled: !!selectedGrade,
+        enabled: !!selectedGrade && !!resolvedDataset,
         refetchInterval: hasPendingChanges ? false : 5000, // 5s auto-refresh when no edits
     });
 
@@ -1922,6 +2155,17 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
     const isLoading = electiveConfigQuery.isLoading || profilesQuery.isLoading;
     const changedStudentCount = Object.keys(pendingChanges).length;
 
+    // Calculate how many students have completely filled all groups
+    const completedCount = useMemo(() => {
+        if (groupCodes.length === 0) return 0;
+        return studentRows.filter(row => {
+            return groupCodes.every(code => {
+                const val = getDisplayElective(row.key, code);
+                return val && val !== "_empty_" && val.trim() !== "";
+            });
+        }).length;
+    }, [studentRows, groupCodes, profilesQuery.data, pendingChanges]);
+
     return (
         <div className="flex flex-col h-full gap-4">
             {/* Header Controls */}
@@ -2047,10 +2291,9 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                 )}
             </div>
 
-            {/* Status Bar */}
             <div className="flex justify-between items-center text-xs pt-1 border-t">
-                <span className="text-gray-400">
-                    총 {studentRows.length}명 ·
+                <span className="text-gray-400 font-medium">
+                    총 {studentRows.length}명 중 {completedCount}명 완료 ({studentRows.length > 0 ? Math.round((completedCount / studentRows.length) * 100) : 0}%) · 
                     저장된 프로필: {profilesQuery.data?.length || 0}개
                     {!hasPendingChanges && <span className="ml-2 text-green-500">● 실시간 동기화 중</span>}
                 </span>
@@ -2425,13 +2668,20 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
     const [excludeApplied, setExcludeApplied] = useState("");
     const [totalMetric, setTotalMetric] = useState<"student" | "ip">("student");
 
+    const [startDate, setStartDate] = useState<string>("");
+    const [endDate, setEndDate] = useState<string>("");
+
     const { data: trendData, isLoading, isError, error } = useQuery({
-        queryKey: ['admin', 'visitor-trends', unit, excludeApplied],
+        queryKey: ['admin', 'visitor-trends', unit, excludeApplied, startDate, endDate],
         queryFn: async () => {
             const params = new URLSearchParams({ unit });
             if (excludeApplied) params.set('exclude', excludeApplied);
+            if (startDate) params.set('startDate', startDate);
+            if (endDate) params.set('endDate', endDate);
+            
             const res = await fetch(`/api/admin/visit-trends?${params}`, {
-                headers: { 'X-Admin-Password': adminPassword }
+                headers: { 'X-Admin-Password': adminPassword },
+                cache: 'no-store'
             });
             if (!res.ok) throw new Error('Failed to fetch trends');
             return res.json();
@@ -2448,8 +2698,10 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
         }
         if (unit === 'day') {
             // "2026-03-05" → "3/5"
-            const [, m, d] = label.split('-');
-            return `${parseInt(m)}/${parseInt(d)}`;
+            const [y, m, d] = label.split('-');
+            const dateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+            const days = ['일', '월', '화', '수', '목', '금', '토'];
+            return `${parseInt(m)}/${parseInt(d)}(${days[dateObj.getDay()]})`;
         }
         if (unit === 'week') {
             return label.replace(/^\d{4}-/, '');
@@ -2528,19 +2780,46 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                     ))}
                 </div>
 
+                {/* Date range inputs */}
+                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-1 border shadow-sm h-10">
+                    <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="text-sm border-none focus:ring-0 text-gray-700 bg-transparent w-32"
+                    />
+                    <span className="text-gray-400">~</span>
+                    <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="text-sm border-none focus:ring-0 text-gray-700 bg-transparent w-32"
+                    />
+                    {(startDate || endDate) && (
+                        <button
+                            onClick={() => { setStartDate(""); setEndDate(""); }}
+                            className="ml-2 text-xs text-red-500 hover:bg-red-50 p-1 rounded transition-colors"
+                            title="기간 초기화"
+                        >
+                            <X className="w-3 h-3" />
+                        </button>
+                    )}
+                </div>
+
                 {/* Exclude input */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 h-10">
                     <Input
                         value={excludeInput}
                         onChange={(e) => setExcludeInput(e.target.value)}
                         placeholder="제외 학번 (예: 2101,2305)"
-                        className="w-[200px] h-9 text-sm"
+                        className="w-[200px] h-full text-sm"
                         onKeyDown={(e) => { if (e.key === 'Enter') setExcludeApplied(excludeInput); }}
                     />
                     <Button
                         size="sm"
                         variant="outline"
                         onClick={() => setExcludeApplied(excludeInput)}
+                        className="h-full"
                     >
                         적용
                     </Button>
@@ -2549,9 +2828,9 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                             size="sm"
                             variant="ghost"
                             onClick={() => { setExcludeInput(''); setExcludeApplied(''); }}
-                            className="text-red-500 px-2"
+                            className="text-red-500 px-2 h-full"
                         >
-                            <X className="w-3 h-3" />
+                            <X className="w-4 h-4" />
                         </Button>
                     )}
                 </div>
@@ -2691,6 +2970,209 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------
+// ----------------------------------------------------------------------
+// 6.5. Trash Manager (Soft-deleted.isDeleted=1 assessments list)
+// ----------------------------------------------------------------------
+function TrashManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [selectedAssessments, setSelectedAssessments] = useState<number[]>([]);
+
+    const trashQuery = useQuery({
+        queryKey: ["admin", "assessments", "trash"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/assessments?trash=true", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("휴지통 항목을 불러올 수 없습니다");
+            return res.json();
+        },
+        refetchInterval: 10000,
+    });
+
+    const restoreMutation = useMutation({
+        mutationFn: async (ids: number[]) => {
+            const res = await fetch("/api/admin/assessments", {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({ ids })
+            });
+            if (!res.ok) throw new Error("복원 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("선택한 항목이 복원되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "assessments"] });
+            setSelectedAssessments([]);
+        },
+        onError: () => toast.error("복원에 실패했습니다.")
+    });
+
+    const hardDeleteMutation = useMutation({
+        mutationFn: async (ids: number[]) => {
+            const res = await fetch("/api/admin/assessments?hard=true", {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({ ids })
+            });
+            if (!res.ok) throw new Error("영구 삭제 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("선택한 항목이 영구 삭제되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "assessments"] });
+            setSelectedAssessments([]);
+        },
+        onError: () => toast.error("항목 삭제에 실패했습니다.")
+    });
+
+    const toggleAll = (checked: boolean) => {
+        if (!trashQuery.data) return;
+        if (checked) {
+            setSelectedAssessments(trashQuery.data.map((a: any) => a.id));
+        } else {
+            setSelectedAssessments([]);
+        }
+    };
+
+    const toggleOne = (id: number, checked: boolean) => {
+        setSelectedAssessments(prev =>
+            checked ? [...prev, id] : prev.filter(x => x !== id)
+        );
+    };
+
+    return (
+        <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
+            {/* Sidebar List */}
+            <div className="w-full md:w-64 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
+                <Button
+                    variant="default"
+                    className="justify-start whitespace-nowrap text-left"
+                >
+                    <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center">
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            수행평가 휴지통
+                        </div>
+                        {trashQuery.data && (
+                            <span className="text-xs text-orange-200 font-bold ml-2">
+                                ({trashQuery.data.length})
+                            </span>
+                        )}
+                    </div>
+                </Button>
+            </div>
+
+            {/* Main Content Area */}
+            <div className="flex-1 p-2 md:p-6 overflow-y-auto">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle>수행평가 휴지통</CardTitle>
+                            <CardDescription>
+                                사용자가 임시 삭제한 항목들입니다. 일정 기한이 지나면 시스템 서버 관리에 의해 자동 영구 삭제됩니다.
+                            </CardDescription>
+                        </div>
+                        {selectedAssessments.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        if (confirm(`${selectedAssessments.length}개의 항목을 다시 목록으로 복원하시겠습니까?`)) {
+                                            restoreMutation.mutate(selectedAssessments);
+                                        }
+                                    }}
+                                >
+                                    <ArchiveRestore className="h-4 w-4 mr-2" />
+                                    선택 복원 ({selectedAssessments.length})
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => {
+                                        if (confirm(`경고: ${selectedAssessments.length}개의 항목을 영구 삭제합니다. 이 작업은 되돌릴 수 없습니다.\n정말 삭제하시겠습니까?`)) {
+                                            hardDeleteMutation.mutate(selectedAssessments);
+                                        }
+                                    }}
+                                >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    영구 삭제 ({selectedAssessments.length})
+                                </Button>
+                            </div>
+                        )}
+                    </CardHeader>
+                    <CardContent>
+                        {trashQuery.isLoading ? (
+                            <div className="py-8 text-center text-gray-500">휴지통을 불러오는 중...</div>
+                        ) : trashQuery.data?.length === 0 ? (
+                            <div className="py-12 flex flex-col items-center justify-center text-gray-400">
+                                <Trash2 className="w-12 h-12 mb-4 text-gray-300" />
+                                <p>휴지통이 비어 있습니다.</p>
+                            </div>
+                        ) : (
+                            <div className="rounded-md border overflow-x-auto">
+                                <Table className="min-w-[800px]">
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="w-[50px] text-center">
+                                                <Checkbox
+                                                    checked={trashQuery.data?.length > 0 && selectedAssessments.length === trashQuery.data.length}
+                                                    onCheckedChange={toggleAll}
+                                                />
+                                            </TableHead>
+                                            <TableHead className="w-[80px] text-center">학년</TableHead>
+                                            <TableHead className="w-[80px] text-center">반</TableHead>
+                                            <TableHead>과목</TableHead>
+                                            <TableHead>제목</TableHead>
+                                            <TableHead className="w-[120px]">마감일</TableHead>
+                                            <TableHead className="w-[120px]">삭제 IP</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {trashQuery.data?.map((assessment: any) => (
+                                            <TableRow key={assessment.id}>
+                                                <TableCell className="text-center">
+                                                    <Checkbox
+                                                        checked={selectedAssessments.includes(assessment.id)}
+                                                        onCheckedChange={(c) => toggleOne(assessment.id, !!c)}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="text-center font-bold text-gray-600">
+                                                    {assessment.grade}학년
+                                                </TableCell>
+                                                <TableCell className="text-center font-bold text-gray-600">
+                                                    {assessment.classNum === 0 ? "전체" : `${assessment.classNum}반`}
+                                                </TableCell>
+                                                <TableCell className="font-medium">
+                                                    <span className={`${assessment.classNum === 0 ? "text-blue-600" : ""}`}>
+                                                        {assessment.subject}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell>{assessment.title}</TableCell>
+                                                <TableCell>{assessment.dueDate}</TableCell>
+                                                <TableCell className="font-mono text-xs text-gray-500">
+                                                    {assessment.lastModifiedIp || "-"}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }
@@ -3349,12 +3831,31 @@ export default function Admin() {
 
     // --- Assessment Management ---
     const [selectedAssessments, setSelectedAssessments] = useState<number[]>([]);
+    const [assessmentSortField, setAssessmentSortField] = useState<string>('dueDate');
+    const [assessmentSortOrder, setAssessmentSortOrder] = useState<'asc' | 'desc'>('asc');
     const [selectedProfile, setSelectedProfile] = useState<IPProfile | null>(null);
     const [selectedIp, setSelectedIp] = useState<string | null>(null);
     const [isOthersExpanded, setIsOthersExpanded] = useState(false);
     const [sortColumn, setSortColumn] = useState<'id' | 'modCount' | 'lastAccess'>('lastAccess');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+    const [assessmentDsFilterG1, setAssessmentDsFilterG1] = useState<string>('_auto_');
+    const [assessmentDsFilterG23, setAssessmentDsFilterG23] = useState<string>('_auto_');
+
+    // Settings query for dataset resolution
+    const { data: adminSettings } = useQuery({
+        queryKey: ["admin", "settings", "main"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": password } });
+            if (!res.ok) throw new Error("settings fetch failed");
+            return res.json();
+        },
+        enabled: isAuthenticated,
+    });
+
+    // Resolve auto dataset per grade
+    const resolvedAutoDatasetGrade1 = adminSettings?.comcigan_dataset_selected_grade1 || '';
+    const resolvedAutoDatasetGrade23 = adminSettings?.comcigan_dataset_selected || '';
 
     const { data: assessments } = useQuery({
         queryKey: ["admin", "assessments"],
@@ -3368,6 +3869,29 @@ export default function Admin() {
         enabled: isAuthenticated,
         refetchInterval: 5000,
     });
+
+    // Get unique datasets present in assessments
+    const assessmentDatasets = useMemo(() => {
+        if (!assessments || !Array.isArray(assessments)) return [];
+        const ds = new Set<string>();
+        assessments.forEach((a: any) => { if (a.dataset !== undefined && a.dataset !== null) ds.add(a.dataset); });
+        return Array.from(ds).sort();
+    }, [assessments]);
+
+    // Filter assessments by per-grade dataset selectors
+    const datasetFilteredAssessments = useMemo(() => {
+        if (!assessments || !Array.isArray(assessments)) return [];
+        return assessments.filter((a: any) => {
+            const isG1 = a.grade === 1;
+            const filter = isG1 ? assessmentDsFilterG1 : assessmentDsFilterG23;
+            if (filter === '_all_') return true;
+            if (filter === '_auto_') {
+                const ds = isG1 ? resolvedAutoDatasetGrade1 : resolvedAutoDatasetGrade23;
+                return (a.dataset || '') === ds;
+            }
+            return (a.dataset || '') === filter;
+        });
+    }, [assessments, assessmentDsFilterG1, assessmentDsFilterG23, resolvedAutoDatasetGrade1, resolvedAutoDatasetGrade23]);
 
     const deleteAssessmentsMutation = useMutation({
         mutationFn: async (ids: number[]) => {
@@ -3562,7 +4086,7 @@ export default function Admin() {
             </div>
 
             <Tabs defaultValue="assessments" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 mb-8 h-auto">
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 mb-8 h-auto">
                     <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
                     <TabsTrigger value="users">사용자 관리</TabsTrigger>
                     <TabsTrigger value="electives">선택과목</TabsTrigger>
@@ -3571,6 +4095,12 @@ export default function Admin() {
                         className="data-[state=active]:bg-green-100 data-[state=active]:text-green-800"
                     >
                         DB 관리
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="trash"
+                        className="data-[state=active]:bg-red-100 data-[state=active]:text-red-800"
+                    >
+                        휴지통
                     </TabsTrigger>
                     <TabsTrigger
                         value="datatransfer"
@@ -3597,6 +4127,10 @@ export default function Admin() {
                     </TabsTrigger>
                 </TabsList>
 
+                <TabsContent value="trash" className="space-y-6">
+                    <TrashManager adminPassword={password} />
+                </TabsContent>
+
                 <TabsContent value="assessments">
                     {/* ... existing assessments content ... */}
                     <Card>
@@ -3604,84 +4138,243 @@ export default function Admin() {
                             <div>
                                 <CardTitle>수행평가 목록</CardTitle>
                                 <CardDescription>
-                                    등록된 모든 수행평가를 확인하고 일괄 삭제할 수 있습니다.
+                                    등록된 수행평가를 확인하고 일괄 삭제할 수 있습니다.
                                 </CardDescription>
                             </div>
-                            {selectedAssessments.length > 0 && (
-                                <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => {
-                                        if (confirm(`${selectedAssessments.length}개의 항목을 삭제하시겠습니까?`)) {
-                                            deleteAssessmentsMutation.mutate(selectedAssessments);
-                                        }
-                                    }}
-                                >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    선택 삭제 ({selectedAssessments.length})
-                                </Button>
-                            )}
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <div className="flex items-center gap-1">
+                                    <span className="text-xs text-slate-500 whitespace-nowrap">1학년</span>
+                                    <select
+                                        value={assessmentDsFilterG1}
+                                        onChange={(e) => { setAssessmentDsFilterG1(e.target.value); setSelectedAssessments([]); }}
+                                        className="border rounded px-2 py-1 text-sm bg-white min-w-[100px]"
+                                    >
+                                        <option value="_auto_">자동</option>
+                                        <option value="_all_">전체</option>
+                                        {assessmentDatasets.map((ds: string) => (
+                                            <option key={ds} value={ds}>{ds || '(빈 데이터셋)'}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-xs text-slate-500 whitespace-nowrap">2·3학년</span>
+                                    <select
+                                        value={assessmentDsFilterG23}
+                                        onChange={(e) => { setAssessmentDsFilterG23(e.target.value); setSelectedAssessments([]); }}
+                                        className="border rounded px-2 py-1 text-sm bg-white min-w-[100px]"
+                                    >
+                                        <option value="_auto_">자동</option>
+                                        <option value="_all_">전체</option>
+                                        {assessmentDatasets.map((ds: string) => (
+                                            <option key={ds} value={ds}>{ds || '(빈 데이터셋)'}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {selectedAssessments.length > 0 && (
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => {
+                                            if (confirm(`${selectedAssessments.length}개의 항목을 삭제하시겠습니까?`)) {
+                                                deleteAssessmentsMutation.mutate(selectedAssessments);
+                                            }
+                                        }}
+                                    >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        선택 삭제 ({selectedAssessments.length})
+                                    </Button>
+                                )}
+                            </div>
                         </CardHeader>
                         <CardContent>
-                            <div className="rounded-md border">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="w-[50px] text-center">
-                                                <Checkbox
-                                                    checked={assessments?.length > 0 && selectedAssessments.length === assessments.length}
-                                                    onCheckedChange={(checked) => {
-                                                        if (checked) {
-                                                            setSelectedAssessments(assessments.map((a: any) => a.id));
-                                                        } else {
-                                                            setSelectedAssessments([]);
-                                                        }
-                                                    }}
-                                                />
-                                            </TableHead>
-                                            <TableHead className="w-[80px] text-center">학년</TableHead>
-                                            <TableHead className="w-[80px] text-center">반</TableHead>
-                                            <TableHead>과목</TableHead>
-                                            <TableHead>제목</TableHead>
-                                            <TableHead className="w-[120px]">마감일</TableHead>
-                                            <TableHead className="w-[120px]">수정 IP</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {assessments?.map((assessment: any) => (
-                                            <TableRow key={assessment.id}>
-                                                <TableCell className="text-center">
+                            {(() => {
+                                const now = new Date();
+
+                                const SortableHeader = ({ field, label, className = "" }: { field: string, label: string, className?: string }) => {
+                                    const isActive = assessmentSortField === field;
+                                    return (
+                                        <TableHead 
+                                            className={`cursor-pointer hover:bg-gray-100 transition-colors select-none ${className}`}
+                                            onClick={() => {
+                                                if (isActive) {
+                                                    setAssessmentSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                                                } else {
+                                                    setAssessmentSortField(field);
+                                                    setAssessmentSortOrder('desc'); // Default to desc (newer first) if changing field
+                                                }
+                                            }}
+                                        >
+                                            <div className="flex items-center justify-center gap-1">
+                                                {label}
+                                                <span className="text-gray-400 text-xs w-3">
+                                                    {isActive ? (assessmentSortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                                                </span>
+                                            </div>
+                                        </TableHead>
+                                    );
+                                };
+
+                                const sortedAssessments = [...(datasetFilteredAssessments || [])].sort((a: any, b: any) => {
+                                    let valA = a[assessmentSortField];
+                                    let valB = b[assessmentSortField];
+
+                                    if (assessmentSortField === 'dueDate') {
+                                        valA = new Date(valA).getTime();
+                                        valB = new Date(valB).getTime();
+                                    } else if (typeof valA === 'string') {
+                                        valA = valA.toLowerCase();
+                                        valB = valB.toLowerCase();
+                                    }
+
+                                    if (valA < valB) return assessmentSortOrder === 'asc' ? -1 : 1;
+                                    if (valA > valB) return assessmentSortOrder === 'asc' ? 1 : -1;
+                                    return 0;
+                                });
+
+                                const activeAssessments = sortedAssessments.filter((a: any) => new Date(a.dueDate + 'T23:59:59') >= now);
+                                const expiredAssessments = sortedAssessments.filter((a: any) => new Date(a.dueDate + 'T23:59:59') < now);
+
+                                return (
+                                    <div className="space-y-6">
+                                        <div className="rounded-md border">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead className="w-[50px] text-center">
+                                                            <Checkbox
+                                                                checked={activeAssessments.length > 0 && activeAssessments.every((a: any) => selectedAssessments.includes(a.id))}
+                                                                onCheckedChange={(checked) => {
+                                                                    if (checked) {
+                                                                        const newSelected = [...selectedAssessments];
+                                                                        activeAssessments.forEach((a: any) => {
+                                                                            if (!newSelected.includes(a.id)) newSelected.push(a.id);
+                                                                        });
+                                                                        setSelectedAssessments(newSelected);
+                                                                    } else {
+                                                                        setSelectedAssessments(selectedAssessments.filter(id => !activeAssessments.find((a: any) => a.id === id)));
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </TableHead>
+                                                        <SortableHeader field="grade" label="학년" className="w-[80px]" />
+                                                        <SortableHeader field="classNum" label="반" className="w-[80px]" />
+                                                        <SortableHeader field="subject" label="과목" />
+                                                        <SortableHeader field="title" label="제목" />
+                                                        <SortableHeader field="dueDate" label="마감일" className="w-[120px]" />
+                                                        <SortableHeader field="lastModifiedIp" label="수정 IP" className="w-[120px]" />
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {activeAssessments.map((assessment: any) => (
+                                                        <TableRow key={assessment.id}>
+                                                            <TableCell className="text-center">
+                                                                <Checkbox
+                                                                    checked={selectedAssessments.includes(assessment.id)}
+                                                                    onCheckedChange={(checked) => {
+                                                                        if (checked) {
+                                                                            setSelectedAssessments([...selectedAssessments, assessment.id]);
+                                                                        } else {
+                                                                            setSelectedAssessments(selectedAssessments.filter((id) => id !== assessment.id));
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell className="text-center font-bold">{assessment.grade}</TableCell>
+                                                            <TableCell className="text-center">{assessment.classNum}</TableCell>
+                                                            <TableCell>{assessment.subject}</TableCell>
+                                                            <TableCell>{assessment.title}</TableCell>
+                                                            <TableCell>{assessment.dueDate}</TableCell>
+                                                            <TableCell className="text-xs font-mono text-gray-500">
+                                                                {assessment.lastModifiedIp || '-'}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                    {(!activeAssessments || activeAssessments.length === 0) && (
+                                                        <TableRow>
+                                                            <TableCell colSpan={7} className="h-24 text-center">
+                                                                등록된 진행중인 수행평가가 없습니다.
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    )}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+
+                                        {expiredAssessments.length > 0 && (
+                                            <div className="relative">
+                                                <details className="group border rounded-md bg-gray-50/50">
+                                                    <summary className="flex items-center p-3 font-medium cursor-pointer list-none hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md">
+                                                        <div className="flex items-center gap-2">
+                                                            <ChevronRight className="w-5 h-5 text-gray-400 group-open:rotate-90 transition-transform" />
+                                                            <span className="text-gray-700">만료된 수행평가 ({expiredAssessments.length})</span>
+                                                        </div>
+                                                    </summary>
+                                                    <div className="border-t bg-white">
+                                                        <Table>
+                                                            <TableHeader>
+                                                                <TableRow>
+                                                                    <TableHead className="w-[50px] text-center"></TableHead>
+                                                                    <SortableHeader field="grade" label="학년" className="w-[80px]" />
+                                                                    <SortableHeader field="classNum" label="반" className="w-[80px]" />
+                                                                    <SortableHeader field="subject" label="과목" />
+                                                                    <SortableHeader field="title" label="제목" />
+                                                                    <SortableHeader field="dueDate" label="마감일" className="w-[120px]" />
+                                                                    <SortableHeader field="lastModifiedIp" label="수정 IP" className="w-[120px]" />
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {expiredAssessments.map((assessment: any) => (
+                                                                    <TableRow key={assessment.id} className="opacity-75 bg-gray-50/50 hover:bg-gray-50 transition-colors">
+                                                                        <TableCell className="w-[50px] text-center border-r">
+                                                                            <Checkbox
+                                                                                checked={selectedAssessments.includes(assessment.id)}
+                                                                                onCheckedChange={(checked) => {
+                                                                                    if (checked) {
+                                                                                        setSelectedAssessments([...selectedAssessments, assessment.id]);
+                                                                                    } else {
+                                                                                        setSelectedAssessments(selectedAssessments.filter((id) => id !== assessment.id));
+                                                                                    }
+                                                                                }}
+                                                                            />
+                                                                        </TableCell>
+                                                                        <TableCell className="w-[80px] text-center font-bold">{assessment.grade}</TableCell>
+                                                                        <TableCell className="w-[80px] text-center">{assessment.classNum}</TableCell>
+                                                                        <TableCell>{assessment.subject}</TableCell>
+                                                                        <TableCell>{assessment.title}</TableCell>
+                                                                        <TableCell className="w-[120px] line-through text-gray-400">{assessment.dueDate}</TableCell>
+                                                                        <TableCell className="w-[120px] text-xs font-mono text-gray-400">
+                                                                            {assessment.lastModifiedIp || '-'}
+                                                                        </TableCell>
+                                                                    </TableRow>
+                                                                ))}
+                                                            </TableBody>
+                                                        </Table>
+                                                    </div>
+                                                </details>
+                                                
+                                                {/* Batch Select Checkbox for Expired Assessments */}
+                                                <div className="absolute top-2.5 right-4 flex items-center gap-2 z-10 px-2 py-1 bg-gray-50/90 rounded border shadow-sm">
+                                                    <span className="text-sm font-normal text-gray-600">일괄 선택 ({expiredAssessments.filter((a: any) => selectedAssessments.includes(a.id)).length})</span>
                                                     <Checkbox
-                                                        checked={selectedAssessments.includes(assessment.id)}
+                                                        checked={expiredAssessments.length > 0 && expiredAssessments.every((a: any) => selectedAssessments.includes(a.id))}
                                                         onCheckedChange={(checked) => {
                                                             if (checked) {
-                                                                setSelectedAssessments([...selectedAssessments, assessment.id]);
+                                                                const newSelected = [...selectedAssessments];
+                                                                expiredAssessments.forEach((a: any) => {
+                                                                    if (!newSelected.includes(a.id)) newSelected.push(a.id);
+                                                                });
+                                                                setSelectedAssessments(newSelected);
                                                             } else {
-                                                                setSelectedAssessments(selectedAssessments.filter((id) => id !== assessment.id));
+                                                                setSelectedAssessments(selectedAssessments.filter(id => !expiredAssessments.find((a: any) => a.id === id)));
                                                             }
                                                         }}
                                                     />
-                                                </TableCell>
-                                                <TableCell className="text-center font-bold">{assessment.grade}</TableCell>
-                                                <TableCell className="text-center">{assessment.classNum}</TableCell>
-                                                <TableCell>{assessment.subject}</TableCell>
-                                                <TableCell>{assessment.title}</TableCell>
-                                                <TableCell>{assessment.dueDate}</TableCell>
-                                                <TableCell className="text-xs font-mono text-gray-500">
-                                                    {assessment.lastModifiedIp || '-'}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {(!assessments || assessments.length === 0) && (
-                                            <TableRow>
-                                                <TableCell colSpan={6} className="h-24 text-center">
-                                                    등록된 수행평가가 없습니다.
-                                                </TableCell>
-                                            </TableRow>
+                                                </div>
+                                            </div>
                                         )}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                                    </div>
+                                );
+                            })()}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -3729,6 +4422,8 @@ export default function Admin() {
                                         studentNumber: number | null;
                                         ips: IPProfile[];
                                         modificationCount: number;
+                                        addCount: number;
+                                        deleteCount: number;
                                         printCount: number;
                                         downloadCount: number;
                                         lastAccess: string | null;
@@ -3747,6 +4442,8 @@ export default function Admin() {
                                         if (existing) {
                                             existing.ips.push(user);
                                             existing.modificationCount += user.modificationCount || 0;
+                                            existing.addCount += user.addCount || 0;
+                                            existing.deleteCount += user.deleteCount || 0;
                                             existing.printCount += user.printCount || 0;
                                             existing.downloadCount += user.downloadCount || 0;
                                             if (!existing.lastAccess || (user.lastAccess && user.lastAccess > existing.lastAccess)) {
@@ -3768,6 +4465,8 @@ export default function Admin() {
                                                 studentNumber: user.studentNumber ?? null,
                                                 ips: [user],
                                                 modificationCount: user.modificationCount || 0,
+                                                addCount: user.addCount || 0,
+                                                deleteCount: user.deleteCount || 0,
                                                 printCount: user.printCount || 0,
                                                 downloadCount: user.downloadCount || 0,
                                                 lastAccess: user.lastAccess,
@@ -3853,9 +4552,21 @@ export default function Admin() {
                                                 ) : <span className="text-gray-300">-</span>}
                                             </TableCell>
                                             <TableCell>
-                                                {user.modificationCount > 0
-                                                    ? <Badge variant="secondary" className="font-mono text-xs">{user.modificationCount}회</Badge>
-                                                    : <span className="text-gray-300">-</span>}
+                                                    <div className="flex flex-col gap-1 items-start">
+                                                        {(() => {
+                                                            const adds = user.addCount || 0;
+                                                            const dels = user.deleteCount || 0;
+                                                            const pureMods = Math.max(0, (user.modificationCount || 0) - adds - dels);
+                                                            if (adds === 0 && dels === 0 && pureMods === 0) return <span className="text-gray-300">-</span>;
+                                                            return (
+                                                                <>
+                                                                    {adds > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-blue-100 text-blue-800 px-1 py-0 h-4">추가 {adds}회</Badge>}
+                                                                    {dels > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-red-100 text-red-800 px-1 py-0 h-4">삭제 {dels}회</Badge>}
+                                                                    {pureMods > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-gray-100 text-gray-800 px-1 py-0 h-4">수정 {pureMods}회</Badge>}
+                                                                </>
+                                                            );
+                                                        })()}
+                                                    </div>
                                             </TableCell>
                                             <TableCell>
                                                 {user.printCount && user.printCount > 0
@@ -3953,9 +4664,21 @@ export default function Admin() {
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
-                                                        {group.modificationCount > 0 ? (
-                                                            <Badge variant="secondary" className="font-mono">{group.modificationCount}회</Badge>
-                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                        <div className="flex flex-col gap-1 items-start">
+                                                            {(() => {
+                                                                const adds = group.addCount || 0;
+                                                                const dels = group.deleteCount || 0;
+                                                                const pureMods = Math.max(0, (group.modificationCount || 0) - adds - dels);
+                                                                if (adds === 0 && dels === 0 && pureMods === 0) return <span className="text-gray-400 text-xs">-</span>;
+                                                                return (
+                                                                    <>
+                                                                        {adds > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-blue-100 text-blue-800 px-1 py-0 h-4">추가 {adds}회</Badge>}
+                                                                        {dels > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-red-100 text-red-800 px-1 py-0 h-4">삭제 {dels}회</Badge>}
+                                                                        {pureMods > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-gray-100 text-gray-800 px-1 py-0 h-4">수정 {pureMods}회</Badge>}
+                                                                    </>
+                                                                );
+                                                            })()}
+                                                        </div>
                                                     </TableCell>
                                                     <TableCell>
                                                         {group.printCount > 0 ? (
@@ -4055,7 +4778,7 @@ export default function Admin() {
                                                             <TableHead className="w-[120px] min-w-[120px]">IP 주소</TableHead>
                                                             <SortHeader col="id" label="학년/반/번호" className="w-[140px] min-w-[140px]" />
                                                             <TableHead className="w-[180px] min-w-[180px]">카카오 계정</TableHead>
-                                                            <SortHeader col="modCount" label="수정 횟수" className="w-[100px] min-w-[100px]" />
+                                                            <SortHeader col="modCount" label="수정/추가/삭제" className="w-[120px] min-w-[120px]" />
                                                             <TableHead className="w-[80px] min-w-[80px]">출력</TableHead>
                                                             <TableHead className="w-[80px] min-w-[80px]">다운로드</TableHead>
                                                             <TableHead className="w-[80px] min-w-[80px]">앱설치</TableHead>
@@ -4110,9 +4833,21 @@ export default function Admin() {
                                                                                 ) : <span className="text-gray-300 text-xs">-</span>}
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                {user.modificationCount > 0 ? (
-                                                                                    <Badge variant="secondary" className="font-mono">{user.modificationCount}회</Badge>
-                                                                                ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                                <div className="flex flex-col gap-1 items-start">
+                                                                                    {(() => {
+                                                                                        const adds = user.addCount || 0;
+                                                                                        const dels = user.deleteCount || 0;
+                                                                                        const pureMods = Math.max(0, (user.modificationCount || 0) - adds - dels);
+                                                                                        if (adds === 0 && dels === 0 && pureMods === 0) return <span className="text-gray-400 text-xs">-</span>;
+                                                                                        return (
+                                                                                            <>
+                                                                                                {adds > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-blue-100 text-blue-800 px-1 py-0 h-4">추가 {adds}회</Badge>}
+                                                                                                {dels > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-red-100 text-red-800 px-1 py-0 h-4">삭제 {dels}회</Badge>}
+                                                                                                {pureMods > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-gray-100 text-gray-800 px-1 py-0 h-4">수정 {pureMods}회</Badge>}
+                                                                                            </>
+                                                                                        );
+                                                                                    })()}
+                                                                                </div>
                                                                             </TableCell>
                                                                             <TableCell>
                                                                                 {user.printCount && user.printCount > 0 ? (
@@ -4201,15 +4936,7 @@ export default function Admin() {
 
                 <TabsContent value="electives" className="space-y-6">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>선택과목 관리</CardTitle>
-                            <CardDescription>
-                                2, 3학년 선택과목의 반 코드(A, B, C...)와 선생님 성함을 관리합니다.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <ElectiveManager password={password} />
-                        </CardContent>
+                        <ElectiveManager password={password} />
                     </Card>
                 </TabsContent>
 
@@ -4303,6 +5030,14 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     const [selectedProp, setSelectedProp] = useState<string>('');
     // Grade 1 dataset selection (separate)
     const [selectedPropGrade1, setSelectedPropGrade1] = useState<string>('');
+    // IP Overrides state
+    const [ipOverrides, setIpOverrides] = useState<Record<string, { grade1?: string, default?: string, memo?: string }>>({});
+    
+    // IP Override form state
+    const [newIp, setNewIp] = useState<string>('');
+    const [newIpGrade1, setNewIpGrade1] = useState<string>('');
+    const [newIpDefault, setNewIpDefault] = useState<string>('');
+    const [newIpMemo, setNewIpMemo] = useState<string>('');
 
     // Fetch current settings
     const settingsQuery = useQuery({
@@ -4322,6 +5057,17 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         if (settingsQuery.data) {
             setSelectedProp(settingsQuery.data.comcigan_dataset_selected || '_auto_');
             setSelectedPropGrade1(settingsQuery.data.comcigan_dataset_selected_grade1 || '_auto_');
+
+            if (settingsQuery.data.dataset_ip_overrides) {
+                try {
+                    setIpOverrides(JSON.parse(settingsQuery.data.dataset_ip_overrides));
+                } catch (e) {
+                    console.error("Failed to parse IP overrides", e);
+                    setIpOverrides({});
+                }
+            } else {
+                setIpOverrides({});
+            }
         }
     }, [settingsQuery.data]);
 
@@ -4368,12 +5114,13 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     const originalValueG1 = settingsQuery.data?.comcigan_dataset_selected_grade1 || '_auto_';
     const isDirtyG1 = displayValueG1 !== originalValueG1;
 
-    const DatasetDropdown = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    const DatasetDropdown = ({ value, onChange, emptyOption = false }: { value: string; onChange: (v: string) => void, emptyOption?: boolean }) => (
         <Select value={value} onValueChange={onChange}>
             <SelectTrigger className="w-full">
                 <SelectValue placeholder="데이터셋 선택" />
             </SelectTrigger>
             <SelectContent>
+                {emptyOption && <SelectItem value="_empty_">사용 안 함 (기본값 설정 따름)</SelectItem>}
                 <SelectItem value="_auto_">자동 (최신: {latestDatasetName})</SelectItem>
                 <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획 수동 입력)</SelectItem>
                 {timetableProps.map(prop => (
@@ -4383,7 +5130,54 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         </Select>
     );
 
+    const handleAddOverride = () => {
+        if (!newIp.trim()) {
+            toast.error("IP 주소를 입력해주세요.");
+            return;
+        }
+        
+        const newOverrides = { 
+            ...ipOverrides, 
+            [newIp.trim()]: {
+                grade1: newIpGrade1 === '_empty_' ? undefined : newIpGrade1,
+                default: newIpDefault === '_empty_' ? undefined : newIpDefault,
+                memo: newIpMemo
+            } 
+        };
+        
+        // Clean up undefined values cleanly for JSON stringify
+        if (!newOverrides[newIp.trim()].grade1) delete newOverrides[newIp.trim()].grade1;
+        if (!newOverrides[newIp.trim()].default) delete newOverrides[newIp.trim()].default;
+
+        setIpOverrides(newOverrides);
+        saveMutation.mutate({ dataset_ip_overrides: JSON.stringify(newOverrides) });
+        
+        // Reset form
+        setNewIp('');
+        setNewIpMemo('');
+        setNewIpGrade1('');
+        setNewIpDefault('');
+    };
+
+    const handleRemoveOverride = (ipToRemove: string) => {
+        const newOverrides = { ...ipOverrides };
+        delete newOverrides[ipToRemove];
+        setIpOverrides(newOverrides);
+        saveMutation.mutate({ dataset_ip_overrides: JSON.stringify(newOverrides) });
+    };
+
+    const fetchMyIp = async () => {
+        try {
+            const res = await fetch("/api/my-ip");
+            const data = await res.json();
+            if (data.ip) setNewIp(data.ip);
+        } catch (e) {
+            toast.error("IP를 가져오는데 실패했습니다.");
+        }
+    };
+
     return (
+        <>
         <Card className="w-full max-w-2xl">
             <CardHeader>
                 <CardTitle>출체 데이터셋 선택</CardTitle>
@@ -4429,11 +5223,100 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
 
             </CardContent>
         </Card>
-    );
+
+        {/* IP Override Manager */}
+        <Card className="w-full max-w-2xl mt-6">
+            <CardHeader>
+                <CardTitle>IP별 데이터셋 강제 지정 (Override)</CardTitle>
+                <CardDescription>
+                    특정 IP 주소에서 접속할 때 메인 화면에 표시할 데이터셋을 별도로 지정합니다.<br />
+                    1학년과 2/3학년을 구분하여 지정할 수 있습니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="space-y-4 border rounded-lg p-4 bg-slate-50">
+                    <div className="flex items-center justify-between pb-2 border-b">
+                        <span className="text-sm font-semibold text-slate-700">현재 오버라이드 목록</span>
+                    </div>
+                    {Object.keys(ipOverrides).length === 0 ? (
+                        <div className="text-sm text-center py-4 text-gray-500 bg-white border rounded">현재 설정된 IP 오버라이드가 없습니다.</div>
+                    ) : (
+                        <div className="overflow-x-auto rounded border">
+                            <Table className="bg-white min-w-[500px]">
+                                <TableHeader className="bg-slate-100">
+                                    <TableRow>
+                                        <TableHead className="w-[120px]">IP</TableHead>
+                                        <TableHead>1학년</TableHead>
+                                        <TableHead>2/3학년</TableHead>
+                                        <TableHead>메모</TableHead>
+                                        <TableHead className="w-[60px]"></TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {Object.entries(ipOverrides).map(([ip, config]) => (
+                                        <TableRow key={ip}>
+                                            <TableCell className="font-mono text-xs">{ip}</TableCell>
+                                            <TableCell className="text-xs text-blue-600 font-medium">
+                                                {config.grade1 === '_auto_' ? '자동' : (config.grade1 || <span className="text-gray-400">지정 안함</span>)}
+                                            </TableCell>
+                                            <TableCell className="text-xs text-green-600 font-medium">
+                                                {config.default === '_auto_' ? '자동' : (config.default || <span className="text-gray-400">지정 안함</span>)}
+                                            </TableCell>
+                                            <TableCell className="text-xs text-gray-500">{config.memo || '-'}</TableCell>
+                                            <TableCell>
+                                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleRemoveOverride(ip)}>
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </div>
+
+                <div className="space-y-4 border rounded-lg p-4 bg-white">
+                     <span className="text-sm font-semibold text-slate-700 block mb-2">새 오버라이드 추가</span>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                             <label className="text-xs font-medium text-gray-600">대상 IP 주소</label>
+                             <div className="flex gap-2">
+                                <Input value={newIp} onChange={e => setNewIp(e.target.value)} placeholder="예: 211.xxx.xxx.xxx" className="text-sm font-mono h-9" />
+                                <Button size="sm" variant="secondary" className="h-9 shrink-0 text-xs" onClick={fetchMyIp}>내 IP 가져오기</Button>
+                             </div>
+                        </div>
+                        <div className="space-y-2">
+                             <label className="text-xs font-medium text-gray-600">관리자 메모 (장소/사용자명 등)</label>
+                             <Input value={newIpMemo} onChange={e => setNewIpMemo(e.target.value)} placeholder="예: 교무실 공용PC" className="text-sm h-9" />
+                        </div>
+                     </div>
+
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                        <div className="space-y-2">
+                             <label className="text-xs font-medium text-gray-600">1학년 강제 지정 데이터셋</label>
+                             <DatasetDropdown value={newIpGrade1} onChange={setNewIpGrade1} emptyOption={true} />
+                        </div>
+                        <div className="space-y-2">
+                             <label className="text-xs font-medium text-gray-600">2/3학년 강제 지정 데이터셋</label>
+                             <DatasetDropdown value={newIpDefault} onChange={setNewIpDefault} emptyOption={true} />
+                        </div>
+                     </div>
+                     <div className="flex justify-end pt-2">
+                         <Button onClick={handleAddOverride} disabled={!newIp.trim() || saveMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
+                             목록에 추가
+                         </Button>
+                     </div>
+                </div>
+
+            </CardContent>
+        </Card>
+        </>
+    );    
 }
 
 function AutoFillAnalyzer({ data, adminPassword, onBack }: {
-    data: { grade: number, fromDataset: string, toDataset: string, mappingRules: any[] },
+    data: { grade: number, fromDataset: string, toDataset: string, mappingRules: any[], copyFullName?: boolean },
     adminPassword: string,
     onBack: () => void
 }) {
@@ -4441,6 +5324,7 @@ function AutoFillAnalyzer({ data, adminPassword, onBack }: {
     const grade = data.grade;
     const bridgeMappingRules = data.mappingRules || [];
     const targetDataset = data.toDataset;
+    const copyFullName = data.copyFullName !== false; // Default true if undefined
 
     // Fetch current setting to determine default
     const settingsQuery = useQuery({
@@ -4591,21 +5475,56 @@ function AutoFillAnalyzer({ data, adminPassword, onBack }: {
                     targetSubjectName = parts.length > 0 ? parts[0] : mSubj;
                     matchedTeacher = manualTeacherName;
                 } else {
-                    // Look up BRIDGE mappings instead of local 'mappings' state
-                    const bridgeRule = bridgeMappingRules.find(r => r.from === baseSubjectName);
+                    // Look up BRIDGE mappings. r.from is stored as "과목명 (선생님)" or just "과목명".
+                    // Extract just the subject part from r.from for comparison.
+                    const extractSubjectFromBridgeFrom = (from: string): string => {
+                        const parenIdx = from.indexOf(' (');
+                        return parenIdx !== -1 ? from.slice(0, parenIdx).trim() : from.trim();
+                    };
+
+                    const bridgeRule = bridgeMappingRules.find(r => {
+                        const rSubj = extractSubjectFromBridgeFrom(r.from);
+                        // Match by subject name (stripped), or try matching full mSubj
+                        return rSubj === baseSubjectName || r.from === mSubj;
+                    });
+
                     if (!bridgeRule || !bridgeRule.to) {
                         throw new Error(`[${mSubj}]의 기본 과목명인 [${baseSubjectName}] 과목이 BRIDGE 매핑 규칙에 지정되어 있지 않습니다.`);
                     }
 
-                    targetSubjectName = bridgeRule.to;
+                    const extractSubjectFromBridgeTo = (to: string) => {
+                        const match = to.match(/(.+?) \((.+?)\)$/);
+                        return match ? { subj: match[1], tchr: match[2] } : { subj: to.trim(), tchr: "" };
+                    };
+
+                    const parsedTo = extractSubjectFromBridgeTo(bridgeRule.to);
+                    targetSubjectName = parsedTo.subj;
+                    const bridgeTeacher = parsedTo.tchr;
 
                     // Live Match extraction
-                    matchedTeacher = manualTeacherName;
+                    // 우선순위: 1. Bridge 매핑에 명시된 교사명 2. 수동 학기별계획 교사명 3. Live 검색 매칭
+                    if (bridgeTeacher) {
+                        matchedTeacher = bridgeTeacher;
+                    } else if (manualTeacherName) {
+                        matchedTeacher = manualTeacherName;
+                    }
+
                     if (liveSubjectsQuery.data) {
                         const liveMatches = liveSubjectsQuery.data.filter((ls: any) => ls.subject === targetSubjectName);
                         if (liveMatches.length > 0) {
-                            const exactMatch = liveMatches.find((ls: any) => ls.teacher === manualTeacherName);
-                            matchedTeacher = exactMatch ? exactMatch.teacher : liveMatches[0].teacher;
+                            // 명시된 교사가 라이브에 존재하는지 정확한 이름으로 검색 (이름에 * 등 축약이 있을 수 있으므로)
+                            let exactMatch = matchedTeacher ? liveMatches.find((ls: any) => ls.teacher === matchedTeacher) : undefined;
+                            
+                            // 만약 명시된 교사명이 라이브에서 정확히 매칭되지 않고,
+                            // 부분 문자열 포함 관계(* 제외)로 찾을 수 있는지 fallback 시도. 예: "김정*" -> "김정원"
+                            if (!exactMatch && matchedTeacher && matchedTeacher.includes("*")) {
+                                const baseName = matchedTeacher.replace('*', '');
+                                exactMatch = liveMatches.find((ls: any) => ls.teacher.startsWith(baseName));
+                            }
+                            
+                            // 여전히 매치는 안 되는데 bridge 교사명 또는 manual 교사명이 명시되어 있으면 그 명시된 이름 자체를 사용.
+                            // 아예 둘 다 명시가 없는 순수 과목만 매칭될 때는 라이브의 첫번째 과목 교사명.
+                            matchedTeacher = exactMatch ? exactMatch.teacher : (matchedTeacher || liveMatches[0].teacher);
                         }
                     }
                 }
@@ -4635,6 +5554,7 @@ function AutoFillAnalyzer({ data, adminPassword, onBack }: {
                         subject: subj,
                         originalTeacher: teacher,
                         classCode: allCodes.sort().join(","),
+                        fullTeacherName: copyFullName ? (manualTeacherName || teacher) : "",
                         isMovingClass: !isExcluded && !isNoGroup,
                         isCombinedClass: false,
                         dataset: targetDataset

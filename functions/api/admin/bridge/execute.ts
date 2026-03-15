@@ -36,6 +36,11 @@ export const onRequest = async (context: any) => {
         }
 
         const { fromDataset, toDataset, targetGrade, mappingData: mappingDataStr } = bridgeEntry;
+
+        if (fromDataset === toDataset) {
+            return new Response(JSON.stringify({ error: "출발역과 도착역은 같을 수 없습니다. (Source protection)" }), { status: 400 });
+        }
+
         const mappingData = JSON.parse(mappingDataStr); // Expected format: { "Math": "Mathematics 1", "Eng": "English 2" }
 
 
@@ -45,18 +50,36 @@ export const onRequest = async (context: any) => {
         // or an Array of { from: string, to: string }. We'll support Array for clarity.
 
         let mappingDict: Record<string, string> = {};
+        // Also build a subject-only lookup (stripping "(teacher)") for student profile lookups
+        let subjectOnlyMappingDict: Record<string, string> = {};
+
+        const extractSubjectFromBridgeKey = (key: string): string => {
+            const parenIdx = key.indexOf(' (');
+            return parenIdx !== -1 ? key.slice(0, parenIdx).trim() : key.trim();
+        };
+
         if (Array.isArray(mappingData)) {
             mappingData.forEach((row: any) => {
                 if (row.from) {
-                    mappingDict[row.from] = (!row.to || row.to === "_none_") ? "_none_" : row.to;
+                    const fullKey = row.from;
+                    const mappedTo = (!row.to || row.to === "_none_") ? "_none_" : row.to;
+                    mappingDict[fullKey] = mappedTo;
+                    // Also map by subject name only (stripped of teacher)
+                    const subjOnly = extractSubjectFromBridgeKey(fullKey);
+                    // Only set if not yet set by a more specific key
+                    if (!subjectOnlyMappingDict[subjOnly]) {
+                        subjectOnlyMappingDict[subjOnly] = mappedTo;
+                    }
                 }
             });
         } else if (typeof mappingData === 'object') {
             mappingDict = mappingData;
         }
 
+        // Helper map removed as per user request for strict mappings.
+
         // The flags indicated by user
-        const { migrateElectiveConfig, migrateStudentProfiles, migrateAssessments } = options || {};
+        const { migrateElectiveConfig, migrateStudentProfiles, migrateAssessments, copyFullName = true } = options || {};
 
         if (targetGrade === 1 && (migrateElectiveConfig || migrateStudentProfiles)) {
             return new Response(JSON.stringify({ error: "1학년은 선택과목 데이터 복제 및 프로필 과목 변경을 지원하지 않습니다." }), { status: 400 });
@@ -73,22 +96,102 @@ export const onRequest = async (context: any) => {
                 "SELECT * FROM elective_config WHERE dataset = ? AND grade = ?"
             ).bind(fromDataset, targetGrade).all();
 
+            // Fetch target teacher information to map source teachers to target dataset teachers
+            // Key: "subject|sourceTeacher" → targetTeacher (for precise matching)
+            // Also keep "subject" → [teachers] for fallback
+            let targetSubjectTeacherMap: Record<string, string> = {}; // "subject|teacher" → targetTeacher
+            let targetSubjectTeachers: Record<string, string[]> = {}; // subject → [teachers]
+            try {
+                const origin = new URL(request.url).origin;
+                const fetchUrl = `${origin}/api/admin/comcigan-subjects?grade=${targetGrade}&dataset=${toDataset}`;
+                
+                const subjRes = await fetch(fetchUrl, {
+                    headers: { "X-Admin-Password": adminPassword }
+                });
+                
+                if (subjRes.ok) {
+                    const subjData = await subjRes.json() as any[];
+                    subjData.forEach(item => {
+                        if (item.subject) {
+                            const teacher = item.teacher || "";
+                            // Map by subject+teacher pair
+                            targetSubjectTeacherMap[`${item.subject}|${teacher}`] = teacher;
+                            // Also collect all teachers per subject
+                            if (!targetSubjectTeachers[item.subject]) targetSubjectTeachers[item.subject] = [];
+                            if (!targetSubjectTeachers[item.subject].includes(teacher)) {
+                                targetSubjectTeachers[item.subject].push(teacher);
+                            }
+                        }
+                    });
+                } else {
+                    console.warn(`Failed to fetch target subjects for resolving teacher mappings. Status: ${subjRes.status}`);
+                }
+            } catch (err) {
+                console.error("Error looking up target dataset subjects during migration:", err);
+            }
+
             // Delete old existing configs on toDataset for this targetGrade
             await env.DB.prepare("DELETE FROM elective_config WHERE dataset = ? AND grade = ?").bind(toDataset, targetGrade).run();
 
             const batchStatements = [];
             for (const config of sourceConfigs) {
-                // Apply mapping to subject name. Default to original if not found in dict.
-                const mappedSubject = mappingDict[config.subject] !== undefined ? mappingDict[config.subject] : config.subject;
+                const key = config.originalTeacher ? `${config.subject} (${config.originalTeacher})` : config.subject;
+                let mappedVal = mappingDict[key];
 
-                // If the mapping explicitly says "_none_", we skip duplicating this subject.
-                if (mappedSubject === "_none_") continue;
+                if (mappedVal === undefined) {
+                    mappedVal = mappingDict[config.subject]; // Try without teacher if that's how it was mapped
+                }
+
+                if (mappedVal === undefined) {
+                    mappedVal = config.subject;
+                }
+
+                if (mappedVal === "_none_") continue;
+
+                const mappedSubject = mappedVal.replace(/ \([^)]+\)$/, '');
+                const mappedTeacherMatch = mappedVal.match(/ \(([^)]+)\)$/);
+                const mappedTeacher = mappedTeacherMatch ? mappedTeacherMatch[1] : null;
+
+                let newTeacher = config.originalTeacher;
+                let newFullTeacherName = config.fullTeacherName;
+
+                if (mappedTeacher) {
+                    // Mapping explicitly specifies target teacher
+                    newTeacher = mappedTeacher;
+                } else {
+                    // No explicit teacher in mapping — find matching teacher in target dataset
+                    const sourceTeacher = (config.originalTeacher || "").replace(/\*$/, "");
+                    const targetTeachers = targetSubjectTeachers[mappedSubject] || [];
+
+                    if (targetTeachers.length === 1) {
+                        // Only one teacher for this subject — use it
+                        newTeacher = targetTeachers[0];
+                    } else if (targetTeachers.length > 1 && sourceTeacher) {
+                        // Multiple teachers: try prefix matching (comcigan truncates to 2 chars)
+                        // "김정원" should match "김정" and vice versa
+                        const cleanTargets = targetTeachers.map(t => t.replace(/\*$/, ""));
+                        const match = cleanTargets.findIndex(t =>
+                            t.startsWith(sourceTeacher) || sourceTeacher.startsWith(t)
+                        );
+                        if (match !== -1) {
+                            newTeacher = targetTeachers[match];
+                        }
+                        // No match found → keep original teacher name
+                    }
+                }
+
+                // Transfer fullTeacherName based on copyFullName flag
+                if (copyFullName) {
+                    newFullTeacherName = config.fullTeacherName || config.originalTeacher;
+                } else {
+                    newFullTeacherName = "";
+                }
 
                 batchStatements.push(env.DB.prepare(
                     "INSERT INTO elective_config (grade, subject, originalTeacher, classCode, fullTeacherName, className, fullSubjectName, isMovingClass, isCombinedClass, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 ).bind(
-                    config.grade, mappedSubject, config.originalTeacher, config.classCode,
-                    config.fullTeacherName, config.className, config.fullSubjectName,
+                    config.grade, mappedSubject, newTeacher, config.classCode,
+                    newFullTeacherName, config.className, config.fullSubjectName,
                     config.isMovingClass, config.isCombinedClass, toDataset, new Date().toISOString()
                 ));
             }
@@ -104,96 +207,179 @@ export const onRequest = async (context: any) => {
         }
 
         // --- 2. Migrate Student Profiles ---
-        // Profile migrations should strictly apply to the targetGrade
         if (migrateStudentProfiles) {
-            const { results: profiles } = await env.DB.prepare(
+            // ── Helper: parse dataset/electives columns into arrays ──
+            const parseArrayCol = (raw: any): any[] => {
+                if (!raw) return [''];
+                try {
+                    const parsed = JSON.parse(raw);
+                    return Array.isArray(parsed) ? parsed : [raw];
+                } catch {
+                    return [raw];
+                }
+            };
+
+            const parseElectivesCol = (raw: any): any[] => {
+                if (!raw) return [null];
+                try {
+                    const parsed = JSON.parse(raw);
+                    return Array.isArray(parsed) ? parsed : [parsed];
+                } catch {
+                    return [null];
+                }
+            };
+
+            // ── Read ALL student profiles for this grade ──
+            const { results: allProfiles } = await env.DB.prepare(
                 "SELECT * FROM student_profiles WHERE grade = ?"
             ).bind(targetGrade).all();
 
-            const batchStatements = [];
-            for (const profile of profiles) {
-                if (!profile.electives) continue;
-                try {
-                    const electivesObj = JSON.parse(profile.electives);
-                    let changed = false;
-                    const newElectives: string[] = [];
+            let updatedCount = 0;
 
-                    if (Array.isArray(electivesObj)) {
-                        for (const subj of electivesObj) {
-                            const mapped = mappingDict[subj] !== undefined ? mappingDict[subj] : subj;
-                            if (mapped === "_none_") {
-                                changed = true; // Subject dropped
-                            } else {
-                                newElectives.push(mapped);
-                                if (mapped !== subj) changed = true;
+            for (const profile of allProfiles) {
+                const datasets = parseArrayCol(profile.dataset);
+                const electivesArr = parseElectivesCol(profile.electives);
+
+                // Find the fromDataset's electives in this student's arrays
+                let fromIdx = datasets.indexOf(fromDataset);
+                // Fallback: try legacy empty dataset
+                if (fromIdx === -1 && fromDataset !== '') {
+                    fromIdx = datasets.indexOf('');
+                    if (fromIdx === -1) {
+                        const nullIdx = datasets.findIndex((d: any) => d === null || d === undefined);
+                        if (nullIdx !== -1) fromIdx = nullIdx;
+                    }
+                }
+
+                if (fromIdx === -1 || !electivesArr[fromIdx]) continue;
+
+                // Get source electives and apply mapping
+                let sourceElectives = electivesArr[fromIdx];
+                let mappedElectives = sourceElectives;
+
+                if (sourceElectives && typeof sourceElectives === 'object') {
+                    try {
+                        const electivesObj = typeof sourceElectives === 'string' ? JSON.parse(sourceElectives) : { ...sourceElectives };
+                        let changed = false;
+                        const newElectivesList: string[] = [];
+
+                        if (Array.isArray(electivesObj)) {
+                            for (const subj of electivesObj) {
+                                const rawMapped =
+                                    mappingDict[subj] !== undefined ? mappingDict[subj] :
+                                    subjectOnlyMappingDict[subj] !== undefined ? subjectOnlyMappingDict[subj] :
+                                    subj;
+                                if (rawMapped === "_none_") {
+                                    changed = true;
+                                } else {
+                                    const mapped = rawMapped.replace(/ \([^)]+\)$/, '');
+                                    newElectivesList.push(mapped);
+                                    if (mapped !== subj) changed = true;
+                                }
                             }
+                            mappedElectives = changed ? newElectivesList : electivesObj;
+                        } else if (typeof electivesObj === 'object') {
+                            const cloned = { ...electivesObj };
+                            Object.keys(cloned).forEach(groupKey => {
+                                const entry = cloned[groupKey];
+                                if (!entry) return;
+
+                                if (typeof entry === 'object' && entry.subject) {
+                                    const oldSubject = entry.subject;
+                                    const oldKey = entry.teacher ? `${oldSubject} (${entry.teacher})` : oldSubject;
+                                    const mappedVal: string =
+                                        mappingDict[oldKey] !== undefined ? mappingDict[oldKey] :
+                                        mappingDict[oldSubject] !== undefined ? mappingDict[oldSubject] :
+                                        subjectOnlyMappingDict[oldSubject] !== undefined ? subjectOnlyMappingDict[oldSubject] :
+                                        oldSubject;
+
+                                    if (mappedVal === "_none_") {
+                                        delete cloned[groupKey];
+                                        changed = true;
+                                    } else if (mappedVal !== oldSubject && mappedVal !== oldKey) {
+                                        const mappedSubject = mappedVal.replace(/ \([^)]+\)$/, '');
+                                        const mappedTeacherMatch = mappedVal.match(/ \(([^)]+)\)$/);
+                                        const mappedTeacher = mappedTeacherMatch ? mappedTeacherMatch[1] : entry.teacher;
+                                        cloned[groupKey] = { ...entry, subject: mappedSubject, teacher: mappedTeacher, fullSubjectName: undefined };
+                                        changed = true;
+                                    }
+                                } else if (typeof entry === 'string') {
+                                    const rawMapped =
+                                        mappingDict[entry] !== undefined ? mappingDict[entry] :
+                                        subjectOnlyMappingDict[entry] !== undefined ? subjectOnlyMappingDict[entry] :
+                                        entry;
+                                    if (rawMapped === "_none_") {
+                                        delete cloned[groupKey];
+                                        changed = true;
+                                    } else {
+                                        const mapped = rawMapped.replace(/ \([^)]+\)$/, '');
+                                        if (mapped !== entry) { cloned[groupKey] = mapped; changed = true; }
+                                    }
+                                }
+                            });
+                            mappedElectives = changed ? cloned : electivesObj;
                         }
-                    } else if (typeof electivesObj === 'object') {
-                        // Format: { "A": { subject, teacher, fullSubjectName }, "B": {...}, ... }
-                        Object.keys(electivesObj).forEach(groupKey => {
-                            const entry = electivesObj[groupKey];
-                            if (!entry) return;
-
-                            if (typeof entry === 'object' && entry.subject) {
-                                // 현재 표준 형식: { subject, teacher, fullSubjectName }
-                                const oldSubject = entry.subject;
-                                const mapped = mappingDict[oldSubject] !== undefined ? mappingDict[oldSubject] : oldSubject;
-                                if (mapped === "_none_") {
-                                    delete electivesObj[groupKey];
-                                    changed = true;
-                                } else if (mapped !== oldSubject) {
-                                    electivesObj[groupKey] = { ...entry, subject: mapped, fullSubjectName: undefined };
-                                    changed = true;
-                                }
-                            } else if (typeof entry === 'string') {
-                                // 레거시 문자열 형식
-                                const mapped = mappingDict[entry] !== undefined ? mappingDict[entry] : entry;
-                                if (mapped === "_none_") {
-                                    delete electivesObj[groupKey];
-                                    changed = true;
-                                } else if (mapped !== entry) {
-                                    electivesObj[groupKey] = mapped;
-                                    changed = true;
-                                }
-                            }
-                        });
+                    } catch (e) {
+                        console.error("Failed to parse/map electives for profile", profile.id, e);
                     }
-
-                    if (changed) {
-                        batchStatements.push(env.DB.prepare(
-                            "UPDATE student_profiles SET electives = ?, updatedAt = ? WHERE id = ?"
-                        ).bind(JSON.stringify(Array.isArray(electivesObj) ? newElectives : electivesObj), new Date().toISOString(), profile.id));
-                    }
-                } catch (e) {
-                    console.error("Failed to parse electives for profile", profile.id, e);
                 }
+
+                // ── Merge mapped electives into the toDataset slot ──
+                const toIdx = datasets.indexOf(toDataset);
+                if (toIdx !== -1) {
+                    electivesArr[toIdx] = mappedElectives;
+                } else {
+                    datasets.push(toDataset);
+                    electivesArr.push(mappedElectives);
+                }
+
+                // Serialize: single entry → plain format (backwards compatible)
+                let finalElectives: string;
+                let finalDataset: string;
+                if (datasets.length === 1) {
+                    finalElectives = JSON.stringify(electivesArr[0]);
+                    finalDataset = datasets[0];
+                } else {
+                    finalElectives = JSON.stringify(electivesArr);
+                    finalDataset = JSON.stringify(datasets);
+                }
+
+                await env.DB.prepare(
+                    "UPDATE student_profiles SET electives = ?, dataset = ?, updatedAt = ? WHERE id = ?"
+                ).bind(finalElectives, finalDataset, new Date().toISOString(), profile.id).run();
+
+                updatedCount++;
             }
 
-            if (batchStatements.length > 0) {
-                // Batch execution limit in D1 is typical 100 statements. If large, split array.
-                // Doing chunks of 50.
-                const chunkSize = 50;
-                for (let i = 0; i < batchStatements.length; i += chunkSize) {
-                    const chunk = batchStatements.slice(i, i + chunkSize);
-                    await env.DB.batch(chunk);
-                }
-                totalStudentProfilesUpdated = batchStatements.length;
-            }
+            totalStudentProfilesUpdated = updatedCount;
         }
+
 
         // --- 3. Migrate Assessments ---
         if (migrateAssessments) {
-            // Apply mappings only to assessments belonging to the targetGrade
+            // Delete old existing assessments on toDataset for this targetGrade
+            await env.DB.prepare("DELETE FROM performance_assessments WHERE dataset = ? AND grade = ?").bind(toDataset, targetGrade).run();
+
+            // Fetch assessments from the fromDataset
             const { results: assessments } = await env.DB.prepare(
-                "SELECT id, subject FROM performance_assessments WHERE grade = ?"
-            ).bind(targetGrade).all();
+                "SELECT * FROM performance_assessments WHERE grade = ? AND dataset = ? AND isDeleted = 0"
+            ).bind(targetGrade, fromDataset).all();
 
             const batchStatements = [];
             for (const assessment of assessments) {
-                if (mappingDict[assessment.subject] && mappingDict[assessment.subject] !== "_none_") {
+                let mappedVal = mappingDict[assessment.subject];
+                
+                if (mappedVal === undefined) {
+                    mappedVal = assessment.subject; // Keep original if no explicit mapping
+                }
+
+                if (mappedVal !== "_none_") {
+                    const mappedSubject = mappedVal.replace(/ \([^)]+\)$/, '');
                     batchStatements.push(env.DB.prepare(
-                        "UPDATE performance_assessments SET subject = ? WHERE id = ?"
-                    ).bind(mappingDict[assessment.subject], assessment.id));
+                        "INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    ).bind(
+                        mappedSubject, assessment.title, assessment.description, assessment.dueDate, assessment.grade, assessment.classNum, assessment.classTime, assessment.isDone, toDataset, assessment.lastModifiedIp, assessment.createdAt
+                    ));
                 }
             }
 

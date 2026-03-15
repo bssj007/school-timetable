@@ -176,15 +176,17 @@ export const onRequest = async (context: any) => {
                 return false;
             };
 
-            // 3. Update IP Profile (Link to student_profile_id)
             const updateIpProfile = async () => {
-                const isEditAction = (['POST', 'DELETE', 'PATCH', 'PUT'].includes(request.method) && url.pathname.startsWith('/api/assessment'));
+                const isAssessmentApi = url.pathname.startsWith('/api/assessment');
+                const isAddAction = isAssessmentApi && request.method === 'POST';
+                const isDeleteAction = isAssessmentApi && request.method === 'DELETE';
+                const isEditAction = isAssessmentApi && ['POST', 'DELETE', 'PATCH', 'PUT'].includes(request.method);
                 const isPrintAction = url.pathname === '/api/action/print';
                 const isDownloadAction = url.pathname === '/api/action/download';
 
                 const query = `
-                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent, printCount, downloadCount, isStandalone)
-                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?)
+                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, addCount, deleteCount, userAgent, printCount, downloadCount, isStandalone)
+                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(ip) DO UPDATE SET
                         lastAccess = datetime('now'),
                         userAgent = excluded.userAgent,
@@ -192,12 +194,16 @@ export const onRequest = async (context: any) => {
                         kakaoId = COALESCE(excluded.kakaoId, ip_profiles.kakaoId),
                         kakaoNickname = COALESCE(excluded.kakaoNickname, ip_profiles.kakaoNickname),
                         modificationCount = ip_profiles.modificationCount + ?,
+                        addCount = ip_profiles.addCount + ?,
+                        deleteCount = ip_profiles.deleteCount + ?,
                         printCount = ip_profiles.printCount + ?,
                         downloadCount = ip_profiles.downloadCount + ?,
                         isStandalone = CASE WHEN excluded.isStandalone = 1 THEN 1 ELSE ip_profiles.isStandalone END
                 `;
 
                 const increment = isEditAction ? 1 : 0;
+                const addIncrement = isAddAction ? 1 : 0;
+                const deleteIncrement = isDeleteAction ? 1 : 0;
                 const printIncrement = isPrintAction ? 1 : 0;
                 const downloadIncrement = isDownloadAction ? 1 : 0;
 
@@ -207,12 +213,16 @@ export const onRequest = async (context: any) => {
                         profileId,
                         kakaoId,
                         kakaoNickname,
-                        increment, // Initial value
+                        increment, // modificationCount Start
+                        addIncrement,
+                        deleteIncrement,
                         userAgent,
                         printIncrement,
                         downloadIncrement,
                         isStandalone,
-                        increment, // Increment value for update
+                        increment, // modificationCount Update
+                        addIncrement,
+                        deleteIncrement,
                         printIncrement,
                         downloadIncrement
                     ).run();
@@ -250,6 +260,12 @@ export const onRequest = async (context: any) => {
                     }
                 } else if (e.message && (e.message.includes("has no column named") || e.message.includes("no column named"))) {
                     console.warn("[Middleware] ip_profiles schema mismatch detected. Attempting safe ALTER...");
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN addCount INTEGER DEFAULT 0").run();
+                    } catch (_) { /* already exists */ }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN deleteCount INTEGER DEFAULT 0").run();
+                    } catch (_) { /* already exists */ }
                     try {
                         await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN printCount INTEGER DEFAULT 0").run();
                     } catch (_) { /* already exists */ }
