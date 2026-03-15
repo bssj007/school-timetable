@@ -771,6 +771,7 @@ function ElectiveManager({ password }: { password: string }) {
                                                         { value: "D", label: "D 지정" },
                                                         { value: "E", label: "E 지정" },
                                                         { value: "F", label: "F 지정" },
+                                                        { value: "G", label: "G 지정" },
                                                     ];
 
                                                     return (
