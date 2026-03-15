@@ -1,3 +1,7 @@
+interface Env {
+    DB: D1Database;
+}
+
 export const onRequestPost: PagesFunction<Env> = async (context) => {
     try {
         const env = context.env;

@@ -609,3 +609,26 @@ body.capturing #timetable-container[data-print-font-size="large"] td .md\:text-b
   font-size: 3.2cqh !important;
   line-height: normal !important;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Disable sticky hover on touch-only devices (mobile)                        */
+/* Only suppress hover when NOT actively pressing — holding still shows feedback */
+/* -------------------------------------------------------------------------- */
+@media (hover: none) {
+  /* Timetable cells: remove transition so hover state doesn't visually linger */
+  #timetable-container td {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Suppress hover styles only when finger is NOT held down */
+  #timetable-container td:not(:active) {
+    transition: none !important;
+  }
+
+  /* Vote buttons and other interactive elements: suppress hover when not pressing */
+  button:not(:active):hover,
+  [role="button"]:not(:active):hover {
+    background-color: inherit !important;
+    color: inherit !important;
+  }
+}

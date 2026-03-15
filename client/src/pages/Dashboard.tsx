@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon } from "lucide-react";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon, ThumbsUp, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
@@ -41,6 +41,7 @@ interface AssessmentItem {
   classTime?: number;
   weekday?: number;
   round?: number; // 차수 추가
+  votes?: string; // JSON array of votes
 }
 
 // 주의 시작일 계산 (월요일 기준)
@@ -702,6 +703,50 @@ export default function Dashboard() {
     return filtered;
   }, [allAssessments, weekDates]);
 
+  // 3.5 수행평가 투표 데이터 (인라인 votes 필드에서 계산)
+  const votesData = useMemo(() => {
+    if (!assessments || assessments.length === 0) return { votes: {} as Record<string, { helpful: number; distrust: number }>, myVotes: {} as Record<string, string> };
+    const votes: Record<string, { helpful: number; distrust: number }> = {};
+    const myVotes: Record<string, string> = {};
+    for (const a of assessments) {
+      const aid = String(a.id);
+      let votesArr: { g: number; c: number; s: number; v: string }[] = [];
+      try { votesArr = JSON.parse(a.votes || '[]'); } catch { votesArr = []; }
+      const helpful = votesArr.filter(x => x.v === 'helpful').length;
+      const distrust = votesArr.filter(x => x.v === 'distrust').length;
+      if (helpful > 0 || distrust > 0) votes[aid] = { helpful, distrust };
+      // Find my vote
+      if (grade && classNum && studentNumber) {
+        const myVote = votesArr.find(x => x.g === parseInt(grade) && x.c === parseInt(classNum) && x.s === parseInt(studentNumber));
+        if (myVote) myVotes[aid] = myVote.v;
+      }
+    }
+    return { votes, myVotes };
+  }, [assessments, grade, classNum, studentNumber]);
+
+  const voteMutation = useMutation({
+    mutationFn: async ({ assessmentId, vote }: { assessmentId: number; vote: 'helpful' | 'distrust' }) => {
+      const myCurrentVote = votesData?.myVotes?.[String(assessmentId)];
+      if (myCurrentVote === vote) {
+        // Toggle off - send null vote
+        await fetch('/api/assessment?action=vote', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assessmentId, grade: parseInt(grade), classNum: parseInt(classNum), studentNumber: parseInt(studentNumber), vote: null }),
+        });
+      } else {
+        await fetch('/api/assessment?action=vote', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assessmentId, grade: parseInt(grade), classNum: parseInt(classNum), studentNumber: parseInt(studentNumber), vote }),
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assessments'] });
+    },
+  });
+
   // 4. 수행평가 추가
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -978,11 +1023,11 @@ export default function Dashboard() {
       <div className="hidden md:flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
           <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
-            {settings?.site_title_html ? (
-              <span dangerouslySetInnerHTML={{ __html: settings.site_title_html }} />
-            ) : (
-              <span className="text-blue-600">수행 일정공유</span>
-            )}
+            <span
+              dangerouslySetInnerHTML={{
+                __html: settings?.site_title_html || '<span class="text-blue-600">수행 일정공유</span>'
+              }}
+            />
           </Link>
 
         </div>
@@ -1466,11 +1511,42 @@ export default function Dashboard() {
                               }) : [];
 
                               // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
-                              const bgColor = (includeAssessments && cellAssessments.length > 0)
-                                ? (isPast ? "bg-gray-200 border-gray-300" : "bg-blue-100 border-blue-300")
-                                : isToday
-                                  ? "bg-red-50 hover:bg-red-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50"
-                                  : "bg-yellow-50 hover:bg-yellow-100";
+                              let bgColor = "bg-yellow-50 hover:bg-yellow-100";
+                              let cellInlineStyle: React.CSSProperties | undefined;
+                              if (includeAssessments && cellAssessments.length > 0) {
+                                if (isPast) {
+                                  bgColor = "bg-gray-200 border-gray-300";
+                                } else if (settings?.assessment_timetable_color && votesData) {
+                                  // Apply vote-based color to timetable cell
+                                  const a = cellAssessments[0];
+                                  const vi = votesData?.votes?.[String(a.id)];
+                                  const net = vi ? (vi.helpful || 0) - (vi.distrust || 0) : 0;
+                                  const blendHex = (base: string, mix: string, ratio: number) => {
+                                    const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
+                                    const b = p(base), m = p(mix), r = ratio;
+                                    return '#' + b.map((c, i) => Math.round(c*(1-r)+m[i]*r).toString(16).padStart(2,'0')).join('');
+                                  };
+                                  if (net > 0) {
+                                    const mixColor = settings?.assessment_positive_color || '#22c55e';
+                                    const ratio = Math.min(100, parseInt(settings?.assessment_positive_ratio || '30')) / 100;
+                                    const scaled = Math.min(1, (vi?.helpful || 0) / 10) * ratio;
+                                    cellInlineStyle = { backgroundColor: blendHex('#dbeafe', mixColor, scaled) };
+                                    bgColor = "border-blue-300";
+                                  } else if (net < 0) {
+                                    const mixColor = settings?.assessment_negative_color || '#9ca3af';
+                                    const ratio = Math.min(100, parseInt(settings?.assessment_negative_ratio || '40')) / 100;
+                                    const scaled = Math.min(1, (vi?.distrust || 0) / 10) * ratio;
+                                    cellInlineStyle = { backgroundColor: blendHex('#dbeafe', mixColor, scaled) };
+                                    bgColor = "border-blue-300";
+                                  } else {
+                                    bgColor = "bg-blue-100 border-blue-300";
+                                  }
+                                } else {
+                                  bgColor = "bg-blue-100 border-blue-300";
+                                }
+                              } else if (isToday) {
+                                bgColor = "bg-red-50 hover:bg-red-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50";
+                              }
 
                               // 과거 날짜 스타일
                               const pastStyle = isPast ? "opacity-70 bg-gray-50 text-gray-400 print:!opacity-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 print:!text-gray-900 capturing:!opacity-100 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50 capturing:!text-gray-900" : "";
@@ -1571,60 +1647,63 @@ export default function Dashboard() {
                                 ${bgColor} ${pastStyle} ${selectionStyle}
                                 ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
+                                  style={cellInlineStyle}
                                 >
                                   {isElectiveActive && group && (
                                     <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400 print:!bg-orange-100 print:!text-orange-800 capturing:!bg-orange-100 capturing:!text-orange-800" : "bg-orange-100 text-orange-800"}`}>
                                       <span>{group}</span><span className="hidden md:inline">그룹</span>
                                     </div>
                                   )}
-                                  {item || isElectiveActive ? (
-                                    <div key="active-cell" className="flex flex-col items-center justify-center h-full min-h-0">
-                                      <div
-                                        className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400 print:!text-gray-900 capturing:!text-gray-900" : "text-gray-900"} ${(displaySubject || "").length > 6 ? 'text-[9px] break-keep' : (displaySubject || "").length > 4 ? 'text-[11px]' : ''}`}
-                                      >
-                                        <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
-                                          {isCancelledByFreePeriod ? (
-                                            <span key="cancelled-subj" className="print:flex print:flex-col print:items-center">
-                                              <span className="line-through opacity-60 flex-shrink-0 whitespace-nowrap">{displaySubject}</span>
-                                              <span className={`block md:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400 print:!text-blue-500 capturing:!text-blue-500" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
-                                            </span>
-                                          ) : (
-                                            displaySubject?.includes("공강") && displaySubject !== "공강" ? (
-                                              <span key="partial-free-subj" className="flex flex-col md:inline md:flex-row items-center">
-                                                <span>{displaySubject.replace("공강", "")}</span>
-                                                <span className="block md:inline md:ml-1">공강</span>
+                                  <div className="flex flex-col items-center justify-center h-full min-h-0">
+                                    {item || isElectiveActive ? (
+                                      <>
+                                        <div
+                                          className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400 print:!text-gray-900 capturing:!text-gray-900" : "text-gray-900"} ${(displaySubject || "").length > 6 ? 'text-[9px] break-keep' : (displaySubject || "").length > 4 ? 'text-[11px]' : ''}`}
+                                        >
+                                          <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
+                                            {isCancelledByFreePeriod ? (
+                                              <span className="print:flex print:flex-col print:items-center">
+                                                <span className="line-through opacity-60 flex-shrink-0 whitespace-nowrap">{displaySubject}</span>
+                                                <span className={`block md:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400 print:!text-blue-500 capturing:!text-blue-500" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
                                               </span>
                                             ) : (
-                                              <span key="normal-subj">{displaySubject}</span>
-                                            )
-                                          )}
-                                        </span>
-                                      </div>
-                                      <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-col md:flex-row print:flex-row print:flex-nowrap items-center md:justify-center print:justify-center overflow-hidden leading-tight md:leading-normal print:leading-tight">
-                                        {!isCancelledByFreePeriod && displayTeacher ? (
-                                          <span key="teacher-span" className="truncate shrink min-w-0 max-w-full print:text-[1.8cqh]">{displayTeacher}</span>
-                                        ) : null}
-                                        {(settings?.show_target_class_main_menu !== false && displayClassName) ? (
-                                          <span key="class-span" className={`truncate shrink min-w-0 max-w-full font-medium text-gray-600 print:text-[1.8cqh] print:!text-gray-500 ${!isCancelledByFreePeriod && displayTeacher ? "md:ml-1.5 print:ml-1" : ""}`}>
-                                            {displayClassName}
+                                              displaySubject?.includes("공강") && displaySubject !== "공강" ? (
+                                                <span className="flex flex-col md:inline md:flex-row items-center">
+                                                  <span>{displaySubject.replace("공강", "")}</span>
+                                                  <span className="block md:inline md:ml-1">공강</span>
+                                                </span>
+                                              ) : (
+                                                <span>{displaySubject}</span>
+                                              )
+                                            )}
                                           </span>
-                                        ) : null}
-                                      </div>
-                                      {includeAssessments && cellAssessments.length > 0 && (
-                                        <div className="mt-0.5 flex-shrink-0">
-                                          <div className="flex flex-wrap gap-0.5 justify-center">
-                                            {cellAssessments.map(a => (
-                                              <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
-                                                {a.description && a.description.includes("차") ? a.description : '평가'}
-                                              </span>
-                                            ))}
-                                          </div>
                                         </div>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span key="empty-cell" className="text-gray-300 text-sm">-</span>
-                                  )}
+                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-col md:flex-row print:flex-row print:flex-nowrap items-center md:justify-center print:justify-center overflow-hidden leading-tight md:leading-normal print:leading-tight">
+                                          {!isCancelledByFreePeriod && displayTeacher ? (
+                                            <span className="truncate shrink min-w-0 max-w-full print:text-[1.8cqh]">{displayTeacher}</span>
+                                          ) : null}
+                                          {(settings?.show_target_class_main_menu !== false && displayClassName) ? (
+                                            <span className={`truncate shrink min-w-0 max-w-full font-medium text-gray-600 print:text-[1.8cqh] print:!text-gray-500 ${!isCancelledByFreePeriod && displayTeacher ? "md:ml-1.5 print:ml-1" : ""}`}>
+                                              {displayClassName}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        {includeAssessments && cellAssessments.length > 0 && (
+                                          <div className="mt-0.5 flex-shrink-0">
+                                            <div className="flex flex-wrap gap-0.5 justify-center">
+                                              {cellAssessments.map(a => (
+                                                <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
+                                                  {a.description && a.description.includes("차") ? a.description : '평가'}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <span className="text-gray-300 text-sm">-</span>
+                                    )}
+                                  </div>
                                 </td>
                               );
                             })}
@@ -2089,10 +2168,35 @@ export default function Dashboard() {
                   const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
                   const isToday = diffDate === 0;
 
+                  // Compute card background based on vote reliability
+                  const voteInfo = votesData?.votes?.[String(assessment.id)];
+                  let cardBg = isToday ? '#fef2f2' : '#ffffff'; // default: red-50 or white
+                  if (voteInfo && !isToday) {
+                    const net = (voteInfo.helpful || 0) - (voteInfo.distrust || 0);
+                    if (net > 0) {
+                      // Positive: blend bg-white with positive color
+                      const mixColor = settings?.assessment_positive_color || '#22c55e';
+                      const ratio = Math.min(100, parseInt(settings?.assessment_positive_ratio || '30')) / 100;
+                      const scaled = Math.min(1, (voteInfo.helpful || 0) / 10) * ratio;
+                      const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
+                      const b = p('#ffffff'), m = p(mixColor);
+                      cardBg = '#' + b.map((c, i) => Math.round(c*(1-scaled)+m[i]*scaled).toString(16).padStart(2,'0')).join('');
+                    } else if (net < 0) {
+                      // Negative: blend bg-white with negative color
+                      const mixColor = settings?.assessment_negative_color || '#9ca3af';
+                      const ratio = Math.min(100, parseInt(settings?.assessment_negative_ratio || '40')) / 100;
+                      const scaled = Math.min(1, (voteInfo.distrust || 0) / 10) * ratio;
+                      const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
+                      const b = p('#ffffff'), m = p(mixColor);
+                      cardBg = '#' + b.map((c, i) => Math.round(c*(1-scaled)+m[i]*scaled).toString(16).padStart(2,'0')).join('');
+                    }
+                  }
+
                   return (
                     <div
                       key={assessment.id}
-                      className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'bg-red-50 border-red-200' : 'bg-white'}`}
+                      className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'border-red-200' : ''}`}
+                      style={{ backgroundColor: cardBg }}
                       onClick={() => {
                         // Find the cell logic
                         const targetDate = new Date(assessment.dueDate); // This might be string 'YYYY-MM-DD'
@@ -2121,21 +2225,51 @@ export default function Dashboard() {
                         }
                       }}
                     >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="flex items-center gap-1 flex-wrap">
                           <span className="font-bold text-lg text-blue-600">
                             {assessment.subject}
                           </span>
                           <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                             {assessment.description}
                           </span>
-                          <span className={`text-sm font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
+                          <span className={`text-base font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
                             {dDay}
                           </span>
                         </div>
+                        {grade && classNum && studentNumber && (
+                          <div className="flex items-center gap-2 flex-shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+                            <button
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                votesData?.myVotes?.[String(assessment.id)] === 'helpful'
+                                  ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
+                                  : 'bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-green-600'
+                              }`}
+                              onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'helpful' }); e.currentTarget.blur(); }}
+                              disabled={voteMutation.isPending}
+                            >
+                              <ThumbsUp className="w-4 h-4" />
+                              <span>땡큐</span>
+                              <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.helpful || 0}</span>
+                            </button>
+                            <button
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                votesData?.myVotes?.[String(assessment.id)] === 'distrust'
+                                  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
+                                  : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600'
+                              }`}
+                              onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' }); e.currentTarget.blur(); }}
+                              disabled={voteMutation.isPending}
+                            >
+                              <X className="w-4 h-4" />
+                              <span>가짜</span>
+                              <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.distrust || 0}</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <p className="text-gray-700 mb-2">{assessment.title}</p>
-                      <div className="flex items-center gap-2 mt-auto">
+                      <div className="flex items-center mt-auto">
                         <div className="flex items-center text-sm text-gray-500">
                           <span>{assessment.dueDate}</span>
                           <span className="mx-2">|</span>
@@ -2197,7 +2331,11 @@ export default function Dashboard() {
         classNum={classNum}
         studentNumber={studentNumber}
         datasetId={(rawTimetableData as any)?.datasetId || ''}
-        forceManualMode={settings?.elective_input_mode === 'manual'}
+        forceManualMode={
+          grade === '2'
+            ? (settings?.elective_input_mode_grade2 ?? settings?.elective_input_mode) === 'manual'
+            : (settings?.elective_input_mode_grade3 ?? settings?.elective_input_mode) === 'manual'
+        }
         onSaveSuccess={() => {
           setShowElectiveDialog(false);
           setIsElectiveEntered(true);

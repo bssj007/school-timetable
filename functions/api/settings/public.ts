@@ -7,7 +7,7 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'show_target_class_main_menu', 'promotion_reset_days')").all();
+        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'elective_input_mode_grade2', 'elective_input_mode_grade3', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'show_target_class_main_menu', 'promotion_reset_days', 'assessment_distrust_threshold', 'assessment_positive_color', 'assessment_positive_ratio', 'assessment_negative_color', 'assessment_negative_ratio', 'assessment_timetable_color')").all();
 
         const settings: any = {};
         if (rows && rows.results) {
@@ -40,6 +40,8 @@ export const onRequest = async (context: any) => {
             is_whitelisted: isWhitelisted,
             client_ip: clientIp,
             elective_input_mode: settings['elective_input_mode'] || 'auto',
+            elective_input_mode_grade2: settings['elective_input_mode_grade2'] || settings['elective_input_mode'] || 'auto',
+            elective_input_mode_grade3: settings['elective_input_mode_grade3'] || settings['elective_input_mode'] || 'auto',
             bug_report_enabled: settings['bug_report_enabled'] !== 'false', // default true
             site_title: settings['site_title'] || '',
             site_title_html: settings['site_title_html'] || '',
@@ -52,7 +54,13 @@ export const onRequest = async (context: any) => {
             samsung_install_button_visible: settings['samsung_install_button_visible'] !== 'false', // default true
             pwa_install_button_visible: settings['pwa_install_button_visible'] !== 'false', // default true
             show_target_class_main_menu: settings['show_target_class_main_menu'] !== 'false', // default true
-            promotion_reset_days: settings['promotion_reset_days'] || '0'
+            promotion_reset_days: settings['promotion_reset_days'] || '0',
+            assessment_distrust_threshold: settings['assessment_distrust_threshold'] || '3',
+            assessment_positive_color: settings['assessment_positive_color'] || '#22c55e',
+            assessment_positive_ratio: settings['assessment_positive_ratio'] || '30',
+            assessment_negative_color: settings['assessment_negative_color'] || '#9ca3af',
+            assessment_negative_ratio: settings['assessment_negative_ratio'] || '40',
+            assessment_timetable_color: settings['assessment_timetable_color'] === 'true'
         }), {
             headers: { 'Content-Type': 'application/json' }
         });

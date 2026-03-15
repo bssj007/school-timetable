@@ -177,10 +177,11 @@ export const onRequest = async (context: any) => {
             };
 
             const updateIpProfile = async () => {
-                const isAssessmentApi = url.pathname.startsWith('/api/assessment');
-                const isAddAction = isAssessmentApi && request.method === 'POST';
-                const isDeleteAction = isAssessmentApi && request.method === 'DELETE';
-                const isEditAction = isAssessmentApi && ['POST', 'DELETE', 'PATCH', 'PUT'].includes(request.method);
+            const isAssessmentApi = url.pathname === '/api/assessment' || url.pathname === '/api/assessment/';
+                const isVoteAction = isAssessmentApi && url.searchParams.get('action') === 'vote';
+                const isAddAction = isAssessmentApi && !isVoteAction && request.method === 'POST';
+                const isDeleteAction = isAssessmentApi && !isVoteAction && request.method === 'DELETE';
+                const isEditAction = isAssessmentApi && !isVoteAction && ['POST', 'DELETE', 'PATCH', 'PUT'].includes(request.method);
                 const isPrintAction = url.pathname === '/api/action/print';
                 const isDownloadAction = url.pathname === '/api/action/download';
 

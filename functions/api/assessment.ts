@@ -56,7 +56,8 @@ export const onRequest = async (context: any) => {
                           dataset TEXT DEFAULT '',
                           createdAt TEXT DEFAULT (datetime('now')),
                           lastModifiedIp TEXT,
-                          isDeleted INTEGER DEFAULT 0
+                          isDeleted INTEGER DEFAULT 0,
+                          votes TEXT DEFAULT '[]'
                         )
                     `).run();
                     // Add isDeleted column if missing (migration for older tables)
@@ -73,6 +74,14 @@ export const onRequest = async (context: any) => {
                     } catch (createErr: any) {
                         if (createErr.message && !createErr.message.includes("duplicate column")) {
                             console.error("Migration error (dataset):", createErr);
+                        }
+                    }
+                    // Add votes column if missing
+                    try {
+                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN votes TEXT DEFAULT '[]'").run();
+                    } catch (createErr: any) {
+                        if (createErr.message && !createErr.message.includes("duplicate column")) {
+                            console.error("Migration error (votes):", createErr);
                         }
                     }
                     return new Response(JSON.stringify([]), {
@@ -109,6 +118,72 @@ export const onRequest = async (context: any) => {
             }
         }
 
+        // PATCH with action=vote: 투표 등록/변경/취소
+        if (request.method === 'PATCH' && url.searchParams.get('action') === 'vote') {
+            const body = await request.json();
+            const { assessmentId, grade: vGrade, classNum: vClass, studentNumber: vStudent, vote } = body;
+
+            if (!assessmentId || !vGrade || !vClass || !vStudent) {
+                return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400 });
+            }
+
+            try {
+                // Read current votes
+                const row = await env.DB.prepare(
+                    "SELECT votes FROM performance_assessments WHERE id = ?"
+                ).bind(assessmentId).first();
+
+                if (!row) {
+                    return new Response(JSON.stringify({ error: 'Assessment not found' }), { status: 404 });
+                }
+
+                let votesArr: { g: number; c: number; s: number; v: string }[] = [];
+                try { votesArr = JSON.parse((row.votes as string) || '[]'); } catch { votesArr = []; }
+
+                // Find existing vote for this student
+                const idx = votesArr.findIndex(x => x.g === vGrade && x.c === vClass && x.s === vStudent);
+
+                if (!vote) {
+                    // DELETE vote
+                    if (idx >= 0) votesArr.splice(idx, 1);
+                } else if (vote === 'helpful' || vote === 'distrust') {
+                    // UPSERT vote
+                    if (idx >= 0) {
+                        votesArr[idx].v = vote;
+                    } else {
+                        votesArr.push({ g: vGrade, c: vClass, s: vStudent, v: vote });
+                    }
+                } else {
+                    return new Response(JSON.stringify({ error: 'Invalid vote value' }), { status: 400 });
+                }
+
+                // Save back
+                await env.DB.prepare(
+                    "UPDATE performance_assessments SET votes = ? WHERE id = ?"
+                ).bind(JSON.stringify(votesArr), assessmentId).run();
+
+                return new Response(JSON.stringify({ success: true }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            } catch (e: any) {
+                if (e.message && e.message.includes("no such column") && e.message.includes("votes")) {
+                    // Auto-heal: add votes column
+                    try {
+                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN votes TEXT DEFAULT '[]'").run();
+                    } catch (_) { /* already exists */ }
+                    // Retry with empty votes
+                    const votesArr = vote ? [{ g: vGrade, c: vClass, s: vStudent, v: vote }] : [];
+                    await env.DB.prepare(
+                        "UPDATE performance_assessments SET votes = ? WHERE id = ?"
+                    ).bind(JSON.stringify(votesArr), assessmentId).run();
+                    return new Response(JSON.stringify({ success: true }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+                throw e;
+            }
+        }
+
         // POST: 추가
         if (request.method === 'POST') {
             const body = await request.json();
@@ -142,7 +217,7 @@ export const onRequest = async (context: any) => {
             // 중복 체크
             if (classTime) {
                 const existing = await env.DB.prepare(
-                    "SELECT id FROM performance_assessments WHERE grade = ? AND classNum = ? AND dueDate = ? AND classTime = ? AND dataset = ?"
+                    "SELECT id FROM performance_assessments WHERE grade = ? AND classNum = ? AND dueDate = ? AND classTime = ? AND dataset = ? AND isDeleted = 0"
                 ).bind(grade, actualClassNum, dueDate, classTime, dataset).first();
 
                 if (existing) {
