@@ -19,7 +19,7 @@ export const onRequestPost: PagesFunction<any> = async (context) => {
                     dataset TEXT DEFAULT '',
                     instructionDismissed INTEGER DEFAULT 0,
                     updatedAt TEXT DEFAULT (datetime('now')),
-                    UNIQUE(grade, classNum, studentNumber, dataset)
+                    UNIQUE(grade, classNum, studentNumber)
                 )
             `),
             env.DB.prepare(`

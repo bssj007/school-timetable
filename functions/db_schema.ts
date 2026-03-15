@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS student_profiles (
     dataset TEXT DEFAULT '',
     instructionDismissed INTEGER DEFAULT 0,
     updatedAt TEXT DEFAULT (datetime('now')),
-    UNIQUE(grade, classNum, studentNumber, dataset)
+    UNIQUE(grade, classNum, studentNumber)
 );
 `;
 

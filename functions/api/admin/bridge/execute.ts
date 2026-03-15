@@ -181,189 +181,61 @@ export const onRequest = async (context: any) => {
         }
 
         // --- 2. Migrate Student Profiles ---
-        // Ensure student_profiles UNIQUE constraint includes dataset before migrating.
-        // (Auto-upgrade so this works even if the admin hasn't manually run migrate_db)
         if (migrateStudentProfiles) {
-            // ── Auto-upgrade schema if needed ──────────────────────────────
-            try {
-                const schemaRow = await env.DB.prepare(
-                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='student_profiles'"
-                ).first() as any;
-                const schemaSql: string = schemaRow?.sql || "";
-                const hasDatasetInUnique = schemaSql.includes("dataset") &&
-                    (schemaSql.includes("UNIQUE(grade") || schemaSql.includes("UNIQUE (grade"));
-
-                const ipSchemaRow = await env.DB.prepare(
-                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='ip_profiles'"
-                ).first() as any;
-                const ipSchemaSql: string = ipSchemaRow?.sql || "";
-                const hasSetNull = ipSchemaSql.includes("SET NULL");
-
-                if (!hasDatasetInUnique || !hasSetNull) {
-                    // 1. Drop any lingering old tables to prevent rename collisions
-                    try { await env.DB.prepare("DROP TABLE IF EXISTS cookie_profiles_old").run(); } catch (_) {}
-                    try { await env.DB.prepare("DROP TABLE IF EXISTS ip_profiles_old").run(); } catch (_) {}
-                    try { await env.DB.prepare("DROP TABLE IF EXISTS student_profiles_old").run(); } catch (_) {}
-
-                    const batchStmts = [
-                        // 1. Rename existing tables to _old
-                        env.DB.prepare("ALTER TABLE ip_profiles RENAME TO ip_profiles_old"),
-                        env.DB.prepare("ALTER TABLE cookie_profiles RENAME TO cookie_profiles_old"),
-                        env.DB.prepare("ALTER TABLE student_profiles RENAME TO student_profiles_old"),
-
-                        // 2. Create new tables with the updated schema (Dataset in UNIQUE for student_profiles)
-                        env.DB.prepare(`
-                            CREATE TABLE student_profiles (
-                                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                grade INTEGER NOT NULL,
-                                classNum INTEGER NOT NULL,
-                                studentNumber INTEGER,
-                                electives TEXT,
-                                dataset TEXT DEFAULT '',
-                                instructionDismissed INTEGER DEFAULT 0,
-                                updatedAt TEXT DEFAULT (datetime('now')),
-                                UNIQUE(grade, classNum, studentNumber, dataset)
-                            )
-                        `),
-                        env.DB.prepare(`
-                            CREATE TABLE ip_profiles (
-                                ip TEXT PRIMARY KEY,
-                                student_profile_id INTEGER,
-                                kakaoId TEXT,
-                                kakaoNickname TEXT,
-                                lastAccess TEXT,
-                                modificationCount INTEGER DEFAULT 0,
-                                addCount INTEGER DEFAULT 0,
-                                deleteCount INTEGER DEFAULT 0,
-                                userAgent TEXT,
-                                instructionDismissed INTEGER DEFAULT 0,
-                                printCount INTEGER DEFAULT 0,
-                                downloadCount INTEGER DEFAULT 0,
-                                isStandalone INTEGER DEFAULT 0,
-                                FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id) ON DELETE SET NULL
-                            )
-                        `),
-                        env.DB.prepare(`
-                            CREATE TABLE cookie_profiles (
-                                client_id TEXT PRIMARY KEY,
-                                student_profile_id INTEGER,
-                                kakaoId TEXT,
-                                kakaoNickname TEXT,
-                                lastAccess TEXT,
-                                modificationCount INTEGER DEFAULT 0,
-                                addCount INTEGER DEFAULT 0,
-                                deleteCount INTEGER DEFAULT 0,
-                                userAgent TEXT,
-                                instructionDismissed INTEGER DEFAULT 0,
-                                ip TEXT,
-                                grade INTEGER,
-                                classNum INTEGER,
-                                studentNumber INTEGER,
-                                printCount INTEGER DEFAULT 0,
-                                downloadCount INTEGER DEFAULT 0,
-                                FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id) ON DELETE SET NULL
-                            )
-                        `),
-
-                        // 3. Clean any orphaned foreign keys in _old tables before migration
-                        env.DB.prepare(`UPDATE ip_profiles_old SET student_profile_id = NULL WHERE student_profile_id IS NOT NULL AND student_profile_id NOT IN (SELECT id FROM student_profiles_old)`),
-                        env.DB.prepare(`UPDATE cookie_profiles_old SET student_profile_id = NULL WHERE student_profile_id IS NOT NULL AND student_profile_id NOT IN (SELECT id FROM student_profiles_old)`),
-
-                        // 4. Migrate data from _old to new tables
-                        env.DB.prepare(`
-                            INSERT OR IGNORE INTO student_profiles (id, grade, classNum, studentNumber, electives, dataset, instructionDismissed, updatedAt)
-                            SELECT id, grade, classNum, studentNumber, electives, COALESCE(dataset, ''), COALESCE(instructionDismissed, 0), COALESCE(updatedAt, datetime('now'))
-                            FROM student_profiles_old
-                        `),
-                        env.DB.prepare("INSERT OR IGNORE INTO ip_profiles SELECT * FROM ip_profiles_old"),
-                        env.DB.prepare("INSERT OR IGNORE INTO cookie_profiles SELECT * FROM cookie_profiles_old"),
-
-                        // 4. Safely drop _old tables (drop children first to avoid FK errors)
-                        env.DB.prepare("DROP TABLE cookie_profiles_old"),
-                        env.DB.prepare("DROP TABLE ip_profiles_old"),
-                        env.DB.prepare("DROP TABLE student_profiles_old")
-                    ];
-
-                    await env.DB.batch(batchStmts);
-
-                    console.log("[BRIDGE execute] 3-Table Rebuild: Auto-upgraded student_profiles UNIQUE constraint to include dataset");
+            // ── Helper: parse dataset/electives columns into arrays ──
+            const parseArrayCol = (raw: any): any[] => {
+                if (!raw) return [''];
+                try {
+                    const parsed = JSON.parse(raw);
+                    return Array.isArray(parsed) ? parsed : [raw];
+                } catch {
+                    return [raw];
                 }
-            } catch (schemaErr) {
-                console.error("[BRIDGE execute] Schema upgrade failed:", schemaErr);
-                // Continue anyway — migration may still succeed if schema was already upgraded
-            }
+            };
 
-            // Re-check schema after upgrade attempt to determine correct ON CONFLICT clause
-            let schemaHasDataset = false;
-            try {
-                const recheckRow = await env.DB.prepare(
-                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='student_profiles'"
-                ).first() as any;
-                const recheckSql: string = recheckRow?.sql || "";
-                schemaHasDataset = recheckSql.includes("dataset") &&
-                    (recheckSql.includes("UNIQUE(grade") || recheckSql.includes("UNIQUE (grade"));
-            } catch (_) {}
+            const parseElectivesCol = (raw: any): any[] => {
+                if (!raw) return [null];
+                try {
+                    const parsed = JSON.parse(raw);
+                    return Array.isArray(parsed) ? parsed : [parsed];
+                } catch {
+                    return [null];
+                }
+            };
 
-            // ── Null out FK refs for toDataset profiles (before deleting them) ─
-            try {
-                const { results: profilesToDelete } = await env.DB.prepare(
-                    "SELECT id FROM student_profiles WHERE grade = ? AND dataset = ?"
-                ).bind(targetGrade, toDataset).all();
+            // ── Read ALL student profiles for this grade ──
+            const { results: allProfiles } = await env.DB.prepare(
+                "SELECT * FROM student_profiles WHERE grade = ?"
+            ).bind(targetGrade).all();
 
-                if (profilesToDelete && profilesToDelete.length > 0) {
-                    const ids = profilesToDelete.map((p: any) => p.id);
-                    const chunkSize = 50;
-                    
-                    for (let i = 0; i < ids.length; i += chunkSize) {
-                        const chunk = ids.slice(i, i + chunkSize);
-                        const placeholders = chunk.map(() => '?').join(',');
-                        
-                        try {
-                            await env.DB.prepare(`UPDATE ip_profiles SET student_profile_id = NULL WHERE student_profile_id IN (${placeholders})`)
-                                .bind(...chunk).run();
-                        } catch (e) {
-                            console.error("[BRIDGE execute] Failed to null ip_profiles FK:", e);
-                        }
-                        
-                        try {
-                            await env.DB.prepare(`UPDATE cookie_profiles SET student_profile_id = NULL WHERE student_profile_id IN (${placeholders})`)
-                                .bind(...chunk).run();
-                        } catch (e) {
-                            console.error("[BRIDGE execute] Failed to null cookie_profiles FK:", e);
-                        }
+            let updatedCount = 0;
+
+            for (const profile of allProfiles) {
+                const datasets = parseArrayCol(profile.dataset);
+                const electivesArr = parseElectivesCol(profile.electives);
+
+                // Find the fromDataset's electives in this student's arrays
+                let fromIdx = datasets.indexOf(fromDataset);
+                // Fallback: try legacy empty dataset
+                if (fromIdx === -1 && fromDataset !== '') {
+                    fromIdx = datasets.indexOf('');
+                    if (fromIdx === -1) {
+                        const nullIdx = datasets.findIndex((d: any) => d === null || d === undefined);
+                        if (nullIdx !== -1) fromIdx = nullIdx;
                     }
                 }
-            } catch (err) {
-                console.error("[BRIDGE execute] Failed during FK nullification fetch:", err);
-            }
 
-            // ── Delete old toDataset profiles ──────────────────────────────
-            await env.DB.prepare(
-                "DELETE FROM student_profiles WHERE grade = ? AND dataset = ?"
-            ).bind(targetGrade, toDataset).run();
+                if (fromIdx === -1 || !electivesArr[fromIdx]) continue;
 
-            // ── Read source profiles ────────────────────────────────────────
-            // Prefer fromDataset; fall back to dataset='' (legacy data without dataset)
-            let { results: profiles } = await env.DB.prepare(
-                "SELECT * FROM student_profiles WHERE grade = ? AND dataset = ?"
-            ).bind(targetGrade, fromDataset).all();
+                // Get source electives and apply mapping
+                let sourceElectives = electivesArr[fromIdx];
+                let mappedElectives = sourceElectives;
 
-            if (profiles.length === 0 && fromDataset !== '') {
-                const { results: legacyProfiles } = await env.DB.prepare(
-                    "SELECT * FROM student_profiles WHERE grade = ? AND (dataset = '' OR dataset IS NULL)"
-                ).bind(targetGrade).all();
-                profiles = legacyProfiles;
-            }
-
-            const batchStatements = [];
-            for (const profile of profiles) {
-                let newElectivesJson = profile.electives;
-
-                if (profile.electives) {
+                if (sourceElectives && typeof sourceElectives === 'object') {
                     try {
-                        const electivesObj = JSON.parse(profile.electives);
+                        const electivesObj = typeof sourceElectives === 'string' ? JSON.parse(sourceElectives) : { ...sourceElectives };
                         let changed = false;
-                        const newElectives: string[] = [];
+                        const newElectivesList: string[] = [];
 
                         if (Array.isArray(electivesObj)) {
                             for (const subj of electivesObj) {
@@ -375,14 +247,15 @@ export const onRequest = async (context: any) => {
                                     changed = true;
                                 } else {
                                     const mapped = rawMapped.replace(/ \([^)]+\)$/, '');
-                                    newElectives.push(mapped);
+                                    newElectivesList.push(mapped);
                                     if (mapped !== subj) changed = true;
                                 }
                             }
-                            newElectivesJson = changed ? JSON.stringify(newElectives) : profile.electives;
+                            mappedElectives = changed ? newElectivesList : electivesObj;
                         } else if (typeof electivesObj === 'object') {
-                            Object.keys(electivesObj).forEach(groupKey => {
-                                const entry = electivesObj[groupKey];
+                            const cloned = { ...electivesObj };
+                            Object.keys(cloned).forEach(groupKey => {
+                                const entry = cloned[groupKey];
                                 if (!entry) return;
 
                                 if (typeof entry === 'object' && entry.subject) {
@@ -395,13 +268,13 @@ export const onRequest = async (context: any) => {
                                         oldSubject;
 
                                     if (mappedVal === "_none_") {
-                                        delete electivesObj[groupKey];
+                                        delete cloned[groupKey];
                                         changed = true;
                                     } else if (mappedVal !== oldSubject && mappedVal !== oldKey) {
                                         const mappedSubject = mappedVal.replace(/ \([^)]+\)$/, '');
                                         const mappedTeacherMatch = mappedVal.match(/ \(([^)]+)\)$/);
                                         const mappedTeacher = mappedTeacherMatch ? mappedTeacherMatch[1] : entry.teacher;
-                                        electivesObj[groupKey] = { ...entry, subject: mappedSubject, teacher: mappedTeacher, fullSubjectName: undefined };
+                                        cloned[groupKey] = { ...entry, subject: mappedSubject, teacher: mappedTeacher, fullSubjectName: undefined };
                                         changed = true;
                                     }
                                 } else if (typeof entry === 'string') {
@@ -410,43 +283,50 @@ export const onRequest = async (context: any) => {
                                         subjectOnlyMappingDict[entry] !== undefined ? subjectOnlyMappingDict[entry] :
                                         entry;
                                     if (rawMapped === "_none_") {
-                                        delete electivesObj[groupKey];
+                                        delete cloned[groupKey];
                                         changed = true;
                                     } else {
                                         const mapped = rawMapped.replace(/ \([^)]+\)$/, '');
-                                        if (mapped !== entry) { electivesObj[groupKey] = mapped; changed = true; }
+                                        if (mapped !== entry) { cloned[groupKey] = mapped; changed = true; }
                                     }
                                 }
                             });
-                            newElectivesJson = changed ? JSON.stringify(electivesObj) : profile.electives;
+                            mappedElectives = changed ? cloned : electivesObj;
                         }
                     } catch (e) {
                         console.error("Failed to parse/map electives for profile", profile.id, e);
                     }
                 }
 
-                // 3. UPSERT mapped profile into toDataset
-                // Dynamically choose ON CONFLICT clause based on actual DB schema
-                const upsertSql = schemaHasDataset
-                    ? "INSERT INTO student_profiles (grade, classNum, studentNumber, electives, instructionDismissed, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(grade, classNum, studentNumber, dataset) DO UPDATE SET electives = excluded.electives, instructionDismissed = excluded.instructionDismissed, updatedAt = excluded.updatedAt"
-                    : "INSERT INTO student_profiles (grade, classNum, studentNumber, electives, instructionDismissed, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(grade, classNum, studentNumber) DO UPDATE SET electives = excluded.electives, dataset = excluded.dataset, instructionDismissed = excluded.instructionDismissed, updatedAt = excluded.updatedAt";
-                batchStatements.push(env.DB.prepare(upsertSql).bind(
-                    profile.grade, profile.classNum, profile.studentNumber,
-                    newElectivesJson, profile.instructionDismissed ?? 0,
-                    toDataset, new Date().toISOString()
-                ));
-            }
-
-            if (batchStatements.length > 0) {
-                const chunkSize = 50;
-                for (let i = 0; i < batchStatements.length; i += chunkSize) {
-                    await env.DB.batch(batchStatements.slice(i, i + chunkSize));
+                // ── Merge mapped electives into the toDataset slot ──
+                const toIdx = datasets.indexOf(toDataset);
+                if (toIdx !== -1) {
+                    electivesArr[toIdx] = mappedElectives;
+                } else {
+                    datasets.push(toDataset);
+                    electivesArr.push(mappedElectives);
                 }
-                totalStudentProfilesUpdated = batchStatements.length;
+
+                // Serialize: single entry → plain format (backwards compatible)
+                let finalElectives: string;
+                let finalDataset: string;
+                if (datasets.length === 1) {
+                    finalElectives = JSON.stringify(electivesArr[0]);
+                    finalDataset = datasets[0];
+                } else {
+                    finalElectives = JSON.stringify(electivesArr);
+                    finalDataset = JSON.stringify(datasets);
+                }
+
+                await env.DB.prepare(
+                    "UPDATE student_profiles SET electives = ?, dataset = ?, updatedAt = ? WHERE id = ?"
+                ).bind(finalElectives, finalDataset, new Date().toISOString(), profile.id).run();
+
+                updatedCount++;
             }
+
+            totalStudentProfilesUpdated = updatedCount;
         }
-
-
 
 
         // --- 3. Migrate Assessments ---
