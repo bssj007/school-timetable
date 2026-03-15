@@ -148,7 +148,9 @@ export default function ElectiveSelectionDialog({
     const queryClient = useQueryClient();
 
     // UI mode: "smart" = subject-name picker, "manual" = group dropdown fallback
-    const [mode, setMode] = useState<"smart" | "manual">(forceManualMode ? "manual" : "smart");
+    // Default: grade 2 → smart (auto), grade 3 → manual
+    const defaultMode = forceManualMode || grade === "3" ? "manual" : "smart";
+    const [mode, setMode] = useState<"smart" | "manual">(defaultMode);
 
     // Smart mode: list of selected subject strings
     const [smartSelected, setSmartSelected] = useState<string[]>([]);
@@ -272,7 +274,7 @@ export default function ElectiveSelectionDialog({
             setManualSelections({});
             setSelectedSolution(null);
             setSearchQuery("");
-            setMode(forceManualMode ? "manual" : "smart");
+            setMode(defaultMode);
             initializedRef.current = false;
         }
     }, [existingProfile, isOpen]);

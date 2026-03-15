@@ -1023,11 +1023,11 @@ export default function Dashboard() {
       <div className="hidden md:flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
           <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
-            {settings?.site_title_html ? (
-              <span dangerouslySetInnerHTML={{ __html: settings.site_title_html }} />
-            ) : (
-              <span className="text-blue-600">수행 일정공유</span>
-            )}
+            <span
+              dangerouslySetInnerHTML={{
+                __html: settings?.site_title_html || '<span class="text-blue-600">수행 일정공유</span>'
+              }}
+            />
           </Link>
 
         </div>
@@ -1654,54 +1654,56 @@ export default function Dashboard() {
                                       <span>{group}</span><span className="hidden md:inline">그룹</span>
                                     </div>
                                   )}
-                                  {item || isElectiveActive ? (
-                                    <div key="active-cell" className="flex flex-col items-center justify-center h-full min-h-0">
-                                      <div
-                                        className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400 print:!text-gray-900 capturing:!text-gray-900" : "text-gray-900"} ${(displaySubject || "").length > 6 ? 'text-[9px] break-keep' : (displaySubject || "").length > 4 ? 'text-[11px]' : ''}`}
-                                      >
-                                        <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
-                                          {isCancelledByFreePeriod ? (
-                                            <span key="cancelled-subj" className="print:flex print:flex-col print:items-center">
-                                              <span className="line-through opacity-60 flex-shrink-0 whitespace-nowrap">{displaySubject}</span>
-                                              <span className={`block md:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400 print:!text-blue-500 capturing:!text-blue-500" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
-                                            </span>
-                                          ) : (
-                                            displaySubject?.includes("공강") && displaySubject !== "공강" ? (
-                                              <span key="partial-free-subj" className="flex flex-col md:inline md:flex-row items-center">
-                                                <span>{displaySubject.replace("공강", "")}</span>
-                                                <span className="block md:inline md:ml-1">공강</span>
+                                  <div className="flex flex-col items-center justify-center h-full min-h-0">
+                                    {item || isElectiveActive ? (
+                                      <>
+                                        <div
+                                          className={`font-bold leading-tight w-full px-1 ${isPast ? "text-gray-400 print:!text-gray-900 capturing:!text-gray-900" : "text-gray-900"} ${(displaySubject || "").length > 6 ? 'text-[9px] break-keep' : (displaySubject || "").length > 4 ? 'text-[11px]' : ''}`}
+                                        >
+                                          <span className={(displaySubject || "").length <= 4 ? "text-sm md:text-base" : ""}>
+                                            {isCancelledByFreePeriod ? (
+                                              <span className="print:flex print:flex-col print:items-center">
+                                                <span className="line-through opacity-60 flex-shrink-0 whitespace-nowrap">{displaySubject}</span>
+                                                <span className={`block md:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400 print:!text-blue-500 capturing:!text-blue-500" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
                                               </span>
                                             ) : (
-                                              <span key="normal-subj">{displaySubject}</span>
-                                            )
-                                          )}
-                                        </span>
-                                      </div>
-                                      <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-col md:flex-row print:flex-row print:flex-nowrap items-center md:justify-center print:justify-center overflow-hidden leading-tight md:leading-normal print:leading-tight">
-                                        {!isCancelledByFreePeriod && displayTeacher ? (
-                                          <span key="teacher-span" className="truncate shrink min-w-0 max-w-full print:text-[1.8cqh]">{displayTeacher}</span>
-                                        ) : null}
-                                        {(settings?.show_target_class_main_menu !== false && displayClassName) ? (
-                                          <span key="class-span" className={`truncate shrink min-w-0 max-w-full font-medium text-gray-600 print:text-[1.8cqh] print:!text-gray-500 ${!isCancelledByFreePeriod && displayTeacher ? "md:ml-1.5 print:ml-1" : ""}`}>
-                                            {displayClassName}
+                                              displaySubject?.includes("공강") && displaySubject !== "공강" ? (
+                                                <span className="flex flex-col md:inline md:flex-row items-center">
+                                                  <span>{displaySubject.replace("공강", "")}</span>
+                                                  <span className="block md:inline md:ml-1">공강</span>
+                                                </span>
+                                              ) : (
+                                                <span>{displaySubject}</span>
+                                              )
+                                            )}
                                           </span>
-                                        ) : null}
-                                      </div>
-                                      {includeAssessments && cellAssessments.length > 0 && (
-                                        <div className="mt-0.5 flex-shrink-0">
-                                          <div className="flex flex-wrap gap-0.5 justify-center">
-                                            {cellAssessments.map(a => (
-                                              <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
-                                                {a.description && a.description.includes("차") ? a.description : '평가'}
-                                              </span>
-                                            ))}
-                                          </div>
                                         </div>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span key="empty-cell" className="text-gray-300 text-sm">-</span>
-                                  )}
+                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-col md:flex-row print:flex-row print:flex-nowrap items-center md:justify-center print:justify-center overflow-hidden leading-tight md:leading-normal print:leading-tight">
+                                          {!isCancelledByFreePeriod && displayTeacher ? (
+                                            <span className="truncate shrink min-w-0 max-w-full print:text-[1.8cqh]">{displayTeacher}</span>
+                                          ) : null}
+                                          {(settings?.show_target_class_main_menu !== false && displayClassName) ? (
+                                            <span className={`truncate shrink min-w-0 max-w-full font-medium text-gray-600 print:text-[1.8cqh] print:!text-gray-500 ${!isCancelledByFreePeriod && displayTeacher ? "md:ml-1.5 print:ml-1" : ""}`}>
+                                              {displayClassName}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        {includeAssessments && cellAssessments.length > 0 && (
+                                          <div className="mt-0.5 flex-shrink-0">
+                                            <div className="flex flex-wrap gap-0.5 justify-center">
+                                              {cellAssessments.map(a => (
+                                                <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
+                                                  {a.description && a.description.includes("차") ? a.description : '평가'}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <span className="text-gray-300 text-sm">-</span>
+                                    )}
+                                  </div>
                                 </td>
                               );
                             })}
@@ -2255,7 +2257,7 @@ export default function Dashboard() {
                               disabled={voteMutation.isPending}
                             >
                               <ThumbsUp className="w-3.5 h-3.5" />
-                              <span>도움됨</span>
+                              <span>땡큐</span>
                               <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.helpful || 0}</span>
                             </button>
                             <button
