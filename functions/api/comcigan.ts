@@ -151,7 +151,11 @@ export const onRequest = async (context: any) => {
             const classNumStr = url.searchParams.get('classNum');
             const datasetOverride = url.searchParams.get('dataset');
             const classNum = classNumStr === 'all' ? 'all' : parseInt(classNumStr || '1');
-            return await getTimetable(grade, classNum, context.env ? context.env.DB : undefined, datasetOverride);
+            
+            // Get Client IP
+            const clientIp = context.request.headers.get('CF-Connecting-IP') || 'unknown';
+
+            return await getTimetable(grade, classNum, context.env ? context.env.DB : undefined, datasetOverride, clientIp);
         }
 
         return new Response('Invalid type or method', { status: 400 });
@@ -167,7 +171,8 @@ export const onRequest = async (context: any) => {
     }
 }
 
-async function getTimetable(grade: number, classNumInput: number | 'all', db?: any, datasetOverride?: string | null) {
+async function getTimetable(grade: number, classNumInput: number | 'all', db?: any, datasetOverride?: string | null, clientIp: string = 'unknown') {
+    let ipOverrideApplied: string | false = false;
     const prefix = await getPrefix();
     const { code1, code2 } = await getSchoolCode(prefix);
 
@@ -224,16 +229,25 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 )
             `).run();
 
-            const { results } = await db.prepare("SELECT key, value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'comcigan_dataset_selected_grade1' OR key = 'manual_semester_plan'").all();
+            const { results } = await db.prepare("SELECT key, value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'comcigan_dataset_selected_grade1' OR key = 'manual_semester_plan' OR key = 'dataset_ip_overrides'").all();
 
             let manualPlanData: any = null;
             let datasetSelected: string | null = null;
             let datasetSelectedGrade1: string | null = null;
+            let ipOverridesFound: Record<string, { grade1?: string, default?: string, memo?: string }> = {};
 
             if (results && results.length > 0) {
                 results.forEach((row: any) => {
                     if (row.key === 'comcigan_dataset_selected') datasetSelected = row.value;
                     if (row.key === 'comcigan_dataset_selected_grade1') datasetSelectedGrade1 = row.value;
+                    if (row.key === 'dataset_ip_overrides') {
+                        try {
+                            ipOverridesFound = JSON.parse(row.value);
+                            console.log(`[Comcigan Debug] Loaded IP Overrides:`, !!ipOverridesFound);
+                        } catch (e) {
+                            console.error("Failed to parse dataset_ip_overrides", e);
+                        }
+                    }
                     if (row.key === 'manual_semester_plan') {
                         try {
                             manualPlanData = JSON.parse(row.value);
@@ -244,19 +258,38 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 });
             }
 
-            // Grade 1 dataset resolution:
-            //   datasetSelectedGrade1 === null  → key never in DB; fall back to grade 2/3 setting (backward compat)
-            //   datasetSelectedGrade1 === ''    → user explicitly set 자동; auto-detect independently for grade 1
-            //   datasetSelectedGrade1 === 'xxx' → specific dataset chosen; use it
-            // Grade 2/3: always use comcigan_dataset_selected ('' = auto-detect)
-            const effectiveDataset = grade === 1
+            // Determine what the effective dataset WOULD BE without IP overrides
+            const effectiveDatasetNoOverride = grade === 1
                 ? (datasetSelectedGrade1 === null ? datasetSelected : datasetSelectedGrade1)
                 : datasetSelected;
 
+            let finalDataset: string | null = effectiveDatasetNoOverride;
+
+            // 1. Check IP Override first
+            if (clientIp !== 'unknown' && ipOverridesFound[clientIp]) {
+                const overrideConfig = ipOverridesFound[clientIp];
+                console.log(`[Comcigan Debug] Applying IP Override for ${clientIp}:`, overrideConfig);
+                
+                if (grade === 1) {
+                    if (overrideConfig.grade1 !== undefined && overrideConfig.grade1 !== null) {
+                        finalDataset = overrideConfig.grade1;
+                    }
+                } else {
+                    if (overrideConfig.default !== undefined && overrideConfig.default !== null) {
+                        finalDataset = overrideConfig.default;
+                    }
+                }
+            }
+
+            // Check if the IP override actually changed the active dataset for the CURRENTLY REQUESTED grade
+            if (clientIp !== 'unknown' && ipOverridesFound[clientIp] && finalDataset !== effectiveDatasetNoOverride) {
+                ipOverrideApplied = grade === 1 ? "1학년" : "2/3학년";
+            }
+
             if (datasetOverride && datasetOverride !== ('_auto_')) {
-                datasetSelected = datasetOverride;
+                datasetSelected = datasetOverride; // From the dashboard manual selector
             } else {
-                datasetSelected = effectiveDataset;
+                datasetSelected = finalDataset;
             }
 
             if (datasetSelected === 'MANUAL_PLAN') {
@@ -312,6 +345,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                     return new Response(JSON.stringify({
                         schoolName: "부산성지고등학교 (수동 시간표)",
                         datasetId: "MANUAL_PLAN",
+                        ipOverrideApplied,
                         data: result,
                         debugTokens: { manualPlan: true }
                     }), { headers: { 'Content-Type': 'application/json' } });
@@ -475,6 +509,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     return new Response(JSON.stringify({
         schoolName: "부산성지고등학교",
         datasetId: timedataProp,
+        ipOverrideApplied: typeof ipOverrideApplied !== 'undefined' ? ipOverrideApplied : false,
         data: result,
         debugTokens: {
             keysCount: keys.length,
@@ -490,5 +525,10 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             teachersCount: teachers.length,
             parsedSamples
         }
-    }), { headers: { 'Content-Type': 'application/json' } });
+    }), {
+        headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=30, s-maxage=60'
+        }
+    });
 }

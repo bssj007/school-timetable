@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS student_profiles (
     classNum INTEGER NOT NULL,
     studentNumber INTEGER,
     electives TEXT, -- JSON string for electives
+    dataset TEXT DEFAULT '',
     instructionDismissed INTEGER DEFAULT 0,
     updatedAt TEXT DEFAULT (datetime('now')),
     UNIQUE(grade, classNum, studentNumber)
@@ -29,12 +30,14 @@ CREATE TABLE IF NOT EXISTS ip_profiles (
     kakaoNickname TEXT,
     lastAccess TEXT,
     modificationCount INTEGER DEFAULT 0,
+    addCount INTEGER DEFAULT 0,
+    deleteCount INTEGER DEFAULT 0,
     userAgent TEXT,
     instructionDismissed INTEGER DEFAULT 0,
     printCount INTEGER DEFAULT 0,
     downloadCount INTEGER DEFAULT 0,
     isStandalone INTEGER DEFAULT 0,
-    FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
+    FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id) ON DELETE SET NULL
 );
 `;
 
@@ -46,6 +49,8 @@ CREATE TABLE IF NOT EXISTS cookie_profiles (
     kakaoNickname TEXT,
     lastAccess TEXT,
     modificationCount INTEGER DEFAULT 0,
+    addCount INTEGER DEFAULT 0,
+    deleteCount INTEGER DEFAULT 0,
     userAgent TEXT,
     instructionDismissed INTEGER DEFAULT 0,
     ip TEXT,
@@ -54,7 +59,7 @@ CREATE TABLE IF NOT EXISTS cookie_profiles (
     studentNumber INTEGER,
     printCount INTEGER DEFAULT 0,
     downloadCount INTEGER DEFAULT 0,
-    FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
+    FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id) ON DELETE SET NULL
 );
 `;
 

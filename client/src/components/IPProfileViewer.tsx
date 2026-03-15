@@ -187,6 +187,10 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                             <div className="bg-blue-50 p-4 rounded-lg flex flex-col gap-1 border border-blue-100 relative">
                                 <span className="text-xs text-blue-600 font-bold flex items-center gap-1"><FileText className="w-3 h-3" /> 수정 기여</span>
                                 <span className="text-2xl font-bold">{data.modificationCount}회</span>
+                                <div className="flex gap-2 mt-1 -mb-1">
+                                    {data.addCount !== undefined && <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-[10px] px-1 py-0 h-4">추가 {data.addCount}회</Badge>}
+                                    {data.deleteCount !== undefined && <Badge variant="secondary" className="bg-red-100 text-red-800 text-[10px] px-1 py-0 h-4">삭제 {data.deleteCount}회</Badge>}
+                                </div>
                             </div>
                             <div className="bg-green-50 p-4 rounded-lg flex flex-col gap-1 border border-green-200">
                                 <span className="text-xs text-green-600 font-bold flex items-center gap-1"><User className="w-3 h-3" /> 학년/반/번호</span>

@@ -59,6 +59,7 @@ export const performanceAssessments = mysqlTable("performance_assessments", {
   classNum: int("classNum").notNull(),
   classTime: int("classTime"),
   isDone: int("isDone").default(0),
+  dataset: varchar("dataset", { length: 50 }).default("").notNull(),
   lastModifiedIp: varchar("lastModifiedIp", { length: 45 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

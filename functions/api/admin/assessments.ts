@@ -19,18 +19,50 @@ export const onRequest = async (context: any) => {
 
     try {
         if (request.method === 'GET') {
-            // Fetch ALL assessments ordered by Grade, Class, DueDate
-            const { results } = await env.DB.prepare(
-                "SELECT * FROM performance_assessments ORDER BY grade ASC, classNum ASC, dueDate ASC"
-            ).all();
+            const url = new URL(request.url);
+            const isTrash = url.searchParams.get('trash') === 'true';
+            
+            try {
+                // Fetch assessments ordered by Grade, Class, DueDate, filtered by isDeleted
+                const query = isTrash 
+                    ? "SELECT * FROM performance_assessments WHERE isDeleted = 1 ORDER BY grade ASC, classNum ASC, dueDate ASC"
+                    : "SELECT * FROM performance_assessments WHERE isDeleted = 0 ORDER BY grade ASC, classNum ASC, dueDate ASC";
+                
+                const { results } = await env.DB.prepare(query).all();
 
-            return new Response(JSON.stringify(results), {
-                headers: { 'Content-Type': 'application/json' }
-            });
+                return new Response(JSON.stringify(results), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            } catch (err: any) {
+                // If isDeleted doesn't exist yet, there is no trash
+                if (err.message && err.message.includes("no such column") && err.message.includes("isDeleted")) {
+                    console.log("[Admin API] 'isDeleted' column missing in GET. Attempting to add it.");
+                    try {
+                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run();
+                    } catch (alterErr) {
+                         console.error("Failed to add isDeleted column:", alterErr);
+                    }
+                    
+                    if (isTrash) {
+                        return new Response(JSON.stringify([]), {
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    } else {
+                        // Fallback to fetch all
+                        const { results } = await env.DB.prepare(
+                            "SELECT * FROM performance_assessments ORDER BY grade ASC, classNum ASC, dueDate ASC"
+                        ).all();
+                        return new Response(JSON.stringify(results), {
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    }
+                }
+                throw err;
+            }
         }
 
-        if (request.method === 'DELETE') {
-            // Bulk Delete
+        if (request.method === 'PATCH') {
+            // Restore from Trash (Bulk)
             const body = await request.json();
             const { ids } = body; // Array of IDs
 
@@ -38,13 +70,60 @@ export const onRequest = async (context: any) => {
                 return new Response("Invalid IDs", { status: 400 });
             }
 
-            // Construct SQL for bulk delete: DELETE FROM table WHERE id IN (?, ?, ?)
             const placeholders = ids.map(() => '?').join(',');
-            const query = `DELETE FROM performance_assessments WHERE id IN (${placeholders})`;
+            const query = `UPDATE performance_assessments SET isDeleted = 0 WHERE id IN (${placeholders})`;
 
-            await env.DB.prepare(query).bind(...ids).run();
+            try {
+                await env.DB.prepare(query).bind(...ids).run();
+            } catch (err: any) {
+                 if (err.message && err.message.includes("no such column") && err.message.includes("isDeleted")) {
+                       await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run();
+                       await env.DB.prepare(query).bind(...ids).run();
+                 } else {
+                     throw err;
+                 }
+            }
 
             return new Response(JSON.stringify({ success: true, count: ids.length }), {
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        if (request.method === 'DELETE') {
+            const url = new URL(request.url);
+            const isHard = url.searchParams.get('hard') === 'true';
+
+            // Bulk Delete Request
+            const body = await request.json();
+            const { ids } = body; // Array of IDs
+
+            if (!ids || !Array.isArray(ids) || ids.length === 0) {
+                return new Response("Invalid IDs", { status: 400 });
+            }
+
+            const placeholders = ids.map(() => '?').join(',');
+
+            if (isHard) {
+                // Construct SQL for bulk delete: DELETE FROM table WHERE id IN (?, ?, ?)
+                const query = `DELETE FROM performance_assessments WHERE id IN (${placeholders})`;
+                await env.DB.prepare(query).bind(...ids).run();
+            } else {
+                // Soft Delete: UPDATE table SET isDeleted = 1 WHERE id IN (?, ?, ?)
+                const query = `UPDATE performance_assessments SET isDeleted = 1 WHERE id IN (${placeholders})`;
+                try {
+                    await env.DB.prepare(query).bind(...ids).run();
+                } catch (err: any) {
+                    if (err.message && err.message.includes("no such column") && err.message.includes("isDeleted")) {
+                        console.log("[Admin API] 'isDeleted' column missing in Soft DELETE. Attempting to add it.");
+                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run();
+                        await env.DB.prepare(query).bind(...ids).run();
+                    } else {
+                        throw err;
+                    }
+                }
+            }
+
+            return new Response(JSON.stringify({ success: true, count: ids.length, type: isHard ? 'hard' : 'soft' }), {
                 headers: { 'Content-Type': 'application/json' }
             });
         }

@@ -34,7 +34,9 @@ export const onRequest = async (context: any) => {
                     ip_profiles.printCount,
                     ip_profiles.downloadCount,
                     ip_profiles.isStandalone,
-                    (SELECT COUNT(*) FROM performance_assessments WHERE lastModifiedIp = ip_profiles.ip) as modificationCount,
+                    ip_profiles.modificationCount,
+                    ip_profiles.addCount,
+                    ip_profiles.deleteCount,
                     student_profiles.grade as profileGrade,
                     student_profiles.classNum as profileClassNum,
                     student_profiles.studentNumber as profileStudentNumber,
@@ -78,12 +80,18 @@ export const onRequest = async (context: any) => {
                     const { results } = await env.DB.prepare(query).all();
                     profiles = results;
                 } else if (e.message && (e.message.includes("no such column") || e.message.includes("has no column named") || e.message.includes("no column named"))) {
-                    console.log("[Admin API] Schema mismatch for printCount/downloadCount. Running safe ALTER TABLE...");
+                    console.log("[Admin API] Schema mismatch for printCount/downloadCount/addCount. Running safe ALTER TABLE...");
                     try {
                         await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN printCount INTEGER DEFAULT 0").run();
                     } catch (_) { }
                     try {
                         await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN downloadCount INTEGER DEFAULT 0").run();
+                    } catch (_) { }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN addCount INTEGER DEFAULT 0").run();
+                    } catch (_) { }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN deleteCount INTEGER DEFAULT 0").run();
                     } catch (_) { }
 
                     // Retry
@@ -129,6 +137,8 @@ export const onRequest = async (context: any) => {
                     isBlocked: false,
                     blockReason: null,
                     modificationCount: p.modificationCount || 0,
+                    addCount: p.addCount || 0,
+                    deleteCount: p.deleteCount || 0,
                     printCount: p.printCount || 0,
                     downloadCount: p.downloadCount || 0,
                     isStandalone: p.isStandalone === 1,
