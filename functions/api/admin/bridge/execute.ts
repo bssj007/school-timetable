@@ -199,81 +199,82 @@ export const onRequest = async (context: any) => {
                     try { await env.DB.prepare("DROP TABLE IF EXISTS ip_profiles_old").run(); } catch (_) {}
                     try { await env.DB.prepare("DROP TABLE IF EXISTS student_profiles_old").run(); } catch (_) {}
 
-                    // 2. Rename existing tables to _old
-                    await env.DB.prepare("ALTER TABLE ip_profiles RENAME TO ip_profiles_old").run();
-                    await env.DB.prepare("ALTER TABLE cookie_profiles RENAME TO cookie_profiles_old").run();
-                    await env.DB.prepare("ALTER TABLE student_profiles RENAME TO student_profiles_old").run();
+                    const batchStmts = [
+                        // 1. Rename existing tables to _old
+                        env.DB.prepare("ALTER TABLE ip_profiles RENAME TO ip_profiles_old"),
+                        env.DB.prepare("ALTER TABLE cookie_profiles RENAME TO cookie_profiles_old"),
+                        env.DB.prepare("ALTER TABLE student_profiles RENAME TO student_profiles_old"),
 
-                    // 3. Create new tables with the updated schema (Dataset in UNIQUE for student_profiles)
-                    await env.DB.prepare(`
-                        CREATE TABLE student_profiles (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            grade INTEGER NOT NULL,
-                            classNum INTEGER NOT NULL,
-                            studentNumber INTEGER,
-                            electives TEXT,
-                            dataset TEXT DEFAULT '',
-                            instructionDismissed INTEGER DEFAULT 0,
-                            updatedAt TEXT DEFAULT (datetime('now')),
-                            UNIQUE(grade, classNum, studentNumber, dataset)
-                        )
-                    `).run();
+                        // 2. Create new tables with the updated schema (Dataset in UNIQUE for student_profiles)
+                        env.DB.prepare(`
+                            CREATE TABLE student_profiles (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                grade INTEGER NOT NULL,
+                                classNum INTEGER NOT NULL,
+                                studentNumber INTEGER,
+                                electives TEXT,
+                                dataset TEXT DEFAULT '',
+                                instructionDismissed INTEGER DEFAULT 0,
+                                updatedAt TEXT DEFAULT (datetime('now')),
+                                UNIQUE(grade, classNum, studentNumber, dataset)
+                            )
+                        `),
+                        env.DB.prepare(`
+                            CREATE TABLE ip_profiles (
+                                ip TEXT PRIMARY KEY,
+                                student_profile_id INTEGER,
+                                kakaoId TEXT,
+                                kakaoNickname TEXT,
+                                lastAccess TEXT,
+                                modificationCount INTEGER DEFAULT 0,
+                                addCount INTEGER DEFAULT 0,
+                                deleteCount INTEGER DEFAULT 0,
+                                userAgent TEXT,
+                                instructionDismissed INTEGER DEFAULT 0,
+                                printCount INTEGER DEFAULT 0,
+                                downloadCount INTEGER DEFAULT 0,
+                                isStandalone INTEGER DEFAULT 0,
+                                FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
+                            )
+                        `),
+                        env.DB.prepare(`
+                            CREATE TABLE cookie_profiles (
+                                client_id TEXT PRIMARY KEY,
+                                student_profile_id INTEGER,
+                                kakaoId TEXT,
+                                kakaoNickname TEXT,
+                                lastAccess TEXT,
+                                modificationCount INTEGER DEFAULT 0,
+                                addCount INTEGER DEFAULT 0,
+                                deleteCount INTEGER DEFAULT 0,
+                                userAgent TEXT,
+                                instructionDismissed INTEGER DEFAULT 0,
+                                ip TEXT,
+                                grade INTEGER,
+                                classNum INTEGER,
+                                studentNumber INTEGER,
+                                printCount INTEGER DEFAULT 0,
+                                downloadCount INTEGER DEFAULT 0,
+                                FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
+                            )
+                        `),
 
-                    await env.DB.prepare(`
-                        CREATE TABLE ip_profiles (
-                            ip TEXT PRIMARY KEY,
-                            student_profile_id INTEGER,
-                            kakaoId TEXT,
-                            kakaoNickname TEXT,
-                            lastAccess TEXT,
-                            modificationCount INTEGER DEFAULT 0,
-                            addCount INTEGER DEFAULT 0,
-                            deleteCount INTEGER DEFAULT 0,
-                            userAgent TEXT,
-                            instructionDismissed INTEGER DEFAULT 0,
-                            printCount INTEGER DEFAULT 0,
-                            downloadCount INTEGER DEFAULT 0,
-                            isStandalone INTEGER DEFAULT 0,
-                            FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
-                        )
-                    `).run();
+                        // 3. Migrate data from _old to new tables
+                        env.DB.prepare(`
+                            INSERT OR IGNORE INTO student_profiles (id, grade, classNum, studentNumber, electives, dataset, instructionDismissed, updatedAt)
+                            SELECT id, grade, classNum, studentNumber, electives, COALESCE(dataset, ''), COALESCE(instructionDismissed, 0), COALESCE(updatedAt, datetime('now'))
+                            FROM student_profiles_old
+                        `),
+                        env.DB.prepare("INSERT OR IGNORE INTO ip_profiles SELECT * FROM ip_profiles_old"),
+                        env.DB.prepare("INSERT OR IGNORE INTO cookie_profiles SELECT * FROM cookie_profiles_old"),
 
-                    await env.DB.prepare(`
-                        CREATE TABLE cookie_profiles (
-                            client_id TEXT PRIMARY KEY,
-                            student_profile_id INTEGER,
-                            kakaoId TEXT,
-                            kakaoNickname TEXT,
-                            lastAccess TEXT,
-                            modificationCount INTEGER DEFAULT 0,
-                            addCount INTEGER DEFAULT 0,
-                            deleteCount INTEGER DEFAULT 0,
-                            userAgent TEXT,
-                            instructionDismissed INTEGER DEFAULT 0,
-                            ip TEXT,
-                            grade INTEGER,
-                            classNum INTEGER,
-                            studentNumber INTEGER,
-                            printCount INTEGER DEFAULT 0,
-                            downloadCount INTEGER DEFAULT 0,
-                            FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
-                        )
-                    `).run();
+                        // 4. Safely drop _old tables (drop children first to avoid FK errors)
+                        env.DB.prepare("DROP TABLE cookie_profiles_old"),
+                        env.DB.prepare("DROP TABLE ip_profiles_old"),
+                        env.DB.prepare("DROP TABLE student_profiles_old")
+                    ];
 
-                    // 4. Migrate data from _old to new tables
-                    await env.DB.prepare(`
-                        INSERT OR IGNORE INTO student_profiles (id, grade, classNum, studentNumber, electives, dataset, instructionDismissed, updatedAt)
-                        SELECT id, grade, classNum, studentNumber, electives, COALESCE(dataset, ''), COALESCE(instructionDismissed, 0), COALESCE(updatedAt, datetime('now'))
-                        FROM student_profiles_old
-                    `).run();
-
-                    await env.DB.prepare("INSERT OR IGNORE INTO ip_profiles SELECT * FROM ip_profiles_old").run();
-                    await env.DB.prepare("INSERT OR IGNORE INTO cookie_profiles SELECT * FROM cookie_profiles_old").run();
-
-                    // 5. Safely drop _old tables (drop children first to avoid FK errors)
-                    await env.DB.prepare("DROP TABLE cookie_profiles_old").run();
-                    await env.DB.prepare("DROP TABLE ip_profiles_old").run();
-                    await env.DB.prepare("DROP TABLE student_profiles_old").run();
+                    await env.DB.batch(batchStmts);
 
                     console.log("[BRIDGE execute] 3-Table Rebuild: Auto-upgraded student_profiles UNIQUE constraint to include dataset");
                 }
