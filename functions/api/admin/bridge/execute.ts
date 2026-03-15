@@ -234,7 +234,7 @@ export const onRequest = async (context: any) => {
                                 printCount INTEGER DEFAULT 0,
                                 downloadCount INTEGER DEFAULT 0,
                                 isStandalone INTEGER DEFAULT 0,
-                                FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
+                                FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id) ON DELETE SET NULL
                             )
                         `),
                         env.DB.prepare(`
@@ -255,11 +255,15 @@ export const onRequest = async (context: any) => {
                                 studentNumber INTEGER,
                                 printCount INTEGER DEFAULT 0,
                                 downloadCount INTEGER DEFAULT 0,
-                                FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id)
+                                FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id) ON DELETE SET NULL
                             )
                         `),
 
-                        // 3. Migrate data from _old to new tables
+                        // 3. Clean any orphaned foreign keys in _old tables before migration
+                        env.DB.prepare(`UPDATE ip_profiles_old SET student_profile_id = NULL WHERE student_profile_id IS NOT NULL AND student_profile_id NOT IN (SELECT id FROM student_profiles_old)`),
+                        env.DB.prepare(`UPDATE cookie_profiles_old SET student_profile_id = NULL WHERE student_profile_id IS NOT NULL AND student_profile_id NOT IN (SELECT id FROM student_profiles_old)`),
+
+                        // 4. Migrate data from _old to new tables
                         env.DB.prepare(`
                             INSERT OR IGNORE INTO student_profiles (id, grade, classNum, studentNumber, electives, dataset, instructionDismissed, updatedAt)
                             SELECT id, grade, classNum, studentNumber, electives, COALESCE(dataset, ''), COALESCE(instructionDismissed, 0), COALESCE(updatedAt, datetime('now'))
