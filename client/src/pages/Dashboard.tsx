@@ -2225,7 +2225,7 @@ export default function Dashboard() {
                         }
                       }}
                     >
-                      <div className="flex justify-between items-start mb-2">
+                      <div className="flex justify-between items-center mb-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-lg text-blue-600">
                             {assessment.subject}
@@ -2236,37 +2236,37 @@ export default function Dashboard() {
                           <span className={`text-sm font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
                             {dDay}
                           </span>
-                          {grade && classNum && studentNumber && (
-                            <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-                              <button
-                                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-                                  votesData?.myVotes?.[String(assessment.id)] === 'helpful'
-                                    ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
-                                    : 'bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-green-600'
-                                }`}
-                                onClick={() => voteMutation.mutate({ assessmentId: assessment.id, vote: 'helpful' })}
-                                disabled={voteMutation.isPending}
-                              >
-                                <ThumbsUp className="w-3.5 h-3.5" />
-                                <span>땡큐</span>
-                                <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.helpful || 0}</span>
-                              </button>
-                              <button
-                                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-                                  votesData?.myVotes?.[String(assessment.id)] === 'distrust'
-                                    ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
-                                    : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600'
-                                }`}
-                                onClick={() => voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' })}
-                                disabled={voteMutation.isPending}
-                              >
-                                <X className="w-3.5 h-3.5" />
-                                <span>가짜</span>
-                                <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.distrust || 0}</span>
-                              </button>
-                            </div>
-                          )}
                         </div>
+                        {grade && classNum && studentNumber && (
+                          <div className="flex items-center gap-2 flex-shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+                            <button
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                votesData?.myVotes?.[String(assessment.id)] === 'helpful'
+                                  ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
+                                  : 'bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-green-600'
+                              }`}
+                              onClick={() => voteMutation.mutate({ assessmentId: assessment.id, vote: 'helpful' })}
+                              disabled={voteMutation.isPending}
+                            >
+                              <ThumbsUp className="w-4 h-4" />
+                              <span>땡큐</span>
+                              <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.helpful || 0}</span>
+                            </button>
+                            <button
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                votesData?.myVotes?.[String(assessment.id)] === 'distrust'
+                                  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
+                                  : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600'
+                              }`}
+                              onClick={() => voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' })}
+                              disabled={voteMutation.isPending}
+                            >
+                              <X className="w-4 h-4" />
+                              <span>가짜</span>
+                              <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.distrust || 0}</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <p className="text-gray-700 mb-2">{assessment.title}</p>
                       <div className="flex items-center mt-auto">
