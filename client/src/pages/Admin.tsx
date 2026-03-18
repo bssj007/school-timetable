@@ -2005,7 +2005,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
     // Filter out "?" entries (no valid classCode).
     const groupSubjects = useMemo(() => {
         if (!electiveConfigQuery.data || !Array.isArray(electiveConfigQuery.data)) return {};
-        const map: Record<string, { subject: string; teacher: string; fullSubjectName: string }[]> = {};
+        const map: Record<string, { subject: string; teacher: string; }[]> = {};
         const EXCLUDED_SUBJECTS = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "채플", "Empty", "Free"];
         for (const cfg of electiveConfigQuery.data) {
             const rawCode = cfg.classCode || "";
@@ -2016,7 +2016,6 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
             const entry = {
                 subject: cfg.subject,
                 teacher: cfg.originalTeacher || cfg.fullTeacherName || "",
-                fullSubjectName: cfg.fullSubjectName || cfg.subject,
             };
             for (const code of codes) {
                 if (!map[code]) map[code] = [];
@@ -2090,7 +2089,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
         setPendingChanges(prev => {
             const existing = prev[key] || {};
             const newEntry = subject
-                ? { subject, teacher: subjectConfig?.teacher || "", fullSubjectName: subjectConfig?.fullSubjectName || subject }
+                ? { subject, teacher: subjectConfig?.teacher || "" }
                 : null; // null means "clear this group"
             return { ...prev, [key]: { ...existing, [groupCode]: newEntry } };
         });
@@ -3482,6 +3481,7 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
     const [selectedMenu, setSelectedMenu] = useState("raw-comcigan");
     const [schoolSearchQuery, setSchoolSearchQuery] = useState("성지");
     const [schoolNameInput, setSchoolNameInput] = useState("부산성지고");
+    const [dataMode, setDataMode] = useState<"live" | "cache">("live");
 
     // Fetch bug reports for real-time count in the sidebar badge
     const reportsQuery = useQuery({
@@ -3495,7 +3495,7 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
     });
 
     const rawDataQuery = useQuery({
-        queryKey: ["admin", "rawComcigan", schoolSearchQuery],
+        queryKey: ["admin", "rawComcigan", schoolSearchQuery, dataMode],
         queryFn: async () => {
             const res = await fetch("/api/admin/raw_comcigan", {
                 method: "POST",
@@ -3503,7 +3503,7 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     "Content-Type": "application/json",
                     "X-Admin-Password": adminPassword
                 },
-                body: JSON.stringify({ schoolName: schoolSearchQuery })
+                body: JSON.stringify({ schoolName: schoolSearchQuery, mode: dataMode })
             });
             let json;
             try {
@@ -3667,6 +3667,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <div className="flex flex-col h-full gap-4">
                         <div className="flex gap-2 items-center pb-4 border-b">
                             <h3 className="text-lg font-bold flex-1">컴시간알리미 원본 데이터 구조</h3>
+                            <div className="flex items-center space-x-2 mr-2">
+                                <span className={`text-sm ${dataMode === 'live' ? 'font-bold text-blue-600' : 'text-gray-500'}`}>라이브</span>
+                                <Switch
+                                    checked={dataMode === 'cache'}
+                                    onCheckedChange={(checked) => setDataMode(checked ? 'cache' : 'live')}
+                                />
+                                <span className={`text-sm ${dataMode === 'cache' ? 'font-bold text-green-600' : 'text-gray-500'}`}>캐시</span>
+                            </div>
                             <Input
                                 value={schoolNameInput}
                                 onChange={(e) => setSchoolNameInput(e.target.value)}

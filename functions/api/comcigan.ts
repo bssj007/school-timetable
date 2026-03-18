@@ -255,6 +255,20 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
     const jsonText = await fetchWithProxy(targetUrl, HEADERS, false);
     const jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
+    
+    if (db) {
+        try {
+            await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_cache (cache_key TEXT PRIMARY KEY, response_json TEXT NOT NULL, dataset_id TEXT, updated_at TEXT DEFAULT (datetime('now')))`).run();
+            await db.prepare(`
+                INSERT INTO timetable_cache (cache_key, response_json, updated_at) 
+                VALUES ('raw_data', ?, datetime('now')) 
+                ON CONFLICT(cache_key) DO UPDATE SET response_json = excluded.response_json, updated_at = datetime('now')
+            `).bind(jsonString).run();
+        } catch (e) {
+            console.error('[Comcigan Debug] Failed to cache raw_data:', e);
+        }
+    }
+
     const rawData = JSON.parse(jsonString);
 
     const keys = Object.keys(rawData);
