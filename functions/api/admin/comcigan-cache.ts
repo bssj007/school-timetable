@@ -79,11 +79,8 @@ export const onRequest = async (context: any) => {
             const results: any[] = [];
             for (const grade of grades) {
                 try {
-                    // 내부 API를 호출하여 캐시 갱신 트리거 (캐시 미스가 발생하면 자동으로 저장됨)
-                    // 먼저 기존 캐시를 삭제하여 강제 미스 유도
-                    await db.prepare("DELETE FROM timetable_cache WHERE cache_key = ?").bind(`grade_${grade}`).run();
-                    
-                    // 직접 Comcigan에서 가져와 캐시에 저장
+                    // 직접 Comcigan에서 가져와 캐시에 저장 (UPSERT로 기존 캐시 덮어쓰기)
+                    // 기존 캐시를 삭제하지 않음 → 갱신 실패 시에도 기존 캐시 유지
                     const { refreshCache } = await import('./comcigan' as any);
                     await refreshCache(db, grade);
                     
