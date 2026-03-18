@@ -2230,7 +2230,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
             </div>
 
             {/* Grid Table */}
-            <div className="flex-1 overflow-auto border rounded-md">
+            <div className="flex-1 overflow-y-auto overflow-x-auto border rounded-md">
                 {!selectedClass ? (
                     <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center h-full">
                         <p className="text-lg font-medium">선택된 반이 없습니다.</p>
@@ -2243,6 +2243,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                         선택과목 설정이 없습니다. 선택과목 관리에서 먼저 설정해주세요.
                     </div>
                 ) : (
+                    <div className="min-w-max">
                     <Table>
                         <TableHeader>
                             <TableRow className="bg-gray-50">
@@ -2302,6 +2303,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                             })}
                         </TableBody>
                     </Table>
+                    </div>
                 )}
             </div>
 

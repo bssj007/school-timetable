@@ -212,7 +212,7 @@ export const onRequest = async (context: any) => {
                 context.waitUntil(
                     (async () => {
                         try {
-                            const json = await responseClone.json();
+                            const json: any = await responseClone.json();
                             if (json.data && json.data.length > 0) {
                                 // 캐시에는 전체 학년의 all-class 데이터를 저장
                                 // (이미 classNum='all'으로 가져온 경우에만 캐시)
@@ -624,7 +624,7 @@ async function refreshCache(db: any, grade: number) {
     console.log(`[Comcigan Cache] Refreshing cache for grade ${grade}...`);
     const response = await getTimetable(grade, 'all', db, null, 'cache-refresh');
     if (response.status === 200) {
-        const json = await response.json();
+        const json: any = await response.json();
         if (json.data && json.data.length > 0) {
             await saveTimetableCache(db, grade, json);
         }
