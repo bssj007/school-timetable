@@ -927,6 +927,41 @@ export default function Dashboard() {
 
   const isLoading = timetableLoading || assessmentLoading;
 
+  // 로딩이 6초 이상 지속되면 자동 오류 리포트 제출 (페이지 로드당 1회)
+  const slowLoadReportedRef = useRef(false);
+  const loadingStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isLoading) {
+      if (loadingStartRef.current === null) {
+        loadingStartRef.current = Date.now();
+      }
+
+      const interval = setInterval(() => {
+        if (!isLoading || slowLoadReportedRef.current || loadingStartRef.current === null) return;
+
+        const elapsedMs = Date.now() - loadingStartRef.current;
+        if (elapsedMs >= 6000) {
+          slowLoadReportedRef.current = true;
+          const elapsedSec = Math.round(elapsedMs / 1000);
+          fetch('/api/bug-reports', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              grade, classNum, studentNumber,
+              message: `[자동 리포트] 로딩 지연 감지: ${elapsedSec}초 경과 (시간표: ${timetableLoading ? '로딩중' : '완료'}, 수행평가: ${assessmentLoading ? '로딩중' : '완료'})`
+            })
+          }).catch(() => { /* 리포트 전송 실패는 무시 */ });
+          clearInterval(interval);
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
+    } else {
+      loadingStartRef.current = null;
+    }
+  }, [isLoading, grade, classNum, studentNumber, timetableLoading, assessmentLoading]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
