@@ -44,7 +44,7 @@ interface ElectiveSelectionDialogProps {
 // =====================================================================
 // Backtracking CSP Solver — finds ALL valid group assignments.
 // Returns:
-type SelectionResult = Record<string, { subject: string; teacher: string; fullSubjectName?: string }>;
+type SelectionResult = Record<string, { subject: string; teacher: string }>;
 //
 //   { result: SelectionResult, solutionCount: 1 }  → unique, auto-assign OK
 //   { result: null, solutionCount: 0 }              → conflict (no solution)
@@ -81,13 +81,10 @@ function solveAssignment(
         return Array.from(teachers).join(", ");
     };
 
-    const getFullSubject = (subject: string, group: string): string | undefined =>
-        (groups[group] || []).find(c => c.subject === subject)?.fullSubjectName;
-
     const buildResult = (assignment: Record<string, string>): SelectionResult => {
         const out: SelectionResult = {};
         for (const [group, subject] of Object.entries(assignment)) {
-            out[group] = { subject, teacher: getTeacher(subject, group), fullSubjectName: getFullSubject(subject, group) };
+            out[group] = { subject, teacher: getTeacher(subject, group) };
         }
         return out;
     };
@@ -294,20 +291,19 @@ export default function ElectiveSelectionDialog({
         });
     };
 
-    const handleManualSelection = (group: string, compoundSubjectName: string) => {
-        const [subjectName, fullSubjectName] = compoundSubjectName.split("|");
-        const configs = (electivesByGroup[group] || []).filter(c => c.subject === subjectName && (c.fullSubjectName || "") === (fullSubjectName || ""));
+    const handleManualSelection = (group: string, subjectName: string) => {
+        const configs = (electivesByGroup[group] || []).filter(c => c.subject === subjectName);
         if (!configs.length) return;
         const teachers = new Set(configs.map(c => c.fullTeacherName || c.originalTeacher).filter(Boolean));
         const combinedTeacher = Array.from(teachers).join(", ");
         const newSel = { ...manualSelections };
         // Remove from other groups
         Object.keys(newSel).forEach(g => {
-            if (g !== group && newSel[g].subject === subjectName && (newSel[g].fullSubjectName || "") === (fullSubjectName || "")) {
+            if (g !== group && newSel[g].subject === subjectName) {
                 delete newSel[g];
             }
         });
-        newSel[group] = { subject: subjectName, fullSubjectName: fullSubjectName || undefined, teacher: combinedTeacher };
+        newSel[group] = { subject: subjectName, teacher: combinedTeacher };
         setManualSelections(newSel);
     };
 
@@ -577,21 +573,28 @@ export default function ElectiveSelectionDialog({
                                     )}
                                     {Object.entries(electivesByGroup).map(([group, configs]) => {
                                         const currentSel = manualSelections[group];
-                                        const selectedCompoundValue = currentSel ? `${currentSel.subject}|${currentSel.fullSubjectName || ""}` : undefined;
+                                        const selectedValue = currentSel?.subject;
+                                        
+                                        // DEBUGGING: Remove this later
+                                        console.log(`[DEBUG UI] Group: ${group}`, {
+                                            currentSel,
+                                            selectedValue,
+                                            availableSubjects: configs.map(c => c.subject)
+                                        });
+
                                         return (
                                             <div key={group} className="grid grid-cols-4 items-center gap-3">
                                                 <label className="text-right text-sm font-bold text-gray-700">{group} 그룹</label>
                                                 <div className="col-span-3 flex flex-col sm:flex-row items-start sm:items-center">
-                                                    <Select value={selectedCompoundValue} onValueChange={(val: string) => handleManualSelection(group, val)}>
-                                                        <SelectTrigger className={`w-full sm:w-[220px] ${selectedCompoundValue ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}`}>
+                                                    <Select value={selectedValue} onValueChange={(val: string) => handleManualSelection(group, val)}>
+                                                        <SelectTrigger className={`w-full sm:w-[220px] ${selectedValue ? "border-blue-500 bg-blue-50 text-blue-700 font-bold" : ""}`}>
                                                             <SelectValue placeholder="과목 선택" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {Array.from(new Map(configs.map(item => [`${item.subject}|${item.fullSubjectName || ""}`, item])).values()).map((config: ElectiveConfig) => {
-                                                                const compoundVal = `${config.subject}|${config.fullSubjectName || ""}`;
+                                                            {Array.from(new Map(configs.map(item => [item.subject, item])).values()).map((config: ElectiveConfig) => {
                                                                 const otherGroup = Object.keys(manualSelections).find(g => manualSelections[g].subject === config.subject && g !== group);
                                                                 return (
-                                                                    <SelectItem key={compoundVal} value={compoundVal} className={otherGroup ? "text-slate-400 bg-yellow-50" : ""}>
+                                                                    <SelectItem key={config.subject} value={config.subject} className={otherGroup ? "text-slate-400 bg-yellow-50" : ""}>
                                                                         {config.subject}{config.fullSubjectName && ` (${config.fullSubjectName})`}{otherGroup ? ` [${otherGroup}에서 선택됨]` : ""}
                                                                     </SelectItem>
                                                                 );

@@ -1603,7 +1603,6 @@ export default function Dashboard() {
                               let isCancelledByFreePeriod = false;
                               let displayClassName = ""; // 반(반이름) 표시용
                               if (group && electiveSelection) {
-                                displaySubject = electiveSelection.fullSubjectName || electiveSelection.subject || displaySubject;
                                 isElectiveActive = true;
 
                                 const electiveTeachers = electiveSelection.teacher
@@ -1631,6 +1630,8 @@ export default function Dashboard() {
                                   c.subject === electiveSelection.subject &&
                                   c.classCode?.split(",").map((s: string) => s.trim()).includes(group)
                                 );
+
+                                displaySubject = configEntry?.fullSubjectName || electiveSelection.subject || displaySubject;
 
                                 if (configEntry?.fullTeacherName) {
                                   displayTeacher = configEntry.fullTeacherName;

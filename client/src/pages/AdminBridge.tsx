@@ -133,7 +133,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
             const res = await fetch("/api/admin/raw_comcigan", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
-                body: JSON.stringify({ schoolName: "부산성지고" })
+                body: JSON.stringify({ schoolName: "부산성지고", mode: "cache" })
             });
             const json = await res.json();
             if (!res.ok || json?.error) return null;

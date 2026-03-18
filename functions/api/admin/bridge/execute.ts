@@ -296,12 +296,17 @@ export const onRequest = async (context: any) => {
                                     if (mappedVal === "_none_") {
                                         delete cloned[groupKey];
                                         changed = true;
-                                    } else if (mappedVal !== oldSubject && mappedVal !== oldKey) {
-                                        const mappedSubject = mappedVal.replace(/ \([^)]+\)$/, '');
-                                        const mappedTeacherMatch = mappedVal.match(/ \(([^)]+)\)$/);
-                                        const mappedTeacher = mappedTeacherMatch ? mappedTeacherMatch[1] : entry.teacher;
-                                        cloned[groupKey] = { ...entry, subject: mappedSubject, teacher: mappedTeacher, fullSubjectName: undefined };
-                                        changed = true;
+                                    } else {
+                                        const isMapped = mappedVal !== oldSubject && mappedVal !== oldKey;
+                                        const mappedSubject = isMapped ? mappedVal.replace(/ \([^)]+\)$/, '') : entry.subject;
+                                        const mappedTeacherMatch = isMapped ? mappedVal.match(/ \(([^)]+)\)$/) : null;
+                                        const mappedTeacher = mappedTeacherMatch ? mappedTeacherMatch[1] : (entry.teacher || "");
+
+                                        cloned[groupKey] = { subject: mappedSubject, teacher: mappedTeacher };
+                                        
+                                        if (isMapped || entry.fullSubjectName !== undefined || Object.keys(entry).some(k => k !== 'subject' && k !== 'teacher')) {
+                                            changed = true;
+                                        }
                                     }
                                 } else if (typeof entry === 'string') {
                                     const rawMapped =
