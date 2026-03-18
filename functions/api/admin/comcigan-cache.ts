@@ -81,7 +81,7 @@ export const onRequest = async (context: any) => {
                 try {
                     // 직접 Comcigan에서 가져와 캐시에 저장 (UPSERT로 기존 캐시 덮어쓰기)
                     // 기존 캐시를 삭제하지 않음 → 갱신 실패 시에도 기존 캐시 유지
-                    const { refreshCache } = await import('./comcigan' as any);
+                    const { refreshCache } = await import('../comcigan' as any);
                     await refreshCache(db, grade);
                     
                     // 저장 결과 확인
