@@ -1,16 +1,19 @@
 
+import { createTimetableCacheTable } from '../db_schema';
+
 /**
  * Cloudflare Pages Function - 부산성지고등학교 전용 컴시간알리미 API
  * 
  * Flow:
- * 1. Connect to /st to get Dynamic Prefix
- * 2. Try School Search / Fallback to Static Code
- * 3. Fetch Timetable
+ * 1. D1 캐시 확인 → 신선하면 즉시 반환
+ * 2. 캐시 미스/만료 → Comcigan 외부 서버에서 가져오기
+ * 3. 결과를 D1에 캐시 저장
  */
 
 const BASE_URL = "http://comci.net:4082";
 const SEARCH_HEX = "%BA%CE%BB%EA%BC%BA%C1%F6%B0%ED"; // 부산성지고 EUC-KR Hex
 const FALLBACK_CODE2 = "93342"; // Known correct code for Busan Seongji
+const DEFAULT_CACHE_MAX_AGE_MS = 5 * 60 * 1000; // 기본 캐시 유효 시간: 5분
 
 const HEADERS: any = {
     'Accept': '*/*',
@@ -154,8 +157,77 @@ export const onRequest = async (context: any) => {
             
             // Get Client IP
             const clientIp = context.request.headers.get('CF-Connecting-IP') || 'unknown';
+            const db = context.env ? context.env.DB : undefined;
 
-            return await getTimetable(grade, classNum, context.env ? context.env.DB : undefined, datasetOverride, clientIp);
+            // --- 캐시 우선 응답 ---
+            if (db) {
+                try {
+                    // 캐시 테이블 보장
+                    try { await db.prepare(createTimetableCacheTable).run(); } catch (_) {}
+
+                    // 캐시 최대 유효 시간 조회 (system_settings)
+                    let cacheMaxAgeMs = DEFAULT_CACHE_MAX_AGE_MS;
+                    try {
+                        const maxAgeRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_cache_max_age_minutes'").first();
+                        if (maxAgeRow && maxAgeRow.value) {
+                            cacheMaxAgeMs = parseInt(maxAgeRow.value as string) * 60 * 1000;
+                        }
+                    } catch (_) {}
+
+                    const cacheKey = `grade_${grade}`;
+                    const cacheRow = await db.prepare("SELECT response_json, dataset_id, updated_at FROM timetable_cache WHERE cache_key = ?").bind(cacheKey).first();
+
+                    if (cacheRow && cacheRow.response_json) {
+                        const cacheAge = Date.now() - new Date(cacheRow.updated_at as string + 'Z').getTime();
+                        const isFresh = cacheAge < cacheMaxAgeMs;
+
+                        console.log(`[Comcigan Cache] HIT: ${cacheKey}, age=${Math.round(cacheAge / 1000)}s, fresh=${isFresh}`);
+
+                        // 캐시에서 데이터를 재구성 (classNum 필터링 + IP override 재적용)
+                        const cachedData = JSON.parse(cacheRow.response_json as string);
+                        const cacheResponse = buildCacheResponse(cachedData, classNum, db, datasetOverride, clientIp, cacheRow.dataset_id as string, cacheAge);
+
+                        if (!isFresh) {
+                            // 백그라운드에서 갱신
+                            context.waitUntil(
+                                refreshCache(db, grade).catch((e: any) => console.error('[Comcigan Cache] Background refresh failed:', e))
+                            );
+                        }
+
+                        return await cacheResponse;
+                    }
+
+                    console.log(`[Comcigan Cache] MISS: ${cacheKey}`);
+                } catch (e) {
+                    console.warn('[Comcigan Cache] Cache lookup failed, falling through to direct fetch:', e);
+                }
+            }
+
+            // --- 캐시 미스: 기존 방식으로 직접 가져오기 ---
+            const response = await getTimetable(grade, classNum, db, datasetOverride, clientIp);
+            
+            // 성공 시 캐시 저장 (백그라운드)
+            if (db && response.status === 200) {
+                const responseClone = response.clone();
+                context.waitUntil(
+                    (async () => {
+                        try {
+                            const json: any = await responseClone.json();
+                            if (json.data && json.data.length > 0) {
+                                // 캐시에는 전체 학년의 all-class 데이터를 저장
+                                // (이미 classNum='all'으로 가져온 경우에만 캐시)
+                                if (classNum === 'all' || json.data.length > 10) {
+                                    await saveTimetableCache(db, grade, json);
+                                }
+                            }
+                        } catch (e) {
+                            console.error('[Comcigan Cache] Failed to save cache:', e);
+                        }
+                    })()
+                );
+            }
+
+            return response;
         }
 
         return new Response('Invalid type or method', { status: 400 });
@@ -532,3 +604,79 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         }
     });
 }
+
+// --- 캐시 헬퍼 함수 ---
+
+async function saveTimetableCache(db: any, grade: number, responseData: any) {
+    const cacheKey = `grade_${grade}`;
+    try {
+        await db.prepare(createTimetableCacheTable).run().catch(() => {});
+        await db.prepare(
+            "INSERT INTO timetable_cache (cache_key, response_json, dataset_id, updated_at) VALUES (?, ?, ?, datetime('now')) ON CONFLICT(cache_key) DO UPDATE SET response_json = excluded.response_json, dataset_id = excluded.dataset_id, updated_at = datetime('now')"
+        ).bind(cacheKey, JSON.stringify(responseData), responseData.datasetId || '').run();
+        console.log(`[Comcigan Cache] Saved: ${cacheKey}, items=${responseData.data?.length || 0}`);
+    } catch (e) {
+        console.error(`[Comcigan Cache] Save failed for ${cacheKey}:`, e);
+    }
+}
+
+async function refreshCache(db: any, grade: number) {
+    console.log(`[Comcigan Cache] Refreshing cache for grade ${grade}...`);
+    const response = await getTimetable(grade, 'all', db, null, 'cache-refresh');
+    if (response.status === 200) {
+        const json: any = await response.json();
+        if (json.data && json.data.length > 0) {
+            await saveTimetableCache(db, grade, json);
+        }
+    }
+}
+
+async function buildCacheResponse(
+    cachedData: any,
+    classNum: number | 'all',
+    db: any,
+    datasetOverride: string | null | undefined,
+    clientIp: string,
+    cachedDatasetId: string,
+    cacheAgeMs: number
+): Promise<Response> {
+    // IP override 확인
+    let ipOverrideApplied: string | false = false;
+    if (db && clientIp !== 'unknown' && clientIp !== 'cache-refresh') {
+        try {
+            const overrideRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'dataset_ip_overrides'").first();
+            if (overrideRow && overrideRow.value) {
+                const overrides = JSON.parse(overrideRow.value as string);
+                if (overrides[clientIp]) {
+                    ipOverrideApplied = "캐시 응답 (IP override 미적용)";
+                }
+            }
+        } catch (_) {}
+    }
+
+    // classNum 필터링 적용
+    let filteredData = cachedData.data || [];
+    if (classNum !== 'all' && typeof classNum === 'number') {
+        filteredData = filteredData.filter((item: any) => item.class === classNum);
+    }
+
+    return new Response(JSON.stringify({
+        schoolName: cachedData.schoolName || "부산성지고등학교",
+        datasetId: cachedData.datasetId || cachedDatasetId,
+        ipOverrideApplied,
+        data: filteredData,
+        cached: true,
+        cacheAgeSec: Math.round(cacheAgeMs / 1000),
+        debugTokens: cachedData.debugTokens
+    }), {
+        headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=10, s-maxage=30',
+            'X-Cache-Status': 'HIT',
+            'X-Cache-Age': String(Math.round(cacheAgeMs / 1000))
+        }
+    });
+}
+
+// 외부에서 호출 가능하도록 export (for _scheduled.ts)
+export { refreshCache, saveTimetableCache };

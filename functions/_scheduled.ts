@@ -56,51 +56,69 @@ export default {
             return;
         }
 
-        const tomorrowDate = getTomorrowDate();
-        console.log('Checking assessments for date:', tomorrowDate);
-
+        // --- 시간표 캐시 갱신 (매 트리거마다 실행) ---
         try {
-            // 내일 수행평가가 있는 모든 항목 조회
-            const { results: assessments } = await env.DB.prepare(
-                `SELECT 
-                    pa.*,
-                    u.kakaoAccessToken,
-                    u.notificationEnabled
-                FROM performance_assessments pa
-                JOIN users u ON pa.userId = u.id
-                WHERE pa.dueDate = ?
-                AND pa.isDone = 0
-                AND pa.isDeleted = 0
-                AND u.notificationEnabled = 1
-                AND u.kakaoAccessToken IS NOT NULL`
-            ).bind(tomorrowDate).all();
-
-            console.log(`Found ${assessments.length} assessments for tomorrow`);
-
-            // 각 수행평가에 대해 카카오톡 전송
-            for (const assessment of assessments) {
+            const { refreshCache } = await import('./api/comcigan' as any);
+            for (const grade of [1, 2, 3]) {
                 try {
-                    await sendKakaoMessage(assessment.kakaoAccessToken, assessment);
-                    console.log(`Notification sent for assessment ${assessment.id}`);
-                } catch (error) {
-                    console.error(`Failed to send notification for assessment ${assessment.id}:`, error);
-                    // 토큰 만료 시 재발급 로직 필요 (추후 구현)
+                    await refreshCache(env.DB, grade);
+                    console.log(`[Scheduled] Grade ${grade} cache refreshed`);
+                } catch (e) {
+                    console.error(`[Scheduled] Grade ${grade} cache refresh failed:`, e);
                 }
             }
-
-            // 2. 데이터베이스 정리 (Auto Cleanup)
-            try {
-                // @ts-ignore
-                const { performCleanup } = await import('../server/performCleanup');
-                const cleanupResult = await performCleanup(env.DB);
-                console.log('Database cleanup result:', cleanupResult);
-            } catch (cleanupError) {
-                console.error('Database cleanup failed:', cleanupError);
-            }
-
-            console.log('Scheduled task completed successfully');
-        } catch (error) {
-            console.error('Scheduled task error:', error);
+        } catch (e) {
+            console.error('[Scheduled] Timetable cache update failed:', e);
         }
+
+        // --- 카카오 알림 + DB 정리는 아침 cron에서만 실행 ---
+        const hour = new Date(event.scheduledTime).getUTCHours();
+        if (hour === 0) { // UTC 0시 = KST 9시
+            const tomorrowDate = getTomorrowDate();
+            console.log('Checking assessments for date:', tomorrowDate);
+
+            try {
+                // 내일 수행평가가 있는 모든 항목 조회
+                const { results: assessments } = await env.DB.prepare(
+                    `SELECT 
+                        pa.*,
+                        u.kakaoAccessToken,
+                        u.notificationEnabled
+                    FROM performance_assessments pa
+                    JOIN users u ON pa.userId = u.id
+                    WHERE pa.dueDate = ?
+                    AND pa.isDone = 0
+                    AND pa.isDeleted = 0
+                    AND u.notificationEnabled = 1
+                    AND u.kakaoAccessToken IS NOT NULL`
+                ).bind(tomorrowDate).all();
+
+                console.log(`Found ${assessments.length} assessments for tomorrow`);
+
+                // 각 수행평가에 대해 카카오톡 전송
+                for (const assessment of assessments) {
+                    try {
+                        await sendKakaoMessage(assessment.kakaoAccessToken, assessment);
+                        console.log(`Notification sent for assessment ${assessment.id}`);
+                    } catch (error) {
+                        console.error(`Failed to send notification for assessment ${assessment.id}:`, error);
+                    }
+                }
+
+                // 2. 데이터베이스 정리 (Auto Cleanup)
+                try {
+                    // @ts-ignore
+                    const { performCleanup } = await import('../server/performCleanup');
+                    const cleanupResult = await performCleanup(env.DB);
+                    console.log('Database cleanup result:', cleanupResult);
+                } catch (cleanupError) {
+                    console.error('Database cleanup failed:', cleanupError);
+                }
+            } catch (error) {
+                console.error('Scheduled notification task error:', error);
+            }
+        }
+
+        console.log('Scheduled task completed successfully');
     }
 };
