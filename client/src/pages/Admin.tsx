@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -3641,6 +3641,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     수행평가 팝업 설정
                 </Button>
                 <Button
+                    variant={selectedMenu === "comcigan-cache" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("comcigan-cache")}
+                >
+                    <Server className="w-4 h-4 mr-2" />
+                    컴시간 캐시 시스템
+                </Button>
+                <Button
                     variant={selectedMenu === "unresolved-issues" ? "default" : "ghost"}
                     className="justify-start whitespace-nowrap text-left text-orange-600 hover:text-orange-700"
                     onClick={() => setSelectedMenu("unresolved-issues")}
@@ -3833,6 +3841,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     </div>
                 )}
 
+                {selectedMenu === "comcigan-cache" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1">컴시간 캐시 시스템</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <ComciganCacheManager adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
                 {selectedMenu === "unresolved-issues" && (
                     <div className="flex flex-col h-full gap-4">
                         <div className="flex gap-2 items-center pb-4 border-b">
@@ -3844,6 +3863,193 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                     </div>
                 )}
+            </div>
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------
+// ComciganCacheManager - 컴시간 캐시 시스템 관리
+// ----------------------------------------------------------------------
+function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [cacheMaxAge, setCacheMaxAge] = useState(5);
+
+    const cacheStatusQuery = useQuery({
+        queryKey: ["admin", "comciganCacheStatus"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/comcigan-cache", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("Failed to fetch cache status");
+            return res.json();
+        },
+        refetchInterval: 10000,
+    });
+
+    useEffect(() => {
+        if (cacheStatusQuery.data?.settings?.cacheMaxAgeMinutes) {
+            setCacheMaxAge(cacheStatusQuery.data.settings.cacheMaxAgeMinutes);
+        }
+    }, [cacheStatusQuery.data?.settings?.cacheMaxAgeMinutes]);
+
+    const refreshMutation = useMutation({
+        mutationFn: async (grades: number[]) => {
+            const res = await fetch("/api/admin/comcigan-cache", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ grades })
+            });
+            if (!res.ok) throw new Error("Refresh failed");
+            return res.json();
+        },
+        onSuccess: (data) => {
+            const failed = data.results?.filter((r: any) => !r.success);
+            if (failed?.length > 0) {
+                toast.error(`일부 학년 갱신 실패: ${failed.map((r: any) => `${r.grade}학년`).join(', ')}`);
+            } else {
+                toast.success("캐시가 갱신되었습니다.");
+            }
+            queryClient.invalidateQueries({ queryKey: ["admin", "comciganCacheStatus"] });
+        },
+        onError: () => toast.error("캐시 갱신에 실패했습니다.")
+    });
+
+    const saveSettingsMutation = useMutation({
+        mutationFn: async (minutes: number) => {
+            const res = await fetch("/api/admin/comcigan-cache", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ cacheMaxAgeMinutes: minutes })
+            });
+            if (!res.ok) throw new Error("Save failed");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("캐시 설정이 저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "comciganCacheStatus"] });
+        },
+        onError: () => toast.error("설정 저장에 실패했습니다.")
+    });
+
+    const formatAge = (sec: number) => {
+        if (sec < 60) return `${sec}초 전`;
+        if (sec < 3600) return `${Math.floor(sec / 60)}분 ${sec % 60}초 전`;
+        return `${Math.floor(sec / 3600)}시간 ${Math.floor((sec % 3600) / 60)}분 전`;
+    };
+
+    const cacheEntries = cacheStatusQuery.data?.cacheEntries || [];
+
+    return (
+        <div className="space-y-6">
+            {/* 캐시 상태 */}
+            <div className="bg-slate-50 border rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                        <Server className="w-4 h-4" />
+                        캐시 상태
+                    </h4>
+                    <Button
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => refreshMutation.mutate([1, 2, 3])}
+                        disabled={refreshMutation.isPending}
+                    >
+                        <RefreshCw className={`w-3 h-3 mr-1 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
+                        {refreshMutation.isPending ? "갱신 중..." : "전체 갱신"}
+                    </Button>
+                </div>
+
+                {cacheStatusQuery.isLoading ? (
+                    <div className="text-sm text-slate-400 py-4 text-center">로딩 중...</div>
+                ) : cacheEntries.length === 0 ? (
+                    <div className="text-sm text-slate-400 py-4 text-center">캐시 데이터가 없습니다. "전체 갱신"을 눌러 캐시를 생성하세요.</div>
+                ) : (
+                    <div className="grid gap-3">
+                        {[1, 2, 3].map(grade => {
+                            const entry = cacheEntries.find((e: any) => e.cacheKey === `grade_${grade}`);
+                            return (
+                                <div key={grade} className="flex items-center gap-3 bg-white border rounded-md px-4 py-3">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-bold text-slate-800">{grade}학년</span>
+                                            {entry ? (
+                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${entry.isFresh
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : 'bg-amber-100 text-amber-700'
+                                                }`}>
+                                                    {entry.isFresh ? '신선' : '만료'}
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">미생성</span>
+                                            )}
+                                        </div>
+                                        {entry && (
+                                            <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                                                <span className="flex items-center gap-1">
+                                                    <Clock className="w-3 h-3" />
+                                                    {formatAge(entry.ageSec)}
+                                                </span>
+                                                <span>데이터셋: {entry.datasetId || '(없음)'}</span>
+                                                <span>{Math.round((entry.dataSize || 0) / 1024)}KB</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 text-xs"
+                                        onClick={() => refreshMutation.mutate([grade])}
+                                        disabled={refreshMutation.isPending}
+                                    >
+                                        <RefreshCw className={`w-3 h-3 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
+                                    </Button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* 캐시 설정 */}
+            <div className="bg-slate-50 border rounded-lg p-4 space-y-3">
+                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                    <Settings className="w-4 h-4" />
+                    캐시 설정
+                </h4>
+
+                <div className="flex items-center gap-3">
+                    <label className="text-xs font-medium text-slate-600 w-32">캐시 유효 시간</label>
+                    <Input
+                        type="number"
+                        value={cacheMaxAge}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCacheMaxAge(Math.max(1, Math.min(60, parseInt(e.target.value) || 1)))}
+                        className="w-20 h-8 text-sm"
+                        min={1}
+                        max={60}
+                    />
+                    <span className="text-xs text-slate-500">분 (1~60분)</span>
+                    <Button
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => saveSettingsMutation.mutate(cacheMaxAge)}
+                        disabled={saveSettingsMutation.isPending}
+                    >
+                        <Save className="w-3 h-3 mr-1" />저장
+                    </Button>
+                </div>
+                <p className="text-xs text-slate-400">
+                    클라이언트 요청 시 캐시가 이 시간보다 오래되면, 캐시를 반환한 뒤 백그라운드에서 자동으로 갱신합니다.
+                </p>
+            </div>
+
+            {/* 설명 */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-xs text-blue-700 space-y-1">
+                <p className="font-bold">💡 작동 방식</p>
+                <p>• Cron 트리거로 주기적 자동 갱신 (Cloudflare Dashboard에서 설정 필요)</p>
+                <p>• 클라이언트 요청 시 D1 캐시에서 즉시 응답 (~50ms)</p>
+                <p>• 캐시가 만료되면 기존 캐시를 반환하면서 백그라운드 갱신 실행</p>
+                <p>• Comcigan 서버 장애 시에도 마지막 캐시 데이터로 정상 서비스</p>
             </div>
         </div>
     );
