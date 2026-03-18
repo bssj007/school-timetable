@@ -102,6 +102,22 @@ export const onRequest = async (context: any) => {
 
         const body = await request.json();
         const schoolName = body.schoolName || "부산성지고";
+        const mode = body.mode || 'live';
+
+        if (mode === 'cache' && context.env.DB) {
+            try {
+                const row = await context.env.DB.prepare("SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'").first();
+                if (row && row.response_json) {
+                    const rawData = JSON.parse(row.response_json as string);
+                    return new Response(JSON.stringify({ success: true, data: rawData, cached: true }), {
+                        status: 200,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+            } catch (e) {
+                console.warn("[Comcigan Debug] Cache mode requested but failed to load raw_data from cache, falling back to live:", e);
+            }
+        }
 
         // 2. Fetch from Comcigan
         const prefix = await getPrefix();

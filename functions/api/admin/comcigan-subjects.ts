@@ -141,14 +141,31 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const prefix = await getPrefix();
-        const { code1, code2 } = await getSchoolCode(prefix);
-        const param = `${prefix}${code2}_0_${grade}`;
-        const targetUrl = `${BASE_URL}/${code1}?${btoa(param)}`;
+        let rawData: any = null;
+        let usedCache = false;
 
-        const jsonText = await fetchWithProxy(targetUrl, HEADERS, false);
-        const jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
-        const rawData = JSON.parse(jsonString);
+        if (context.env.DB) {
+            try {
+                const row = await context.env.DB.prepare("SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'").first();
+                if (row && row.response_json) {
+                    rawData = JSON.parse(row.response_json as string);
+                    usedCache = true;
+                }
+            } catch (e) {
+                console.warn("[Comcigan Subjects] Failed to load raw_data from cache:", e);
+            }
+        }
+
+        if (!rawData) {
+            const prefix = await getPrefix();
+            const { code1, code2 } = await getSchoolCode(prefix);
+            const param = `${prefix}${code2}_0_${grade}`;
+            const targetUrl = `${BASE_URL}/${code1}?${btoa(param)}`;
+
+            const jsonText = await fetchWithProxy(targetUrl, HEADERS, false);
+            const jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
+            rawData = JSON.parse(jsonString);
+        }
 
         // Parse logic (simplified from comcigan.ts)
         const keys = Object.keys(rawData);
