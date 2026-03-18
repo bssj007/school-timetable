@@ -2248,7 +2248,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                             <TableRow className="bg-gray-50">
                                 <TableHead className="sticky left-0 bg-gray-50 z-10 min-w-[80px] font-bold">학번</TableHead>
                                 {groupCodes.map(code => (
-                                    <TableHead key={code} className="text-center min-w-[120px] font-bold">
+                                    <TableHead key={code} className="text-center min-w-[90px] font-bold">
                                         {code}그룹
                                     </TableHead>
                                 ))}
