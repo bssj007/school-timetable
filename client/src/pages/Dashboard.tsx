@@ -1172,7 +1172,7 @@ export default function Dashboard() {
       <div className="flex flex-row justify-between items-center gap-2 md:gap-4 mb-6 md:hidden">
         <div>
           <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">
-            {grade || '?'}-{classNum || '?'} 시간표
+            {grade && classNum && studentNumber ? formattedStudentId : (grade && classNum ? `${grade}-${classNum}` : '?')} 시간표
           </h1>
         </div>
 
@@ -1290,8 +1290,8 @@ export default function Dashboard() {
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
               {/* Desktop Title */}
               <div className="hidden md:flex items-center gap-2 flex-1 min-w-0">
-                <h1 className="text-2xl font-bold whitespace-nowrap overflow-hidden text-ellipsis">
-                  {grade || '?'}-{classNum || '?'} 시간표
+                <h1 className="text-xl md:text-2xl font-bold whitespace-nowrap overflow-hidden text-ellipsis">
+                  {grade && classNum && studentNumber ? formattedStudentId : (grade && classNum ? `${grade}-${classNum}` : '?')} 시간표
                 </h1>
                 {(grade === "2" || grade === "3") && (
                   <div className="relative inline-block">
