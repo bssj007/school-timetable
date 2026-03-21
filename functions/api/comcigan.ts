@@ -580,6 +580,14 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     }
 
     const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+    // When no targetDate is provided and today is a weekend (Sat=6, Sun=0),
+    // advance to next Monday so we match the upcoming week's dataset range.
+    const dayOfWeek = koreanTime.getUTCDay(); // UTC day since koreanTime is already offset
+    if (!targetDate && (dayOfWeek === 6 || dayOfWeek === 0)) {
+        const daysToAdd = dayOfWeek === 6 ? 2 : 1; // Sat->Mon=+2, Sun->Mon=+1
+        koreanTime.setUTCDate(koreanTime.getUTCDate() + daysToAdd);
+        console.log(`[Comcigan Debug] Weekend detected (day=${dayOfWeek}), advancing target to Monday: ${koreanTime.toISOString().split('T')[0]}`);
+    }
     const todayShort = koreanTime.toISOString().split('T')[0].substring(2); // "YY-MM-DD"
     const targetShort = targetDate ? (targetDate.length > 8 ? targetDate.substring(2) : targetDate) : todayShort;
 

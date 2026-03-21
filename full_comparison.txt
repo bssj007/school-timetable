@@ -1,0 +1,171 @@
+============================================
+PART 1: DEPLOYED API RESPONSE (no targetDate)
+============================================
+datasetId: 자료481
+isFallbackApplied: undefined
+cached: true
+cacheAgeSec: 1914
+debugTokens: {
+  "override1": "자료147",
+  "override23": "자료147",
+  "fallback1": "자료481",
+  "fallback23": "자료481",
+  "isFallbackApplied": true,
+  "keysCount": 28,
+  "teacherProp": "자료446",
+  "subjectProp": "자료492",
+  "timetableProps": [
+    "자료481",
+    "자료147",
+    "자료542",
+    "자료245"
+  ],
+  "timedataProp": "자료481",
+  "bunri": 1000,
+  "hasData": true,
+  "bunriLogic": "other",
+  "subjectsCount": 53,
+  "teachersCount": 59,
+  "parsedSamples": [
+    {
+      "code": 52058,
+      "tIdx": 58,
+      "sIdx": 52,
+      "subj": "학년공강",
+      "teacher": "학년*",
+      "alt_sIdx": 58,
+      "alt_tIdx": 52,
+      "alt_subj": "(none)",
+      "alt_teacher": "빈교*"
+    },
+    {
+      "code": 25021,
+      "tIdx": 21,
+      "sIdx": 25,
+      "subj": "사문",
+      "teacher": "임영*",
+      "alt_sIdx": 21,
+      "alt_tIdx": 25,
+      "alt_subj": "사문탐",
+      "alt_teacher": "윤은*"
+    },
+    {
+      "code": 46034,
+      "tIdx": 34,
+      "sIdx": 46,
+      "subj": "진로",
+      "teacher": "백수*",
+      "alt_sIdx": 34,
+      "alt_tIdx": 46,
+      "alt_subj": "화2",
+      "alt_teacher": "공강*"
+    },
+    {
+      "code": 4003,
+      "tIdx": 3,
+      "sIdx": 4,
+      "subj": "독작",
+      "teacher": "심희*",
+      "alt_sIdx": 3,
+      "alt_tIdx": 4,
+      "alt_subj": "논술",
+      "alt_teacher": "이주*"
+    },
+    {
+      "code": 27022,
+      "tIdx": 22,
+      "sIdx": 27,
+      "subj": "윤사",
+      "teacher": "정철*",
+      "alt_sIdx": 22,
+      "alt_tIdx": 27,
+      "alt_subj": "통사",
+      "alt_teacher": "신유*"
+    },
+    {
+      "code": 9010,
+      "tIdx": 10,
+      "sIdx": 9,
+      "subj": "대수",
+      "teacher": "이종*",
+      "alt_sIdx": 10,
+      "alt_tIdx": 9,
+      "alt_subj": "기하",
+      "alt_teacher": "윤찬*"
+    },
+    {
+      "code": 32025,
+      "tIdx": 25,
+      "sIdx": 32,
+      "subj": "화학",
+      "teacher": "윤은*",
+      "alt_sIdx": 25,
+      "alt_tIdx": 32,
+      "alt_subj": "사문",
+      "alt_teacher": "임지*"
+    },
+    {
+      "code": 13013,
+      "tIdx": 13,
+      "sIdx": 13,
+      "subj": "영어1",
+      "teacher": "김성*",
+      "alt_sIdx": 13,
+      "alt_tIdx": 13,
+      "alt_subj": "영어1",
+      "alt_teacher": "김성*"
+    }
+  ]
+}
+
+--- Deployed site G2C1 timetable ---
+  월: 
+  화: 
+  수: 
+  목: 
+  금: 
+
+============================================
+PART 2: RAW COMCIGAN DATA
+============================================
+teachers count: 59, subjects count: 53, bunri: 1000
+일자자료: [[1,"26-03-23 ~ 26-03-28"],[2,"26-03-30 ~ 26-04-04"]]
+시작일: 2026-03-23
+오늘r: 1
+timetableProps (JSON order): ["자료481","자료147","자료542","자료245"]
+
+Date ranges (direct index mapping):
+  자료481 -> (no date range)
+  자료147 -> 26-03-23 ~ 26-03-28
+  자료542 -> 26-03-30 ~ 26-04-04
+  자료245 -> (no date range)
+
+--- 자료481 G2C1 timetable (dateRange: N/A) ---
+  월: 1:?58(빈교), 2:사문탐(윤은), 3:화2(공강), 4:논술(이주), 5:사문탐(윤은), 6:기하(윤찬), 7:경영(박소)
+  화: 1:통사(신유), 2:기하(윤찬), 3:사문(임지), 4:영어1(김성), 5:통과(공강), 6:사문(임지), 7:문영(이주)
+  수: 1:사문탐(윤은), 2:기하(윤찬), 3:직영(김성), 4:사문(임지), 5:?56(빈교), 6:?57(빈교), 7:?57(빈교)
+  목: 1:문영(이주), 2:사문(임지), 3:공학(윤찬), 4:통사(신유), 5:직영(김성), 6:화학(공강), 7:경영(박소)
+  금: 1:영어1(김성), 2:논술(이주), 3:통사(신유), 4:통과(공강), 5:사문탐(윤은), 6:화학(공강), 7:경영(박소)
+
+--- 자료147 G2C1 timetable (dateRange: 26-03-23 ~ 26-03-28) ---
+  월: 1:?58(빈교), 2:사문탐(윤은), 3:화2(공강), 4:논술(이주), 5:사문탐(윤은), 6:기하(윤찬), 7:경영(박소)
+  화: 1:통사(신유), 2:기하(윤찬), 3:사문(임지), 4:영어1(김성), 5:통과(공강), 6:사문(임지), 7:문영(이주)
+  수: 1:영어1(김성), 2:논술(이주), 3:통사(신유), 4:통과(공강), 5:사문탐(윤은), 6:화학(공강), 7:직영(박소)
+  목: 1:문영(이주), 2:사문(임지), 3:공학(윤찬), 4:통사(신유), 5:직영(김성), 6:화학(공강), 7:경영(박소)
+  금: 1:_, 2:_, 3:_, 4:_, 5:_, 6:_, 7:_
+
+--- 자료542 G2C1 timetable (dateRange: 26-03-30 ~ 26-04-04) ---
+  월: (no weekday data)
+  화: (no weekday data)
+  수: (no weekday data)
+  목: 1:_, 2:_, 3:_, 4:_, 5:_, 6:_, 7:_
+  금: 1:_, 2:_, 3:_, 4:_, 5:_, 6:_, 7:_
+  ** ALL ZEROS - EMPTY DATASET **
+
+--- 자료245 G2C1 timetable (dateRange: N/A) ---
+  월: 1:_, 2:_, 3:_, 4:_, 5:_, 6:_, 7:_
+  화: 1:_, 2:_, 3:_, 4:_, 5:_, 6:_, 7:_
+  수: 1:_, 2:_, 3:_, 4:_, 5:_, 6:_, 7:_
+  목: 1:_, 2:_, 3:_, 4:_, 5:_, 6:_, 7:_
+  금: 1:_, 2:_, 3:_, 4:_, 5:_, 6:_, 7:_
+  ** ALL ZEROS - EMPTY DATASET **
