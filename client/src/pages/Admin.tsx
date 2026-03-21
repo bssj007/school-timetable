@@ -3714,8 +3714,8 @@ function DatasetDatesViewer({ rawData, adminPassword }: { rawData: any; adminPas
     if (!rawData) return <div className="p-4 flex items-center justify-center font-bold text-slate-500">원격 데이터 대기 중...</div>;
     if (settingsQuery.isLoading) return <div className="p-4 flex items-center justify-center font-bold text-slate-500">설정 로딩 중...</div>;
 
-    const dataArr = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
-    const timetableProps = dataArr.sort((a, b) => parseInt(a.replace('자료', ''), 10) - parseInt(b.replace('자료', ''), 10));
+    // Rely on native Object.keys traversal order to match "일자/일자자료" indices
+    const timetableProps = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
     
     // Extracted robust date mapping logic
     const datasetDateRanges: Record<string, string> = {};

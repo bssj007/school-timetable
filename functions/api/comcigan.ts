@@ -623,8 +623,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         
         if (rawData['일자'] && Array.isArray(rawData['일자'])) {
             // Legacy format: flat array of date strings, offset by 1 from allDatasetKeys
+            // Legacy format: flat array of date strings
             const allDatasetKeys = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
-            allDatasetKeys.sort((a, b) => parseInt(a.replace('자료', '')) - parseInt(b.replace('자료', '')));
             allDatasetKeys.forEach((key, idx) => {
                 if (idx + 1 < rawData['일자'].length) {
                     datasetDateRanges[key] = rawData['일자'][idx + 1];
