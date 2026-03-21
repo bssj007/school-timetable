@@ -2662,7 +2662,7 @@ export default function Dashboard() {
                           {assessment.isPostponed ? (
                             <>
                               <div className="flex items-center">
-                                <span className="line-through text-blue-200">{formatShortDateText(assessment.originalDueDate)} {assessment.originalClassTime}교시</span>
+                                <span className="line-through text-gray-400">{formatShortDateText(assessment.originalDueDate)} {assessment.originalClassTime}교시</span>
                                 <span className="mx-1 font-bold text-red-500">➔</span>
                               </div>
                               <div className="flex items-center">
