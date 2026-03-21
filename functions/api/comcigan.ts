@@ -516,78 +516,86 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         }
     }
 
-    // Dynamic date matching logic
-    if (datasetSelected !== 'MANUAL_PLAN' && (!datasetSelected || datasetSelected === '_auto_') && targetDate) {
-        // e.g., targetDate: "2026-03-23" 
-        // Comcigan date arrays typically have "YY-MM-DD ~ YY-MM-DD" formatted items
-        const dateArr = rawData['일자']; // Array of week ranges, usually index 1 matches `timetableProps[0]` 
+    // ----------------------------------------------------
+    // DYNAMIC MATCHING FOR TARGET DATE (Highest Priority)
+    // ----------------------------------------------------
+    // Helper to evaluate if a targetDate falls within a Comcigan format range (e.g. "26-03-23 ~ 26-03-28")
+    const isDateInRange = (targetDateStr: string, rangeStr: any): boolean => {
+        if (typeof rangeStr !== 'string') return false;
+        const targetShort = targetDateStr.length > 8 ? targetDateStr.substring(2) : targetDateStr;
+        const parts = rangeStr.split('~').map(s => s.trim());
+        if (parts.length < 2) return rangeStr.startsWith(targetShort);
+        const startDate = new Date(`20${parts[0]}`);
+        const endDate = new Date(`20${parts[1]}`);
+        const target = new Date(`20${targetShort}`);
+        endDate.setHours(23, 59, 59, 999);
+        return target >= startDate && target <= endDate;
+    };
+
+    let resolvedDateDataset: string | null = null;
+    if (targetDate) {
+        const dateArr = rawData['일자']; // Array of week ranges
         if (dateArr && Array.isArray(dateArr)) {
-            // Find the index of the matching date string
-            // Let's format targetDate to "YY-MM-DD"
-            const shortDateStr = targetDate.substring(2); // "26-03-23"
-            const matchedIdx = dateArr.findIndex((str: any) => typeof str === 'string' && str.startsWith(shortDateStr));
-            
+            const matchedIdx = dateArr.findIndex((str: any) => isDateInRange(targetDate, str));
             if (matchedIdx >= 1 && matchedIdx - 1 < timetableProps.length) {
-                // If 일자 array starts with index 1 matching timetableProps[0], then:
-                // We use index matching mapping
-                timedataProp = timetableProps[matchedIdx - 1];
-                datasetSelected = timedataProp; // Resolved by date!
-                console.log(`[Comcigan Debug] Mapped exact date ${targetDate} to dataset ${timedataProp}`);
+                resolvedDateDataset = timetableProps[matchedIdx - 1]; // Resolved accurately including shift holidays!
             }
         }
-    } else if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_' && targetDate) {
-        // Strict boundary check for explicitly designated dataset
-        let isDateMatch = false;
-        const dateArr = rawData['일자'];
-        if (dateArr && Array.isArray(dateArr)) {
-            const shortDateStr = targetDate.substring(2); // "26-03-23"
-            const idx = timetableProps.indexOf(datasetSelected);
-            // dateArr usually has its 0th element as string like "2026학년도", and ranges start at index 1
-            if (idx >= 0 && idx + 1 < dateArr.length) {
-                const datasetDateStr = dateArr[idx + 1];
-                if (typeof datasetDateStr === 'string' && datasetDateStr.startsWith(shortDateStr)) {
-                    isDateMatch = true;
-                }
-            }
+    }
+
+    if (resolvedDateDataset) {
+        timedataProp = resolvedDateDataset;
+        console.log(`[Comcigan Debug] Mapped targetDate ${targetDate} natively to dataset ${timedataProp}`);
+    } else {
+        console.log(`[Comcigan Debug] targetDate ${targetDate || 'undefined'} not natively found. Applying fallback cascade.`);
+        
+        // 1. Explicitly configured dataset (Admin Force-Select)
+        if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_' && timetableProps.includes(datasetSelected)) {
+            timedataProp = datasetSelected;
+            console.log(`[Comcigan Debug] Used explicit datasetSelected override: ${timedataProp}`);
         }
         
-        if (!isDateMatch) {
-            console.log(`[Comcigan Debug] Designated dataset ${datasetSelected} does NOT cover targetDate ${targetDate}. Deferring to fallback.`);
-            datasetSelected = null; // Unset to force fallback logic
-        }
-    }
-
-    // Check if what we resolved or selected is valid
-    if (datasetSelected && timetableProps.includes(datasetSelected)) {
-        timedataProp = datasetSelected;
-        console.log(`[Comcigan Debug] Using defined timetable dataset: ${timedataProp}`);
-    }
-
-    // Auto logic for unresolved dates
-    if (!timedataProp) {
-        let fallbackSelected: string | null = null;
-        try {
-            if (db) {
-                if (grade === 1) {
-                    const fbRowG1 = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_fallback_dataset_grade1'").first();
-                    if (fbRowG1 && fbRowG1.value) fallbackSelected = fbRowG1.value as string;
+        // 2. Missing targetDate or explicit setting was invalid/auto => use DB Fallback
+        if (!timedataProp && datasetSelected !== 'MANUAL_PLAN') {
+            let fallbackSelected: string | null = null;
+            try {
+                if (db) {
+                    if (grade === 1) {
+                        const fbRowG1 = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_fallback_dataset_grade1'").first();
+                        if (fbRowG1 && fbRowG1.value) fallbackSelected = fbRowG1.value as string;
+                    }
+                    if (!fallbackSelected) {
+                        const fbRowGen = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_fallback_dataset'").first();
+                        if (fbRowGen && fbRowGen.value) fallbackSelected = fbRowGen.value as string;
+                    }
                 }
-                if (!fallbackSelected) {
-                    const fbRowGen = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_fallback_dataset'").first();
-                    if (fbRowGen && fbRowGen.value) fallbackSelected = fbRowGen.value as string;
+            } catch (e) {
+                console.warn("[Comcigan Debug] Error reading fallback setting:", e);
+            }
+
+            if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
+                timedataProp = fallbackSelected;
+                console.log(`[Comcigan Debug] Resolved via DB fallback setting: ${timedataProp}`);
+            } else if (timetableProps.length > 0) {
+                // 3. Dynamic Current Week Fallback (for generic _auto_ routing)
+                if ((!fallbackSelected || fallbackSelected === '_auto_')) {
+                    const dateArr = rawData['일자'];
+                    const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+                    const todayShort = koreanTime.toISOString().split('T')[0].substring(2); // "YY-MM-DD"
+                    const autoMatchedIdx = dateArr && Array.isArray(dateArr) ? dateArr.findIndex((str: any) => isDateInRange(todayShort, str)) : -1;
+                    
+                    if (autoMatchedIdx >= 1 && autoMatchedIdx - 1 < timetableProps.length) {
+                        timedataProp = timetableProps[autoMatchedIdx - 1]; // Found the TRUE physical active week!
+                        console.log(`[Comcigan Debug] _auto_ fallback mapped physical exact week dataset: ${timedataProp}`);
+                    } else {
+                        timedataProp = timetableProps[timetableProps.length - 1];
+                        console.log(`[Comcigan Debug] Ultimate fallback to newest array dataset: ${timedataProp}`);
+                    }
+                } else {
+                    timedataProp = timetableProps[timetableProps.length - 1];
+                    console.log(`[Comcigan Debug] Ultimate fallback to newest array dataset: ${timedataProp}`);
                 }
             }
-        } catch (e) {
-            console.warn("[Comcigan Debug] Error reading fallback setting:", e);
-        }
-
-        if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
-            timedataProp = fallbackSelected;
-            console.log(`[Comcigan Debug] Resolved unresolved date using fallback dataset: ${timedataProp}`);
-        } else if (timetableProps.length > 0) {
-            // 가장 최신(마지막) 데이터셋 사용 (시수 무시)
-            timedataProp = timetableProps[timetableProps.length - 1];
-            console.log(`[Comcigan Debug] Falling back to newest array dataset: ${timedataProp}`);
         }
     }
 
@@ -602,7 +610,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             if (dateArr && Array.isArray(dateArr)) {
                 const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
                 const todayShort = koreanTime.toISOString().split('T')[0].substring(2); // "YY-MM-DD"
-                const matchedIdx = dateArr.findIndex((str: any) => typeof str === 'string' && str.startsWith(todayShort));
+                const matchedIdx = dateArr.findIndex((str: any) => isDateInRange(todayShort, str));
                 if (matchedIdx >= 1 && matchedIdx - 1 < timetableProps.length) {
                     originalDatasetId = timetableProps[matchedIdx - 1];
                 } else if (timetableProps.length > 0) {
@@ -615,7 +623,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
              if (dateArr && Array.isArray(dateArr)) {
                  const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
                  const todayShort = koreanTime.toISOString().split('T')[0].substring(2); // "YY-MM-DD"
-                 const matchedIdx = dateArr.findIndex((str: any) => typeof str === 'string' && str.startsWith(todayShort));
+                 const matchedIdx = dateArr.findIndex((str: any) => isDateInRange(todayShort, str));
                  if (matchedIdx >= 1 && matchedIdx - 1 < timetableProps.length) {
                      originalDatasetId = timetableProps[matchedIdx - 1];
                  } else if (timetableProps.length > 0) {
