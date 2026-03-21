@@ -148,6 +148,31 @@ export const onRequest = async (context: any) => {
             });
         }
 
+        // GET method: Return teacher timetable specifically
+        if (type === 'teacher_timetable') {
+            // Fetch live raw data, skipping DB cache
+            const timetableResponse = await getTimetable(1, 1, undefined);
+            const timetableJson: any = await timetableResponse.json();
+            const rawData = timetableJson.data;
+
+            if (!rawData) {
+                return new Response(JSON.stringify({ error: "Failed to fetch Comcigan data" }), { status: 500 });
+            }
+
+            return new Response(JSON.stringify({
+                success: true,
+                teachers: rawData['자료446'] || [],
+                subjects: rawData['자료492'] || [],
+                timetable: rawData['자료542'] || []
+            }), {
+                status: 200,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
+            });
+        }
+
         // GET method: Return timetable
         if (type === 'timetable') {
             const grade = parseInt(url.searchParams.get('grade') || '1');

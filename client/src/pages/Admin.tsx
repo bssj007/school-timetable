@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import IPProfileViewer from "@/components/IPProfileViewer";
 import DatabaseManager from "@/components/DatabaseManager";
+import TeacherTimetable from "@/components/TeacherTimetable";
 import { IPProfile } from "@/types";
 import {
     Table,
@@ -3986,6 +3987,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     컴시간 캐시 시스템
                 </Button>
                 <Button
+                    variant={selectedMenu === "teacher-timetable" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-medium"
+                    onClick={() => setSelectedMenu("teacher-timetable")}
+                >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    교사용 시간표
+                </Button>
+                <Button
                     variant={selectedMenu === "unresolved-issues" ? "default" : "ghost"}
                     className="justify-start whitespace-nowrap text-left text-orange-600 hover:text-orange-700"
                     onClick={() => setSelectedMenu("unresolved-issues")}
@@ -4196,6 +4205,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <ComciganCacheManager adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+
+                {selectedMenu === "teacher-timetable" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex-1 overflow-y-auto print:overflow-visible">
+                            <TeacherTimetable />
                         </div>
                     </div>
                 )}
