@@ -588,28 +588,25 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_') {
         let datasetDateRanges: Record<string, string> = {};
         
-        const allDatasetKeys = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
-        allDatasetKeys.sort((a, b) => parseInt(a.replace('자료', '')) - parseInt(b.replace('자료', '')));
-        
         if (rawData['일자'] && Array.isArray(rawData['일자'])) {
-            // Legacy mapping
+            // Legacy format: flat array of date strings, offset by 1 from allDatasetKeys
+            const allDatasetKeys = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
+            allDatasetKeys.sort((a, b) => parseInt(a.replace('자료', '')) - parseInt(b.replace('자료', '')));
             allDatasetKeys.forEach((key, idx) => {
                 if (idx + 1 < rawData['일자'].length) {
                     datasetDateRanges[key] = rawData['일자'][idx + 1];
                 }
             });
         } else if (rawData['일자자료'] && Array.isArray(rawData['일자자료'])) {
-            // New mapping: arrays list dates from oldest active to newest, mapping to LATEST valid datasets
-            const validKeys = allDatasetKeys.filter(k => {
-                const val = rawData[k];
-                return Array.isArray(val) && ((val[1] && val[1][1]) || (val[2] && val[2][1]) || (val[3] && val[3][1]));
-            });
+            // New format: [[directIndex, "YY-MM-DD ~ YY-MM-DD"], ...]
+            // directIndex is a DIRECT index into timetableProps (JSON key insertion order)
             const dateList = rawData['일자자료'];
-            const startIndex = validKeys.length - dateList.length;
-            dateList.forEach((dt: any, i: number) => {
-                const targetKeyIdx = startIndex + i;
-                if (targetKeyIdx >= 0 && targetKeyIdx < validKeys.length) {
-                    datasetDateRanges[validKeys[targetKeyIdx]] = Array.isArray(dt) ? dt[1] : dt;
+            dateList.forEach((dt: any) => {
+                if (!Array.isArray(dt) || dt.length < 2) return;
+                const [directIdx, range] = dt;
+                // timetableProps is in JSON key insertion order — exactly what directIdx refers to
+                if (typeof directIdx === 'number' && timetableProps[directIdx]) {
+                    datasetDateRanges[timetableProps[directIdx]] = range;
                 }
             });
         }
