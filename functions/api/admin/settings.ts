@@ -57,7 +57,7 @@ export const onRequest = async (context: any) => {
                 if (requiresCachePurge) {
                     try {
                         console.log("[Settings API] Purging timetable_cache due to dataset boundary modifications");
-                        await env.DB.prepare("DELETE FROM timetable_cache WHERE cache_key LIKE 'grade_%'").run();
+                        await env.DB.prepare("DELETE FROM timetable_cache WHERE cache_key LIKE 'gc_%'").run();
                     } catch (e) { console.error("Cache purge failed", e); }
                 }
             }

@@ -175,7 +175,7 @@ export const onRequest = async (context: any) => {
                         }
                     } catch (_) {}
 
-                    let cacheKey = targetDate ? `grade_${grade}_${targetDate}` : `grade_${grade}`;
+                    let cacheKey = targetDate ? `gc_${grade}_${targetDate}` : `gc_${grade}`;
 
                     // 미리 IP Override 여부를 확인하여 캐시키를 고립시킴
                     let hasIpOverride = false;
@@ -253,7 +253,7 @@ export const onRequest = async (context: any) => {
             // 성공 시 캐시 저장 (백그라운드)
             if (db && response.status === 200) {
                 // Determine the isolated cacheKey again for saving
-                let cacheKeyToSave = targetDate ? `grade_${grade}_${targetDate}` : `grade_${grade}`;
+                let cacheKeyToSave = targetDate ? `gc_${grade}_${targetDate}` : `gc_${grade}`;
                 
                 let hasIpOverride = false;
                 if (clientIp !== 'unknown') {
@@ -584,8 +584,10 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         const dateArr = rawData['일자'];
         let covers = false;
         
-        if (trueIdx >= 0 && dateArr && Array.isArray(dateArr) && trueIdx < dateArr.length) {
-            if (isDateInRange(targetShort, dateArr[trueIdx])) {
+        // Comcigan date sequence begins with a timestamp offset at index 0 (e.g. "2026-03-23")
+        // Therefore, dataset index 0 maps to date array index 1.
+        if (trueIdx >= 0 && dateArr && Array.isArray(dateArr) && trueIdx + 1 < dateArr.length) {
+            if (isDateInRange(targetShort, dateArr[trueIdx + 1])) {
                 covers = true;
             }
         }
