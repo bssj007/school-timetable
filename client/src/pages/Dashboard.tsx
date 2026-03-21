@@ -416,6 +416,9 @@ export default function Dashboard() {
           (mappedData as any).datasetId = result.datasetId;
           (mappedData as any).originalDatasetId = result.originalDatasetId || result.datasetId;
           (mappedData as any).ipOverrideApplied = result.ipOverrideApplied;
+          if (result.originalData && Array.isArray(result.originalData)) {
+            (mappedData as any).originalData = result.originalData;
+          }
           return mappedData;
         }
         const emptyArray = [] as TimetableItem[];
@@ -528,11 +531,12 @@ export default function Dashboard() {
 
   }, [grade, classNum, studentNumber, datasetId, currentProfile, electiveConfigs]);
 
-  const { timetableData, allClassesTimetable } = useMemo(() => {
-    if (!rawTimetableData) return { timetableData: [], allClassesTimetable: [] };
+  const { timetableData, allClassesTimetable, allClassesOriginalTimetable } = useMemo(() => {
+    if (!rawTimetableData) return { timetableData: [], allClassesTimetable: [], allClassesOriginalTimetable: [] as TimetableItem[] };
     const all = rawTimetableData;
+    const originalAll = ((rawTimetableData as any).originalData || all) as TimetableItem[];
     const current = all.filter(t => !t.class || t.class.toString() === classNum.toString());
-    return { timetableData: current, allClassesTimetable: all };
+    return { timetableData: current, allClassesTimetable: all, allClassesOriginalTimetable: originalAll };
   }, [rawTimetableData, classNum]);
 
   // 5. 설정 조회 (Public)
@@ -596,7 +600,7 @@ export default function Dashboard() {
 
       for (let w = 0; w < 5; w++) {
         for (let p = 1; p <= 7; p++) {
-          const slots = allClassesTimetable.filter(t => t.weekday === w && t.classTime === p);
+          const slots = allClassesOriginalTimetable.filter(t => t.weekday === w && t.classTime === p);
           if (slots.length === 0) continue;
 
           const groupCounts: Record<string, number> = {};
@@ -642,7 +646,7 @@ export default function Dashboard() {
 
     lastValidGroupsRef.current = cellGroups;
     return cellGroups;
-  }, [allClassesTimetable, electiveConfigs, grade, settings?.elective_group_overrides]);
+  }, [allClassesOriginalTimetable, allClassesTimetable, electiveConfigs, grade, settings?.elective_group_overrides]);
 
   // 2. 컴시간에서 시간표 가져오기
   const fetchFromComcigan = useMutation({
