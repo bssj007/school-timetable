@@ -3725,8 +3725,8 @@ function DatasetDatesViewer({ rawData, adminPassword }: { rawData: any; adminPas
         if (!gradeData || (!gradeData[1] && !gradeData[2] && !gradeData[3])) continue; // Skip empty datasets
 
         let datePeriod = "(미확인)";
-        if (datesArr && Array.isArray(datesArr) && idx + 1 < datesArr.length) {
-            datePeriod = datesArr[idx + 1];
+        if (datesArr && Array.isArray(datesArr) && idx < datesArr.length) {
+            datePeriod = datesArr[idx];
         }
 
         const remarks = [];

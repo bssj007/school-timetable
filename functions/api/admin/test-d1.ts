@@ -1,22 +1,19 @@
 interface Env {
-    DB: D1Database;
+    DB: any;
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
     try {
         const env = context.env;
-        const { results } = await env.DB.prepare("SELECT cache_key, dataset_id, updated_at, length(response_json) as size FROM timetable_cache LIMIT 20").all();
+        const row = await env.DB.prepare("SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'").first();
         
-        return new Response(JSON.stringify({ 
-            success: true, 
-            message: "Successfully queried test database",
-            data: results
-        }, null, 2), { 
+        return new Response(row.response_json, { 
             headers: { 
-                "Content-Type": "application/json" 
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
             } 
         });
     } catch (e: any) {
-        return new Response(e.message, { status: 500 });
+        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
     }
 }

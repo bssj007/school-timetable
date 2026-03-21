@@ -577,11 +577,15 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     let isFallbackApplied = false;
 
     if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_') {
-        const idx = timetableProps.indexOf(datasetSelected);
+        const allDatasetKeys = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
+        allDatasetKeys.sort((a, b) => parseInt(a.replace('자료', '')) - parseInt(b.replace('자료', '')));
+        
+        const trueIdx = allDatasetKeys.indexOf(datasetSelected);
         const dateArr = rawData['일자'];
         let covers = false;
-        if (idx >= 0 && dateArr && Array.isArray(dateArr) && idx + 1 < dateArr.length) {
-            if (isDateInRange(targetShort, dateArr[idx + 1])) {
+        
+        if (trueIdx >= 0 && dateArr && Array.isArray(dateArr) && trueIdx < dateArr.length) {
+            if (isDateInRange(targetShort, dateArr[trueIdx])) {
                 covers = true;
             }
         }
