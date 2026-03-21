@@ -3727,14 +3727,16 @@ function DatasetDatesViewer({ rawData, adminPassword }: { rawData: any; adminPas
     } else if (rawData['일자자료'] && Array.isArray(rawData['일자자료'])) {
         const validKeys = timetableProps.filter(k => {
             const val = rawData[k];
-            return Array.isArray(val) && ((val[1] && val[1][1]) || (val[2] && val[2][1]) || (val[3] && val[3][1]));
+            // Must be a 3D array (timetable matrix)
+            return Array.isArray(val) && val.length > 1 && Array.isArray(val[1]) && val[1].length > 1 && Array.isArray(val[1][1]);
         });
         const dateList = rawData['일자자료'];
-        const startIndex = validKeys.length - dateList.length;
-        dateList.forEach((dt: any, i: number) => {
-            const targetKeyIdx = startIndex + i;
-            if (targetKeyIdx >= 0 && targetKeyIdx < validKeys.length) {
-                datasetDateRanges[validKeys[targetKeyIdx]] = Array.isArray(dt) ? dt[1] : dt;
+        dateList.forEach((dt: any) => {
+            if (Array.isArray(dt) && dt.length >= 2) {
+                const targetKeyIdx = dt[0];
+                if (typeof targetKeyIdx === 'number' && targetKeyIdx >= 0 && targetKeyIdx < validKeys.length) {
+                    datasetDateRanges[validKeys[targetKeyIdx]] = dt[1];
+                }
             }
         });
     }
@@ -6068,7 +6070,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     const keys = Object.keys(rawData);
     const timetableProps = keys.filter(k => {
         const val = rawData[k];
-        return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+        return Array.isArray(val) && val.length > 1 && Array.isArray(val[1]) && val[1].length > 1 && Array.isArray(val[1][1]);
     });
 
     // 가장 마지막 데이터가 배열의 마지막에 위치 (가장 최신)
