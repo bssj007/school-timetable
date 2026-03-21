@@ -2658,7 +2658,7 @@ export default function Dashboard() {
                       </div>
                       <p className="text-gray-700 mb-2">{assessment.title}</p>
                       <div className="flex items-end justify-between mt-auto">
-                        <div className={`flex text-sm text-gray-500 ${assessment.isPostponed ? 'flex-col items-start gap-1' : 'flex-col gap-1'}`}>
+                        <div className={`flex text-sm text-gray-500 ${assessment.isPostponed ? 'flex-col items-start gap-1' : 'items-center'}`}>
                           {assessment.isPostponed ? (
                             <>
                               <div className="flex items-center">
