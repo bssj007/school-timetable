@@ -129,6 +129,7 @@ export default function Dashboard() {
   // Custom Orphan Relocation State
   const [relocatingAssessment, setRelocatingAssessment] = useState<AssessmentItem | null>(null);
   const [pendingRelocation, setPendingRelocation] = useState<{ date: string, classTime: number } | null>(null);
+  const [isRelocatingUpdating, setIsRelocatingUpdating] = useState(false);
 
 
   // ... previous imports
@@ -1047,6 +1048,99 @@ export default function Dashboard() {
     }
   };
 
+  const findNextSlotForSubject = (fromDateStr: string, fromClassTime: number, targetSubject: string) => {
+    const fromDate = new Date(fromDateStr);
+    let currentWeekday = fromDate.getDay() - 1; // 0=Mon, 4=Fri
+    if (currentWeekday < 0 || currentWeekday > 4) currentWeekday = 0;
+    
+    // Scan up to 4 weeks ahead
+    for (let weeksAhead = 0; weeksAhead < 4; weeksAhead++) {
+      for (let w = 0; w < 5; w++) {
+         if (weeksAhead === 0 && w < currentWeekday) continue;
+
+         const daySlots = (timetableData || []).filter(t => t.weekday === w).sort((x, y) => x.classTime - y.classTime);
+         
+         for (const t of daySlots) {
+             if (weeksAhead === 0 && w === currentWeekday && t.classTime <= fromClassTime) continue;
+
+             const tGroup = computedGroups[`${w}-${t.classTime}`];
+             const tElective = currentProfile?.electives?.[tGroup];
+             const tSubject = tGroup && tElective ? (tElective.fullSubjectName || tElective.subject) : t.subject;
+             
+             if (tSubject?.trim() === targetSubject.trim()) {
+                 const targetDate = new Date(fromDate);
+                 const daysDiff = (weeksAhead * 7) + (w - currentWeekday);
+                 targetDate.setDate(targetDate.getDate() + daysDiff);
+                 
+                 return {
+                     date: toDateString(targetDate),
+                     classTime: t.classTime
+                 };
+             }
+         }
+      }
+    }
+    return null;
+  };
+
+  const handleRelocationSubmit = async () => {
+    if (!pendingRelocation || !relocatingAssessment) return;
+    setIsRelocatingUpdating(true);
+    try {
+        const updatesToMake: any[] = [];
+        const queue = [
+            { assessment: relocatingAssessment, targetDate: pendingRelocation.date, targetTime: pendingRelocation.classTime }
+        ];
+
+        while (queue.length > 0) {
+           const { assessment, targetDate, targetTime } = queue.shift()!;
+           
+           updatesToMake.push({
+               ...assessment,
+               tempDueDate: targetDate,
+               tempClassTime: targetTime
+           });
+
+           // Find collider in allAssessments
+           const collider = allAssessments?.find(a => {
+               if (a.id === assessment.id) return false;
+               if (a.isDone) return false; // Ignore completed assessments
+               if (a.subject.trim() !== assessment.subject.trim()) return false;
+               
+               // Check if this assessment is already pending an update in this cascade
+               const pendingUpdate = updatesToMake.find(u => u.id === a.id);
+               const effectiveDate = pendingUpdate ? pendingUpdate.tempDueDate : (a.tempDueDate || a.dueDate);
+               const effectiveTime = pendingUpdate ? pendingUpdate.tempClassTime : (a.tempClassTime || a.classTime);
+
+               return effectiveDate === targetDate && effectiveTime === targetTime;
+           });
+
+           if (collider) {
+               const nextSlot = findNextSlotForSubject(targetDate, targetTime, assessment.subject);
+               if (nextSlot) {
+                   queue.push({ assessment: collider, targetDate: nextSlot.date, targetTime: nextSlot.classTime });
+               } else {
+                   // Fallback if no slot found in 4 weeks
+                   toast.warning(`[${assessment.subject}] 더 이상 배정할 다음 수업 시간이 없어 연쇄 연기가 중단되었습니다.`);
+               }
+           }
+        }
+
+        // Apply bulk updates
+        for (const update of updatesToMake) {
+             await updateMutation.mutateAsync(update);
+        }
+        
+    } catch (e) {
+       console.error("Relocation Error:", e);
+       toast.error("연기 처리 중 오류가 발생했습니다.");
+    } finally {
+        setIsRelocatingUpdating(false);
+        setRelocatingAssessment(null);
+        setPendingRelocation(null);
+    }
+  };
+
   // 요일별로 시간표 데이터를 그룹화
   const weekdayNames = ["월", "화", "수", "목", "금"];
   const timetableByDay: Record<number, TimetableItem[]> = {};
@@ -1762,8 +1856,8 @@ export default function Dashboard() {
                               }
 
                               if (item && item.isChanged && !cellInlineStyle && !isPast) {
-                                const tColor = settings?.changed_class_tint_color || '#fbbf24';
-                                const tOpacity = settings?.changed_class_tint_opacity !== undefined ? parseFloat(settings.changed_class_tint_opacity) : 0.4;
+                                const tColor = settings?.changed_class_tint_color || '#fef08a';
+                                const tOpacity = settings?.changed_class_tint_opacity !== undefined ? parseFloat(settings.changed_class_tint_opacity) : 1.0;
                                 const h = tColor.replace('#', '');
                                 const r = parseInt(h.length === 3 ? h.slice(0, 1).repeat(2) : h.slice(0, 2), 16);
                                 const g = parseInt(h.length === 3 ? h.slice(1, 2).repeat(2) : h.slice(2, 4), 16);
@@ -1780,7 +1874,7 @@ export default function Dashboard() {
 
 
                               // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
-                              const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
+                              const isSubjectDisabled = item && (!item.subject.trim() || ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex)));
 
                               const group = computedGroups[`${weekdayIdx}-${classTime}`];
                               const electiveSelection = currentProfile?.electives?.[group];
@@ -2322,8 +2416,24 @@ export default function Dashboard() {
                   }
                 </div>
                 <p className="text-gray-700 mb-2">{assessment.title}</p>
-                <div className="text-xs text-gray-500">
-                  {assessment.dueDate}
+                <div className="flex justify-between items-end mt-2">
+                  <div className="text-xs text-gray-500">
+                    {assessment.dueDate}
+                  </div>
+                  {assessment.dueDate >= toDateString(new Date()) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-7 px-3 border-orange-200 text-orange-600 hover:bg-orange-50 hover:text-orange-700 transition-colors font-semibold"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRelocatingAssessment(assessment);
+                        setShowViewDialog(false);
+                      }}
+                    >
+                      날짜 바꾸기
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -2517,16 +2627,19 @@ export default function Dashboard() {
                       </div>
                       <p className="text-gray-700 mb-2">{assessment.title}</p>
                       <div className="flex items-center justify-between mt-auto">
-                        <div className="flex items-center text-sm text-gray-500 flex-wrap">
+                        <div className={`flex text-sm text-gray-500 ${assessment.isPostponed ? 'flex-col items-start gap-1' : 'items-center flex-wrap'}`}>
                           {assessment.isPostponed ? (
                             <>
-                              <span className="line-through text-gray-400">{assessment.originalDueDate}</span>
-                              <span className="mx-1 text-red-500">➔</span>
-                              <span className="font-bold text-red-600">{assessment.dueDate}</span>
-                              <span className="mx-2 text-gray-300">|</span>
-                              <span className="line-through text-gray-400">{assessment.originalClassTime}교시</span>
-                              <span className="mx-1 text-red-500">➔</span>
-                              <span className="font-bold text-red-600">{assessment.classTime}교시</span>
+                              <div className="flex items-center">
+                                <span className="line-through text-blue-200">{assessment.originalDueDate}</span>
+                                <span className="mx-1 font-bold text-red-500">➔</span>
+                                <span className="font-bold text-red-600">{assessment.dueDate}</span>
+                              </div>
+                              <div className="flex items-center">
+                                <span className="line-through text-blue-200">{assessment.originalClassTime}교시</span>
+                                <span className="mx-1 font-bold text-red-500">➔</span>
+                                <span className="font-bold text-red-600">{assessment.classTime}교시</span>
+                              </div>
                             </>
                           ) : (
                             <>
@@ -2546,10 +2659,9 @@ export default function Dashboard() {
                               setRelocatingAssessment(assessment);
                               setPendingRelocation(null);
                               window.scrollTo({ top: 0, behavior: "smooth" });
-                              toast.info("시간표 표에서 이동할 새 날짜 칸을 클릭하세요.");
                             }}
                           >
-                            바뀐 날짜
+                            날짜 바꾸기
                           </Button>
                         )}
                       </div>
@@ -2628,31 +2740,16 @@ export default function Dashboard() {
                   setRelocatingAssessment(null);
                   setPendingRelocation(null);
                 }}
+                disabled={isRelocatingUpdating}
               >
                 취소
               </Button>
               <Button 
                 className="flex-1 md:flex-none bg-red-600 hover:bg-red-700 text-white transition-colors"
-                disabled={!pendingRelocation || updateMutation.isPending}
-                onClick={() => {
-                  if (pendingRelocation) {
-                    updateMutation.mutate(
-                      {
-                        ...relocatingAssessment,
-                        tempDueDate: pendingRelocation.date,
-                        tempClassTime: pendingRelocation.classTime
-                      },
-                      {
-                        onSuccess: () => {
-                          setRelocatingAssessment(null);
-                          setPendingRelocation(null);
-                        }
-                      }
-                    );
-                  }
-                }}
+                disabled={!pendingRelocation || isRelocatingUpdating || updateMutation.isPending}
+                onClick={handleRelocationSubmit}
               >
-                {updateMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                {(isRelocatingUpdating || updateMutation.isPending) && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                 적용
               </Button>
             </div>

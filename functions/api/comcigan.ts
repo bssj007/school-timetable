@@ -542,9 +542,29 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
     // Auto logic for unresolved dates
     if (!timedataProp) {
-        if (timetableProps.length > 0) {
+        let fallbackSelected: string | null = null;
+        try {
+            if (db) {
+                if (grade === 1) {
+                    const fbRowG1 = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_fallback_dataset_grade1'").first();
+                    if (fbRowG1 && fbRowG1.value) fallbackSelected = fbRowG1.value as string;
+                }
+                if (!fallbackSelected) {
+                    const fbRowGen = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_fallback_dataset'").first();
+                    if (fbRowGen && fbRowGen.value) fallbackSelected = fbRowGen.value as string;
+                }
+            }
+        } catch (e) {
+            console.warn("[Comcigan Debug] Error reading fallback setting:", e);
+        }
+
+        if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
+            timedataProp = fallbackSelected;
+            console.log(`[Comcigan Debug] Resolved unresolved date using fallback dataset: ${timedataProp}`);
+        } else if (timetableProps.length > 0) {
             // 가장 최신(마지막) 데이터셋 사용 (시수 무시)
             timedataProp = timetableProps[timetableProps.length - 1];
+            console.log(`[Comcigan Debug] Falling back to newest array dataset: ${timedataProp}`);
         }
     }
 
@@ -606,46 +626,58 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         const classData = data[grade][classNum];
 
         for (let weekday = 1; weekday <= 5; weekday++) {
-            if (!classData[weekday] || !Array.isArray(classData[weekday])) continue;
+            let currentPeriodLimit = 0;
+            if (classData[weekday] && Array.isArray(classData[weekday])) {
+                currentPeriodLimit = Math.min(classData[weekday][0] || 0, classData[weekday].length - 1);
+            }
 
-            const periodCount = classData[weekday][0] || 0;
-            const maxPeriod = classData[weekday].length - 1;
-            const loopLimit = Math.min(periodCount, maxPeriod);
+            let basePeriodLimit = 0;
+            if (baseData && baseData[grade] && baseData[grade][classNum] && baseData[grade][classNum][weekday]) {
+                const bWeekday = baseData[grade][classNum][weekday];
+                if (Array.isArray(bWeekday)) {
+                    basePeriodLimit = Math.min(bWeekday[0] || 0, bWeekday.length - 1);
+                }
+            }
+
+            const loopLimit = Math.max(currentPeriodLimit, basePeriodLimit);
 
             for (let period = 1; period <= loopLimit; period++) {
-                const code = classData[weekday][period];
-                if (!code) continue;
+                const code = (classData[weekday] && classData[weekday][period]) ? classData[weekday][period] : 0;
 
                 let isChanged = false;
                 if (baseData && baseData[grade] && baseData[grade][classNum] && baseData[grade][classNum][weekday]) {
-                    const baseCode = baseData[grade][classNum][weekday][period];
-                    if (baseCode !== undefined && baseCode !== code && timedataProp !== timetableProps[0]) {
+                    const baseCode = baseData[grade][classNum][weekday][period] || 0;
+                    if (baseCode !== code && timedataProp !== timetableProps[0]) {
                         isChanged = true;
                     }
                 }
 
-                let teacherIdx = 0;
-                let subjectIdx = 0;
+                if (!code && !isChanged) continue;
 
-                // Based on bunri value (same logic as server comcigan-parser.ts)
-                if (bunri === 100) {
-                    teacherIdx = Math.floor(code / bunri);
-                    subjectIdx = code % bunri;
-                } else { // bunri === 1000 or other
-                    teacherIdx = code % bunri;
-                    subjectIdx = Math.floor(code / bunri);
+                let subject = "";
+                let teacher = "";
+
+                if (code) {
+                    let teacherIdx = 0;
+                    let subjectIdx = 0;
+                    if (bunri === 100) {
+                        teacherIdx = Math.floor(code / bunri);
+                        subjectIdx = code % bunri;
+                    } else {
+                        teacherIdx = code % bunri;
+                        subjectIdx = Math.floor(code / bunri);
+                    }
+                    subject = subjects[subjectIdx] ? subjects[subjectIdx].replace(/_/g, "") : "";
+                    teacher = teachers[teacherIdx] || "";
                 }
 
-                const subject = subjects[subjectIdx] ? subjects[subjectIdx].replace(/_/g, "") : "";
-                const teacher = teachers[teacherIdx] || "";
-
-                if (subject) {
+                if (subject || isChanged) {
                     result.push({
                         grade,
                         class: classNum,
                         weekday: weekday - 1, // Convert to 0-indexed (0=Mon, 4=Fri)
                         classTime: period,
-                        subject,
+                        subject, // Empty string if cancelled
                         teacher,
                         isChanged
                     });

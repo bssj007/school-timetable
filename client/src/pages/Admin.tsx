@@ -2369,8 +2369,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 setSiteFaviconUrl(currentSettings.site_favicon_url || '');
                 setPwaAppTitle(currentSettings.pwa_app_title || '성지수행');
                 setPwaAppIconUrl(currentSettings.pwa_app_icon_url || currentSettings.site_favicon_url || '');
-                setTintColor(currentSettings.changed_class_tint_color || '#fbbf24');
-                setTintOpacity(currentSettings.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings.changed_class_tint_opacity) : 0.4);
+                setTintColor(currentSettings.changed_class_tint_color || '#fef08a');
+                setTintOpacity(currentSettings.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings.changed_class_tint_opacity) : 1.0);
                 setIsInitialized(true);
                 setHtmlChanged(false);
             } else if (!htmlChanged) {
@@ -2382,8 +2382,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 setSiteFaviconUrl(currentSettings.site_favicon_url || '');
                 setPwaAppTitle(currentSettings.pwa_app_title || '성지수행');
                 setPwaAppIconUrl(currentSettings.pwa_app_icon_url || currentSettings.site_favicon_url || '');
-                setTintColor(currentSettings.changed_class_tint_color || '#fbbf24');
-                setTintOpacity(currentSettings.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings.changed_class_tint_opacity) : 0.4);
+                setTintColor(currentSettings.changed_class_tint_color || '#fef08a');
+                setTintOpacity(currentSettings.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings.changed_class_tint_opacity) : 1.0);
             }
         }
     }, [currentSettings, isInitialized, htmlChanged]);
@@ -2465,8 +2465,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
         setSiteFaviconUrl(currentSettings?.site_favicon_url || '');
         setPwaAppTitle(currentSettings?.pwa_app_title || '성지수행');
         setPwaAppIconUrl(currentSettings?.pwa_app_icon_url || currentSettings?.site_favicon_url || '');
-        setTintColor(currentSettings?.changed_class_tint_color || '#fbbf24');
-        setTintOpacity(currentSettings?.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings?.changed_class_tint_opacity) : 0.4);
+        setTintColor(currentSettings?.changed_class_tint_color || '#fef08a');
+        setTintOpacity(currentSettings?.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings?.changed_class_tint_opacity) : 1.0);
         setHtmlChanged(false);
     };
 
@@ -2474,8 +2474,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     const savedFavicon = currentSettings?.site_favicon_url || '';
     const savedPwaTitle = currentSettings?.pwa_app_title || '성지수행';
     const savedPwaIcon = currentSettings?.pwa_app_icon_url || currentSettings?.site_favicon_url || '';
-    const savedTintColor = currentSettings?.changed_class_tint_color || '#fbbf24';
-    const savedTintOpacity = currentSettings?.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings?.changed_class_tint_opacity) : 0.4;
+    const savedTintColor = currentSettings?.changed_class_tint_color || '#fef08a';
+    const savedTintOpacity = currentSettings?.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings?.changed_class_tint_opacity) : 1.0;
     const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon || htmlChanged || pwaAppTitle !== savedPwaTitle || pwaAppIconUrl !== savedPwaIcon || tintColor !== savedTintColor || tintOpacity !== savedTintOpacity;
 
     if (isLoading) {
@@ -4542,9 +4542,119 @@ export default function Admin() {
             .catch(() => setUserIp(null));
     }, []);
 
-    // --- Authentication ---
-    // --- Authentication ---
-    // Password persistence removed for security
+function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExpired, adminPassword }: any) {
+    const { data: timetableData } = useQuery({
+        queryKey: ["admin", "timetable", assessment.grade, assessment.classNum, assessment.dataset],
+        queryFn: async () => {
+            const grade = assessment.grade;
+            // Fetch for all classes if classNum is 0 (전체)
+            const cNum = assessment.classNum === 0 ? "all" : assessment.classNum;
+            const ds = assessment.dataset;
+            const url = `/api/comcigan?type=timetable&grade=${grade}&classNum=${cNum}${ds ? '&dataset=' + encodeURIComponent(ds) : ''}`;
+            const res = await fetch(url);
+            if (!res.ok) return [];
+            const json = await res.json();
+            return json.data || [];
+        },
+        staleTime: 60000,
+    });
+
+    const { data: electiveConfigs } = useQuery({
+        queryKey: ["admin", "electives", assessment.grade, assessment.dataset],
+        queryFn: async () => {
+            const ds = assessment.dataset;
+            const res = await fetch(`/api/admin/electives?grade=${assessment.grade}${ds ? '&dataset=' + encodeURIComponent(ds) : ''}`, {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) return [];
+            return res.json();
+        },
+        staleTime: 60000,
+    });
+
+    let isOrphan = false;
+    if (timetableData && electiveConfigs && assessment.classNum !== 0) {
+        // Find if this specific slot exists in the full timetable of that class
+        const dueDateObj = new Date(assessment.tempDueDate || assessment.dueDate);
+        const aDay = dueDateObj.getDay();
+        if (aDay === 0 || aDay === 6) {
+            isOrphan = true; // Weekends
+        } else {
+            const w = aDay - 1;
+            const slots = timetableData.filter((t: any) => t.class === assessment.classNum && t.weekday === w);
+            let matchingSlots = slots;
+            const targetTime = assessment.tempClassTime || assessment.classTime;
+            if (targetTime) {
+                matchingSlots = slots.filter((t: any) => t.classTime === targetTime);
+            }
+            if (matchingSlots.length === 0) {
+                // E.g. gap, or missing slot
+                isOrphan = true;  
+            } else {
+                let foundMatch = false;
+                for (const slot of matchingSlots) {
+                    if (slot.subject === assessment.subject) {
+                        foundMatch = true; 
+                        break;
+                    }
+                    // Elective alias fallback
+                    const specificConfig = electiveConfigs.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
+                    if (specificConfig && specificConfig.fullSubjectName === assessment.subject) {
+                        foundMatch = true; 
+                        break;
+                    }
+                    const genericConfig = electiveConfigs.find((cfg: any) => (cfg.subject.trim() === assessment.subject.trim() || cfg.fullSubjectName?.trim() === assessment.subject.trim()));
+                    if (genericConfig && genericConfig.classCode) {
+                        if (specificConfig && specificConfig.classCode) {
+                            const codesA = genericConfig.classCode.split(',').map((s: string) => s.trim());
+                            const codesB = specificConfig.classCode.split(',').map((s: string) => s.trim());
+                            if (codesA.some((c: string) => codesB.includes(c))) {
+                                foundMatch = true; 
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (!foundMatch) {
+                    isOrphan = true;
+                }
+            }
+        }
+    }
+
+    const isPostponed = !!assessment.tempDueDate || !!assessment.tempClassTime;
+
+    return (
+        <TableRow className={isExpired ? "opacity-75 bg-gray-50/50 hover:bg-gray-50 transition-colors" : ""}>
+            <TableCell className="text-center">
+                <Checkbox checked={isSelected} onCheckedChange={(c) => onToggleSelect(!!c, assessment.id)} />
+            </TableCell>
+            <TableCell className="text-center font-bold text-gray-700">{assessment.grade}</TableCell>
+            <TableCell className="text-center">{assessment.classNum === 0 ? "전체" : assessment.classNum}</TableCell>
+            <TableCell className="font-medium">
+                {assessment.subject}
+                {isOrphan && <Badge variant="destructive" className="ml-2 text-[10px] px-1 h-4 bg-red-100 hover:bg-red-200 text-red-700 border border-red-200">고아 수행평가</Badge>}
+            </TableCell>
+            <TableCell className="truncate max-w-[200px]">{assessment.title}</TableCell>
+            <TableCell>
+                {isPostponed ? (
+                    <div className="flex flex-col">
+                        <span className="line-through text-gray-400 text-xs">{assessment.dueDate}</span>
+                        <span className="text-orange-600 font-bold">{assessment.tempDueDate}</span>
+                    </div>
+                ) : (
+                    <span className={isOrphan ? "line-through text-red-400" : ""}>{assessment.dueDate}</span>
+                )}
+            </TableCell>
+            <TableCell className="text-xs font-mono text-gray-500">
+                {assessment.lastModifiedIp || '-'}
+            </TableCell>
+        </TableRow>
+    );
+}
+
+// --- Authentication ---
+// Password persistence removed for security
 
     const checkPasswordMutation = useMutation({
         mutationFn: async (password: string) => {
@@ -5019,28 +5129,20 @@ export default function Admin() {
                                                 </TableHeader>
                                                 <TableBody>
                                                     {activeAssessments.map((assessment: any) => (
-                                                        <TableRow key={assessment.id}>
-                                                            <TableCell className="text-center">
-                                                                <Checkbox
-                                                                    checked={selectedAssessments.includes(assessment.id)}
-                                                                    onCheckedChange={(checked) => {
-                                                                        if (checked) {
-                                                                            setSelectedAssessments([...selectedAssessments, assessment.id]);
-                                                                        } else {
-                                                                            setSelectedAssessments(selectedAssessments.filter((id) => id !== assessment.id));
-                                                                        }
-                                                                    }}
-                                                                />
-                                                            </TableCell>
-                                                            <TableCell className="text-center font-bold">{assessment.grade}</TableCell>
-                                                            <TableCell className="text-center">{assessment.classNum}</TableCell>
-                                                            <TableCell>{assessment.subject}</TableCell>
-                                                            <TableCell>{assessment.title}</TableCell>
-                                                            <TableCell>{assessment.dueDate}</TableCell>
-                                                            <TableCell className="text-xs font-mono text-gray-500">
-                                                                {assessment.lastModifiedIp || '-'}
-                                                            </TableCell>
-                                                        </TableRow>
+                                                        <AdminAssessmentTableRow
+                                                            key={assessment.id}
+                                                            assessment={assessment}
+                                                            isSelected={selectedAssessments.includes(assessment.id)}
+                                                            onToggleSelect={(checked: boolean, id: number) => {
+                                                                if (checked) {
+                                                                    setSelectedAssessments([...selectedAssessments, id]);
+                                                                } else {
+                                                                    setSelectedAssessments(selectedAssessments.filter((aid) => aid !== id));
+                                                                }
+                                                            }}
+                                                            isExpired={false}
+                                                            adminPassword={password}
+                                                        />
                                                     ))}
                                                     {(!activeAssessments || activeAssessments.length === 0) && (
                                                         <TableRow>
@@ -5077,28 +5179,20 @@ export default function Admin() {
                                                             </TableHeader>
                                                             <TableBody>
                                                                 {expiredAssessments.map((assessment: any) => (
-                                                                    <TableRow key={assessment.id} className="opacity-75 bg-gray-50/50 hover:bg-gray-50 transition-colors">
-                                                                        <TableCell className="w-[50px] text-center border-r">
-                                                                            <Checkbox
-                                                                                checked={selectedAssessments.includes(assessment.id)}
-                                                                                onCheckedChange={(checked) => {
-                                                                                    if (checked) {
-                                                                                        setSelectedAssessments([...selectedAssessments, assessment.id]);
-                                                                                    } else {
-                                                                                        setSelectedAssessments(selectedAssessments.filter((id) => id !== assessment.id));
-                                                                                    }
-                                                                                }}
-                                                                            />
-                                                                        </TableCell>
-                                                                        <TableCell className="w-[80px] text-center font-bold">{assessment.grade}</TableCell>
-                                                                        <TableCell className="w-[80px] text-center">{assessment.classNum}</TableCell>
-                                                                        <TableCell>{assessment.subject}</TableCell>
-                                                                        <TableCell>{assessment.title}</TableCell>
-                                                                        <TableCell className="w-[120px] line-through text-gray-400">{assessment.dueDate}</TableCell>
-                                                                        <TableCell className="w-[120px] text-xs font-mono text-gray-400">
-                                                                            {assessment.lastModifiedIp || '-'}
-                                                                        </TableCell>
-                                                                    </TableRow>
+                                                                    <AdminAssessmentTableRow
+                                                                        key={assessment.id}
+                                                                        assessment={assessment}
+                                                                        isSelected={selectedAssessments.includes(assessment.id)}
+                                                                        onToggleSelect={(checked: boolean, id: number) => {
+                                                                            if (checked) {
+                                                                                setSelectedAssessments([...selectedAssessments, id]);
+                                                                            } else {
+                                                                                setSelectedAssessments(selectedAssessments.filter((aid) => aid !== id));
+                                                                            }
+                                                                        }}
+                                                                        isExpired={true}
+                                                                        adminPassword={password}
+                                                                    />
                                                                 ))}
                                                             </TableBody>
                                                         </Table>
@@ -5783,6 +5877,9 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     const [selectedProp, setSelectedProp] = useState<string>('');
     // Grade 1 dataset selection (separate)
     const [selectedPropGrade1, setSelectedPropGrade1] = useState<string>('');
+    // Fallback datasets
+    const [fallbackProp, setFallbackProp] = useState<string>('');
+    const [fallbackPropGrade1, setFallbackPropGrade1] = useState<string>('');
     // IP Overrides state
     const [ipOverrides, setIpOverrides] = useState<Record<string, { grade1?: string, default?: string, memo?: string }>>({});
     
@@ -5810,6 +5907,8 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         if (settingsQuery.data) {
             setSelectedProp(settingsQuery.data.comcigan_dataset_selected || '_auto_');
             setSelectedPropGrade1(settingsQuery.data.comcigan_dataset_selected_grade1 || '_auto_');
+            setFallbackProp(settingsQuery.data.comcigan_fallback_dataset || '_auto_');
+            setFallbackPropGrade1(settingsQuery.data.comcigan_fallback_dataset_grade1 || '_auto_');
 
             if (settingsQuery.data.dataset_ip_overrides) {
                 try {
@@ -5867,6 +5966,15 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     const displayValueG1 = selectedPropGrade1 || '_auto_';
     const originalValueG1 = settingsQuery.data?.comcigan_dataset_selected_grade1 || '_auto_';
     const isDirtyG1 = displayValueG1 !== originalValueG1;
+
+    // Fallback dirty tracking
+    const displayValueFB = fallbackProp || '_auto_';
+    const originalValueFB = settingsQuery.data?.comcigan_fallback_dataset || '_auto_';
+    const isDirtyFB = displayValueFB !== originalValueFB;
+
+    const displayValueFBG1 = fallbackPropGrade1 || '_auto_';
+    const originalValueFBG1 = settingsQuery.data?.comcigan_fallback_dataset_grade1 || '_auto_';
+    const isDirtyFBG1 = displayValueFBG1 !== originalValueFBG1;
 
     const DatasetDropdown = ({ value, onChange, emptyOption = false }: { value: string; onChange: (v: string) => void, emptyOption?: boolean }) => (
         <Select value={value} onValueChange={onChange}>
@@ -5936,17 +6044,18 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
             <CardHeader>
                 <CardTitle>출체 데이터셋 선택</CardTitle>
                 <CardDescription>
-                    일반적으로 날짜 선택 시 자동으로 해당 주차의 시간표가 출력됩니다.<br/>
-                    <b>이 설정은 아직 컴시간에 계획되지 않은 &quot;미정 날짜&quot;를 선택했을 때 보여줄 &quot;디폴트 데이터셋&quot;을 지정합니다.</b><br/>
-                    &quot;자동&quot;으로 설정할 경우 컴시간에 존재하는 <b>가장 최신 데이터셋</b>을 자동으로 선택합니다. (시수 무시)
+                    일반적으로 날짜 선택 시 <b>자동</b>으로 해당 주차의 시간표가 출력됩니다.<br/>
+                    <b>오버라이드(강제 지정)</b>는 시스템 날짜를 무시하고 모든 화면을 해당 데이터셋으로 강제 고정합니다. 특별한 사유가 없으면 자동(권장)을 유지하세요.<br/>
+                    <b>폴백(미정 기본)</b>은 미래/과거 등 아직 시스템에 없는 미정 날짜를 조회했을 때, 대신 보여줄 데이터셋을 지정합니다. 자동으로 둘 경우 최신 데이터셋을 사용합니다.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
 
-                {/* Grade 1 dataset */}
-                <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
+                {/* Grade 1 Override dataset */}
+                <div className="space-y-2 border rounded-lg p-4 bg-red-50/50">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-slate-700">1학년 미정 날짜구간 기본 데이터셋</span>
+                        <span className="text-sm font-semibold text-red-700">1학년 데이터셋 강제 지정 (Override)</span>
+                        <span className="text-xs text-red-400">모든 화면 구조를 이 데이터셋으로 고정 (자동 권장)</span>
                     </div>
                     <DatasetDropdown value={displayValueG1} onChange={setSelectedPropGrade1} />
                     <div className="flex justify-end gap-2 pt-1">
@@ -5954,16 +6063,16 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                             변경 취소
                         </Button>
                         <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected_grade1: selectedPropGrade1 === '_auto_' ? '' : selectedPropGrade1 })} disabled={!isDirtyG1 || saveMutation.isPending}>
-                            {saveMutation.isPending ? "저장 중..." : "저장"}
+                            {saveMutation.isPending ? "저장 중..." : "위험 저장"}
                         </Button>
                     </div>
                 </div>
 
-                {/* Grade 2/3 dataset */}
-                <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
+                {/* Grade 2/3 Override dataset */}
+                <div className="space-y-2 border rounded-lg p-4 bg-red-50/50">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-slate-700">2/3학년 미정 날짜구간 기본 데이터셋</span>
-                        <span className="text-xs text-slate-400">(그룹 확인기, 선택과목 자동 등에 적용)</span>
+                        <span className="text-sm font-semibold text-red-700">2/3학년 데이터셋 강제 지정 (Override)</span>
+                        <span className="text-xs text-red-400">그룹 확인기 등을 이 데이터셋으로 강제 락다운.</span>
                     </div>
                     <DatasetDropdown value={displayValue} onChange={setSelectedProp} />
                     <div className="flex justify-end gap-2 pt-1">
@@ -5971,6 +6080,42 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                             변경 취소
                         </Button>
                         <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected: selectedProp === '_auto_' ? '' : selectedProp })} disabled={!isDirty || saveMutation.isPending}>
+                            {saveMutation.isPending ? "저장 중..." : "위험 저장"}
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="w-full h-px bg-slate-200 my-2" />
+
+                {/* Grade 1 Fallback dataset */}
+                <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-700">1학년 미정 주차 기본 데이터셋 (Fallback)</span>
+                        <span className="text-xs text-slate-400">선택된 날짜가 서버에 없을 때 띄울 시간표</span>
+                    </div>
+                    <DatasetDropdown value={displayValueFBG1} onChange={setFallbackPropGrade1} />
+                    <div className="flex justify-end gap-2 pt-1">
+                        <Button variant="outline" size="sm" onClick={() => setFallbackPropGrade1(originalValueFBG1)} disabled={!isDirtyFBG1 || saveMutation.isPending}>
+                            변경 취소
+                        </Button>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_fallback_dataset_grade1: fallbackPropGrade1 === '_auto_' ? '' : fallbackPropGrade1 })} disabled={!isDirtyFBG1 || saveMutation.isPending}>
+                            {saveMutation.isPending ? "저장 중..." : "저장"}
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Grade 2/3 Fallback dataset */}
+                <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-700">2/3학년 미정 주차 기본 데이터셋 (Fallback)</span>
+                        <span className="text-xs text-slate-400">선택된 날짜가 서버에 없을 때 띄울 시간표</span>
+                    </div>
+                    <DatasetDropdown value={displayValueFB} onChange={setFallbackProp} />
+                    <div className="flex justify-end gap-2 pt-1">
+                        <Button variant="outline" size="sm" onClick={() => setFallbackProp(originalValueFB)} disabled={!isDirtyFB || saveMutation.isPending}>
+                            변경 취소
+                        </Button>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_fallback_dataset: fallbackProp === '_auto_' ? '' : fallbackProp })} disabled={!isDirtyFB || saveMutation.isPending}>
                             {saveMutation.isPending ? "저장 중..." : "저장"}
                         </Button>
                     </div>
