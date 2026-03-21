@@ -48,6 +48,7 @@ interface AssessmentItem {
   originalClassTime?: number;
   tempDueDate?: string;
   tempClassTime?: number;
+  isAutoPredicted?: boolean;
 }
 
 // 주의 시작일 계산 (월요일 기준)
@@ -826,7 +827,8 @@ export default function Dashboard() {
                  originalDueDate: a.dueDate,
                  originalClassTime: a.classTime,
                  dueDate: nextSlot.date,
-                 classTime: nextSlot.classTime
+                 classTime: nextSlot.classTime,
+                 isAutoPredicted: true
               };
            }
         }
@@ -2582,17 +2584,26 @@ export default function Dashboard() {
                         }
                       }}
                     >
-                      <div className="flex justify-between items-center mb-2">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <span className="font-bold text-lg text-blue-600">
-                            {assessment.subject}
-                          </span>
-                          <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-                            {assessment.description}
-                          </span>
-                          <span className={`text-base font-bold ${assessment.isPostponed ? 'text-red-500 text-sm' : isToday ? 'text-red-600' : 'text-gray-500'}`}>
-                            {assessment.isPostponed ? '시간표 변경' : dDay}
-                          </span>
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-1 flex-wrap mb-1">
+                            <span className="font-bold text-lg text-blue-600">
+                              {assessment.subject}
+                            </span>
+                            <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                              {assessment.description}
+                            </span>
+                            {!assessment.isPostponed && (
+                              <span className={`text-base font-bold ${isToday ? 'text-red-600' : 'text-gray-500'} ml-1`}>
+                                {dDay}
+                              </span>
+                            )}
+                          </div>
+                          {assessment.isPostponed && (
+                            <div className="text-red-500 text-sm font-bold mt-0.5">
+                              시간표 변경
+                            </div>
+                          )}
                         </div>
                         {grade && classNum && studentNumber && (
                           <div className="flex items-center gap-2 flex-shrink-0 ml-2" onClick={e => e.stopPropagation()}>
@@ -2626,14 +2637,17 @@ export default function Dashboard() {
                         )}
                       </div>
                       <p className="text-gray-700 mb-2">{assessment.title}</p>
-                      <div className="flex items-center justify-between mt-auto">
-                        <div className={`flex text-sm text-gray-500 ${assessment.isPostponed ? 'flex-col items-start gap-1' : 'items-center flex-wrap'}`}>
+                      <div className="flex items-end justify-between mt-auto">
+                        <div className={`flex text-sm text-gray-500 ${assessment.isPostponed ? 'flex-col items-start gap-1' : 'flex-col gap-1'}`}>
                           {assessment.isPostponed ? (
                             <>
                               <div className="flex items-center">
                                 <span className="line-through text-blue-200">{assessment.originalDueDate}</span>
                                 <span className="mx-1 font-bold text-red-500">➔</span>
                                 <span className="font-bold text-red-600">{assessment.dueDate}</span>
+                                {assessment.isAutoPredicted && (
+                                  <span className="ml-1 text-xs text-orange-500 font-bold whitespace-nowrap">(자동예측)</span>
+                                )}
                               </div>
                               <div className="flex items-center">
                                 <span className="line-through text-blue-200">{assessment.originalClassTime}교시</span>

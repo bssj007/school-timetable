@@ -97,12 +97,12 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
         const updated = { ...config, ...newConfig };
         setConfigState(updated);
 
-        // 쿠키 저장 (만료 1년) - dismiss 상태는 쿠키에 절대 저장하지 않음!
+        // 쿠키 저장 (만료 10년 - 무기한) - dismiss 상태는 쿠키에 절대 저장하지 않음!
         const cookieData = { ...updated };
         delete cookieData.instructionDismissedV2;
 
         const expires = new Date();
-        expires.setFullYear(expires.getFullYear() + 1);
+        expires.setFullYear(expires.getFullYear() + 10);
         document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(cookieData))}; expires=${expires.toUTCString()}; path=/`;
 
         // If dismissing instruction, sync to server with profile

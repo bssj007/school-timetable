@@ -373,6 +373,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     // Pick the last one that actually has non-zero values in its class 1 timetable.
     let timedataProp = "";
     let datasetSelected: string | null = null;
+    let designatedDatasetId: string | null = null;
 
     if (db) {
         try {
@@ -445,6 +446,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             } else {
                 datasetSelected = finalDataset;
             }
+
+            designatedDatasetId = datasetSelected;
 
             if (datasetSelected === 'MANUAL_PLAN') {
                 console.log(`[Comcigan Debug] Using MANUAL_PLAN dataset`);
@@ -532,6 +535,26 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 console.log(`[Comcigan Debug] Mapped exact date ${targetDate} to dataset ${timedataProp}`);
             }
         }
+    } else if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_' && targetDate) {
+        // Strict boundary check for explicitly designated dataset
+        let isDateMatch = false;
+        const dateArr = rawData['일자'];
+        if (dateArr && Array.isArray(dateArr)) {
+            const shortDateStr = targetDate.substring(2); // "26-03-23"
+            const idx = timetableProps.indexOf(datasetSelected);
+            // dateArr usually has its 0th element as string like "2026학년도", and ranges start at index 1
+            if (idx >= 0 && idx + 1 < dateArr.length) {
+                const datasetDateStr = dateArr[idx + 1];
+                if (typeof datasetDateStr === 'string' && datasetDateStr.startsWith(shortDateStr)) {
+                    isDateMatch = true;
+                }
+            }
+        }
+        
+        if (!isDateMatch) {
+            console.log(`[Comcigan Debug] Designated dataset ${datasetSelected} does NOT cover targetDate ${targetDate}. Deferring to fallback.`);
+            datasetSelected = null; // Unset to force fallback logic
+        }
     }
 
     // Check if what we resolved or selected is valid
@@ -569,10 +592,12 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     }
 
     // Determine the persistent "Original" dataset corresponding to the current real-world date
-    // regardless of whether the requested targetDate was out of bounds
+    // or the explicit designation, regardless of whether the requested targetDate was out of bounds
     let originalDatasetId = timedataProp || null;
     try {
-        if (datasetSelected !== 'MANUAL_PLAN' && (!datasetSelected || datasetSelected === '_auto_')) {
+        if (typeof designatedDatasetId !== 'undefined' && designatedDatasetId && designatedDatasetId !== 'MANUAL_PLAN' && designatedDatasetId !== '_auto_') {
+            originalDatasetId = designatedDatasetId;
+        } else if (typeof designatedDatasetId !== 'undefined' && designatedDatasetId !== 'MANUAL_PLAN' && (!designatedDatasetId || designatedDatasetId === '_auto_')) {
             const dateArr = rawData['일자'];
             if (dateArr && Array.isArray(dateArr)) {
                 const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
@@ -584,9 +609,21 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                     originalDatasetId = timetableProps[timetableProps.length - 1];
                 }
             }
-        } else {
-            originalDatasetId = datasetSelected;
+        } else if (datasetSelected !== 'MANUAL_PLAN' && (!datasetSelected || datasetSelected === '_auto_')) {
+             // Fallback for types or scope issues
+             const dateArr = rawData['일자'];
+             if (dateArr && Array.isArray(dateArr)) {
+                 const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+                 const todayShort = koreanTime.toISOString().split('T')[0].substring(2); // "YY-MM-DD"
+                 const matchedIdx = dateArr.findIndex((str: any) => typeof str === 'string' && str.startsWith(todayShort));
+                 if (matchedIdx >= 1 && matchedIdx - 1 < timetableProps.length) {
+                     originalDatasetId = timetableProps[matchedIdx - 1];
+                 } else if (timetableProps.length > 0) {
+                     originalDatasetId = timetableProps[timetableProps.length - 1];
+                 }
+             }
         }
+        
         if (originalDatasetId === 'MANUAL_PLAN' || datasetSelected === 'MANUAL_PLAN') {
              originalDatasetId = 'MANUAL_PLAN';
         }

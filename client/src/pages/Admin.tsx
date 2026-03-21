@@ -6045,17 +6045,17 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                 <CardTitle>출체 데이터셋 선택</CardTitle>
                 <CardDescription>
                     일반적으로 날짜 선택 시 <b>자동</b>으로 해당 주차의 시간표가 출력됩니다.<br/>
-                    <b>오버라이드(강제 지정)</b>는 시스템 날짜를 무시하고 모든 화면을 해당 데이터셋으로 강제 고정합니다. 특별한 사유가 없으면 자동(권장)을 유지하세요.<br/>
+                    <b>특정 데이터셋</b>을 선택하면 시스템 날짜를 무시하고 모든 화면 구조를 해당 데이터셋 기준으로 활성화합니다.<br/>
                     <b>폴백(미정 기본)</b>은 미래/과거 등 아직 시스템에 없는 미정 날짜를 조회했을 때, 대신 보여줄 데이터셋을 지정합니다. 자동으로 둘 경우 최신 데이터셋을 사용합니다.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
 
                 {/* Grade 1 Override dataset */}
-                <div className="space-y-2 border rounded-lg p-4 bg-red-50/50">
+                <div className="space-y-2 border rounded-lg p-4 bg-white">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-red-700">1학년 데이터셋 강제 지정 (Override)</span>
-                        <span className="text-xs text-red-400">모든 화면 구조를 이 데이터셋으로 고정 (자동 권장)</span>
+                        <span className="text-sm font-semibold text-gray-800">1학년 출제 데이터셋 선택</span>
+                        <span className="text-xs text-gray-500">모든 화면 구조를 이 데이터셋으로 고정</span>
                     </div>
                     <DatasetDropdown value={displayValueG1} onChange={setSelectedPropGrade1} />
                     <div className="flex justify-end gap-2 pt-1">
@@ -6063,16 +6063,16 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                             변경 취소
                         </Button>
                         <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected_grade1: selectedPropGrade1 === '_auto_' ? '' : selectedPropGrade1 })} disabled={!isDirtyG1 || saveMutation.isPending}>
-                            {saveMutation.isPending ? "저장 중..." : "위험 저장"}
+                            {saveMutation.isPending ? "저장 중..." : "저장"}
                         </Button>
                     </div>
                 </div>
 
                 {/* Grade 2/3 Override dataset */}
-                <div className="space-y-2 border rounded-lg p-4 bg-red-50/50">
+                <div className="space-y-2 border rounded-lg p-4 bg-white">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-red-700">2/3학년 데이터셋 강제 지정 (Override)</span>
-                        <span className="text-xs text-red-400">그룹 확인기 등을 이 데이터셋으로 강제 락다운.</span>
+                        <span className="text-sm font-semibold text-gray-800">2/3학년 출제 데이터셋 선택</span>
+                        <span className="text-xs text-gray-500">모든 화면 구조를 이 데이터셋으로 고정</span>
                     </div>
                     <DatasetDropdown value={displayValue} onChange={setSelectedProp} />
                     <div className="flex justify-end gap-2 pt-1">
@@ -6080,7 +6080,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                             변경 취소
                         </Button>
                         <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected: selectedProp === '_auto_' ? '' : selectedProp })} disabled={!isDirty || saveMutation.isPending}>
-                            {saveMutation.isPending ? "저장 중..." : "위험 저장"}
+                            {saveMutation.isPending ? "저장 중..." : "저장"}
                         </Button>
                     </div>
                 </div>
@@ -6127,7 +6127,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         {/* IP Override Manager */}
         <Card className="w-full max-w-2xl mt-6">
             <CardHeader>
-                <CardTitle>IP별 데이터셋 강제 지정 (Override)</CardTitle>
+                <CardTitle>IP별 데이터셋 지정</CardTitle>
                 <CardDescription>
                     특정 IP 주소에서 접속할 때 메인 화면에 표시할 데이터셋을 별도로 지정합니다.<br />
                     1학년과 2/3학년을 구분하여 지정할 수 있습니다.
@@ -6136,10 +6136,10 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
             <CardContent className="space-y-6">
                 <div className="space-y-4 border rounded-lg p-4 bg-slate-50">
                     <div className="flex items-center justify-between pb-2 border-b">
-                        <span className="text-sm font-semibold text-slate-700">현재 오버라이드 목록</span>
+                        <span className="text-sm font-semibold text-slate-700">현재 IP별 지정 목록</span>
                     </div>
                     {Object.keys(ipOverrides).length === 0 ? (
-                        <div className="text-sm text-center py-4 text-gray-500 bg-white border rounded">현재 설정된 IP 오버라이드가 없습니다.</div>
+                        <div className="text-sm text-center py-4 text-gray-500 bg-white border rounded">현재 지정된 IP별 데이터셋이 없습니다.</div>
                     ) : (
                         <div className="overflow-x-auto rounded border">
                             <Table className="bg-white min-w-[500px]">
@@ -6177,7 +6177,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                 </div>
 
                 <div className="space-y-4 border rounded-lg p-4 bg-white">
-                     <span className="text-sm font-semibold text-slate-700 block mb-2">새 오버라이드 추가</span>
+                     <span className="text-sm font-semibold text-slate-700 block mb-2">새 IP 지정 추가</span>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                              <label className="text-xs font-medium text-gray-600">대상 IP 주소</label>
@@ -6194,11 +6194,11 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
 
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                         <div className="space-y-2">
-                             <label className="text-xs font-medium text-gray-600">1학년 강제 지정 데이터셋</label>
+                             <label className="text-xs font-medium text-gray-600">1학년 지정 데이터셋</label>
                              <DatasetDropdown value={newIpGrade1} onChange={setNewIpGrade1} emptyOption={true} />
                         </div>
                         <div className="space-y-2">
-                             <label className="text-xs font-medium text-gray-600">2/3학년 강제 지정 데이터셋</label>
+                             <label className="text-xs font-medium text-gray-600">2/3학년 지정 데이터셋</label>
                              <DatasetDropdown value={newIpDefault} onChange={setNewIpDefault} emptyOption={true} />
                         </div>
                      </div>
