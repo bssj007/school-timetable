@@ -85,7 +85,7 @@ export const onRequest = async (context: any) => {
                     await refreshCache(db, grade);
                     
                     // 저장 결과 확인
-                    const row = await db.prepare("SELECT updated_at, LENGTH(response_json) as data_size FROM timetable_cache WHERE cache_key = ?").bind(`grade_${grade}`).first();
+                    const row = await db.prepare("SELECT updated_at, LENGTH(response_json) as data_size FROM timetable_cache WHERE cache_key = ?").bind(`gc_${grade}`).first();
                     results.push({
                         grade,
                         success: !!row,

@@ -832,7 +832,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 // --- 캐시 헬퍼 함수 ---
 
 async function saveTimetableCache(db: any, grade: number, responseData: any, targetDate?: string | null, cacheKeyOverride?: string) {
-    const cacheKey = cacheKeyOverride || (targetDate ? `grade_${grade}_${targetDate}` : `grade_${grade}`);
+    const cacheKey = cacheKeyOverride || (targetDate ? `gc_${grade}_${targetDate}` : `gc_${grade}`);
     try {
         await db.prepare(createTimetableCacheTable).run().catch(() => {});
         await db.prepare(
