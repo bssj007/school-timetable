@@ -3715,7 +3715,29 @@ function DatasetDatesViewer({ rawData, adminPassword }: { rawData: any; adminPas
 
     const dataArr = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
     const timetableProps = dataArr.sort((a, b) => parseInt(a.replace('자료', ''), 10) - parseInt(b.replace('자료', ''), 10));
-    const datesArr = rawData['일자']; // Array of ranges
+    
+    // Extracted robust date mapping logic
+    const datasetDateRanges: Record<string, string> = {};
+    if (rawData['일자'] && Array.isArray(rawData['일자'])) {
+        timetableProps.forEach((key, idx) => {
+            if (idx + 1 < rawData['일자'].length) {
+                datasetDateRanges[key] = rawData['일자'][idx + 1];
+            }
+        });
+    } else if (rawData['일자자료'] && Array.isArray(rawData['일자자료'])) {
+        const validKeys = timetableProps.filter(k => {
+            const val = rawData[k];
+            return Array.isArray(val) && ((val[1] && val[1][1]) || (val[2] && val[2][1]) || (val[3] && val[3][1]));
+        });
+        const dateList = rawData['일자자료'];
+        const startIndex = validKeys.length - dateList.length;
+        dateList.forEach((dt: any, i: number) => {
+            const targetKeyIdx = startIndex + i;
+            if (targetKeyIdx >= 0 && targetKeyIdx < validKeys.length) {
+                datasetDateRanges[validKeys[targetKeyIdx]] = Array.isArray(dt) ? dt[1] : dt;
+            }
+        });
+    }
 
     const tableRows = [];
 
@@ -3724,10 +3746,7 @@ function DatasetDatesViewer({ rawData, adminPassword }: { rawData: any; adminPas
         const gradeData = rawData[dKey];
         if (!gradeData || (!gradeData[1] && !gradeData[2] && !gradeData[3])) continue; // Skip empty datasets
 
-        let datePeriod = "(미확인)";
-        if (datesArr && Array.isArray(datesArr) && idx + 1 < datesArr.length) {
-            datePeriod = datesArr[idx + 1];
-        }
+        const datePeriod = datasetDateRanges[dKey] || "(미확인)";
 
         const remarks = [];
         const s = settingsQuery.data || {};

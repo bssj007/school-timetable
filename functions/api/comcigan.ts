@@ -319,9 +319,18 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         try {
             const tempRaw = JSON.parse(jsonString);
             const dateArr = tempRaw['일자'];
+            const dateArrNew = tempRaw['일자자료'];
+            let lastRange = null;
+            
             if (dateArr && Array.isArray(dateArr) && dateArr.length > 0) {
-                const lastRange = dateArr[dateArr.length - 1]; // e.g. "26-03-23 ~ 26-03-28"
-                const parts = lastRange.split('~').map((s: string) => s.trim());
+                lastRange = dateArr[dateArr.length - 1]; // e.g. "26-03-23 ~ 26-03-28"
+            } else if (dateArrNew && Array.isArray(dateArrNew) && dateArrNew.length > 0) {
+                const lastItem = dateArrNew[dateArrNew.length - 1]; // e.g. [2, "26-03-30 ~ 26-04-04"]
+                lastRange = Array.isArray(lastItem) ? lastItem[1] : lastItem;
+            }
+            
+            if (lastRange && typeof lastRange === 'string') {
+                const parts = lastRange.split('~').map(s => s.trim());
                 if (parts.length >= 2) {
                     const endDate = new Date(`20${parts[1]}`);
                     endDate.setHours(23, 59, 59, 999);
@@ -577,19 +586,39 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     let isFallbackApplied = false;
 
     if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_') {
+        let datasetDateRanges: Record<string, string> = {};
+        
         const allDatasetKeys = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
         allDatasetKeys.sort((a, b) => parseInt(a.replace('자료', '')) - parseInt(b.replace('자료', '')));
         
-        const trueIdx = allDatasetKeys.indexOf(datasetSelected);
-        const dateArr = rawData['일자'];
+        if (rawData['일자'] && Array.isArray(rawData['일자'])) {
+            // Legacy mapping
+            allDatasetKeys.forEach((key, idx) => {
+                if (idx + 1 < rawData['일자'].length) {
+                    datasetDateRanges[key] = rawData['일자'][idx + 1];
+                }
+            });
+        } else if (rawData['일자자료'] && Array.isArray(rawData['일자자료'])) {
+            // New mapping: arrays list dates from oldest active to newest, mapping to LATEST valid datasets
+            const validKeys = allDatasetKeys.filter(k => {
+                const val = rawData[k];
+                return Array.isArray(val) && ((val[1] && val[1][1]) || (val[2] && val[2][1]) || (val[3] && val[3][1]));
+            });
+            const dateList = rawData['일자자료'];
+            const startIndex = validKeys.length - dateList.length;
+            dateList.forEach((dt: any, i: number) => {
+                const targetKeyIdx = startIndex + i;
+                if (targetKeyIdx >= 0 && targetKeyIdx < validKeys.length) {
+                    datasetDateRanges[validKeys[targetKeyIdx]] = Array.isArray(dt) ? dt[1] : dt;
+                }
+            });
+        }
+        
+        const rangeStr = datasetDateRanges[datasetSelected];
         let covers = false;
         
-        // Comcigan date sequence begins with a timestamp offset at index 0 (e.g. "2026-03-23")
-        // Therefore, dataset index 0 maps to date array index 1.
-        if (trueIdx >= 0 && dateArr && Array.isArray(dateArr) && trueIdx + 1 < dateArr.length) {
-            if (isDateInRange(targetShort, dateArr[trueIdx + 1])) {
-                covers = true;
-            }
+        if (rangeStr) {
+            covers = isDateInRange(targetShort, rangeStr);
         }
         
         if (covers) {
