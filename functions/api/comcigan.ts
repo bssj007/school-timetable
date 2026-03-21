@@ -311,6 +311,34 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     let ipOverrideApplied: string | false = false;
     let jsonString = cachedRawDataString;
 
+    // --- FUTURE BOUNDARY STALE CHECK ---
+    // If the frontend legitimately requests a date that exceeds the maximum timeline of our currently
+    // cached Comcigan payload, aggressively discard the raw cache to prevent the auto-fallback algorithm 
+    // from blindly attaching itself to the final index of a stale array.
+    if (jsonString && targetDate) {
+        try {
+            const tempRaw = JSON.parse(jsonString);
+            const dateArr = tempRaw['일자'];
+            if (dateArr && Array.isArray(dateArr) && dateArr.length > 0) {
+                const lastRange = dateArr[dateArr.length - 1]; // e.g. "26-03-23 ~ 26-03-28"
+                const parts = lastRange.split('~').map((s: string) => s.trim());
+                if (parts.length >= 2) {
+                    const endDate = new Date(`20${parts[1]}`);
+                    endDate.setHours(23, 59, 59, 999);
+                    const targetShort = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
+                    const targetDateObj = new Date(`20${targetShort}`);
+                    
+                    if (targetDateObj > endDate) {
+                        console.log(`[Comcigan Debug] targetDate ${targetShort} exceeds cached raw_data max date ${parts[1]}. Bypassing raw_data cache.`);
+                        jsonString = undefined; 
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[Comcigan Debug] Failed to evaluate raw_data date expiration boundary', e);
+        }
+    }
+
     if (!jsonString) {
         const prefix = await getPrefix();
         const { code1, code2 } = await getSchoolCode(prefix);

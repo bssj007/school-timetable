@@ -64,6 +64,16 @@ function formatDate(date: Date): string {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
+// YYYY-MM-DD ➔ M/D 단축 포맷팅 (대시보드 카드 레이아웃 보호용)
+function formatShortDateText(dateString?: string): string {
+  if (!dateString) return '';
+  const parts = dateString.split('-');
+  if (parts.length === 3) {
+    return `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
+  }
+  return dateString;
+}
+
 // 주간 날짜 배열 생성
 function getWeekDates(weekOffset: number): Date[] {
   const today = new Date();
@@ -2652,9 +2662,9 @@ export default function Dashboard() {
                           {assessment.isPostponed ? (
                             <>
                               <div className="flex items-center">
-                                <span className="line-through text-blue-200">{assessment.originalDueDate}</span>
+                                <span className="line-through text-blue-200">{formatShortDateText(assessment.originalDueDate)}</span>
                                 <span className="mx-1 font-bold text-red-500">➔</span>
-                                <span className="font-bold text-red-600">{assessment.dueDate}</span>
+                                <span className="font-bold text-red-600">{formatShortDateText(assessment.dueDate)}</span>
                                 {assessment.isAutoPredicted && (
                                   <span className="ml-1 text-xs text-orange-500 font-bold whitespace-nowrap">(자동예측)</span>
                                 )}
