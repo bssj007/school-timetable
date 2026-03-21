@@ -29,6 +29,7 @@ interface TimetableItem {
   subject: string;
   teacher: string;
   class?: number;
+  isChanged?: boolean;
 }
 
 interface AssessmentItem {
@@ -42,6 +43,11 @@ interface AssessmentItem {
   weekday?: number;
   round?: number; // 차수 추가
   votes?: string; // JSON array of votes
+  isPostponed?: boolean;
+  originalDueDate?: string;
+  originalClassTime?: number;
+  tempDueDate?: string;
+  tempClassTime?: number;
 }
 
 // 주의 시작일 계산 (월요일 기준)
@@ -119,6 +125,10 @@ export default function Dashboard() {
   const [viewingAssessments, setViewingAssessments] = useState<AssessmentItem[]>([]);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<AssessmentItem | null>(null);
+  
+  // Custom Orphan Relocation State
+  const [relocatingAssessment, setRelocatingAssessment] = useState<AssessmentItem | null>(null);
+  const [pendingRelocation, setPendingRelocation] = useState<{ date: string, classTime: number } | null>(null);
 
 
   // ... previous imports
@@ -296,9 +306,6 @@ export default function Dashboard() {
   };
 
 
-  // Extract datasetId early for use in effects
-  const datasetId = (queryClient.getQueryData(['timetable', schoolName, grade, classNum]) as any)?.datasetId || '';
-
 
 
   useEffect(() => {
@@ -375,12 +382,13 @@ export default function Dashboard() {
 
   // 1. 시간표 조회
   const { data: rawTimetableData, isLoading: timetableLoading, isFetching: isTimetableFetching, refetch: refetchTimetable } = useQuery({
-    queryKey: ['timetable', schoolName, grade, classNum],
+    queryKey: ['timetable', schoolName, grade, classNum, weekDates[0].toISOString()],
     queryFn: async () => {
       if (!grade || !classNum) return [];
       try {
         const queryClassNum = (grade === "2" || grade === "3") ? "all" : classNum;
-        const response = await fetch(`/api/comcigan?type=timetable&grade=${grade}&classNum=${queryClassNum}`);
+        const targetDate = toDateString(weekDates[0]);
+        const response = await fetch(`/api/comcigan?type=timetable&grade=${grade}&classNum=${queryClassNum}&targetDate=${encodeURIComponent(targetDate)}`);
         if (!response.ok) {
           throw new Error(`Failed to fetch from Comcigan: ${response.status}`);
         }
@@ -394,11 +402,13 @@ export default function Dashboard() {
           })) as TimetableItem[];
           // Attach datasetId for downstream queries
           (mappedData as any).datasetId = result.datasetId;
+          (mappedData as any).originalDatasetId = result.originalDatasetId || result.datasetId;
           (mappedData as any).ipOverrideApplied = result.ipOverrideApplied;
           return mappedData;
         }
         const emptyArray = [] as TimetableItem[];
         (emptyArray as any).datasetId = result.datasetId;
+        (emptyArray as any).originalDatasetId = result.originalDatasetId || result.datasetId;
         (emptyArray as any).ipOverrideApplied = result.ipOverrideApplied;
         return emptyArray;
       } catch (e) {
@@ -411,6 +421,9 @@ export default function Dashboard() {
     retryDelay: 3000, // 3초 간격
     staleTime: 5000, // 5초 동안은 데이터를 신선한 상태로 유지하여, 캐싱 반영 및 UI 깜빡임 최소화
   });
+
+  // Extract persistent datasetId for use in effects (fallback to actual timetable response)
+  const datasetId = (rawTimetableData as any)?.originalDatasetId || (rawTimetableData as any)?.datasetId || '';
 
   // 1.5 선택과목 데이터 및 프로필 조회 (2, 3학년용)
   const { data: electiveConfigs, isFetching: isElectiveConfigsFetching } = useQuery({
@@ -673,35 +686,171 @@ export default function Dashboard() {
     refetchInterval: 2000,
   });
 
-  // 현재 주에 해당하는 수행평가만 필터링 및 정렬
+  // 학생이 실제로 수강하는 과목 목록 계산 (수행평가 고아상태 필터링용)
+  const myActualSubjects = useMemo(() => {
+    const subjects = new Set<string>();
+    
+    // 1. 시간표 기반 수강 과목 수집
+    for (let w = 0; w < 5; w++) {
+      for (let c = 1; c <= 7; c++) {
+        const item = (timetableData || []).find(t => t.weekday === w && t.classTime === c);
+        const group = computedGroups[`${w}-${c}`];
+        const electiveSelection = currentProfile?.electives?.[group];
+        
+        let displaySubject = item ? item.subject : null;
+        
+        if (group && electiveSelection) {
+           const configEntry = (electiveConfigs || []).find((cfg: any) =>
+             cfg.subject === electiveSelection.subject &&
+             cfg.classCode?.split(",").map((s: string) => s.trim()).includes(group)
+           );
+           displaySubject = configEntry?.fullSubjectName || electiveSelection.subject || displaySubject;
+        }
+
+        if (displaySubject) {
+           subjects.add(displaySubject.trim());
+        }
+      }
+    }
+
+    // 2. 시간표에 없더라도 학생이 명시적으로 선택한 선택과목은 모두 포함
+    if (grade === "2" || grade === "3") {
+      if (currentProfile?.electives) {
+        Object.values(currentProfile.electives).forEach((sel: any) => {
+          if (sel && sel.subject) {
+            subjects.add(sel.subject.trim());
+            if (sel.fullSubjectName) subjects.add(sel.fullSubjectName.trim());
+            
+            const configEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === sel.subject);
+            if (configEntry?.fullSubjectName) subjects.add(configEntry.fullSubjectName.trim());
+          }
+        });
+      }
+    }
+
+    return subjects;
+  }, [timetableData, computedGroups, currentProfile, electiveConfigs, grade]);
+
+  // 현재 주에 해당하는 수행평가만 필터링, 정렬 및 임시 연기(고아 처리)
   const assessments = useMemo(() => {
     if (!allAssessments) return [];
 
     // 1. Filter by Week
-    const filtered = allAssessments.filter(a => isDateInWeek(a.dueDate, weekDates));
+    let filtered = allAssessments.filter(a => {
+      const effectiveDate = a.tempDueDate ? a.tempDueDate : a.dueDate;
+      return isDateInWeek(effectiveDate, weekDates);
+    });
 
-    // 2. Sort: Date ASC -> Period (classTime) ASC
-    filtered.sort((a, b) => {
-      // Date Comparison
+    // 2. 학생이 듣지 않는 과목의 고아상태 수행평가 필터링 (2, 3학년)
+    if (grade === "2" || grade === "3") {
+      filtered = filtered.filter(a => myActualSubjects.has(a.subject.trim()));
+    }
+
+    // 날짜 범위를 벗어난 폴백 데이터셋을 보고 있을 경우, 고아(자동 임시 연기) 처리를 하지 않음
+    const isOutOfBounds = (rawTimetableData as any)?.datasetId && (rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.datasetId !== (rawTimetableData as any)?.originalDatasetId;
+
+    // 3. 고아 수행평가 임시 이동 처리 (시간표 변경으로 이번 주 현재 시간이 소실된 경우)
+    const processed = filtered.map(a => {
+      // 수동 임시 연기 우선 반영
+      if (a.tempDueDate && a.tempClassTime) {
+        return {
+           ...a,
+           isPostponed: true,
+           originalDueDate: a.dueDate,
+           originalClassTime: a.classTime,
+           dueDate: a.tempDueDate,
+           classTime: a.tempClassTime
+        };
+      }
+      
+      if (a.isDone) return a;
+      if (isOutOfBounds) return a; // 범위를 벗어난 폴백 시간표에서는 원본 과목이 없을 수 있으므로 고아 처리 보류
+      
+      const matchIdx = weekDates.findIndex(d => toDateString(d) === a.dueDate);
+      if (matchIdx !== -1 && a.classTime) {
+        const cellGroup = computedGroups[`${matchIdx}-${a.classTime}`];
+        const cellElective = currentProfile?.electives?.[cellGroup];
+        const cellMatchSubject = cellGroup && cellElective ? (cellElective.fullSubjectName || cellElective.subject) : null;
+        
+        const cellItem = (timetableData || []).find(t => t.weekday === matchIdx && t.classTime === a.classTime);
+        const actualSubject = cellMatchSubject || (cellItem?.subject);
+        
+        // 고아 확인 (과목 불일치나 해당 교시가 사라진 경우)
+        if (actualSubject?.trim() !== a.subject.trim()) {
+           let foundNext = false;
+           let nextSlot = null;
+           
+           // 1. 당일 피벗 이후 ~ 금요일까지 탐색
+           for (let w = matchIdx; w < 5 && !foundNext; w++) {
+             const daySlots = (timetableData || []).filter(t => t.weekday === w).sort((x, y) => x.classTime - y.classTime);
+             for (const t of daySlots) {
+               if (w === matchIdx && t.classTime <= a.classTime) continue; // 당일은 지정된 시간 이후여야 함
+               
+               const tGroup = computedGroups[`${w}-${t.classTime}`];
+               const tElective = currentProfile?.electives?.[tGroup];
+               const tSubject = tGroup && tElective ? (tElective.fullSubjectName || tElective.subject) : t.subject;
+               
+               if (tSubject?.trim() === a.subject.trim()) {
+                 foundNext = true;
+                 nextSlot = { weekday: w, classTime: t.classTime, date: toDateString(weekDates[w]) };
+                 break;
+               }
+             }
+           }
+           
+           // 2. 이번 주 내에 없으면 다음 주 월요일 ~ 당일 이전까지 탐색 (Wrap Around)
+           for (let w = 0; w <= matchIdx && !foundNext; w++) {
+             const daySlots = (timetableData || []).filter(t => t.weekday === w).sort((x, y) => x.classTime - y.classTime);
+             for (const t of daySlots) {
+               // 다음 주 당일이라면, 시간과 무관하게 가장 이른 시간을 잡으면 됨 (어차피 다음 주니까 무조건 미래)
+               // 단, 정확히 동일한 요일의 동일한 시간까지 왔다면 한 바퀴를 돈 셈이지만, 일단 가장 빠른 시간을 찾음.
+               const tGroup = computedGroups[`${w}-${t.classTime}`];
+               const tElective = currentProfile?.electives?.[tGroup];
+               const tSubject = tGroup && tElective ? (tElective.fullSubjectName || tElective.subject) : t.subject;
+               
+               if (tSubject?.trim() === a.subject.trim()) {
+                 foundNext = true;
+                 const nextWeekDate = new Date(weekDates[w]);
+                 nextWeekDate.setDate(nextWeekDate.getDate() + 7);
+                 nextSlot = { weekday: w, classTime: t.classTime, date: toDateString(nextWeekDate) };
+                 break;
+               }
+             }
+           }
+           
+           if (foundNext && nextSlot) {
+              return {
+                 ...a,
+                 isPostponed: true,
+                 originalDueDate: a.dueDate,
+                 originalClassTime: a.classTime,
+                 dueDate: nextSlot.date,
+                 classTime: nextSlot.classTime
+              };
+           }
+        }
+      }
+      return a;
+    });
+
+    // 4. Sort: Date ASC -> Period (classTime) ASC
+    processed.sort((a, b) => {
       const dateA = new Date(a.dueDate).getTime();
       const dateB = new Date(b.dueDate).getTime();
       if (dateA !== dateB) return dateA - dateB;
 
-      // Period Comparison (If same date)
-      // Treat null/undefined classTime as larger (end of list)
       const periodA = a.classTime || 99;
       const periodB = b.classTime || 99;
       return periodA - periodB;
     });
 
-    console.log('[Assessments Filter & Sort]', {
+    console.log('[Assessments Filter, Sort & Postpone]', {
       weekRange: `${toDateString(weekDates[0])} ~ ${toDateString(weekDates[4])}`,
       totalAssessments: allAssessments.length,
-      filteredAssessments: filtered.length,
-      sorted: filtered.map(a => ({ subject: a.subject, date: a.dueDate, classTime: a.classTime }))
+      processedAssessments: processed.length,
     });
-    return filtered;
-  }, [allAssessments, weekDates]);
+    return processed;
+  }, [allAssessments, weekDates, grade, myActualSubjects, timetableData, computedGroups, currentProfile]);
 
   // 3.5 수행평가 투표 데이터 (인라인 votes 필드에서 계산)
   const votesData = useMemo(() => {
@@ -927,9 +1076,10 @@ export default function Dashboard() {
 
   const isLoading = timetableLoading || assessmentLoading;
 
-  // 로딩이 6초 이상 지속되면 자동 오류 리포트 제출 (페이지 로드당 1회)
-  const slowLoadReportedRef = useRef(false);
+  // 로딩이 5초 이상 지속되면 자동 오류 리포트 제출 및 1초 단위 업데이트
+  const slowLoadReportIdRef = useRef<number | null>(null);
   const loadingStartRef = useRef<number | null>(null);
+  const isReportingRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (isLoading) {
@@ -937,28 +1087,48 @@ export default function Dashboard() {
         loadingStartRef.current = Date.now();
       }
 
-      const interval = setInterval(() => {
-        if (!isLoading || slowLoadReportedRef.current || loadingStartRef.current === null) return;
+      const interval = setInterval(async () => {
+        if (!isLoading || loadingStartRef.current === null || isReportingRef.current) return;
 
         const elapsedMs = Date.now() - loadingStartRef.current;
-        if (elapsedMs >= 6000) {
-          slowLoadReportedRef.current = true;
+        // 5초 이상부터 감지 시작
+        if (elapsedMs >= 5000) {
+          isReportingRef.current = true;
           const elapsedSec = Math.round(elapsedMs / 1000);
-          fetch('/api/bug-reports', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              grade, classNum, studentNumber,
-              message: `[자동 리포트] 로딩 지연 감지: ${elapsedSec}초 경과 (시간표: ${timetableLoading ? '로딩중' : '완료'}, 수행평가: ${assessmentLoading ? '로딩중' : '완료'})`
-            })
-          }).catch(() => { /* 리포트 전송 실패는 무시 */ });
-          clearInterval(interval);
+          const message = `[자동 리포트] 로딩 지연 감지: ${elapsedSec}초 경과 (시간표: ${timetableLoading ? '로딩중' : '완료'}, 수행평가: ${assessmentLoading ? '로딩중' : '완료'})`;
+
+          if (slowLoadReportIdRef.current === null) {
+             // 최초 리포트 생성
+             try {
+                const res = await fetch('/api/bug-reports', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ grade, classNum, studentNumber, message })
+                });
+                const data = await res.json();
+                if (data.id) {
+                    slowLoadReportIdRef.current = data.id;
+                }
+             } catch (e) { /* 실패 시 무시 */ }
+          } else {
+             // 이미 등록된 내역이 있다면 업데이트 (PATCH)
+             try {
+                await fetch('/api/bug-reports', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: slowLoadReportIdRef.current, message })
+                });
+             } catch (e) { /* 실패 시 무시 */ }
+          }
+          isReportingRef.current = false;
         }
       }, 1000);
 
       return () => clearInterval(interval);
     } else {
       loadingStartRef.current = null;
+      slowLoadReportIdRef.current = null; // 로딩 끝나면 리포트 ID도 리셋 (다음 로딩을 위해)
+      isReportingRef.current = false;
     }
   }, [isLoading, grade, classNum, studentNumber, timetableLoading, assessmentLoading]);
 
@@ -1579,8 +1749,26 @@ export default function Dashboard() {
                                 } else {
                                   bgColor = "bg-blue-100 border-blue-300";
                                 }
+
+                                if (cellAssessments.some(a => a.isPostponed)) {
+                                  bgColor = "bg-white border-red-300";
+                                  cellInlineStyle = { 
+                                    ...cellInlineStyle, 
+                                    backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.1) 10px, rgba(239, 68, 68, 0.1) 20px)' 
+                                  };
+                                }
                               } else if (isToday) {
                                 bgColor = "bg-red-50 hover:bg-red-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50";
+                              }
+
+                              if (item && item.isChanged && !cellInlineStyle && !isPast) {
+                                const tColor = settings?.changed_class_tint_color || '#fbbf24';
+                                const tOpacity = settings?.changed_class_tint_opacity !== undefined ? parseFloat(settings.changed_class_tint_opacity) : 0.4;
+                                const h = tColor.replace('#', '');
+                                const r = parseInt(h.length === 3 ? h.slice(0, 1).repeat(2) : h.slice(0, 2), 16);
+                                const g = parseInt(h.length === 3 ? h.slice(1, 2).repeat(2) : h.slice(2, 4), 16);
+                                const b = parseInt(h.length === 3 ? h.slice(2, 3).repeat(2) : h.slice(4, 6), 16);
+                                cellInlineStyle = { backgroundColor: `rgba(${r}, ${g}, ${b}, ${tOpacity})` };
                               }
 
                               // 과거 날짜 스타일
@@ -1589,6 +1777,7 @@ export default function Dashboard() {
                               // 선택된 셀 스타일
                               const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
                               const selectionStyle = isSelected ? "ring-2 ring-blue-500 ring-inset z-10" : "";
+
 
                               // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
                               const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
@@ -1664,11 +1853,30 @@ export default function Dashboard() {
                                 }
                               }
 
+                              let relocationStyle = "";
+                              if (relocatingAssessment) {
+                                if (displaySubject.trim() === relocatingAssessment.subject.trim()) {
+                                  if (pendingRelocation?.date === toDateString(weekDates[weekdayIdx]) && pendingRelocation?.classTime === classTime) {
+                                     relocationStyle = "ring-4 ring-red-500 ring-inset z-20 shadow-lg scale-[1.02] transform !bg-red-50";
+                                  } else {
+                                     relocationStyle = "ring-2 ring-red-300 ring-inset cursor-pointer z-10 hover:bg-red-50 animate-pulse";
+                                  }
+                                } else {
+                                  relocationStyle = "opacity-30 blur-[2px] pointer-events-none transition-all duration-300";
+                                }
+                              }
+
                               return (
                                 <td
                                   key={weekdayIdx}
                                   id={`cell-${weekdayIdx}-${classTime}`}
                                   onClick={() => {
+                                    if (relocatingAssessment) {
+                                      if (displaySubject.trim() === relocatingAssessment.subject.trim()) {
+                                        setPendingRelocation({ date: toDateString(weekDates[weekdayIdx]), classTime });
+                                      }
+                                      return; // 릴로케이션 모드에서는 일반 클릭 무시
+                                    }
                                     if (item || isElectiveActive) {
                                       if (isSubjectDisabled && !isElectiveActive) {
                                         toast.error(`${item.subject}은(는) 선택할 수 없습니다.`);
@@ -1679,8 +1887,8 @@ export default function Dashboard() {
                                       }
                                     }
                                   }}
-                                  className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors overflow-hidden
-                                ${bgColor} ${pastStyle} ${selectionStyle}
+                                  className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-all overflow-hidden
+                                ${bgColor} ${pastStyle} ${selectionStyle} ${relocationStyle}
                                 ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
                                   style={cellInlineStyle}
@@ -1728,7 +1936,7 @@ export default function Dashboard() {
                                           <div className="mt-0.5 flex-shrink-0">
                                             <div className="flex flex-wrap gap-0.5 justify-center">
                                               {cellAssessments.map(a => (
-                                                <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
+                                                <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : a.isPostponed ? "bg-white text-red-500 border border-red-500" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
                                                   {a.description && a.description.includes("차") ? a.description : '평가'}
                                                 </span>
                                               ))}
@@ -2232,7 +2440,10 @@ export default function Dashboard() {
                     <div
                       key={assessment.id}
                       className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'border-red-200' : ''}`}
-                      style={{ backgroundColor: cardBg }}
+                      style={{ 
+                        backgroundColor: cardBg,
+                        backgroundImage: assessment.isPostponed ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.05) 10px, rgba(239, 68, 68, 0.05) 20px)' : 'none'
+                      }}
                       onClick={() => {
                         // Find the cell logic
                         const targetDate = new Date(assessment.dueDate); // This might be string 'YYYY-MM-DD'
@@ -2269,8 +2480,8 @@ export default function Dashboard() {
                           <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                             {assessment.description}
                           </span>
-                          <span className={`text-base font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
-                            {dDay}
+                          <span className={`text-base font-bold ${assessment.isPostponed ? 'text-red-500 text-sm' : isToday ? 'text-red-600' : 'text-gray-500'}`}>
+                            {assessment.isPostponed ? '시간표 변경' : dDay}
                           </span>
                         </div>
                         {grade && classNum && studentNumber && (
@@ -2305,12 +2516,42 @@ export default function Dashboard() {
                         )}
                       </div>
                       <p className="text-gray-700 mb-2">{assessment.title}</p>
-                      <div className="flex items-center mt-auto">
-                        <div className="flex items-center text-sm text-gray-500">
-                          <span>{assessment.dueDate}</span>
-                          <span className="mx-2">|</span>
-                          <span>{assessment.classTime}교시</span>
+                      <div className="flex items-center justify-between mt-auto">
+                        <div className="flex items-center text-sm text-gray-500 flex-wrap">
+                          {assessment.isPostponed ? (
+                            <>
+                              <span className="line-through text-gray-400">{assessment.originalDueDate}</span>
+                              <span className="mx-1 text-red-500">➔</span>
+                              <span className="font-bold text-red-600">{assessment.dueDate}</span>
+                              <span className="mx-2 text-gray-300">|</span>
+                              <span className="line-through text-gray-400">{assessment.originalClassTime}교시</span>
+                              <span className="mx-1 text-red-500">➔</span>
+                              <span className="font-bold text-red-600">{assessment.classTime}교시</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>{assessment.dueDate}</span>
+                              <span className="mx-2">|</span>
+                              <span>{assessment.classTime}교시</span>
+                            </>
+                          )}
                         </div>
+                        {assessment.isPostponed && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-red-600 border-red-200 hover:bg-red-50 h-7 text-xs px-2 shadow-sm ml-2 shrink-0 pointer-events-auto"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRelocatingAssessment(assessment);
+                              setPendingRelocation(null);
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                              toast.info("시간표 표에서 이동할 새 날짜 칸을 클릭하세요.");
+                            }}
+                          >
+                            바뀐 날짜
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
@@ -2360,6 +2601,64 @@ export default function Dashboard() {
           </div>
         )
       }
+      {/* Custom Relocation Action Bar */}
+      {relocatingAssessment && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-red-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] p-4 z-[9999] animate-in slide-in-from-bottom-2 duration-300">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900 leading-tight">
+                  <span className="text-red-600">{relocatingAssessment.subject}</span> 임시 이동 날짜 선택
+                </p>
+                <p className="text-sm text-gray-500">
+                  {pendingRelocation 
+                    ? `선택됨: ${pendingRelocation.date} (${pendingRelocation.classTime}교시)` 
+                    : "위 시간표에서 붉은 점선 칸 중 하나를 클릭해 임시 이동할 날짜를 직접 선택하세요."}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <Button 
+                variant="outline" 
+                className="flex-1 md:flex-none hover:bg-gray-50"
+                onClick={() => {
+                  setRelocatingAssessment(null);
+                  setPendingRelocation(null);
+                }}
+              >
+                취소
+              </Button>
+              <Button 
+                className="flex-1 md:flex-none bg-red-600 hover:bg-red-700 text-white transition-colors"
+                disabled={!pendingRelocation || updateMutation.isPending}
+                onClick={() => {
+                  if (pendingRelocation) {
+                    updateMutation.mutate(
+                      {
+                        ...relocatingAssessment,
+                        tempDueDate: pendingRelocation.date,
+                        tempClassTime: pendingRelocation.classTime
+                      },
+                      {
+                        onSuccess: () => {
+                          setRelocatingAssessment(null);
+                          setPendingRelocation(null);
+                        }
+                      }
+                    );
+                  }
+                }}
+              >
+                {updateMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                적용
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 선택과목 선택 다이얼로그 */}
       <ElectiveSelectionDialog
         isOpen={showElectiveDialog}

@@ -153,6 +153,7 @@ export const onRequest = async (context: any) => {
             const grade = parseInt(url.searchParams.get('grade') || '1');
             const classNumStr = url.searchParams.get('classNum');
             const datasetOverride = url.searchParams.get('dataset');
+            const targetDate = url.searchParams.get('targetDate');
             const classNum = classNumStr === 'all' ? 'all' : parseInt(classNumStr || '1');
             
             // Get Client IP
@@ -174,7 +175,28 @@ export const onRequest = async (context: any) => {
                         }
                     } catch (_) {}
 
-                    const cacheKey = `grade_${grade}`;
+                    let cacheKey = targetDate ? `grade_${grade}_${targetDate}` : `grade_${grade}`;
+
+                    // 미리 IP Override 여부를 확인하여 캐시키를 고립시킴
+                    let hasIpOverride = false;
+                    if (clientIp !== 'unknown') {
+                        try {
+                            const overrideRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'dataset_ip_overrides'").first();
+                            if (overrideRow && overrideRow.value) {
+                                const overrides = JSON.parse(overrideRow.value as string);
+                                if (overrides[clientIp]) {
+                                    hasIpOverride = true;
+                                }
+                            }
+                        } catch (_) {}
+                    }
+
+                    if (datasetOverride && datasetOverride !== '_auto_') {
+                        cacheKey += `__dataset_${datasetOverride}`;
+                    } else if (hasIpOverride) {
+                        cacheKey += `__ip_${clientIp.replace(/[:.]/g, '_')}`;
+                    }
+
                     const cacheRow = await db.prepare("SELECT response_json, dataset_id, updated_at FROM timetable_cache WHERE cache_key = ?").bind(cacheKey).first();
 
                     if (cacheRow && cacheRow.response_json) {
@@ -190,7 +212,7 @@ export const onRequest = async (context: any) => {
                         if (!isFresh) {
                             // 백그라운드에서 갱신
                             context.waitUntil(
-                                refreshCache(db, grade).catch((e: any) => console.error('[Comcigan Cache] Background refresh failed:', e))
+                                refreshCache(db, grade, targetDate).catch((e: any) => console.error('[Comcigan Cache] Background refresh failed:', e))
                             );
                         }
 
@@ -203,11 +225,53 @@ export const onRequest = async (context: any) => {
                 }
             }
 
-            // --- 캐시 미스: 기존 방식으로 직접 가져오기 ---
-            const response = await getTimetable(grade, classNum, db, datasetOverride, clientIp);
+            // --- 캐시 미스: 기존 방식으로 직접 가져오거나 raw_data 캐시 우회 사용 ---
+            let cachedRawDataString: string | undefined = undefined;
+            if (db) {
+                try {
+                    const rawDataRow = await db.prepare("SELECT response_json, updated_at FROM timetable_cache WHERE cache_key = 'raw_data'").first();
+                    if (rawDataRow && rawDataRow.response_json) {
+                        let cacheMaxAgeMs = DEFAULT_CACHE_MAX_AGE_MS;
+                        try {
+                            const maxAgeRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_cache_max_age_minutes'").first();
+                            if (maxAgeRow && maxAgeRow.value) {
+                                cacheMaxAgeMs = parseInt(maxAgeRow.value as string) * 60 * 1000;
+                            }
+                        } catch (_) {}
+                        
+                        const age = Date.now() - new Date(rawDataRow.updated_at as string + 'Z').getTime();
+                        if (age < cacheMaxAgeMs) {
+                            cachedRawDataString = rawDataRow.response_json as string;
+                            console.log(`[Comcigan Cache] raw_data HIT, age=${Math.round(age/1000)}s - By-passing HTTP Fetch`);
+                        }
+                    }
+                } catch (e) { }
+            }
+
+            const response = await getTimetable(grade, classNum, db, datasetOverride, clientIp, targetDate, cachedRawDataString);
             
             // 성공 시 캐시 저장 (백그라운드)
             if (db && response.status === 200) {
+                // Determine the isolated cacheKey again for saving
+                let cacheKeyToSave = targetDate ? `grade_${grade}_${targetDate}` : `grade_${grade}`;
+                
+                let hasIpOverride = false;
+                if (clientIp !== 'unknown') {
+                    try {
+                        const overrideRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'dataset_ip_overrides'").first();
+                        if (overrideRow && overrideRow.value) {
+                            const overrides = JSON.parse(overrideRow.value as string);
+                            if (overrides[clientIp]) hasIpOverride = true;
+                        }
+                    } catch (_) {}
+                }
+
+                if (datasetOverride && datasetOverride !== '_auto_') {
+                    cacheKeyToSave += `__dataset_${datasetOverride}`;
+                } else if (hasIpOverride) {
+                    cacheKeyToSave += `__ip_${clientIp.replace(/[:.]/g, '_')}`;
+                }
+
                 const responseClone = response.clone();
                 context.waitUntil(
                     (async () => {
@@ -217,7 +281,7 @@ export const onRequest = async (context: any) => {
                                 // 캐시에는 전체 학년의 all-class 데이터를 저장
                                 // (이미 classNum='all'으로 가져온 경우에만 캐시)
                                 if (classNum === 'all' || json.data.length > 10) {
-                                    await saveTimetableCache(db, grade, json);
+                                    await saveTimetableCache(db, grade, json, targetDate, cacheKeyToSave);
                                 }
                             }
                         } catch (e) {
@@ -243,18 +307,22 @@ export const onRequest = async (context: any) => {
     }
 }
 
-async function getTimetable(grade: number, classNumInput: number | 'all', db?: any, datasetOverride?: string | null, clientIp: string = 'unknown') {
+async function getTimetable(grade: number, classNumInput: number | 'all', db?: any, datasetOverride?: string | null, clientIp: string = 'unknown', targetDate?: string | null, cachedRawDataString?: string) {
     let ipOverrideApplied: string | false = false;
-    const prefix = await getPrefix();
-    const { code1, code2 } = await getSchoolCode(prefix);
+    let jsonString = cachedRawDataString;
 
-    // Always fetch grade 1's parameter to avoid Comcigan server corruption where fetching grade 2 breaks the Thursday data
-    const param = `${prefix}${code2}_0_1`;
-    const b64 = btoa(param);
-    const targetUrl = `${BASE_URL}/${code1}?${b64}`;
+    if (!jsonString) {
+        const prefix = await getPrefix();
+        const { code1, code2 } = await getSchoolCode(prefix);
 
-    const jsonText = await fetchWithProxy(targetUrl, HEADERS, false);
-    const jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
+        // Always fetch grade 1's parameter to avoid Comcigan server corruption where fetching grade 2 breaks the Thursday data
+        const param = `${prefix}${code2}_0_1`;
+        const b64 = btoa(param);
+        const targetUrl = `${BASE_URL}/${code1}?${b64}`;
+
+        const jsonText = await fetchWithProxy(targetUrl, HEADERS, false);
+        jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
+    }
     
     if (db) {
         try {
@@ -304,6 +372,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     // Sometimes the last element is an empty matrix of zeros for future use.
     // Pick the last one that actually has non-zero values in its class 1 timetable.
     let timedataProp = "";
+    let datasetSelected: string | null = null;
 
     if (db) {
         try {
@@ -318,7 +387,6 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             const { results } = await db.prepare("SELECT key, value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'comcigan_dataset_selected_grade1' OR key = 'manual_semester_plan' OR key = 'dataset_ip_overrides'").all();
 
             let manualPlanData: any = null;
-            let datasetSelected: string | null = null;
             let datasetSelectedGrade1: string | null = null;
             let ipOverridesFound: Record<string, { grade1?: string, default?: string, memo?: string }> = {};
 
@@ -439,49 +507,71 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                     console.warn(`[Comcigan Debug] MANUAL_PLAN selected but no data found for G${grade} C${classNumInput}. Falling back to normal.`);
                 }
 
-            } else if (datasetSelected && timetableProps.includes(datasetSelected)) {
-                timedataProp = datasetSelected;
-                console.log(`[Comcigan Debug] Using admin selected timetable dataset: ${timedataProp}`);
             }
         } catch (e) {
             console.warn("[Comcigan Debug] Failed to read system_settings for dataset selection", e);
         }
     }
 
-    if (!timedataProp) {
-        let minDataCount = Infinity;
-        for (let i = timetableProps.length - 1; i >= 0; i--) {
-            const prop = timetableProps[i];
-            const gradeData = rawData[prop][grade];
-            if (!gradeData) continue;
-
-            let dataCount = 0;
-            for (let c = 1; c < gradeData.length; c++) {
-                const classData = gradeData[c];
-                if (!classData) continue;
-                // Flatten the week's data to check for non-zero codes
-                for (let w = 1; w <= 5; w++) {
-                    if (classData[w] && Array.isArray(classData[w])) {
-                        dataCount += classData[w].filter((code: any) => typeof code === 'number' && code > 0).length;
-                    }
-                }
-            }
-
-            // If it has a reasonable amount of data for the week, it's a valid candidate.
-            // We want the ONE WITH THE FEWEST classes (cancelled classes logic)
-            // AND we want the LATEST one if there is a tie (iterating backwards, so `<` correctly prefers earlier iterations if we used forward loop, but we use backward loop! Wait, if we use backward loop:
-            // i=3 (자료245): minDataCount=110, timedataProp=자료245
-            // i=2 (자료147): minCount=110. 110 < 110 is false. So timedataProp remains 자료245.
-            // Why did it select 자료147 in my test script?
-            if (dataCount > 10 && dataCount < minDataCount) {
-                minDataCount = dataCount;
-                timedataProp = prop;
+    // Dynamic date matching logic
+    if (datasetSelected !== 'MANUAL_PLAN' && (!datasetSelected || datasetSelected === '_auto_') && targetDate) {
+        // e.g., targetDate: "2026-03-23" 
+        // Comcigan date arrays typically have "YY-MM-DD ~ YY-MM-DD" formatted items
+        const dateArr = rawData['일자']; // Array of week ranges, usually index 1 matches `timetableProps[0]` 
+        if (dateArr && Array.isArray(dateArr)) {
+            // Find the index of the matching date string
+            // Let's format targetDate to "YY-MM-DD"
+            const shortDateStr = targetDate.substring(2); // "26-03-23"
+            const matchedIdx = dateArr.findIndex((str: any) => typeof str === 'string' && str.startsWith(shortDateStr));
+            
+            if (matchedIdx >= 1 && matchedIdx - 1 < timetableProps.length) {
+                // If 일자 array starts with index 1 matching timetableProps[0], then:
+                // We use index matching mapping
+                timedataProp = timetableProps[matchedIdx - 1];
+                datasetSelected = timedataProp; // Resolved by date!
+                console.log(`[Comcigan Debug] Mapped exact date ${targetDate} to dataset ${timedataProp}`);
             }
         }
-        // Fallback just in case
-        if (!timedataProp && timetableProps.length > 0) {
+    }
+
+    // Check if what we resolved or selected is valid
+    if (datasetSelected && timetableProps.includes(datasetSelected)) {
+        timedataProp = datasetSelected;
+        console.log(`[Comcigan Debug] Using defined timetable dataset: ${timedataProp}`);
+    }
+
+    // Auto logic for unresolved dates
+    if (!timedataProp) {
+        if (timetableProps.length > 0) {
+            // 가장 최신(마지막) 데이터셋 사용 (시수 무시)
             timedataProp = timetableProps[timetableProps.length - 1];
         }
+    }
+
+    // Determine the persistent "Original" dataset corresponding to the current real-world date
+    // regardless of whether the requested targetDate was out of bounds
+    let originalDatasetId = timedataProp || null;
+    try {
+        if (datasetSelected !== 'MANUAL_PLAN' && (!datasetSelected || datasetSelected === '_auto_')) {
+            const dateArr = rawData['일자'];
+            if (dateArr && Array.isArray(dateArr)) {
+                const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+                const todayShort = koreanTime.toISOString().split('T')[0].substring(2); // "YY-MM-DD"
+                const matchedIdx = dateArr.findIndex((str: any) => typeof str === 'string' && str.startsWith(todayShort));
+                if (matchedIdx >= 1 && matchedIdx - 1 < timetableProps.length) {
+                    originalDatasetId = timetableProps[matchedIdx - 1];
+                } else if (timetableProps.length > 0) {
+                    originalDatasetId = timetableProps[timetableProps.length - 1];
+                }
+            }
+        } else {
+            originalDatasetId = datasetSelected;
+        }
+        if (originalDatasetId === 'MANUAL_PLAN' || datasetSelected === 'MANUAL_PLAN') {
+             originalDatasetId = 'MANUAL_PLAN';
+        }
+    } catch (e) {
+        console.error("[Comcigan Debug] Error computing originalDatasetId:", e);
     }
 
     console.log('[Comcigan Debug] keys:', keys.length, 'teacherProp:', teacherProp, 'subjectProp:', subjectProp);
@@ -492,6 +582,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     const teachers = rawData[teacherProp] || [];
     const subjects = rawData[subjectProp] || [];
     const data = rawData[timedataProp];
+    const baseData = timetableProps.length > 0 ? rawData[timetableProps[0]] : null;
     const bunri = rawData['분리'] !== undefined ? rawData['분리'] : 100; // Get bunri value
     const timeInfoProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].length === 8 && typeof rawData[k][1] === 'number');
 
@@ -525,6 +616,14 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 const code = classData[weekday][period];
                 if (!code) continue;
 
+                let isChanged = false;
+                if (baseData && baseData[grade] && baseData[grade][classNum] && baseData[grade][classNum][weekday]) {
+                    const baseCode = baseData[grade][classNum][weekday][period];
+                    if (baseCode !== undefined && baseCode !== code && timedataProp !== timetableProps[0]) {
+                        isChanged = true;
+                    }
+                }
+
                 let teacherIdx = 0;
                 let subjectIdx = 0;
 
@@ -547,7 +646,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                         weekday: weekday - 1, // Convert to 0-indexed (0=Mon, 4=Fri)
                         classTime: period,
                         subject,
-                        teacher
+                        teacher,
+                        isChanged
                     });
                 }
             }
@@ -595,6 +695,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     return new Response(JSON.stringify({
         schoolName: "부산성지고등학교",
         datasetId: timedataProp,
+        originalDatasetId: originalDatasetId,
         ipOverrideApplied: typeof ipOverrideApplied !== 'undefined' ? ipOverrideApplied : false,
         data: result,
         debugTokens: {
@@ -621,8 +722,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
 // --- 캐시 헬퍼 함수 ---
 
-async function saveTimetableCache(db: any, grade: number, responseData: any) {
-    const cacheKey = `grade_${grade}`;
+async function saveTimetableCache(db: any, grade: number, responseData: any, targetDate?: string | null, cacheKeyOverride?: string) {
+    const cacheKey = cacheKeyOverride || (targetDate ? `grade_${grade}_${targetDate}` : `grade_${grade}`);
     try {
         await db.prepare(createTimetableCacheTable).run().catch(() => {});
         await db.prepare(
@@ -634,13 +735,13 @@ async function saveTimetableCache(db: any, grade: number, responseData: any) {
     }
 }
 
-async function refreshCache(db: any, grade: number) {
-    console.log(`[Comcigan Cache] Refreshing cache for grade ${grade}...`);
-    const response = await getTimetable(grade, 'all', db, null, 'cache-refresh');
+async function refreshCache(db: any, grade: number, targetDate?: string | null) {
+    console.log(`[Comcigan Cache] Refreshing cache for grade ${grade} / date ${targetDate || 'default'}...`);
+    const response = await getTimetable(grade, 'all', db, null, 'cache-refresh', targetDate, undefined);
     if (response.status === 200) {
         const json: any = await response.json();
         if (json.data && json.data.length > 0) {
-            await saveTimetableCache(db, grade, json);
+            await saveTimetableCache(db, grade, json, targetDate);
         }
     }
 }
@@ -654,19 +755,9 @@ async function buildCacheResponse(
     cachedDatasetId: string,
     cacheAgeMs: number
 ): Promise<Response> {
-    // IP override 확인
-    let ipOverrideApplied: string | false = false;
-    if (db && clientIp !== 'unknown' && clientIp !== 'cache-refresh') {
-        try {
-            const overrideRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'dataset_ip_overrides'").first();
-            if (overrideRow && overrideRow.value) {
-                const overrides = JSON.parse(overrideRow.value as string);
-                if (overrides[clientIp]) {
-                    ipOverrideApplied = "캐시 응답 (IP override 미적용)";
-                }
-            }
-        } catch (_) {}
-    }
+    // 캐시 키가 이미 IP 오버라이드나 강제 지정자를 반영하여 분리되었으므로,
+    // cachedData 내부에 본래 포함된 ipOverrideApplied 상태를 그대로 신뢰함.
+    let ipOverrideApplied = cachedData.ipOverrideApplied || false;
 
     // classNum 필터링 적용
     let filteredData = cachedData.data || [];

@@ -2339,6 +2339,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     const [siteFaviconUrl, setSiteFaviconUrl] = useState("");
     const [pwaAppTitle, setPwaAppTitle] = useState("");
     const [pwaAppIconUrl, setPwaAppIconUrl] = useState("");
+    const [tintColor, setTintColor] = useState("#fbbf24");
+    const [tintOpacity, setTintOpacity] = useState(0.4);
     const [isSaving, setIsSaving] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
     const titleHtmlRef = React.useRef<HTMLDivElement>(null);
@@ -2367,6 +2369,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 setSiteFaviconUrl(currentSettings.site_favicon_url || '');
                 setPwaAppTitle(currentSettings.pwa_app_title || '성지수행');
                 setPwaAppIconUrl(currentSettings.pwa_app_icon_url || currentSettings.site_favicon_url || '');
+                setTintColor(currentSettings.changed_class_tint_color || '#fbbf24');
+                setTintOpacity(currentSettings.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings.changed_class_tint_opacity) : 0.4);
                 setIsInitialized(true);
                 setHtmlChanged(false);
             } else if (!htmlChanged) {
@@ -2378,6 +2382,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 setSiteFaviconUrl(currentSettings.site_favicon_url || '');
                 setPwaAppTitle(currentSettings.pwa_app_title || '성지수행');
                 setPwaAppIconUrl(currentSettings.pwa_app_icon_url || currentSettings.site_favicon_url || '');
+                setTintColor(currentSettings.changed_class_tint_color || '#fbbf24');
+                setTintOpacity(currentSettings.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings.changed_class_tint_opacity) : 0.4);
             }
         }
     }, [currentSettings, isInitialized, htmlChanged]);
@@ -2421,7 +2427,9 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                     site_title_html: finalHtml,
                     site_favicon_url: siteFaviconUrl,
                     pwa_app_title: pwaAppTitle,
-                    pwa_app_icon_url: pwaAppIconUrl
+                    pwa_app_icon_url: pwaAppIconUrl,
+                    changed_class_tint_color: tintColor,
+                    changed_class_tint_opacity: tintOpacity.toString()
                 })
             });
             if (!res.ok) throw new Error('Failed to save');
@@ -2434,7 +2442,9 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 site_title_html: finalHtml,
                 site_favicon_url: siteFaviconUrl,
                 pwa_app_title: pwaAppTitle,
-                pwa_app_icon_url: pwaAppIconUrl
+                pwa_app_icon_url: pwaAppIconUrl,
+                changed_class_tint_color: tintColor,
+                changed_class_tint_opacity: tintOpacity.toString()
             }));
 
             queryClient.invalidateQueries({ queryKey: ['admin', 'settings', 'site-design'] });
@@ -2455,6 +2465,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
         setSiteFaviconUrl(currentSettings?.site_favicon_url || '');
         setPwaAppTitle(currentSettings?.pwa_app_title || '성지수행');
         setPwaAppIconUrl(currentSettings?.pwa_app_icon_url || currentSettings?.site_favicon_url || '');
+        setTintColor(currentSettings?.changed_class_tint_color || '#fbbf24');
+        setTintOpacity(currentSettings?.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings?.changed_class_tint_opacity) : 0.4);
         setHtmlChanged(false);
     };
 
@@ -2462,7 +2474,9 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     const savedFavicon = currentSettings?.site_favicon_url || '';
     const savedPwaTitle = currentSettings?.pwa_app_title || '성지수행';
     const savedPwaIcon = currentSettings?.pwa_app_icon_url || currentSettings?.site_favicon_url || '';
-    const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon || htmlChanged || pwaAppTitle !== savedPwaTitle || pwaAppIconUrl !== savedPwaIcon;
+    const savedTintColor = currentSettings?.changed_class_tint_color || '#fbbf24';
+    const savedTintOpacity = currentSettings?.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings?.changed_class_tint_opacity) : 0.4;
+    const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon || htmlChanged || pwaAppTitle !== savedPwaTitle || pwaAppIconUrl !== savedPwaIcon || tintColor !== savedTintColor || tintOpacity !== savedTintOpacity;
 
     if (isLoading) {
         return <div className="p-8 text-center text-gray-400">설정을 불러오는 중...</div>;
@@ -2637,6 +2651,62 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 </div>
                 <p className="text-xs text-gray-400">모바일 앱 설치 시 표시되는 아이콘입니다. 정사각형(1:1)의 PNG 권장. 미지정시 기본 이미지(/icon.svg)가 적용됩니다.</p>
             </div>
+
+            <hr className="my-6 border-slate-200" />
+
+            {/* 변경된 시간표 하이라이트 설정 */}
+            <div className="space-y-4">
+                <Label className="text-sm font-semibold text-amber-600">시간표 변경사항 하이라이트 (Tint)</Label>
+                <div className="flex flex-col gap-3 p-4 bg-amber-50/50 border border-amber-100 rounded-lg">
+                    <div className="flex items-center gap-4">
+                        <div className="space-y-1">
+                            <Label className="text-xs text-gray-700">색상 (Color)</Label>
+                            <input
+                                type="color"
+                                value={tintColor}
+                                onChange={(e) => setTintColor(e.target.value)}
+                                className="w-12 h-10 p-1 bg-white border rounded cursor-pointer block"
+                            />
+                        </div>
+                        <div className="space-y-1 flex-1 max-w-[200px]">
+                            <div className="flex justify-between items-center">
+                                <Label className="text-xs text-gray-700">투명도 (Opacity)</Label>
+                                <span className="text-xs font-mono text-gray-500">{Math.round(tintOpacity * 100)}%</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                                value={tintOpacity}
+                                onChange={(e) => setTintOpacity(parseFloat(e.target.value))}
+                                className="w-full"
+                            />
+                        </div>
+                    </div>
+                    
+                    {/* 미리보기 (Tint) */}
+                    <div className="mt-2 flex gap-2 items-center">
+                        <span className="text-xs text-gray-500">예시:</span>
+                        <div className="border border-gray-200 bg-white rounded flex items-center justify-center w-24 h-12 relative overflow-hidden">
+                            <div 
+                                className="absolute inset-0 pointer-events-none" 
+                                style={{ 
+                                    backgroundColor: tintColor, 
+                                    opacity: tintOpacity 
+                                }} 
+                            />
+                            <div className="relative text-xs flex flex-col items-center">
+                                <span className="font-bold text-blue-700 text-[11px]">국어</span>
+                                <span className="text-gray-500 text-[10px]">김교사</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p className="text-xs text-gray-400">메인페이지 시간표 뷰어에서 변경된 수업인 경우, 해당 칸의 배경에 위 색상과 투명도가 적용되어 칠해집니다.</p>
+            </div>
+
+            <hr className="my-6 border-slate-200" />
 
             {/* 미리보기 */}
             {(siteTitle || siteFaviconUrl) && (
@@ -3278,6 +3348,87 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
         enabled: !!resolvedDataset,
     });
 
+    const timetableAllQuery = useQuery({
+        queryKey: ["admin", "timetableAll_reliability", selectedGrade, resolvedDataset],
+        queryFn: async () => {
+            if (!resolvedDataset) return [];
+            const res = await fetch(`/api/comcigan?type=timetable&grade=${selectedGrade}&classNum=all&dataset=${encodeURIComponent(resolvedDataset)}`);
+            if (!res.ok) return [];
+            const json = await res.json();
+            return json.data || [];
+        },
+        enabled: !!resolvedDataset,
+    });
+
+    const electiveConfigsQuery = useQuery({
+        queryKey: ["admin", "electiveConfigs_reliability", selectedGrade, resolvedDataset],
+        queryFn: async () => {
+            if (selectedGrade !== "2" && selectedGrade !== "3") return [];
+            if (!resolvedDataset) return [];
+            const res = await fetch(`/api/electives?grade=${selectedGrade}&dataset=${encodeURIComponent(resolvedDataset)}`);
+            if (!res.ok) return [];
+            return res.json();
+        },
+        enabled: !!resolvedDataset && (selectedGrade === "2" || selectedGrade === "3"),
+    });
+
+    const computedGroups = useMemo(() => {
+        const slots = timetableAllQuery.data || [];
+        const configs = electiveConfigsQuery.data || [];
+        if (selectedGrade !== "2" && selectedGrade !== "3") return {};
+        if (slots.length === 0 || configs.length === 0) return {};
+
+        const subjectTeacherToGroups = new Map<string, string[]>();
+        const subjectToGroups = new Map<string, string[]>();
+
+        configs.forEach((c: any) => {
+            const isFreePeriod = ["빈교실", "공강", "Empty", "Free"].some(k => (c.subject || "").includes(k));
+            if ((c.isMovingClass !== 0 || isFreePeriod) && c.classCode) {
+                const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
+                const subj = c.subject.trim();
+                
+                const existing = subjectToGroups.get(subj) || [];
+                subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
+
+                const teacherNames = [];
+                if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
+                if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
+                
+                const uniqueTeachers = Array.from(new Set(teacherNames));
+                uniqueTeachers.forEach((tName: string) => {
+                    const key = `${subj}|${tName}`;
+                    const existingKey = subjectTeacherToGroups.get(key) || [];
+                    subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
+                });
+            }
+        });
+
+        const cellGroups: Record<string, string> = {};
+        for (let w = 0; w < 5; w++) {
+            for (let p = 1; p <= 7; p++) {
+                const matchingSlots = slots.filter((t: any) => t.weekday === w && t.classTime === p);
+                if (matchingSlots.length === 0) continue;
+
+                const groupCounts: Record<string, number> = {};
+                matchingSlots.forEach((slot: any) => {
+                    const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
+                    let groups = subjectTeacherToGroups.get(key) || subjectToGroups.get(slot.subject.trim());
+                    if (groups) {
+                        groups.forEach(g => {
+                            groupCounts[g] = (groupCounts[g] || 0) + 1;
+                        });
+                    }
+                });
+
+                const entries = Object.entries(groupCounts).sort((a, b) => b[1] - a[1]);
+                if (entries.length > 0 && entries[0][1] >= 1) {
+                    cellGroups[`${w}-${p}`] = entries[0][0];
+                }
+            }
+        }
+        return cellGroups;
+    }, [timetableAllQuery.data, electiveConfigsQuery.data, selectedGrade]);
+
     const assessments = assessmentsQuery.data || [];
 
     // Compute votes from inline assessment.votes JSON
@@ -3361,11 +3512,77 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
             const v = votes[String(a.id)] || { helpful: 0, distrust: 0 };
             const eligible = a.classNum === 0 ? eligibleCounts.total : (eligibleCounts.byClass[a.classNum] || 0);
             const exceedsThreshold = v.distrust >= threshold;
-            return { ...a, helpful: v.helpful, distrust: v.distrust, eligible, exceedsThreshold };
-        }).sort((a: any, b: any) => b.distrust - a.distrust);
-    }, [assessments, votes, eligibleCounts, threshold]);
+            
+            // 고아 수행평가 판단 (Orphan Assessment Detection)
+            let isOrphan = false;
+            // Get weekday from dueDate
+            const dueDateObj = new Date(a.dueDate);
+            const aDay = dueDateObj.getDay();
+            if (aDay === 0 || aDay === 6) {
+                // Weekend
+                isOrphan = true;
+            } else {
+                const w = aDay - 1; // 0=Mon ... 4=Fri
+                const slots = (timetableAllQuery.data || []).filter((t: any) => t.class === a.classNum && t.weekday === w);
+                
+                let matchingSlots = slots;
+                if (a.classTime) {
+                    matchingSlots = slots.filter((t: any) => t.classTime === a.classTime);
+                }
+                
+                if (matchingSlots.length === 0) {
+                    isOrphan = true;
+                } else {
+                    let foundMatch = false;
+                    for (const slot of matchingSlots) {
+                        const p = slot.classTime;
+                        
+                        // Direct match
+                        let matchSubject = slot.subject;
+                        
+                        // Electives match
+                        const group = computedGroups[`${w}-${p}`];
+                        if (group && (selectedGrade === "2" || selectedGrade === "3")) {
+                            // Check if a.subject is in this group
+                            const configs = electiveConfigsQuery.data || [];
+                            const isSubjectInGroup = configs.some((cfg: any) => 
+                                (cfg.subject.trim() === a.subject.trim() || cfg.fullSubjectName?.trim() === a.subject.trim()) &&
+                                cfg.classCode?.split(',').map((s: string) => s.trim()).includes(group)
+                            );
+                            if (isSubjectInGroup) {
+                                foundMatch = true;
+                                break;
+                            }
+                        }
+                        
+                        // Handle generic fullSubjectName mappings if direct match fails
+                        if (!foundMatch && matchSubject !== a.subject) {
+                            const configs = electiveConfigsQuery.data || [];
+                            const specificConfig = configs.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
+                            if (specificConfig && specificConfig.fullSubjectName === a.subject) {
+                                foundMatch = true;
+                                break;
+                            }
+                        } else if (matchSubject === a.subject) {
+                            foundMatch = true;
+                            break;
+                        }
+                    }
+                    if (!foundMatch) {
+                        isOrphan = true;
+                    }
+                }
+            }
 
-    const isLoading = assessmentsQuery.isLoading;
+            return { ...a, helpful: v.helpful, distrust: v.distrust, eligible, exceedsThreshold, isOrphan };
+        }).sort((a: any, b: any) => {
+            if (a.isOrphan && !b.isOrphan) return -1;
+            if (!a.isOrphan && b.isOrphan) return 1;
+            return b.distrust - a.distrust;
+        });
+    }, [assessments, votes, eligibleCounts, threshold, timetableAllQuery.data, electiveConfigsQuery.data, computedGroups, selectedGrade]);
+
+    const isLoading = assessmentsQuery.isLoading || timetableAllQuery.isLoading || electiveConfigsQuery.isLoading;
 
     const blendHex = (base: string, mix: string, ratio: number) => {
         const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
@@ -3451,8 +3668,13 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
                         <tbody>
                             {tableRows.map((row: any) => (
                                 <tr key={row.id} className={`hover:bg-slate-50 ${row.exceedsThreshold ? 'bg-red-50' : ''}`}>
-                                    <td className="border border-slate-300 px-3 py-2 text-center font-medium">{row.subject}</td>
-                                    <td className="border border-slate-300 px-3 py-2 text-center text-xs">{row.dueDate}</td>
+                                    <td className="border border-slate-300 px-3 py-2 text-center font-medium">
+                                        {row.subject}
+                                        {row.isOrphan && (
+                                            <Badge variant="destructive" className="ml-2 text-[10px] px-1 h-4">고아 수행평가</Badge>
+                                        )}
+                                    </td>
+                                    <td className={`border border-slate-300 px-3 py-2 text-center text-xs ${row.isOrphan ? 'line-through text-red-400' : ''}`}>{row.dueDate}</td>
                                     <td className="border border-slate-300 px-3 py-2 text-center text-xs truncate max-w-[150px]">{row.title}</td>
                                     <td className="border border-slate-300 px-3 py-2 text-center text-green-600 font-bold">{row.helpful}</td>
                                     <td className={`border border-slate-300 px-3 py-2 text-center font-bold ${row.exceedsThreshold ? 'text-red-600' : 'text-slate-600'}`}>{row.distrust}</td>
@@ -4078,7 +4300,7 @@ function RawTimetableViewer({ rawData }: { rawData: any }) {
         if (timetableProps.length > 0 && !selectedProp) {
             setSelectedProp(timetableProps[timetableProps.length - 1]);
         }
-    }, [timetableProps, selectedProp]);
+    }, [timetableProps, selectedProp, rawData]);
 
     if (!rawData) return null;
 
@@ -5633,7 +5855,8 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
     });
 
-    const latestDatasetName = timetableProps && timetableProps.length > 0 ? timetableProps[0] : '없음';
+    // 가장 마지막 데이터가 배열의 마지막에 위치 (가장 최신)
+    const latestDatasetName = timetableProps && timetableProps.length > 0 ? timetableProps[timetableProps.length - 1] : '없음';
 
     // Grade 2/3 dirty tracking
     const displayValue = selectedProp || '_auto_';
@@ -5713,8 +5936,9 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
             <CardHeader>
                 <CardTitle>출체 데이터셋 선택</CardTitle>
                 <CardDescription>
-                    메인 화면의 시간표에서 출력할 원본 데이터셋을 학년별로 선택합니다.
-                    &quot;자동&quot;으로 설정할 경우 가장 최신 데이터셋을 자동으로 선택합니다.
+                    일반적으로 날짜 선택 시 자동으로 해당 주차의 시간표가 출력됩니다.<br/>
+                    <b>이 설정은 아직 컴시간에 계획되지 않은 &quot;미정 날짜&quot;를 선택했을 때 보여줄 &quot;디폴트 데이터셋&quot;을 지정합니다.</b><br/>
+                    &quot;자동&quot;으로 설정할 경우 컴시간에 존재하는 <b>가장 최신 데이터셋</b>을 자동으로 선택합니다. (시수 무시)
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -5722,7 +5946,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                 {/* Grade 1 dataset */}
                 <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-slate-700">1학년 데이터셋</span>
+                        <span className="text-sm font-semibold text-slate-700">1학년 미정 날짜구간 기본 데이터셋</span>
                     </div>
                     <DatasetDropdown value={displayValueG1} onChange={setSelectedPropGrade1} />
                     <div className="flex justify-end gap-2 pt-1">
@@ -5738,7 +5962,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                 {/* Grade 2/3 dataset */}
                 <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-slate-700">2/3학년 데이터셋</span>
+                        <span className="text-sm font-semibold text-slate-700">2/3학년 미정 날짜구간 기본 데이터셋</span>
                         <span className="text-xs text-slate-400">(그룹 확인기, 선택과목 자동 등에 적용)</span>
                     </div>
                     <DatasetDropdown value={displayValue} onChange={setSelectedProp} />

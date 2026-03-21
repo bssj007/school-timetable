@@ -57,33 +57,20 @@ export const onRequest = async (context: any) => {
                           createdAt TEXT DEFAULT (datetime('now')),
                           lastModifiedIp TEXT,
                           isDeleted INTEGER DEFAULT 0,
-                          votes TEXT DEFAULT '[]'
+                          votes TEXT DEFAULT '[]',
+                          tempDueDate TEXT,
+                          tempClassTime INTEGER
                         )
                     `).run();
                     // Add isDeleted column if missing (migration for older tables)
-                    try {
-                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run();
-                    } catch (createErr: any) {
-                        if (createErr.message && !createErr.message.includes("duplicate column")) {
-                            console.error("Migration error (isDeleted):", createErr);
-                        }
-                    }
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run(); } catch (_) {}
                     // Add dataset column if missing (migration for older tables)
-                    try {
-                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN dataset TEXT DEFAULT ''").run();
-                    } catch (createErr: any) {
-                        if (createErr.message && !createErr.message.includes("duplicate column")) {
-                            console.error("Migration error (dataset):", createErr);
-                        }
-                    }
-                    // Add votes column if missing
-                    try {
-                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN votes TEXT DEFAULT '[]'").run();
-                    } catch (createErr: any) {
-                        if (createErr.message && !createErr.message.includes("duplicate column")) {
-                            console.error("Migration error (votes):", createErr);
-                        }
-                    }
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN dataset TEXT DEFAULT ''").run(); } catch (_) {}
+                    // Add votes column if missing 
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN votes TEXT DEFAULT '[]'").run(); } catch (_) {}
+                    // Add temp columns if missing
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempDueDate TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempClassTime INTEGER").run(); } catch (_) {}
                     return new Response(JSON.stringify([]), {
                         headers: { 'Content-Type': 'application/json' }
                     });
@@ -105,6 +92,20 @@ export const onRequest = async (context: any) => {
                 if (e.message && e.message.includes("no such column") && e.message.includes("dataset")) {
                     console.log("[Assessment API] 'dataset' column missing in GET. Attempting to add it.");
                     await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN dataset TEXT DEFAULT ''").run();
+
+                    // Retry original query
+                    const { results } = await env.DB.prepare(query).bind(...params).all();
+
+                    return new Response(JSON.stringify(results), {
+                         headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+                
+                // Column missing: tempDueDate or tempClassTime
+                if (e.message && e.message.includes("no such column") && (e.message.includes("tempDueDate") || e.message.includes("tempClassTime"))) {
+                    console.log("[Assessment API] 'temp' columns missing in GET. Attempting to add them.");
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempDueDate TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempClassTime INTEGER").run(); } catch (_) {}
 
                     // Retry original query
                     const { results } = await env.DB.prepare(query).bind(...params).all();
@@ -259,25 +260,19 @@ export const onRequest = async (context: any) => {
                           dataset TEXT DEFAULT '',
                           createdAt TEXT DEFAULT (datetime('now')),
                           lastModifiedIp TEXT,
-                          isDeleted INTEGER DEFAULT 0
+                          isDeleted INTEGER DEFAULT 0,
+                          votes TEXT DEFAULT '[]',
+                          tempDueDate TEXT,
+                          tempClassTime INTEGER
                         )
                     `).run();
                     // Add isDeleted column if missing (migration for older tables)
-                    try {
-                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run();
-                    } catch (createErr: any) {
-                        if (createErr.message && !createErr.message.includes("duplicate column")) {
-                            console.error("Migration error (isDeleted):", createErr);
-                        }
-                    }
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run(); } catch (_) {}
                     // Add dataset column if missing (migration for older tables)
-                    try {
-                        await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN dataset TEXT DEFAULT ''").run();
-                    } catch (createErr: any) {
-                        if (createErr.message && !createErr.message.includes("duplicate column")) {
-                            console.error("Migration error (dataset):", createErr);
-                        }
-                    }
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN dataset TEXT DEFAULT ''").run(); } catch (_) {}
+                    // Add temp columns if missing
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempDueDate TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempClassTime INTEGER").run(); } catch (_) {}
 
                     // Retry
                     const result = await env.DB.prepare(
@@ -363,7 +358,7 @@ export const onRequest = async (context: any) => {
         // PATCH: 수정
         if (request.method === 'PATCH') {
             const body = await request.json();
-            const { id, subject, title, description, dueDate, round, classTime } = body;
+            const { id, subject, title, description, dueDate, round, classTime, tempDueDate, tempClassTime } = body;
 
             if (!id) return new Response('Missing ID', { status: 400 });
 
@@ -376,6 +371,20 @@ export const onRequest = async (context: any) => {
             if (description !== undefined) { updates.push("description = ?"); values.push(description); }
             if (dueDate !== undefined) { updates.push("dueDate = ?"); values.push(dueDate); }
             if (classTime !== undefined) { updates.push("classTime = ?"); values.push(classTime); }
+            
+            if (tempDueDate !== undefined) { 
+                updates.push("tempDueDate = ?"); 
+                values.push(tempDueDate); 
+            } else if (dueDate !== undefined) {
+                // 원본 날짜가 수정될 때는 기존의 임시 연기 날짜를 삭제함 (수동으로 제공되지 않은 경우)
+                updates.push("tempDueDate = NULL");
+                updates.push("tempClassTime = NULL");
+            }
+            
+            if (tempClassTime !== undefined) { 
+                updates.push("tempClassTime = ?"); 
+                values.push(tempClassTime); 
+            }
 
             // lastModifiedIp 업데이트
             const ip = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
@@ -398,6 +407,18 @@ export const onRequest = async (context: any) => {
                 });
             } catch (updateError: any) {
                 const errorMsg = updateError.message || "";
+
+                // Auto-Heal: Missing Column 'tempDueDate' / 'tempClassTime'
+                if (errorMsg.includes("no such column") && (errorMsg.includes("tempDueDate") || errorMsg.includes("tempClassTime"))) {
+                    console.log("[Assessment API] 'temp' columns missing in PATCH. Attempting to add them.");
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempDueDate TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempClassTime INTEGER").run(); } catch (_) {}
+
+                    const retryResult = await env.DB.prepare(query).bind(...values).run();
+                    return new Response(JSON.stringify({ success: true, result: retryResult }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
 
                 // Auto-Heal: Missing Column 'lastModifiedIp'
                 if (errorMsg.includes("no such column") && errorMsg.includes("lastModifiedIp")) {
