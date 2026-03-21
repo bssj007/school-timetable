@@ -4707,8 +4707,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
 
     let isOrphan = false;
     if (timetableData && electiveConfigs && assessment.classNum !== 0) {
-        // Find if this specific slot exists in the full timetable of that class
-        const dueDateObj = new Date(assessment.tempDueDate || assessment.dueDate);
+        // Find if this specific slot exists in the full timetable of that class using ORIGINAL dueDate
+        const dueDateObj = new Date(assessment.dueDate);
         const aDay = dueDateObj.getDay();
         if (aDay === 0 || aDay === 6) {
             isOrphan = true; // Weekends
@@ -4716,7 +4716,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
             const w = aDay - 1;
             const slots = timetableData.filter((t: any) => t.class === assessment.classNum && t.weekday === w);
             let matchingSlots = slots;
-            const targetTime = assessment.tempClassTime || assessment.classTime;
+            const targetTime = assessment.classTime;
             if (targetTime) {
                 matchingSlots = slots.filter((t: any) => t.classTime === targetTime);
             }
@@ -4771,17 +4771,15 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
             <TableCell className="truncate max-w-[200px]">{assessment.title}</TableCell>
             <TableCell>
                 {isPostponed ? (
-                    <div className="flex flex-col gap-1">
-                        <div className="flex items-center">
-                            <span className="line-through text-gray-400 text-xs">{assessment.dueDate} {assessment.classTime}교시</span>
-                            <span className="mx-1 font-bold text-red-500 text-xs">➔</span>
-                        </div>
-                        <div className="flex items-center flex-wrap gap-1">
-                            <span className="text-red-600 font-bold text-xs">{assessment.tempDueDate} {assessment.tempClassTime}교시</span>
-                            {assessment.isAutoPredicted && (
-                                <span className="text-[10px] text-orange-500 font-bold">(자동예측)</span>
-                            )}
-                        </div>
+                    <div className="flex items-center flex-wrap gap-1">
+                        <span className={`text-xs ${isOrphan ? "line-through text-red-400" : "line-through text-gray-400"}`}>
+                            {assessment.dueDate} {assessment.classTime}교시
+                        </span>
+                        <span className="mx-1 font-bold text-red-500 text-xs">➔</span>
+                        <span className="text-red-600 font-bold text-xs">{assessment.tempDueDate} {assessment.tempClassTime}교시</span>
+                        {assessment.isAutoPredicted && (
+                            <span className="text-[10px] text-orange-500 font-bold whitespace-nowrap">(자동예측)</span>
+                        )}
                     </div>
                 ) : (
                     <span className={`text-xs ${isOrphan ? "line-through text-red-400" : ""}`}>{assessment.dueDate} {assessment.classTime}교시</span>

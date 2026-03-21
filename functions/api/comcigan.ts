@@ -150,13 +150,25 @@ export const onRequest = async (context: any) => {
 
         // GET method: Return teacher timetable specifically
         if (type === 'teacher_timetable') {
-            // Fetch live raw data, skipping DB cache
-            const timetableResponse = await getTimetable(1, 1, undefined);
-            const timetableJson: any = await timetableResponse.json();
-            const rawData = timetableJson.data;
+            let rawData;
+            try {
+                // Fetch live raw data directly
+                const prefix = await getPrefix();
+                const { code1, code2 } = await getSchoolCode(prefix);
+                const param = `${prefix}${code2}_0_1`;
+                const b64 = btoa(param);
+                const targetUrl = `${BASE_URL}/${code1}?${b64}`;
+
+                const jsonText = await fetchWithProxy(targetUrl, HEADERS, false);
+                const jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
+                rawData = JSON.parse(jsonString);
+            } catch (e: any) {
+                console.error("[Teacher Timetable] Failed to fetch raw data:", e);
+                return new Response(JSON.stringify({ error: "Failed to fetch Comcigan data", details: e.message }), { status: 500 });
+            }
 
             if (!rawData) {
-                return new Response(JSON.stringify({ error: "Failed to fetch Comcigan data" }), { status: 500 });
+                return new Response(JSON.stringify({ error: "Failed to parse Comcigan data" }), { status: 500 });
             }
 
             return new Response(JSON.stringify({
