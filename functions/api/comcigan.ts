@@ -796,53 +796,12 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         };
     });
 
-    let originalData: any[] | undefined = undefined;
-    if (isFallbackApplied && originalDatasetId && originalDatasetId !== 'MANUAL_PLAN' && rawData[originalDatasetId]) {
-        originalData = [];
-        const oData = rawData[originalDatasetId];
-        if (oData[grade]) {
-            for (const cls of classesToProcess) {
-                if (!oData[grade][cls]) continue;
-                const classData = oData[grade][cls];
-                for (let weekday = 1; weekday <= 5; weekday++) {
-                    const limit = classData[weekday] && Array.isArray(classData[weekday]) ? Math.min(classData[weekday][0] || 0, classData[weekday].length - 1) : 0;
-                    for (let period = 1; period <= limit; period++) {
-                        const code = classData[weekday][period] || 0;
-                        if (!code) continue;
-                        let teacherIdx = 0, subjectIdx = 0;
-                        if (bunri === 100) {
-                            teacherIdx = Math.floor(code / bunri);
-                            subjectIdx = code % bunri;
-                        } else {
-                            teacherIdx = code % bunri;
-                            subjectIdx = Math.floor(code / bunri);
-                        }
-                        const subject = subjects[subjectIdx] ? subjects[subjectIdx].replace(/_/g, "") : "";
-                        const teacher = teachers[teacherIdx] || "";
-                        if (subject) {
-                            originalData.push({
-                                grade,
-                                class: cls,
-                                weekday: weekday - 1,
-                                classTime: period,
-                                subject,
-                                teacher,
-                                isChanged: false
-                            });
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     return new Response(JSON.stringify({
         schoolName: "부산성지고등학교",
         datasetId: timedataProp,
         originalDatasetId,
         ipOverrideApplied: typeof ipOverrideApplied !== 'undefined' ? ipOverrideApplied : false,
         data: result,
-        originalData,
         debugTokens: { 
             override1: datasetSelectedGrade1 || null, 
             override23: typeof datasetSelected !== 'undefined' ? datasetSelected : null,
