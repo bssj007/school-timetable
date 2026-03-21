@@ -3699,6 +3699,90 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
 // ----------------------------------------------------------------------
 // 7. Etc Manager (Miscellaneous features like Raw Comcigan Data)
 // ----------------------------------------------------------------------
+function DatasetDatesViewer({ rawData, adminPassword }: { rawData: any; adminPassword: string }) {
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            return res.json();
+        }
+    });
+
+    if (!rawData) return <div className="p-4 flex items-center justify-center font-bold text-slate-500">원격 데이터 대기 중...</div>;
+    if (settingsQuery.isLoading) return <div className="p-4 flex items-center justify-center font-bold text-slate-500">설정 로딩 중...</div>;
+
+    const dataArr = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
+    const timetableProps = dataArr.sort((a, b) => parseInt(a.replace('자료', ''), 10) - parseInt(b.replace('자료', ''), 10));
+    const datesArr = rawData['일자']; // Array of ranges
+
+    const tableRows = [];
+
+    for (let idx = 0; idx < timetableProps.length; idx++) {
+        const dKey = timetableProps[idx];
+        const gradeData = rawData[dKey];
+        if (!gradeData || (!gradeData[1] && !gradeData[2] && !gradeData[3])) continue; // Skip empty datasets
+
+        let datePeriod = "(미확인)";
+        if (datesArr && Array.isArray(datesArr) && idx + 1 < datesArr.length) {
+            datePeriod = datesArr[idx + 1];
+        }
+
+        const remarks = [];
+        const s = settingsQuery.data || {};
+
+        if (s.comcigan_dataset_selected_grade1 === dKey) remarks.push("1학년 단독선택(Override)");
+        if (s.comcigan_dataset_selected === dKey) remarks.push("2/3학년 단독선택(Override)");
+        if (s.comcigan_fallback_dataset_grade1 === dKey) remarks.push("1학년 Fallback");
+        if (s.comcigan_fallback_dataset === dKey) remarks.push("2/3학년 Fallback");
+
+        tableRows.push({
+            id: dKey,
+            period: datePeriod,
+            remarks: remarks.join(", ")
+        });
+    }
+
+    return (
+        <Card className="w-full h-full flex flex-col border-none shadow-none">
+            <CardHeader className="py-2 px-4 border-b">
+                <CardTitle className="text-lg">데이터셋 유효날짜 열람기</CardTitle>
+                <CardDescription className="text-xs">
+                    시간표 값이 존재하는 실제 데이터셋들의 유효 날짜 기간을 확인하고 시스템 배정 현황을 열람합니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto p-0">
+                <Table className="max-w-4xl min-w-[600px] border-b">
+                    <TableHeader className="bg-slate-50 sticky top-0 shadow-sm">
+                        <TableRow>
+                            <TableHead className="w-[120px] font-bold">데이터셋</TableHead>
+                            <TableHead className="w-[250px] font-bold">유효날짜 기간 (일자)</TableHead>
+                            <TableHead className="font-bold">비고 (시스템 배정 여부)</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {tableRows.length > 0 ? tableRows.map(row => (
+                            <TableRow key={row.id} className="hover:bg-slate-50/50">
+                                <TableCell className="font-bold whitespace-nowrap">{row.id}</TableCell>
+                                <TableCell className="whitespace-nowrap">{row.period}</TableCell>
+                                <TableCell className={row.remarks ? "font-bold text-blue-600 text-sm whitespace-nowrap" : "text-gray-400 text-sm whitespace-nowrap"}>
+                                    {row.remarks || "-"}
+                                </TableCell>
+                            </TableRow>
+                        )) : (
+                            <TableRow>
+                                <TableCell colSpan={3} className="text-center py-8 text-slate-500">표시할 시간표 데이터셋이 없습니다.</TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
 function EtcManager({ adminPassword }: { adminPassword: string }) {
     const [selectedMenu, setSelectedMenu] = useState("raw-comcigan");
     const [schoolSearchQuery, setSchoolSearchQuery] = useState("성지");
@@ -3739,7 +3823,7 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
 
             return json.data;
         },
-        enabled: (selectedMenu === "raw-comcigan" || selectedMenu === "dataset-selector") && !!schoolSearchQuery,
+        enabled: (selectedMenu === "raw-comcigan" || selectedMenu === "dataset-selector" || selectedMenu === "dataset-viewer") && !!schoolSearchQuery,
         retry: 1
     });
 
@@ -3766,6 +3850,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 >
                     <Database className="w-4 h-4 mr-2" />
                     시간표 데이터셋 선택기
+                </Button>
+                <Button
+                    variant={selectedMenu === "dataset-viewer" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("dataset-viewer")}
+                >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    데이터셋 유효날짜 열람기
                 </Button>
                 <Button
                     variant={selectedMenu === "visit-restriction" ? "default" : "ghost"}
@@ -3885,6 +3977,9 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col gap-4 overflow-hidden border rounded-md bg-white p-4">
+                {selectedMenu === "dataset-viewer" && (
+                    <DatasetDatesViewer rawData={rawDataQuery.data} adminPassword={adminPassword} />
+                )}
                 {selectedMenu === "raw-comcigan" && (
                     <div className="flex flex-col h-full gap-4">
                         <div className="flex gap-2 items-center pb-4 border-b">
@@ -5880,6 +5975,8 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     // Fallback datasets
     const [fallbackProp, setFallbackProp] = useState<string>('');
     const [fallbackPropGrade1, setFallbackPropGrade1] = useState<string>('');
+    // Debug UI overlay toggle
+    const [debugOverlay, setDebugOverlay] = useState<boolean>(false);
     // IP Overrides state
     const [ipOverrides, setIpOverrides] = useState<Record<string, { grade1?: string, default?: string, memo?: string }>>({});
     
@@ -5909,6 +6006,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
             setSelectedPropGrade1(settingsQuery.data.comcigan_dataset_selected_grade1 || '_auto_');
             setFallbackProp(settingsQuery.data.comcigan_fallback_dataset || '_auto_');
             setFallbackPropGrade1(settingsQuery.data.comcigan_fallback_dataset_grade1 || '_auto_');
+            setDebugOverlay(settingsQuery.data.comcigan_debug_overlay_enabled === 'true');
 
             if (settingsQuery.data.dataset_ip_overrides) {
                 try {
@@ -6116,6 +6214,34 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                             변경 취소
                         </Button>
                         <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_fallback_dataset: fallbackProp === '_auto_' ? '' : fallbackProp })} disabled={!isDirtyFB || saveMutation.isPending}>
+                            {saveMutation.isPending ? "저장 중..." : "저장"}
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Debug Overlay Toggle */}
+                <div className="space-y-2 border rounded-lg p-4 bg-white mt-4">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-700">메인페이지 디버그 표시</span>
+                        <span className="text-xs text-slate-400">현재 날짜에 해당하는 유효 데이터셋(Fallback 포함) 정보를 띄웁니다</span>
+                    </div>
+                    <div className="flex items-center gap-2 pt-2 pb-2">
+                        <input 
+                            type="checkbox" 
+                            id="debug-overlay-toggle"
+                            checked={debugOverlay}
+                            onChange={(e) => setDebugOverlay(e.target.checked)}
+                            className="w-4 h-4 cursor-pointer align-middle"
+                        />
+                        <label htmlFor="debug-overlay-toggle" className="text-sm cursor-pointer select-none font-medium">
+                            디버그용 현재날짜 해당 데이터셋 표시
+                        </label>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1 border-t mt-2 pt-3">
+                        <Button variant="outline" size="sm" onClick={() => setDebugOverlay(settingsQuery.data?.comcigan_debug_overlay_enabled === 'true')} disabled={debugOverlay === (settingsQuery.data?.comcigan_debug_overlay_enabled === 'true') || saveMutation.isPending}>
+                            변경 취소
+                        </Button>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_debug_overlay_enabled: debugOverlay ? 'true' : 'false' })} disabled={debugOverlay === (settingsQuery.data?.comcigan_debug_overlay_enabled === 'true') || saveMutation.isPending}>
                             {saveMutation.isPending ? "저장 중..." : "저장"}
                         </Button>
                     </div>

@@ -374,6 +374,9 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     let timedataProp = "";
     let datasetSelected: string | null = null;
     let designatedDatasetId: string | null = null;
+    let datasetSelectedGrade1: string | null = null;
+    let fallbackSelectedGrade1: string | null = null;
+    let fallbackSelectedGen: string | null = null;
 
     if (db) {
         try {
@@ -385,16 +388,17 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 )
             `).run();
 
-            const { results } = await db.prepare("SELECT key, value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'comcigan_dataset_selected_grade1' OR key = 'manual_semester_plan' OR key = 'dataset_ip_overrides'").all();
+            const { results } = await db.prepare("SELECT key, value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'comcigan_dataset_selected_grade1' OR key = 'manual_semester_plan' OR key = 'dataset_ip_overrides' OR key = 'comcigan_fallback_dataset' OR key = 'comcigan_fallback_dataset_grade1'").all();
 
             let manualPlanData: any = null;
-            let datasetSelectedGrade1: string | null = null;
             let ipOverridesFound: Record<string, { grade1?: string, default?: string, memo?: string }> = {};
 
             if (results && results.length > 0) {
                 results.forEach((row: any) => {
                     if (row.key === 'comcigan_dataset_selected') datasetSelected = row.value;
                     if (row.key === 'comcigan_dataset_selected_grade1') datasetSelectedGrade1 = row.value;
+                    if (row.key === 'comcigan_fallback_dataset') fallbackSelectedGen = row.value;
+                    if (row.key === 'comcigan_fallback_dataset_grade1') fallbackSelectedGrade1 = row.value;
                     if (row.key === 'dataset_ip_overrides') {
                         try {
                             ipOverridesFound = JSON.parse(row.value);
@@ -517,9 +521,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     }
 
     // ----------------------------------------------------
-    // DYNAMIC MATCHING FOR TARGET DATE (Highest Priority)
+    // STRICT BOUNDARY FALLBACK CASCADE (Temp User Request)
     // ----------------------------------------------------
-    // Helper to evaluate if a targetDate falls within a Comcigan format range (e.g. "26-03-23 ~ 26-03-28")
     const isDateInRange = (targetDateStr: string, rangeStr: any): boolean => {
         if (typeof rangeStr !== 'string') return false;
         const targetShort = targetDateStr.length > 8 ? targetDateStr.substring(2) : targetDateStr;
@@ -532,111 +535,67 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         return target >= startDate && target <= endDate;
     };
 
-    let resolvedDateDataset: string | null = null;
-    if (targetDate) {
-        const dateArr = rawData['일자']; // Array of week ranges
-        if (dateArr && Array.isArray(dateArr)) {
-            const matchedIdx = dateArr.findIndex((str: any) => isDateInRange(targetDate, str));
-            if (matchedIdx >= 1 && matchedIdx - 1 < timetableProps.length) {
-                resolvedDateDataset = timetableProps[matchedIdx - 1]; // Resolved accurately including shift holidays!
-            }
-        }
+    let fallbackSelected = null;
+    if (grade === 1 && fallbackSelectedGrade1) {
+        fallbackSelected = fallbackSelectedGrade1;
+    } else {
+        fallbackSelected = fallbackSelectedGen;
     }
 
-    if (resolvedDateDataset) {
-        timedataProp = resolvedDateDataset;
-        console.log(`[Comcigan Debug] Mapped targetDate ${targetDate} natively to dataset ${timedataProp}`);
-    } else {
-        console.log(`[Comcigan Debug] targetDate ${targetDate || 'undefined'} not natively found. Applying fallback cascade.`);
-        
-        // 1. Explicitly configured dataset (Admin Force-Select)
-        if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_' && timetableProps.includes(datasetSelected)) {
-            timedataProp = datasetSelected;
-            console.log(`[Comcigan Debug] Used explicit datasetSelected override: ${timedataProp}`);
+    const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+    const todayShort = koreanTime.toISOString().split('T')[0].substring(2); // "YY-MM-DD"
+    const targetShort = targetDate ? (targetDate.length > 8 ? targetDate.substring(2) : targetDate) : todayShort;
+
+    let isFallbackApplied = false;
+
+    if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_') {
+        const idx = timetableProps.indexOf(datasetSelected);
+        const dateArr = rawData['일자'];
+        let covers = false;
+        if (idx >= 0 && dateArr && Array.isArray(dateArr) && idx + 1 < dateArr.length) {
+            if (isDateInRange(targetShort, dateArr[idx + 1])) {
+                covers = true;
+            }
         }
         
-        // 2. Missing targetDate or explicit setting was invalid/auto => use DB Fallback
-        if (!timedataProp && datasetSelected !== 'MANUAL_PLAN') {
-            let fallbackSelected: string | null = null;
-            try {
-                if (db) {
-                    if (grade === 1) {
-                        const fbRowG1 = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_fallback_dataset_grade1'").first();
-                        if (fbRowG1 && fbRowG1.value) fallbackSelected = fbRowG1.value as string;
-                    }
-                    if (!fallbackSelected) {
-                        const fbRowGen = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_fallback_dataset'").first();
-                        if (fbRowGen && fbRowGen.value) fallbackSelected = fbRowGen.value as string;
-                    }
-                }
-            } catch (e) {
-                console.warn("[Comcigan Debug] Error reading fallback setting:", e);
-            }
-
+        if (covers) {
+            timedataProp = datasetSelected;
+            console.log(`[Comcigan Debug] datasetSelected ${datasetSelected} covers ${targetShort}`);
+        } else {
+            console.log(`[Comcigan Debug] datasetSelected ${datasetSelected} does NOT cover ${targetShort}. Applying explicit fallback.`);
             if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
                 timedataProp = fallbackSelected;
-                console.log(`[Comcigan Debug] Resolved via DB fallback setting: ${timedataProp}`);
-            } else if (timetableProps.length > 0) {
-                // 3. Dynamic Current Week Fallback (for generic _auto_ routing)
-                if ((!fallbackSelected || fallbackSelected === '_auto_')) {
-                    const dateArr = rawData['일자'];
-                    const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
-                    const todayShort = koreanTime.toISOString().split('T')[0].substring(2); // "YY-MM-DD"
-                    const autoMatchedIdx = dateArr && Array.isArray(dateArr) ? dateArr.findIndex((str: any) => isDateInRange(todayShort, str)) : -1;
-                    
-                    if (autoMatchedIdx >= 1 && autoMatchedIdx - 1 < timetableProps.length) {
-                        timedataProp = timetableProps[autoMatchedIdx - 1]; // Found the TRUE physical active week!
-                        console.log(`[Comcigan Debug] _auto_ fallback mapped physical exact week dataset: ${timedataProp}`);
-                    } else {
-                        timedataProp = timetableProps[timetableProps.length - 1];
-                        console.log(`[Comcigan Debug] Ultimate fallback to newest array dataset: ${timedataProp}`);
-                    }
-                } else {
-                    timedataProp = timetableProps[timetableProps.length - 1];
-                    console.log(`[Comcigan Debug] Ultimate fallback to newest array dataset: ${timedataProp}`);
-                }
+            } else {
+                timedataProp = timetableProps[timetableProps.length - 1] || "";
             }
+            isFallbackApplied = true;
         }
+    } else if (datasetSelected === 'MANUAL_PLAN') {
+        timedataProp = 'MANUAL_PLAN';
+    } else {
+        console.log(`[Comcigan Debug] No concrete datasetSelected found. Auto-applying fallback.`);
+        if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
+            timedataProp = fallbackSelected;
+        } else {
+            timedataProp = timetableProps[timetableProps.length - 1] || "";
+        }
+        isFallbackApplied = true;
     }
 
-    // Determine the persistent "Original" dataset corresponding to the current real-world date
-    // or the explicit designation, regardless of whether the requested targetDate was out of bounds
-    let originalDatasetId = timedataProp || null;
-    try {
-        if (typeof designatedDatasetId !== 'undefined' && designatedDatasetId && designatedDatasetId !== 'MANUAL_PLAN' && designatedDatasetId !== '_auto_') {
-            originalDatasetId = designatedDatasetId;
-        } else if (typeof designatedDatasetId !== 'undefined' && designatedDatasetId !== 'MANUAL_PLAN' && (!designatedDatasetId || designatedDatasetId === '_auto_')) {
-            const dateArr = rawData['일자'];
-            if (dateArr && Array.isArray(dateArr)) {
-                const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
-                const todayShort = koreanTime.toISOString().split('T')[0].substring(2); // "YY-MM-DD"
-                const matchedIdx = dateArr.findIndex((str: any) => isDateInRange(todayShort, str));
-                if (matchedIdx >= 1 && matchedIdx - 1 < timetableProps.length) {
-                    originalDatasetId = timetableProps[matchedIdx - 1];
-                } else if (timetableProps.length > 0) {
-                    originalDatasetId = timetableProps[timetableProps.length - 1];
-                }
-            }
-        } else if (datasetSelected !== 'MANUAL_PLAN' && (!datasetSelected || datasetSelected === '_auto_')) {
-             // Fallback for types or scope issues
-             const dateArr = rawData['일자'];
-             if (dateArr && Array.isArray(dateArr)) {
-                 const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
-                 const todayShort = koreanTime.toISOString().split('T')[0].substring(2); // "YY-MM-DD"
-                 const matchedIdx = dateArr.findIndex((str: any) => isDateInRange(todayShort, str));
-                 if (matchedIdx >= 1 && matchedIdx - 1 < timetableProps.length) {
-                     originalDatasetId = timetableProps[matchedIdx - 1];
-                 } else if (timetableProps.length > 0) {
-                     originalDatasetId = timetableProps[timetableProps.length - 1];
-                 }
-             }
+    // Anchor originalDatasetId explicitly
+    let originalDatasetId = null;
+    let explicitRef = typeof designatedDatasetId !== 'undefined' ? designatedDatasetId : datasetSelected;
+    
+    if (explicitRef && explicitRef !== 'MANUAL_PLAN' && explicitRef !== '_auto_' && timetableProps.includes(explicitRef)) {
+        originalDatasetId = explicitRef;
+    } else if (explicitRef === 'MANUAL_PLAN') {
+        originalDatasetId = 'MANUAL_PLAN';
+    } else {
+        if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
+            originalDatasetId = fallbackSelected;
+        } else {
+            originalDatasetId = timetableProps[timetableProps.length - 1];
         }
-        
-        if (originalDatasetId === 'MANUAL_PLAN' || datasetSelected === 'MANUAL_PLAN') {
-             originalDatasetId = 'MANUAL_PLAN';
-        }
-    } catch (e) {
-        console.error("[Comcigan Debug] Error computing originalDatasetId:", e);
     }
 
     console.log('[Comcigan Debug] keys:', keys.length, 'teacherProp:', teacherProp, 'subjectProp:', subjectProp);
@@ -772,10 +731,15 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     return new Response(JSON.stringify({
         schoolName: "부산성지고등학교",
         datasetId: timedataProp,
-        originalDatasetId: originalDatasetId,
+        originalDatasetId,
         ipOverrideApplied: typeof ipOverrideApplied !== 'undefined' ? ipOverrideApplied : false,
         data: result,
-        debugTokens: {
+        debugTokens: { 
+            override1: datasetSelectedGrade1 || null, 
+            override23: typeof datasetSelected !== 'undefined' ? datasetSelected : null,
+            fallback1: fallbackSelectedGrade1 || null, 
+            fallback23: fallbackSelectedGen || null, 
+            isFallbackApplied,
             keysCount: keys.length,
             teacherProp,
             subjectProp,

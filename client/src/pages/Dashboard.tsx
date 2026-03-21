@@ -1717,6 +1717,16 @@ export default function Dashboard() {
                   `}
                 </style>
                 <div ref={timetableRef} id="timetable-container" className="group" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
+                  {/* System Dataset Config UI (Debug) */}
+                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled && (
+                    <div className="print:hidden capturing:hidden text-[10px] md:text-xs text-gray-400 text-right mb-1 tracking-tight flex flex-wrap items-center justify-end gap-1 md:gap-2 pr-1">
+                      <span>1학년: {(rawTimetableData as any).debugTokens.override1 && (rawTimetableData as any).debugTokens.override1 !== '_auto_' ? '단독선택(O)' : '단독선택(X)'} / 기본FB{(rawTimetableData as any).debugTokens.fallback1 && (rawTimetableData as any).debugTokens.fallback1 !== '_auto_' ? '(O)' : '(X)'}</span>
+                      <span className="hidden md:inline">|</span>
+                      <span>2,3학년: {(rawTimetableData as any).debugTokens.override23 && (rawTimetableData as any).debugTokens.override23 !== '_auto_' ? '단독선택(O)' : '단독선택(X)'} / 기본FB{(rawTimetableData as any).debugTokens.fallback23 && (rawTimetableData as any).debugTokens.fallback23 !== '_auto_' ? '(O)' : '(X)'}</span>
+                      {(rawTimetableData as any).debugTokens.isFallbackApplied && <span className="text-red-400 font-bold ml-1">(! Fallback 가동중)</span>}
+                    </div>
+                  )}
+
                   {/* Print Capture Header */}
                   <div className="capture-only mb-1.5 p-1.5 border rounded-md text-black flex flex-col gap-0.5">
                     <div className="flex justify-between items-end border-b pb-0.5 mb-0.5">
