@@ -6,7 +6,7 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
     
     // Group required queries by Grade, Dataset, and the Target Week
     for (const a of assessments) {
-        if (a.isDone || a.isDeleted || a.classNum === 0) continue;
+        if (a.isDone || a.isDeleted) continue;
         let ds = a.dataset || '';
         if (ds !== 'MANUAL_PLAN' && ds !== 'SEMESTER_PLAN') ds = 'COMCIGAN';
         
@@ -55,7 +55,7 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
 
     // Evaluate orphans and collect Promises (since we added DB await)
     return Promise.all(assessments.map(async assessment => {
-        if (assessment.isDone || assessment.isDeleted || assessment.classNum === 0) return assessment;
+        if (assessment.isDone || assessment.isDeleted) return assessment;
 
         let ds = assessment.dataset || '';
         if (ds !== 'MANUAL_PLAN' && ds !== 'SEMESTER_PLAN') ds = 'COMCIGAN';
@@ -108,6 +108,15 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             return false;
         };
 
+        // 공강/빈교실 판별 함수 (연기 탐색 대상에서 제외)
+        const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free", "창체", "자습", "동아리", "점심시간"];
+        const isFreePeriod = (subject: string) => FREE_KEYWORDS.some(k => (subject || '').includes(k));
+
+        // 이동수업(classNum=0): 학년 전체 시간표에서 과목 탐색, 일반 수업: 해당 반만
+        const getSlots = (w: number) => assessment.classNum !== 0
+            ? ctx.timetable.filter((t: any) => t.class === assessment.classNum && t.weekday === w)
+            : ctx.timetable.filter((t: any) => t.weekday === w);
+
         let isOrphan = false;
         let currentW = -1;
 
@@ -115,13 +124,14 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             isOrphan = true; // Weekends
         } else {
             currentW = aDay - 1;
-            const slots = ctx.timetable.filter((t: any) => t.class === assessment.classNum && t.weekday === currentW);
+            const slots = getSlots(currentW);
             let matchingSlots = slots;
             if (targetTime) matchingSlots = slots.filter((t: any) => t.classTime === targetTime);
             
             let foundMatch = false;
             if (matchingSlots.length > 0) {
                 for (const slot of matchingSlots) {
+                    if (isFreePeriod(slot.subject || '')) continue; // 공강은 매칭 제외
                     if (checkSubjectMatch(slot)) {
                         foundMatch = true;
                         break;
@@ -141,8 +151,9 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
 
             // 1. Search from the pivot day to Friday
             for (let w = currentW; w < 5 && !foundNext; w++) {
-                const daySlots = ctx.timetable.filter((t: any) => t.class === assessment.classNum && t.weekday === w).sort((x: any, y: any) => x.classTime - y.classTime);
+                const daySlots = getSlots(w).sort((x: any, y: any) => x.classTime - y.classTime);
                 for (const t of daySlots) {
+                    if (isFreePeriod(t.subject || '')) continue; // 공강 슬롯 제외
                     if (w === currentW && t.classTime <= targetTime) continue; // Must be strictly AFTER the original time on the same day
                     if (checkSubjectMatch(t)) {
                         foundNext = true;
@@ -157,8 +168,9 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             
             // 2. Wrap-around: Search from next Monday to the day before pivot
             for (let w = 0; w <= currentW && !foundNext; w++) {
-                const daySlots = ctx.timetable.filter((t: any) => t.class === assessment.classNum && t.weekday === w).sort((x: any, y: any) => x.classTime - y.classTime);
+                const daySlots = getSlots(w).sort((x: any, y: any) => x.classTime - y.classTime);
                 for (const t of daySlots) {
+                    if (isFreePeriod(t.subject || '')) continue; // 공강 슬롯 제외
                     if (checkSubjectMatch(t)) {
                         foundNext = true;
                         const matchDate = new Date(targetDateObj);
