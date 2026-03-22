@@ -102,16 +102,39 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             if (assessment.classNum !== 0) {
                 return tbl.filter((t: any) => t.class === assessment.classNum && t.weekday === w);
             }
-            // 이동수업: teacher가 있으면 동일 teacher의 슬롯만 (가장 정확)
+            // 이동수업: teacher로 엄격 필터
+            // assessment.teacher + elective_config fullTeacherName/originalTeacher 모두 비교
             if (assessment.teacher) {
                 const teacherBase = assessment.teacher.replace(/\*.*$/, '').trim();
-                return tbl.filter((t: any) =>
-                    t.weekday === w &&
-                    !isFreePeriod(t.subject || '') &&
-                    (t.teacher === assessment.teacher || (t.teacher || '').startsWith(teacherBase))
+
+                // elective_config에서 이 과목의 모든 선생님 이름 수집
+                const electiveConfigs = ctx.electives.filter((c: any) =>
+                    c.subject === baseAssSubject || c.fullSubjectName === baseAssSubject
                 );
+                const knownTeacherNames = new Set<string>([teacherBase]);
+                for (const ec of electiveConfigs) {
+                    if (ec.fullTeacherName) {
+                        // "박상민, 정효진" 같이 복수 선생님인 경우 분리
+                        for (const n of String(ec.fullTeacherName).split(/[,、]+/)) {
+                            const nm = n.replace(/\*.*$/, '').trim();
+                            if (nm) knownTeacherNames.add(nm);
+                        }
+                    }
+                    if (ec.originalTeacher) {
+                        const nm = String(ec.originalTeacher).replace(/\*.*$/, '').trim();
+                        if (nm) knownTeacherNames.add(nm);
+                    }
+                }
+
+                return tbl.filter((t: any) => {
+                    if (t.weekday !== w || isFreePeriod(t.subject || '')) return false;
+                    const slotTeacher = (t.teacher || '').replace(/\*.*$/, '').trim();
+                    return [...knownTeacherNames].some(name =>
+                        slotTeacher === name || slotTeacher.startsWith(name) || name.startsWith(slotTeacher)
+                    );
+                });
             }
-            // teacher 미상: 과목명으로만 탐색 (공강 제외)
+            // teacher 정보 없음: 과목명으로만 탐색 (공강 제외)
             return tbl.filter((t: any) =>
                 t.weekday === w &&
                 !isFreePeriod(t.subject || '') &&
