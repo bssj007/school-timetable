@@ -130,13 +130,14 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             // 이동수업: teacher로 엄격 필터
             // assessment.teacher + elective_config fullTeacherName/originalTeacher 모두 비교
             if (assessment.teacher) {
-                const teacherBase = assessment.teacher.replace(/\*.*$/, '').trim();
+                // targetTeachers를 쉼표 등으로 분리하여 다중 선생님 대응
+                const targetTeachers = assessment.teacher.split(/[,、]+/).map((t: string) => t.replace(/\*.*$/, '').trim());
 
                 // elective_config에서 이 과목의 모든 선생님 이름 수집
                 const electiveConfigs = ctx.electives.filter((c: any) =>
                     c.subject === baseAssSubject || c.fullSubjectName === baseAssSubject
                 );
-                const knownTeacherNames = new Set<string>([teacherBase]);
+                const knownTeacherNames = new Set<string>(targetTeachers);
                 for (const ec of electiveConfigs) {
                     if (ec.fullTeacherName) {
                         // "박상민, 정효진" 같이 복수 선생님인 경우 분리
@@ -209,21 +210,27 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             // 2. 선생님 매칭 확인 (평가에 선생님이 지정된 경우)
             if (assessment.teacher) {
                 let isTeacherMatch = false;
-                const targetTeacher = assessment.teacher.replace(/\*.*$/, '').trim();
+                const targetTeachers = assessment.teacher.split(/[,、]+/).map((t: string) => t.replace(/\*.*$/, '').trim());
                 
                 // 설정에 fullName이 있으면 우선적으로 비교 ("originalName외 fullName이 있을시 fullName로 비교")
                 if (specificConfig && specificConfig.fullTeacherName) {
                     const fullNames = specificConfig.fullTeacherName.split(/[,、]+/).map((n: string) => n.replace(/\*.*$/, '').trim());
-                    if (fullNames.some((name: string) => targetTeacher === name || targetTeacher.startsWith(name) || name.startsWith(targetTeacher))) {
-                        isTeacherMatch = true;
+                    for (const targetTeacher of targetTeachers) {
+                        if (fullNames.some((name: string) => targetTeacher === name || targetTeacher.startsWith(name) || name.startsWith(targetTeacher))) {
+                            isTeacherMatch = true;
+                            break;
+                        }
                     }
                 }
                 
                 // fullName과 매칭되지 않았거나 없는 경우 originalName(slot.teacher)으로 비교
                 if (!isTeacherMatch && slot.teacher) {
                     const originalName = slot.teacher.replace(/\*.*$/, '').trim();
-                    if (targetTeacher === originalName || targetTeacher.startsWith(originalName) || originalName.startsWith(targetTeacher)) {
-                        isTeacherMatch = true;
+                    for (const targetTeacher of targetTeachers) {
+                        if (targetTeacher === originalName || targetTeacher.startsWith(originalName) || originalName.startsWith(targetTeacher)) {
+                            isTeacherMatch = true;
+                            break;
+                        }
                     }
                 }
                 
