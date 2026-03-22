@@ -728,11 +728,13 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 if (baseData && baseData[grade] && baseData[grade][classNum] && baseData[grade][classNum][weekday]) {
                     const baseCode = baseData[grade][classNum][weekday][period] || 0;
                     
-                    // 컴시간알리미 클라이언트의 셀 수준 폴백(Cell-level Fallback) 로직 개선:
-                    // 주간 변동 데이터셋 전체가 비어있는 경우(자료245 등) 뿐만 아니라,
-                    // 일과시간(dayLimit) 내에 들어가는 교시인데도 데이터가 비어있다면, 임시 편성 중 누락된 것으로 간주하고 원본 스케줄로 덮어씌웁니다.
+                    // Cell-level fallback: only apply base dataset fill-in when the entire weekly
+                    // dataset is all zeros (isEmptyDataset). In that case, the live comcigan data
+                    // hasn't been published yet and we use the baseline as a placeholder.
+                    // When the weekly dataset HAS real data (isEmptyDataset=false), code=0 means
+                    // the period is genuinely free/cancelled, so we must NOT overwrite it.
                     if (code === 0 && baseCode !== 0) {
-                        if (isEmptyDataset || dayLimit === 0 || period <= dayLimit) {
+                        if (isEmptyDataset) {
                             code = baseCode;
                         }
                     }
