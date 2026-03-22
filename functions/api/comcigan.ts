@@ -316,19 +316,6 @@ export const onRequest = async (context: any) => {
                         try {
                             const json: any = await responseClone.json();
                             if (json.data && json.data.length > 0) {
-                                const isDisappeared = json.debugTokens?.isFallbackApplied;
-                                const isEmptyDataset = json.debugTokens?.isEmptyDataset;
-
-                                if (isDisappeared || isEmptyDataset) {
-                                    // 기존 유효한 캐시가 존재하는지 검사
-                                    const existingRow = await db.prepare("SELECT 1 FROM timetable_cache WHERE cache_key = ? AND is_frozen = 0").bind(cacheKeyToSave).first();
-                                    if (existingRow) {
-                                        console.log(`[Comcigan Cache] Auto-freezing ${cacheKeyToSave} because dataset disappeared or is empty.`);
-                                        await db.prepare("UPDATE timetable_cache SET is_frozen = 1, updated_at = datetime('now') WHERE cache_key = ?").bind(cacheKeyToSave).run();
-                                        return; // 동결 시 덮어쓰기 방지
-                                    }
-                                }
-
                                 // 일반 캐시 저장 로직
                                 // 캐시에는 전체 학년의 all-class 데이터를 저장
                                 if (classNum === 'all' || json.data.length > 10) {
@@ -638,7 +625,6 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         
         if (rawData['일자'] && Array.isArray(rawData['일자'])) {
             // Legacy format: flat array of date strings, offset by 1 from allDatasetKeys
-            // Legacy format: flat array of date strings
             const allDatasetKeys = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
             allDatasetKeys.forEach((key, idx) => {
                 if (idx + 1 < rawData['일자'].length) {
@@ -647,12 +633,10 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             });
         } else if (rawData['일자자료'] && Array.isArray(rawData['일자자료'])) {
             // New format: [[directIndex, "YY-MM-DD ~ YY-MM-DD"], ...]
-            // directIndex is a DIRECT index into timetableProps (JSON key insertion order)
             const dateList = rawData['일자자료'];
             dateList.forEach((dt: any) => {
                 if (!Array.isArray(dt) || dt.length < 2) return;
                 const [directIdx, range] = dt;
-                // timetableProps is in JSON key insertion order — exactly what directIdx refers to
                 if (typeof directIdx === 'number' && timetableProps[directIdx]) {
                     datasetDateRanges[timetableProps[directIdx]] = range;
                 }
@@ -665,7 +649,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         if (rangeStr) {
             covers = isDateInRange(targetShort, rangeStr);
         }
-        
+
         if (covers) {
             timedataProp = datasetSelected;
             console.log(`[Comcigan Debug] datasetSelected ${datasetSelected} covers ${targetShort}`);
@@ -674,7 +658,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
                 timedataProp = fallbackSelected;
             } else {
-                timedataProp = timetableProps[timetableProps.length - 1] || "";
+                timedataProp = timetableProps[0] || "";
             }
             isFallbackApplied = true;
         }
@@ -685,7 +669,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
             timedataProp = fallbackSelected;
         } else {
-            timedataProp = timetableProps[timetableProps.length - 1] || "";
+            timedataProp = timetableProps[0] || "";
         }
         isFallbackApplied = true;
     }
@@ -702,7 +686,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
             originalDatasetId = fallbackSelected;
         } else {
-            originalDatasetId = timetableProps[timetableProps.length - 1];
+            originalDatasetId = timetableProps[0];
         }
     }
 
@@ -772,11 +756,19 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             const loopLimit = Math.max(currentPeriodLimit, basePeriodLimit);
 
             for (let period = 1; period <= loopLimit; period++) {
-                const code = (classData[weekday] && classData[weekday][period]) ? classData[weekday][period] : 0;
+                let code = (classData[weekday] && classData[weekday][period]) ? classData[weekday][period] : 0;
 
                 let isChanged = false;
                 if (baseData && baseData[grade] && baseData[grade][classNum] && baseData[grade][classNum][weekday]) {
                     const baseCode = baseData[grade][classNum][weekday][period] || 0;
+                    
+                    // 컴시간알리미 클라이언트의 셀 수준 폴백(Cell-level Fallback) 로직:
+                    // 주간 변동 데이터셋(자료147, 자료245 등)에서 값이 `0`으로 비어 있다면, 
+                    // 이는 "휴강"이 아니라 "해당 교시는 원본 스케줄(자료481 등)을 그대로 따른다"는 의미입니다.
+                    if (code === 0 && baseCode !== 0) {
+                        code = baseCode;
+                    }
+                    
                     if (baseCode !== code && timedataProp !== timetableProps[0]) {
                         isChanged = true;
                     }
@@ -860,7 +852,9 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             await db.prepare(`
                 INSERT INTO timetable_cache (cache_key, response_json, updated_at) 
                 VALUES ('raw_data', ?, datetime('now')) 
-                ON CONFLICT(cache_key) DO UPDATE SET response_json = excluded.response_json, updated_at = datetime('now')
+                ON CONFLICT(cache_key) DO UPDATE SET 
+                    response_json = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.response_json ELSE excluded.response_json END,
+                    updated_at = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.updated_at ELSE datetime('now') END
             `).bind(jsonString).run();
         } catch (e) {
             console.error('[Comcigan Debug] Failed to cache raw_data (deferred):', e);
