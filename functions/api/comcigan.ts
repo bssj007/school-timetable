@@ -256,8 +256,10 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
     // --- FUTURE BOUNDARY STALE CHECK ---
     // If the frontend legitimately requests a date that exceeds the maximum timeline of our currently
-    // cached Comcigan payload, aggressively discard the raw cache to prevent the auto-fallback algorithm 
-    // from blindly attaching itself to the final index of a stale array.
+    // cached Comcigan payload, mark it as out-of-range so we can fallback to the standard dataset.
+    // We do NOT discard the raw cache—doing so would also discard the standard baseline dataset
+    // (e.g. 자료481) that has no date bounds and is valid for any week.
+    let isOutOfRange = false;
     if (jsonString && targetDate) {
         try {
             const tempRaw = JSON.parse(jsonString);
@@ -281,8 +283,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                     const targetDateObj = new Date(`20${targetShort}`);
                     
                     if (targetDateObj > endDate) {
-                        console.log(`[Comcigan Debug] targetDate ${targetShort} exceeds cached raw_data max date ${parts[1]}. Bypassing raw_data cache.`);
-                        jsonString = undefined; 
+                        console.log(`[Comcigan Debug] targetDate ${targetShort} exceeds cached raw_data max date ${parts[1]}. Will use standard (baseline) dataset instead.`);
+                        isOutOfRange = true;
                     }
                 }
             }
@@ -497,7 +499,20 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         baselineDatasetId = maxKeyItem.key;
     }
 
-    if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_') {
+    // When the target date is beyond the cached comcigan range, skip date-matching and
+    // directly use designatedDatasetId (the admin-configured standard dataset for this grade).
+    if (isOutOfRange) {
+        console.log(`[Comcigan Debug] isOutOfRange=true. Forcing standard dataset. designatedDatasetId=${designatedDatasetId}, finalDataset=${finalDataset}, baselineDatasetId=${baselineDatasetId}`);
+        if (designatedDatasetId && designatedDatasetId !== '_auto_' && (timetableProps.includes(designatedDatasetId) || designatedDatasetId === 'MANUAL_PLAN')) {
+            timedataProp = designatedDatasetId;
+        } else if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
+            timedataProp = finalDataset;
+        } else {
+            timedataProp = baselineDatasetId || timetableProps[0] || "";
+        }
+        isFallbackApplied = true;
+        console.log(`[Comcigan Debug] Out-of-range fallback resolved to: ${timedataProp}`);
+    } else if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_') {
         const rangeStr = datasetDateRanges[datasetSelected];
         let covers = false;
         
@@ -544,6 +559,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             isFallbackApplied = true;
         }
     }
+
 
     // Anchor originalDatasetId explicitly
     let originalDatasetId = null;
