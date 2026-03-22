@@ -70,25 +70,33 @@ export const onRequest = async (context: any) => {
         }
     }
 
-    // POST: 수동 캐시 갱신 (전체 통합본 갱신)
+    // POST: 수동 캐시 갱신
     if (method === 'POST') {
         try {
+            const body = await request.json();
+            const grades = body.grades || [1, 2, 3];
+
+            // comcigan.ts의 refreshCache를 직접 import하면 Cloudflare Pages Functions에서
+            // import 경로 문제가 생길 수 있으므로, 직접 fetch로 캐시를 갱신
             const results: any[] = [];
-            try {
-                // 직접 Comcigan에서 가져와 단일 통합 캐시(raw_data)에 저장
-                const { refreshRawCache } = await import('../comcigan' as any);
-                await refreshRawCache(db);
-                
-                // 저장 결과 확인 (raw_data가 갱신되었는지 검증)
-                const row = await db.prepare("SELECT updated_at, LENGTH(response_json) as data_size FROM timetable_cache WHERE cache_key = 'raw_data'").first();
-                results.push({
-                    type: 'raw_data',
-                    success: !!row,
-                    updatedAt: row?.updated_at,
-                    dataSize: row?.data_size
-                });
-            } catch (e: any) {
-                results.push({ type: 'raw_data', success: false, error: e.message });
+            for (const grade of grades) {
+                try {
+                    // 직접 Comcigan에서 가져와 캐시에 저장 (UPSERT로 기존 캐시 덮어쓰기)
+                    // 기존 캐시를 삭제하지 않음 → 갱신 실패 시에도 기존 캐시 유지
+                    const { refreshCache } = await import('../comcigan' as any);
+                    await refreshCache(db, grade);
+                    
+                    // 저장 결과 확인
+                    const row = await db.prepare("SELECT updated_at, LENGTH(response_json) as data_size FROM timetable_cache WHERE cache_key = ?").bind(`gc_${grade}`).first();
+                    results.push({
+                        grade,
+                        success: !!row,
+                        updatedAt: row?.updated_at,
+                        dataSize: row?.data_size
+                    });
+                } catch (e: any) {
+                    results.push({ grade, success: false, error: e.message });
+                }
             }
 
             return new Response(JSON.stringify({ success: true, results }), {

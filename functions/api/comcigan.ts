@@ -197,14 +197,13 @@ export const onRequest = async (context: any) => {
             const clientIp = context.request.headers.get('CF-Connecting-IP') || 'unknown';
             const db = context.env ? context.env.DB : undefined;
 
-            // --- 통합 캐시(raw_data) 조회 및 Stale-While-Revalidate 로직 ---
-            let cachedRawDataString: string | undefined = undefined;
+            // --- 캐시 우선 응답 ---
             if (db) {
                 try {
                     // 캐시 테이블 보장
                     try { await db.prepare(createTimetableCacheTable).run(); } catch (_) {}
 
-                    const rawDataRow = await db.prepare("SELECT response_json, updated_at, is_frozen FROM timetable_cache WHERE cache_key = 'raw_data'").first();
+                    // 캐시 최대 유효 시간 조회 (system_settings)
                     let cacheMaxAgeMs = DEFAULT_CACHE_MAX_AGE_MS;
                     try {
                         const maxAgeRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_cache_max_age_minutes'").first();
@@ -213,37 +212,121 @@ export const onRequest = async (context: any) => {
                         }
                     } catch (_) {}
 
-                    if (rawDataRow && rawDataRow.response_json) {
-                        const isFrozen = rawDataRow.is_frozen === 1;
-                        const age = Date.now() - new Date(rawDataRow.updated_at as string + 'Z').getTime();
-                        
-                        if (isFrozen || age < cacheMaxAgeMs) {
-                            cachedRawDataString = rawDataRow.response_json as string;
-                            console.log(`[Comcigan Cache] raw_data HIT, age=${Math.round(age/1000)}s, frozen=${isFrozen}`);
-                        } else {
-                            // Stale: Serve cached data instantly alongside a background fetch
-                            cachedRawDataString = rawDataRow.response_json as string;
-                            console.log(`[Comcigan Cache] raw_data STALE, age=${Math.round(age/1000)}s - Serving stale & refreshing in background`);
+                    let cacheKey = targetDate ? `gc_${grade}_${targetDate}` : `gc_${grade}`;
+
+                    // 미리 IP Override 여부를 확인하여 캐시키를 고립시킴
+                    let hasIpOverride = false;
+                    if (clientIp !== 'unknown') {
+                        try {
+                            const overrideRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'dataset_ip_overrides'").first();
+                            if (overrideRow && overrideRow.value) {
+                                const overrides = JSON.parse(overrideRow.value as string);
+                                if (overrides[clientIp]) {
+                                    hasIpOverride = true;
+                                }
+                            }
+                        } catch (_) {}
+                    }
+
+                    if (datasetOverride && datasetOverride !== '_auto_') {
+                        cacheKey += `__dataset_${datasetOverride}`;
+                    } else if (hasIpOverride) {
+                        cacheKey += `__ip_${clientIp.replace(/[:.]/g, '_')}`;
+                    }
+
+                    const cacheRow = await db.prepare("SELECT response_json, dataset_id, updated_at, is_frozen FROM timetable_cache WHERE cache_key = ?").bind(cacheKey).first();
+
+                    if (cacheRow && cacheRow.response_json) {
+                        const isFrozen = cacheRow.is_frozen === 1;
+                        const cacheAge = Date.now() - new Date(cacheRow.updated_at as string + 'Z').getTime();
+                        const isFresh = isFrozen || cacheAge < cacheMaxAgeMs;
+
+                        console.log(`[Comcigan Cache] HIT: ${cacheKey}, age=${Math.round(cacheAge / 1000)}s, fresh=${isFresh}, frozen=${isFrozen}`);
+
+                        // 캐시에서 데이터를 재구성 (classNum 필터링 + IP override 재적용)
+                        const cachedData = JSON.parse(cacheRow.response_json as string);
+                        const cacheResponse = buildCacheResponse(cachedData, classNum, db, datasetOverride, clientIp, cacheRow.dataset_id as string, cacheAge);
+
+                        if (!isFresh) {
+                            // 백그라운드에서 갱신
                             context.waitUntil(
-                                // Triggering live fetch for Grade 1 automatically refreshes the raw_data
-                                getTimetable(1, 'all', db, null, 'bg-refresh', null, undefined).catch(e => console.error('[Comcigan Background Refresh Failed]', e))
+                                refreshCache(db, grade, targetDate).catch((e: any) => console.error('[Comcigan Cache] Background refresh failed:', e))
                             );
                         }
-                    } else {
-                        console.log(`[Comcigan Cache] raw_data MISS`);
+
+                        return await cacheResponse;
                     }
+
+                    console.log(`[Comcigan Cache] MISS: ${cacheKey}`);
                 } catch (e) {
-                    console.warn('[Comcigan Cache] Error accessing raw_data:', e);
+                    console.warn('[Comcigan Cache] Cache lookup failed, falling through to direct fetch:', e);
                 }
+            }
+
+            // --- 캐시 미스: 기존 방식으로 직접 가져오거나 raw_data 캐시 우회 사용 ---
+            let cachedRawDataString: string | undefined = undefined;
+            if (db) {
+                try {
+                    const rawDataRow = await db.prepare("SELECT response_json, updated_at FROM timetable_cache WHERE cache_key = 'raw_data'").first();
+                    if (rawDataRow && rawDataRow.response_json) {
+                        let cacheMaxAgeMs = DEFAULT_CACHE_MAX_AGE_MS;
+                        try {
+                            const maxAgeRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_cache_max_age_minutes'").first();
+                            if (maxAgeRow && maxAgeRow.value) {
+                                cacheMaxAgeMs = parseInt(maxAgeRow.value as string) * 60 * 1000;
+                            }
+                        } catch (_) {}
+                        
+                        const age = Date.now() - new Date(rawDataRow.updated_at as string + 'Z').getTime();
+                        if (age < cacheMaxAgeMs) {
+                            cachedRawDataString = rawDataRow.response_json as string;
+                            console.log(`[Comcigan Cache] raw_data HIT, age=${Math.round(age/1000)}s - By-passing HTTP Fetch`);
+                        }
+                    }
+                } catch (e) { }
             }
 
             const response = await getTimetable(grade, classNum, db, datasetOverride, clientIp, targetDate, cachedRawDataString);
             
-            // 캐시에서 가져왔다면 Response 헤더에 캐시 적중 여부를 덧붙입니다
-            if (cachedRawDataString) {
-                const resClone = new Response(response.body, response);
-                resClone.headers.set('X-Cache-Status', 'HIT');
-                return resClone;
+            // 성공 시 캐시 저장 (백그라운드)
+            if (db && response.status === 200) {
+                // Determine the isolated cacheKey again for saving
+                let cacheKeyToSave = targetDate ? `gc_${grade}_${targetDate}` : `gc_${grade}`;
+                
+                let hasIpOverride = false;
+                if (clientIp !== 'unknown') {
+                    try {
+                        const overrideRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'dataset_ip_overrides'").first();
+                        if (overrideRow && overrideRow.value) {
+                            const overrides = JSON.parse(overrideRow.value as string);
+                            if (overrides[clientIp]) hasIpOverride = true;
+                        }
+                    } catch (_) {}
+                }
+
+                if (datasetOverride && datasetOverride !== '_auto_') {
+                    cacheKeyToSave += `__dataset_${datasetOverride}`;
+                } else if (hasIpOverride) {
+                    cacheKeyToSave += `__ip_${clientIp.replace(/[:.]/g, '_')}`;
+                }
+
+                const responseClone = response.clone();
+                context.waitUntil(
+                    (async () => {
+                        try {
+                            const json: any = await responseClone.json();
+                            if (json.data && json.data.length > 0) {
+                                // 일반 캐시 저장 로직
+                                // 캐시에는 전체 학년의 all-class 데이터를 저장
+                                if (classNum === 'all' || json.data.length > 10) {
+                                    await saveTimetableCache(db, grade, json, targetDate, cacheKeyToSave);
+                                }
+                            }
+                        } catch (e) {
+                            console.error('[Comcigan Cache] Failed to save cache:', e);
+                        }
+                    })()
+                );
             }
 
             return response;
@@ -502,7 +585,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     }
 
     // ----------------------------------------------------
-    // STRICT BOUNDARY FALLBACK CASCADE
+    // STRICT BOUNDARY FALLBACK CASCADE (Temp User Request)
     // ----------------------------------------------------
     const isDateInRange = (targetDateStr: string, rangeStr: any): boolean => {
         if (typeof rangeStr !== 'string') return false;
@@ -523,29 +606,17 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         fallbackSelected = fallbackSelectedGen;
     }
 
-    // Determine the logical target date, inherently applying Comcigan's Weekend Shift rule (Sat/Sun -> upcoming Mon)
-    // even for explicitly provided dates.
-    let baseTimeForDate = new Date();
-    if (targetDate) {
-        // Use Noon KST to guarantee that the UTC equivalent (03:00 AM) lands on the exact same physical Date.
-        baseTimeForDate = new Date(`${targetDate}T12:00:00+09:00`);
-    } else {
-        // Build current Korean Phase 
-        const nowMs = new Date().getTime();
-        const kstOffsetMs = 9 * 60 * 60 * 1000;
-        const kstDate = new Date(nowMs + kstOffsetMs);
-        // Force it to Noon UTC equivalents so getUTCDay perfectly aligns
-        baseTimeForDate = new Date(Date.UTC(kstDate.getUTCFullYear(), kstDate.getUTCMonth(), kstDate.getUTCDate(), 12, 0, 0));
-    }
-
-    const dayOfWeek = baseTimeForDate.getUTCDay(); // safely check DayOfWeek using normalized UTC Noon
-    if (dayOfWeek === 6 || dayOfWeek === 0) {
+    const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+    // When no targetDate is provided and today is a weekend (Sat=6, Sun=0),
+    // advance to next Monday so we match the upcoming week's dataset range.
+    const dayOfWeek = koreanTime.getUTCDay(); // UTC day since koreanTime is already offset
+    if (!targetDate && (dayOfWeek === 6 || dayOfWeek === 0)) {
         const daysToAdd = dayOfWeek === 6 ? 2 : 1; // Sat->Mon=+2, Sun->Mon=+1
-        baseTimeForDate.setUTCDate(baseTimeForDate.getUTCDate() + daysToAdd);
-        console.log(`[Comcigan Debug] Weekend detected (day=${dayOfWeek}), advancing target mapping to Monday: ${baseTimeForDate.toISOString().split('T')[0]}`);
+        koreanTime.setUTCDate(koreanTime.getUTCDate() + daysToAdd);
+        console.log(`[Comcigan Debug] Weekend detected (day=${dayOfWeek}), advancing target to Monday: ${koreanTime.toISOString().split('T')[0]}`);
     }
-    
-    const targetShort = baseTimeForDate.toISOString().split('T')[0].substring(2); // Extract YY-MM-DD
+    const todayShort = koreanTime.toISOString().split('T')[0].substring(2); // "YY-MM-DD"
+    const targetShort = targetDate ? (targetDate.length > 8 ? targetDate.substring(2) : targetDate) : todayShort;
 
     let isFallbackApplied = false;
     let datasetDateRanges: Record<string, string> = {};
@@ -705,9 +776,9 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                     const baseCode = baseData[grade][classNum][weekday][period] || 0;
                     
                     // 컴시간알리미 클라이언트의 셀 수준 폴백(Cell-level Fallback) 로직:
-                    // 전체가 비어있는 예약용 깡통 데이터셋(isEmptyDataset)일 때만 원본 스케줄로 덮어씌웁니다.
-                    // 데이터가 부분적으로라도 들어있는 실사용 데이터셋에서는 `0`이 실제 "휴강(비어있음)"을 의미하므로 무시해야 합니다.
-                    if (code === 0 && baseCode !== 0 && isEmptyDataset) {
+                    // 주간 변동 데이터셋(자료147, 자료245 등)에서 값이 `0`으로 비어 있다면, 
+                    // 이는 "휴강"이 아니라 "해당 교시는 원본 스케줄(자료481 등)을 그대로 따른다"는 의미입니다.
+                    if (code === 0 && baseCode !== 0) {
                         code = baseCode;
                     }
                     
@@ -837,11 +908,75 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     });
 }
 
-// 외부에 노출할 타이머 백그라운드 갱신 함수 (for _scheduled.ts)
-async function refreshRawCache(db: any) {
-    console.log(`[Comcigan Cache] Cron Background Refresh triggered for raw_data...`);
-    // Grade 1 데이터 요청 시 내부적으로 fetch가 발생하며 timetable_cache에 raw_data가 최신으로 엎어쳐짐.
-    await getTimetable(1, 'all', db, null, 'cron-bg-refresh', null, undefined);
+// --- 캐시 헬퍼 함수 ---
+
+async function saveTimetableCache(db: any, grade: number, responseData: any, targetDate?: string | null, cacheKeyOverride?: string) {
+    const cacheKey = cacheKeyOverride || (targetDate ? `gc_${grade}_${targetDate}` : `gc_${grade}`);
+    try {
+        await db.prepare(createTimetableCacheTable).run().catch(() => {});
+        try { await db.prepare("ALTER TABLE timetable_cache ADD COLUMN is_frozen INTEGER DEFAULT 0").run(); } catch(e) {}
+        
+        await db.prepare(`
+            INSERT INTO timetable_cache (cache_key, response_json, dataset_id, updated_at) 
+            VALUES (?, ?, ?, datetime('now')) 
+            ON CONFLICT(cache_key) DO UPDATE SET 
+                response_json = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.response_json ELSE excluded.response_json END,
+                dataset_id = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.dataset_id ELSE excluded.dataset_id END,
+                updated_at = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.updated_at ELSE datetime('now') END
+        `).bind(cacheKey, JSON.stringify(responseData), responseData.datasetId || '').run();
+        console.log(`[Comcigan Cache] Saved: ${cacheKey}, items=${responseData.data?.length || 0}`);
+    } catch (e) {
+        console.error(`[Comcigan Cache] Save failed for ${cacheKey}:`, e);
+    }
 }
 
-export { refreshRawCache };
+async function refreshCache(db: any, grade: number, targetDate?: string | null) {
+    console.log(`[Comcigan Cache] Refreshing cache for grade ${grade} / date ${targetDate || 'default'}...`);
+    const response = await getTimetable(grade, 'all', db, null, 'cache-refresh', targetDate, undefined);
+    if (response.status === 200) {
+        const json: any = await response.json();
+        if (json.data && json.data.length > 0) {
+            await saveTimetableCache(db, grade, json, targetDate);
+        }
+    }
+}
+
+async function buildCacheResponse(
+    cachedData: any,
+    classNum: number | 'all',
+    db: any,
+    datasetOverride: string | null | undefined,
+    clientIp: string,
+    cachedDatasetId: string,
+    cacheAgeMs: number
+): Promise<Response> {
+    // 캐시 키가 이미 IP 오버라이드나 강제 지정자를 반영하여 분리되었으므로,
+    // cachedData 내부에 본래 포함된 ipOverrideApplied 상태를 그대로 신뢰함.
+    let ipOverrideApplied = cachedData.ipOverrideApplied || false;
+
+    // classNum 필터링 적용
+    let filteredData = cachedData.data || [];
+    if (classNum !== 'all' && typeof classNum === 'number') {
+        filteredData = filteredData.filter((item: any) => item.class === classNum);
+    }
+
+    return new Response(JSON.stringify({
+        schoolName: cachedData.schoolName || "부산성지고등학교",
+        datasetId: cachedData.datasetId || cachedDatasetId,
+        ipOverrideApplied,
+        data: filteredData,
+        cached: true,
+        cacheAgeSec: Math.round(cacheAgeMs / 1000),
+        debugTokens: cachedData.debugTokens
+    }), {
+        headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=10, s-maxage=30',
+            'X-Cache-Status': 'HIT',
+            'X-Cache-Age': String(Math.round(cacheAgeMs / 1000))
+        }
+    });
+}
+
+// 외부에서 호출 가능하도록 export (for _scheduled.ts)
+export { refreshCache, saveTimetableCache };
