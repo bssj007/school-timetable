@@ -716,7 +716,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                     // 주간 변동 데이터셋 전체가 비어있는 경우(자료245 등) 뿐만 아니라,
                     // 일과시간(dayLimit) 내에 들어가는 교시인데도 데이터가 비어있다면, 임시 편성 중 누락된 것으로 간주하고 원본 스케줄로 덮어씌웁니다.
                     if (code === 0 && baseCode !== 0) {
-                        if (isEmptyDataset || (dayLimit !== 0 && period <= dayLimit)) {
+                        if (isEmptyDataset || dayLimit === 0 || period <= dayLimit) {
                             code = baseCode;
                         }
                     }
