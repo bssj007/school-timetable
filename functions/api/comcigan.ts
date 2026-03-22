@@ -353,8 +353,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     let datasetSelected: string | null = null;
     let designatedDatasetId: string | null = null;
     let datasetSelectedGrade1: string | null = null;
-    let fallbackSelectedGrade1: string | null = null;
-    let fallbackSelectedGen: string | null = null;
+    let finalDataset: string | null = null;
     let manualPlanData: any = null;
 
     if (db) {
@@ -375,8 +374,6 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 results.forEach((row: any) => {
                     if (row.key === 'comcigan_dataset_selected') datasetSelected = row.value;
                     if (row.key === 'comcigan_dataset_selected_grade1') datasetSelectedGrade1 = row.value;
-                    if (row.key === 'comcigan_fallback_dataset') fallbackSelectedGen = row.value;
-                    if (row.key === 'comcigan_fallback_dataset_grade1') fallbackSelectedGrade1 = row.value;
                     if (row.key === 'dataset_ip_overrides') {
                         try {
                             ipOverridesFound = JSON.parse(row.value);
@@ -400,7 +397,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 ? (datasetSelectedGrade1 === null ? datasetSelected : datasetSelectedGrade1)
                 : datasetSelected;
 
-            let finalDataset: string | null = effectiveDatasetNoOverride;
+            finalDataset = effectiveDatasetNoOverride;
 
             // 1. Check IP Override first
             if (clientIp !== 'unknown' && ipOverridesFound[clientIp]) {
@@ -451,13 +448,6 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         endDate.setHours(23, 59, 59, 999);
         return target >= startDate && target <= endDate;
     };
-
-    let fallbackSelected = null;
-    if (grade === 1 && fallbackSelectedGrade1) {
-        fallbackSelected = fallbackSelectedGrade1;
-    } else {
-        fallbackSelected = fallbackSelectedGen;
-    }
 
     const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
     // When no targetDate is provided and today is a weekend (Sat=6, Sun=0),
@@ -520,8 +510,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             console.log(`[Comcigan Debug] datasetSelected ${datasetSelected} covers ${targetShort}`);
         } else {
             console.log(`[Comcigan Debug] datasetSelected ${datasetSelected} does NOT cover ${targetShort}. Applying explicit fallback.`);
-            if (fallbackSelected && fallbackSelected !== '_auto_' && (timetableProps.includes(fallbackSelected) || fallbackSelected === 'MANUAL_PLAN')) {
-                timedataProp = fallbackSelected;
+            if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
+                timedataProp = finalDataset;
             } else {
                 timedataProp = baselineDatasetId || timetableProps[0] || "";
             }
@@ -545,8 +535,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             console.log(`[Comcigan Debug] Auto-resolved to ${matchedDataset} for date ${targetShort}`);
         } else {
             console.log(`[Comcigan Debug] No dataset matches date ${targetShort}. Applying explicit fallback.`);
-            if (fallbackSelected && fallbackSelected !== '_auto_' && (timetableProps.includes(fallbackSelected) || fallbackSelected === 'MANUAL_PLAN')) {
-                timedataProp = fallbackSelected;
+            if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
+                timedataProp = finalDataset;
             } else {
                 // If completely out of bounds, use the dynamically inferred baseline standard timetable
                 timedataProp = baselineDatasetId || timetableProps[0] || "";
@@ -564,8 +554,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     } else if (explicitRef === 'MANUAL_PLAN') {
         originalDatasetId = 'MANUAL_PLAN';
     } else {
-        if (fallbackSelected && fallbackSelected !== '_auto_' && (timetableProps.includes(fallbackSelected) || fallbackSelected === 'MANUAL_PLAN')) {
-            originalDatasetId = fallbackSelected;
+        if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
+            originalDatasetId = finalDataset;
         } else {
             originalDatasetId = baselineDatasetId || timetableProps[0] || "";
         }
@@ -832,8 +822,6 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         debugTokens: { 
             override1: datasetSelectedGrade1 || null, 
             override23: typeof datasetSelected !== 'undefined' ? datasetSelected : null,
-            fallback1: fallbackSelectedGrade1 || null, 
-            fallback23: fallbackSelectedGen || null, 
             isFallbackApplied,
             isEmptyDataset,
             keysCount: keys.length,
