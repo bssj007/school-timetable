@@ -2127,7 +2127,7 @@ export default function Dashboard() {
                                       const opacityRatio = (specialSchedule.opacity ?? 100) / 100;
                                       return (
                                         <td key={weekdayIdx} rowSpan={7} className="border-transparent p-0 align-middle text-center relative pointer-events-auto">
-                                          <div className="absolute inset-[1px] md:inset-[1.5px] z-[-1] rounded-sm" style={{ backgroundColor: `rgba(253, 232, 232, ${opacityRatio})` }} />
+                                          <div className="absolute inset-0 z-[-1] mix-blend-multiply" style={{ backgroundColor: `rgba(253, 232, 232, ${opacityRatio})` }} />
                                           <div className={`relative z-10 w-full h-full flex flex-col items-center justify-center p-2 md:p-4 whitespace-pre-wrap font-black text-pink-700 leading-tight tracking-widest ${specialSchedule.fontSize}`}>
                                             {specialSchedule.text}
                                           </div>
