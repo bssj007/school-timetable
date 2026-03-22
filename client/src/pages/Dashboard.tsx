@@ -2464,16 +2464,19 @@ export default function Dashboard() {
             {assessments && assessments.filter(assessment => {
               const today = new Date();
               today.setHours(0, 0, 0, 0);
-              return new Date(assessment.dueDate) >= today;
+              const effDate = assessment.tempDueDate || assessment.dueDate;
+              return new Date(effDate) >= today;
             }).length > 0 ? (
               assessments
                 .filter(assessment => {
                   const today = new Date();
                   today.setHours(0, 0, 0, 0);
-                  return new Date(assessment.dueDate) >= today;
+                  const effDate = assessment.tempDueDate || assessment.dueDate;
+                  return new Date(effDate) >= today;
                 })
                 .map((assessment) => {
-                  const diffDate = Math.ceil((new Date(assessment.dueDate).getTime() - new Date(toDateString(new Date())).getTime()) / (1000 * 60 * 60 * 24));
+                  const effDate = assessment.tempDueDate || assessment.dueDate;
+                  const diffDate = Math.ceil((new Date(effDate).getTime() - new Date(toDateString(new Date())).getTime()) / (1000 * 60 * 60 * 24));
                   const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
                   const isToday = diffDate === 0;
 
@@ -2511,7 +2514,7 @@ export default function Dashboard() {
                       }}
                       onClick={() => {
                         // Find the cell logic
-                        const targetDate = new Date(assessment.dueDate); // This might be string 'YYYY-MM-DD'
+                        const targetDate = new Date(assessment.tempDueDate || assessment.dueDate); // This might be string 'YYYY-MM-DD'
                         // We need to find which column (weekday) and row (classTime) this corresponds to.
                         // However, viewingAssessments are "this week's" assessments, so they should be on the screen.
                         // But wait, the assessments list is "This Week's".
@@ -2595,11 +2598,11 @@ export default function Dashboard() {
                           {assessment.isPostponed ? (
                             <>
                               <div className="flex items-center">
-                                <span className="line-through text-gray-400">{formatShortDateText(assessment.originalDueDate)} {assessment.originalClassTime}교시</span>
+                                <span className="line-through text-gray-400">{formatShortDateText(assessment.dueDate)} {assessment.classTime}교시</span>
                                 <span className="mx-1 font-bold text-red-500">➔</span>
                               </div>
                               <div className="flex items-center">
-                                <span className="font-bold text-red-600">{formatShortDateText(assessment.dueDate)} {assessment.classTime}교시</span>
+                                <span className="font-bold text-red-600">{formatShortDateText(assessment.tempDueDate || assessment.dueDate)} {assessment.tempClassTime || assessment.classTime}교시</span>
                                 {Boolean(assessment.isAutoPredicted) && (
                                   <span className="ml-1 text-xs text-orange-500 font-bold whitespace-nowrap">(자동예측)</span>
                                 )}

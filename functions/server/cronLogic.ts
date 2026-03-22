@@ -89,22 +89,17 @@ export async function executeCronTasks(env: any) {
 
             // 3.1 내일 수행평가가 있는 모든 항목 조회
             const { results: assessments } = await env.DB.prepare(
-                `SELECT 
-                    pa.*,
-                    u.kakaoAccessToken,
-                    u.notificationEnabled
-                FROM performance_assessments pa
-                JOIN users u ON pa.userId = u.id
-                WHERE COALESCE(pa.tempDueDate, pa.dueDate) = ?
-                AND pa.isDone = 0
-                AND pa.isDeleted = 0
-                AND u.notificationEnabled = 1
-                AND u.kakaoAccessToken IS NOT NULL`
+                `SELECT *
+                FROM performance_assessments
+                WHERE COALESCE(tempDueDate, dueDate) = ?
+                AND isDone = 0
+                AND isDeleted = 0`
             ).bind(tomorrowDateString).all();
 
             console.log(`[Cron] Found ${assessments.length} assessments for tomorrow`);
 
-            // 3.2 각 수행평가에 대해 카카오톡 전송
+            // 3.2 각 수행평가에 대해 카카오톡 전송 (TODO: Requires 'users' table and kakao OAuth implementation)
+            /*
             for (const assessment of assessments) {
                 try {
                     await sendKakaoMessage(assessment.kakaoAccessToken, assessment);
@@ -113,6 +108,7 @@ export async function executeCronTasks(env: any) {
                     console.error(`[Cron] Failed to send notification for assessment ${assessment.id}:`, error);
                 }
             }
+            */
         } else {
             // 조건 미달 시 그냥 넘어감
             console.log(`[Cron] Daily sweep skipped. (KST Hour: ${kstHour}, last sent: ${lastDailyCronDate})`);

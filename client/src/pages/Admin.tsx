@@ -5152,8 +5152,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     let valB = b[assessmentSortField];
 
                                     if (assessmentSortField === 'dueDate') {
-                                        valA = new Date(valA).getTime();
-                                        valB = new Date(valB).getTime();
+                                        valA = new Date(a.tempDueDate || a.dueDate).getTime();
+                                        valB = new Date(b.tempDueDate || b.dueDate).getTime();
                                     } else if (typeof valA === 'string') {
                                         valA = valA.toLowerCase();
                                         valB = valB.toLowerCase();

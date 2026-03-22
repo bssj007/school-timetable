@@ -554,6 +554,20 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         });
     }
 
+    // Infer the Comcigan standard baseline dataset dynamically.
+    // The baseline is typically the highest numbered dataset that does NOT have specific date bounds.
+    let baselineDatasetId = "";
+    const unboundedDatasets = timetableProps.filter(key => !datasetDateRanges[key]);
+    const baselineCandidates = unboundedDatasets.length > 0 ? unboundedDatasets : timetableProps;
+    
+    if (baselineCandidates.length > 0) {
+        const maxKeyItem = baselineCandidates.reduce((max, key) => {
+            const num = parseInt(key.replace('자료', ''));
+            return num > max.num ? { key, num } : max;
+        }, { key: baselineCandidates[0], num: -1 });
+        baselineDatasetId = maxKeyItem.key;
+    }
+
     if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_') {
         const rangeStr = datasetDateRanges[datasetSelected];
         let covers = false;
@@ -570,7 +584,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
                 timedataProp = fallbackSelected;
             } else {
-                timedataProp = timetableProps[0] || "";
+                timedataProp = baselineDatasetId || timetableProps[0] || "";
             }
             isFallbackApplied = true;
         }
@@ -595,7 +609,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
                 timedataProp = fallbackSelected;
             } else {
-                timedataProp = timetableProps[0] || "";
+                // If completely out of bounds, use the dynamically inferred baseline standard timetable
+                timedataProp = baselineDatasetId || timetableProps[0] || "";
             }
             isFallbackApplied = true;
         }
@@ -613,7 +628,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
             originalDatasetId = fallbackSelected;
         } else {
-            originalDatasetId = timetableProps[0];
+            originalDatasetId = baselineDatasetId || timetableProps[0] || "";
         }
     }
 
@@ -625,7 +640,20 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     const teachers = rawData[teacherProp] || [];
     const subjects = rawData[subjectProp] || [];
     const data = rawData[timedataProp];
-    const baseData = timetableProps.length > 0 ? rawData[timetableProps[0]] : null;
+    
+    // Determine the true standard baseline dataset (Base Data for cell-level fill)
+    let targetBaseId = "";
+    if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
+        targetBaseId = fallbackSelected;
+    } else if (baselineDatasetId) {
+        targetBaseId = baselineDatasetId;
+    } else if (timetableProps.length > 0) {
+        targetBaseId = timetableProps[0];
+    }
+
+    // Explicitly target the resolved baseline timetable for cell-level fallback calculations
+    const baseData = targetBaseId ? rawData[targetBaseId] : null;
+    
     const bunri = rawData['분리'] !== undefined ? rawData['분리'] : 100; // Get bunri value
     const timeInfoProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].length === 8 && typeof rawData[k][1] === 'number');
 
