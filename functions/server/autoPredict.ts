@@ -197,9 +197,9 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             } else {
                 const genericConfig = ctx.electives.find((cfg: any) => (cfg.subject.trim() === baseAssSubject || cfg.fullSubjectName?.trim() === baseAssSubject));
                 if (genericConfig && genericConfig.classCode && specificConfig && specificConfig.classCode) {
-                    const codesA = genericConfig.classCode.split(',').map((s: string) => s.trim());
-                    const codesB = specificConfig.classCode.split(',').map((s: string) => s.trim());
-                    if (codesA.some((c: string) => codesB.includes(c))) {
+                    const codesA = genericConfig.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
+                    const codesB = specificConfig.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
+                    if (codesA.length > 0 && codesA.some((c: string) => codesB.includes(c))) {
                         isSubjectMatch = true;
                     }
                 }
