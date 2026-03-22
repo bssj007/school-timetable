@@ -3251,10 +3251,15 @@ function TrashManager({ adminPassword }: { adminPassword: string }) {
                                                 <TableCell className="text-center font-bold text-gray-600">
                                                     {assessment.classNum === 0 ? "전체" : `${assessment.classNum}반`}
                                                 </TableCell>
-                                                <TableCell className="font-medium">
+                                                <TableCell className="font-medium flex items-center gap-2">
                                                     <span className={`${assessment.classNum === 0 ? "text-blue-600" : ""}`}>
                                                         {assessment.subject}
                                                     </span>
+                                                    {assessment.description && (
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">
+                                                            {assessment.description}
+                                                        </span>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell>{assessment.title}</TableCell>
                                                 <TableCell>{assessment.dueDate}</TableCell>
@@ -3623,10 +3628,17 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
                             {tableRows.map((row: any) => (
                                 <tr key={row.id} className={`hover:bg-slate-50 ${row.exceedsThreshold ? 'bg-red-50' : ''}`}>
                                     <td className="border border-slate-300 px-3 py-2 text-center font-medium">
-                                        {row.subject}
-                                        {row.isOrphan && (
-                                            <Badge variant="destructive" className="ml-2 text-[10px] px-1 h-4">고아 수행평가</Badge>
-                                        )}
+                                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                            <span>{row.subject}</span>
+                                            {row.description && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                                                    {row.description}
+                                                </span>
+                                            )}
+                                            {row.isOrphan && (
+                                                <Badge variant="destructive" className="text-[10px] px-1 h-4">고아 수행평가</Badge>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className={`border border-slate-300 px-3 py-2 text-center text-xs ${row.isOrphan ? 'line-through text-red-400' : ''}`}>{row.dueDate}</td>
                                     <td className="border border-slate-300 px-3 py-2 text-center text-xs truncate max-w-[150px]">{row.title}</td>
@@ -4696,8 +4708,15 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
             <TableCell className="text-center font-bold text-gray-700">{assessment.grade}</TableCell>
             <TableCell className="text-center">{assessment.classNum === 0 ? "전체" : assessment.classNum}</TableCell>
             <TableCell className="font-medium">
-                {assessment.subject}
-                {isOrphan && <Badge variant="destructive" className="ml-2 text-[10px] px-1 h-4 bg-red-100 hover:bg-red-200 text-red-700 border border-red-200">고아 수행평가</Badge>}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    <span>{assessment.subject}</span>
+                    {assessment.description && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                            {assessment.description}
+                        </span>
+                    )}
+                    {isOrphan && <Badge variant="destructive" className="text-[10px] px-1 h-4 bg-red-100 hover:bg-red-200 text-red-700 border border-red-200">고아 수행평가</Badge>}
+                </div>
             </TableCell>
             <TableCell className="truncate max-w-[200px]">{assessment.title}</TableCell>
             <TableCell>
