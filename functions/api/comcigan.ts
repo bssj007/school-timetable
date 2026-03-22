@@ -775,11 +775,13 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 if (baseData && baseData[grade] && baseData[grade][classNum] && baseData[grade][classNum][weekday]) {
                     const baseCode = baseData[grade][classNum][weekday][period] || 0;
                     
-                    // 컴시간알리미 클라이언트의 셀 수준 폴백(Cell-level Fallback) 로직:
-                    // 주간 변동 데이터셋(자료147, 자료245 등)에서 값이 `0`으로 비어 있다면, 
-                    // 이는 "휴강"이 아니라 "해당 교시는 원본 스케줄(자료481 등)을 그대로 따른다"는 의미입니다.
+                    // 컴시간알리미 클라이언트의 셀 수준 폴백(Cell-level Fallback) 로직 개선:
+                    // 주간 변동 데이터셋 전체가 비어있거나(자료245 등), 정상적인 날짜 내의 일부 결측 교시인 경우에만 원본 스케줄로 덮어씌웁니다.
+                    // 특정 요일이 아예 휴일 등으로 인해 0교시로 지정된 경우(currentPeriodLimit === 0)에는 기본 시간표가 강제로 적용되지 않게 합니다.
                     if (code === 0 && baseCode !== 0) {
-                        code = baseCode;
+                        if (isEmptyDataset || period <= currentPeriodLimit) {
+                            code = baseCode;
+                        }
                     }
                     
                     if (baseCode !== code && timedataProp !== timetableProps[0]) {
