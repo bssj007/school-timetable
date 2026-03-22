@@ -122,23 +122,39 @@ export const onRequest = async (context: any) => {
     const method = context.request.method;
 
     try {
-        // POST method: Simple fetch and return without DB save
+        // POST method is strictly disabled to enforce caching architecture
         if (method === 'POST') {
-            const body = await context.request.json();
-            const { schoolName, grade, classNum } = body;
+            return new Response(JSON.stringify({ error: "Direct POST fetch is disabled. Use GET /api/comcigan?type=timetable to enforce cache usage." }), { status: 403, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+        }
 
-            console.log('[Comcigan API] POST request:', { schoolName, grade, classNum });
+        // GET method: Return teacher timetable specifically
+        if (type === 'teacher_timetable') {
+            let rawData;
+            
+            // Strictly fetch from the global raw_data cache instead of polling the live server
+            if (context.env && context.env.DB) {
+                try {
+                    const rawDataRow = await context.env.DB.prepare("SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'").first();
+                    if (rawDataRow && rawDataRow.response_json) {
+                        rawData = JSON.parse(rawDataRow.response_json as string);
+                    }
+                } catch (e: any) {
+                    console.error("[Teacher Timetable] DB read error:", e);
+                }
+            }
 
-            // Just fetch the timetable and return it
-            // D1 save will be handled client-side or later
-            const timetableResponse = await getTimetable(grade, classNum, context.env ? context.env.DB : undefined);
-            const timetableJson: any = await timetableResponse.json();
+            if (!rawData) {
+                return new Response(JSON.stringify({ 
+                    success: false, 
+                    error: "Cached timetable raw data not available. Please wait for background refresh." 
+                }), { status: 503, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+            }
 
             return new Response(JSON.stringify({
                 success: true,
-                message: `${schoolName || '부산성지고등학교'} ${grade}학년 ${classNum}반 시간표를 가져왔습니다.`,
-                count: timetableJson.data?.length || 0,
-                data: timetableJson.data
+                teachers: rawData['자료446'] || [],
+                subjects: rawData['자료492'] || [],
+                timetable: rawData['자료542'] || []
             }), {
                 status: 200,
                 headers: {
@@ -153,77 +169,68 @@ export const onRequest = async (context: any) => {
             const grade = parseInt(url.searchParams.get('grade') || '1');
             const classNumStr = url.searchParams.get('classNum');
             const datasetOverride = url.searchParams.get('dataset');
+            const targetDate = url.searchParams.get('targetDate');
             const classNum = classNumStr === 'all' ? 'all' : parseInt(classNumStr || '1');
             
             // Get Client IP
             const clientIp = context.request.headers.get('CF-Connecting-IP') || 'unknown';
             const db = context.env ? context.env.DB : undefined;
 
-            // --- 캐시 우선 응답 ---
+            let cachedRawDataString: string | undefined = undefined;
+            let isStale = false;
             if (db) {
                 try {
-                    // 캐시 테이블 보장
-                    try { await db.prepare(createTimetableCacheTable).run(); } catch (_) {}
-
-                    // 캐시 최대 유효 시간 조회 (system_settings)
-                    let cacheMaxAgeMs = DEFAULT_CACHE_MAX_AGE_MS;
-                    try {
-                        const maxAgeRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_cache_max_age_minutes'").first();
-                        if (maxAgeRow && maxAgeRow.value) {
-                            cacheMaxAgeMs = parseInt(maxAgeRow.value as string) * 60 * 1000;
+                    const rawDataRow = await db.prepare("SELECT response_json, updated_at FROM timetable_cache WHERE cache_key = 'raw_data'").first();
+                    if (rawDataRow && rawDataRow.response_json) {
+                        let cacheMaxAgeMs = DEFAULT_CACHE_MAX_AGE_MS;
+                        try {
+                            const maxAgeRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_cache_max_age_minutes'").first();
+                            if (maxAgeRow && maxAgeRow.value) {
+                                cacheMaxAgeMs = parseInt(maxAgeRow.value as string) * 60 * 1000;
+                            }
+                        } catch (_) {}
+                        
+                        const age = Date.now() - new Date((rawDataRow.updated_at as string || "").replace(' ', 'T') + 'Z').getTime();
+                        if (age >= cacheMaxAgeMs) {
+                            isStale = true;
                         }
-                    } catch (_) {}
-
-                    const cacheKey = `grade_${grade}`;
-                    const cacheRow = await db.prepare("SELECT response_json, dataset_id, updated_at FROM timetable_cache WHERE cache_key = ?").bind(cacheKey).first();
-
-                    if (cacheRow && cacheRow.response_json) {
-                        const cacheAge = Date.now() - new Date(cacheRow.updated_at as string + 'Z').getTime();
-                        const isFresh = cacheAge < cacheMaxAgeMs;
-
-                        console.log(`[Comcigan Cache] HIT: ${cacheKey}, age=${Math.round(cacheAge / 1000)}s, fresh=${isFresh}`);
-
-                        // 캐시에서 데이터를 재구성 (classNum 필터링 + IP override 재적용)
-                        const cachedData = JSON.parse(cacheRow.response_json as string);
-                        const cacheResponse = buildCacheResponse(cachedData, classNum, db, datasetOverride, clientIp, cacheRow.dataset_id as string, cacheAge);
-
-                        if (!isFresh) {
-                            // 백그라운드에서 갱신
-                            context.waitUntil(
-                                refreshCache(db, grade).catch((e: any) => console.error('[Comcigan Cache] Background refresh failed:', e))
-                            );
-                        }
-
-                        return await cacheResponse;
+                        cachedRawDataString = rawDataRow.response_json as string;
+                        console.log(`[Comcigan Cache] raw_data read, age=${Math.round(age/1000)}s, stale=${isStale}`);
                     }
-
-                    console.log(`[Comcigan Cache] MISS: ${cacheKey}`);
-                } catch (e) {
-                    console.warn('[Comcigan Cache] Cache lookup failed, falling through to direct fetch:', e);
-                }
+                } catch (e) { }
             }
 
-            // --- 캐시 미스: 기존 방식으로 직접 가져오기 ---
-            const response = await getTimetable(grade, classNum, db, datasetOverride, clientIp);
+            // getTimetable with allowLiveFetch = false to strictly enforce Cache
+            const response = await getTimetable(grade, classNum, db, datasetOverride, clientIp, targetDate, cachedRawDataString, false);
             
-            // 성공 시 캐시 저장 (백그라운드)
-            if (db && response.status === 200) {
-                const responseClone = response.clone();
+            if (response.status === 503 && db) {
+                // Completely empty cache + live fetching disabled
+                console.warn(`[Comcigan Cache] Cache completely empty for Grade ${grade}. Triggering background refresh...`);
                 context.waitUntil(
-                    (async () => {
-                        try {
-                            const json: any = await responseClone.json();
-                            if (json.data && json.data.length > 0) {
-                                // 캐시에는 전체 학년의 all-class 데이터를 저장
-                                // (이미 classNum='all'으로 가져온 경우에만 캐시)
-                                if (classNum === 'all' || json.data.length > 10) {
-                                    await saveTimetableCache(db, grade, json);
-                                }
-                            }
-                        } catch (e) {
-                            console.error('[Comcigan Cache] Failed to save cache:', e);
-                        }
-                    })()
+                    refreshCache(db, grade, targetDate).catch((e: any) => console.error('[Comcigan Cache] Background refresh on 503 miss failed:', e))
+                );
+                
+                // Return a graceful empty response to prevent frontend crashes or hanging
+                return new Response(JSON.stringify({
+                    success: true,
+                    cached: true,
+                    isPending: true,
+                    data: [],
+                    message: "캐시가 비어있어 백그라운드에서 시간표를 갱신 중입니다. 잠시 후 상단의 새로고침을 클릭해주세요.",
+                    datasetId: datasetOverride || 'PENDING',
+                    ipOverrideApplied: false
+                }), {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    }
+                });
+            }
+            if (isStale && db) {
+                // Background update
+                context.waitUntil(
+                    refreshCache(db, grade, targetDate).catch((e: any) => console.error('[Comcigan Cache] Background refresh failed:', e))
                 );
             }
 
@@ -243,32 +250,73 @@ export const onRequest = async (context: any) => {
     }
 }
 
-async function getTimetable(grade: number, classNumInput: number | 'all', db?: any, datasetOverride?: string | null, clientIp: string = 'unknown') {
+async function getTimetable(grade: number, classNumInput: number | 'all', db?: any, datasetOverride?: string | null, clientIp: string = 'unknown', targetDate?: string | null, cachedRawDataString?: string, allowLiveFetch: boolean = false) {
     let ipOverrideApplied: string | false = false;
-    const prefix = await getPrefix();
-    const { code1, code2 } = await getSchoolCode(prefix);
+    let jsonString = cachedRawDataString;
 
-    // Always fetch grade 1's parameter to avoid Comcigan server corruption where fetching grade 2 breaks the Thursday data
-    const param = `${prefix}${code2}_0_1`;
-    const b64 = btoa(param);
-    const targetUrl = `${BASE_URL}/${code1}?${b64}`;
-
-    const jsonText = await fetchWithProxy(targetUrl, HEADERS, false);
-    const jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
-    
-    if (db) {
+    // --- FUTURE BOUNDARY STALE CHECK ---
+    // If the frontend legitimately requests a date that exceeds the maximum timeline of our currently
+    // cached Comcigan payload, mark it as out-of-range so we can fallback to the standard dataset.
+    // We do NOT discard the raw cache—doing so would also discard the standard baseline dataset
+    // (e.g. 자료481) that has no date bounds and is valid for any week.
+    let isOutOfRange = false;
+    if (jsonString && targetDate) {
         try {
-            await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_cache (cache_key TEXT PRIMARY KEY, response_json TEXT NOT NULL, dataset_id TEXT, updated_at TEXT DEFAULT (datetime('now')))`).run();
-            await db.prepare(`
-                INSERT INTO timetable_cache (cache_key, response_json, updated_at) 
-                VALUES ('raw_data', ?, datetime('now')) 
-                ON CONFLICT(cache_key) DO UPDATE SET response_json = excluded.response_json, updated_at = datetime('now')
-            `).bind(jsonString).run();
+            const tempRaw = JSON.parse(jsonString);
+            const dateArr = tempRaw['일자'];
+            const dateArrNew = tempRaw['일자자료'];
+            let lastRange = null;
+            
+            if (dateArr && Array.isArray(dateArr) && dateArr.length > 0) {
+                lastRange = dateArr[dateArr.length - 1]; // e.g. "26-03-23 ~ 26-03-28"
+            } else if (dateArrNew && Array.isArray(dateArrNew) && dateArrNew.length > 0) {
+                const lastItem = dateArrNew[dateArrNew.length - 1]; // e.g. [2, "26-03-30 ~ 26-04-04"]
+                lastRange = Array.isArray(lastItem) ? lastItem[1] : lastItem;
+            }
+            
+            if (lastRange && typeof lastRange === 'string') {
+                const parts = lastRange.split('~').map(s => s.trim());
+                if (parts.length >= 2) {
+                    const endDate = new Date(`20${parts[1]}`);
+                    endDate.setHours(23, 59, 59, 999);
+                    const targetShort = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
+                    const targetDateObj = new Date(`20${targetShort}`);
+                    
+                    if (targetDateObj > endDate) {
+                        console.log(`[Comcigan Debug] targetDate ${targetShort} exceeds cached raw_data max date ${parts[1]}. Will use standard (baseline) dataset instead.`);
+                        isOutOfRange = true;
+                    }
+                }
+            }
         } catch (e) {
-            console.error('[Comcigan Debug] Failed to cache raw_data:', e);
+            console.warn('[Comcigan Debug] Failed to evaluate raw_data date expiration boundary', e);
         }
     }
 
+    if (!jsonString) {
+        if (!allowLiveFetch) {
+            console.warn(`[getTimetable] Cache MISS & live fetch disabled for targetDate=${targetDate}. Returning 503.`);
+            return new Response(JSON.stringify({ 
+                success: false, 
+                error: "Cache miss and live Comcigan fetch is strictly disabled for user requests.", 
+                data: [] 
+            }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        const prefix = await getPrefix();
+        const { code1, code2 } = await getSchoolCode(prefix);
+
+        // Always fetch grade 1's parameter to avoid Comcigan server corruption where fetching grade 2 breaks the Thursday data
+        const param = `${prefix}${code2}_0_1`;
+        const b64 = btoa(param);
+        const targetUrl = `${BASE_URL}/${code1}?${b64}`;
+
+        const jsonText = await fetchWithProxy(targetUrl, HEADERS, false);
+        jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
+    }
+    
+    // raw_data caching moved to the end of the function to ensure data integrity
+    
     const rawData = JSON.parse(jsonString);
 
     const keys = Object.keys(rawData);
@@ -304,6 +352,11 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     // Sometimes the last element is an empty matrix of zeros for future use.
     // Pick the last one that actually has non-zero values in its class 1 timetable.
     let timedataProp = "";
+    let datasetSelected: string | null = null;
+    let designatedDatasetId: string | null = null;
+    let datasetSelectedGrade1: string | null = null;
+    let finalDataset: string | null = null;
+    let manualPlanData: any = null;
 
     if (db) {
         try {
@@ -315,11 +368,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 )
             `).run();
 
-            const { results } = await db.prepare("SELECT key, value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'comcigan_dataset_selected_grade1' OR key = 'manual_semester_plan' OR key = 'dataset_ip_overrides'").all();
+            const { results } = await db.prepare("SELECT key, value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'comcigan_dataset_selected_grade1' OR key = 'manual_semester_plan' OR key = 'dataset_ip_overrides' OR key = 'comcigan_fallback_dataset' OR key = 'comcigan_fallback_dataset_grade1'").all();
 
-            let manualPlanData: any = null;
-            let datasetSelected: string | null = null;
-            let datasetSelectedGrade1: string | null = null;
             let ipOverridesFound: Record<string, { grade1?: string, default?: string, memo?: string }> = {};
 
             if (results && results.length > 0) {
@@ -349,7 +399,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 ? (datasetSelectedGrade1 === null ? datasetSelected : datasetSelectedGrade1)
                 : datasetSelected;
 
-            let finalDataset: string | null = effectiveDatasetNoOverride;
+            finalDataset = effectiveDatasetNoOverride;
 
             // 1. Check IP Override first
             if (clientIp !== 'unknown' && ipOverridesFound[clientIp]) {
@@ -372,126 +422,238 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 ipOverrideApplied = grade === 1 ? "1학년" : "2/3학년";
             }
 
-            if (datasetOverride && datasetOverride !== ('_auto_')) {
+            if (datasetOverride && datasetOverride !== '_auto_' && datasetOverride !== 'COMCIGAN') {
                 datasetSelected = datasetOverride; // From the dashboard manual selector
             } else {
                 datasetSelected = finalDataset;
             }
 
-            if (datasetSelected === 'MANUAL_PLAN') {
-                console.log(`[Comcigan Debug] Using MANUAL_PLAN dataset`);
+            designatedDatasetId = datasetSelected;
 
-                // Parse the manual plan for the requested grade and class
-                const result: any[] = [];
-                let classList: number[] = [];
-                if (classNumInput === 'all') {
-                    if (manualPlanData?.timetables) {
-                        classList = Object.keys(manualPlanData.timetables)
-                            .filter(key => key.startsWith(`${grade}-`))
-                            .map(key => parseInt(key.split('-')[1]));
-                    }
-                } else {
-                    classList = [classNumInput as number];
-                }
-
-                for (const cls of classList) {
-                    const classPlan = manualPlanData?.timetables?.[`${grade}-${cls}`];
-                    if (classPlan) {
-                        for (const [key, subjectStr] of Object.entries(classPlan)) {
-                            // key is "weekday-period", e.g. "0-2" (Monday 2nd period)
-                            const [weekdayStr, periodStr] = key.split('-');
-                            const weekday = parseInt(weekdayStr);
-                            const period = parseInt(periodStr);
-                            const subjectValue = subjectStr as string;
-
-                            // Let's try to extract teacher if it's "Subj Name". Basically split by space.
-                            let subject = subjectValue;
-                            let teacher = "";
-                            const parts = subjectValue.split(' ');
-                            if (parts.length > 1) {
-                                subject = parts[0];
-                                teacher = parts.slice(1).join(' '); // in case name has spaces
-                            }
-
-                            if (subjectValue) {
-                                result.push({
-                                    grade,
-                                    class: cls,
-                                    weekday, // already 0-indexed in our manual planner
-                                    classTime: period,
-                                    subject,
-                                    teacher
-                                });
-                            }
-                        }
-                    }
-                }
-
-                if (result.length > 0) {
-                    return new Response(JSON.stringify({
-                        schoolName: "부산성지고등학교 (수동 시간표)",
-                        datasetId: "MANUAL_PLAN",
-                        ipOverrideApplied,
-                        data: result,
-                        debugTokens: { manualPlan: true }
-                    }), { headers: { 'Content-Type': 'application/json' } });
-                } else {
-                    console.warn(`[Comcigan Debug] MANUAL_PLAN selected but no data found for G${grade} C${classNumInput}. Falling back to normal.`);
-                }
-
-            } else if (datasetSelected && timetableProps.includes(datasetSelected)) {
-                timedataProp = datasetSelected;
-                console.log(`[Comcigan Debug] Using admin selected timetable dataset: ${timedataProp}`);
-            }
+            designatedDatasetId = datasetSelected;
         } catch (e) {
             console.warn("[Comcigan Debug] Failed to read system_settings for dataset selection", e);
         }
     }
 
-    if (!timedataProp) {
-        let minDataCount = Infinity;
-        for (let i = timetableProps.length - 1; i >= 0; i--) {
-            const prop = timetableProps[i];
-            const gradeData = rawData[prop][grade];
-            if (!gradeData) continue;
+    // ----------------------------------------------------
+    // STRICT BOUNDARY FALLBACK CASCADE (Temp User Request)
+    // ----------------------------------------------------
+    const isDateInRange = (targetDateStr: string, rangeStr: any): boolean => {
+        if (typeof rangeStr !== 'string') return false;
+        const targetShort = targetDateStr.length > 8 ? targetDateStr.substring(2) : targetDateStr;
+        const parts = rangeStr.split('~').map(s => s.trim());
+        if (parts.length < 2) return rangeStr.startsWith(targetShort);
+        const startDate = new Date(`20${parts[0]}`);
+        const endDate = new Date(`20${parts[1]}`);
+        const target = new Date(`20${targetShort}`);
+        endDate.setHours(23, 59, 59, 999);
+        return target >= startDate && target <= endDate;
+    };
 
-            let dataCount = 0;
-            for (let c = 1; c < gradeData.length; c++) {
-                const classData = gradeData[c];
-                if (!classData) continue;
-                // Flatten the week's data to check for non-zero codes
-                for (let w = 1; w <= 5; w++) {
-                    if (classData[w] && Array.isArray(classData[w])) {
-                        dataCount += classData[w].filter((code: any) => typeof code === 'number' && code > 0).length;
-                    }
-                }
+    const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+    // When no targetDate is provided and today is a weekend (Sat=6, Sun=0),
+    // advance to next Monday so we match the upcoming week's dataset range.
+    const dayOfWeek = koreanTime.getUTCDay(); // UTC day since koreanTime is already offset
+    if (!targetDate && (dayOfWeek === 6 || dayOfWeek === 0)) {
+        const daysToAdd = dayOfWeek === 6 ? 2 : 1; // Sat->Mon=+2, Sun->Mon=+1
+        koreanTime.setUTCDate(koreanTime.getUTCDate() + daysToAdd);
+        console.log(`[Comcigan Debug] Weekend detected (day=${dayOfWeek}), advancing target to Monday: ${koreanTime.toISOString().split('T')[0]}`);
+    }
+    const todayShort = koreanTime.toISOString().split('T')[0].substring(2); // "YY-MM-DD"
+    const targetShort = targetDate ? (targetDate.length > 8 ? targetDate.substring(2) : targetDate) : todayShort;
+
+    let isFallbackApplied = false;
+    let datasetDateRanges: Record<string, string> = {};
+    
+    // Always build the date ranges map first
+    if (rawData['일자'] && Array.isArray(rawData['일자'])) {
+        const allDatasetKeys = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
+        allDatasetKeys.forEach((key, idx) => {
+            if (idx + 1 < rawData['일자'].length) {
+                datasetDateRanges[key] = rawData['일자'][idx + 1];
             }
+        });
+    } else if (rawData['일자자료'] && Array.isArray(rawData['일자자료'])) {
+        const dateList = rawData['일자자료'];
+        dateList.forEach((dt: any) => {
+            if (!Array.isArray(dt) || dt.length < 2) return;
+            const [directIdx, range] = dt;
+            if (typeof directIdx === 'number' && timetableProps[directIdx]) {
+                datasetDateRanges[timetableProps[directIdx]] = range;
+            }
+        });
+    }
 
-            // If it has a reasonable amount of data for the week, it's a valid candidate.
-            // We want the ONE WITH THE FEWEST classes (cancelled classes logic)
-            // AND we want the LATEST one if there is a tie (iterating backwards, so `<` correctly prefers earlier iterations if we used forward loop, but we use backward loop! Wait, if we use backward loop:
-            // i=3 (자료245): minDataCount=110, timedataProp=자료245
-            // i=2 (자료147): minCount=110. 110 < 110 is false. So timedataProp remains 자료245.
-            // Why did it select 자료147 in my test script?
-            if (dataCount > 10 && dataCount < minDataCount) {
-                minDataCount = dataCount;
-                timedataProp = prop;
+    // Infer the Comcigan standard baseline dataset dynamically.
+    // The baseline is typically the highest numbered dataset that does NOT have specific date bounds.
+    let baselineDatasetId = "";
+    const unboundedDatasets = timetableProps.filter(key => !datasetDateRanges[key]);
+    const baselineCandidates = unboundedDatasets.length > 0 ? unboundedDatasets : timetableProps;
+    
+    if (baselineCandidates.length > 0) {
+        const maxKeyItem = baselineCandidates.reduce((max, key) => {
+            const num = parseInt(key.replace('자료', ''));
+            return num > max.num ? { key, num } : max;
+        }, { key: baselineCandidates[0], num: -1 });
+        baselineDatasetId = maxKeyItem.key;
+    }
+
+    // When the target date is beyond the cached comcigan range, skip date-matching and
+    // directly use designatedDatasetId (the admin-configured standard dataset for this grade).
+    if (isOutOfRange) {
+        console.log(`[Comcigan Debug] isOutOfRange=true. Forcing standard dataset. designatedDatasetId=${designatedDatasetId}, finalDataset=${finalDataset}, baselineDatasetId=${baselineDatasetId}`);
+        if (designatedDatasetId && designatedDatasetId !== '_auto_' && (timetableProps.includes(designatedDatasetId) || designatedDatasetId === 'MANUAL_PLAN')) {
+            timedataProp = designatedDatasetId;
+        } else if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
+            timedataProp = finalDataset;
+        } else {
+            timedataProp = baselineDatasetId || timetableProps[0] || "";
+        }
+        isFallbackApplied = true;
+        console.log(`[Comcigan Debug] Out-of-range fallback resolved to: ${timedataProp}`);
+    } else if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_') {
+        const rangeStr = datasetDateRanges[datasetSelected];
+        let covers = false;
+        
+        if (rangeStr) {
+            covers = isDateInRange(targetShort, rangeStr);
+        }
+
+        if (covers) {
+            timedataProp = datasetSelected;
+            console.log(`[Comcigan Debug] datasetSelected ${datasetSelected} covers ${targetShort}`);
+        } else {
+            console.log(`[Comcigan Debug] datasetSelected ${datasetSelected} does NOT cover ${targetShort}. Applying explicit fallback.`);
+            if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
+                timedataProp = finalDataset;
+            } else {
+                timedataProp = baselineDatasetId || timetableProps[0] || "";
+            }
+            isFallbackApplied = true;
+        }
+    } else if (datasetSelected === 'MANUAL_PLAN') {
+        timedataProp = 'MANUAL_PLAN';
+    } else {
+        console.log(`[Comcigan Debug] No concrete datasetSelected found. Auto-applying dynamic date resolution.`);
+        
+        let matchedDataset = null;
+        for (const [key, rangeStr] of Object.entries(datasetDateRanges)) {
+            if (isDateInRange(targetShort, rangeStr)) {
+                matchedDataset = key;
+                break;
             }
         }
-        // Fallback just in case
-        if (!timedataProp && timetableProps.length > 0) {
-            timedataProp = timetableProps[timetableProps.length - 1];
+
+        if (matchedDataset) {
+            timedataProp = matchedDataset;
+            console.log(`[Comcigan Debug] Auto-resolved to ${matchedDataset} for date ${targetShort}`);
+        } else {
+            console.log(`[Comcigan Debug] No dataset matches date ${targetShort}. Applying explicit fallback.`);
+            if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
+                timedataProp = finalDataset;
+            } else {
+                // If completely out of bounds, use the dynamically inferred baseline standard timetable
+                timedataProp = baselineDatasetId || timetableProps[0] || "";
+            }
+            isFallbackApplied = true;
+        }
+    }
+
+
+    // Anchor originalDatasetId explicitly
+    let originalDatasetId = null;
+    let explicitRef = typeof designatedDatasetId !== 'undefined' ? designatedDatasetId : datasetSelected;
+    
+    if (explicitRef && explicitRef !== 'MANUAL_PLAN' && explicitRef !== '_auto_' && timetableProps.includes(explicitRef)) {
+        originalDatasetId = explicitRef;
+    } else if (explicitRef === 'MANUAL_PLAN') {
+        originalDatasetId = 'MANUAL_PLAN';
+    } else {
+        if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
+            originalDatasetId = finalDataset;
+        } else {
+            originalDatasetId = baselineDatasetId || timetableProps[0] || "";
         }
     }
 
     console.log('[Comcigan Debug] keys:', keys.length, 'teacherProp:', teacherProp, 'subjectProp:', subjectProp);
     console.log('[Comcigan Debug] timetableProps:', timetableProps, 'selected timedataProp:', timedataProp);
 
+    if (timedataProp === 'MANUAL_PLAN') {
+        console.log(`[Comcigan Debug] Using MANUAL_PLAN dataset (resolved)`);
+
+        // Parse the manual plan for the requested grade and class
+        const result: any[] = [];
+        let classList: number[] = [];
+        if (classNumInput === 'all') {
+            if (manualPlanData?.timetables) {
+                classList = Object.keys(manualPlanData.timetables)
+                    .filter(key => key.startsWith(`${grade}-`))
+                    .map(key => parseInt(key.split('-')[1]));
+            }
+        } else {
+            classList = [classNumInput as number];
+        }
+
+        for (const cls of classList) {
+            const classPlan = manualPlanData?.timetables?.[`${grade}-${cls}`];
+            if (classPlan) {
+                for (const [key, subjectStr] of Object.entries(classPlan)) {
+                    // key is "weekday-period", e.g. "0-2" (Monday 2nd period)
+                    const [weekdayStr, periodStr] = key.split('-');
+                    const weekday = parseInt(weekdayStr);
+                    const period = parseInt(periodStr);
+                    const subjectValue = subjectStr as string;
+
+                    let subject = subjectValue;
+                    let teacher = "";
+                    const parts = subjectValue.split(' ');
+                    if (parts.length > 1) {
+                        subject = parts[0];
+                        teacher = parts.slice(1).join(' ');
+                    }
+
+                    if (subjectValue) {
+                        result.push({
+                            grade,
+                            class: cls,
+                            weekday, // already 0-indexed in our manual planner
+                            classTime: period,
+                            subject,
+                            teacher
+                        });
+                    }
+                }
+            }
+        }
+
+        return new Response(JSON.stringify({
+            schoolName: "부산성지고등학교 (수동 시간표)",
+            datasetId: "MANUAL_PLAN",
+            ipOverrideApplied,
+            data: result,
+            debugTokens: { manualPlan: true }
+        }), { headers: { 'Content-Type': 'application/json' } });
+    }
+
     if (!timedataProp) throw new Error("Data key not found");
 
     const teachers = rawData[teacherProp] || [];
     const subjects = rawData[subjectProp] || [];
     const data = rawData[timedataProp];
+    
+    // Determine the true standard baseline dataset (Base Data for cell-level fill)
+    let targetBaseId = "";
+    if (baselineDatasetId) {
+        targetBaseId = baselineDatasetId;
+    } else if (timetableProps.length > 0) {
+        targetBaseId = timetableProps[0];
+    }
+
+    // Explicitly target the resolved baseline timetable for cell-level fallback calculations
+    const baseData = targetBaseId ? rawData[targetBaseId] : null;
+    
     const bunri = rawData['분리'] !== undefined ? rawData['분리'] : 100; // Get bunri value
     const timeInfoProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].length === 8 && typeof rawData[k][1] === 'number');
 
@@ -502,6 +664,24 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
     if (!data || !data[grade]) {
         throw new Error(`Data not found for G${grade}`);
+    }
+
+    let isEmptyDataset = true;
+    for (const cls of Object.keys(data[grade])) {
+        if (parseInt(cls) > 0) {
+             for(let w=1; w<=5; w++){
+                 if(data[grade][cls][w]){
+                     for(let p=1; p<data[grade][cls][w].length; p++){
+                         if(data[grade][cls][w][p] !== 0) {
+                             isEmptyDataset = false;
+                             break;
+                         }
+                     }
+                 }
+                 if(!isEmptyDataset) break;
+             }
+        }
+        if(!isEmptyDataset) break;
     }
 
     const classesToProcess = classNumInput === 'all'
@@ -515,39 +695,83 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         const classData = data[grade][classNum];
 
         for (let weekday = 1; weekday <= 5; weekday++) {
-            if (!classData[weekday] || !Array.isArray(classData[weekday])) continue;
+            let currentPeriodLimit = 0;
+            if (classData[weekday] && Array.isArray(classData[weekday])) {
+                currentPeriodLimit = Math.min(classData[weekday][0] || 0, classData[weekday].length - 1);
+            }
 
-            const periodCount = classData[weekday][0] || 0;
-            const maxPeriod = classData[weekday].length - 1;
-            const loopLimit = Math.min(periodCount, maxPeriod);
+            let basePeriodLimit = 0;
+            if (baseData && baseData[grade] && baseData[grade][classNum] && baseData[grade][classNum][weekday]) {
+                const bWeekday = baseData[grade][classNum][weekday];
+                if (Array.isArray(bWeekday)) {
+                    basePeriodLimit = Math.min(bWeekday[0] || 0, bWeekday.length - 1);
+                }
+            }
+
+            const loopLimit = Math.max(currentPeriodLimit, basePeriodLimit);
+
+            // Get explicitly declared daily loop limit (e.g. if Friday ends at 6th period, dayLimit is 6)
+            let dayLimit = 0;
+            if (timeInfo && timeInfo[weekday]) {
+                const dayLimitStr = timeInfo[weekday];
+                if (typeof dayLimitStr === 'string' && !isNaN(parseInt(dayLimitStr, 10))) {
+                    dayLimit = parseInt(dayLimitStr, 10);
+                } else if (typeof dayLimitStr === 'number') {
+                    dayLimit = dayLimitStr;
+                }
+            }
 
             for (let period = 1; period <= loopLimit; period++) {
-                const code = classData[weekday][period];
-                if (!code) continue;
+                let code = (classData[weekday] && classData[weekday][period]) ? classData[weekday][period] : 0;
 
-                let teacherIdx = 0;
-                let subjectIdx = 0;
-
-                // Based on bunri value (same logic as server comcigan-parser.ts)
-                if (bunri === 100) {
-                    teacherIdx = Math.floor(code / bunri);
-                    subjectIdx = code % bunri;
-                } else { // bunri === 1000 or other
-                    teacherIdx = code % bunri;
-                    subjectIdx = Math.floor(code / bunri);
+                let isChanged = false;
+                if (baseData && baseData[grade] && baseData[grade][classNum] && baseData[grade][classNum][weekday]) {
+                    const baseCode = baseData[grade][classNum][weekday][period] || 0;
+                    
+                    // Cell-level fallback: only apply base dataset fill-in when the entire weekly
+                    // dataset is all zeros (isEmptyDataset). In that case, the live comcigan data
+                    // hasn't been published yet and we use the baseline as a placeholder.
+                    // When the weekly dataset HAS real data (isEmptyDataset=false), code=0 means
+                    // the period is genuinely free/cancelled, so we must NOT overwrite it.
+                    if (code === 0 && baseCode !== 0) {
+                        if (isEmptyDataset) {
+                            code = baseCode;
+                        }
+                    }
+                    
+                    if (baseCode !== code && timedataProp !== timetableProps[0]) {
+                        isChanged = true;
+                    }
                 }
 
-                const subject = subjects[subjectIdx] ? subjects[subjectIdx].replace(/_/g, "") : "";
-                const teacher = teachers[teacherIdx] || "";
+                if (!code && !isChanged) continue;
 
-                if (subject) {
+                let subject = "";
+                let teacher = "";
+
+                if (code) {
+                    let teacherIdx = 0;
+                    let subjectIdx = 0;
+                    if (bunri === 100) {
+                        teacherIdx = Math.floor(code / bunri);
+                        subjectIdx = code % bunri;
+                    } else {
+                        teacherIdx = code % bunri;
+                        subjectIdx = Math.floor(code / bunri);
+                    }
+                    subject = subjects[subjectIdx] ? subjects[subjectIdx].replace(/_/g, "") : "";
+                    teacher = teachers[teacherIdx] || "";
+                }
+
+                if (subject || isChanged) {
                     result.push({
                         grade,
                         class: classNum,
                         weekday: weekday - 1, // Convert to 0-indexed (0=Mon, 4=Fri)
                         classTime: period,
-                        subject,
-                        teacher
+                        subject, // Empty string if cancelled
+                        teacher,
+                        isChanged
                     });
                 }
             }
@@ -592,12 +816,32 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         };
     });
 
+    if (db && !isEmptyDataset && !isFallbackApplied) {
+        try {
+            await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_cache (cache_key TEXT PRIMARY KEY, response_json TEXT NOT NULL, dataset_id TEXT, updated_at TEXT DEFAULT (datetime('now')))`).run();
+            await db.prepare(`
+                INSERT INTO timetable_cache (cache_key, response_json, updated_at) 
+                VALUES ('raw_data', ?, datetime('now')) 
+                ON CONFLICT(cache_key) DO UPDATE SET 
+                    response_json = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.response_json ELSE excluded.response_json END,
+                    updated_at = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.updated_at ELSE datetime('now') END
+            `).bind(jsonString).run();
+        } catch (e) {
+            console.error('[Comcigan Debug] Failed to cache raw_data (deferred):', e);
+        }
+    }
+
     return new Response(JSON.stringify({
         schoolName: "부산성지고등학교",
         datasetId: timedataProp,
+        originalDatasetId,
         ipOverrideApplied: typeof ipOverrideApplied !== 'undefined' ? ipOverrideApplied : false,
         data: result,
-        debugTokens: {
+        debugTokens: { 
+            override1: datasetSelectedGrade1 || null, 
+            override23: typeof datasetSelected !== 'undefined' ? datasetSelected : null,
+            isFallbackApplied,
+            isEmptyDataset,
             keysCount: keys.length,
             teacherProp,
             subjectProp,
@@ -621,76 +865,9 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
 // --- 캐시 헬퍼 함수 ---
 
-async function saveTimetableCache(db: any, grade: number, responseData: any) {
-    const cacheKey = `grade_${grade}`;
-    try {
-        await db.prepare(createTimetableCacheTable).run().catch(() => {});
-        await db.prepare(
-            "INSERT INTO timetable_cache (cache_key, response_json, dataset_id, updated_at) VALUES (?, ?, ?, datetime('now')) ON CONFLICT(cache_key) DO UPDATE SET response_json = excluded.response_json, dataset_id = excluded.dataset_id, updated_at = datetime('now')"
-        ).bind(cacheKey, JSON.stringify(responseData), responseData.datasetId || '').run();
-        console.log(`[Comcigan Cache] Saved: ${cacheKey}, items=${responseData.data?.length || 0}`);
-    } catch (e) {
-        console.error(`[Comcigan Cache] Save failed for ${cacheKey}:`, e);
-    }
+async function refreshCache(db: any, grade: number = 1, targetDate?: string | null) {
+    console.log(`[Comcigan Cache] Refreshing global raw_data cache via background ...`);
+    await getTimetable(grade, 'all', db, null, 'cache-refresh', targetDate, undefined, true);
 }
 
-async function refreshCache(db: any, grade: number) {
-    console.log(`[Comcigan Cache] Refreshing cache for grade ${grade}...`);
-    const response = await getTimetable(grade, 'all', db, null, 'cache-refresh');
-    if (response.status === 200) {
-        const json: any = await response.json();
-        if (json.data && json.data.length > 0) {
-            await saveTimetableCache(db, grade, json);
-        }
-    }
-}
-
-async function buildCacheResponse(
-    cachedData: any,
-    classNum: number | 'all',
-    db: any,
-    datasetOverride: string | null | undefined,
-    clientIp: string,
-    cachedDatasetId: string,
-    cacheAgeMs: number
-): Promise<Response> {
-    // IP override 확인
-    let ipOverrideApplied: string | false = false;
-    if (db && clientIp !== 'unknown' && clientIp !== 'cache-refresh') {
-        try {
-            const overrideRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'dataset_ip_overrides'").first();
-            if (overrideRow && overrideRow.value) {
-                const overrides = JSON.parse(overrideRow.value as string);
-                if (overrides[clientIp]) {
-                    ipOverrideApplied = "캐시 응답 (IP override 미적용)";
-                }
-            }
-        } catch (_) {}
-    }
-
-    // classNum 필터링 적용
-    let filteredData = cachedData.data || [];
-    if (classNum !== 'all' && typeof classNum === 'number') {
-        filteredData = filteredData.filter((item: any) => item.class === classNum);
-    }
-
-    return new Response(JSON.stringify({
-        schoolName: cachedData.schoolName || "부산성지고등학교",
-        datasetId: cachedData.datasetId || cachedDatasetId,
-        ipOverrideApplied,
-        data: filteredData,
-        cached: true,
-        cacheAgeSec: Math.round(cacheAgeMs / 1000),
-        debugTokens: cachedData.debugTokens
-    }), {
-        headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'public, max-age=10, s-maxage=30',
-            'X-Cache-Status': 'HIT',
-            'X-Cache-Age': String(Math.round(cacheAgeMs / 1000))
-        }
-    });
-}
-
-// 외부에서 호출 가능하도록 export (for _scheduled.ts)
-export { refreshCache, saveTimetableCache };
+export { refreshCache, getTimetable };

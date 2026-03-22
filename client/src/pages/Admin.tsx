@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import IPProfileViewer from "@/components/IPProfileViewer";
 import DatabaseManager from "@/components/DatabaseManager";
+import TeacherTimetable from "@/components/TeacherTimetable";
 import { IPProfile } from "@/types";
 import {
     Table,
@@ -42,6 +43,29 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
+// Helper to resolve the semantic dataset mode globally
+export const getDatasetMode = (overrideVal?: string) => {
+    if (!overrideVal) return 'COMCIGAN';
+    if (overrideVal === 'MANUAL_PLAN' || overrideVal === 'SEMESTER_PLAN') return overrideVal;
+    return 'COMCIGAN'; // treats all legacy "자료xxx" IDs and empty values as COMCIGAN
+};
+
+// Real-time ticking cache age component
+const LiveAgeText = React.memo(({ initialAgeSec, dataUpdatedAt }: { initialAgeSec: number, dataUpdatedAt: number }) => {
+    const [elapsed, setElapsed] = useState(0);
+    useEffect(() => {
+        setElapsed(0);
+        const timer = setInterval(() => {
+            setElapsed(Math.floor((Date.now() - dataUpdatedAt) / 1000));
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [dataUpdatedAt]);
+    
+    const sec = initialAgeSec + Math.max(0, elapsed);
+    if (sec < 60) return <>{sec}초 전</>;
+    if (sec < 3600) return <>{Math.floor(sec / 60)}분 {sec % 60}초 전</>;
+    return <>{Math.floor(sec / 3600)}시간 {Math.floor((sec % 3600) / 60)}분 전</>;
+});
 
 function ElectiveManager({ password }: { password: string }) {
     const [selectedGrade, setSelectedGrade] = useState<number>(2);
@@ -75,7 +99,7 @@ function ElectiveManager({ password }: { password: string }) {
             const res = await fetch("/api/admin/raw_comcigan", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-Admin-Password": password },
-                body: JSON.stringify({ schoolName: schoolSearchQuery })
+                body: JSON.stringify({ schoolName: schoolSearchQuery, mode: "cache" })
             });
             const json = await res.json();
             if (!res.ok || json?.error) return null;
@@ -95,8 +119,7 @@ function ElectiveManager({ password }: { password: string }) {
     const timetableAllQuery = useQuery({
         queryKey: ["admin", "timetableAll", selectedGrade, selectedDataset],
         queryFn: async () => {
-            let targetDataset = selectedDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : selectedDataset;
-            if (!targetDataset && timetableProps && timetableProps.length > 0) targetDataset = timetableProps[0];
+            let targetDataset = selectedDataset === "_auto_" ? "COMCIGAN" : selectedDataset;
             if (!targetDataset) return [];
             const url = `/api/comcigan?type=timetable&grade=${selectedGrade}&classNum=all` +
                 (targetDataset !== '_auto_' ? `&dataset=${targetDataset}` : '');
@@ -141,7 +164,7 @@ function ElectiveManager({ password }: { password: string }) {
     useEffect(() => {
         if (settingsQuery.data) {
             if (!selectedDataset) {
-                setSelectedDataset('_auto_');
+                setSelectedDataset('COMCIGAN');
             }
         }
     }, [settingsQuery.data, selectedDataset]);
@@ -156,10 +179,8 @@ function ElectiveManager({ password }: { password: string }) {
         try {
             console.log("Fetching data for grade", selectedGrade);
 
-            let targetDataset = selectedDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : selectedDataset;
-            if (!targetDataset && timetableProps && timetableProps.length > 0) {
-                targetDataset = timetableProps[0];
-            }
+            let targetDataset = selectedDataset === "_auto_" ? "COMCIGAN" : selectedDataset;
+            if (!targetDataset) targetDataset = "COMCIGAN";
 
             // 1. Fetch Comcigan Subjects
             let comciganData = [];
@@ -439,11 +460,8 @@ function ElectiveManager({ password }: { password: string }) {
                                 <SelectValue placeholder="데이터셋 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="_auto_">{autoLabel}</SelectItem>
+                                <SelectItem value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</SelectItem>
                                 <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
-                                {timetableProps.map((prop: string) => (
-                                    <SelectItem key={prop} value={prop}>{prop}</SelectItem>
-                                ))}
                             </SelectContent>
                         </Select>
                     </div>
@@ -1266,11 +1284,9 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
                             <SelectValue placeholder="데이터셋" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="_auto_">자동 (현재 설정)</SelectItem>
-                            <SelectItem value="MANUAL_PLAN">MANUAL_PLAN</SelectItem>
-                            {timetableProps.map(prop => (
-                                <SelectItem key={prop} value={prop}>{prop}</SelectItem>
-                            ))}
+                            <SelectItem value="_auto_">자동 ({getDatasetMode(settingsQuery.data?.comcigan_dataset_selected)})</SelectItem>
+                            <SelectItem value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</SelectItem>
+                            <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
                         </SelectContent>
                     </Select>
 
@@ -1565,11 +1581,9 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                         onChange={e => setSelectedDataset(e.target.value)}
                         className="border rounded px-2 py-1 text-sm"
                     >
-                        <option value="_auto_">자동 (활성 데이터셋)</option>
-                        <option value="MANUAL_PLAN">MANUAL_PLAN</option>
-                        {timetableProps.map(tp => (
-                            <option key={tp} value={tp}>{tp}</option>
-                        ))}
+                        <option value="_auto_">자동 ({getDatasetMode(settingsQuery.data?.comcigan_dataset_selected)})</option>
+                        <option value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</option>
+                        <option value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</option>
                     </select>
                     {resolvedDataset && (
                         <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-0.5 rounded">{resolvedDataset}</span>
@@ -2198,11 +2212,9 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                         <SelectValue placeholder="데이터셋" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="_auto_">자동{resolvedDataset && selectedDataset === "_auto_" ? ` (${resolvedDataset})` : ""}</SelectItem>
-                        <SelectItem value="MANUAL_PLAN">MANUAL_PLAN</SelectItem>
-                        {timetableProps.map((prop: string) => (
-                            <SelectItem key={prop} value={prop}>{prop}</SelectItem>
-                        ))}
+                        <SelectItem value="_auto_">자동 ({getDatasetMode(settingsQuery.data?.comcigan_dataset_selected)})</SelectItem>
+                        <SelectItem value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</SelectItem>
+                        <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
@@ -2339,6 +2351,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     const [siteFaviconUrl, setSiteFaviconUrl] = useState("");
     const [pwaAppTitle, setPwaAppTitle] = useState("");
     const [pwaAppIconUrl, setPwaAppIconUrl] = useState("");
+    const [tintColor, setTintColor] = useState("#fbbf24");
+    const [tintOpacity, setTintOpacity] = useState(0.4);
     const [isSaving, setIsSaving] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
     const titleHtmlRef = React.useRef<HTMLDivElement>(null);
@@ -2367,6 +2381,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 setSiteFaviconUrl(currentSettings.site_favicon_url || '');
                 setPwaAppTitle(currentSettings.pwa_app_title || '성지수행');
                 setPwaAppIconUrl(currentSettings.pwa_app_icon_url || currentSettings.site_favicon_url || '');
+                setTintColor(currentSettings.changed_class_tint_color || '#fef08a');
+                setTintOpacity(currentSettings.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings.changed_class_tint_opacity) : 1.0);
                 setIsInitialized(true);
                 setHtmlChanged(false);
             } else if (!htmlChanged) {
@@ -2378,6 +2394,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 setSiteFaviconUrl(currentSettings.site_favicon_url || '');
                 setPwaAppTitle(currentSettings.pwa_app_title || '성지수행');
                 setPwaAppIconUrl(currentSettings.pwa_app_icon_url || currentSettings.site_favicon_url || '');
+                setTintColor(currentSettings.changed_class_tint_color || '#fef08a');
+                setTintOpacity(currentSettings.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings.changed_class_tint_opacity) : 1.0);
             }
         }
     }, [currentSettings, isInitialized, htmlChanged]);
@@ -2421,7 +2439,9 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                     site_title_html: finalHtml,
                     site_favicon_url: siteFaviconUrl,
                     pwa_app_title: pwaAppTitle,
-                    pwa_app_icon_url: pwaAppIconUrl
+                    pwa_app_icon_url: pwaAppIconUrl,
+                    changed_class_tint_color: tintColor,
+                    changed_class_tint_opacity: tintOpacity.toString()
                 })
             });
             if (!res.ok) throw new Error('Failed to save');
@@ -2434,7 +2454,9 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 site_title_html: finalHtml,
                 site_favicon_url: siteFaviconUrl,
                 pwa_app_title: pwaAppTitle,
-                pwa_app_icon_url: pwaAppIconUrl
+                pwa_app_icon_url: pwaAppIconUrl,
+                changed_class_tint_color: tintColor,
+                changed_class_tint_opacity: tintOpacity.toString()
             }));
 
             queryClient.invalidateQueries({ queryKey: ['admin', 'settings', 'site-design'] });
@@ -2455,6 +2477,8 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
         setSiteFaviconUrl(currentSettings?.site_favicon_url || '');
         setPwaAppTitle(currentSettings?.pwa_app_title || '성지수행');
         setPwaAppIconUrl(currentSettings?.pwa_app_icon_url || currentSettings?.site_favicon_url || '');
+        setTintColor(currentSettings?.changed_class_tint_color || '#fef08a');
+        setTintOpacity(currentSettings?.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings?.changed_class_tint_opacity) : 1.0);
         setHtmlChanged(false);
     };
 
@@ -2462,7 +2486,9 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     const savedFavicon = currentSettings?.site_favicon_url || '';
     const savedPwaTitle = currentSettings?.pwa_app_title || '성지수행';
     const savedPwaIcon = currentSettings?.pwa_app_icon_url || currentSettings?.site_favicon_url || '';
-    const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon || htmlChanged || pwaAppTitle !== savedPwaTitle || pwaAppIconUrl !== savedPwaIcon;
+    const savedTintColor = currentSettings?.changed_class_tint_color || '#fef08a';
+    const savedTintOpacity = currentSettings?.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings?.changed_class_tint_opacity) : 1.0;
+    const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon || htmlChanged || pwaAppTitle !== savedPwaTitle || pwaAppIconUrl !== savedPwaIcon || tintColor !== savedTintColor || tintOpacity !== savedTintOpacity;
 
     if (isLoading) {
         return <div className="p-8 text-center text-gray-400">설정을 불러오는 중...</div>;
@@ -2637,6 +2663,62 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 </div>
                 <p className="text-xs text-gray-400">모바일 앱 설치 시 표시되는 아이콘입니다. 정사각형(1:1)의 PNG 권장. 미지정시 기본 이미지(/icon.svg)가 적용됩니다.</p>
             </div>
+
+            <hr className="my-6 border-slate-200" />
+
+            {/* 변경된 시간표 하이라이트 설정 */}
+            <div className="space-y-4">
+                <Label className="text-sm font-semibold text-amber-600">시간표 변경사항 하이라이트 (Tint)</Label>
+                <div className="flex flex-col gap-3 p-4 bg-amber-50/50 border border-amber-100 rounded-lg">
+                    <div className="flex items-center gap-4">
+                        <div className="space-y-1">
+                            <Label className="text-xs text-gray-700">색상 (Color)</Label>
+                            <input
+                                type="color"
+                                value={tintColor}
+                                onChange={(e) => setTintColor(e.target.value)}
+                                className="w-12 h-10 p-1 bg-white border rounded cursor-pointer block"
+                            />
+                        </div>
+                        <div className="space-y-1 flex-1 max-w-[200px]">
+                            <div className="flex justify-between items-center">
+                                <Label className="text-xs text-gray-700">투명도 (Opacity)</Label>
+                                <span className="text-xs font-mono text-gray-500">{Math.round(tintOpacity * 100)}%</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                                value={tintOpacity}
+                                onChange={(e) => setTintOpacity(parseFloat(e.target.value))}
+                                className="w-full"
+                            />
+                        </div>
+                    </div>
+                    
+                    {/* 미리보기 (Tint) */}
+                    <div className="mt-2 flex gap-2 items-center">
+                        <span className="text-xs text-gray-500">예시:</span>
+                        <div className="border border-gray-200 bg-white rounded flex items-center justify-center w-24 h-12 relative overflow-hidden">
+                            <div 
+                                className="absolute inset-0 pointer-events-none" 
+                                style={{ 
+                                    backgroundColor: tintColor, 
+                                    opacity: tintOpacity 
+                                }} 
+                            />
+                            <div className="relative text-xs flex flex-col items-center">
+                                <span className="font-bold text-blue-700 text-[11px]">국어</span>
+                                <span className="text-gray-500 text-[10px]">김교사</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p className="text-xs text-gray-400">메인페이지 시간표 뷰어에서 변경된 수업인 경우, 해당 칸의 배경에 위 색상과 투명도가 적용되어 칠해집니다.</p>
+            </div>
+
+            <hr className="my-6 border-slate-200" />
 
             {/* 미리보기 */}
             {(siteTitle || siteFaviconUrl) && (
@@ -3155,7 +3237,12 @@ function TrashManager({ adminPassword }: { adminPassword: string }) {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {trashQuery.data?.map((assessment: any) => (
+                                        {trashQuery.data?.map((assessment: any) => {
+                                            const subjectMatch = typeof assessment.subject === 'string' ? assessment.subject.match(/^(.*?)\s*\((.*?그룹.*?)\)$/) : null;
+                                            const baseSubject = subjectMatch ? subjectMatch[1].trim() : assessment.subject;
+                                            const groupSuffix = subjectMatch ? subjectMatch[2].trim() : null;
+
+                                            return (
                                             <TableRow key={assessment.id}>
                                                 <TableCell className="text-center">
                                                     <Checkbox
@@ -3170,9 +3257,21 @@ function TrashManager({ adminPassword }: { adminPassword: string }) {
                                                     {assessment.classNum === 0 ? "전체" : `${assessment.classNum}반`}
                                                 </TableCell>
                                                 <TableCell className="font-medium">
-                                                    <span className={`${assessment.classNum === 0 ? "text-blue-600" : ""}`}>
-                                                        {assessment.subject}
-                                                    </span>
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className={`${assessment.classNum === 0 ? "text-blue-600" : ""}`}>
+                                                            {baseSubject}
+                                                        </span>
+                                                        {groupSuffix && (
+                                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                                                                {groupSuffix}
+                                                            </span>
+                                                        )}
+                                                        {assessment.description && (
+                                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">
+                                                                {assessment.description}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell>{assessment.title}</TableCell>
                                                 <TableCell>{assessment.dueDate}</TableCell>
@@ -3180,7 +3279,8 @@ function TrashManager({ adminPassword }: { adminPassword: string }) {
                                                     {assessment.lastModifiedIp || "-"}
                                                 </TableCell>
                                             </TableRow>
-                                        ))}
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                             </div>
@@ -3278,6 +3378,87 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
         enabled: !!resolvedDataset,
     });
 
+    const timetableAllQuery = useQuery({
+        queryKey: ["admin", "timetableAll_reliability", selectedGrade, resolvedDataset],
+        queryFn: async () => {
+            if (!resolvedDataset) return [];
+            const res = await fetch(`/api/comcigan?type=timetable&grade=${selectedGrade}&classNum=all&dataset=${encodeURIComponent(resolvedDataset)}`);
+            if (!res.ok) return [];
+            const json = await res.json();
+            return json.data || [];
+        },
+        enabled: !!resolvedDataset,
+    });
+
+    const electiveConfigsQuery = useQuery({
+        queryKey: ["admin", "electiveConfigs_reliability", selectedGrade, resolvedDataset],
+        queryFn: async () => {
+            if (selectedGrade !== "2" && selectedGrade !== "3") return [];
+            if (!resolvedDataset) return [];
+            const res = await fetch(`/api/electives?grade=${selectedGrade}&dataset=${encodeURIComponent(resolvedDataset)}`);
+            if (!res.ok) return [];
+            return res.json();
+        },
+        enabled: !!resolvedDataset && (selectedGrade === "2" || selectedGrade === "3"),
+    });
+
+    const computedGroups = useMemo(() => {
+        const slots = timetableAllQuery.data || [];
+        const configs = electiveConfigsQuery.data || [];
+        if (selectedGrade !== "2" && selectedGrade !== "3") return {};
+        if (slots.length === 0 || configs.length === 0) return {};
+
+        const subjectTeacherToGroups = new Map<string, string[]>();
+        const subjectToGroups = new Map<string, string[]>();
+
+        configs.forEach((c: any) => {
+            const isFreePeriod = ["빈교실", "공강", "Empty", "Free"].some(k => (c.subject || "").includes(k));
+            if ((c.isMovingClass !== 0 || isFreePeriod) && c.classCode) {
+                const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
+                const subj = c.subject.trim();
+                
+                const existing = subjectToGroups.get(subj) || [];
+                subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
+
+                const teacherNames = [];
+                if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
+                if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
+                
+                const uniqueTeachers = Array.from(new Set(teacherNames));
+                uniqueTeachers.forEach((tName: string) => {
+                    const key = `${subj}|${tName}`;
+                    const existingKey = subjectTeacherToGroups.get(key) || [];
+                    subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
+                });
+            }
+        });
+
+        const cellGroups: Record<string, string> = {};
+        for (let w = 0; w < 5; w++) {
+            for (let p = 1; p <= 7; p++) {
+                const matchingSlots = slots.filter((t: any) => t.weekday === w && t.classTime === p);
+                if (matchingSlots.length === 0) continue;
+
+                const groupCounts: Record<string, number> = {};
+                matchingSlots.forEach((slot: any) => {
+                    const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
+                    let groups = subjectTeacherToGroups.get(key) || subjectToGroups.get(slot.subject.trim());
+                    if (groups) {
+                        groups.forEach(g => {
+                            groupCounts[g] = (groupCounts[g] || 0) + 1;
+                        });
+                    }
+                });
+
+                const entries = Object.entries(groupCounts).sort((a, b) => b[1] - a[1]);
+                if (entries.length > 0 && entries[0][1] >= 1) {
+                    cellGroups[`${w}-${p}`] = entries[0][0];
+                }
+            }
+        }
+        return cellGroups;
+    }, [timetableAllQuery.data, electiveConfigsQuery.data, selectedGrade]);
+
     const assessments = assessmentsQuery.data || [];
 
     // Compute votes from inline assessment.votes JSON
@@ -3361,11 +3542,19 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
             const v = votes[String(a.id)] || { helpful: 0, distrust: 0 };
             const eligible = a.classNum === 0 ? eligibleCounts.total : (eligibleCounts.byClass[a.classNum] || 0);
             const exceedsThreshold = v.distrust >= threshold;
-            return { ...a, helpful: v.helpful, distrust: v.distrust, eligible, exceedsThreshold };
-        }).sort((a: any, b: any) => b.distrust - a.distrust);
+            
+            // Trust backend's centralized auto prediction logic for isOrphan
+            const isOrphan = !!a.isOrphan;
+
+            return { ...a, helpful: v.helpful, distrust: v.distrust, eligible, exceedsThreshold, isOrphan };
+        }).sort((a: any, b: any) => {
+            if (a.isOrphan && !b.isOrphan) return -1;
+            if (!a.isOrphan && b.isOrphan) return 1;
+            return b.distrust - a.distrust;
+        });
     }, [assessments, votes, eligibleCounts, threshold]);
 
-    const isLoading = assessmentsQuery.isLoading;
+    const isLoading = assessmentsQuery.isLoading || timetableAllQuery.isLoading || electiveConfigsQuery.isLoading;
 
     const blendHex = (base: string, mix: string, ratio: number) => {
         const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
@@ -3422,9 +3611,9 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
                 <div>
                     <label className="text-xs font-medium text-slate-500 block mb-1">데이터셋</label>
                     <select value={selectedDataset} onChange={e => setSelectedDataset(e.target.value)} className="border rounded px-2 py-1 text-sm">
-                        <option value="_auto_">자동 (활성)</option>
+                        <option value="_auto_">자동 ({selectedGrade === "1" ? getDatasetMode(settingsQuery.data?.comcigan_dataset_selected_grade1) : getDatasetMode(settingsQuery.data?.comcigan_dataset_selected)})</option>
+                        <option value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</option>
                         <option value="MANUAL_PLAN">수동 시간표</option>
-                        {timetableProps.map(tp => <option key={tp} value={tp}>{tp}</option>)}
                     </select>
                 </div>
                 {resolvedDataset && <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-1 rounded self-end">{resolvedDataset}</span>}
@@ -3449,10 +3638,42 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
                             </tr>
                         </thead>
                         <tbody>
-                            {tableRows.map((row: any) => (
+                            {tableRows.map((row: any) => {
+                                const subjectMatch = typeof row.subject === 'string' ? row.subject.match(/^(.*?)\s*\((.*?그룹.*?)\)$/) : null;
+                                const baseSubject = subjectMatch ? subjectMatch[1].trim() : row.subject;
+                                const groupSuffix = subjectMatch ? subjectMatch[2].trim() : null;
+
+                                return (
                                 <tr key={row.id} className={`hover:bg-slate-50 ${row.exceedsThreshold ? 'bg-red-50' : ''}`}>
-                                    <td className="border border-slate-300 px-3 py-2 text-center font-medium">{row.subject}</td>
-                                    <td className="border border-slate-300 px-3 py-2 text-center text-xs">{row.dueDate}</td>
+                                    <td className="border border-slate-300 px-3 py-2 text-center font-medium">
+                                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                            <span>{baseSubject}</span>
+                                            {row.classCode && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                                                    {row.classCode}그룹
+                                                </span>
+                                            )}
+                                            {row.teacher && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                                                    {row.teacher}
+                                                </span>
+                                            )}
+                                            {!row.classCode && groupSuffix && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                                                    {groupSuffix}
+                                                </span>
+                                            )}
+                                            {row.description && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                                                    {row.description}
+                                                </span>
+                                            )}
+                                            {row.isOrphan && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-800">고아 수행평가</span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className={`border border-slate-300 px-3 py-2 text-center text-xs ${row.isOrphan ? 'line-through text-red-400' : ''}`}>{row.dueDate}</td>
                                     <td className="border border-slate-300 px-3 py-2 text-center text-xs truncate max-w-[150px]">{row.title}</td>
                                     <td className="border border-slate-300 px-3 py-2 text-center text-green-600 font-bold">{row.helpful}</td>
                                     <td className={`border border-slate-300 px-3 py-2 text-center font-bold ${row.exceedsThreshold ? 'text-red-600' : 'text-slate-600'}`}>{row.distrust}</td>
@@ -3466,7 +3687,8 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
                                         )}
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -3476,6 +3698,136 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
 }
 // ----------------------------------------------------------------------
 // 7. Etc Manager (Miscellaneous features like Raw Comcigan Data)
+// ----------------------------------------------------------------------
+function DatasetDatesViewer({ rawData, adminPassword }: { rawData: any; adminPassword: string }) {
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            return res.json();
+        }
+    });
+
+    if (!rawData) return <div className="p-4 flex items-center justify-center font-bold text-slate-500">원격 데이터 대기 중...</div>;
+    if (settingsQuery.isLoading) return <div className="p-4 flex items-center justify-center font-bold text-slate-500">설정 로딩 중...</div>;
+
+    // Rely on native Object.keys traversal order to match "일자/일자자료" indices
+    const timetableProps = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
+    
+    // Extracted robust date mapping logic
+    const datasetDateRanges: Record<string, string> = {};
+    
+    // Always prefer '일자자료' if it exists and has items, as it provides exact index bindings
+    if (rawData['일자자료'] && Array.isArray(rawData['일자자료']) && rawData['일자자료'].length > 0) {
+        const dateList = rawData['일자자료'];
+        dateList.forEach((dt: any) => {
+            if (Array.isArray(dt) && dt.length >= 2) {
+                const targetKeyIdx = dt[0];
+                if (typeof targetKeyIdx === 'number' && targetKeyIdx >= 0 && targetKeyIdx < timetableProps.length) {
+                    let formattedRange = dt[1];
+                    if (typeof formattedRange === 'string') {
+                        formattedRange = formattedRange
+                            .split('~')
+                            .map(part => {
+                                let s = part.trim();
+                                if (/^\d{2}-\d{2}-\d{2}$/.test(s)) {
+                                    s = '20' + s.replace(/-/g, '.');
+                                }
+                                return s;
+                            })
+                            .join(' ~ ');
+                    }
+                    datasetDateRanges[timetableProps[targetKeyIdx]] = formattedRange;
+                }
+            }
+        });
+    } else if (rawData['일자'] && Array.isArray(rawData['일자'])) {
+        // Fallback to older '일자' array mapping
+        const allDatasetKeys = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
+        allDatasetKeys.forEach((key, idx) => {
+            if (idx + 1 < rawData['일자'].length) {
+                let formattedRange = rawData['일자'][idx + 1];
+                if (typeof formattedRange === 'string') {
+                    formattedRange = formattedRange
+                        .split('~')
+                        .map(part => {
+                            let s = part.trim();
+                            if (/^\d{2}-\d{2}-\d{2}$/.test(s)) {
+                                s = '20' + s.replace(/-/g, '.');
+                            }
+                            return s;
+                        })
+                        .join(' ~ ');
+                }
+                datasetDateRanges[key] = formattedRange;
+            }
+        });
+    }
+
+    const tableRows = [];
+
+    for (let idx = 0; idx < timetableProps.length; idx++) {
+        const dKey = timetableProps[idx];
+        const gradeData = rawData[dKey];
+        if (!gradeData || (!gradeData[1] && !gradeData[2] && !gradeData[3])) continue; // Skip empty datasets
+
+        const datePeriod = datasetDateRanges[dKey] || "(미확인)";
+
+        const remarks = [];
+        const s = settingsQuery.data || {};
+
+        if (s.comcigan_dataset_selected_grade1 === dKey) remarks.push("1학년 단독선택(Override)");
+        if (s.comcigan_dataset_selected === dKey) remarks.push("2/3학년 단독선택(Override)");
+        if (s.comcigan_fallback_dataset_grade1 === dKey) remarks.push("1학년 Fallback");
+        if (s.comcigan_fallback_dataset === dKey) remarks.push("2/3학년 Fallback");
+
+        tableRows.push({
+            id: dKey,
+            period: datePeriod,
+            remarks: remarks.join(", ")
+        });
+    }
+
+    return (
+        <Card className="w-full h-full flex flex-col border-none shadow-none">
+            <CardHeader className="py-2 px-4 border-b">
+                <CardTitle className="text-lg">데이터셋 유효날짜 열람기</CardTitle>
+                <CardDescription className="text-xs">
+                    시간표 값이 존재하는 실제 데이터셋들의 유효 날짜 기간을 확인하고 시스템 배정 현황을 열람합니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto p-0">
+                <Table className="max-w-4xl min-w-[600px] border-b">
+                    <TableHeader className="bg-slate-50 sticky top-0 shadow-sm">
+                        <TableRow>
+                            <TableHead className="w-[120px] font-bold">데이터셋</TableHead>
+                            <TableHead className="w-[250px] font-bold">유효날짜 기간 (일자)</TableHead>
+                            <TableHead className="font-bold">비고 (시스템 배정 여부)</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {tableRows.length > 0 ? tableRows.map(row => (
+                            <TableRow key={row.id} className="hover:bg-slate-50/50">
+                                <TableCell className="font-bold whitespace-nowrap">{row.id}</TableCell>
+                                <TableCell className="whitespace-nowrap">{row.period}</TableCell>
+                                <TableCell className={row.remarks ? "font-bold text-blue-600 text-sm whitespace-nowrap" : "text-gray-400 text-sm whitespace-nowrap"}>
+                                    {row.remarks || "-"}
+                                </TableCell>
+                            </TableRow>
+                        )) : (
+                            <TableRow>
+                                <TableCell colSpan={3} className="text-center py-8 text-slate-500">표시할 시간표 데이터셋이 없습니다.</TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    );
+}
+
 // ----------------------------------------------------------------------
 function EtcManager({ adminPassword }: { adminPassword: string }) {
     const [selectedMenu, setSelectedMenu] = useState("raw-comcigan");
@@ -3517,7 +3869,7 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
 
             return json.data;
         },
-        enabled: (selectedMenu === "raw-comcigan" || selectedMenu === "dataset-selector") && !!schoolSearchQuery,
+        enabled: (selectedMenu === "raw-comcigan" || selectedMenu === "dataset-selector" || selectedMenu === "dataset-viewer") && !!schoolSearchQuery,
         retry: 1
     });
 
@@ -3544,6 +3896,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 >
                     <Database className="w-4 h-4 mr-2" />
                     시간표 데이터셋 선택기
+                </Button>
+                <Button
+                    variant={selectedMenu === "dataset-viewer" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("dataset-viewer")}
+                >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    데이터셋 유효날짜 열람기
                 </Button>
                 <Button
                     variant={selectedMenu === "visit-restriction" ? "default" : "ghost"}
@@ -3651,6 +4011,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     컴시간 캐시 시스템
                 </Button>
                 <Button
+                    variant={selectedMenu === "teacher-timetable" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-medium"
+                    onClick={() => setSelectedMenu("teacher-timetable")}
+                >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    교사용 시간표
+                </Button>
+                <Button
                     variant={selectedMenu === "unresolved-issues" ? "default" : "ghost"}
                     className="justify-start whitespace-nowrap text-left text-orange-600 hover:text-orange-700"
                     onClick={() => setSelectedMenu("unresolved-issues")}
@@ -3658,11 +4026,22 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <AlertCircle className="w-4 h-4 mr-2" />
                     미해결 문제
                 </Button>
+                <Button
+                    variant={selectedMenu === "special-schedules" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-pink-600 hover:text-pink-700 hover:bg-pink-50 font-medium"
+                    onClick={() => setSelectedMenu("special-schedules")}
+                >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    특수일정 관리
+                </Button>
                 {/* Additional list items can go here later */}
             </div>
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col gap-4 overflow-hidden border rounded-md bg-white p-4">
+                {selectedMenu === "dataset-viewer" && (
+                    <DatasetDatesViewer rawData={rawDataQuery.data} adminPassword={adminPassword} />
+                )}
                 {selectedMenu === "raw-comcigan" && (
                     <div className="flex flex-col h-full gap-4">
                         <div className="flex gap-2 items-center pb-4 border-b">
@@ -3862,6 +4241,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     </div>
                 )}
 
+                {selectedMenu === "teacher-timetable" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex-1 overflow-y-auto print:overflow-visible">
+                            <TeacherTimetable />
+                        </div>
+                    </div>
+                )}
+
                 {selectedMenu === "unresolved-issues" && (
                     <div className="flex flex-col h-full gap-4">
                         <div className="flex gap-2 items-center pb-4 border-b">
@@ -3870,6 +4257,16 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         <div className="flex-1 overflow-y-auto">
                             <TargetClassDisplaySettings adminPassword={adminPassword} />
                             <SamsungInstallSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+                {selectedMenu === "special-schedules" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-pink-600">특수일정 관리</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <SpecialScheduleManager adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -3904,11 +4301,11 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
     }, [cacheStatusQuery.data?.settings?.cacheMaxAgeMinutes]);
 
     const refreshMutation = useMutation({
-        mutationFn: async (grades: number[]) => {
+        mutationFn: async () => {
             const res = await fetch("/api/admin/comcigan-cache", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
-                body: JSON.stringify({ grades })
+                body: JSON.stringify({})
             });
             if (!res.ok) throw new Error("Refresh failed");
             return res.json();
@@ -3916,9 +4313,9 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
         onSuccess: (data) => {
             const failed = data.results?.filter((r: any) => !r.success);
             if (failed?.length > 0) {
-                toast.error(`일부 학년 갱신 실패: ${failed.map((r: any) => `${r.grade}학년`).join(', ')}`);
+                toast.error(`전체 캐시 갱신을 일부 실패했습니다.`);
             } else {
-                toast.success("캐시가 갱신되었습니다.");
+                toast.success("통합본 전체 캐시가 성공적으로 갱신되었습니다.");
             }
             queryClient.invalidateQueries({ queryKey: ["admin", "comciganCacheStatus"] });
         },
@@ -3942,6 +4339,23 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
         onError: () => toast.error("설정 저장에 실패했습니다.")
     });
 
+    const toggleFreezeMutation = useMutation({
+        mutationFn: async ({ cacheKey, freeze }: { cacheKey: string, freeze: boolean }) => {
+            const res = await fetch("/api/admin/comcigan-cache", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ action: "toggle_freeze", cacheKey, freeze })
+            });
+            if (!res.ok) throw new Error("Toggle freeze failed");
+            return res.json();
+        },
+        onSuccess: (data) => {
+            toast.success(data.isFrozen ? "캐시가 동결되었습니다." : "캐시 동결이 해제되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "comciganCacheStatus"] });
+        },
+        onError: () => toast.error("동결 상태 변경에 실패했습니다.")
+    });
+
     const formatAge = (sec: number) => {
         if (sec < 60) return `${sec}초 전`;
         if (sec < 3600) return `${Math.floor(sec / 60)}분 ${sec % 60}초 전`;
@@ -3962,7 +4376,7 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                     <Button
                         size="sm"
                         className="h-8 text-xs"
-                        onClick={() => refreshMutation.mutate([1, 2, 3])}
+                        onClick={() => refreshMutation.mutate()}
                         disabled={refreshMutation.isPending}
                     >
                         <RefreshCw className={`w-3 h-3 mr-1 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
@@ -3976,47 +4390,61 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                     <div className="text-sm text-slate-400 py-4 text-center">캐시 데이터가 없습니다. "전체 갱신"을 눌러 캐시를 생성하세요.</div>
                 ) : (
                     <div className="grid gap-3">
-                        {[1, 2, 3].map(grade => {
-                            const entry = cacheEntries.find((e: any) => e.cacheKey === `grade_${grade}`);
+                        {/* Raw Unified Dataset Status */}
+                        {(() => {
+                            const rawEntry = cacheEntries.find((e: any) => e.cacheKey === 'raw_data');
                             return (
-                                <div key={grade} className="flex items-center gap-3 bg-white border rounded-md px-4 py-3">
+                                <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-md px-4 py-3 mb-2 shadow-sm">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-sm font-bold text-slate-800">{grade}학년</span>
-                                            {entry ? (
-                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${entry.isFresh
+                                            <span className="text-sm font-bold text-blue-900">원본 통합 데이터셋 (raw_data)</span>
+                                            {rawEntry ? (
+                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${rawEntry.isFresh
                                                     ? 'bg-green-100 text-green-700'
                                                     : 'bg-amber-100 text-amber-700'
                                                 }`}>
-                                                    {entry.isFresh ? '신선' : '만료'}
+                                                    {rawEntry.isFresh ? '신선' : '만료'}
                                                 </span>
                                             ) : (
                                                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">미생성</span>
                                             )}
+                                            {rawEntry?.isFrozen && (
+                                                <Badge variant="outline" className="border-blue-300 text-blue-700 bg-blue-50 h-5 px-1.5 ml-1">
+                                                    <Lock className="w-3 h-3 mr-1" />
+                                                    동결됨
+                                                </Badge>
+                                            )}
                                         </div>
-                                        {entry && (
-                                            <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                                        {rawEntry && (
+                                            <div className="flex items-center gap-3 mt-1 text-xs text-blue-700">
                                                 <span className="flex items-center gap-1">
                                                     <Clock className="w-3 h-3" />
-                                                    {formatAge(entry.ageSec)}
+                                                    <LiveAgeText initialAgeSec={rawEntry.ageSec} dataUpdatedAt={cacheStatusQuery.dataUpdatedAt || Date.now()} />
                                                 </span>
-                                                <span>데이터셋: {entry.datasetId || '(없음)'}</span>
-                                                <span>{Math.round((entry.dataSize || 0) / 1024)}KB</span>
+                                                <span>가용 데이터셋: COMCIGAN 통합본 전체</span>
+                                                <span className="font-mono bg-blue-100 px-1 rounded">{Math.round((rawEntry.dataSize || 0) / 1024)}KB</span>
                                             </div>
                                         )}
                                     </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-7 text-xs"
-                                        onClick={() => refreshMutation.mutate([grade])}
-                                        disabled={refreshMutation.isPending}
-                                    >
-                                        <RefreshCw className={`w-3 h-3 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
-                                    </Button>
+                                    {rawEntry && (
+                                        <div className="flex items-center gap-2 mr-2 border-r border-blue-200 pr-4">
+                                            <Label htmlFor="freeze-raw" className="text-xs text-blue-800 cursor-pointer">
+                                                통합본 전체 동결
+                                            </Label>
+                                            <Switch
+                                                id="freeze-raw"
+                                                checked={rawEntry.isFrozen}
+                                                onCheckedChange={(checked) => toggleFreezeMutation.mutate({ cacheKey: rawEntry.cacheKey, freeze: checked })}
+                                                disabled={toggleFreezeMutation.isPending}
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="text-xs text-blue-600 font-medium whitespace-nowrap px-2">
+                                        실시간 동기화 {rawEntry?.isFrozen ? "중지됨" : "작동중"}
+                                    </div>
                                 </div>
                             );
-                        })}
+                        })()}
                     </div>
                 )}
             </div>
@@ -4078,7 +4506,7 @@ function RawTimetableViewer({ rawData }: { rawData: any }) {
         if (timetableProps.length > 0 && !selectedProp) {
             setSelectedProp(timetableProps[timetableProps.length - 1]);
         }
-    }, [timetableProps, selectedProp]);
+    }, [timetableProps, selectedProp, rawData]);
 
     if (!rawData) return null;
 
@@ -4246,6 +4674,235 @@ function RawTimetableViewer({ rawData }: { rawData: any }) {
 }
 
 
+// ----------------------------------------------------------------------
+// SpecialScheduleManager - 특수일정 관리 컴포넌트
+// ----------------------------------------------------------------------
+function SpecialScheduleManager({ adminPassword }: { adminPassword: string }) {
+    const [schedules, setSchedules] = useState<any[]>([]);
+    const [originalSchedules, setOriginalSchedules] = useState<any[]>([]);
+    const [globalEnabled, setGlobalEnabled] = useState(true);
+    const [originalGlobalEnabled, setOriginalGlobalEnabled] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const { isLoading, data, refetch } = useQuery({
+        queryKey: ["admin", "specialSchedules"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 로드 실패");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (data?.special_schedules) {
+            try {
+                const parsed = JSON.parse(data.special_schedules);
+                setSchedules(parsed);
+                setOriginalSchedules(JSON.parse(JSON.stringify(parsed)));
+            } catch (e) {
+                console.error("Failed to parse special_schedules", e);
+                setSchedules([]);
+                setOriginalSchedules([]);
+            }
+        } else if (data) {
+            setSchedules([]);
+            setOriginalSchedules([]);
+        }
+
+        if (data?.special_schedules_enabled !== undefined) {
+            const isEnabled = data.special_schedules_enabled !== 'false';
+            setGlobalEnabled(isEnabled);
+            setOriginalGlobalEnabled(isEnabled);
+        }
+    }, [data]);
+
+    const hasChanges = JSON.stringify(schedules) !== JSON.stringify(originalSchedules) || globalEnabled !== originalGlobalEnabled;
+
+    const handleAdd = () => {
+        const newSchedule = {
+            id: Date.now().toString(),
+            date: new Date().toISOString().split('T')[0],
+            grade: 0,
+            text: "학\n력\n평\n가",
+            fontSize: "text-4xl",
+            opacity: 100
+        };
+        setSchedules([...schedules, newSchedule]);
+    };
+
+    const handleDelete = (id: string) => {
+        setSchedules(schedules.filter(s => s.id !== id));
+    };
+
+    const handleChange = (id: string, field: string, value: any) => {
+        setSchedules(schedules.map(s => s.id === id ? { ...s, [field]: value } : s));
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({
+                    special_schedules: JSON.stringify(schedules),
+                    special_schedules_enabled: globalEnabled.toString()
+                })
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            toast.success("특수일정이 성공적으로 저장되었습니다.");
+            refetch();
+        } catch (error: any) {
+            toast.error(error.message || "저장 중 오류가 발생했습니다.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleCancel = () => {
+        setSchedules(JSON.parse(JSON.stringify(originalSchedules)));
+        setGlobalEnabled(originalGlobalEnabled);
+    };
+
+    return (
+        <div className="flex flex-col gap-4">
+            <div className="flex justify-between items-center bg-gray-50 p-4 border rounded-md">
+                <div className="flex flex-col">
+                    <div className="flex items-center gap-3">
+                        <h4 className="font-bold text-gray-800">특수일정 기능 전체 켜기/끄기</h4>
+                        <Switch 
+                            checked={globalEnabled} 
+                            onCheckedChange={setGlobalEnabled} 
+                        />
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1">
+                        이 스위치를 끄면 아래에 등록된 일정 정보가 남아있어도 사용자 대시보드에서 특수일정이 나타나지 않습니다.
+                    </p>
+                </div>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={handleCancel} disabled={!hasChanges || isSaving}>
+                        취소
+                    </Button>
+                    <Button onClick={handleSave} disabled={!hasChanges || isSaving} className="bg-pink-600 hover:bg-pink-700">
+                        {isSaving ? "저장 중..." : "변경사항 저장"}
+                    </Button>
+                </div>
+            </div>
+
+            <div className="flex justify-between items-center mb-2">
+                <p className="text-sm text-gray-500">
+                    지정한 날짜의 정규 시간표 영역에 "특수일정 텍스트"를 세로로 가득 채워 표시합니다.<br/>
+                    불투명도를 낮추면 뒤에 있는 원래 시간표가 반투명하게 비쳐 보입니다.
+                </p>
+            </div>
+
+            <div className="space-y-4">
+                {isLoading ? (
+                    <div className="text-center py-8 text-gray-500">로딩 중...</div>
+                ) : schedules.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500 border rounded-md border-dashed">
+                        등록된 특수일정이 없습니다.
+                    </div>
+                ) : (
+                    schedules.map((schedule) => (
+                        <div key={schedule.id} className="flex flex-col md:flex-row gap-4 p-4 border rounded-md bg-white border-pink-100 items-start">
+                            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-sm font-semibold text-gray-700">날짜 (YYYY-MM-DD)</label>
+                                    <Input 
+                                        type="date" 
+                                        value={schedule.date} 
+                                        onChange={(e) => handleChange(schedule.id, "date", e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-semibold text-gray-700">적용 학년</label>
+                                    <Select 
+                                        value={schedule.grade.toString()} 
+                                        onValueChange={(val) => handleChange(schedule.id, "grade", parseInt(val))}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="0">전학년(1,2,3)</SelectItem>
+                                            <SelectItem value="1">1학년</SelectItem>
+                                            <SelectItem value="2">2학년</SelectItem>
+                                            <SelectItem value="3">3학년</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-semibold text-gray-700">텍스트 크기</label>
+                                    <Select 
+                                        value={schedule.fontSize} 
+                                        onValueChange={(val) => handleChange(schedule.id, "fontSize", val)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="text-2xl">2xl</SelectItem>
+                                            <SelectItem value="text-3xl">3xl</SelectItem>
+                                            <SelectItem value="text-4xl">4xl</SelectItem>
+                                            <SelectItem value="text-5xl">5xl</SelectItem>
+                                            <SelectItem value="text-6xl">6xl (가장 큼)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-semibold text-gray-700">배경 불투명도 ({schedule.opacity ?? 100}%)</label>
+                                    <input 
+                                        type="range" 
+                                        min="0" max="100" 
+                                        className="w-full accent-pink-600 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2" 
+                                        value={schedule.opacity ?? 100} 
+                                        onChange={(e) => handleChange(schedule.id, "opacity", parseInt(e.target.value))}
+                                    />
+                                    <div className="text-xs text-gray-500 mt-1">100%면 과목이 아예 안보입니다.</div>
+                                </div>
+                                <div className="space-y-1 md:col-span-2 lg:col-span-2">
+                                    <label className="text-sm font-semibold text-gray-700 flex justify-between">
+                                        <span>세로 텍스트 문구</span>
+                                        <span className="text-xs text-gray-400 font-normal">엔터로 줄바꿈</span>
+                                    </label>
+                                    <textarea
+                                        className="w-full h-[120px] p-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                        value={schedule.text}
+                                        onChange={(e) => handleChange(schedule.id, "text", e.target.value)}
+                                        placeholder="학&#10;력&#10;평&#10;가"
+                                    />
+                                </div>
+                            </div>
+                            
+                            <Button 
+                                variant="destructive" 
+                                size="icon" 
+                                className="mt-6 shrink-0"
+                                onClick={() => handleDelete(schedule.id)}
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </Button>
+                        </div>
+                    ))
+                )}
+                
+                <Button 
+                    variant="outline" 
+                    className="w-full border-dashed border-pink-300 text-pink-600 hover:bg-pink-50 hover:text-pink-700"
+                    onClick={handleAdd}
+                >
+                    <Plus className="w-4 h-4 mr-2" /> 특수일정 추가
+                </Button>
+            </div>
+        </div>
+    );
+}
 
 export default function Admin() {
     const [password, setPassword] = useState("");
@@ -4320,9 +4977,73 @@ export default function Admin() {
             .catch(() => setUserIp(null));
     }, []);
 
-    // --- Authentication ---
-    // --- Authentication ---
-    // Password persistence removed for security
+function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExpired, adminPassword }: any) {
+    const isOrphan = !!assessment.isOrphan;
+    const isPostponed = !!assessment.tempDueDate || !!assessment.tempClassTime;
+
+    const subjectMatch = typeof assessment.subject === 'string' ? assessment.subject.match(/^(.*?)\s*\((.*?그룹.*?)\)$/) : null;
+    const baseSubject = subjectMatch ? subjectMatch[1].trim() : assessment.subject;
+    const groupSuffix = subjectMatch ? subjectMatch[2].trim() : null;
+
+    return (
+        <TableRow className={isExpired ? "opacity-75 bg-gray-50/50 hover:bg-gray-50 transition-colors" : ""}>
+            <TableCell className="text-center">
+                <Checkbox checked={isSelected} onCheckedChange={(c) => onToggleSelect(!!c, assessment.id)} />
+            </TableCell>
+            <TableCell className="text-center font-bold text-gray-700">{assessment.grade}</TableCell>
+            <TableCell className="text-center">{assessment.classNum === 0 ? "전체" : assessment.classNum}</TableCell>
+            <TableCell className="font-medium">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    <span>{baseSubject}</span>
+                    {assessment.classCode && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                            {assessment.classCode}그룹
+                        </span>
+                    )}
+                    {assessment.teacher && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                            {assessment.teacher}
+                        </span>
+                    )}
+                    {!assessment.classCode && groupSuffix && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                            {groupSuffix}
+                        </span>
+                    )}
+                    {assessment.description && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                            {assessment.description}
+                        </span>
+                    )}
+                    {isOrphan && <Badge variant="destructive" className="text-[10px] px-1 h-4 bg-red-100 hover:bg-red-200 text-red-700 border border-red-200">고아 수행평가</Badge>}
+                </div>
+            </TableCell>
+            <TableCell className="truncate max-w-[200px]">{assessment.title}</TableCell>
+            <TableCell>
+                {isPostponed ? (
+                    <div className="flex items-center flex-wrap gap-1">
+                        <span className={`text-xs ${isOrphan ? "line-through text-red-400" : "line-through text-gray-400"}`}>
+                            {assessment.dueDate} {assessment.classTime}교시
+                        </span>
+                        <span className="mx-1 font-bold text-red-500 text-xs">➔</span>
+                        <span className="text-red-600 font-bold text-xs">{assessment.tempDueDate} {assessment.tempClassTime}교시</span>
+                        {Boolean(assessment.isAutoPredicted) && (
+                            <span className="text-[10px] text-orange-500 font-bold whitespace-nowrap">(자동예측)</span>
+                        )}
+                    </div>
+                ) : (
+                    <span className={`text-xs ${isOrphan ? "line-through text-red-400" : ""}`}>{assessment.dueDate} {assessment.classTime}교시</span>
+                )}
+            </TableCell>
+            <TableCell className="text-xs font-mono text-gray-500">
+                {assessment.lastModifiedIp || '-'}
+            </TableCell>
+        </TableRow>
+    );
+}
+
+// --- Authentication ---
+// Password persistence removed for security
 
     const checkPasswordMutation = useMutation({
         mutationFn: async (password: string) => {
@@ -4372,6 +5093,7 @@ export default function Admin() {
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [assessmentDsFilterG1, setAssessmentDsFilterG1] = useState<string>('_auto_');
     const [assessmentDsFilterG23, setAssessmentDsFilterG23] = useState<string>('_auto_');
+    const [userSearchQuery, setUserSearchQuery] = useState("");
 
     // Settings query for dataset resolution
     const { data: adminSettings } = useQuery({
@@ -4384,9 +5106,9 @@ export default function Admin() {
         enabled: isAuthenticated,
     });
 
-    // Resolve auto dataset per grade
-    const resolvedAutoDatasetGrade1 = adminSettings?.comcigan_dataset_selected_grade1 || '';
-    const resolvedAutoDatasetGrade23 = adminSettings?.comcigan_dataset_selected || '';
+    // Resolve auto dataset mode per grade globally in Admin
+    const activeDatasetModeG1 = getDatasetMode(adminSettings?.comcigan_dataset_selected_grade1);
+    const activeDatasetModeG23 = getDatasetMode(adminSettings?.comcigan_dataset_selected);
 
     const { data: assessments } = useQuery({
         queryKey: ["admin", "assessments"],
@@ -4417,12 +5139,12 @@ export default function Admin() {
             const filter = isG1 ? assessmentDsFilterG1 : assessmentDsFilterG23;
             if (filter === '_all_') return true;
             if (filter === '_auto_') {
-                const ds = isG1 ? resolvedAutoDatasetGrade1 : resolvedAutoDatasetGrade23;
-                return (a.dataset || '') === ds;
+                const mode = isG1 ? activeDatasetModeG1 : activeDatasetModeG23;
+                return (a.dataset || 'COMCIGAN') === mode;
             }
-            return (a.dataset || '') === filter;
+            return (a.dataset || 'COMCIGAN') === filter;
         });
-    }, [assessments, assessmentDsFilterG1, assessmentDsFilterG23, resolvedAutoDatasetGrade1, resolvedAutoDatasetGrade23]);
+    }, [assessments, assessmentDsFilterG1, assessmentDsFilterG23, activeDatasetModeG1, activeDatasetModeG23]);
 
     const deleteAssessmentsMutation = useMutation({
         mutationFn: async (ids: number[]) => {
@@ -4680,7 +5402,7 @@ export default function Admin() {
                                         onChange={(e) => { setAssessmentDsFilterG1(e.target.value); setSelectedAssessments([]); }}
                                         className="border rounded px-2 py-1 text-sm bg-white min-w-[100px]"
                                     >
-                                        <option value="_auto_">자동</option>
+                                        <option value="_auto_">자동 ({activeDatasetModeG1})</option>
                                         <option value="_all_">전체</option>
                                         {assessmentDatasets.map((ds: string) => (
                                             <option key={ds} value={ds}>{ds || '(빈 데이터셋)'}</option>
@@ -4694,7 +5416,7 @@ export default function Admin() {
                                         onChange={(e) => { setAssessmentDsFilterG23(e.target.value); setSelectedAssessments([]); }}
                                         className="border rounded px-2 py-1 text-sm bg-white min-w-[100px]"
                                     >
-                                        <option value="_auto_">자동</option>
+                                        <option value="_auto_">자동 ({activeDatasetModeG23})</option>
                                         <option value="_all_">전체</option>
                                         {assessmentDatasets.map((ds: string) => (
                                             <option key={ds} value={ds}>{ds || '(빈 데이터셋)'}</option>
@@ -4750,8 +5472,8 @@ export default function Admin() {
                                     let valB = b[assessmentSortField];
 
                                     if (assessmentSortField === 'dueDate') {
-                                        valA = new Date(valA).getTime();
-                                        valB = new Date(valB).getTime();
+                                        valA = new Date(a.tempDueDate || a.dueDate).getTime();
+                                        valB = new Date(b.tempDueDate || b.dueDate).getTime();
                                     } else if (typeof valA === 'string') {
                                         valA = valA.toLowerCase();
                                         valB = valB.toLowerCase();
@@ -4797,28 +5519,20 @@ export default function Admin() {
                                                 </TableHeader>
                                                 <TableBody>
                                                     {activeAssessments.map((assessment: any) => (
-                                                        <TableRow key={assessment.id}>
-                                                            <TableCell className="text-center">
-                                                                <Checkbox
-                                                                    checked={selectedAssessments.includes(assessment.id)}
-                                                                    onCheckedChange={(checked) => {
-                                                                        if (checked) {
-                                                                            setSelectedAssessments([...selectedAssessments, assessment.id]);
-                                                                        } else {
-                                                                            setSelectedAssessments(selectedAssessments.filter((id) => id !== assessment.id));
-                                                                        }
-                                                                    }}
-                                                                />
-                                                            </TableCell>
-                                                            <TableCell className="text-center font-bold">{assessment.grade}</TableCell>
-                                                            <TableCell className="text-center">{assessment.classNum}</TableCell>
-                                                            <TableCell>{assessment.subject}</TableCell>
-                                                            <TableCell>{assessment.title}</TableCell>
-                                                            <TableCell>{assessment.dueDate}</TableCell>
-                                                            <TableCell className="text-xs font-mono text-gray-500">
-                                                                {assessment.lastModifiedIp || '-'}
-                                                            </TableCell>
-                                                        </TableRow>
+                                                        <AdminAssessmentTableRow
+                                                            key={assessment.id}
+                                                            assessment={assessment}
+                                                            isSelected={selectedAssessments.includes(assessment.id)}
+                                                            onToggleSelect={(checked: boolean, id: number) => {
+                                                                if (checked) {
+                                                                    setSelectedAssessments([...selectedAssessments, id]);
+                                                                } else {
+                                                                    setSelectedAssessments(selectedAssessments.filter((aid) => aid !== id));
+                                                                }
+                                                            }}
+                                                            isExpired={false}
+                                                            adminPassword={password}
+                                                        />
                                                     ))}
                                                     {(!activeAssessments || activeAssessments.length === 0) && (
                                                         <TableRow>
@@ -4855,28 +5569,20 @@ export default function Admin() {
                                                             </TableHeader>
                                                             <TableBody>
                                                                 {expiredAssessments.map((assessment: any) => (
-                                                                    <TableRow key={assessment.id} className="opacity-75 bg-gray-50/50 hover:bg-gray-50 transition-colors">
-                                                                        <TableCell className="w-[50px] text-center border-r">
-                                                                            <Checkbox
-                                                                                checked={selectedAssessments.includes(assessment.id)}
-                                                                                onCheckedChange={(checked) => {
-                                                                                    if (checked) {
-                                                                                        setSelectedAssessments([...selectedAssessments, assessment.id]);
-                                                                                    } else {
-                                                                                        setSelectedAssessments(selectedAssessments.filter((id) => id !== assessment.id));
-                                                                                    }
-                                                                                }}
-                                                                            />
-                                                                        </TableCell>
-                                                                        <TableCell className="w-[80px] text-center font-bold">{assessment.grade}</TableCell>
-                                                                        <TableCell className="w-[80px] text-center">{assessment.classNum}</TableCell>
-                                                                        <TableCell>{assessment.subject}</TableCell>
-                                                                        <TableCell>{assessment.title}</TableCell>
-                                                                        <TableCell className="w-[120px] line-through text-gray-400">{assessment.dueDate}</TableCell>
-                                                                        <TableCell className="w-[120px] text-xs font-mono text-gray-400">
-                                                                            {assessment.lastModifiedIp || '-'}
-                                                                        </TableCell>
-                                                                    </TableRow>
+                                                                    <AdminAssessmentTableRow
+                                                                        key={assessment.id}
+                                                                        assessment={assessment}
+                                                                        isSelected={selectedAssessments.includes(assessment.id)}
+                                                                        onToggleSelect={(checked: boolean, id: number) => {
+                                                                            if (checked) {
+                                                                                setSelectedAssessments([...selectedAssessments, id]);
+                                                                            } else {
+                                                                                setSelectedAssessments(selectedAssessments.filter((aid) => aid !== id));
+                                                                            }
+                                                                        }}
+                                                                        isExpired={true}
+                                                                        adminPassword={password}
+                                                                    />
                                                                 ))}
                                                             </TableBody>
                                                         </Table>
@@ -4912,17 +5618,29 @@ export default function Admin() {
 
                 <TabsContent value="users">
                     <div className="grid gap-6">
-                        <div className="flex justify-end">
-                            <Select value={timeRange} onValueChange={(value: any) => setTimeRange(value)}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="기간 선택" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="24h">최근 24시간</SelectItem>
-                                    <SelectItem value="7d">최근 1주일</SelectItem>
-                                    <SelectItem value="all">전체 사용자</SelectItem>
-                                </SelectContent>
-                            </Select>
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-50/50 p-4 rounded-lg border">
+                            <div className="relative w-full md:max-w-md">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <Input
+                                    placeholder="IP, 학번(예: 2105), 이름 등으로 사용자 검색..."
+                                    value={userSearchQuery}
+                                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                                    className="pl-9 bg-white"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
+                                <span className="text-sm font-medium text-gray-600 whitespace-nowrap hidden md:inline">조회 기간</span>
+                                <Select value={timeRange} onValueChange={(value: any) => setTimeRange(value)}>
+                                    <SelectTrigger className="w-full md:w-[150px] bg-white">
+                                        <SelectValue placeholder="기간 선택" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="24h">최근 24시간</SelectItem>
+                                        <SelectItem value="7d">최근 1주일</SelectItem>
+                                        <SelectItem value="all">전체 사용자</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                         <Card>
                             <CardHeader>
@@ -4942,8 +5660,25 @@ export default function Admin() {
                                     };
 
                                     const activeUsers = userData?.activeUsers || [];
-                                    const knownUsers = activeUsers.filter(isKnownUser);
-                                    const unknownUsers = activeUsers.filter((u: any) => !isKnownUser(u));
+
+                                    const filteredActiveUsers = activeUsers.filter((u: any) => {
+                                        if (!userSearchQuery.trim()) return true;
+                                        const query = userSearchQuery.toLowerCase();
+                                        const gradeClassNum = `${u.grade || ''}${u.classNum || ''}${String(u.studentNumber || '').padStart(2, '0')}`;
+                                        const gradeClassNum2 = `${u.grade || ''}${u.classNum || ''}${u.studentNumber || ''}`;
+                                        const gradeClassNumHyphen = `${u.grade || ''}-${u.classNum || ''}-${u.studentNumber || ''}`;
+                                        const ip = u.ip || '';
+                                        const kakaoNames = (u.kakaoAccounts || []).map((k: any) => k.kakaoNickname).join(' ');
+                                        
+                                        return ip.includes(query) || 
+                                               gradeClassNum.includes(query) || 
+                                               gradeClassNum2.includes(query) ||
+                                               gradeClassNumHyphen.includes(query) ||
+                                               kakaoNames.toLowerCase().includes(query);
+                                    });
+
+                                    const knownUsers = filteredActiveUsers.filter(isKnownUser);
+                                    const unknownUsers = filteredActiveUsers.filter((u: any) => !isKnownUser(u));
 
                                     // --- Group known users by student ID ---
                                     type UserGroup = {
@@ -5436,7 +6171,14 @@ export default function Admin() {
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {userData?.blockedUsers?.map((blocked: any) => (
+                                            {userData?.blockedUsers
+                                                ?.filter((blocked: any) => {
+                                                    if (!userSearchQuery.trim()) return true;
+                                                    const query = userSearchQuery.toLowerCase();
+                                                    return (blocked.identifier || '').toLowerCase().includes(query) ||
+                                                           (blocked.reason || '').toLowerCase().includes(query);
+                                                })
+                                                .map((blocked: any) => (
                                                 <TableRow key={blocked.id}>
                                                     <TableCell className="font-mono">
                                                         {blocked.identifier}
@@ -5561,6 +6303,11 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     const [selectedProp, setSelectedProp] = useState<string>('');
     // Grade 1 dataset selection (separate)
     const [selectedPropGrade1, setSelectedPropGrade1] = useState<string>('');
+    // Fallback datasets
+    const [fallbackProp, setFallbackProp] = useState<string>('');
+    const [fallbackPropGrade1, setFallbackPropGrade1] = useState<string>('');
+    // Debug UI overlay toggle
+    const [debugOverlay, setDebugOverlay] = useState<boolean>(false);
     // IP Overrides state
     const [ipOverrides, setIpOverrides] = useState<Record<string, { grade1?: string, default?: string, memo?: string }>>({});
     
@@ -5588,6 +6335,9 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         if (settingsQuery.data) {
             setSelectedProp(settingsQuery.data.comcigan_dataset_selected || '_auto_');
             setSelectedPropGrade1(settingsQuery.data.comcigan_dataset_selected_grade1 || '_auto_');
+            setFallbackProp(settingsQuery.data.comcigan_fallback_dataset || '_auto_');
+            setFallbackPropGrade1(settingsQuery.data.comcigan_fallback_dataset_grade1 || '_auto_');
+            setDebugOverlay(settingsQuery.data.comcigan_debug_overlay_enabled === 'true');
 
             if (settingsQuery.data.dataset_ip_overrides) {
                 try {
@@ -5630,30 +6380,66 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     const keys = Object.keys(rawData);
     const timetableProps = keys.filter(k => {
         const val = rawData[k];
-        return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+        return Array.isArray(val) && val.length > 1 && Array.isArray(val[1]) && val[1].length > 1 && Array.isArray(val[1][1]);
     });
 
-    const latestDatasetName = timetableProps && timetableProps.length > 0 ? timetableProps[0] : '없음';
+    // 가장 첫 번째 데이터가 전체 학기를 관통하는 오리지널 베이스라인
+    const baselineDatasetName = timetableProps && timetableProps.length > 0 ? timetableProps[0] : '없음';
 
-    // Grade 2/3 dirty tracking
-    const displayValue = selectedProp || '_auto_';
-    const originalValue = settingsQuery.data?.comcigan_dataset_selected || '_auto_';
-    const isDirty = displayValue !== originalValue;
+    const sanitizeDatasetValue = (val: string) => {
+        if (!val) return '_auto_';
+        if (val === 'MANUAL_PLAN' || val === '_empty_') return val;
+        // If it's COMCIGAN or a legacy 자료xxx, it's virtually _auto_ now
+        if (val === 'COMCIGAN' || val.startsWith('자료')) return '_auto_';
+        return val;
+    };
 
-    // Grade 1 dirty tracking
-    const displayValueG1 = selectedPropGrade1 || '_auto_';
-    const originalValueG1 = settingsQuery.data?.comcigan_dataset_selected_grade1 || '_auto_';
-    const isDirtyG1 = displayValueG1 !== originalValueG1;
+    // Grade 2/3 tracking
+    const originalValueRaw = settingsQuery.data?.comcigan_dataset_selected || '_auto_';
+    const originalValue = sanitizeDatasetValue(originalValueRaw);
+    const displayValue = sanitizeDatasetValue(selectedProp || '_auto_');
+    const isDirty = displayValue !== originalValue || originalValueRaw !== originalValue;
 
-    const DatasetDropdown = ({ value, onChange, emptyOption = false }: { value: string; onChange: (v: string) => void, emptyOption?: boolean }) => (
+    // Grade 1 tracking
+    const originalValueRawG1 = settingsQuery.data?.comcigan_dataset_selected_grade1 || '_auto_';
+    const originalValueG1 = sanitizeDatasetValue(originalValueRawG1);
+    const displayValueG1 = sanitizeDatasetValue(selectedPropGrade1 || '_auto_');
+    const isDirtyG1 = displayValueG1 !== originalValueG1 || originalValueRawG1 !== originalValueG1;
+
+    // Fallback dirty tracking
+    const displayValueFB = fallbackProp || '_auto_';
+    const originalValueFB = settingsQuery.data?.comcigan_fallback_dataset || '_auto_';
+    const isDirtyFB = displayValueFB !== originalValueFB;
+
+    const displayValueFBG1 = fallbackPropGrade1 || '_auto_';
+    const originalValueFBG1 = settingsQuery.data?.comcigan_fallback_dataset_grade1 || '_auto_';
+    const isDirtyFBG1 = displayValueFBG1 !== originalValueFBG1;
+
+    const SourceDatasetDropdown = ({ value, onChange, emptyOption = false }: { value: string; onChange: (v: string) => void, emptyOption?: boolean }) => (
         <Select value={value} onValueChange={onChange}>
             <SelectTrigger className="w-full">
-                <SelectValue placeholder="데이터셋 선택" />
+                <SelectValue placeholder="출처 데이터셋 선택" />
             </SelectTrigger>
             <SelectContent>
                 {emptyOption && <SelectItem value="_empty_">사용 안 함 (기본값 설정 따름)</SelectItem>}
-                <SelectItem value="_auto_">자동 (최신: {latestDatasetName})</SelectItem>
-                <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획 수동 입력)</SelectItem>
+                <SelectItem value="_auto_">자동 (COMCIGAN 통합 데이터)</SelectItem>
+                <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
+                {timetableProps.map(prop => (
+                    <SelectItem key={prop} value={prop}>{prop}</SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
+
+    const StandardDatasetDropdown = ({ value, onChange, emptyOption = false }: { value: string; onChange: (v: string) => void, emptyOption?: boolean }) => (
+        <Select value={value} onValueChange={onChange}>
+            <SelectTrigger className="w-full">
+                <SelectValue placeholder="표준 데이터셋 선택" />
+            </SelectTrigger>
+            <SelectContent>
+                {emptyOption && <SelectItem value="_empty_">사용 안 함 (기본값 설정 따름)</SelectItem>}
+                <SelectItem value="_auto_">자동 (원본 베이스라인: {baselineDatasetName})</SelectItem>
+                <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
                 {timetableProps.map(prop => (
                     <SelectItem key={prop} value={prop}>{prop}</SelectItem>
                 ))}
@@ -5711,42 +6497,108 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         <>
         <Card className="w-full max-w-2xl">
             <CardHeader>
-                <CardTitle>출체 데이터셋 선택</CardTitle>
+                <CardTitle>데이터셋 선택기</CardTitle>
                 <CardDescription>
-                    메인 화면의 시간표에서 출력할 원본 데이터셋을 학년별로 선택합니다.
-                    &quot;자동&quot;으로 설정할 경우 가장 최신 데이터셋을 자동으로 선택합니다.
+                    일반적으로 날짜 선택 시 <b>자동</b>으로 해당 주차의 시간표가 출력됩니다.<br/>
+                    <b>특정 데이터셋</b>을 선택하면 시스템 날짜를 무시하고 모든 화면 구조를 해당 데이터셋 기준으로 활성화합니다.<br/>
+                    <b>표준 데이터셋</b>은 전체 시스템이 기준으로 삼을 세분화된 단일 데이터셋(예: 자료481)을 지칭합니다. 자동으로 둘 경우 원본 베이스라인을 사용합니다.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
 
-                {/* Grade 1 dataset */}
-                <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
+                {/* Grade 1 Override dataset */}
+                <div className="space-y-2 border rounded-lg p-4 bg-white">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-slate-700">1학년 데이터셋</span>
+                        <span className="text-sm font-semibold text-gray-800">1학년 출처 데이터셋 선택</span>
+                        <span className="text-xs text-gray-500">모든 화면 구조를 이 데이터셋으로 고정</span>
                     </div>
-                    <DatasetDropdown value={displayValueG1} onChange={setSelectedPropGrade1} />
+                    <SourceDatasetDropdown value={displayValueG1} onChange={setSelectedPropGrade1} />
                     <div className="flex justify-end gap-2 pt-1">
                         <Button variant="outline" size="sm" onClick={() => setSelectedPropGrade1(originalValueG1)} disabled={!isDirtyG1 || saveMutation.isPending}>
                             변경 취소
                         </Button>
-                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected_grade1: selectedPropGrade1 === '_auto_' ? '' : selectedPropGrade1 })} disabled={!isDirtyG1 || saveMutation.isPending}>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected_grade1: displayValueG1 === '_auto_' ? '' : displayValueG1 })} disabled={!isDirtyG1 || saveMutation.isPending}>
                             {saveMutation.isPending ? "저장 중..." : "저장"}
                         </Button>
                     </div>
                 </div>
 
-                {/* Grade 2/3 dataset */}
-                <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
+                {/* Grade 2/3 Override dataset */}
+                <div className="space-y-2 border rounded-lg p-4 bg-white">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-slate-700">2/3학년 데이터셋</span>
-                        <span className="text-xs text-slate-400">(그룹 확인기, 선택과목 자동 등에 적용)</span>
+                        <span className="text-sm font-semibold text-gray-800">2/3학년 출처 데이터셋 선택</span>
+                        <span className="text-xs text-gray-500">모든 화면 구조를 이 데이터셋으로 고정</span>
                     </div>
-                    <DatasetDropdown value={displayValue} onChange={setSelectedProp} />
+                    <SourceDatasetDropdown value={displayValue} onChange={setSelectedProp} />
                     <div className="flex justify-end gap-2 pt-1">
-                        <Button variant="outline" size="sm" onClick={() => setSelectedProp(originalValue)} disabled={!isDirty || saveMutation.isPending}>
+                        <Button variant="outline" size="sm" onClick={() => setSelectedProp(originalValueRaw)} disabled={!isDirty || saveMutation.isPending}>
                             변경 취소
                         </Button>
-                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected: selectedProp === '_auto_' ? '' : selectedProp })} disabled={!isDirty || saveMutation.isPending}>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected: displayValue === '_auto_' ? '' : displayValue })} disabled={!isDirty || saveMutation.isPending}>
+                            {saveMutation.isPending ? "저장 중..." : "저장"}
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="w-full h-px bg-slate-200 my-2" />
+
+                {/* Grade 1 Fallback dataset */}
+                <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-700">1학년 표준 데이터셋</span>
+                        <span className="text-xs text-slate-400">전체 시스템이 기준으로 삼을 세분화된 단일 데이터셋</span>
+                    </div>
+                    <StandardDatasetDropdown value={displayValueFBG1} onChange={setFallbackPropGrade1} />
+                    <div className="flex justify-end gap-2 pt-1">
+                        <Button variant="outline" size="sm" onClick={() => setFallbackPropGrade1(originalValueFBG1)} disabled={!isDirtyFBG1 || saveMutation.isPending}>
+                            변경 취소
+                        </Button>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_fallback_dataset_grade1: fallbackPropGrade1 === '_auto_' ? '' : fallbackPropGrade1 })} disabled={!isDirtyFBG1 || saveMutation.isPending}>
+                            {saveMutation.isPending ? "저장 중..." : "저장"}
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Grade 2/3 Fallback dataset */}
+                <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-700">2/3학년 표준 데이터셋</span>
+                        <span className="text-xs text-slate-400">전체 시스템이 기준으로 삼을 세분화된 단일 데이터셋</span>
+                    </div>
+                    <StandardDatasetDropdown value={displayValueFB} onChange={setFallbackProp} />
+                    <div className="flex justify-end gap-2 pt-1">
+                        <Button variant="outline" size="sm" onClick={() => setFallbackProp(originalValueFB)} disabled={!isDirtyFB || saveMutation.isPending}>
+                            변경 취소
+                        </Button>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_fallback_dataset: fallbackProp === '_auto_' ? '' : fallbackProp })} disabled={!isDirtyFB || saveMutation.isPending}>
+                            {saveMutation.isPending ? "저장 중..." : "저장"}
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Debug Overlay Toggle */}
+                <div className="space-y-2 border rounded-lg p-4 bg-white mt-4">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-700">메인페이지 디버그 표시</span>
+                        <span className="text-xs text-slate-400">현재 날짜에 해당하는 유효 데이터셋(Fallback 포함) 정보를 띄웁니다</span>
+                    </div>
+                    <div className="flex items-center gap-2 pt-2 pb-2">
+                        <input 
+                            type="checkbox" 
+                            id="debug-overlay-toggle"
+                            checked={debugOverlay}
+                            onChange={(e) => setDebugOverlay(e.target.checked)}
+                            className="w-4 h-4 cursor-pointer align-middle"
+                        />
+                        <label htmlFor="debug-overlay-toggle" className="text-sm cursor-pointer select-none font-medium">
+                            디버그용 현재날짜 해당 데이터셋 표시
+                        </label>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1 border-t mt-2 pt-3">
+                        <Button variant="outline" size="sm" onClick={() => setDebugOverlay(settingsQuery.data?.comcigan_debug_overlay_enabled === 'true')} disabled={debugOverlay === (settingsQuery.data?.comcigan_debug_overlay_enabled === 'true') || saveMutation.isPending}>
+                            변경 취소
+                        </Button>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_debug_overlay_enabled: debugOverlay ? 'true' : 'false' })} disabled={debugOverlay === (settingsQuery.data?.comcigan_debug_overlay_enabled === 'true') || saveMutation.isPending}>
                             {saveMutation.isPending ? "저장 중..." : "저장"}
                         </Button>
                     </div>
@@ -5758,7 +6610,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         {/* IP Override Manager */}
         <Card className="w-full max-w-2xl mt-6">
             <CardHeader>
-                <CardTitle>IP별 데이터셋 강제 지정 (Override)</CardTitle>
+                <CardTitle>IP별 데이터셋 지정</CardTitle>
                 <CardDescription>
                     특정 IP 주소에서 접속할 때 메인 화면에 표시할 데이터셋을 별도로 지정합니다.<br />
                     1학년과 2/3학년을 구분하여 지정할 수 있습니다.
@@ -5767,10 +6619,10 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
             <CardContent className="space-y-6">
                 <div className="space-y-4 border rounded-lg p-4 bg-slate-50">
                     <div className="flex items-center justify-between pb-2 border-b">
-                        <span className="text-sm font-semibold text-slate-700">현재 오버라이드 목록</span>
+                        <span className="text-sm font-semibold text-slate-700">현재 IP별 지정 목록</span>
                     </div>
                     {Object.keys(ipOverrides).length === 0 ? (
-                        <div className="text-sm text-center py-4 text-gray-500 bg-white border rounded">현재 설정된 IP 오버라이드가 없습니다.</div>
+                        <div className="text-sm text-center py-4 text-gray-500 bg-white border rounded">현재 지정된 IP별 데이터셋이 없습니다.</div>
                     ) : (
                         <div className="overflow-x-auto rounded border">
                             <Table className="bg-white min-w-[500px]">
@@ -5808,7 +6660,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                 </div>
 
                 <div className="space-y-4 border rounded-lg p-4 bg-white">
-                     <span className="text-sm font-semibold text-slate-700 block mb-2">새 오버라이드 추가</span>
+                     <span className="text-sm font-semibold text-slate-700 block mb-2">새 IP 지정 추가</span>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                              <label className="text-xs font-medium text-gray-600">대상 IP 주소</label>
@@ -5825,12 +6677,12 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
 
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                         <div className="space-y-2">
-                             <label className="text-xs font-medium text-gray-600">1학년 강제 지정 데이터셋</label>
-                             <DatasetDropdown value={newIpGrade1} onChange={setNewIpGrade1} emptyOption={true} />
+                             <label className="text-xs font-medium text-gray-600">1학년 지정 출처 데이터셋</label>
+                             <SourceDatasetDropdown value={newIpGrade1} onChange={setNewIpGrade1} emptyOption={true} />
                         </div>
                         <div className="space-y-2">
-                             <label className="text-xs font-medium text-gray-600">2/3학년 강제 지정 데이터셋</label>
-                             <DatasetDropdown value={newIpDefault} onChange={setNewIpDefault} emptyOption={true} />
+                             <label className="text-xs font-medium text-gray-600">2/3학년 지정 출처 데이터셋</label>
+                             <SourceDatasetDropdown value={newIpDefault} onChange={setNewIpDefault} emptyOption={true} />
                         </div>
                      </div>
                      <div className="flex justify-end pt-2">

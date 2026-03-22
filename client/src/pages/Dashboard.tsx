@@ -29,6 +29,7 @@ interface TimetableItem {
   subject: string;
   teacher: string;
   class?: number;
+  isChanged?: boolean;
 }
 
 interface AssessmentItem {
@@ -42,6 +43,14 @@ interface AssessmentItem {
   weekday?: number;
   round?: number; // 차수 추가
   votes?: string; // JSON array of votes
+  isPostponed?: boolean;
+  originalDueDate?: string;
+  originalClassTime?: number;
+  tempDueDate?: string;
+  tempClassTime?: number;
+  isAutoPredicted?: boolean | number;
+  teacher?: string;
+  classCode?: string;
 }
 
 // 주의 시작일 계산 (월요일 기준)
@@ -55,6 +64,16 @@ function getMonday(date: Date): Date {
 // 날짜 포맷팅
 function formatDate(date: Date): string {
   return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+// YYYY-MM-DD ➔ M/D 단축 포맷팅 (대시보드 카드 레이아웃 보호용)
+function formatShortDateText(dateString?: string): string {
+  if (!dateString) return '';
+  const parts = dateString.split('-');
+  if (parts.length === 3) {
+    return `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
+  }
+  return dateString;
 }
 
 // 주간 날짜 배열 생성
@@ -119,6 +138,11 @@ export default function Dashboard() {
   const [viewingAssessments, setViewingAssessments] = useState<AssessmentItem[]>([]);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<AssessmentItem | null>(null);
+  
+  // Custom Orphan Relocation State
+  const [relocatingAssessment, setRelocatingAssessment] = useState<AssessmentItem | null>(null);
+  const [pendingRelocation, setPendingRelocation] = useState<{ date: string, classTime: number } | null>(null);
+  const [isRelocatingUpdating, setIsRelocatingUpdating] = useState(false);
 
 
   // ... previous imports
@@ -132,6 +156,8 @@ export default function Dashboard() {
     content: "",
     classTime: "",
     round: "1",
+    teacher: "",
+    classCode: "",
   });
 
   const [showElectiveDialog, setShowElectiveDialog] = useState(false);
@@ -296,9 +322,6 @@ export default function Dashboard() {
   };
 
 
-  // Extract datasetId early for use in effects
-  const datasetId = (queryClient.getQueryData(['timetable', schoolName, grade, classNum]) as any)?.datasetId || '';
-
 
 
   useEffect(() => {
@@ -336,7 +359,9 @@ export default function Dashboard() {
     classTime: number,
     subject: string,
     date: Date,
-    cellAssessments: AssessmentItem[]
+    cellAssessments: AssessmentItem[],
+    teacher: string = "",
+    classCode: string = ""
   ) => {
     const today = new Date();
     const todayStr = toDateString(today);
@@ -367,6 +392,8 @@ export default function Dashboard() {
           content: "",
           classTime: classTime.toString(),
           round: "1",
+          teacher: teacher,
+          classCode: classCode,
         });
         setShowAddDialog(true);
       }
@@ -375,12 +402,13 @@ export default function Dashboard() {
 
   // 1. 시간표 조회
   const { data: rawTimetableData, isLoading: timetableLoading, isFetching: isTimetableFetching, refetch: refetchTimetable } = useQuery({
-    queryKey: ['timetable', schoolName, grade, classNum],
+    queryKey: ['timetable', schoolName, grade, classNum, weekDates[0].toISOString()],
     queryFn: async () => {
       if (!grade || !classNum) return [];
       try {
         const queryClassNum = (grade === "2" || grade === "3") ? "all" : classNum;
-        const response = await fetch(`/api/comcigan?type=timetable&grade=${grade}&classNum=${queryClassNum}`);
+        const targetDate = toDateString(weekDates[0]);
+        const response = await fetch(`/api/comcigan?type=timetable&grade=${grade}&classNum=${queryClassNum}&targetDate=${encodeURIComponent(targetDate)}`);
         if (!response.ok) {
           throw new Error(`Failed to fetch from Comcigan: ${response.status}`);
         }
@@ -394,11 +422,13 @@ export default function Dashboard() {
           })) as TimetableItem[];
           // Attach datasetId for downstream queries
           (mappedData as any).datasetId = result.datasetId;
+          (mappedData as any).originalDatasetId = result.originalDatasetId || result.datasetId;
           (mappedData as any).ipOverrideApplied = result.ipOverrideApplied;
           return mappedData;
         }
         const emptyArray = [] as TimetableItem[];
         (emptyArray as any).datasetId = result.datasetId;
+        (emptyArray as any).originalDatasetId = result.originalDatasetId || result.datasetId;
         (emptyArray as any).ipOverrideApplied = result.ipOverrideApplied;
         return emptyArray;
       } catch (e) {
@@ -411,6 +441,9 @@ export default function Dashboard() {
     retryDelay: 3000, // 3초 간격
     staleTime: 5000, // 5초 동안은 데이터를 신선한 상태로 유지하여, 캐싱 반영 및 UI 깜빡임 최소화
   });
+
+  // Extract persistent datasetId for use in effects (fallback to actual timetable response)
+  const datasetId = (rawTimetableData as any)?.originalDatasetId || (rawTimetableData as any)?.datasetId || '';
 
   // 1.5 선택과목 데이터 및 프로필 조회 (2, 3학년용)
   const { data: electiveConfigs, isFetching: isElectiveConfigsFetching } = useQuery({
@@ -522,17 +555,15 @@ export default function Dashboard() {
   });
 
   // 각 시간(교시)별 다수결 그룹 계산
-  // We keep track of the last successfully computed groups to prevent flickering during refetches.
-  const lastValidGroupsRef = React.useRef<Record<string, string>>({});
+  // 각 시간(교시)별 다수결 그룹 계산
 
   const computedGroups = useMemo(() => {
     if (grade !== "2" && grade !== "3") {
-      lastValidGroupsRef.current = {};
       return {};
     }
-    // 시간표 데이터 자체가 없으면 마지막 유효값 유지
+    // 시간표 데이터 자체가 없으면 그룹 매핑도 없는 것이 정상입니다.
     if (!allClassesTimetable || allClassesTimetable.length === 0) {
-      return lastValidGroupsRef.current;
+      return {};
     }
 
     const cellGroups: Record<string, string> = {};
@@ -614,8 +645,6 @@ export default function Dashboard() {
         }
       }
     }
-
-    lastValidGroupsRef.current = cellGroups;
     return cellGroups;
   }, [allClassesTimetable, electiveConfigs, grade, settings?.elective_group_overrides]);
 
@@ -673,35 +702,159 @@ export default function Dashboard() {
     refetchInterval: 2000,
   });
 
-  // 현재 주에 해당하는 수행평가만 필터링 및 정렬
+  // 학생이 실제로 수강하는 과목 목록 계산 (수행평가 고아상태 필터링용)
+  const myActualSubjects = useMemo(() => {
+    const subjects = new Set<string>();
+    
+    // 1. 시간표 기반 수강 과목 수집
+    for (let w = 0; w < 5; w++) {
+      for (let c = 1; c <= 7; c++) {
+        const item = (timetableData || []).find(t => t.weekday === w && t.classTime === c);
+        const group = computedGroups[`${w}-${c}`];
+        const electiveSelection = currentProfile?.electives?.[group];
+        
+        let displaySubject = item ? item.subject : null;
+        
+        if (group && electiveSelection) {
+           const configEntry = (electiveConfigs || []).find((cfg: any) =>
+             cfg.subject === electiveSelection.subject &&
+             cfg.classCode?.split(",").map((s: string) => s.trim()).includes(group)
+           );
+           displaySubject = configEntry?.fullSubjectName || electiveSelection.subject || displaySubject;
+        }
+
+        if (displaySubject) {
+           subjects.add(displaySubject.trim());
+        }
+      }
+    }
+
+    // 2. 시간표에 없더라도 학생이 명시적으로 선택한 선택과목은 모두 포함
+    if (grade === "2" || grade === "3") {
+      if (currentProfile?.electives) {
+        Object.values(currentProfile.electives).forEach((sel: any) => {
+          if (sel && sel.subject) {
+            subjects.add(sel.subject.trim());
+            if (sel.fullSubjectName) subjects.add(sel.fullSubjectName.trim());
+            
+            const configEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === sel.subject);
+            if (configEntry?.fullSubjectName) subjects.add(configEntry.fullSubjectName.trim());
+          }
+        });
+      }
+    }
+
+    return subjects;
+  }, [timetableData, computedGroups, currentProfile, electiveConfigs, grade]);
+
+  // 현재 주에 해당하는 수행평가만 필터링, 정렬 및 임시 연기(고아 처리)
   const assessments = useMemo(() => {
     if (!allAssessments) return [];
 
     // 1. Filter by Week
-    const filtered = allAssessments.filter(a => isDateInWeek(a.dueDate, weekDates));
+    let filtered = allAssessments.filter(a => {
+      const effectiveDate = a.tempDueDate ? a.tempDueDate : a.dueDate;
+      return isDateInWeek(effectiveDate, weekDates);
+    });
 
-    // 2. Sort: Date ASC -> Period (classTime) ASC
-    filtered.sort((a, b) => {
-      // Date Comparison
+    // 2. 학생이 듣지 않는 과목의 고아상태 등 수행평가 필터링 (2, 3학년)
+    if (grade === "2" || grade === "3") {
+      filtered = filtered.filter(a => {
+        // 1차 필터: 아예 듣지 않는 과목(이름)이면 100% 탈락
+        const baseSubject = a.subject.replace(/\s*\(.*$/, '').trim();
+        if (!myActualSubjects.has(baseSubject)) return false;
+
+        // 2차 필터: a.classCode가 명시된 경우, 이 학생의 elective 그룹이 포함되는지 직접 검증
+        // 이동수업 수행평가는 subject 이름에 그룹이 없어도 classCode로만 구분됨
+        if (a.classCode && a.classCode.trim()) {
+          const allowedGroups = a.classCode.split(",").map((s: string) => s.trim()).filter(Boolean);
+          if (allowedGroups.length > 0) {
+            // 학생이 보유한 elective 그룹 목록 (currentProfile.electives의 키: "A", "B", ...)
+            const myGroups = new Set<string>(Object.keys(currentProfile?.electives || {}));
+            // 내 그룹 중 하나라도 allowedGroups에 포함되어야 함
+            const hasMatch = allowedGroups.some(g => myGroups.has(g));
+            if (!hasMatch) {
+              return false; // 이 학생의 그룹이 대상 그룹에 없음 → 표시 안 함
+            }
+            // 그룹은 맞지만, 해당 그룹에서 선택한 과목이 수행평가 과목과 다른지 추가 검증
+            const matchedGroup = allowedGroups.find(g => myGroups.has(g));
+            if (matchedGroup) {
+              const mySubjectInGroup = currentProfile?.electives?.[matchedGroup]?.subject;
+              if (mySubjectInGroup) {
+                const cfgEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySubjectInGroup);
+                const fullSubj = cfgEntry?.fullSubjectName || mySubjectInGroup;
+                if (baseSubject !== mySubjectInGroup.trim() && baseSubject !== fullSubj.trim()) {
+                  return false; // 그룹은 같지만 그 그룹에서 내가 선택한 과목과 다름
+                }
+              }
+            }
+          }
+        } else {
+          // classCode가 없는 경우: 과목명의 "(C그룹)" 텍스트로 폴백 검증
+          const groupMatch = a.subject.match(/\(([A-Z]그룹)/);
+          if (groupMatch && groupMatch[1]) {
+             const targetGroup = groupMatch[1];
+             const mySelectedSubjectForGroup = currentProfile?.electives?.[targetGroup]?.subject;
+             
+             if (!mySelectedSubjectForGroup) {
+                return false; // 해당 그룹에 아무 과목도 선택하지 않았다면 내 것이 아님
+             }
+
+             const configEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySelectedSubjectForGroup);
+             const fullSubj = configEntry?.fullSubjectName || mySelectedSubjectForGroup;
+
+             if (baseSubject !== mySelectedSubjectForGroup.trim() && baseSubject !== fullSubj.trim()) {
+                return false; // 내 프로필의 그룹 배정 과목과, 수행평가의 실제 과목이 일치하지 않음
+             }
+          }
+        }
+
+        return true;
+      });
+    }
+
+
+    // 날짜 범위를 벗어난 폴백 데이터셋을 보고 있을 경우, 고아(자동 임시 연기) 처리를 하지 않음
+    const isOutOfBounds = (rawTimetableData as any)?.datasetId && (rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.datasetId !== (rawTimetableData as any)?.originalDatasetId;
+
+    // 3. 고아 수행평가 임시 이동 처리 및 대시보드 UI를 위한 과목명 정리(Suffix 제거)
+    const processed = filtered.map(a => {
+      // 대시보드 UI에서는 (C그룹, 선생님) 등의 꼬리표를 제거하여 깔끔하게 표시
+      const baseSubject = a.subject.replace(/\s*\(.*$/, '').trim();
+
+      // 서버에서 계산된 수동 연기 및 자동 연기(자동 예측) 수행평가 반영
+      if (a.tempDueDate && a.tempClassTime) {
+        return {
+           ...a,
+           subject: baseSubject,
+           isPostponed: true,
+           originalDueDate: a.dueDate,
+           originalClassTime: a.classTime,
+           dueDate: a.tempDueDate,
+           classTime: a.tempClassTime
+        };
+      }
+      return { ...a, subject: baseSubject };
+    });
+
+    // 4. Sort: Date ASC -> Period (classTime) ASC
+    processed.sort((a, b) => {
       const dateA = new Date(a.dueDate).getTime();
       const dateB = new Date(b.dueDate).getTime();
       if (dateA !== dateB) return dateA - dateB;
 
-      // Period Comparison (If same date)
-      // Treat null/undefined classTime as larger (end of list)
       const periodA = a.classTime || 99;
       const periodB = b.classTime || 99;
       return periodA - periodB;
     });
 
-    console.log('[Assessments Filter & Sort]', {
+    console.log('[Assessments Filter, Sort & Postpone]', {
       weekRange: `${toDateString(weekDates[0])} ~ ${toDateString(weekDates[4])}`,
       totalAssessments: allAssessments.length,
-      filteredAssessments: filtered.length,
-      sorted: filtered.map(a => ({ subject: a.subject, date: a.dueDate, classTime: a.classTime }))
+      processedAssessments: processed.length,
     });
-    return filtered;
-  }, [allAssessments, weekDates]);
+    return processed;
+  }, [allAssessments, weekDates, grade, myActualSubjects, timetableData, computedGroups, currentProfile]);
 
   // 3.5 수행평가 투표 데이터 (인라인 votes 필드에서 계산)
   const votesData = useMemo(() => {
@@ -762,6 +915,8 @@ export default function Dashboard() {
           classNum: parseInt(classNum),
           classTime: data.classTime ? parseInt(data.classTime) : null,
           dataset: datasetId || '',
+          teacher: data.teacher,
+          classCode: data.classCode,
         }),
       });
 
@@ -844,6 +999,8 @@ export default function Dashboard() {
         content: "",
         classTime: "",
         round: "1",
+        teacher: "",
+        classCode: "",
       });
       setShowAddDialog(false); // 다이얼로그 닫기
       setSelectedCell(null); // 선택 셀 해제
@@ -876,6 +1033,8 @@ export default function Dashboard() {
       content: assessment.title,
       classTime: assessment.classTime?.toString() || "",
       round: parsedRound,
+      teacher: assessment.teacher || "",
+      classCode: assessment.classCode || "",
     });
     setShowViewDialog(false);
     setShowEditDialog(true);
@@ -889,12 +1048,114 @@ export default function Dashboard() {
       await updateMutation.mutateAsync({
         ...editingAssessment,
         title: formData.content,
-        dueDate: formData.assessmentDate,
-        classTime: formData.classTime ? parseInt(formData.classTime) : undefined,
+        // 만약 이미 연기된 수행평가라면, dueDate로는 원본 날짜를 보존하고 tempDueDate를 수정합니다.
+        dueDate: editingAssessment.originalDueDate || formData.assessmentDate,
+        classTime: editingAssessment.originalClassTime || (formData.classTime ? parseInt(formData.classTime) : undefined),
+        tempDueDate: editingAssessment.originalDueDate ? formData.assessmentDate : undefined,
+        tempClassTime: editingAssessment.originalDueDate ? (formData.classTime ? parseInt(formData.classTime) : undefined) : undefined,
+        isAutoPredicted: editingAssessment.originalDueDate ? 0 : undefined,
         description: formData.round ? `${formData.round}차` : "",
+        teacher: formData.teacher,
+        classCode: formData.classCode,
       });
     } catch (error) {
       console.error("수행평가 수정 실패:", error);
+    }
+  };
+
+  const findNextSlotForSubject = (fromDateStr: string, fromClassTime: number, targetSubject: string) => {
+    const fromDate = new Date(fromDateStr);
+    let currentWeekday = fromDate.getDay() - 1; // 0=Mon, 4=Fri
+    if (currentWeekday < 0 || currentWeekday > 4) currentWeekday = 0;
+    
+    // Scan up to 4 weeks ahead
+    for (let weeksAhead = 0; weeksAhead < 4; weeksAhead++) {
+      for (let w = 0; w < 5; w++) {
+         if (weeksAhead === 0 && w < currentWeekday) continue;
+
+         const daySlots = (timetableData || []).filter(t => t.weekday === w).sort((x, y) => x.classTime - y.classTime);
+         
+         for (const t of daySlots) {
+             if (weeksAhead === 0 && w === currentWeekday && t.classTime <= fromClassTime) continue;
+
+             const tGroup = computedGroups[`${w}-${t.classTime}`];
+             const tElective = currentProfile?.electives?.[tGroup];
+             const tSubject = tGroup && tElective ? (tElective.fullSubjectName || tElective.subject) : t.subject;
+             
+             if (tSubject?.trim() === targetSubject.trim()) {
+                 const targetDate = new Date(fromDate);
+                 const daysDiff = (weeksAhead * 7) + (w - currentWeekday);
+                 targetDate.setDate(targetDate.getDate() + daysDiff);
+                 
+                 return {
+                     date: toDateString(targetDate),
+                     classTime: t.classTime
+                 };
+             }
+         }
+      }
+    }
+    return null;
+  };
+
+  const handleRelocationSubmit = async () => {
+    if (!pendingRelocation || !relocatingAssessment) return;
+    setIsRelocatingUpdating(true);
+    try {
+        const updatesToMake: any[] = [];
+        const queue = [
+            { assessment: relocatingAssessment, targetDate: pendingRelocation.date, targetTime: pendingRelocation.classTime }
+        ];
+
+        while (queue.length > 0) {
+           const { assessment, targetDate, targetTime } = queue.shift()!;
+           
+           updatesToMake.push({
+               ...assessment,
+               dueDate: assessment.originalDueDate || assessment.dueDate,
+               classTime: assessment.originalClassTime || assessment.classTime,
+               tempDueDate: targetDate,
+               tempClassTime: targetTime,
+               isAutoPredicted: 0
+           });
+
+           // Find collider in allAssessments
+           const collider = allAssessments?.find(a => {
+               if (a.id === assessment.id) return false;
+               if (a.isDone) return false; // Ignore completed assessments
+               if (a.subject.trim() !== assessment.subject.trim()) return false;
+               
+               // Check if this assessment is already pending an update in this cascade
+               const pendingUpdate = updatesToMake.find(u => u.id === a.id);
+               const effectiveDate = pendingUpdate ? pendingUpdate.tempDueDate : (a.tempDueDate || a.dueDate);
+               const effectiveTime = pendingUpdate ? pendingUpdate.tempClassTime : (a.tempClassTime || a.classTime);
+
+               return effectiveDate === targetDate && effectiveTime === targetTime;
+           });
+
+           if (collider) {
+               const nextSlot = findNextSlotForSubject(targetDate, targetTime, assessment.subject);
+               if (nextSlot) {
+                   queue.push({ assessment: collider, targetDate: nextSlot.date, targetTime: nextSlot.classTime });
+               } else {
+                   // Fallback if no slot found in 4 weeks
+                   toast.warning(`[${assessment.subject}] 더 이상 배정할 다음 수업 시간이 없어 연쇄 연기가 중단되었습니다.`);
+               }
+           }
+        }
+
+        // Apply bulk updates
+        for (const update of updatesToMake) {
+             await updateMutation.mutateAsync(update);
+        }
+        
+    } catch (e) {
+       console.error("Relocation Error:", e);
+       toast.error("연기 처리 중 오류가 발생했습니다.");
+    } finally {
+        setIsRelocatingUpdating(false);
+        setRelocatingAssessment(null);
+        setPendingRelocation(null);
     }
   };
 
@@ -927,9 +1188,10 @@ export default function Dashboard() {
 
   const isLoading = timetableLoading || assessmentLoading;
 
-  // 로딩이 6초 이상 지속되면 자동 오류 리포트 제출 (페이지 로드당 1회)
-  const slowLoadReportedRef = useRef(false);
+  // 로딩이 5초 이상 지속되면 자동 오류 리포트 제출 및 1초 단위 업데이트
+  const slowLoadReportIdRef = useRef<number | null>(null);
   const loadingStartRef = useRef<number | null>(null);
+  const isReportingRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (isLoading) {
@@ -937,28 +1199,48 @@ export default function Dashboard() {
         loadingStartRef.current = Date.now();
       }
 
-      const interval = setInterval(() => {
-        if (!isLoading || slowLoadReportedRef.current || loadingStartRef.current === null) return;
+      const interval = setInterval(async () => {
+        if (!isLoading || loadingStartRef.current === null || isReportingRef.current) return;
 
         const elapsedMs = Date.now() - loadingStartRef.current;
-        if (elapsedMs >= 6000) {
-          slowLoadReportedRef.current = true;
+        // 5초 이상부터 감지 시작
+        if (elapsedMs >= 5000) {
+          isReportingRef.current = true;
           const elapsedSec = Math.round(elapsedMs / 1000);
-          fetch('/api/bug-reports', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              grade, classNum, studentNumber,
-              message: `[자동 리포트] 로딩 지연 감지: ${elapsedSec}초 경과 (시간표: ${timetableLoading ? '로딩중' : '완료'}, 수행평가: ${assessmentLoading ? '로딩중' : '완료'})`
-            })
-          }).catch(() => { /* 리포트 전송 실패는 무시 */ });
-          clearInterval(interval);
+          const message = `[자동 리포트] 로딩 지연 감지: ${elapsedSec}초 경과 (시간표: ${timetableLoading ? '로딩중' : '완료'}, 수행평가: ${assessmentLoading ? '로딩중' : '완료'})`;
+
+          if (slowLoadReportIdRef.current === null) {
+             // 최초 리포트 생성
+             try {
+                const res = await fetch('/api/bug-reports', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ grade, classNum, studentNumber, message })
+                });
+                const data = await res.json();
+                if (data.id) {
+                    slowLoadReportIdRef.current = data.id;
+                }
+             } catch (e) { /* 실패 시 무시 */ }
+          } else {
+             // 이미 등록된 내역이 있다면 업데이트 (PATCH)
+             try {
+                await fetch('/api/bug-reports', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: slowLoadReportIdRef.current, message })
+                });
+             } catch (e) { /* 실패 시 무시 */ }
+          }
+          isReportingRef.current = false;
         }
       }, 1000);
 
       return () => clearInterval(interval);
     } else {
       loadingStartRef.current = null;
+      slowLoadReportIdRef.current = null; // 로딩 끝나면 리포트 ID도 리셋 (다음 로딩을 위해)
+      isReportingRef.current = false;
     }
   }, [isLoading, grade, classNum, studentNumber, timetableLoading, assessmentLoading]);
 
@@ -1451,6 +1733,18 @@ export default function Dashboard() {
                   `}
                 </style>
                 <div ref={timetableRef} id="timetable-container" className="group" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
+                  {/* System Dataset Config UI (Debug) */}
+                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled && (
+                    <div className="print:hidden capturing:hidden text-[10px] md:text-xs text-gray-400 text-right mb-1 tracking-tight flex flex-wrap items-center justify-end gap-1 md:gap-2 pr-1">
+                      <span className="text-blue-500 font-semibold text-xs border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">현재 데이터셋: {(rawTimetableData as any)?.datasetId}{((rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.originalDatasetId !== (rawTimetableData as any)?.datasetId) ? ` (원본: ${(rawTimetableData as any)?.originalDatasetId})` : ''}</span>
+                      <span className="hidden md:inline">|</span>
+                      <span>1학년: {(rawTimetableData as any).debugTokens.override1 && (rawTimetableData as any).debugTokens.override1 !== '_auto_' ? '단독선택(O)' : '단독선택(X)'} / 기본FB{(rawTimetableData as any).debugTokens.fallback1 && (rawTimetableData as any).debugTokens.fallback1 !== '_auto_' ? '(O)' : '(X)'}</span>
+                      <span className="hidden md:inline">|</span>
+                      <span>2,3학년: {(rawTimetableData as any).debugTokens.override23 && (rawTimetableData as any).debugTokens.override23 !== '_auto_' ? '단독선택(O)' : '단독선택(X)'} / 기본FB{(rawTimetableData as any).debugTokens.fallback23 && (rawTimetableData as any).debugTokens.fallback23 !== '_auto_' ? '(O)' : '(X)'}</span>
+                      {(rawTimetableData as any).debugTokens.isFallbackApplied && <span className="text-red-400 font-bold ml-1">(! Fallback 가동중)</span>}
+                    </div>
+                  )}
+
                   {/* Print Capture Header */}
                   <div className="capture-only mb-1.5 p-1.5 border rounded-md text-black flex flex-col gap-0.5">
                     <div className="flex justify-between items-end border-b pb-0.5 mb-0.5">
@@ -1491,8 +1785,8 @@ export default function Dashboard() {
                         </div>
                       </div>
                     )}
-
-                    <table className={`w-full min-h-full h-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
+                    <div className="relative w-full h-full">
+                      <table className={`w-full min-h-full h-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
                       <thead>
                         <tr>
                           <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
@@ -1519,9 +1813,10 @@ export default function Dashboard() {
                               {classTime}
                             </td>
                             {Array.from({ length: 5 }, (_, weekdayIdx) => {
+                              const currentDate = toDateString(weekDates[weekdayIdx]);
+
                               const dayItems = timetableByDay[weekdayIdx] || [];
                               const item = dayItems.find((t) => t.classTime === classTime);
-                              const currentDate = toDateString(weekDates[weekdayIdx]);
 
                               // 오늘 날짜인지 확인
                               const today = new Date();
@@ -1538,11 +1833,23 @@ export default function Dashboard() {
                                 const electiveSelection = currentProfile?.electives?.[group];
                                 const matchSubject = group && electiveSelection ? (electiveSelection.fullSubjectName || electiveSelection.subject) : (item ? item.subject : null);
 
-                                return matchSubject &&
-                                  a.subject.trim() === matchSubject.trim() &&
-                                  a.dueDate === currentDate &&
-                                  a.classTime === classTime &&
-                                  !a.isDone;
+                                if (!matchSubject) return false;
+                                if (a.subject.trim() !== matchSubject.trim()) return false;
+                                if (a.dueDate !== currentDate) return false;
+                                if (a.classTime !== classTime) return false;
+                                if (a.isDone) return false;
+
+                                // classCode 검증: 수행평가에 classCode(그룹)가 지정된 경우,
+                                // 이 학생의 group이 해당 그룹 목록에 포함될 때만 표시한다.
+                                // classCode가 없으면 전체 공통 수행평가이므로 그룹 무관하게 표시.
+                                if (a.classCode && a.classCode.trim()) {
+                                  const allowedGroups = a.classCode.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                  if (group && allowedGroups.length > 0 && !allowedGroups.includes(group)) {
+                                    return false; // 이 학생의 그룹이 대상 그룹에 없음
+                                  }
+                                }
+
+                                return true;
                               }) : [];
 
                               // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
@@ -1579,8 +1886,26 @@ export default function Dashboard() {
                                 } else {
                                   bgColor = "bg-blue-100 border-blue-300";
                                 }
+
+                                if (cellAssessments.some(a => a.isPostponed)) {
+                                  bgColor = "bg-white border-red-300";
+                                  cellInlineStyle = { 
+                                    ...cellInlineStyle, 
+                                    backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.1) 10px, rgba(239, 68, 68, 0.1) 20px)' 
+                                  };
+                                }
                               } else if (isToday) {
                                 bgColor = "bg-red-50 hover:bg-red-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50";
+                              }
+
+                              if (item && item.isChanged && !cellInlineStyle && !isPast && cellAssessments.length === 0) {
+                                const tColor = settings?.changed_class_tint_color || '#fef08a';
+                                const tOpacity = settings?.changed_class_tint_opacity !== undefined ? parseFloat(settings.changed_class_tint_opacity) : 1.0;
+                                const h = tColor.replace('#', '');
+                                const r = parseInt(h.length === 3 ? h.slice(0, 1).repeat(2) : h.slice(0, 2), 16);
+                                const g = parseInt(h.length === 3 ? h.slice(1, 2).repeat(2) : h.slice(2, 4), 16);
+                                const b = parseInt(h.length === 3 ? h.slice(2, 3).repeat(2) : h.slice(4, 6), 16);
+                                cellInlineStyle = { backgroundColor: `rgba(${r}, ${g}, ${b}, ${tOpacity})` };
                               }
 
                               // 과거 날짜 스타일
@@ -1590,8 +1915,9 @@ export default function Dashboard() {
                               const isSelected = selectedCell?.weekday === weekdayIdx && selectedCell?.classTime === classTime;
                               const selectionStyle = isSelected ? "ring-2 ring-blue-500 ring-inset z-10" : "";
 
+
                               // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
-                              const isSubjectDisabled = item && ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex));
+                              const isSubjectDisabled = item && (!item.subject.trim() || ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex)));
 
                               const group = computedGroups[`${weekdayIdx}-${classTime}`];
                               const electiveSelection = currentProfile?.electives?.[group];
@@ -1664,23 +1990,45 @@ export default function Dashboard() {
                                 }
                               }
 
+                              let relocationStyle = "";
+                              if (relocatingAssessment) {
+                                if (displaySubject.trim() === relocatingAssessment.subject.trim()) {
+                                  if (pendingRelocation?.date === toDateString(weekDates[weekdayIdx]) && pendingRelocation?.classTime === classTime) {
+                                     relocationStyle = "ring-4 ring-red-500 ring-inset z-20 shadow-lg scale-[1.02] transform !bg-red-50";
+                                  } else {
+                                     relocationStyle = "ring-2 ring-red-300 ring-inset cursor-pointer z-10 hover:bg-red-50 animate-pulse";
+                                  }
+                                } else {
+                                  relocationStyle = "opacity-30 blur-[2px] pointer-events-none transition-all duration-300";
+                                }
+                              }
+
                               return (
                                 <td
                                   key={weekdayIdx}
                                   id={`cell-${weekdayIdx}-${classTime}`}
                                   onClick={() => {
+                                    if (relocatingAssessment) {
+                                      if (displaySubject.trim() === relocatingAssessment.subject.trim()) {
+                                        setPendingRelocation({ date: toDateString(weekDates[weekdayIdx]), classTime });
+                                      }
+                                      return; // 릴로케이션 모드에서는 일반 클릭 무시
+                                    }
                                     if (item || isElectiveActive) {
                                       if (isSubjectDisabled && !isElectiveActive) {
                                         toast.error(`${item.subject}은(는) 선택할 수 없습니다.`);
                                         return;
                                       }
                                       if (!isPast || cellAssessments.length > 0) {
-                                        handleCellClick(weekdayIdx, classTime, displaySubject, weekDates[weekdayIdx], cellAssessments);
+                                        const subjectToSave = displaySubject;
+                                        const tToSave = displayTeacher || "";
+                                        const cToSave = (isElectiveActive && group) ? group : "";
+                                        handleCellClick(weekdayIdx, classTime, subjectToSave, weekDates[weekdayIdx], cellAssessments, tToSave, cToSave);
                                       }
                                     }
                                   }}
-                                  className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-colors overflow-hidden
-                                ${bgColor} ${pastStyle} ${selectionStyle}
+                                  className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-all overflow-hidden
+                                ${bgColor} ${pastStyle} ${selectionStyle} ${relocationStyle}
                                 ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
                                   style={cellInlineStyle}
@@ -1728,7 +2076,7 @@ export default function Dashboard() {
                                           <div className="mt-0.5 flex-shrink-0">
                                             <div className="flex flex-wrap gap-0.5 justify-center">
                                               {cellAssessments.map(a => (
-                                                <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
+                                                <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : a.isPostponed ? "bg-white text-red-500 border border-red-500" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
                                                   {a.description && a.description.includes("차") ? a.description : '평가'}
                                                 </span>
                                               ))}
@@ -1746,7 +2094,55 @@ export default function Dashboard() {
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                      </table>
+
+                      {/* 특수일정 오버레이 (Absolute Table) */}
+                      {settings?.special_schedules_enabled && (
+                        <table aria-hidden="true" className={`absolute top-0 left-0 w-full min-h-full h-full border-collapse table-fixed pointer-events-none z-10 transition-all duration-300 ${isElectiveMissingImmediate ? "hidden" : ""}`}>
+                          <thead>
+                            <tr>
+                              <th className="border-transparent p-1 md:p-2 bg-transparent w-8 md:w-10 text-sm font-medium"></th>
+                              {weekdayNames.map((day, idx) => (
+                                <th key={day} className="border-transparent bg-transparent p-1 md:p-2">
+                                  <div className="text-sm opacity-0">{day}</div>
+                                  <div className="text-[10px] md:text-xs opacity-0">...</div>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Array.from({ length: 7 }, (_, i) => i + 1).map((classTime) => (
+                              <tr key={classTime}>
+                                <td className="border-transparent bg-transparent p-1 md:p-2 text-center text-sm w-8 md:w-10 opacity-0">{classTime}</td>
+                                {Array.from({ length: 5 }, (_, weekdayIdx) => {
+                                  const currentDate = toDateString(weekDates[weekdayIdx]);
+                                  const specialSchedule = settings?.special_schedules?.find((s: any) => 
+                                    s.date === currentDate && (s.grade === 0 || s.grade.toString() === grade.toString())
+                                  );
+
+                                  if (specialSchedule) {
+                                    if (classTime === 1) {
+                                      const opacityRatio = (specialSchedule.opacity ?? 100) / 100;
+                                      return (
+                                        <td key={weekdayIdx} rowSpan={7} className="border-transparent p-2 md:p-4 align-middle text-center relative overflow-hidden pointer-events-auto" style={{ backgroundColor: `rgba(253, 232, 232, ${opacityRatio})` }}>
+                                          <div className={`whitespace-pre-wrap font-black text-pink-700 leading-tight tracking-widest ${specialSchedule.fontSize}`}>
+                                            {specialSchedule.text}
+                                          </div>
+                                        </td>
+                                      );
+                                    } else {
+                                      return null;
+                                    }
+                                  }
+                                  
+                                  return <td key={weekdayIdx} className="border-transparent bg-transparent"></td>;
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2075,6 +2471,21 @@ export default function Dashboard() {
                     <span className="font-semibold text-lg text-gray-900">
                       {assessment.subject}
                     </span>
+                    {assessment.classCode && (
+                      <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full font-medium">
+                        {assessment.classCode}그룹
+                      </span>
+                    )}
+                    {assessment.teacher && (
+                      <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full font-medium">
+                        {assessment.teacher}
+                      </span>
+                    )}
+                    {!assessment.classCode && typeof assessment.subject === 'string' && assessment.subject.match(/\((.*?그룹.*?)\)$/) && (
+                      <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full font-medium">
+                        {assessment.subject.match(/\((.*?그룹.*?)\)$/)?.[1]}
+                      </span>
+                    )}
                     {assessment.description && (
                       <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">
                         {assessment.description}
@@ -2114,8 +2525,24 @@ export default function Dashboard() {
                   }
                 </div>
                 <p className="text-gray-700 mb-2">{assessment.title}</p>
-                <div className="text-xs text-gray-500">
-                  {assessment.dueDate}
+                <div className="flex justify-between items-end mt-2">
+                  <div className="text-xs text-gray-500">
+                    {assessment.dueDate}
+                  </div>
+                  {assessment.dueDate >= toDateString(new Date()) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-7 px-3 border-orange-200 text-orange-600 hover:bg-orange-50 hover:text-orange-700 transition-colors font-semibold"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRelocatingAssessment(assessment);
+                        setShowViewDialog(false);
+                      }}
+                    >
+                      날짜 바꾸기
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -2191,16 +2618,19 @@ export default function Dashboard() {
             {assessments && assessments.filter(assessment => {
               const today = new Date();
               today.setHours(0, 0, 0, 0);
-              return new Date(assessment.dueDate) >= today;
+              const effDate = assessment.tempDueDate || assessment.dueDate;
+              return new Date(effDate) >= today;
             }).length > 0 ? (
               assessments
                 .filter(assessment => {
                   const today = new Date();
                   today.setHours(0, 0, 0, 0);
-                  return new Date(assessment.dueDate) >= today;
+                  const effDate = assessment.tempDueDate || assessment.dueDate;
+                  return new Date(effDate) >= today;
                 })
                 .map((assessment) => {
-                  const diffDate = Math.ceil((new Date(assessment.dueDate).getTime() - new Date(toDateString(new Date())).getTime()) / (1000 * 60 * 60 * 24));
+                  const effDate = assessment.tempDueDate || assessment.dueDate;
+                  const diffDate = Math.ceil((new Date(effDate).getTime() - new Date(toDateString(new Date())).getTime()) / (1000 * 60 * 60 * 24));
                   const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
                   const isToday = diffDate === 0;
 
@@ -2231,11 +2661,14 @@ export default function Dashboard() {
                   return (
                     <div
                       key={assessment.id}
-                      className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'border-red-200' : ''}`}
-                      style={{ backgroundColor: cardBg }}
+                      className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col h-full ${isToday ? 'border-red-200' : ''}`}
+                      style={{ 
+                        backgroundColor: cardBg,
+                        backgroundImage: assessment.isPostponed ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.05) 10px, rgba(239, 68, 68, 0.05) 20px)' : 'none'
+                      }}
                       onClick={() => {
                         // Find the cell logic
-                        const targetDate = new Date(assessment.dueDate); // This might be string 'YYYY-MM-DD'
+                        const targetDate = new Date(assessment.tempDueDate || assessment.dueDate); // This might be string 'YYYY-MM-DD'
                         // We need to find which column (weekday) and row (classTime) this corresponds to.
                         // However, viewingAssessments are "this week's" assessments, so they should be on the screen.
                         // But wait, the assessments list is "This Week's".
@@ -2261,17 +2694,26 @@ export default function Dashboard() {
                         }
                       }}
                     >
-                      <div className="flex justify-between items-center mb-2">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <span className="font-bold text-lg text-blue-600">
-                            {assessment.subject}
-                          </span>
-                          <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-                            {assessment.description}
-                          </span>
-                          <span className={`text-base font-bold ${isToday ? 'text-red-600' : 'text-gray-500'}`}>
-                            {dDay}
-                          </span>
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-1 flex-wrap mb-1">
+                            <span className="font-bold text-lg text-blue-600">
+                              {assessment.subject}
+                            </span>
+                            <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                              {assessment.description}
+                            </span>
+                            {!assessment.isPostponed && (
+                              <span className={`text-base font-bold ${isToday ? 'text-red-600' : 'text-gray-500'} ml-1`}>
+                                {dDay}
+                              </span>
+                            )}
+                          </div>
+                          {assessment.isPostponed && Boolean(assessment.isAutoPredicted) && (
+                            <div className="text-red-500 text-sm font-bold mt-0.5">
+                              시간표 변경
+                            </div>
+                          )}
                         </div>
                         {grade && classNum && studentNumber && (
                           <div className="flex items-center gap-2 flex-shrink-0 ml-2" onClick={e => e.stopPropagation()}>
@@ -2305,12 +2747,44 @@ export default function Dashboard() {
                         )}
                       </div>
                       <p className="text-gray-700 mb-2">{assessment.title}</p>
-                      <div className="flex items-center mt-auto">
-                        <div className="flex items-center text-sm text-gray-500">
-                          <span>{assessment.dueDate}</span>
-                          <span className="mx-2">|</span>
-                          <span>{assessment.classTime}교시</span>
+                      <div className="flex items-end justify-between mt-auto">
+                        <div className={`flex text-sm text-gray-500 ${assessment.isPostponed ? 'flex-col items-start gap-1' : 'items-center'}`}>
+                          {assessment.isPostponed ? (
+                            <>
+                              <div className="flex items-center">
+                                <span className="line-through text-gray-400">{formatShortDateText(assessment.originalDueDate || assessment.dueDate)} {(assessment.originalClassTime || assessment.classTime)}교시</span>
+                                <span className="mx-1 font-bold text-red-500">➔</span>
+                              </div>
+                              <div className="flex items-center">
+                                <span className="font-bold text-red-600">{formatShortDateText(assessment.tempDueDate || assessment.dueDate)} {assessment.tempClassTime || assessment.classTime}교시</span>
+                                {Boolean(assessment.isAutoPredicted) && (
+                                  <span className="ml-1 text-xs text-orange-500 font-bold whitespace-nowrap">(자동예측)</span>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <span>{assessment.dueDate}</span>
+                              <span className="mx-2">|</span>
+                              <span>{assessment.classTime}교시</span>
+                            </>
+                          )}
                         </div>
+                        {assessment.isPostponed && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-red-600 border-red-200 hover:bg-red-50 h-7 text-xs px-2 shadow-sm ml-2 shrink-0 pointer-events-auto"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRelocatingAssessment(assessment);
+                              setPendingRelocation(null);
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                          >
+                            날짜 바꾸기
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
@@ -2360,6 +2834,49 @@ export default function Dashboard() {
           </div>
         )
       }
+      {/* Custom Relocation Action Bar */}
+      {relocatingAssessment && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-red-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] p-4 z-[9999] animate-in slide-in-from-bottom-2 duration-300">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900 leading-tight">
+                  <span className="text-red-600">{relocatingAssessment.subject}</span> 임시 이동 날짜 선택
+                </p>
+                <p className="text-sm text-gray-500">
+                  {pendingRelocation 
+                    ? `선택됨: ${pendingRelocation.date} (${pendingRelocation.classTime}교시)` 
+                    : "위 시간표에서 붉은 점선 칸 중 하나를 클릭해 임시 이동할 날짜를 직접 선택하세요."}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <Button 
+                variant="outline" 
+                className="flex-1 md:flex-none hover:bg-gray-50"
+                onClick={() => {
+                  setRelocatingAssessment(null);
+                  setPendingRelocation(null);
+                }}
+                disabled={isRelocatingUpdating}
+              >
+                취소
+              </Button>
+              <Button 
+                className="flex-1 md:flex-none bg-red-600 hover:bg-red-700 text-white transition-colors"
+                disabled={!pendingRelocation || isRelocatingUpdating || updateMutation.isPending}
+                onClick={handleRelocationSubmit}
+              >
+                {(isRelocatingUpdating || updateMutation.isPending) && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                적용
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 선택과목 선택 다이얼로그 */}
       <ElectiveSelectionDialog
         isOpen={showElectiveDialog}

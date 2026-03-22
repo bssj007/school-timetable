@@ -30,7 +30,13 @@ export const onRequest = async (context: any) => {
                 
                 const { results } = await env.DB.prepare(query).all();
 
-                return new Response(JSON.stringify(results), {
+                let predictedResults = results;
+                if (!isTrash) {
+                    const { applyAutoPredictions } = await import('../../server/autoPredict');
+                    predictedResults = await applyAutoPredictions(results, env.DB);
+                }
+
+                return new Response(JSON.stringify(predictedResults), {
                     headers: { 'Content-Type': 'application/json' }
                 });
             } catch (err: any) {
@@ -52,7 +58,12 @@ export const onRequest = async (context: any) => {
                         const { results } = await env.DB.prepare(
                             "SELECT * FROM performance_assessments ORDER BY grade ASC, classNum ASC, dueDate ASC"
                         ).all();
-                        return new Response(JSON.stringify(results), {
+                        let predictedResults = results;
+                        if (!isTrash) {
+                            const { applyAutoPredictions } = await import('../../server/autoPredict');
+                            predictedResults = await applyAutoPredictions(results, env.DB);
+                        }
+                        return new Response(JSON.stringify(predictedResults), {
                             headers: { 'Content-Type': 'application/json' }
                         });
                     }

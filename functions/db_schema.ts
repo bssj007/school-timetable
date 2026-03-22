@@ -110,7 +110,8 @@ CREATE TABLE IF NOT EXISTS timetable_cache (
     cache_key TEXT PRIMARY KEY,
     response_json TEXT NOT NULL,
     dataset_id TEXT,
-    updated_at TEXT DEFAULT (datetime('now'))
+    updated_at TEXT DEFAULT (datetime('now')),
+    is_frozen INTEGER DEFAULT 0
 );
 `;
 
