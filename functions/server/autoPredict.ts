@@ -103,11 +103,22 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
         // 역추적: 원본 요일/교시에서 이 과목을 듣던 반(Class) 목록 (이동수업 그룹 매칭용)
         const originalClassesWithSubject = new Set<number>();
         if (assessment.classNum === 0 && originalW >= 0 && originalW <= 4 && originalTime) {
-            const origSlots = ctx.timetable.filter((t: any) => t.weekday === originalW && t.classTime === originalTime);
-            for (const t of origSlots) {
-                if ((t.subject || '').replace(/\s*\(.*$/, '').trim() === baseAssSubject) {
-                    originalClassesWithSubject.add(t.class);
+            const extractClasses = (timetable: any[]) => {
+                const slots = timetable.filter((t: any) => t.weekday === originalW && t.classTime === originalTime);
+                let found = false;
+                for (const t of slots) {
+                    if ((t.subject || '').replace(/\s*\(.*$/, '').trim() === baseAssSubject) {
+                        originalClassesWithSubject.add(t.class);
+                        found = true;
+                    }
                 }
+                return found;
+            };
+
+            const foundInCtx = extractClasses(ctx.timetable);
+            // 만약 이번 주(원본) 시간표가 고아/행사 등으로 덮어씌워져 해당 과목을 찾지 못했다면 다음 주 시간표를 참조
+            if (!foundInCtx && nextCtx && nextCtx.timetable) {
+                extractClasses(nextCtx.timetable);
             }
         }
 

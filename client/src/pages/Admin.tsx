@@ -4680,6 +4680,8 @@ function RawTimetableViewer({ rawData }: { rawData: any }) {
 function SpecialScheduleManager({ adminPassword }: { adminPassword: string }) {
     const [schedules, setSchedules] = useState<any[]>([]);
     const [originalSchedules, setOriginalSchedules] = useState<any[]>([]);
+    const [globalEnabled, setGlobalEnabled] = useState(true);
+    const [originalGlobalEnabled, setOriginalGlobalEnabled] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
 
     const { isLoading, data, refetch } = useQuery({
@@ -4708,9 +4710,15 @@ function SpecialScheduleManager({ adminPassword }: { adminPassword: string }) {
             setSchedules([]);
             setOriginalSchedules([]);
         }
+
+        if (data?.special_schedules_enabled !== undefined) {
+            const isEnabled = data.special_schedules_enabled !== 'false';
+            setGlobalEnabled(isEnabled);
+            setOriginalGlobalEnabled(isEnabled);
+        }
     }, [data]);
 
-    const hasChanges = JSON.stringify(schedules) !== JSON.stringify(originalSchedules);
+    const hasChanges = JSON.stringify(schedules) !== JSON.stringify(originalSchedules) || globalEnabled !== originalGlobalEnabled;
 
     const handleAdd = () => {
         const newSchedule = {
@@ -4718,7 +4726,8 @@ function SpecialScheduleManager({ adminPassword }: { adminPassword: string }) {
             date: new Date().toISOString().split('T')[0],
             grade: 0,
             text: "학\n력\n평\n가",
-            fontSize: "text-4xl"
+            fontSize: "text-4xl",
+            opacity: 100
         };
         setSchedules([...schedules, newSchedule]);
     };
@@ -4741,7 +4750,8 @@ function SpecialScheduleManager({ adminPassword }: { adminPassword: string }) {
                     "X-Admin-Password": adminPassword
                 },
                 body: JSON.stringify({
-                    special_schedules: JSON.stringify(schedules)
+                    special_schedules: JSON.stringify(schedules),
+                    special_schedules_enabled: globalEnabled.toString()
                 })
             });
             if (!res.ok) throw new Error("저장 실패");
@@ -4756,15 +4766,24 @@ function SpecialScheduleManager({ adminPassword }: { adminPassword: string }) {
 
     const handleCancel = () => {
         setSchedules(JSON.parse(JSON.stringify(originalSchedules)));
+        setGlobalEnabled(originalGlobalEnabled);
     };
 
     return (
         <div className="flex flex-col gap-4">
-            <div className="flex justify-between items-center mb-2">
-                <p className="text-sm text-gray-500">
-                    지정한 날짜의 1~7교시 정규 시간표를 완전히 무시하고, 여기서 입력한 "특수일정 텍스트"를 세로로 가득 채워 표시합니다.<br/>
-                    (단일 학년 또는 전학년 대상 지정 가능)
-                </p>
+            <div className="flex justify-between items-center bg-gray-50 p-4 border rounded-md">
+                <div className="flex flex-col">
+                    <div className="flex items-center gap-3">
+                        <h4 className="font-bold text-gray-800">특수일정 기능 전체 켜기/끄기</h4>
+                        <Switch 
+                            checked={globalEnabled} 
+                            onCheckedChange={setGlobalEnabled} 
+                        />
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1">
+                        이 스위치를 끄면 아래에 등록된 일정 정보가 남아있어도 사용자 대시보드에서 특수일정이 나타나지 않습니다.
+                    </p>
+                </div>
                 <div className="flex gap-2">
                     <Button variant="outline" onClick={handleCancel} disabled={!hasChanges || isSaving}>
                         취소
@@ -4773,6 +4792,13 @@ function SpecialScheduleManager({ adminPassword }: { adminPassword: string }) {
                         {isSaving ? "저장 중..." : "변경사항 저장"}
                     </Button>
                 </div>
+            </div>
+
+            <div className="flex justify-between items-center mb-2">
+                <p className="text-sm text-gray-500">
+                    지정한 날짜의 정규 시간표 영역에 "특수일정 텍스트"를 세로로 가득 채워 표시합니다.<br/>
+                    불투명도를 낮추면 뒤에 있는 원래 시간표가 반투명하게 비쳐 보입니다.
+                </p>
             </div>
 
             <div className="space-y-4">
@@ -4829,7 +4855,18 @@ function SpecialScheduleManager({ adminPassword }: { adminPassword: string }) {
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="space-y-1 md:col-span-2 lg:col-span-1">
+                                <div className="space-y-1">
+                                    <label className="text-sm font-semibold text-gray-700">배경 불투명도 ({schedule.opacity ?? 100}%)</label>
+                                    <input 
+                                        type="range" 
+                                        min="0" max="100" 
+                                        className="w-full accent-pink-600 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2" 
+                                        value={schedule.opacity ?? 100} 
+                                        onChange={(e) => handleChange(schedule.id, "opacity", parseInt(e.target.value))}
+                                    />
+                                    <div className="text-xs text-gray-500 mt-1">100%면 과목이 아예 안보입니다.</div>
+                                </div>
+                                <div className="space-y-1 md:col-span-2 lg:col-span-2">
                                     <label className="text-sm font-semibold text-gray-700 flex justify-between">
                                         <span>세로 텍스트 문구</span>
                                         <span className="text-xs text-gray-400 font-normal">엔터로 줄바꿈</span>

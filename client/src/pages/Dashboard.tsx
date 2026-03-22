@@ -1785,8 +1785,8 @@ export default function Dashboard() {
                         </div>
                       </div>
                     )}
-
-                    <table className={`w-full min-h-full h-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
+                    <div className="relative w-full h-full">
+                      <table className={`w-full min-h-full h-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
                       <thead>
                         <tr>
                           <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
@@ -1814,25 +1814,6 @@ export default function Dashboard() {
                             </td>
                             {Array.from({ length: 5 }, (_, weekdayIdx) => {
                               const currentDate = toDateString(weekDates[weekdayIdx]);
-
-                              // 특수일정 체크 (해당 일, 전체학년(0) 또는 현재학년 매칭)
-                              const specialSchedule = settings?.special_schedules?.find((s: any) => 
-                                s.date === currentDate && (s.grade === 0 || s.grade.toString() === grade.toString())
-                              );
-
-                              if (specialSchedule) {
-                                if (classTime === 1) {
-                                  return (
-                                    <td key={weekdayIdx} rowSpan={7} className="border p-2 md:p-4 align-middle text-center bg-pink-50/50 relative overflow-hidden print:!bg-white">
-                                      <div className={`whitespace-pre-wrap font-black text-pink-700 leading-tight tracking-widest ${specialSchedule.fontSize} print:!text-black`}>
-                                        {specialSchedule.text}
-                                      </div>
-                                    </td>
-                                  );
-                                } else {
-                                  return null; // 2~7교시는 렌더링 무시
-                                }
-                              }
 
                               const dayItems = timetableByDay[weekdayIdx] || [];
                               const item = dayItems.find((t) => t.classTime === classTime);
@@ -2113,7 +2094,55 @@ export default function Dashboard() {
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                      </table>
+
+                      {/* 특수일정 오버레이 (Absolute Table) */}
+                      {settings?.special_schedules_enabled && (
+                        <table aria-hidden="true" className={`absolute top-0 left-0 w-full min-h-full h-full border-collapse table-fixed pointer-events-none z-10 transition-all duration-300 ${isElectiveMissingImmediate ? "hidden" : ""}`}>
+                          <thead>
+                            <tr>
+                              <th className="border-transparent p-1 md:p-2 bg-transparent w-8 md:w-10 text-sm font-medium"></th>
+                              {weekdayNames.map((day, idx) => (
+                                <th key={day} className="border-transparent bg-transparent p-1 md:p-2">
+                                  <div className="text-sm opacity-0">{day}</div>
+                                  <div className="text-[10px] md:text-xs opacity-0">...</div>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Array.from({ length: 7 }, (_, i) => i + 1).map((classTime) => (
+                              <tr key={classTime}>
+                                <td className="border-transparent bg-transparent p-1 md:p-2 text-center text-sm w-8 md:w-10 opacity-0">{classTime}</td>
+                                {Array.from({ length: 5 }, (_, weekdayIdx) => {
+                                  const currentDate = toDateString(weekDates[weekdayIdx]);
+                                  const specialSchedule = settings?.special_schedules?.find((s: any) => 
+                                    s.date === currentDate && (s.grade === 0 || s.grade.toString() === grade.toString())
+                                  );
+
+                                  if (specialSchedule) {
+                                    if (classTime === 1) {
+                                      const opacityRatio = (specialSchedule.opacity ?? 100) / 100;
+                                      return (
+                                        <td key={weekdayIdx} rowSpan={7} className="border-transparent p-2 md:p-4 align-middle text-center relative overflow-hidden pointer-events-auto" style={{ backgroundColor: `rgba(253, 232, 232, ${opacityRatio})` }}>
+                                          <div className={`whitespace-pre-wrap font-black text-pink-700 leading-tight tracking-widest ${specialSchedule.fontSize}`}>
+                                            {specialSchedule.text}
+                                          </div>
+                                        </td>
+                                      );
+                                    } else {
+                                      return null;
+                                    }
+                                  }
+                                  
+                                  return <td key={weekdayIdx} className="border-transparent bg-transparent"></td>;
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
