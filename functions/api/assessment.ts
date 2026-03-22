@@ -254,11 +254,11 @@ export const onRequest = async (context: any) => {
             // 중복 체크
             if (classTime) {
                 const existing = await env.DB.prepare(
-                    "SELECT id FROM performance_assessments WHERE grade = ? AND classNum = ? AND dueDate = ? AND classTime = ? AND dataset = ? AND isDeleted = 0"
+                    "SELECT id FROM performance_assessments WHERE grade = ? AND classNum = ? AND COALESCE(tempDueDate, dueDate) = ? AND COALESCE(tempClassTime, classTime) = ? AND dataset = ? AND isDeleted = 0"
                 ).bind(grade, actualClassNum, dueDate, classTime, dataset).first();
 
                 if (existing) {
-                    return new Response(JSON.stringify({ error: "이미 해당 교시에 수행평가가 등록되어 있습니다." }), {
+                    return new Response(JSON.stringify({ error: "해당 교시에 이미 수행평가가 등록되어 있습니다." }), {
                         status: 409, // Conflict
                         headers: { 'Content-Type': 'application/json' }
                     });
@@ -428,17 +428,39 @@ export const onRequest = async (context: any) => {
             if (classTime !== undefined) { updates.push("classTime = ?"); values.push(classTime); }
             if (teacher !== undefined) { updates.push("teacher = ?"); values.push(teacher); }
             if (classCode !== undefined) { updates.push("classCode = ?"); values.push(classCode); }
+            // tempDueDate 비교를 위해 현재 DB의 원본 dueDate를 조회
+            let originalDueDate = dueDate;
+            let originalClassTime = classTime;
             
+            if (originalDueDate === undefined || originalClassTime === undefined) {
+                try {
+                    const row = await env.DB.prepare("SELECT dueDate, classTime FROM performance_assessments WHERE id = ?").bind(id).first();
+                    if (row) {
+                        if (originalDueDate === undefined) originalDueDate = row.dueDate;
+                        if (originalClassTime === undefined) originalClassTime = row.classTime;
+                    }
+                } catch (e) { console.error("Failed to fetch original dates:", e); }
+            }
+
+            // 사용자 연기 요청
             if (tempDueDate !== undefined) { 
-                updates.push("tempDueDate = ?"); 
-                values.push(tempDueDate); 
+                // 연기 목표가 원본 날짜와 같으면 연기 상태 해제
+                if (tempDueDate === originalDueDate && tempClassTime === originalClassTime) {
+                    updates.push("tempDueDate = NULL");
+                    updates.push("tempClassTime = NULL");
+                    updates.push("isAutoPredicted = 0"); // 수동/자동 상태 해제
+                } else {
+                    updates.push("tempDueDate = ?"); 
+                    values.push(tempDueDate); 
+                }
             } else if (dueDate !== undefined) {
                 // 원본 날짜가 수정될 때는 기존의 임시 연기 날짜를 삭제함 (수동으로 제공되지 않은 경우)
                 updates.push("tempDueDate = NULL");
                 updates.push("tempClassTime = NULL");
+                updates.push("isAutoPredicted = 0");
             }
             
-            if (tempClassTime !== undefined) { 
+            if (tempClassTime !== undefined && (tempDueDate !== originalDueDate || tempClassTime !== originalClassTime)) { 
                 updates.push("tempClassTime = ?"); 
                 values.push(tempClassTime); 
             }

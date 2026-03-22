@@ -1048,8 +1048,11 @@ export default function Dashboard() {
       await updateMutation.mutateAsync({
         ...editingAssessment,
         title: formData.content,
-        dueDate: formData.assessmentDate,
-        classTime: formData.classTime ? parseInt(formData.classTime) : undefined,
+        // 만약 이미 연기된 수행평가라면, dueDate로는 원본 날짜를 보존하고 tempDueDate를 수정합니다.
+        dueDate: editingAssessment.originalDueDate || formData.assessmentDate,
+        classTime: editingAssessment.originalClassTime || (formData.classTime ? parseInt(formData.classTime) : undefined),
+        tempDueDate: editingAssessment.originalDueDate ? formData.assessmentDate : undefined,
+        tempClassTime: editingAssessment.originalDueDate ? (formData.classTime ? parseInt(formData.classTime) : undefined) : undefined,
         description: formData.round ? `${formData.round}차` : "",
         teacher: formData.teacher,
         classCode: formData.classCode,
@@ -1108,6 +1111,8 @@ export default function Dashboard() {
            
            updatesToMake.push({
                ...assessment,
+               dueDate: assessment.originalDueDate || assessment.dueDate,
+               classTime: assessment.originalClassTime || assessment.classTime,
                tempDueDate: targetDate,
                tempClassTime: targetTime
            });
@@ -2653,7 +2658,7 @@ export default function Dashboard() {
                               </span>
                             )}
                           </div>
-                          {assessment.isPostponed && (
+                          {assessment.isPostponed && Boolean(assessment.isAutoPredicted) && (
                             <div className="text-red-500 text-sm font-bold mt-0.5">
                               시간표 변경
                             </div>
