@@ -125,7 +125,7 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
         // tbl 파라미터로 현재 주 또는 다음 주 시간표를 선택할 수 있음
         const buildGetSlots = (tbl: any[]) => (w: number) => {
             if (assessment.classNum !== 0) {
-                return tbl.filter((t: any) => t.class === assessment.classNum && t.weekday === w);
+                return tbl.filter((t: any) => (!t.class || t.class.toString() === assessment.classNum.toString()) && t.weekday === w);
             }
             // 이동수업: teacher로 엄격 필터
             // assessment.teacher + elective_config fullTeacherName/originalTeacher 모두 비교
