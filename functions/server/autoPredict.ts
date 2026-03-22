@@ -109,22 +109,24 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             if (isFreePeriod(slot.subject || '')) return false;
 
             if (assessment.teacher && assessment.classCode) {
-                // 이동수업: teacher + classCode 일치확인 엄격 모드
+                // teacher + classCode 둘 다 있으면 elective_config로 정밀 검증 시도
                 const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
                 if (specificConfig && specificConfig.classCode) {
-                    const codes = specificConfig.classCode.split(',').map((s: string) => s.trim());
-                    if (codes.includes(assessment.classCode) && (assessment.teacher === slot.teacher || specificConfig.fullTeacherName?.includes(assessment.teacher))) {
+                    // assessment.classCode가 단일그룹("D")이든 다중그룹("A,B,C,D")이든 교차 비교
+                    const assessCodes = assessment.classCode.split(',').map((s: string) => s.trim());
+                    const slotCodes = specificConfig.classCode.split(',').map((s: string) => s.trim());
+                    if (assessCodes.some((c: string) => slotCodes.includes(c)) &&
+                        (assessment.teacher === slot.teacher || specificConfig.fullTeacherName?.includes(assessment.teacher))) {
                         return true;
                     }
                 }
-                // classCode가 있는 수행평가는 폴백 없이 false
-                return false;
+                // 정밀 매칭 실패 시 폴백(과목명 비교)으로 계속 진행
             } else if (assessment.teacher && !assessment.classCode) {
                 // 일반 수업: 선생님 + 과목명 같아야 함
                 if (slot.subject === baseAssSubject && slot.teacher === assessment.teacher) return true;
             }
 
-            // 공통 과목명 매칭 (고가 일반 과목)
+            // 과목명 매칭 (일반 과목 공통 폴백)
             if (slot.subject === baseAssSubject) return true;
             
             // Elective alias fallback
