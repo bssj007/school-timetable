@@ -43,6 +43,12 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
+// Helper to resolve the semantic dataset mode globally
+export const getDatasetMode = (overrideVal?: string) => {
+    if (!overrideVal) return 'COMCIGAN';
+    if (overrideVal === 'MANUAL_PLAN' || overrideVal === 'SEMESTER_PLAN') return overrideVal;
+    return 'COMCIGAN'; // treats all legacy "자료xxx" IDs and empty values as COMCIGAN
+};
 
 function ElectiveManager({ password }: { password: string }) {
     const [selectedGrade, setSelectedGrade] = useState<number>(2);
@@ -1261,7 +1267,7 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
                             <SelectValue placeholder="데이터셋" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="_auto_">자동 (현재 설정)</SelectItem>
+                            <SelectItem value="_auto_">자동 ({getDatasetMode(settingsQuery.data?.comcigan_dataset_selected)})</SelectItem>
                             <SelectItem value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</SelectItem>
                             <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
                         </SelectContent>
@@ -1558,7 +1564,7 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                         onChange={e => setSelectedDataset(e.target.value)}
                         className="border rounded px-2 py-1 text-sm"
                     >
-                        <option value="_auto_">자동 (활성 데이터셋)</option>
+                        <option value="_auto_">자동 ({getDatasetMode(settingsQuery.data?.comcigan_dataset_selected)})</option>
                         <option value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</option>
                         <option value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</option>
                     </select>
@@ -2189,7 +2195,7 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                         <SelectValue placeholder="데이터셋" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="_auto_">자동{resolvedDataset && selectedDataset === "_auto_" ? ` (${resolvedDataset})` : ""}</SelectItem>
+                        <SelectItem value="_auto_">자동 ({getDatasetMode(settingsQuery.data?.comcigan_dataset_selected)})</SelectItem>
                         <SelectItem value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</SelectItem>
                         <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
                     </SelectContent>
@@ -3628,7 +3634,7 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
                 <div>
                     <label className="text-xs font-medium text-slate-500 block mb-1">데이터셋</label>
                     <select value={selectedDataset} onChange={e => setSelectedDataset(e.target.value)} className="border rounded px-2 py-1 text-sm">
-                        <option value="_auto_">자동 (활성)</option>
+                        <option value="_auto_">자동 ({selectedGrade === "1" ? getDatasetMode(settingsQuery.data?.comcigan_dataset_selected_grade1) : getDatasetMode(settingsQuery.data?.comcigan_dataset_selected)})</option>
                         <option value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</option>
                         <option value="MANUAL_PLAN">수동 시간표</option>
                     </select>
@@ -4257,11 +4263,11 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
     }, [cacheStatusQuery.data?.settings?.cacheMaxAgeMinutes]);
 
     const refreshMutation = useMutation({
-        mutationFn: async (grades: number[]) => {
+        mutationFn: async () => {
             const res = await fetch("/api/admin/comcigan-cache", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
-                body: JSON.stringify({ grades })
+                body: JSON.stringify({})
             });
             if (!res.ok) throw new Error("Refresh failed");
             return res.json();
@@ -4269,9 +4275,9 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
         onSuccess: (data) => {
             const failed = data.results?.filter((r: any) => !r.success);
             if (failed?.length > 0) {
-                toast.error(`일부 학년 갱신 실패: ${failed.map((r: any) => `${r.grade}학년`).join(', ')}`);
+                toast.error(`전체 캐시 갱신을 일부 실패했습니다.`);
             } else {
-                toast.success("캐시가 갱신되었습니다.");
+                toast.success("통합본 전체 캐시가 성공적으로 갱신되었습니다.");
             }
             queryClient.invalidateQueries({ queryKey: ["admin", "comciganCacheStatus"] });
         },
@@ -4332,7 +4338,7 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                     <Button
                         size="sm"
                         className="h-8 text-xs"
-                        onClick={() => refreshMutation.mutate([1, 2, 3])}
+                        onClick={() => refreshMutation.mutate()}
                         disabled={refreshMutation.isPending}
                     >
                         <RefreshCw className={`w-3 h-3 mr-1 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
@@ -4401,68 +4407,6 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                                 </div>
                             );
                         })()}
-
-                        {[1, 2, 3].map(grade => {
-                            const entry = cacheEntries.find((e: any) => e.cacheKey === `gc_${grade}`);
-                            return (
-                                <div key={grade} className="flex items-center gap-3 bg-white border rounded-md px-4 py-3">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm font-bold text-slate-800">{grade}학년</span>
-                                            {entry ? (
-                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${entry.isFresh
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : 'bg-amber-100 text-amber-700'
-                                                }`}>
-                                                    {entry.isFresh ? '신선' : '만료'}
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">미생성</span>
-                                            )}
-                                            {entry?.isFrozen && (
-                                                <Badge variant="outline" className="border-blue-300 text-blue-700 bg-blue-50 h-5 px-1.5 ml-1">
-                                                    <Lock className="w-3 h-3 mr-1" />
-                                                    동결됨
-                                                </Badge>
-                                            )}
-                                        </div>
-                                        {entry && (
-                                            <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                                                <span className="flex items-center gap-1">
-                                                    <Clock className="w-3 h-3" />
-                                                    {entry.isFrozen ? "무기한 (동결)" : formatAge(entry.ageSec)}
-                                                </span>
-                                                <span>데이터셋: {entry.datasetId || '(없음)'}</span>
-                                                <span>{Math.round((entry.dataSize || 0) / 1024)}KB</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    {entry && (
-                                        <div className="flex items-center gap-2 mr-2 border-r pr-4">
-                                            <Label htmlFor={`freeze-${grade}`} className="text-xs text-slate-600 cursor-pointer">
-                                                수동 동결
-                                            </Label>
-                                            <Switch
-                                                id={`freeze-${grade}`}
-                                                checked={entry.isFrozen}
-                                                onCheckedChange={(checked) => toggleFreezeMutation.mutate({ cacheKey: entry.cacheKey, freeze: checked })}
-                                                disabled={toggleFreezeMutation.isPending}
-                                            />
-                                        </div>
-                                    )}
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-7 text-xs"
-                                        onClick={() => refreshMutation.mutate([grade])}
-                                        disabled={refreshMutation.isPending || entry?.isFrozen}
-                                        title={entry?.isFrozen ? "동결 상태에서는 수동 갱신할 수 없습니다." : "최신 데이터로 강제 갱신"}
-                                    >
-                                        <RefreshCw className={`w-3 h-3 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
-                                    </Button>
-                                </div>
-                            );
-                        })}
                     </div>
                 )}
             </div>
@@ -4767,85 +4711,7 @@ export default function Admin() {
     }, []);
 
 function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExpired, adminPassword }: any) {
-    const { data: timetableData } = useQuery({
-        queryKey: ["admin", "timetable", assessment.grade, assessment.classNum, assessment.dataset],
-        queryFn: async () => {
-            const grade = assessment.grade;
-            // Fetch for all classes if classNum is 0 (전체)
-            const cNum = assessment.classNum === 0 ? "all" : assessment.classNum;
-            const ds = assessment.dataset;
-            const url = `/api/comcigan?type=timetable&grade=${grade}&classNum=${cNum}${ds ? '&dataset=' + encodeURIComponent(ds) : ''}`;
-            const res = await fetch(url);
-            if (!res.ok) return [];
-            const json = await res.json();
-            return json.data || [];
-        },
-        staleTime: 60000,
-    });
-
-    const { data: electiveConfigs } = useQuery({
-        queryKey: ["admin", "electives", assessment.grade, assessment.dataset],
-        queryFn: async () => {
-            const ds = assessment.dataset;
-            const res = await fetch(`/api/admin/electives?grade=${assessment.grade}${ds ? '&dataset=' + encodeURIComponent(ds) : ''}`, {
-                headers: { "X-Admin-Password": adminPassword }
-            });
-            if (!res.ok) return [];
-            return res.json();
-        },
-        staleTime: 60000,
-    });
-
-    let isOrphan = false;
-    if (timetableData && electiveConfigs && assessment.classNum !== 0) {
-        // Find if this specific slot exists in the full timetable of that class using ORIGINAL dueDate
-        const dueDateObj = new Date(assessment.dueDate);
-        const aDay = dueDateObj.getDay();
-        if (aDay === 0 || aDay === 6) {
-            isOrphan = true; // Weekends
-        } else {
-            const w = aDay - 1;
-            const slots = timetableData.filter((t: any) => t.class === assessment.classNum && t.weekday === w);
-            let matchingSlots = slots;
-            const targetTime = assessment.classTime;
-            if (targetTime) {
-                matchingSlots = slots.filter((t: any) => t.classTime === targetTime);
-            }
-            if (matchingSlots.length === 0) {
-                // E.g. gap, or missing slot
-                isOrphan = true;  
-            } else {
-                let foundMatch = false;
-                for (const slot of matchingSlots) {
-                    if (slot.subject === assessment.subject) {
-                        foundMatch = true; 
-                        break;
-                    }
-                    // Elective alias fallback
-                    const specificConfig = electiveConfigs.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
-                    if (specificConfig && specificConfig.fullSubjectName === assessment.subject) {
-                        foundMatch = true; 
-                        break;
-                    }
-                    const genericConfig = electiveConfigs.find((cfg: any) => (cfg.subject.trim() === assessment.subject.trim() || cfg.fullSubjectName?.trim() === assessment.subject.trim()));
-                    if (genericConfig && genericConfig.classCode) {
-                        if (specificConfig && specificConfig.classCode) {
-                            const codesA = genericConfig.classCode.split(',').map((s: string) => s.trim());
-                            const codesB = specificConfig.classCode.split(',').map((s: string) => s.trim());
-                            if (codesA.some((c: string) => codesB.includes(c))) {
-                                foundMatch = true; 
-                                break;
-                            }
-                        }
-                    }
-                }
-                if (!foundMatch) {
-                    isOrphan = true;
-                }
-            }
-        }
-    }
-
+    const isOrphan = !!assessment.isOrphan;
     const isPostponed = !!assessment.tempDueDate || !!assessment.tempClassTime;
 
     return (
@@ -4946,9 +4812,9 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
         enabled: isAuthenticated,
     });
 
-    // Resolve auto dataset per grade
-    const resolvedAutoDatasetGrade1 = adminSettings?.comcigan_dataset_selected_grade1 || '';
-    const resolvedAutoDatasetGrade23 = adminSettings?.comcigan_dataset_selected || '';
+    // Resolve auto dataset mode per grade globally in Admin
+    const activeDatasetModeG1 = getDatasetMode(adminSettings?.comcigan_dataset_selected_grade1);
+    const activeDatasetModeG23 = getDatasetMode(adminSettings?.comcigan_dataset_selected);
 
     const { data: assessments } = useQuery({
         queryKey: ["admin", "assessments"],
@@ -4979,12 +4845,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
             const filter = isG1 ? assessmentDsFilterG1 : assessmentDsFilterG23;
             if (filter === '_all_') return true;
             if (filter === '_auto_') {
-                const ds = isG1 ? resolvedAutoDatasetGrade1 : resolvedAutoDatasetGrade23;
-                return (a.dataset || '') === ds;
+                const mode = isG1 ? activeDatasetModeG1 : activeDatasetModeG23;
+                return (a.dataset || 'COMCIGAN') === mode;
             }
-            return (a.dataset || '') === filter;
+            return (a.dataset || 'COMCIGAN') === filter;
         });
-    }, [assessments, assessmentDsFilterG1, assessmentDsFilterG23, resolvedAutoDatasetGrade1, resolvedAutoDatasetGrade23]);
+    }, [assessments, assessmentDsFilterG1, assessmentDsFilterG23, activeDatasetModeG1, activeDatasetModeG23]);
 
     const deleteAssessmentsMutation = useMutation({
         mutationFn: async (ids: number[]) => {
@@ -5242,7 +5108,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         onChange={(e) => { setAssessmentDsFilterG1(e.target.value); setSelectedAssessments([]); }}
                                         className="border rounded px-2 py-1 text-sm bg-white min-w-[100px]"
                                     >
-                                        <option value="_auto_">자동</option>
+                                        <option value="_auto_">자동 ({activeDatasetModeG1})</option>
                                         <option value="_all_">전체</option>
                                         {assessmentDatasets.map((ds: string) => (
                                             <option key={ds} value={ds}>{ds || '(빈 데이터셋)'}</option>
@@ -5256,7 +5122,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         onChange={(e) => { setAssessmentDsFilterG23(e.target.value); setSelectedAssessments([]); }}
                                         className="border rounded px-2 py-1 text-sm bg-white min-w-[100px]"
                                     >
-                                        <option value="_auto_">자동</option>
+                                        <option value="_auto_">자동 ({activeDatasetModeG23})</option>
                                         <option value="_all_">전체</option>
                                         {assessmentDatasets.map((ds: string) => (
                                             <option key={ds} value={ds}>{ds || '(빈 데이터셋)'}</option>

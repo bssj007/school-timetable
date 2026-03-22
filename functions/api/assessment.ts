@@ -37,7 +37,10 @@ export const onRequest = async (context: any) => {
                     .bind(...params)
                     .all();
 
-                return new Response(JSON.stringify(results), {
+                const { applyAutoPredictions } = await import('../server/autoPredict');
+                const predictedResults = await applyAutoPredictions(results, env.DB);
+
+                return new Response(JSON.stringify(predictedResults), {
                     headers: { 'Content-Type': 'application/json' }
                 });
             } catch (e: any) {
@@ -85,7 +88,10 @@ export const onRequest = async (context: any) => {
                     // Retry original query
                     const { results } = await env.DB.prepare(query).bind(...params).all();
 
-                    return new Response(JSON.stringify(results), {
+                    const { applyAutoPredictions } = await import('../server/autoPredict');
+                    const predictedResults = await applyAutoPredictions(results, env.DB);
+
+                    return new Response(JSON.stringify(predictedResults), {
                          headers: { 'Content-Type': 'application/json' }
                     });
                 }
@@ -97,7 +103,10 @@ export const onRequest = async (context: any) => {
                     // Retry original query
                     const { results } = await env.DB.prepare(query).bind(...params).all();
 
-                    return new Response(JSON.stringify(results), {
+                    const { applyAutoPredictions } = await import('../server/autoPredict');
+                    const predictedResults = await applyAutoPredictions(results, env.DB);
+
+                    return new Response(JSON.stringify(predictedResults), {
                          headers: { 'Content-Type': 'application/json' }
                     });
                 }
@@ -111,7 +120,10 @@ export const onRequest = async (context: any) => {
                     // Retry original query
                     const { results } = await env.DB.prepare(query).bind(...params).all();
 
-                    return new Response(JSON.stringify(results), {
+                    const { applyAutoPredictions } = await import('../server/autoPredict');
+                    const predictedResults = await applyAutoPredictions(results, env.DB);
+
+                    return new Response(JSON.stringify(predictedResults), {
                          headers: { 'Content-Type': 'application/json' }
                     });
                 }

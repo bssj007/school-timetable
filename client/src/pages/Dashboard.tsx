@@ -761,9 +761,9 @@ export default function Dashboard() {
     // 날짜 범위를 벗어난 폴백 데이터셋을 보고 있을 경우, 고아(자동 임시 연기) 처리를 하지 않음
     const isOutOfBounds = (rawTimetableData as any)?.datasetId && (rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.datasetId !== (rawTimetableData as any)?.originalDatasetId;
 
-    // 3. 고아 수행평가 임시 이동 처리 (시간표 변경으로 이번 주 현재 시간이 소실된 경우)
+    // 3. 고아 수행평가 임시 이동 처리 (서버에서 전달된 tempDueDate 반영)
     const processed = filtered.map(a => {
-      // 수동 임시 연기 우선 반영
+      // 서버에서 계산된 수동 연기 및 자동 연기(자동 예측) 수행평가 반영
       if (a.tempDueDate && a.tempClassTime) {
         return {
            ...a,
@@ -773,75 +773,6 @@ export default function Dashboard() {
            dueDate: a.tempDueDate,
            classTime: a.tempClassTime
         };
-      }
-      
-      if (a.isDone) return a;
-      if (isOutOfBounds) return a; // 범위를 벗어난 폴백 시간표에서는 원본 과목이 없을 수 있으므로 고아 처리 보류
-      
-      const matchIdx = weekDates.findIndex(d => toDateString(d) === a.dueDate);
-      if (matchIdx !== -1 && a.classTime) {
-        const cellGroup = computedGroups[`${matchIdx}-${a.classTime}`];
-        const cellElective = currentProfile?.electives?.[cellGroup];
-        const cellMatchSubject = cellGroup && cellElective ? (cellElective.fullSubjectName || cellElective.subject) : null;
-        
-        const cellItem = (timetableData || []).find(t => t.weekday === matchIdx && t.classTime === a.classTime);
-        const actualSubject = cellMatchSubject || (cellItem?.subject);
-        
-        // 고아 확인 (과목 불일치나 해당 교시가 사라진 경우)
-        if (actualSubject?.trim() !== a.subject.trim()) {
-           let foundNext = false;
-           let nextSlot = null;
-           
-           // 1. 당일 피벗 이후 ~ 금요일까지 탐색
-           for (let w = matchIdx; w < 5 && !foundNext; w++) {
-             const daySlots = (timetableData || []).filter(t => t.weekday === w).sort((x, y) => x.classTime - y.classTime);
-             for (const t of daySlots) {
-               if (w === matchIdx && t.classTime <= a.classTime) continue; // 당일은 지정된 시간 이후여야 함
-               
-               const tGroup = computedGroups[`${w}-${t.classTime}`];
-               const tElective = currentProfile?.electives?.[tGroup];
-               const tSubject = tGroup && tElective ? (tElective.fullSubjectName || tElective.subject) : t.subject;
-               
-               if (tSubject?.trim() === a.subject.trim()) {
-                 foundNext = true;
-                 nextSlot = { weekday: w, classTime: t.classTime, date: toDateString(weekDates[w]) };
-                 break;
-               }
-             }
-           }
-           
-           // 2. 이번 주 내에 없으면 다음 주 월요일 ~ 당일 이전까지 탐색 (Wrap Around)
-           for (let w = 0; w <= matchIdx && !foundNext; w++) {
-             const daySlots = (timetableData || []).filter(t => t.weekday === w).sort((x, y) => x.classTime - y.classTime);
-             for (const t of daySlots) {
-               // 다음 주 당일이라면, 시간과 무관하게 가장 이른 시간을 잡으면 됨 (어차피 다음 주니까 무조건 미래)
-               // 단, 정확히 동일한 요일의 동일한 시간까지 왔다면 한 바퀴를 돈 셈이지만, 일단 가장 빠른 시간을 찾음.
-               const tGroup = computedGroups[`${w}-${t.classTime}`];
-               const tElective = currentProfile?.electives?.[tGroup];
-               const tSubject = tGroup && tElective ? (tElective.fullSubjectName || tElective.subject) : t.subject;
-               
-               if (tSubject?.trim() === a.subject.trim()) {
-                 foundNext = true;
-                 const nextWeekDate = new Date(weekDates[w]);
-                 nextWeekDate.setDate(nextWeekDate.getDate() + 7);
-                 nextSlot = { weekday: w, classTime: t.classTime, date: toDateString(nextWeekDate) };
-                 break;
-               }
-             }
-           }
-           
-           if (foundNext && nextSlot) {
-              return {
-                 ...a,
-                 isPostponed: true,
-                 originalDueDate: a.dueDate,
-                 originalClassTime: a.classTime,
-                 dueDate: nextSlot.date,
-                 classTime: nextSlot.classTime,
-                 isAutoPredicted: true
-              };
-           }
-        }
       }
       return a;
     });
@@ -1728,8 +1659,10 @@ export default function Dashboard() {
                 </style>
                 <div ref={timetableRef} id="timetable-container" className="group" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
                   {/* System Dataset Config UI (Debug) */}
-                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled && (
+                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled === 'true' && (
                     <div className="print:hidden capturing:hidden text-[10px] md:text-xs text-gray-400 text-right mb-1 tracking-tight flex flex-wrap items-center justify-end gap-1 md:gap-2 pr-1">
+                      <span className="text-blue-500 font-semibold text-xs border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">현재 데이터셋: {(rawTimetableData as any)?.datasetId}{((rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.originalDatasetId !== (rawTimetableData as any)?.datasetId) ? ` (원본: ${(rawTimetableData as any)?.originalDatasetId})` : ''}</span>
+                      <span className="hidden md:inline">|</span>
                       <span>1학년: {(rawTimetableData as any).debugTokens.override1 && (rawTimetableData as any).debugTokens.override1 !== '_auto_' ? '단독선택(O)' : '단독선택(X)'} / 기본FB{(rawTimetableData as any).debugTokens.fallback1 && (rawTimetableData as any).debugTokens.fallback1 !== '_auto_' ? '(O)' : '(X)'}</span>
                       <span className="hidden md:inline">|</span>
                       <span>2,3학년: {(rawTimetableData as any).debugTokens.override23 && (rawTimetableData as any).debugTokens.override23 !== '_auto_' ? '단독선택(O)' : '단독선택(X)'} / 기본FB{(rawTimetableData as any).debugTokens.fallback23 && (rawTimetableData as any).debugTokens.fallback23 !== '_auto_' ? '(O)' : '(X)'}</span>
