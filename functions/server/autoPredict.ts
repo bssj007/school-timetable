@@ -80,7 +80,7 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
         const baseAssSubject = assessment.subject.replace(/\s*\(.*$/, '').trim();
 
         // 공강/빈교실 판별 함수 - checkSubjectMatch보다 먼저 선언
-        const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free", "창체", "자습", "동아리", "점심시간"];
+        const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free", "창체", "창의적", "자습", "동아리", "점심", "채플", "홈룸", "담임", "HR"];
         const isFreePeriod = (subject: string) => FREE_KEYWORDS.some(k => (subject || '').includes(k));
 
         // 이동수업(classNum=0): teacher로 1차 필터 후 과목 탐색 → 일반 수업: 해당 반만
