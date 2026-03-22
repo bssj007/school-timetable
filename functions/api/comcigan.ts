@@ -509,7 +509,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 ipOverrideApplied = grade === 1 ? "1학년" : "2/3학년";
             }
 
-            if (datasetOverride && datasetOverride !== '_auto_' && datasetOverride !== 'COMCIGAN') {
+            if (datasetOverride && datasetOverride !== ('_auto_')) {
                 datasetSelected = datasetOverride; // From the dashboard manual selector
             } else {
                 datasetSelected = finalDataset;
@@ -619,28 +619,30 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     const targetShort = targetDate ? (targetDate.length > 8 ? targetDate.substring(2) : targetDate) : todayShort;
 
     let isFallbackApplied = false;
-    let datasetDateRanges: Record<string, string> = {};
-    
-    // Always build the date ranges map first
-    if (rawData['일자'] && Array.isArray(rawData['일자'])) {
-        const allDatasetKeys = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
-        allDatasetKeys.forEach((key, idx) => {
-            if (idx + 1 < rawData['일자'].length) {
-                datasetDateRanges[key] = rawData['일자'][idx + 1];
-            }
-        });
-    } else if (rawData['일자자료'] && Array.isArray(rawData['일자자료'])) {
-        const dateList = rawData['일자자료'];
-        dateList.forEach((dt: any) => {
-            if (!Array.isArray(dt) || dt.length < 2) return;
-            const [directIdx, range] = dt;
-            if (typeof directIdx === 'number' && timetableProps[directIdx]) {
-                datasetDateRanges[timetableProps[directIdx]] = range;
-            }
-        });
-    }
 
     if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_') {
+        let datasetDateRanges: Record<string, string> = {};
+        
+        if (rawData['일자'] && Array.isArray(rawData['일자'])) {
+            // Legacy format: flat array of date strings, offset by 1 from allDatasetKeys
+            const allDatasetKeys = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
+            allDatasetKeys.forEach((key, idx) => {
+                if (idx + 1 < rawData['일자'].length) {
+                    datasetDateRanges[key] = rawData['일자'][idx + 1];
+                }
+            });
+        } else if (rawData['일자자료'] && Array.isArray(rawData['일자자료'])) {
+            // New format: [[directIndex, "YY-MM-DD ~ YY-MM-DD"], ...]
+            const dateList = rawData['일자자료'];
+            dateList.forEach((dt: any) => {
+                if (!Array.isArray(dt) || dt.length < 2) return;
+                const [directIdx, range] = dt;
+                if (typeof directIdx === 'number' && timetableProps[directIdx]) {
+                    datasetDateRanges[timetableProps[directIdx]] = range;
+                }
+            });
+        }
+        
         const rangeStr = datasetDateRanges[datasetSelected];
         let covers = false;
         
@@ -663,28 +665,13 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     } else if (datasetSelected === 'MANUAL_PLAN') {
         timedataProp = 'MANUAL_PLAN';
     } else {
-        console.log(`[Comcigan Debug] No concrete datasetSelected found. Auto-applying dynamic date resolution.`);
-        
-        let matchedDataset = null;
-        for (const [key, rangeStr] of Object.entries(datasetDateRanges)) {
-            if (isDateInRange(targetShort, rangeStr)) {
-                matchedDataset = key;
-                break;
-            }
-        }
-
-        if (matchedDataset) {
-            timedataProp = matchedDataset;
-            console.log(`[Comcigan Debug] Auto-resolved to ${matchedDataset} for date ${targetShort}`);
+        console.log(`[Comcigan Debug] No concrete datasetSelected found. Auto-applying fallback.`);
+        if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
+            timedataProp = fallbackSelected;
         } else {
-            console.log(`[Comcigan Debug] No dataset matches date ${targetShort}. Applying explicit fallback.`);
-            if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
-                timedataProp = fallbackSelected;
-            } else {
-                timedataProp = timetableProps[0] || "";
-            }
-            isFallbackApplied = true;
+            timedataProp = timetableProps[0] || "";
         }
+        isFallbackApplied = true;
     }
 
     // Anchor originalDatasetId explicitly

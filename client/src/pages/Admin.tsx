@@ -6190,25 +6190,15 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     // 가장 첫 번째 데이터가 전체 학기를 관통하는 오리지널 베이스라인
     const baselineDatasetName = timetableProps && timetableProps.length > 0 ? timetableProps[0] : '없음';
 
-    const sanitizeDatasetValue = (val: string) => {
-        if (!val) return '_auto_';
-        if (val === 'MANUAL_PLAN' || val === '_empty_') return val;
-        // If it's COMCIGAN or a legacy 자료xxx, it's virtually _auto_ now
-        if (val === 'COMCIGAN' || val.startsWith('자료')) return '_auto_';
-        return val;
-    };
+    // Grade 2/3 dirty tracking
+    const displayValue = selectedProp || '_auto_';
+    const originalValue = settingsQuery.data?.comcigan_dataset_selected || '_auto_';
+    const isDirty = displayValue !== originalValue;
 
-    // Grade 2/3 tracking
-    const originalValueRaw = settingsQuery.data?.comcigan_dataset_selected || '_auto_';
-    const originalValue = sanitizeDatasetValue(originalValueRaw);
-    const displayValue = sanitizeDatasetValue(selectedProp || '_auto_');
-    const isDirty = displayValue !== originalValue || originalValueRaw !== originalValue;
-
-    // Grade 1 tracking
-    const originalValueRawG1 = settingsQuery.data?.comcigan_dataset_selected_grade1 || '_auto_';
-    const originalValueG1 = sanitizeDatasetValue(originalValueRawG1);
-    const displayValueG1 = sanitizeDatasetValue(selectedPropGrade1 || '_auto_');
-    const isDirtyG1 = displayValueG1 !== originalValueG1 || originalValueRawG1 !== originalValueG1;
+    // Grade 1 dirty tracking
+    const displayValueG1 = selectedPropGrade1 || '_auto_';
+    const originalValueG1 = settingsQuery.data?.comcigan_dataset_selected_grade1 || '_auto_';
+    const isDirtyG1 = displayValueG1 !== originalValueG1;
 
     // Fallback dirty tracking
     const displayValueFB = fallbackProp || '_auto_';
@@ -6228,9 +6218,6 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                 {emptyOption && <SelectItem value="_empty_">사용 안 함 (기본값 설정 따름)</SelectItem>}
                 <SelectItem value="_auto_">자동 (COMCIGAN 통합 데이터)</SelectItem>
                 <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
-                {timetableProps.map(prop => (
-                    <SelectItem key={prop} value={prop}>{prop}</SelectItem>
-                ))}
             </SelectContent>
         </Select>
     );
@@ -6321,7 +6308,7 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                         <Button variant="outline" size="sm" onClick={() => setSelectedPropGrade1(originalValueG1)} disabled={!isDirtyG1 || saveMutation.isPending}>
                             변경 취소
                         </Button>
-                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected_grade1: displayValueG1 === '_auto_' ? '' : displayValueG1 })} disabled={!isDirtyG1 || saveMutation.isPending}>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected_grade1: selectedPropGrade1 === '_auto_' ? '' : selectedPropGrade1 })} disabled={!isDirtyG1 || saveMutation.isPending}>
                             {saveMutation.isPending ? "저장 중..." : "저장"}
                         </Button>
                     </div>
@@ -6335,10 +6322,10 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                     </div>
                     <SourceDatasetDropdown value={displayValue} onChange={setSelectedProp} />
                     <div className="flex justify-end gap-2 pt-1">
-                        <Button variant="outline" size="sm" onClick={() => setSelectedProp(originalValueRaw)} disabled={!isDirty || saveMutation.isPending}>
+                        <Button variant="outline" size="sm" onClick={() => setSelectedProp(originalValue)} disabled={!isDirty || saveMutation.isPending}>
                             변경 취소
                         </Button>
-                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected: displayValue === '_auto_' ? '' : displayValue })} disabled={!isDirty || saveMutation.isPending}>
+                        <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_dataset_selected: selectedProp === '_auto_' ? '' : selectedProp })} disabled={!isDirty || saveMutation.isPending}>
                             {saveMutation.isPending ? "저장 중..." : "저장"}
                         </Button>
                     </div>
