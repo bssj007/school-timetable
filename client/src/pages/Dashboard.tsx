@@ -764,27 +764,55 @@ export default function Dashboard() {
         const baseSubject = a.subject.replace(/\s*\(.*$/, '').trim();
         if (!myActualSubjects.has(baseSubject)) return false;
 
-        // 2차 필터: 다른 추측(교시 등)이 아니라, 수행평가 자체의 이름에 명시된 그룹 정보(예: C그룹)를 추출해 교차 검증
-        const groupMatch = a.subject.match(/\(([A-Z]그룹)/);
-        if (groupMatch && groupMatch[1]) {
-           const targetGroup = groupMatch[1];
-           const mySelectedSubjectForGroup = currentProfile?.electives?.[targetGroup]?.subject;
-           
-           if (!mySelectedSubjectForGroup) {
-              return false; // 해당 그룹에 아무 과목도 선택하지 않았다면 내 것이 아님
-           }
+        // 2차 필터: a.classCode가 명시된 경우, 이 학생의 elective 그룹이 포함되는지 직접 검증
+        // 이동수업 수행평가는 subject 이름에 그룹이 없어도 classCode로만 구분됨
+        if (a.classCode && a.classCode.trim()) {
+          const allowedGroups = a.classCode.split(",").map((s: string) => s.trim()).filter(Boolean);
+          if (allowedGroups.length > 0) {
+            // 학생이 보유한 elective 그룹 목록 (currentProfile.electives의 키: "A", "B", ...)
+            const myGroups = new Set<string>(Object.keys(currentProfile?.electives || {}));
+            // 내 그룹 중 하나라도 allowedGroups에 포함되어야 함
+            const hasMatch = allowedGroups.some(g => myGroups.has(g));
+            if (!hasMatch) {
+              return false; // 이 학생의 그룹이 대상 그룹에 없음 → 표시 안 함
+            }
+            // 그룹은 맞지만, 해당 그룹에서 선택한 과목이 수행평가 과목과 다른지 추가 검증
+            const matchedGroup = allowedGroups.find(g => myGroups.has(g));
+            if (matchedGroup) {
+              const mySubjectInGroup = currentProfile?.electives?.[matchedGroup]?.subject;
+              if (mySubjectInGroup) {
+                const cfgEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySubjectInGroup);
+                const fullSubj = cfgEntry?.fullSubjectName || mySubjectInGroup;
+                if (baseSubject !== mySubjectInGroup.trim() && baseSubject !== fullSubj.trim()) {
+                  return false; // 그룹은 같지만 그 그룹에서 내가 선택한 과목과 다름
+                }
+              }
+            }
+          }
+        } else {
+          // classCode가 없는 경우: 과목명의 "(C그룹)" 텍스트로 폴백 검증
+          const groupMatch = a.subject.match(/\(([A-Z]그룹)/);
+          if (groupMatch && groupMatch[1]) {
+             const targetGroup = groupMatch[1];
+             const mySelectedSubjectForGroup = currentProfile?.electives?.[targetGroup]?.subject;
+             
+             if (!mySelectedSubjectForGroup) {
+                return false; // 해당 그룹에 아무 과목도 선택하지 않았다면 내 것이 아님
+             }
 
-           const configEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySelectedSubjectForGroup);
-           const fullSubj = configEntry?.fullSubjectName || mySelectedSubjectForGroup;
+             const configEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySelectedSubjectForGroup);
+             const fullSubj = configEntry?.fullSubjectName || mySelectedSubjectForGroup;
 
-           if (baseSubject !== mySelectedSubjectForGroup.trim() && baseSubject !== fullSubj.trim()) {
-              return false; // 내 프로필의 그룹 배정 과목과, 수행평가의 실제 과목이 일치하지 않음
-           }
+             if (baseSubject !== mySelectedSubjectForGroup.trim() && baseSubject !== fullSubj.trim()) {
+                return false; // 내 프로필의 그룹 배정 과목과, 수행평가의 실제 과목이 일치하지 않음
+             }
+          }
         }
 
         return true;
       });
     }
+
 
     // 날짜 범위를 벗어난 폴백 데이터셋을 보고 있을 경우, 고아(자동 임시 연기) 처리를 하지 않음
     const isOutOfBounds = (rawTimetableData as any)?.datasetId && (rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.datasetId !== (rawTimetableData as any)?.originalDatasetId;
