@@ -234,13 +234,14 @@ export const onRequest = async (context: any) => {
                         cacheKey += `__ip_${clientIp.replace(/[:.]/g, '_')}`;
                     }
 
-                    const cacheRow = await db.prepare("SELECT response_json, dataset_id, updated_at FROM timetable_cache WHERE cache_key = ?").bind(cacheKey).first();
+                    const cacheRow = await db.prepare("SELECT response_json, dataset_id, updated_at, is_frozen FROM timetable_cache WHERE cache_key = ?").bind(cacheKey).first();
 
                     if (cacheRow && cacheRow.response_json) {
+                        const isFrozen = cacheRow.is_frozen === 1;
                         const cacheAge = Date.now() - new Date(cacheRow.updated_at as string + 'Z').getTime();
-                        const isFresh = cacheAge < cacheMaxAgeMs;
+                        const isFresh = isFrozen || cacheAge < cacheMaxAgeMs;
 
-                        console.log(`[Comcigan Cache] HIT: ${cacheKey}, age=${Math.round(cacheAge / 1000)}s, fresh=${isFresh}`);
+                        console.log(`[Comcigan Cache] HIT: ${cacheKey}, age=${Math.round(cacheAge / 1000)}s, fresh=${isFresh}, frozen=${isFrozen}`);
 
                         // 캐시에서 데이터를 재구성 (classNum 필터링 + IP override 재적용)
                         const cachedData = JSON.parse(cacheRow.response_json as string);
@@ -315,8 +316,21 @@ export const onRequest = async (context: any) => {
                         try {
                             const json: any = await responseClone.json();
                             if (json.data && json.data.length > 0) {
+                                const isDisappeared = json.debugTokens?.isFallbackApplied;
+                                const isEmptyDataset = json.debugTokens?.isEmptyDataset;
+
+                                if (isDisappeared || isEmptyDataset) {
+                                    // 기존 유효한 캐시가 존재하는지 검사
+                                    const existingRow = await db.prepare("SELECT 1 FROM timetable_cache WHERE cache_key = ? AND is_frozen = 0").bind(cacheKeyToSave).first();
+                                    if (existingRow) {
+                                        console.log(`[Comcigan Cache] Auto-freezing ${cacheKeyToSave} because dataset disappeared or is empty.`);
+                                        await db.prepare("UPDATE timetable_cache SET is_frozen = 1, updated_at = datetime('now') WHERE cache_key = ?").bind(cacheKeyToSave).run();
+                                        return; // 동결 시 덮어쓰기 방지
+                                    }
+                                }
+
+                                // 일반 캐시 저장 로직
                                 // 캐시에는 전체 학년의 all-class 데이터를 저장
-                                // (이미 classNum='all'으로 가져온 경우에만 캐시)
                                 if (classNum === 'all' || json.data.length > 10) {
                                     await saveTimetableCache(db, grade, json, targetDate, cacheKeyToSave);
                                 }
@@ -398,19 +412,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
     }
     
-    if (db) {
-        try {
-            await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_cache (cache_key TEXT PRIMARY KEY, response_json TEXT NOT NULL, dataset_id TEXT, updated_at TEXT DEFAULT (datetime('now')))`).run();
-            await db.prepare(`
-                INSERT INTO timetable_cache (cache_key, response_json, updated_at) 
-                VALUES ('raw_data', ?, datetime('now')) 
-                ON CONFLICT(cache_key) DO UPDATE SET response_json = excluded.response_json, updated_at = datetime('now')
-            `).bind(jsonString).run();
-        } catch (e) {
-            console.error('[Comcigan Debug] Failed to cache raw_data:', e);
-        }
-    }
-
+    // raw_data caching moved to the end of the function to ensure data integrity
+    
     const rawData = JSON.parse(jsonString);
 
     const keys = Object.keys(rawData);
@@ -724,6 +727,24 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         throw new Error(`Data not found for G${grade}`);
     }
 
+    let isEmptyDataset = true;
+    for (const cls of Object.keys(data[grade])) {
+        if (parseInt(cls) > 0) {
+             for(let w=1; w<=5; w++){
+                 if(data[grade][cls][w]){
+                     for(let p=1; p<data[grade][cls][w].length; p++){
+                         if(data[grade][cls][w][p] !== 0) {
+                             isEmptyDataset = false;
+                             break;
+                         }
+                     }
+                 }
+                 if(!isEmptyDataset) break;
+             }
+        }
+        if(!isEmptyDataset) break;
+    }
+
     const classesToProcess = classNumInput === 'all'
         ? Object.keys(data[grade]).filter(k => !isNaN(parseInt(k)) && parseInt(k) > 0).map(Number)
         : [classNumInput as number];
@@ -833,6 +854,19 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         };
     });
 
+    if (db && !isEmptyDataset && !isFallbackApplied) {
+        try {
+            await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_cache (cache_key TEXT PRIMARY KEY, response_json TEXT NOT NULL, dataset_id TEXT, updated_at TEXT DEFAULT (datetime('now')))`).run();
+            await db.prepare(`
+                INSERT INTO timetable_cache (cache_key, response_json, updated_at) 
+                VALUES ('raw_data', ?, datetime('now')) 
+                ON CONFLICT(cache_key) DO UPDATE SET response_json = excluded.response_json, updated_at = datetime('now')
+            `).bind(jsonString).run();
+        } catch (e) {
+            console.error('[Comcigan Debug] Failed to cache raw_data (deferred):', e);
+        }
+    }
+
     return new Response(JSON.stringify({
         schoolName: "부산성지고등학교",
         datasetId: timedataProp,
@@ -845,6 +879,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             fallback1: fallbackSelectedGrade1 || null, 
             fallback23: fallbackSelectedGen || null, 
             isFallbackApplied,
+            isEmptyDataset,
             keysCount: keys.length,
             teacherProp,
             subjectProp,
@@ -872,9 +907,16 @@ async function saveTimetableCache(db: any, grade: number, responseData: any, tar
     const cacheKey = cacheKeyOverride || (targetDate ? `gc_${grade}_${targetDate}` : `gc_${grade}`);
     try {
         await db.prepare(createTimetableCacheTable).run().catch(() => {});
-        await db.prepare(
-            "INSERT INTO timetable_cache (cache_key, response_json, dataset_id, updated_at) VALUES (?, ?, ?, datetime('now')) ON CONFLICT(cache_key) DO UPDATE SET response_json = excluded.response_json, dataset_id = excluded.dataset_id, updated_at = datetime('now')"
-        ).bind(cacheKey, JSON.stringify(responseData), responseData.datasetId || '').run();
+        try { await db.prepare("ALTER TABLE timetable_cache ADD COLUMN is_frozen INTEGER DEFAULT 0").run(); } catch(e) {}
+        
+        await db.prepare(`
+            INSERT INTO timetable_cache (cache_key, response_json, dataset_id, updated_at) 
+            VALUES (?, ?, ?, datetime('now')) 
+            ON CONFLICT(cache_key) DO UPDATE SET 
+                response_json = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.response_json ELSE excluded.response_json END,
+                dataset_id = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.dataset_id ELSE excluded.dataset_id END,
+                updated_at = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.updated_at ELSE datetime('now') END
+        `).bind(cacheKey, JSON.stringify(responseData), responseData.datasetId || '').run();
         console.log(`[Comcigan Cache] Saved: ${cacheKey}, items=${responseData.data?.length || 0}`);
     } catch (e) {
         console.error(`[Comcigan Cache] Save failed for ${cacheKey}:`, e);

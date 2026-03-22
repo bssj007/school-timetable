@@ -76,7 +76,7 @@ function ElectiveManager({ password }: { password: string }) {
             const res = await fetch("/api/admin/raw_comcigan", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-Admin-Password": password },
-                body: JSON.stringify({ schoolName: schoolSearchQuery })
+                body: JSON.stringify({ schoolName: schoolSearchQuery, mode: "cache" })
             });
             const json = await res.json();
             if (!res.ok || json?.error) return null;
@@ -4297,6 +4297,23 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
         onError: () => toast.error("설정 저장에 실패했습니다.")
     });
 
+    const toggleFreezeMutation = useMutation({
+        mutationFn: async ({ cacheKey, freeze }: { cacheKey: string, freeze: boolean }) => {
+            const res = await fetch("/api/admin/comcigan-cache", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ action: "toggle_freeze", cacheKey, freeze })
+            });
+            if (!res.ok) throw new Error("Toggle freeze failed");
+            return res.json();
+        },
+        onSuccess: (data) => {
+            toast.success(data.isFrozen ? "캐시가 동결되었습니다." : "캐시 동결이 해제되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "comciganCacheStatus"] });
+        },
+        onError: () => toast.error("동결 상태 변경에 실패했습니다.")
+    });
+
     const formatAge = (sec: number) => {
         if (sec < 60) return `${sec}초 전`;
         if (sec < 3600) return `${Math.floor(sec / 60)}분 ${sec % 60}초 전`;
@@ -4348,24 +4365,44 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                                             ) : (
                                                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">미생성</span>
                                             )}
+                                            {entry?.isFrozen && (
+                                                <Badge variant="outline" className="border-blue-300 text-blue-700 bg-blue-50 h-5 px-1.5 ml-1">
+                                                    <Lock className="w-3 h-3 mr-1" />
+                                                    동결됨
+                                                </Badge>
+                                            )}
                                         </div>
                                         {entry && (
                                             <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
                                                 <span className="flex items-center gap-1">
                                                     <Clock className="w-3 h-3" />
-                                                    {formatAge(entry.ageSec)}
+                                                    {entry.isFrozen ? "무기한 (동결)" : formatAge(entry.ageSec)}
                                                 </span>
                                                 <span>데이터셋: {entry.datasetId || '(없음)'}</span>
                                                 <span>{Math.round((entry.dataSize || 0) / 1024)}KB</span>
                                             </div>
                                         )}
                                     </div>
+                                    {entry && (
+                                        <div className="flex items-center gap-2 mr-2 border-r pr-4">
+                                            <Label htmlFor={`freeze-${grade}`} className="text-xs text-slate-600 cursor-pointer">
+                                                수동 동결
+                                            </Label>
+                                            <Switch
+                                                id={`freeze-${grade}`}
+                                                checked={entry.isFrozen}
+                                                onCheckedChange={(checked) => toggleFreezeMutation.mutate({ cacheKey: entry.cacheKey, freeze: checked })}
+                                                disabled={toggleFreezeMutation.isPending}
+                                            />
+                                        </div>
+                                    )}
                                     <Button
                                         variant="outline"
                                         size="sm"
                                         className="h-7 text-xs"
                                         onClick={() => refreshMutation.mutate([grade])}
-                                        disabled={refreshMutation.isPending}
+                                        disabled={refreshMutation.isPending || entry?.isFrozen}
+                                        title={entry?.isFrozen ? "동결 상태에서는 수동 갱신할 수 없습니다." : "최신 데이터로 강제 갱신"}
                                     >
                                         <RefreshCw className={`w-3 h-3 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
                                     </Button>

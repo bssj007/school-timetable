@@ -21,15 +21,16 @@ export const onRequest = async (context: any) => {
 
     const db = env.DB;
 
-    // 테이블 보장
+    // 테이블 보장 밑 컬럼 핫픽스
     try { await db.prepare(createTimetableCacheTable).run(); } catch (_) {}
+    try { await db.prepare("ALTER TABLE timetable_cache ADD COLUMN is_frozen INTEGER DEFAULT 0").run(); } catch (_) {}
 
     const method = request.method;
 
     // GET: 캐시 상태 조회
     if (method === 'GET') {
         try {
-            const { results } = await db.prepare("SELECT cache_key, dataset_id, updated_at, LENGTH(response_json) as data_size FROM timetable_cache ORDER BY cache_key").all();
+            const { results } = await db.prepare("SELECT cache_key, dataset_id, updated_at, LENGTH(response_json) as data_size, is_frozen FROM timetable_cache ORDER BY cache_key").all();
 
             // 현재 캐시 최대 유효 시간 설정값 조회
             let cacheMaxAgeMinutes = 5;
@@ -48,7 +49,8 @@ export const onRequest = async (context: any) => {
                     updatedAt: row.updated_at,
                     ageSec: Math.round(ageMs / 1000),
                     dataSize: row.data_size,
-                    isFresh: ageMs < (cacheMaxAgeMinutes * 60 * 1000)
+                    isFresh: row.is_frozen === 1 || ageMs < (cacheMaxAgeMinutes * 60 * 1000),
+                    isFrozen: row.is_frozen === 1
                 };
             });
 
@@ -108,11 +110,20 @@ export const onRequest = async (context: any) => {
         }
     }
 
-    // PATCH: 캐시 설정 변경
+    // PATCH: 캐시 설정 변경 및 수동 동결 설정
     if (method === 'PATCH') {
         try {
             const body = await request.json();
-            const { cacheMaxAgeMinutes } = body;
+            const { action, cacheKey, freeze, cacheMaxAgeMinutes } = body;
+
+            if (action === 'toggle_freeze' && cacheKey) {
+                await db.prepare("UPDATE timetable_cache SET is_frozen = ?, updated_at = datetime('now') WHERE cache_key = ?")
+                    .bind(freeze ? 1 : 0, cacheKey)
+                    .run();
+                return new Response(JSON.stringify({ success: true, isFrozen: freeze }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
 
             if (cacheMaxAgeMinutes !== undefined) {
                 const minutes = Math.max(1, Math.min(60, parseInt(cacheMaxAgeMinutes)));
