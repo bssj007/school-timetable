@@ -555,17 +555,15 @@ export default function Dashboard() {
   });
 
   // 각 시간(교시)별 다수결 그룹 계산
-  // We keep track of the last successfully computed groups to prevent flickering during refetches.
-  const lastValidGroupsRef = React.useRef<Record<string, string>>({});
+  // 각 시간(교시)별 다수결 그룹 계산
 
   const computedGroups = useMemo(() => {
     if (grade !== "2" && grade !== "3") {
-      lastValidGroupsRef.current = {};
       return {};
     }
-    // 시간표 데이터 자체가 없으면 마지막 유효값 유지
+    // 시간표 데이터 자체가 없으면 그룹 매핑도 없는 것이 정상입니다.
     if (!allClassesTimetable || allClassesTimetable.length === 0) {
-      return lastValidGroupsRef.current;
+      return {};
     }
 
     const cellGroups: Record<string, string> = {};
@@ -647,8 +645,6 @@ export default function Dashboard() {
         }
       }
     }
-
-    lastValidGroupsRef.current = cellGroups;
     return cellGroups;
   }, [allClassesTimetable, electiveConfigs, grade, settings?.elective_group_overrides]);
 
@@ -1976,9 +1972,10 @@ export default function Dashboard() {
                                         return;
                                       }
                                       if (!isPast || cellAssessments.length > 0) {
-                                        const displaySubjectSuffix = (isElectiveActive && group) ? ` (${group}${displayTeacher ? `, ${displayTeacher}` : ''})` : '';
-                                        const subjectToSave = `${displaySubject}${displaySubjectSuffix}`;
-                                        handleCellClick(weekdayIdx, classTime, subjectToSave, weekDates[weekdayIdx], cellAssessments);
+                                        const subjectToSave = displaySubject;
+                                        const tToSave = displayTeacher || "";
+                                        const cToSave = (isElectiveActive && group) ? group : "";
+                                        handleCellClick(weekdayIdx, classTime, subjectToSave, weekDates[weekdayIdx], cellAssessments, tToSave, cToSave);
                                       }
                                     }
                                   }}

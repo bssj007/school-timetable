@@ -355,6 +355,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     let datasetSelectedGrade1: string | null = null;
     let fallbackSelectedGrade1: string | null = null;
     let fallbackSelectedGen: string | null = null;
+    let manualPlanData: any = null;
 
     if (db) {
         try {
@@ -368,7 +369,6 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
             const { results } = await db.prepare("SELECT key, value FROM system_settings WHERE key = 'comcigan_dataset_selected' OR key = 'comcigan_dataset_selected_grade1' OR key = 'manual_semester_plan' OR key = 'dataset_ip_overrides' OR key = 'comcigan_fallback_dataset' OR key = 'comcigan_fallback_dataset_grade1'").all();
 
-            let manualPlanData: any = null;
             let ipOverridesFound: Record<string, { grade1?: string, default?: string, memo?: string }> = {};
 
             if (results && results.length > 0) {
@@ -431,68 +431,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
             designatedDatasetId = datasetSelected;
 
-            if (datasetSelected === 'MANUAL_PLAN') {
-                console.log(`[Comcigan Debug] Using MANUAL_PLAN dataset`);
-
-                // Parse the manual plan for the requested grade and class
-                const result: any[] = [];
-                let classList: number[] = [];
-                if (classNumInput === 'all') {
-                    if (manualPlanData?.timetables) {
-                        classList = Object.keys(manualPlanData.timetables)
-                            .filter(key => key.startsWith(`${grade}-`))
-                            .map(key => parseInt(key.split('-')[1]));
-                    }
-                } else {
-                    classList = [classNumInput as number];
-                }
-
-                for (const cls of classList) {
-                    const classPlan = manualPlanData?.timetables?.[`${grade}-${cls}`];
-                    if (classPlan) {
-                        for (const [key, subjectStr] of Object.entries(classPlan)) {
-                            // key is "weekday-period", e.g. "0-2" (Monday 2nd period)
-                            const [weekdayStr, periodStr] = key.split('-');
-                            const weekday = parseInt(weekdayStr);
-                            const period = parseInt(periodStr);
-                            const subjectValue = subjectStr as string;
-
-                            // Let's try to extract teacher if it's "Subj Name". Basically split by space.
-                            let subject = subjectValue;
-                            let teacher = "";
-                            const parts = subjectValue.split(' ');
-                            if (parts.length > 1) {
-                                subject = parts[0];
-                                teacher = parts.slice(1).join(' '); // in case name has spaces
-                            }
-
-                            if (subjectValue) {
-                                result.push({
-                                    grade,
-                                    class: cls,
-                                    weekday, // already 0-indexed in our manual planner
-                                    classTime: period,
-                                    subject,
-                                    teacher
-                                });
-                            }
-                        }
-                    }
-                }
-
-                if (result.length > 0) {
-                    return new Response(JSON.stringify({
-                        schoolName: "부산성지고등학교 (수동 시간표)",
-                        datasetId: "MANUAL_PLAN",
-                        ipOverrideApplied,
-                        data: result,
-                        debugTokens: { manualPlan: true }
-                    }), { headers: { 'Content-Type': 'application/json' } });
-                } else {
-                    console.warn(`[Comcigan Debug] MANUAL_PLAN selected but no data found for G${grade} C${classNumInput}. Falling back to normal.`);
-                }
-
-            }
+            designatedDatasetId = datasetSelected;
         } catch (e) {
             console.warn("[Comcigan Debug] Failed to read system_settings for dataset selection", e);
         }
@@ -581,7 +520,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             console.log(`[Comcigan Debug] datasetSelected ${datasetSelected} covers ${targetShort}`);
         } else {
             console.log(`[Comcigan Debug] datasetSelected ${datasetSelected} does NOT cover ${targetShort}. Applying explicit fallback.`);
-            if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
+            if (fallbackSelected && fallbackSelected !== '_auto_' && (timetableProps.includes(fallbackSelected) || fallbackSelected === 'MANUAL_PLAN')) {
                 timedataProp = fallbackSelected;
             } else {
                 timedataProp = baselineDatasetId || timetableProps[0] || "";
@@ -606,7 +545,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             console.log(`[Comcigan Debug] Auto-resolved to ${matchedDataset} for date ${targetShort}`);
         } else {
             console.log(`[Comcigan Debug] No dataset matches date ${targetShort}. Applying explicit fallback.`);
-            if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
+            if (fallbackSelected && fallbackSelected !== '_auto_' && (timetableProps.includes(fallbackSelected) || fallbackSelected === 'MANUAL_PLAN')) {
                 timedataProp = fallbackSelected;
             } else {
                 // If completely out of bounds, use the dynamically inferred baseline standard timetable
@@ -625,7 +564,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     } else if (explicitRef === 'MANUAL_PLAN') {
         originalDatasetId = 'MANUAL_PLAN';
     } else {
-        if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
+        if (fallbackSelected && fallbackSelected !== '_auto_' && (timetableProps.includes(fallbackSelected) || fallbackSelected === 'MANUAL_PLAN')) {
             originalDatasetId = fallbackSelected;
         } else {
             originalDatasetId = baselineDatasetId || timetableProps[0] || "";
@@ -635,6 +574,63 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     console.log('[Comcigan Debug] keys:', keys.length, 'teacherProp:', teacherProp, 'subjectProp:', subjectProp);
     console.log('[Comcigan Debug] timetableProps:', timetableProps, 'selected timedataProp:', timedataProp);
 
+    if (timedataProp === 'MANUAL_PLAN') {
+        console.log(`[Comcigan Debug] Using MANUAL_PLAN dataset (resolved)`);
+
+        // Parse the manual plan for the requested grade and class
+        const result: any[] = [];
+        let classList: number[] = [];
+        if (classNumInput === 'all') {
+            if (manualPlanData?.timetables) {
+                classList = Object.keys(manualPlanData.timetables)
+                    .filter(key => key.startsWith(`${grade}-`))
+                    .map(key => parseInt(key.split('-')[1]));
+            }
+        } else {
+            classList = [classNumInput as number];
+        }
+
+        for (const cls of classList) {
+            const classPlan = manualPlanData?.timetables?.[`${grade}-${cls}`];
+            if (classPlan) {
+                for (const [key, subjectStr] of Object.entries(classPlan)) {
+                    // key is "weekday-period", e.g. "0-2" (Monday 2nd period)
+                    const [weekdayStr, periodStr] = key.split('-');
+                    const weekday = parseInt(weekdayStr);
+                    const period = parseInt(periodStr);
+                    const subjectValue = subjectStr as string;
+
+                    let subject = subjectValue;
+                    let teacher = "";
+                    const parts = subjectValue.split(' ');
+                    if (parts.length > 1) {
+                        subject = parts[0];
+                        teacher = parts.slice(1).join(' ');
+                    }
+
+                    if (subjectValue) {
+                        result.push({
+                            grade,
+                            class: cls,
+                            weekday, // already 0-indexed in our manual planner
+                            classTime: period,
+                            subject,
+                            teacher
+                        });
+                    }
+                }
+            }
+        }
+
+        return new Response(JSON.stringify({
+            schoolName: "부산성지고등학교 (수동 시간표)",
+            datasetId: "MANUAL_PLAN",
+            ipOverrideApplied,
+            data: result,
+            debugTokens: { manualPlan: true }
+        }), { headers: { 'Content-Type': 'application/json' } });
+    }
+
     if (!timedataProp) throw new Error("Data key not found");
 
     const teachers = rawData[teacherProp] || [];
@@ -643,7 +639,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     
     // Determine the true standard baseline dataset (Base Data for cell-level fill)
     let targetBaseId = "";
-    if (fallbackSelected && fallbackSelected !== '_auto_' && timetableProps.includes(fallbackSelected)) {
+    if (fallbackSelected && fallbackSelected !== '_auto_' && (timetableProps.includes(fallbackSelected) || fallbackSelected === 'MANUAL_PLAN')) {
         targetBaseId = fallbackSelected;
     } else if (baselineDatasetId) {
         targetBaseId = baselineDatasetId;
