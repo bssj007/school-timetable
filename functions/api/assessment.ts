@@ -329,7 +329,7 @@ export const onRequest = async (context: any) => {
 
                 // Fallback: Insert without lastModifiedIp and/or dataset (Old Schema)
                 // Check if 'dataset' column is missing
-                if (errorMsg.includes("no such column") && errorMsg.includes("dataset")) {
+                if ((errorMsg.includes("no such column") || errorMsg.includes("no column")) && errorMsg.includes("dataset")) {
                     console.log("[Assessment API] 'dataset' column missing in POST. Attempting to add it.");
                     await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN dataset TEXT DEFAULT ''").run();
                     // Retry
@@ -342,7 +342,7 @@ export const onRequest = async (context: any) => {
                     });
                 }
                 // Check if 'lastModifiedIp' column is missing
-                if (errorMsg.includes("no such column") && errorMsg.includes("lastModifiedIp")) {
+                if ((errorMsg.includes("no such column") || errorMsg.includes("no column")) && errorMsg.includes("lastModifiedIp")) {
                     console.log("[Assessment API] 'lastModifiedIp' column missing in POST. Attempting to add it.");
                     await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN lastModifiedIp TEXT").run();
                     // Retry
@@ -356,7 +356,7 @@ export const onRequest = async (context: any) => {
                 }
 
                 // Check if 'teacher' or 'classCode' column is missing
-                if (errorMsg.includes("no such column") && (errorMsg.includes("teacher") || errorMsg.includes("classCode"))) {
+                if ((errorMsg.includes("no such column") || errorMsg.includes("no column")) && (errorMsg.includes("teacher") || errorMsg.includes("classCode"))) {
                     console.log("[Assessment API] 'teacher'/'classCode' column missing in POST. Attempting to add it.");
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN teacher TEXT").run(); } catch (_) {}
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN classCode TEXT").run(); } catch (_) {}
@@ -392,7 +392,7 @@ export const onRequest = async (context: any) => {
                     "UPDATE performance_assessments SET isDeleted = 1 WHERE id = ?"
                 ).bind(id).run();
             } catch (err: any) {
-                if (err.message && err.message.includes("no such column") && err.message.includes("isDeleted")) {
+                if (err.message && (err.message.includes("no such column") || err.message.includes("no column")) && err.message.includes("isDeleted")) {
                     console.log("[Assessment API] 'isDeleted' column missing in DELETE. Attempting to add it.");
                     await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isDeleted INTEGER DEFAULT 0").run();
                     
@@ -466,7 +466,7 @@ export const onRequest = async (context: any) => {
                 const errorMsg = updateError.message || "";
 
                 // Auto-Heal: Missing Column 'tempDueDate' / 'tempClassTime'
-                if (errorMsg.includes("no such column") && (errorMsg.includes("tempDueDate") || errorMsg.includes("tempClassTime"))) {
+                if ((errorMsg.includes("no such column") || errorMsg.includes("no column")) && (errorMsg.includes("tempDueDate") || errorMsg.includes("tempClassTime"))) {
                     console.log("[Assessment API] 'temp' columns missing in PATCH. Attempting to add them.");
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempDueDate TEXT").run(); } catch (_) {}
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempClassTime INTEGER").run(); } catch (_) {}
@@ -478,7 +478,7 @@ export const onRequest = async (context: any) => {
                 }
 
                 // Auto-Heal: Missing Column 'lastModifiedIp'
-                if (errorMsg.includes("no such column") && errorMsg.includes("lastModifiedIp")) {
+                if ((errorMsg.includes("no such column") || errorMsg.includes("no column")) && errorMsg.includes("lastModifiedIp")) {
                     console.log("[Assessment API] 'lastModifiedIp' column missing in PATCH. Attempting to add it.");
                     try {
                         await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN lastModifiedIp TEXT").run();
@@ -525,7 +525,7 @@ export const onRequest = async (context: any) => {
                 }
 
                 // Auto-Heal: Missing Column 'teacher' / 'classCode'
-                if (errorMsg.includes("no such column") && (errorMsg.includes("teacher") || errorMsg.includes("classCode"))) {
+                if ((errorMsg.includes("no such column") || errorMsg.includes("no column")) && (errorMsg.includes("teacher") || errorMsg.includes("classCode"))) {
                     console.log("[Assessment API] 'teacher'/'classCode' columns missing in PATCH. Attempting to add them.");
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN teacher TEXT").run(); } catch (_) {}
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN classCode TEXT").run(); } catch (_) {}
