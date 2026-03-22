@@ -1262,8 +1262,10 @@ function GroupChecker({ adminPassword }: { adminPassword: string }) {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="_auto_">자동 (현재 설정)</SelectItem>
-                            <SelectItem value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</SelectItem>
-                            <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
+                            <SelectItem value="MANUAL_PLAN">MANUAL_PLAN</SelectItem>
+                            {timetableProps.map(prop => (
+                                <SelectItem key={prop} value={prop}>{prop}</SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
 
@@ -1559,8 +1561,10 @@ function ClassFreePeriodChecker({ adminPassword }: { adminPassword: string }) {
                         className="border rounded px-2 py-1 text-sm"
                     >
                         <option value="_auto_">자동 (활성 데이터셋)</option>
-                        <option value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</option>
-                        <option value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</option>
+                        <option value="MANUAL_PLAN">MANUAL_PLAN</option>
+                        {timetableProps.map(tp => (
+                            <option key={tp} value={tp}>{tp}</option>
+                        ))}
                     </select>
                     {resolvedDataset && (
                         <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-0.5 rounded">{resolvedDataset}</span>
@@ -2190,8 +2194,10 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="_auto_">자동{resolvedDataset && selectedDataset === "_auto_" ? ` (${resolvedDataset})` : ""}</SelectItem>
-                        <SelectItem value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</SelectItem>
-                        <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
+                        <SelectItem value="MANUAL_PLAN">MANUAL_PLAN</SelectItem>
+                        {timetableProps.map((prop: string) => (
+                            <SelectItem key={prop} value={prop}>{prop}</SelectItem>
+                        ))}
                     </SelectContent>
                 </Select>
             </div>
@@ -3629,8 +3635,8 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
                     <label className="text-xs font-medium text-slate-500 block mb-1">데이터셋</label>
                     <select value={selectedDataset} onChange={e => setSelectedDataset(e.target.value)} className="border rounded px-2 py-1 text-sm">
                         <option value="_auto_">자동 (활성)</option>
-                        <option value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</option>
                         <option value="MANUAL_PLAN">수동 시간표</option>
+                        {timetableProps.map(tp => <option key={tp} value={tp}>{tp}</option>)}
                     </select>
                 </div>
                 {resolvedDataset && <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-1 rounded self-end">{resolvedDataset}</span>}
@@ -3714,27 +3720,17 @@ function DatasetDatesViewer({ rawData, adminPassword }: { rawData: any; adminPas
             }
         });
     } else if (rawData['일자자료'] && Array.isArray(rawData['일자자료'])) {
+        const validKeys = timetableProps.filter(k => {
+            const val = rawData[k];
+            // Must be a 3D array (timetable matrix)
+            return Array.isArray(val) && val.length > 1 && Array.isArray(val[1]) && val[1].length > 1 && Array.isArray(val[1][1]);
+        });
         const dateList = rawData['일자자료'];
         dateList.forEach((dt: any) => {
             if (Array.isArray(dt) && dt.length >= 2) {
                 const targetKeyIdx = dt[0];
-                if (typeof targetKeyIdx === 'number' && targetKeyIdx >= 0 && targetKeyIdx < timetableProps.length) {
-                    // Format dates beautifully e.g., "26-03-23 ~ 26-03-28" -> "2026.03.23 ~ 2026.03.28"
-                    let formattedRange = dt[1];
-                    if (typeof formattedRange === 'string') {
-                        formattedRange = formattedRange
-                            .split('~')
-                            .map(part => {
-                                let s = part.trim();
-                                // if it's strictly in YY-MM-DD format, convert to 20YY.MM.DD
-                                if (/^\d{2}-\d{2}-\d{2}$/.test(s)) {
-                                    s = '20' + s.replace(/-/g, '.');
-                                }
-                                return s;
-                            })
-                            .join(' ~ ');
-                    }
-                    datasetDateRanges[timetableProps[targetKeyIdx]] = formattedRange;
+                if (typeof targetKeyIdx === 'number' && targetKeyIdx >= 0 && targetKeyIdx < validKeys.length) {
+                    datasetDateRanges[validKeys[targetKeyIdx]] = dt[1];
                 }
             }
         });
@@ -4346,64 +4342,8 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                     <div className="text-sm text-slate-400 py-4 text-center">캐시 데이터가 없습니다. "전체 갱신"을 눌러 캐시를 생성하세요.</div>
                 ) : (
                     <div className="grid gap-3">
-                        {/* Raw Unified Dataset Status */}
-                        {(() => {
-                            const rawEntry = cacheEntries.find((e: any) => e.cacheKey === 'raw_data');
-                            return (
-                                <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-md px-4 py-3 mb-2 shadow-sm">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm font-bold text-blue-900">원본 통합 데이터셋 (raw_data)</span>
-                                            {rawEntry ? (
-                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${rawEntry.isFresh
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : 'bg-amber-100 text-amber-700'
-                                                }`}>
-                                                    {rawEntry.isFresh ? '신선' : '만료'}
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">미생성</span>
-                                            )}
-                                            {rawEntry?.isFrozen && (
-                                                <Badge variant="outline" className="border-blue-300 text-blue-700 bg-blue-50 h-5 px-1.5 ml-1">
-                                                    <Lock className="w-3 h-3 mr-1" />
-                                                    동결됨
-                                                </Badge>
-                                            )}
-                                        </div>
-                                        {rawEntry && (
-                                            <div className="flex items-center gap-3 mt-1 text-xs text-blue-700">
-                                                <span className="flex items-center gap-1">
-                                                    <Clock className="w-3 h-3" />
-                                                    {formatAge(rawEntry.ageSec)}
-                                                </span>
-                                                <span>가용 데이터셋: COMCIGAN 통합본 전체</span>
-                                                <span className="font-mono bg-blue-100 px-1 rounded">{Math.round((rawEntry.dataSize || 0) / 1024)}KB</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    {rawEntry && (
-                                        <div className="flex items-center gap-2 mr-2 border-r border-blue-200 pr-4">
-                                            <Label htmlFor="freeze-raw" className="text-xs text-blue-800 cursor-pointer">
-                                                통합본 전체 동결
-                                            </Label>
-                                            <Switch
-                                                id="freeze-raw"
-                                                checked={rawEntry.isFrozen}
-                                                onCheckedChange={(checked) => toggleFreezeMutation.mutate({ cacheKey: rawEntry.cacheKey, freeze: checked })}
-                                                disabled={toggleFreezeMutation.isPending}
-                                            />
-                                        </div>
-                                    )}
-                                    <div className="text-xs text-blue-600 font-medium whitespace-nowrap px-2">
-                                        실시간 동기화 {rawEntry?.isFrozen ? "중지됨" : "작동중"}
-                                    </div>
-                                </div>
-                            );
-                        })()}
-
                         {[1, 2, 3].map(grade => {
-                            const entry = cacheEntries.find((e: any) => e.cacheKey === `gc_${grade}`);
+                            const entry = cacheEntries.find((e: any) => e.cacheKey === `grade_${grade}`);
                             return (
                                 <div key={grade} className="flex items-center gap-3 bg-white border rounded-md px-4 py-3">
                                     <div className="flex-1">
@@ -6187,8 +6127,8 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         return Array.isArray(val) && val.length > 1 && Array.isArray(val[1]) && val[1].length > 1 && Array.isArray(val[1][1]);
     });
 
-    // 가장 첫 번째 데이터가 전체 학기를 관통하는 오리지널 베이스라인
-    const baselineDatasetName = timetableProps && timetableProps.length > 0 ? timetableProps[0] : '없음';
+    // 가장 마지막 데이터가 배열의 마지막에 위치 (가장 최신)
+    const latestDatasetName = timetableProps && timetableProps.length > 0 ? timetableProps[timetableProps.length - 1] : '없음';
 
     // Grade 2/3 dirty tracking
     const displayValue = selectedProp || '_auto_';
@@ -6209,28 +6149,15 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     const originalValueFBG1 = settingsQuery.data?.comcigan_fallback_dataset_grade1 || '_auto_';
     const isDirtyFBG1 = displayValueFBG1 !== originalValueFBG1;
 
-    const SourceDatasetDropdown = ({ value, onChange, emptyOption = false }: { value: string; onChange: (v: string) => void, emptyOption?: boolean }) => (
+    const DatasetDropdown = ({ value, onChange, emptyOption = false }: { value: string; onChange: (v: string) => void, emptyOption?: boolean }) => (
         <Select value={value} onValueChange={onChange}>
             <SelectTrigger className="w-full">
-                <SelectValue placeholder="출처 데이터셋 선택" />
+                <SelectValue placeholder="데이터셋 선택" />
             </SelectTrigger>
             <SelectContent>
                 {emptyOption && <SelectItem value="_empty_">사용 안 함 (기본값 설정 따름)</SelectItem>}
-                <SelectItem value="_auto_">자동 (COMCIGAN 통합 데이터)</SelectItem>
-                <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
-            </SelectContent>
-        </Select>
-    );
-
-    const StandardDatasetDropdown = ({ value, onChange, emptyOption = false }: { value: string; onChange: (v: string) => void, emptyOption?: boolean }) => (
-        <Select value={value} onValueChange={onChange}>
-            <SelectTrigger className="w-full">
-                <SelectValue placeholder="표준 데이터셋 선택" />
-            </SelectTrigger>
-            <SelectContent>
-                {emptyOption && <SelectItem value="_empty_">사용 안 함 (기본값 설정 따름)</SelectItem>}
-                <SelectItem value="_auto_">자동 (원본 베이스라인: {baselineDatasetName})</SelectItem>
-                <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
+                <SelectItem value="_auto_">자동 (최신: {latestDatasetName})</SelectItem>
+                <SelectItem value="MANUAL_PLAN">MANUAL_PLAN (학기별 계획 수동 입력)</SelectItem>
                 {timetableProps.map(prop => (
                     <SelectItem key={prop} value={prop}>{prop}</SelectItem>
                 ))}
@@ -6288,11 +6215,11 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
         <>
         <Card className="w-full max-w-2xl">
             <CardHeader>
-                <CardTitle>데이터셋 선택기</CardTitle>
+                <CardTitle>출체 데이터셋 선택</CardTitle>
                 <CardDescription>
                     일반적으로 날짜 선택 시 <b>자동</b>으로 해당 주차의 시간표가 출력됩니다.<br/>
                     <b>특정 데이터셋</b>을 선택하면 시스템 날짜를 무시하고 모든 화면 구조를 해당 데이터셋 기준으로 활성화합니다.<br/>
-                    <b>표준 데이터셋</b>은 전체 시스템이 기준으로 삼을 세분화된 단일 데이터셋(예: 자료481)을 지칭합니다. 자동으로 둘 경우 원본 베이스라인을 사용합니다.
+                    <b>폴백(미정 기본)</b>은 미래/과거 등 아직 시스템에 없는 미정 날짜를 조회했을 때, 대신 보여줄 데이터셋을 지정합니다. 자동으로 둘 경우 최신 데이터셋을 사용합니다.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -6300,10 +6227,10 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                 {/* Grade 1 Override dataset */}
                 <div className="space-y-2 border rounded-lg p-4 bg-white">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-gray-800">1학년 출처 데이터셋 선택</span>
+                        <span className="text-sm font-semibold text-gray-800">1학년 출제 데이터셋 선택</span>
                         <span className="text-xs text-gray-500">모든 화면 구조를 이 데이터셋으로 고정</span>
                     </div>
-                    <SourceDatasetDropdown value={displayValueG1} onChange={setSelectedPropGrade1} />
+                    <DatasetDropdown value={displayValueG1} onChange={setSelectedPropGrade1} />
                     <div className="flex justify-end gap-2 pt-1">
                         <Button variant="outline" size="sm" onClick={() => setSelectedPropGrade1(originalValueG1)} disabled={!isDirtyG1 || saveMutation.isPending}>
                             변경 취소
@@ -6317,10 +6244,10 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                 {/* Grade 2/3 Override dataset */}
                 <div className="space-y-2 border rounded-lg p-4 bg-white">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-gray-800">2/3학년 출처 데이터셋 선택</span>
+                        <span className="text-sm font-semibold text-gray-800">2/3학년 출제 데이터셋 선택</span>
                         <span className="text-xs text-gray-500">모든 화면 구조를 이 데이터셋으로 고정</span>
                     </div>
-                    <SourceDatasetDropdown value={displayValue} onChange={setSelectedProp} />
+                    <DatasetDropdown value={displayValue} onChange={setSelectedProp} />
                     <div className="flex justify-end gap-2 pt-1">
                         <Button variant="outline" size="sm" onClick={() => setSelectedProp(originalValue)} disabled={!isDirty || saveMutation.isPending}>
                             변경 취소
@@ -6336,10 +6263,10 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                 {/* Grade 1 Fallback dataset */}
                 <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-slate-700">1학년 표준 데이터셋</span>
-                        <span className="text-xs text-slate-400">전체 시스템이 기준으로 삼을 세분화된 단일 데이터셋</span>
+                        <span className="text-sm font-semibold text-slate-700">1학년 미정 주차 기본 데이터셋 (Fallback)</span>
+                        <span className="text-xs text-slate-400">선택된 날짜가 서버에 없을 때 띄울 시간표</span>
                     </div>
-                    <StandardDatasetDropdown value={displayValueFBG1} onChange={setFallbackPropGrade1} />
+                    <DatasetDropdown value={displayValueFBG1} onChange={setFallbackPropGrade1} />
                     <div className="flex justify-end gap-2 pt-1">
                         <Button variant="outline" size="sm" onClick={() => setFallbackPropGrade1(originalValueFBG1)} disabled={!isDirtyFBG1 || saveMutation.isPending}>
                             변경 취소
@@ -6353,10 +6280,10 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                 {/* Grade 2/3 Fallback dataset */}
                 <div className="space-y-2 border rounded-lg p-4 bg-slate-50">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-slate-700">2/3학년 표준 데이터셋</span>
-                        <span className="text-xs text-slate-400">전체 시스템이 기준으로 삼을 세분화된 단일 데이터셋</span>
+                        <span className="text-sm font-semibold text-slate-700">2/3학년 미정 주차 기본 데이터셋 (Fallback)</span>
+                        <span className="text-xs text-slate-400">선택된 날짜가 서버에 없을 때 띄울 시간표</span>
                     </div>
-                    <StandardDatasetDropdown value={displayValueFB} onChange={setFallbackProp} />
+                    <DatasetDropdown value={displayValueFB} onChange={setFallbackProp} />
                     <div className="flex justify-end gap-2 pt-1">
                         <Button variant="outline" size="sm" onClick={() => setFallbackProp(originalValueFB)} disabled={!isDirtyFB || saveMutation.isPending}>
                             변경 취소
@@ -6468,12 +6395,12 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
 
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                         <div className="space-y-2">
-                             <label className="text-xs font-medium text-gray-600">1학년 지정 출처 데이터셋</label>
-                             <SourceDatasetDropdown value={newIpGrade1} onChange={setNewIpGrade1} emptyOption={true} />
+                             <label className="text-xs font-medium text-gray-600">1학년 지정 데이터셋</label>
+                             <DatasetDropdown value={newIpGrade1} onChange={setNewIpGrade1} emptyOption={true} />
                         </div>
                         <div className="space-y-2">
-                             <label className="text-xs font-medium text-gray-600">2/3학년 지정 출처 데이터셋</label>
-                             <SourceDatasetDropdown value={newIpDefault} onChange={setNewIpDefault} emptyOption={true} />
+                             <label className="text-xs font-medium text-gray-600">2/3학년 지정 데이터셋</label>
+                             <DatasetDropdown value={newIpDefault} onChange={setNewIpDefault} emptyOption={true} />
                         </div>
                      </div>
                      <div className="flex justify-end pt-2">

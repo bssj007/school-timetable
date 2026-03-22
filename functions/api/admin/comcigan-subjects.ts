@@ -198,6 +198,32 @@ export const onRequest = async (context: any) => {
 
         if (dataset && dataset !== 'COMCIGAN' && keys.includes(dataset)) {
             timedataProp = dataset;
+        } else if (dataset === 'COMCIGAN') {
+            // Find the most populated '자료XXX' table (the fallback usually has the most data)
+            let maxCount = -1;
+            let bestKey = timedataProp;
+            
+            for (const k of keys) {
+                if (k.startsWith('자료') && Array.isArray(rawData[k]) && rawData[k][grade]) {
+                    const gradeArr = rawData[k][grade];
+                    let nonZeroCount = 0;
+                    // GradeArr is array of classes, each class is array of weekdays, each day is array of periods
+                    for (let c = 1; c < gradeArr.length; c++) {
+                        if (!Array.isArray(gradeArr[c])) continue;
+                        for (let d = 1; d <= 5; d++) {
+                            if (!Array.isArray(gradeArr[c][d])) continue;
+                            for (let p = 1; p < gradeArr[c][d].length; p++) {
+                                if (gradeArr[c][d][p] > 0) nonZeroCount++;
+                            }
+                        }
+                    }
+                    if (nonZeroCount > maxCount) {
+                        maxCount = nonZeroCount;
+                        bestKey = k;
+                    }
+                }
+            }
+            if (bestKey) timedataProp = bestKey;
         }
 
         if (!timedataProp) throw new Error("Data key not found");
