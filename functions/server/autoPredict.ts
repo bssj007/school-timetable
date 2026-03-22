@@ -97,6 +97,20 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
         const isFreePeriod = (subject: string) => FREE_KEYWORDS.some(k => (subject || '').includes(k));
 
         // 이동수업(classNum=0): teacher로 1차 필터 후 과목 탐색 → 일반 수업: 해당 반만
+        const originalW = new Date(assessment.dueDate).getDay() - 1;
+        const originalTime = assessment.classTime;
+
+        // 역추적: 원본 요일/교시에서 이 과목을 듣던 반(Class) 목록 (이동수업 그룹 매칭용)
+        const originalClassesWithSubject = new Set<number>();
+        if (assessment.classNum === 0 && originalW >= 0 && originalW <= 4 && originalTime) {
+            const origSlots = ctx.timetable.filter((t: any) => t.weekday === originalW && t.classTime === originalTime);
+            for (const t of origSlots) {
+                if ((t.subject || '').replace(/\s*\(.*$/, '').trim() === baseAssSubject) {
+                    originalClassesWithSubject.add(t.class);
+                }
+            }
+        }
+
         // tbl 파라미터로 현재 주 또는 다음 주 시간표를 선택할 수 있음
         const buildGetSlots = (tbl: any[]) => (w: number) => {
             if (assessment.classNum !== 0) {
@@ -129,17 +143,32 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
                 return tbl.filter((t: any) => {
                     if (t.weekday !== w || isFreePeriod(t.subject || '')) return false;
                     const slotTeacher = (t.teacher || '').replace(/\*.*$/, '').trim();
-                    return [...knownTeacherNames].some(name =>
+                    const teacherMatch = [...knownTeacherNames].some(name =>
                         slotTeacher === name || slotTeacher.startsWith(name) || name.startsWith(slotTeacher)
                     );
+                    if (!teacherMatch) return false;
+                    
+                    // 이동수업 블록(그룹) 일치 여부 검증
+                    if (originalClassesWithSubject.size > 0 && !originalClassesWithSubject.has(t.class)) {
+                        return false;
+                    }
+                    return true;
                 });
             }
             // teacher 정보 없음: 과목명으로만 탐색 (공강 제외)
-            return tbl.filter((t: any) =>
-                t.weekday === w &&
-                !isFreePeriod(t.subject || '') &&
-                (t.subject || '').replace(/\s*\(.*$/, '').trim() === baseAssSubject
-            );
+            return tbl.filter((t: any) => {
+                if (t.weekday !== w) return false;
+                if (isFreePeriod(t.subject || '')) return false;
+                if ((t.subject || '').replace(/\s*\(.*$/, '').trim() !== baseAssSubject) return false;
+                
+                // 이동수업 블록(그룹) 일치 여부 검증
+                // 원본 교시가 존재하고 이 과목을 듣던 반 목록이 확보된 경우,
+                // 후보 슬롯의 반(class)이 원래 그룹에 포함되어 있지 않다면 다른 그룹의 수업으로 간주하여 무시함.
+                if (originalClassesWithSubject.size > 0 && !originalClassesWithSubject.has(t.class)) {
+                    return false;
+                }
+                return true;
+            });
         };
         const checkSubjectMatch = (slot: any) => {
             // 공강/빈교실 슬롯은 어떤 경우도 매칭 불가
