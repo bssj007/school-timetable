@@ -80,7 +80,22 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
         const baseAssSubject = assessment.subject.replace(/\s*\(.*$/, '').trim();
 
         const checkSubjectMatch = (slot: any) => {
+            if (assessment.teacher && assessment.classCode) {
+                // If we recorded exact classCode and teacher, verify them against the current slot's elective configuration
+                const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
+                if (specificConfig && specificConfig.classCode) {
+                    const codes = specificConfig.classCode.split(',').map((s: string) => s.trim());
+                    if (codes.includes(assessment.classCode) && (assessment.teacher === slot.teacher || specificConfig.fullTeacherName?.includes(assessment.teacher))) {
+                        return true;
+                    }
+                }
+            } else if (assessment.teacher && !assessment.classCode) {
+                // For non-electives, if we have an explicit teacher, it should match the slot teacher
+                if (slot.subject === baseAssSubject && slot.teacher === assessment.teacher) return true;
+            }
+
             if (slot.subject === baseAssSubject) return true;
+            
             // Elective alias fallback
             const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
             if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) return true;

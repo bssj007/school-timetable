@@ -3237,7 +3237,12 @@ function TrashManager({ adminPassword }: { adminPassword: string }) {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {trashQuery.data?.map((assessment: any) => (
+                                        {trashQuery.data?.map((assessment: any) => {
+                                            const subjectMatch = typeof assessment.subject === 'string' ? assessment.subject.match(/^(.*?)\s*\((.*?그룹.*?)\)$/) : null;
+                                            const baseSubject = subjectMatch ? subjectMatch[1].trim() : assessment.subject;
+                                            const groupSuffix = subjectMatch ? subjectMatch[2].trim() : null;
+
+                                            return (
                                             <TableRow key={assessment.id}>
                                                 <TableCell className="text-center">
                                                     <Checkbox
@@ -3251,15 +3256,22 @@ function TrashManager({ adminPassword }: { adminPassword: string }) {
                                                 <TableCell className="text-center font-bold text-gray-600">
                                                     {assessment.classNum === 0 ? "전체" : `${assessment.classNum}반`}
                                                 </TableCell>
-                                                <TableCell className="font-medium flex items-center gap-2">
-                                                    <span className={`${assessment.classNum === 0 ? "text-blue-600" : ""}`}>
-                                                        {assessment.subject}
-                                                    </span>
-                                                    {assessment.description && (
-                                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">
-                                                            {assessment.description}
+                                                <TableCell className="font-medium">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className={`${assessment.classNum === 0 ? "text-blue-600" : ""}`}>
+                                                            {baseSubject}
                                                         </span>
-                                                    )}
+                                                        {groupSuffix && (
+                                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                                                                {groupSuffix}
+                                                            </span>
+                                                        )}
+                                                        {assessment.description && (
+                                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">
+                                                                {assessment.description}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell>{assessment.title}</TableCell>
                                                 <TableCell>{assessment.dueDate}</TableCell>
@@ -3267,7 +3279,8 @@ function TrashManager({ adminPassword }: { adminPassword: string }) {
                                                     {assessment.lastModifiedIp || "-"}
                                                 </TableCell>
                                             </TableRow>
-                                        ))}
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                             </div>
@@ -3625,18 +3638,38 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
                             </tr>
                         </thead>
                         <tbody>
-                            {tableRows.map((row: any) => (
+                            {tableRows.map((row: any) => {
+                                const subjectMatch = typeof row.subject === 'string' ? row.subject.match(/^(.*?)\s*\((.*?그룹.*?)\)$/) : null;
+                                const baseSubject = subjectMatch ? subjectMatch[1].trim() : row.subject;
+                                const groupSuffix = subjectMatch ? subjectMatch[2].trim() : null;
+
+                                return (
                                 <tr key={row.id} className={`hover:bg-slate-50 ${row.exceedsThreshold ? 'bg-red-50' : ''}`}>
                                     <td className="border border-slate-300 px-3 py-2 text-center font-medium">
                                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                                            <span>{row.subject}</span>
+                                            <span>{baseSubject}</span>
+                                            {row.classCode && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                                                    {row.classCode}그룹
+                                                </span>
+                                            )}
+                                            {row.teacher && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                                                    {row.teacher}
+                                                </span>
+                                            )}
+                                            {!row.classCode && groupSuffix && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                                                    {groupSuffix}
+                                                </span>
+                                            )}
                                             {row.description && (
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-700">
                                                     {row.description}
                                                 </span>
                                             )}
                                             {row.isOrphan && (
-                                                <Badge variant="destructive" className="text-[10px] px-1 h-4">고아 수행평가</Badge>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-800">고아 수행평가</span>
                                             )}
                                         </div>
                                     </td>
@@ -3654,7 +3687,8 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
                                         )}
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -4700,6 +4734,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
     const isOrphan = !!assessment.isOrphan;
     const isPostponed = !!assessment.tempDueDate || !!assessment.tempClassTime;
 
+    const subjectMatch = typeof assessment.subject === 'string' ? assessment.subject.match(/^(.*?)\s*\((.*?그룹.*?)\)$/) : null;
+    const baseSubject = subjectMatch ? subjectMatch[1].trim() : assessment.subject;
+    const groupSuffix = subjectMatch ? subjectMatch[2].trim() : null;
+
     return (
         <TableRow className={isExpired ? "opacity-75 bg-gray-50/50 hover:bg-gray-50 transition-colors" : ""}>
             <TableCell className="text-center">
@@ -4709,7 +4747,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
             <TableCell className="text-center">{assessment.classNum === 0 ? "전체" : assessment.classNum}</TableCell>
             <TableCell className="font-medium">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                    <span>{assessment.subject}</span>
+                    <span>{baseSubject}</span>
+                    {groupSuffix && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                            {groupSuffix}
+                        </span>
+                    )}
                     {assessment.description && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
                             {assessment.description}
@@ -4793,6 +4836,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [assessmentDsFilterG1, setAssessmentDsFilterG1] = useState<string>('_auto_');
     const [assessmentDsFilterG23, setAssessmentDsFilterG23] = useState<string>('_auto_');
+    const [userSearchQuery, setUserSearchQuery] = useState("");
 
     // Settings query for dataset resolution
     const { data: adminSettings } = useQuery({
@@ -5317,17 +5361,29 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
 
                 <TabsContent value="users">
                     <div className="grid gap-6">
-                        <div className="flex justify-end">
-                            <Select value={timeRange} onValueChange={(value: any) => setTimeRange(value)}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="기간 선택" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="24h">최근 24시간</SelectItem>
-                                    <SelectItem value="7d">최근 1주일</SelectItem>
-                                    <SelectItem value="all">전체 사용자</SelectItem>
-                                </SelectContent>
-                            </Select>
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-50/50 p-4 rounded-lg border">
+                            <div className="relative w-full md:max-w-md">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <Input
+                                    placeholder="IP, 학번(예: 2105), 이름 등으로 사용자 검색..."
+                                    value={userSearchQuery}
+                                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                                    className="pl-9 bg-white"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
+                                <span className="text-sm font-medium text-gray-600 whitespace-nowrap hidden md:inline">조회 기간</span>
+                                <Select value={timeRange} onValueChange={(value: any) => setTimeRange(value)}>
+                                    <SelectTrigger className="w-full md:w-[150px] bg-white">
+                                        <SelectValue placeholder="기간 선택" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="24h">최근 24시간</SelectItem>
+                                        <SelectItem value="7d">최근 1주일</SelectItem>
+                                        <SelectItem value="all">전체 사용자</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                         <Card>
                             <CardHeader>
@@ -5347,8 +5403,25 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     };
 
                                     const activeUsers = userData?.activeUsers || [];
-                                    const knownUsers = activeUsers.filter(isKnownUser);
-                                    const unknownUsers = activeUsers.filter((u: any) => !isKnownUser(u));
+
+                                    const filteredActiveUsers = activeUsers.filter((u: any) => {
+                                        if (!userSearchQuery.trim()) return true;
+                                        const query = userSearchQuery.toLowerCase();
+                                        const gradeClassNum = `${u.grade || ''}${u.classNum || ''}${String(u.studentNumber || '').padStart(2, '0')}`;
+                                        const gradeClassNum2 = `${u.grade || ''}${u.classNum || ''}${u.studentNumber || ''}`;
+                                        const gradeClassNumHyphen = `${u.grade || ''}-${u.classNum || ''}-${u.studentNumber || ''}`;
+                                        const ip = u.ip || '';
+                                        const kakaoNames = (u.kakaoAccounts || []).map((k: any) => k.kakaoNickname).join(' ');
+                                        
+                                        return ip.includes(query) || 
+                                               gradeClassNum.includes(query) || 
+                                               gradeClassNum2.includes(query) ||
+                                               gradeClassNumHyphen.includes(query) ||
+                                               kakaoNames.toLowerCase().includes(query);
+                                    });
+
+                                    const knownUsers = filteredActiveUsers.filter(isKnownUser);
+                                    const unknownUsers = filteredActiveUsers.filter((u: any) => !isKnownUser(u));
 
                                     // --- Group known users by student ID ---
                                     type UserGroup = {
@@ -5841,7 +5914,14 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {userData?.blockedUsers?.map((blocked: any) => (
+                                            {userData?.blockedUsers
+                                                ?.filter((blocked: any) => {
+                                                    if (!userSearchQuery.trim()) return true;
+                                                    const query = userSearchQuery.toLowerCase();
+                                                    return (blocked.identifier || '').toLowerCase().includes(query) ||
+                                                           (blocked.reason || '').toLowerCase().includes(query);
+                                                })
+                                                .map((blocked: any) => (
                                                 <TableRow key={blocked.id}>
                                                     <TableCell className="font-mono">
                                                         {blocked.identifier}

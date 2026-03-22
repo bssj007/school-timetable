@@ -59,11 +59,12 @@ export const onRequest = async (context: any) => {
                           isDone INTEGER DEFAULT 0,
                           dataset TEXT DEFAULT '',
                           createdAt TEXT DEFAULT (datetime('now')),
-                          lastModifiedIp TEXT,
                           isDeleted INTEGER DEFAULT 0,
                           votes TEXT DEFAULT '[]',
                           tempDueDate TEXT,
-                          tempClassTime INTEGER
+                          tempClassTime INTEGER,
+                          teacher TEXT,
+                          classCode TEXT
                         )
                     `).run();
                     // Add isDeleted column if missing (migration for older tables)
@@ -75,6 +76,9 @@ export const onRequest = async (context: any) => {
                     // Add temp columns if missing
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempDueDate TEXT").run(); } catch (_) {}
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempClassTime INTEGER").run(); } catch (_) {}
+                    // Add new columns for identification
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN teacher TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN classCode TEXT").run(); } catch (_) {}
                     return new Response(JSON.stringify([]), {
                         headers: { 'Content-Type': 'application/json' }
                     });
@@ -116,6 +120,23 @@ export const onRequest = async (context: any) => {
                     console.log("[Assessment API] 'temp' columns missing in GET. Attempting to add them.");
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempDueDate TEXT").run(); } catch (_) {}
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempClassTime INTEGER").run(); } catch (_) {}
+
+                    // Retry original query
+                    const { results } = await env.DB.prepare(query).bind(...params).all();
+
+                    const { applyAutoPredictions } = await import('../server/autoPredict');
+                    const predictedResults = await applyAutoPredictions(results, env.DB);
+
+                    return new Response(JSON.stringify(predictedResults), {
+                         headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+                
+                // Column missing: teacher or classCode
+                if (e.message && e.message.includes("no such column") && (e.message.includes("teacher") || e.message.includes("classCode"))) {
+                    console.log("[Assessment API] 'teacher'/'classCode' columns missing in GET. Attempting to add them.");
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN teacher TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN classCode TEXT").run(); } catch (_) {}
 
                     // Retry original query
                     const { results } = await env.DB.prepare(query).bind(...params).all();
@@ -201,13 +222,13 @@ export const onRequest = async (context: any) => {
         // POST: 추가
         if (request.method === 'POST') {
             const body = await request.json();
-            const { subject, title, dueDate, description, grade, classNum, classTime } = body;
+            const { subject, title, dueDate, description, grade, classNum, classTime, teacher, classCode } = body;
 
             if (!subject || !title || !dueDate || !grade || !classNum) {
                 return new Response("Missing required fields", { status: 400 });
             }
 
-            console.log('[Assessment API] Creating:', { subject, title, dueDate, grade, classNum, classTime });
+            console.log('[Assessment API] Creating:', { subject, title, dueDate, grade, classNum, classTime, teacher, classCode });
 
             // Check if the subject is an elective (isMovingClass = 1)
             let actualClassNum = classNum;
@@ -249,9 +270,9 @@ export const onRequest = async (context: any) => {
             try {
                 // Try inserting with lastModifiedIp and dataset (New Schema)
                 const result = await env.DB.prepare(
-                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
-                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip).run();
+                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
+                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null).run();
 
                 return new Response(JSON.stringify({ success: true, result }), {
                     headers: { 'Content-Type': 'application/json' }
@@ -274,11 +295,12 @@ export const onRequest = async (context: any) => {
                           isDone INTEGER DEFAULT 0,
                           dataset TEXT DEFAULT '',
                           createdAt TEXT DEFAULT (datetime('now')),
-                          lastModifiedIp TEXT,
                           isDeleted INTEGER DEFAULT 0,
                           votes TEXT DEFAULT '[]',
                           tempDueDate TEXT,
-                          tempClassTime INTEGER
+                          tempClassTime INTEGER,
+                          teacher TEXT,
+                          classCode TEXT
                         )
                     `).run();
                     // Add isDeleted column if missing (migration for older tables)
@@ -288,12 +310,15 @@ export const onRequest = async (context: any) => {
                     // Add temp columns if missing
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempDueDate TEXT").run(); } catch (_) {}
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN tempClassTime INTEGER").run(); } catch (_) {}
+                    // Add new columns for identification
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN teacher TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN classCode TEXT").run(); } catch (_) {}
 
                     // Retry
                     const result = await env.DB.prepare(
-                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
-                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip).run();
+                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
+                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null).run();
 
                     return new Response(JSON.stringify({ success: true, result }), {
                         headers: { 'Content-Type': 'application/json' }
@@ -307,11 +332,11 @@ export const onRequest = async (context: any) => {
                 if (errorMsg.includes("no such column") && errorMsg.includes("dataset")) {
                     console.log("[Assessment API] 'dataset' column missing in POST. Attempting to add it.");
                     await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN dataset TEXT DEFAULT ''").run();
-                    // Retry with dataset, but potentially without lastModifiedIp if that was the original issue
+                    // Retry
                     const result = await env.DB.prepare(
-                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
-                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip).run();
+                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
+                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null).run();
                     return new Response(JSON.stringify({ success: true, result, warning: "Dataset column added and retried" }), {
                         headers: { 'Content-Type': 'application/json' }
                     });
@@ -320,21 +345,36 @@ export const onRequest = async (context: any) => {
                 if (errorMsg.includes("no such column") && errorMsg.includes("lastModifiedIp")) {
                     console.log("[Assessment API] 'lastModifiedIp' column missing in POST. Attempting to add it.");
                     await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN lastModifiedIp TEXT").run();
-                    // Retry with lastModifiedIp, but potentially without dataset if that was the original issue
+                    // Retry
                     const result = await env.DB.prepare(
-                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
-                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip).run();
+                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
+                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null).run();
                     return new Response(JSON.stringify({ success: true, result, warning: "lastModifiedIp column added and retried" }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
+                // Check if 'teacher' or 'classCode' column is missing
+                if (errorMsg.includes("no such column") && (errorMsg.includes("teacher") || errorMsg.includes("classCode"))) {
+                    console.log("[Assessment API] 'teacher'/'classCode' column missing in POST. Attempting to add it.");
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN teacher TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN classCode TEXT").run(); } catch (_) {}
+                    // Retry
+                    const result = await env.DB.prepare(
+                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
+                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null).run();
+                    return new Response(JSON.stringify({ success: true, result, warning: "teacher/classCode column added and retried" }), {
                         headers: { 'Content-Type': 'application/json' }
                     });
                 }
 
                 // Final fallback if both are missing or other error
                 const result = await env.DB.prepare(
-                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
-                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null).run();
+                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, teacher, classCode)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
+                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, teacher || null, classCode || null).run();
 
                 return new Response(JSON.stringify({ success: true, result, warning: "IP not saved due to schema mismatch" }), {
                     headers: { 'Content-Type': 'application/json' }
@@ -373,7 +413,7 @@ export const onRequest = async (context: any) => {
         // PATCH: 수정
         if (request.method === 'PATCH') {
             const body = await request.json();
-            const { id, subject, title, description, dueDate, round, classTime, tempDueDate, tempClassTime } = body;
+            const { id, subject, title, description, dueDate, round, classTime, tempDueDate, tempClassTime, teacher, classCode } = body;
 
             if (!id) return new Response('Missing ID', { status: 400 });
 
@@ -386,6 +426,8 @@ export const onRequest = async (context: any) => {
             if (description !== undefined) { updates.push("description = ?"); values.push(description); }
             if (dueDate !== undefined) { updates.push("dueDate = ?"); values.push(dueDate); }
             if (classTime !== undefined) { updates.push("classTime = ?"); values.push(classTime); }
+            if (teacher !== undefined) { updates.push("teacher = ?"); values.push(teacher); }
+            if (classCode !== undefined) { updates.push("classCode = ?"); values.push(classCode); }
             
             if (tempDueDate !== undefined) { 
                 updates.push("tempDueDate = ?"); 
@@ -481,6 +523,19 @@ export const onRequest = async (context: any) => {
                         });
                     }
                 }
+
+                // Auto-Heal: Missing Column 'teacher' / 'classCode'
+                if (errorMsg.includes("no such column") && (errorMsg.includes("teacher") || errorMsg.includes("classCode"))) {
+                    console.log("[Assessment API] 'teacher'/'classCode' columns missing in PATCH. Attempting to add them.");
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN teacher TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN classCode TEXT").run(); } catch (_) {}
+
+                    const retryResult = await env.DB.prepare(query).bind(...values).run();
+                    return new Response(JSON.stringify({ success: true, result: retryResult }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+                
                 throw updateError;
             }
         }

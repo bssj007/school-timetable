@@ -49,6 +49,8 @@ interface AssessmentItem {
   tempDueDate?: string;
   tempClassTime?: number;
   isAutoPredicted?: boolean;
+  teacher?: string;
+  classCode?: string;
 }
 
 // 주의 시작일 계산 (월요일 기준)
@@ -154,6 +156,8 @@ export default function Dashboard() {
     content: "",
     classTime: "",
     round: "1",
+    teacher: "",
+    classCode: "",
   });
 
   const [showElectiveDialog, setShowElectiveDialog] = useState(false);
@@ -355,7 +359,9 @@ export default function Dashboard() {
     classTime: number,
     subject: string,
     date: Date,
-    cellAssessments: AssessmentItem[]
+    cellAssessments: AssessmentItem[],
+    teacher: string = "",
+    classCode: string = ""
   ) => {
     const today = new Date();
     const todayStr = toDateString(today);
@@ -386,6 +392,8 @@ export default function Dashboard() {
           content: "",
           classTime: classTime.toString(),
           round: "1",
+          teacher: teacher,
+          classCode: classCode,
         });
         setShowAddDialog(true);
       }
@@ -883,6 +891,8 @@ export default function Dashboard() {
           classNum: parseInt(classNum),
           classTime: data.classTime ? parseInt(data.classTime) : null,
           dataset: datasetId || '',
+          teacher: data.teacher,
+          classCode: data.classCode,
         }),
       });
 
@@ -965,6 +975,8 @@ export default function Dashboard() {
         content: "",
         classTime: "",
         round: "1",
+        teacher: "",
+        classCode: "",
       });
       setShowAddDialog(false); // 다이얼로그 닫기
       setSelectedCell(null); // 선택 셀 해제
@@ -997,6 +1009,8 @@ export default function Dashboard() {
       content: assessment.title,
       classTime: assessment.classTime?.toString() || "",
       round: parsedRound,
+      teacher: assessment.teacher || "",
+      classCode: assessment.classCode || "",
     });
     setShowViewDialog(false);
     setShowEditDialog(true);
@@ -1013,6 +1027,8 @@ export default function Dashboard() {
         dueDate: formData.assessmentDate,
         classTime: formData.classTime ? parseInt(formData.classTime) : undefined,
         description: formData.round ? `${formData.round}차` : "",
+        teacher: formData.teacher,
+        classCode: formData.classCode,
       });
     } catch (error) {
       console.error("수행평가 수정 실패:", error);
@@ -1838,7 +1854,7 @@ export default function Dashboard() {
                                 bgColor = "bg-red-50 hover:bg-red-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50";
                               }
 
-                              if (item && item.isChanged && !cellInlineStyle && !isPast) {
+                              if (item && item.isChanged && !cellInlineStyle && !isPast && cellAssessments.length === 0) {
                                 const tColor = settings?.changed_class_tint_color || '#fef08a';
                                 const tOpacity = settings?.changed_class_tint_opacity !== undefined ? parseFloat(settings.changed_class_tint_opacity) : 1.0;
                                 const h = tColor.replace('#', '');
