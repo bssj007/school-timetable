@@ -4257,11 +4257,11 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
     }, [cacheStatusQuery.data?.settings?.cacheMaxAgeMinutes]);
 
     const refreshMutation = useMutation({
-        mutationFn: async (grades: number[]) => {
+        mutationFn: async () => {
             const res = await fetch("/api/admin/comcigan-cache", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
-                body: JSON.stringify({ grades })
+                body: JSON.stringify({})
             });
             if (!res.ok) throw new Error("Refresh failed");
             return res.json();
@@ -4269,9 +4269,9 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
         onSuccess: (data) => {
             const failed = data.results?.filter((r: any) => !r.success);
             if (failed?.length > 0) {
-                toast.error(`일부 학년 갱신 실패: ${failed.map((r: any) => `${r.grade}학년`).join(', ')}`);
+                toast.error(`원본 통합 데이터셋 갱신 실패`);
             } else {
-                toast.success("캐시가 갱신되었습니다.");
+                toast.success("통합 캐시가 갱신되었습니다.");
             }
             queryClient.invalidateQueries({ queryKey: ["admin", "comciganCacheStatus"] });
         },
@@ -4332,7 +4332,7 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                     <Button
                         size="sm"
                         className="h-8 text-xs"
-                        onClick={() => refreshMutation.mutate([1, 2, 3])}
+                        onClick={() => refreshMutation.mutate()}
                         disabled={refreshMutation.isPending}
                     >
                         <RefreshCw className={`w-3 h-3 mr-1 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
@@ -4401,68 +4401,7 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                                 </div>
                             );
                         })()}
-
-                        {[1, 2, 3].map(grade => {
-                            const entry = cacheEntries.find((e: any) => e.cacheKey === `gc_${grade}`);
-                            return (
-                                <div key={grade} className="flex items-center gap-3 bg-white border rounded-md px-4 py-3">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm font-bold text-slate-800">{grade}학년</span>
-                                            {entry ? (
-                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${entry.isFresh
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : 'bg-amber-100 text-amber-700'
-                                                }`}>
-                                                    {entry.isFresh ? '신선' : '만료'}
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">미생성</span>
-                                            )}
-                                            {entry?.isFrozen && (
-                                                <Badge variant="outline" className="border-blue-300 text-blue-700 bg-blue-50 h-5 px-1.5 ml-1">
-                                                    <Lock className="w-3 h-3 mr-1" />
-                                                    동결됨
-                                                </Badge>
-                                            )}
-                                        </div>
-                                        {entry && (
-                                            <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                                                <span className="flex items-center gap-1">
-                                                    <Clock className="w-3 h-3" />
-                                                    {entry.isFrozen ? "무기한 (동결)" : formatAge(entry.ageSec)}
-                                                </span>
-                                                <span>데이터셋: {entry.datasetId || '(없음)'}</span>
-                                                <span>{Math.round((entry.dataSize || 0) / 1024)}KB</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    {entry && (
-                                        <div className="flex items-center gap-2 mr-2 border-r pr-4">
-                                            <Label htmlFor={`freeze-${grade}`} className="text-xs text-slate-600 cursor-pointer">
-                                                수동 동결
-                                            </Label>
-                                            <Switch
-                                                id={`freeze-${grade}`}
-                                                checked={entry.isFrozen}
-                                                onCheckedChange={(checked) => toggleFreezeMutation.mutate({ cacheKey: entry.cacheKey, freeze: checked })}
-                                                disabled={toggleFreezeMutation.isPending}
-                                            />
-                                        </div>
-                                    )}
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-7 text-xs"
-                                        onClick={() => refreshMutation.mutate([grade])}
-                                        disabled={refreshMutation.isPending || entry?.isFrozen}
-                                        title={entry?.isFrozen ? "동결 상태에서는 수동 갱신할 수 없습니다." : "최신 데이터로 강제 갱신"}
-                                    >
-                                        <RefreshCw className={`w-3 h-3 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
-                                    </Button>
-                                </div>
-                            );
-                        })}
+                        {/* 학년별 분리 캐시 매핑 소거: 통합 원본 캐시(raw_data)가 전체를 관리함 */}
                     </div>
                 )}
             </div>

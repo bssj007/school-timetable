@@ -58,17 +58,11 @@ export default {
 
         // --- 시간표 캐시 갱신 (매 트리거마다 실행) ---
         try {
-            const { refreshCache } = await import('./api/comcigan' as any);
-            for (const grade of [1, 2, 3]) {
-                try {
-                    await refreshCache(env.DB, grade);
-                    console.log(`[Scheduled] Grade ${grade} cache refreshed`);
-                } catch (e) {
-                    console.error(`[Scheduled] Grade ${grade} cache refresh failed:`, e);
-                }
-            }
+            const { refreshRawCache } = await import('./api/comcigan' as any);
+            await refreshRawCache(env.DB);
+            console.log(`[Scheduled] Unified raw_data cache refreshed`);
         } catch (e) {
-            console.error('[Scheduled] Timetable cache update failed:', e);
+            console.error('[Scheduled] Timetable raw_data cache update failed:', e);
         }
 
         // --- 카카오 알림 + DB 정리는 아침 cron에서만 실행 ---
