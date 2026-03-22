@@ -125,7 +125,21 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
         // tbl 파라미터로 현재 주 또는 다음 주 시간표를 선택할 수 있음
         const buildGetSlots = (tbl: any[]) => (w: number) => {
             if (assessment.classNum !== 0) {
-                return tbl.filter((t: any) => (!t.class || t.class.toString() === assessment.classNum.toString()) && t.weekday === w);
+                return tbl.filter((t: any) => {
+                    if (t.weekday !== w) return false;
+                    // 1. 본인 반이거나 반 정보가 없는 공통 슬롯
+                    if (!t.class || t.class.toString() === assessment.classNum.toString()) return true;
+                    
+                    // 2. 다른 반 데이터라도 이동수업 특성상 동일 과목이 나오면 해당 블록으로 간주하여 포함시킴 (대시보드 갭필링 대체)
+                    const tSubj = (t.subject || '').replace(/\s*\(.*$/, '').trim();
+                    if (tSubj === baseAssSubject) return true;
+                    
+                    // 3. 선택과목 별칭 교차 확인
+                    const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === t.subject && cfg.originalTeacher === t.teacher);
+                    if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) return true;
+                    
+                    return false;
+                });
             }
             // 이동수업: teacher로 엄격 필터
             // assessment.teacher + elective_config fullTeacherName/originalTeacher 모두 비교
