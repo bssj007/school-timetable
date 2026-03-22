@@ -185,37 +185,61 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             // 공강/빈교실 슬롯은 어떤 경우도 매칭 불가
             if (isFreePeriod(slot.subject || '')) return false;
 
-            if (assessment.teacher && assessment.classCode) {
-                // teacher + classCode 둘 다 있으면 elective_config로 정밀 검증 시도
-                const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
-                if (specificConfig && specificConfig.classCode) {
-                    // assessment.classCode가 단일그룹("D")이든 다중그룹("A,B,C,D")이든 교차 비교
-                    const assessCodes = assessment.classCode.split(',').map((s: string) => s.trim());
-                    const slotCodes = specificConfig.classCode.split(',').map((s: string) => s.trim());
-                    if (assessCodes.some((c: string) => slotCodes.includes(c)) &&
-                        (assessment.teacher === slot.teacher || specificConfig.fullTeacherName?.includes(assessment.teacher))) {
-                        return true;
+            // 1. 과목명 매칭 확인
+            let isSubjectMatch = false;
+            const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
+            
+            if (slot.subject === baseAssSubject) {
+                isSubjectMatch = true;
+            } else if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) {
+                isSubjectMatch = true;
+            } else {
+                const genericConfig = ctx.electives.find((cfg: any) => (cfg.subject.trim() === baseAssSubject || cfg.fullSubjectName?.trim() === baseAssSubject));
+                if (genericConfig && genericConfig.classCode && specificConfig && specificConfig.classCode) {
+                    const codesA = genericConfig.classCode.split(',').map((s: string) => s.trim());
+                    const codesB = specificConfig.classCode.split(',').map((s: string) => s.trim());
+                    if (codesA.some((c: string) => codesB.includes(c))) {
+                        isSubjectMatch = true;
                     }
                 }
-                // 정밀 매칭 실패 시 폴백(과목명 비교)으로 계속 진행
-            } else if (assessment.teacher && !assessment.classCode) {
-                // 일반 수업: 선생님 + 과목명 같아야 함
-                if (slot.subject === baseAssSubject && slot.teacher === assessment.teacher) return true;
             }
 
-            // 과목명 매칭 (일반 과목 공통 폴백)
-            if (slot.subject === baseAssSubject) return true;
-            
-            // Elective alias fallback
-            const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
-            if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) return true;
-            const genericConfig = ctx.electives.find((cfg: any) => (cfg.subject.trim() === baseAssSubject || cfg.fullSubjectName?.trim() === baseAssSubject));
-            if (genericConfig && genericConfig.classCode && specificConfig && specificConfig.classCode) {
-                const codesA = genericConfig.classCode.split(',').map((s: string) => s.trim());
-                const codesB = specificConfig.classCode.split(',').map((s: string) => s.trim());
-                if (codesA.some((c: string) => codesB.includes(c))) return true;
+            if (!isSubjectMatch) return false;
+
+            // 2. 선생님 매칭 확인 (평가에 선생님이 지정된 경우)
+            if (assessment.teacher) {
+                let isTeacherMatch = false;
+                const targetTeacher = assessment.teacher.replace(/\*.*$/, '').trim();
+                
+                // 설정에 fullName이 있으면 우선적으로 비교 ("originalName외 fullName이 있을시 fullName로 비교")
+                if (specificConfig && specificConfig.fullTeacherName) {
+                    const fullNames = specificConfig.fullTeacherName.split(/[,、]+/).map((n: string) => n.replace(/\*.*$/, '').trim());
+                    if (fullNames.some((name: string) => targetTeacher === name || targetTeacher.startsWith(name) || name.startsWith(targetTeacher))) {
+                        isTeacherMatch = true;
+                    }
+                }
+                
+                // fullName과 매칭되지 않았거나 없는 경우 originalName(slot.teacher)으로 비교
+                if (!isTeacherMatch && slot.teacher) {
+                    const originalName = slot.teacher.replace(/\*.*$/, '').trim();
+                    if (targetTeacher === originalName || targetTeacher.startsWith(originalName) || originalName.startsWith(targetTeacher)) {
+                        isTeacherMatch = true;
+                    }
+                }
+                
+                if (!isTeacherMatch) return false;
+
+                // 3. classCode 교차 검증 (classCode가 지정된 평가인 경우)
+                if (assessment.classCode && specificConfig && specificConfig.classCode) {
+                    const assessCodes = assessment.classCode.split(',').map((s: string) => s.trim());
+                    const slotCodes = specificConfig.classCode.split(',').map((s: string) => s.trim());
+                    if (!assessCodes.some((c: string) => slotCodes.includes(c))) {
+                        return false;
+                    }
+                }
             }
-            return false;
+
+            return true;
         };
 
 
