@@ -4026,6 +4026,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <AlertCircle className="w-4 h-4 mr-2" />
                     미해결 문제
                 </Button>
+                <Button
+                    variant={selectedMenu === "special-schedules" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-pink-600 hover:text-pink-700 hover:bg-pink-50 font-medium"
+                    onClick={() => setSelectedMenu("special-schedules")}
+                >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    특수일정 관리
+                </Button>
                 {/* Additional list items can go here later */}
             </div>
 
@@ -4249,6 +4257,16 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         <div className="flex-1 overflow-y-auto">
                             <TargetClassDisplaySettings adminPassword={adminPassword} />
                             <SamsungInstallSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+                {selectedMenu === "special-schedules" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-pink-600">특수일정 관리</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <SpecialScheduleManager adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -4656,6 +4674,198 @@ function RawTimetableViewer({ rawData }: { rawData: any }) {
 }
 
 
+// ----------------------------------------------------------------------
+// SpecialScheduleManager - 특수일정 관리 컴포넌트
+// ----------------------------------------------------------------------
+function SpecialScheduleManager({ adminPassword }: { adminPassword: string }) {
+    const [schedules, setSchedules] = useState<any[]>([]);
+    const [originalSchedules, setOriginalSchedules] = useState<any[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const { isLoading, data, refetch } = useQuery({
+        queryKey: ["admin", "specialSchedules"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 로드 실패");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (data?.special_schedules) {
+            try {
+                const parsed = JSON.parse(data.special_schedules);
+                setSchedules(parsed);
+                setOriginalSchedules(JSON.parse(JSON.stringify(parsed)));
+            } catch (e) {
+                console.error("Failed to parse special_schedules", e);
+                setSchedules([]);
+                setOriginalSchedules([]);
+            }
+        } else if (data) {
+            setSchedules([]);
+            setOriginalSchedules([]);
+        }
+    }, [data]);
+
+    const hasChanges = JSON.stringify(schedules) !== JSON.stringify(originalSchedules);
+
+    const handleAdd = () => {
+        const newSchedule = {
+            id: Date.now().toString(),
+            date: new Date().toISOString().split('T')[0],
+            grade: 0,
+            text: "학\n력\n평\n가",
+            fontSize: "text-4xl"
+        };
+        setSchedules([...schedules, newSchedule]);
+    };
+
+    const handleDelete = (id: string) => {
+        setSchedules(schedules.filter(s => s.id !== id));
+    };
+
+    const handleChange = (id: string, field: string, value: any) => {
+        setSchedules(schedules.map(s => s.id === id ? { ...s, [field]: value } : s));
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({
+                    special_schedules: JSON.stringify(schedules)
+                })
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            toast.success("특수일정이 성공적으로 저장되었습니다.");
+            refetch();
+        } catch (error: any) {
+            toast.error(error.message || "저장 중 오류가 발생했습니다.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleCancel = () => {
+        setSchedules(JSON.parse(JSON.stringify(originalSchedules)));
+    };
+
+    return (
+        <div className="flex flex-col gap-4">
+            <div className="flex justify-between items-center mb-2">
+                <p className="text-sm text-gray-500">
+                    지정한 날짜의 1~7교시 정규 시간표를 완전히 무시하고, 여기서 입력한 "특수일정 텍스트"를 세로로 가득 채워 표시합니다.<br/>
+                    (단일 학년 또는 전학년 대상 지정 가능)
+                </p>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={handleCancel} disabled={!hasChanges || isSaving}>
+                        취소
+                    </Button>
+                    <Button onClick={handleSave} disabled={!hasChanges || isSaving} className="bg-pink-600 hover:bg-pink-700">
+                        {isSaving ? "저장 중..." : "변경사항 저장"}
+                    </Button>
+                </div>
+            </div>
+
+            <div className="space-y-4">
+                {isLoading ? (
+                    <div className="text-center py-8 text-gray-500">로딩 중...</div>
+                ) : schedules.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500 border rounded-md border-dashed">
+                        등록된 특수일정이 없습니다.
+                    </div>
+                ) : (
+                    schedules.map((schedule) => (
+                        <div key={schedule.id} className="flex flex-col md:flex-row gap-4 p-4 border rounded-md bg-white border-pink-100 items-start">
+                            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-sm font-semibold text-gray-700">날짜 (YYYY-MM-DD)</label>
+                                    <Input 
+                                        type="date" 
+                                        value={schedule.date} 
+                                        onChange={(e) => handleChange(schedule.id, "date", e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-semibold text-gray-700">적용 학년</label>
+                                    <Select 
+                                        value={schedule.grade.toString()} 
+                                        onValueChange={(val) => handleChange(schedule.id, "grade", parseInt(val))}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="0">전학년(1,2,3)</SelectItem>
+                                            <SelectItem value="1">1학년</SelectItem>
+                                            <SelectItem value="2">2학년</SelectItem>
+                                            <SelectItem value="3">3학년</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-semibold text-gray-700">텍스트 크기</label>
+                                    <Select 
+                                        value={schedule.fontSize} 
+                                        onValueChange={(val) => handleChange(schedule.id, "fontSize", val)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="text-2xl">2xl</SelectItem>
+                                            <SelectItem value="text-3xl">3xl</SelectItem>
+                                            <SelectItem value="text-4xl">4xl</SelectItem>
+                                            <SelectItem value="text-5xl">5xl</SelectItem>
+                                            <SelectItem value="text-6xl">6xl (가장 큼)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-1 md:col-span-2 lg:col-span-1">
+                                    <label className="text-sm font-semibold text-gray-700 flex justify-between">
+                                        <span>세로 텍스트 문구</span>
+                                        <span className="text-xs text-gray-400 font-normal">엔터로 줄바꿈</span>
+                                    </label>
+                                    <textarea
+                                        className="w-full h-[120px] p-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                        value={schedule.text}
+                                        onChange={(e) => handleChange(schedule.id, "text", e.target.value)}
+                                        placeholder="학&#10;력&#10;평&#10;가"
+                                    />
+                                </div>
+                            </div>
+                            
+                            <Button 
+                                variant="destructive" 
+                                size="icon" 
+                                className="mt-6 shrink-0"
+                                onClick={() => handleDelete(schedule.id)}
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </Button>
+                        </div>
+                    ))
+                )}
+                
+                <Button 
+                    variant="outline" 
+                    className="w-full border-dashed border-pink-300 text-pink-600 hover:bg-pink-50 hover:text-pink-700"
+                    onClick={handleAdd}
+                >
+                    <Plus className="w-4 h-4 mr-2" /> 특수일정 추가
+                </Button>
+            </div>
+        </div>
+    );
+}
 
 export default function Admin() {
     const [password, setPassword] = useState("");

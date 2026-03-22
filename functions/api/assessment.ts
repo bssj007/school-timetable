@@ -413,7 +413,7 @@ export const onRequest = async (context: any) => {
         // PATCH: 수정
         if (request.method === 'PATCH') {
             const body = await request.json();
-            const { id, subject, title, description, dueDate, round, classTime, tempDueDate, tempClassTime, teacher, classCode } = body;
+            const { id, subject, title, description, dueDate, round, classTime, tempDueDate, tempClassTime, teacher, classCode, isAutoPredicted } = body;
 
             if (!id) return new Response('Missing ID', { status: 400 });
 
@@ -452,6 +452,10 @@ export const onRequest = async (context: any) => {
                 } else {
                     updates.push("tempDueDate = ?"); 
                     values.push(tempDueDate); 
+                    if (isAutoPredicted !== undefined) {
+                        updates.push("isAutoPredicted = ?");
+                        values.push(isAutoPredicted);
+                    }
                 }
             } else if (dueDate !== undefined) {
                 // 원본 날짜가 수정될 때는 기존의 임시 연기 날짜를 삭제함 (수동으로 제공되지 않은 경우)

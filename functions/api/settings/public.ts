@@ -7,7 +7,7 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'elective_input_mode_grade2', 'elective_input_mode_grade3', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'show_target_class_main_menu', 'promotion_reset_days', 'assessment_distrust_threshold', 'assessment_positive_color', 'assessment_positive_ratio', 'assessment_negative_color', 'assessment_negative_ratio', 'assessment_timetable_color', 'changed_class_tint_color', 'changed_class_tint_opacity', 'comcigan_debug_overlay_enabled')").all();
+        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'elective_input_mode_grade2', 'elective_input_mode_grade3', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'show_target_class_main_menu', 'promotion_reset_days', 'assessment_distrust_threshold', 'assessment_positive_color', 'assessment_positive_ratio', 'assessment_negative_color', 'assessment_negative_ratio', 'assessment_timetable_color', 'changed_class_tint_color', 'changed_class_tint_opacity', 'comcigan_debug_overlay_enabled', 'special_schedules')").all();
 
         const settings: any = {};
         if (rows && rows.results) {
@@ -63,7 +63,8 @@ export const onRequest = async (context: any) => {
             assessment_timetable_color: settings['assessment_timetable_color'] === 'true',
             changed_class_tint_color: settings['changed_class_tint_color'],
             changed_class_tint_opacity: settings['changed_class_tint_opacity'],
-            comcigan_debug_overlay_enabled: settings['comcigan_debug_overlay_enabled'] === 'true'
+            comcigan_debug_overlay_enabled: settings['comcigan_debug_overlay_enabled'] === 'true',
+            special_schedules: settings['special_schedules'] ? JSON.parse(settings['special_schedules']) : []
         }), {
             headers: { 'Content-Type': 'application/json' }
         });

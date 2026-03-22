@@ -48,7 +48,7 @@ interface AssessmentItem {
   originalClassTime?: number;
   tempDueDate?: string;
   tempClassTime?: number;
-  isAutoPredicted?: boolean;
+  isAutoPredicted?: boolean | number;
   teacher?: string;
   classCode?: string;
 }
@@ -1053,6 +1053,7 @@ export default function Dashboard() {
         classTime: editingAssessment.originalClassTime || (formData.classTime ? parseInt(formData.classTime) : undefined),
         tempDueDate: editingAssessment.originalDueDate ? formData.assessmentDate : undefined,
         tempClassTime: editingAssessment.originalDueDate ? (formData.classTime ? parseInt(formData.classTime) : undefined) : undefined,
+        isAutoPredicted: editingAssessment.originalDueDate ? 0 : undefined,
         description: formData.round ? `${formData.round}차` : "",
         teacher: formData.teacher,
         classCode: formData.classCode,
@@ -1114,7 +1115,8 @@ export default function Dashboard() {
                dueDate: assessment.originalDueDate || assessment.dueDate,
                classTime: assessment.originalClassTime || assessment.classTime,
                tempDueDate: targetDate,
-               tempClassTime: targetTime
+               tempClassTime: targetTime,
+               isAutoPredicted: 0
            });
 
            // Find collider in allAssessments
@@ -1811,9 +1813,29 @@ export default function Dashboard() {
                               {classTime}
                             </td>
                             {Array.from({ length: 5 }, (_, weekdayIdx) => {
+                              const currentDate = toDateString(weekDates[weekdayIdx]);
+
+                              // 특수일정 체크 (해당 일, 전체학년(0) 또는 현재학년 매칭)
+                              const specialSchedule = settings?.special_schedules?.find((s: any) => 
+                                s.date === currentDate && (s.grade === 0 || s.grade.toString() === grade.toString())
+                              );
+
+                              if (specialSchedule) {
+                                if (classTime === 1) {
+                                  return (
+                                    <td key={weekdayIdx} rowSpan={7} className="border p-2 md:p-4 align-middle text-center bg-pink-50/50 relative overflow-hidden print:!bg-white">
+                                      <div className={`whitespace-pre-wrap font-black text-pink-700 leading-tight tracking-widest ${specialSchedule.fontSize} print:!text-black`}>
+                                        {specialSchedule.text}
+                                      </div>
+                                    </td>
+                                  );
+                                } else {
+                                  return null; // 2~7교시는 렌더링 무시
+                                }
+                              }
+
                               const dayItems = timetableByDay[weekdayIdx] || [];
                               const item = dayItems.find((t) => t.classTime === classTime);
-                              const currentDate = toDateString(weekDates[weekdayIdx]);
 
                               // 오늘 날짜인지 확인
                               const today = new Date();
