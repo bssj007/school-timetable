@@ -79,9 +79,37 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
 
         const baseAssSubject = assessment.subject.replace(/\s*\(.*$/, '').trim();
 
+        // 공강/빈교실 판별 함수 - checkSubjectMatch보다 먼저 선언
+        const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free", "창체", "자습", "동아리", "점심시간"];
+        const isFreePeriod = (subject: string) => FREE_KEYWORDS.some(k => (subject || '').includes(k));
+
+        // 이동수업(classNum=0): teacher로 1차 필터 후 과목 탐색 → 일반 수업: 해당 반만
+        const getSlots = (w: number) => {
+            if (assessment.classNum !== 0) {
+                return ctx.timetable.filter((t: any) => t.class === assessment.classNum && t.weekday === w);
+            }
+            // 이동수업: teacher가 있으면 동일 teacher의 슬롯만 (가장 정확)
+            if (assessment.teacher) {
+                const teacherBase = assessment.teacher.replace(/\*.*$/, '').trim();
+                return ctx.timetable.filter((t: any) =>
+                    t.weekday === w &&
+                    !isFreePeriod(t.subject || '') &&
+                    (t.teacher === assessment.teacher || (t.teacher || '').startsWith(teacherBase))
+                );
+            }
+            // teacher 미상: 과목명으로만 탐색 (공강 제외)
+            return ctx.timetable.filter((t: any) =>
+                t.weekday === w &&
+                !isFreePeriod(t.subject || '') &&
+                (t.subject || '').replace(/\s*\(.*$/, '').trim() === baseAssSubject
+            );
+        };
         const checkSubjectMatch = (slot: any) => {
+            // 공강/빈교실 슬롯은 어떤 경우도 매칭 불가
+            if (isFreePeriod(slot.subject || '')) return false;
+
             if (assessment.teacher && assessment.classCode) {
-                // If we recorded exact classCode and teacher, verify them against the current slot's elective configuration
+                // 이동수업: teacher + classCode 일치확인 엄격 모드
                 const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
                 if (specificConfig && specificConfig.classCode) {
                     const codes = specificConfig.classCode.split(',').map((s: string) => s.trim());
@@ -89,11 +117,14 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
                         return true;
                     }
                 }
+                // classCode가 있는 수행평가는 폴백 없이 false
+                return false;
             } else if (assessment.teacher && !assessment.classCode) {
-                // For non-electives, if we have an explicit teacher, it should match the slot teacher
+                // 일반 수업: 선생님 + 과목명 같아야 함
                 if (slot.subject === baseAssSubject && slot.teacher === assessment.teacher) return true;
             }
 
+            // 공통 과목명 매칭 (고가 일반 과목)
             if (slot.subject === baseAssSubject) return true;
             
             // Elective alias fallback
@@ -108,14 +139,6 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             return false;
         };
 
-        // 공강/빈교실 판별 함수 (연기 탐색 대상에서 제외)
-        const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free", "창체", "자습", "동아리", "점심시간"];
-        const isFreePeriod = (subject: string) => FREE_KEYWORDS.some(k => (subject || '').includes(k));
-
-        // 이동수업(classNum=0): 학년 전체 시간표에서 과목 탐색, 일반 수업: 해당 반만
-        const getSlots = (w: number) => assessment.classNum !== 0
-            ? ctx.timetable.filter((t: any) => t.class === assessment.classNum && t.weekday === w)
-            : ctx.timetable.filter((t: any) => t.weekday === w);
 
         let isOrphan = false;
         let currentW = -1;
