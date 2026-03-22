@@ -1797,11 +1797,23 @@ export default function Dashboard() {
                                 const electiveSelection = currentProfile?.electives?.[group];
                                 const matchSubject = group && electiveSelection ? (electiveSelection.fullSubjectName || electiveSelection.subject) : (item ? item.subject : null);
 
-                                return matchSubject &&
-                                  a.subject.trim() === matchSubject.trim() &&
-                                  a.dueDate === currentDate &&
-                                  a.classTime === classTime &&
-                                  !a.isDone;
+                                if (!matchSubject) return false;
+                                if (a.subject.trim() !== matchSubject.trim()) return false;
+                                if (a.dueDate !== currentDate) return false;
+                                if (a.classTime !== classTime) return false;
+                                if (a.isDone) return false;
+
+                                // classCode 검증: 수행평가에 classCode(그룹)가 지정된 경우,
+                                // 이 학생의 group이 해당 그룹 목록에 포함될 때만 표시한다.
+                                // classCode가 없으면 전체 공통 수행평가이므로 그룹 무관하게 표시.
+                                if (a.classCode && a.classCode.trim()) {
+                                  const allowedGroups = a.classCode.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                  if (group && allowedGroups.length > 0 && !allowedGroups.includes(group)) {
+                                    return false; // 이 학생의 그룹이 대상 그룹에 없음
+                                  }
+                                }
+
+                                return true;
                               }) : [];
 
                               // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
