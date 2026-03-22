@@ -3525,66 +3525,8 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
             const eligible = a.classNum === 0 ? eligibleCounts.total : (eligibleCounts.byClass[a.classNum] || 0);
             const exceedsThreshold = v.distrust >= threshold;
             
-            // 고아 수행평가 판단 (Orphan Assessment Detection)
-            let isOrphan = false;
-            // Get weekday from dueDate
-            const dueDateObj = new Date(a.dueDate);
-            const aDay = dueDateObj.getDay();
-            if (aDay === 0 || aDay === 6) {
-                // Weekend
-                isOrphan = true;
-            } else {
-                const w = aDay - 1; // 0=Mon ... 4=Fri
-                const slots = (timetableAllQuery.data || []).filter((t: any) => t.class === a.classNum && t.weekday === w);
-                
-                let matchingSlots = slots;
-                if (a.classTime) {
-                    matchingSlots = slots.filter((t: any) => t.classTime === a.classTime);
-                }
-                
-                if (matchingSlots.length === 0) {
-                    isOrphan = true;
-                } else {
-                    let foundMatch = false;
-                    for (const slot of matchingSlots) {
-                        const p = slot.classTime;
-                        
-                        // Direct match
-                        let matchSubject = slot.subject;
-                        
-                        // Electives match
-                        const group = computedGroups[`${w}-${p}`];
-                        if (group && (selectedGrade === "2" || selectedGrade === "3")) {
-                            // Check if a.subject is in this group
-                            const configs = electiveConfigsQuery.data || [];
-                            const isSubjectInGroup = configs.some((cfg: any) => 
-                                (cfg.subject.trim() === a.subject.trim() || cfg.fullSubjectName?.trim() === a.subject.trim()) &&
-                                cfg.classCode?.split(',').map((s: string) => s.trim()).includes(group)
-                            );
-                            if (isSubjectInGroup) {
-                                foundMatch = true;
-                                break;
-                            }
-                        }
-                        
-                        // Handle generic fullSubjectName mappings if direct match fails
-                        if (!foundMatch && matchSubject !== a.subject) {
-                            const configs = electiveConfigsQuery.data || [];
-                            const specificConfig = configs.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
-                            if (specificConfig && specificConfig.fullSubjectName === a.subject) {
-                                foundMatch = true;
-                                break;
-                            }
-                        } else if (matchSubject === a.subject) {
-                            foundMatch = true;
-                            break;
-                        }
-                    }
-                    if (!foundMatch) {
-                        isOrphan = true;
-                    }
-                }
-            }
+            // Trust backend's centralized auto prediction logic for isOrphan
+            const isOrphan = !!a.isOrphan;
 
             return { ...a, helpful: v.helpful, distrust: v.distrust, eligible, exceedsThreshold, isOrphan };
         }).sort((a: any, b: any) => {
@@ -3592,7 +3534,7 @@ function AssessmentReliabilityManager({ adminPassword }: { adminPassword: string
             if (!a.isOrphan && b.isOrphan) return 1;
             return b.distrust - a.distrust;
         });
-    }, [assessments, votes, eligibleCounts, threshold, timetableAllQuery.data, electiveConfigsQuery.data, computedGroups, selectedGrade]);
+    }, [assessments, votes, eligibleCounts, threshold]);
 
     const isLoading = assessmentsQuery.isLoading || timetableAllQuery.isLoading || electiveConfigsQuery.isLoading;
 
@@ -4766,7 +4708,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         </span>
                         <span className="mx-1 font-bold text-red-500 text-xs">➔</span>
                         <span className="text-red-600 font-bold text-xs">{assessment.tempDueDate} {assessment.tempClassTime}교시</span>
-                        {assessment.isAutoPredicted && (
+                        {Boolean(assessment.isAutoPredicted) && (
                             <span className="text-[10px] text-orange-500 font-bold whitespace-nowrap">(자동예측)</span>
                         )}
                     </div>

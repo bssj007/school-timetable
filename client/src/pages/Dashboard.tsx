@@ -2600,7 +2600,7 @@ export default function Dashboard() {
                               </div>
                               <div className="flex items-center">
                                 <span className="font-bold text-red-600">{formatShortDateText(assessment.dueDate)} {assessment.classTime}교시</span>
-                                {assessment.isAutoPredicted && (
+                                {Boolean(assessment.isAutoPredicted) && (
                                   <span className="ml-1 text-xs text-orange-500 font-bold whitespace-nowrap">(자동예측)</span>
                                 )}
                               </div>

@@ -41,7 +41,7 @@ export const onRequest = async (context: any) => {
 
             const now = Date.now();
             const cacheEntries = (results || []).map((row: any) => {
-                const updatedAt = new Date(row.updated_at + 'Z').getTime();
+                const updatedAt = new Date((row.updated_at || "").replace(' ', 'T') + 'Z').getTime();
                 const ageMs = now - updatedAt;
                 return {
                     cacheKey: row.cache_key,

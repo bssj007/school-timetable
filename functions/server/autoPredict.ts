@@ -4,14 +4,22 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
     // We need to fetch timetable & electives for all involved datasets and grades
     const contextMap = new Map(); 
     
-    // Group required queries
+    // Group required queries by Grade, Dataset, and the Target Week
     for (const a of assessments) {
         if (a.isDone || a.isDeleted || a.classNum === 0) continue;
         let ds = a.dataset || '';
         if (ds !== 'MANUAL_PLAN' && ds !== 'SEMESTER_PLAN') ds = 'COMCIGAN';
-        const key = `${ds}_${a.grade}`;
+        
+        // Find Monday of the assessment due date to act as the week identifier
+        const dObj = new Date(a.dueDate);
+        const day = dObj.getDay();
+        const diff = dObj.getDate() - day + (day === 0 ? -6 : 1); // Adjust when Sunday
+        const monday = new Date(dObj.setDate(diff));
+        const weekKey = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+        
+        const key = `${ds}_${a.grade}_${weekKey}`;
         if (!contextMap.has(key)) {
-            contextMap.set(key, { grade: a.grade, dataset: ds, timetable: [], electives: [] });
+            contextMap.set(key, { grade: a.grade, dataset: ds, targetDate: weekKey, timetable: [], electives: [] });
         }
     }
 
@@ -33,7 +41,8 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             } catch (e) { }
 
             const dsParam = ctx.dataset === 'COMCIGAN' ? null : ctx.dataset;
-            const response = await getTimetable(ctx.grade, 'all', db, dsParam, 'unknown', null, cachedRawDataString, false);
+            // Pass ctx.targetDate so the engine resolves the correct timetable structure for that specific week
+            const response = await getTimetable(ctx.grade, 'all', db, dsParam, 'unknown', ctx.targetDate, cachedRawDataString, false);
             
             if (response.status === 200) {
                  const json = await response.json() as any;
@@ -50,11 +59,21 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
 
         let ds = assessment.dataset || '';
         if (ds !== 'MANUAL_PLAN' && ds !== 'SEMESTER_PLAN') ds = 'COMCIGAN';
-        const ctx = contextMap.get(`${ds}_${assessment.grade}`);
+        
+        const dObj = new Date(assessment.dueDate);
+        const day = dObj.getDay();
+        const diff = dObj.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(dObj.setDate(diff));
+        const weekKey = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+        
+        const ctx = contextMap.get(`${ds}_${assessment.grade}_${weekKey}`);
         if (!ctx || !ctx.timetable.length) return assessment;
 
-        const targetDateStr = assessment.tempDueDate || assessment.dueDate;
-        const targetTime = assessment.tempClassTime || assessment.classTime;
+        // Evaluate orphan status strictly against the MANUAL target.
+        // If the shift was auto-predicted, we must ignore it and re-evaluate the original manually-set date
+        // to see if it is still an orphan under the latest timetable data.
+        const targetDateStr = (assessment.tempDueDate && !assessment.isAutoPredicted) ? assessment.tempDueDate : assessment.dueDate;
+        const targetTime = (assessment.tempClassTime && !assessment.isAutoPredicted) ? assessment.tempClassTime : assessment.classTime;
         const targetDateObj = new Date(targetDateStr);
         const aDay = targetDateObj.getDay();
 
@@ -97,8 +116,9 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
 
         assessment.isOrphan = isOrphan;
 
-        // Auto predict if orphan and NO tempDueDate
-        if (isOrphan && !assessment.tempDueDate && currentW !== -1) {
+        // Auto predict if orphan and NO manual tempDueDate
+        // If it was already auto-predicted, we still run the search to ensure it hasn't shifted further
+        if (isOrphan && (!assessment.tempDueDate || assessment.isAutoPredicted) && currentW !== -1) {
             let nextSlot = null;
             let foundNext = false;
 

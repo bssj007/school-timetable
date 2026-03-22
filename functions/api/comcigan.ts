@@ -190,7 +190,7 @@ export const onRequest = async (context: any) => {
                             }
                         } catch (_) {}
                         
-                        const age = Date.now() - new Date(rawDataRow.updated_at as string + 'Z').getTime();
+                        const age = Date.now() - new Date((rawDataRow.updated_at as string || "").replace(' ', 'T') + 'Z').getTime();
                         if (age >= cacheMaxAgeMs) {
                             isStale = true;
                         }
