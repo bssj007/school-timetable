@@ -211,14 +211,15 @@ export const onRequest = async (context: any) => {
 
             // Check if the subject is an elective (isMovingClass = 1)
             let actualClassNum = classNum;
+            const baseSubject = subject.replace(/\s*\(.*$/, '').trim();
             try {
                 const electiveConfig = await env.DB.prepare(
-                    "SELECT isMovingClass FROM elective_config WHERE grade = ? AND subject = ?"
-                ).bind(grade, subject).first();
+                    "SELECT isMovingClass FROM elective_config WHERE grade = ? AND (subject = ? OR fullSubjectName = ?)"
+                ).bind(grade, baseSubject, baseSubject).first();
 
                 if (electiveConfig && electiveConfig.isMovingClass === 1) {
                     actualClassNum = 0; // 0 indicates it applies to all classes in the grade
-                    console.log(`[Assessment API] Subject ${subject} is a moving class. Setting classNum to 0.`);
+                    console.log(`[Assessment API] Subject ${baseSubject} is a moving class. Setting classNum to 0.`);
                 }
             } catch (e) {
                 console.error("[Assessment API] Error checking elective config:", e);

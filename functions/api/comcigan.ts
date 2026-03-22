@@ -710,6 +710,17 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
             const loopLimit = Math.max(currentPeriodLimit, basePeriodLimit);
 
+            // Get explicitly declared daily loop limit (e.g. if Friday ends at 6th period, dayLimit is 6)
+            let dayLimit = 0;
+            if (timeInfo && timeInfo[weekday]) {
+                const dayLimitStr = timeInfo[weekday];
+                if (typeof dayLimitStr === 'string' && !isNaN(parseInt(dayLimitStr, 10))) {
+                    dayLimit = parseInt(dayLimitStr, 10);
+                } else if (typeof dayLimitStr === 'number') {
+                    dayLimit = dayLimitStr;
+                }
+            }
+
             for (let period = 1; period <= loopLimit; period++) {
                 let code = (classData[weekday] && classData[weekday][period]) ? classData[weekday][period] : 0;
 
@@ -718,10 +729,10 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                     const baseCode = baseData[grade][classNum][weekday][period] || 0;
                     
                     // 컴시간알리미 클라이언트의 셀 수준 폴백(Cell-level Fallback) 로직 개선:
-                    // 주간 변동 데이터셋 전체가 비어있는 경우(자료245 등 아직 이번주 시간표가 작성되지 않음)에만 원본 스케줄로 덮어씌웁니다.
-                    // 데이터셋에 하루라도 실제 일별 시간표가 들어있다면, 그 중에 존재하는 `0` 값은 의도적인 '휴강' 또는 '빈 시간표'를 의미하므로 기본 시간표를 채우지 않습니다.
+                    // 주간 변동 데이터셋 전체가 비어있는 경우(자료245 등) 뿐만 아니라,
+                    // 일과시간(dayLimit) 내에 들어가는 교시인데도 데이터가 비어있다면, 임시 편성 중 누락된 것으로 간주하고 원본 스케줄로 덮어씌웁니다.
                     if (code === 0 && baseCode !== 0) {
-                        if (isEmptyDataset) {
+                        if (isEmptyDataset || (dayLimit !== 0 && period <= dayLimit)) {
                             code = baseCode;
                         }
                     }

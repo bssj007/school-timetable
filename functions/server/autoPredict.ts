@@ -77,12 +77,14 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
         const targetDateObj = new Date(targetDateStr);
         const aDay = targetDateObj.getDay();
 
+        const baseAssSubject = assessment.subject.replace(/\s*\(.*$/, '').trim();
+
         const checkSubjectMatch = (slot: any) => {
-            if (slot.subject === assessment.subject) return true;
+            if (slot.subject === baseAssSubject) return true;
             // Elective alias fallback
             const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
-            if (specificConfig && specificConfig.fullSubjectName === assessment.subject) return true;
-            const genericConfig = ctx.electives.find((cfg: any) => (cfg.subject.trim() === assessment.subject.trim() || cfg.fullSubjectName?.trim() === assessment.subject.trim()));
+            if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) return true;
+            const genericConfig = ctx.electives.find((cfg: any) => (cfg.subject.trim() === baseAssSubject || cfg.fullSubjectName?.trim() === baseAssSubject));
             if (genericConfig && genericConfig.classCode && specificConfig && specificConfig.classCode) {
                 const codesA = genericConfig.classCode.split(',').map((s: string) => s.trim());
                 const codesB = specificConfig.classCode.split(',').map((s: string) => s.trim());

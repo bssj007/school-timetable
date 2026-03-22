@@ -753,20 +753,48 @@ export default function Dashboard() {
       return isDateInWeek(effectiveDate, weekDates);
     });
 
-    // 2. 학생이 듣지 않는 과목의 고아상태 수행평가 필터링 (2, 3학년)
+    // 2. 학생이 듣지 않는 과목의 고아상태 등 수행평가 필터링 (2, 3학년)
     if (grade === "2" || grade === "3") {
-      filtered = filtered.filter(a => myActualSubjects.has(a.subject.trim()));
+      filtered = filtered.filter(a => {
+        // 1차 필터: 아예 듣지 않는 과목(이름)이면 100% 탈락
+        const baseSubject = a.subject.replace(/\s*\(.*$/, '').trim();
+        if (!myActualSubjects.has(baseSubject)) return false;
+
+        // 2차 필터: 다른 추측(교시 등)이 아니라, 수행평가 자체의 이름에 명시된 그룹 정보(예: C그룹)를 추출해 교차 검증
+        const groupMatch = a.subject.match(/\(([A-Z]그룹)/);
+        if (groupMatch && groupMatch[1]) {
+           const targetGroup = groupMatch[1];
+           const mySelectedSubjectForGroup = currentProfile?.electives?.[targetGroup]?.subject;
+           
+           if (!mySelectedSubjectForGroup) {
+              return false; // 해당 그룹에 아무 과목도 선택하지 않았다면 내 것이 아님
+           }
+
+           const configEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySelectedSubjectForGroup);
+           const fullSubj = configEntry?.fullSubjectName || mySelectedSubjectForGroup;
+
+           if (baseSubject !== mySelectedSubjectForGroup.trim() && baseSubject !== fullSubj.trim()) {
+              return false; // 내 프로필의 그룹 배정 과목과, 수행평가의 실제 과목이 일치하지 않음
+           }
+        }
+
+        return true;
+      });
     }
 
     // 날짜 범위를 벗어난 폴백 데이터셋을 보고 있을 경우, 고아(자동 임시 연기) 처리를 하지 않음
     const isOutOfBounds = (rawTimetableData as any)?.datasetId && (rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.datasetId !== (rawTimetableData as any)?.originalDatasetId;
 
-    // 3. 고아 수행평가 임시 이동 처리 (서버에서 전달된 tempDueDate 반영)
+    // 3. 고아 수행평가 임시 이동 처리 및 대시보드 UI를 위한 과목명 정리(Suffix 제거)
     const processed = filtered.map(a => {
+      // 대시보드 UI에서는 (C그룹, 선생님) 등의 꼬리표를 제거하여 깔끔하게 표시
+      const baseSubject = a.subject.replace(/\s*\(.*$/, '').trim();
+
       // 서버에서 계산된 수동 연기 및 자동 연기(자동 예측) 수행평가 반영
       if (a.tempDueDate && a.tempClassTime) {
         return {
            ...a,
+           subject: baseSubject,
            isPostponed: true,
            originalDueDate: a.dueDate,
            originalClassTime: a.classTime,
@@ -774,7 +802,7 @@ export default function Dashboard() {
            classTime: a.tempClassTime
         };
       }
-      return a;
+      return { ...a, subject: baseSubject };
     });
 
     // 4. Sort: Date ASC -> Period (classTime) ASC
@@ -1932,7 +1960,9 @@ export default function Dashboard() {
                                         return;
                                       }
                                       if (!isPast || cellAssessments.length > 0) {
-                                        handleCellClick(weekdayIdx, classTime, displaySubject, weekDates[weekdayIdx], cellAssessments);
+                                        const displaySubjectSuffix = (isElectiveActive && group) ? ` (${group}${displayTeacher ? `, ${displayTeacher}` : ''})` : '';
+                                        const subjectToSave = `${displaySubject}${displaySubjectSuffix}`;
+                                        handleCellClick(weekdayIdx, classTime, subjectToSave, weekDates[weekdayIdx], cellAssessments);
                                       }
                                     }
                                   }}
