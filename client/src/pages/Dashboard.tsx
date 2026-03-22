@@ -1699,7 +1699,7 @@ export default function Dashboard() {
                 </style>
                 <div ref={timetableRef} id="timetable-container" className="group" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
                   {/* System Dataset Config UI (Debug) */}
-                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled === 'true' && (
+                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled && (
                     <div className="print:hidden capturing:hidden text-[10px] md:text-xs text-gray-400 text-right mb-1 tracking-tight flex flex-wrap items-center justify-end gap-1 md:gap-2 pr-1">
                       <span className="text-blue-500 font-semibold text-xs border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">현재 데이터셋: {(rawTimetableData as any)?.datasetId}{((rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.originalDatasetId !== (rawTimetableData as any)?.datasetId) ? ` (원본: ${(rawTimetableData as any)?.originalDatasetId})` : ''}</span>
                       <span className="hidden md:inline">|</span>
@@ -2375,6 +2375,21 @@ export default function Dashboard() {
                     <span className="font-semibold text-lg text-gray-900">
                       {assessment.subject}
                     </span>
+                    {assessment.classCode && (
+                      <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full font-medium">
+                        {assessment.classCode}그룹
+                      </span>
+                    )}
+                    {assessment.teacher && (
+                      <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full font-medium">
+                        {assessment.teacher}
+                      </span>
+                    )}
+                    {!assessment.classCode && typeof assessment.subject === 'string' && assessment.subject.match(/\((.*?그룹.*?)\)$/) && (
+                      <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full font-medium">
+                        {assessment.subject.match(/\((.*?그룹.*?)\)$/)?.[1]}
+                      </span>
+                    )}
                     {assessment.description && (
                       <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">
                         {assessment.description}

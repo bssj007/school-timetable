@@ -4748,7 +4748,17 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
             <TableCell className="font-medium">
                 <div className="flex items-center gap-1.5 flex-wrap">
                     <span>{baseSubject}</span>
-                    {groupSuffix && (
+                    {assessment.classCode && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                            {assessment.classCode}그룹
+                        </span>
+                    )}
+                    {assessment.teacher && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                            {assessment.teacher}
+                        </span>
+                    )}
+                    {!assessment.classCode && groupSuffix && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800">
                             {groupSuffix}
                         </span>

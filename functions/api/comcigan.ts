@@ -639,9 +639,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     
     // Determine the true standard baseline dataset (Base Data for cell-level fill)
     let targetBaseId = "";
-    if (fallbackSelected && fallbackSelected !== '_auto_' && (timetableProps.includes(fallbackSelected) || fallbackSelected === 'MANUAL_PLAN')) {
-        targetBaseId = fallbackSelected;
-    } else if (baselineDatasetId) {
+    if (baselineDatasetId) {
         targetBaseId = baselineDatasetId;
     } else if (timetableProps.length > 0) {
         targetBaseId = timetableProps[0];
