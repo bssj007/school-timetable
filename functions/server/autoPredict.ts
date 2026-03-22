@@ -21,6 +21,16 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
         if (!contextMap.has(key)) {
             contextMap.set(key, { grade: a.grade, dataset: ds, targetDate: weekKey, timetable: [], electives: [] });
         }
+
+        // wrap-around 탐색은 다음 주 시간표를 사용해야 함 → 다음 주 컨텍스트도 예약
+        const nextMonday = new Date(monday);
+        nextMonday.setDate(monday.getDate() + 7);
+        const nextWeekKey = `${nextMonday.getFullYear()}-${String(nextMonday.getMonth() + 1).padStart(2, '0')}-${String(nextMonday.getDate()).padStart(2, '0')}`;
+        const nextKey = `NEXT_${ds}_${a.grade}_${weekKey}`; // 이 주의 '다음 주' 컨텍스트
+        if (!contextMap.has(nextKey)) {
+            contextMap.set(nextKey, { grade: a.grade, dataset: ds, targetDate: nextWeekKey, timetable: [], electives: [] });
+        }
+
     }
 
     // Fetch context data
@@ -69,6 +79,9 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
         const ctx = contextMap.get(`${ds}_${assessment.grade}_${weekKey}`);
         if (!ctx || !ctx.timetable.length) return assessment;
 
+        // wrap-around 탐색용 다음 주 시간표 (없으면 현재 주로 폴백)
+        const nextCtx = contextMap.get(`NEXT_${ds}_${assessment.grade}_${weekKey}`) || ctx;
+
         // Evaluate orphan status strictly against the MANUAL target.
         // If the shift was auto-predicted, we must ignore it and re-evaluate the original manually-set date
         // to see if it is still an orphan under the latest timetable data.
@@ -84,21 +97,22 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
         const isFreePeriod = (subject: string) => FREE_KEYWORDS.some(k => (subject || '').includes(k));
 
         // 이동수업(classNum=0): teacher로 1차 필터 후 과목 탐색 → 일반 수업: 해당 반만
-        const getSlots = (w: number) => {
+        // tbl 파라미터로 현재 주 또는 다음 주 시간표를 선택할 수 있음
+        const buildGetSlots = (tbl: any[]) => (w: number) => {
             if (assessment.classNum !== 0) {
-                return ctx.timetable.filter((t: any) => t.class === assessment.classNum && t.weekday === w);
+                return tbl.filter((t: any) => t.class === assessment.classNum && t.weekday === w);
             }
             // 이동수업: teacher가 있으면 동일 teacher의 슬롯만 (가장 정확)
             if (assessment.teacher) {
                 const teacherBase = assessment.teacher.replace(/\*.*$/, '').trim();
-                return ctx.timetable.filter((t: any) =>
+                return tbl.filter((t: any) =>
                     t.weekday === w &&
                     !isFreePeriod(t.subject || '') &&
                     (t.teacher === assessment.teacher || (t.teacher || '').startsWith(teacherBase))
                 );
             }
             // teacher 미상: 과목명으로만 탐색 (공강 제외)
-            return ctx.timetable.filter((t: any) =>
+            return tbl.filter((t: any) =>
                 t.weekday === w &&
                 !isFreePeriod(t.subject || '') &&
                 (t.subject || '').replace(/\s*\(.*$/, '').trim() === baseAssSubject
@@ -141,6 +155,10 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             return false;
         };
 
+
+        // 고아 판별: 현재 주 시간표, wrap-around 탐색: 다음 주 시간표
+        const getSlots = buildGetSlots(ctx.timetable);
+        const getNextSlots = buildGetSlots(nextCtx.timetable);
 
         let isOrphan = false;
         let currentW = -1;
@@ -191,9 +209,9 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
                 }
             }
             
-            // 2. Wrap-around: Search from next Monday to the day before pivot
+            // 2. Wrap-around: 다음 주 실제 시간표(getNextSlots)로 검증 후 배정
             for (let w = 0; w <= currentW && !foundNext; w++) {
-                const daySlots = getSlots(w).sort((x: any, y: any) => x.classTime - y.classTime);
+                const daySlots = getNextSlots(w).sort((x: any, y: any) => x.classTime - y.classTime);
                 for (const t of daySlots) {
                     if (isFreePeriod(t.subject || '')) continue; // 공강 슬롯 제외
                     if (checkSubjectMatch(t)) {
