@@ -2101,11 +2101,13 @@ export default function Dashboard() {
                         <table aria-hidden="true" className={`absolute top-0 left-0 w-full min-h-full h-full border-collapse table-fixed pointer-events-none z-10 transition-all duration-300 ${isElectiveMissingImmediate ? "hidden" : ""}`}>
                           <thead>
                             <tr>
-                              <th className="border-transparent p-1 md:p-2 bg-transparent w-8 md:w-10 text-sm font-medium"></th>
+                              <th className="border-transparent p-1 md:p-2 bg-transparent w-8 md:w-10 text-sm font-medium"><div className="invisible">교시</div></th>
                               {weekdayNames.map((day, idx) => (
-                                <th key={day} className="border-transparent bg-transparent p-1 md:p-2">
-                                  <div className="text-sm opacity-0">{day}</div>
-                                  <div className="text-[10px] md:text-xs opacity-0">...</div>
+                                <th key={day} className="border-transparent bg-transparent p-1 md:p-2 font-medium w-1/5 relative">
+                                  <div className="text-sm font-semibold invisible">{day}</div>
+                                  <div className="text-[10px] md:text-xs font-normal invisible">
+                                    {formatDate(weekDates[idx])}
+                                  </div>
                                 </th>
                               ))}
                             </tr>
@@ -2124,8 +2126,9 @@ export default function Dashboard() {
                                     if (classTime === 1) {
                                       const opacityRatio = (specialSchedule.opacity ?? 100) / 100;
                                       return (
-                                        <td key={weekdayIdx} rowSpan={7} className="border-transparent p-2 md:p-4 align-middle text-center relative overflow-hidden pointer-events-auto" style={{ backgroundColor: `rgba(253, 232, 232, ${opacityRatio})` }}>
-                                          <div className={`whitespace-pre-wrap font-black text-pink-700 leading-tight tracking-widest ${specialSchedule.fontSize}`}>
+                                        <td key={weekdayIdx} rowSpan={7} className="border-transparent p-0 align-middle text-center relative pointer-events-auto">
+                                          <div className="absolute inset-[1px] md:inset-[1.5px] z-[-1] rounded-sm" style={{ backgroundColor: `rgba(253, 232, 232, ${opacityRatio})` }} />
+                                          <div className={`relative z-10 w-full h-full flex flex-col items-center justify-center p-2 md:p-4 whitespace-pre-wrap font-black text-pink-700 leading-tight tracking-widest ${specialSchedule.fontSize}`}>
                                             {specialSchedule.text}
                                           </div>
                                         </td>
