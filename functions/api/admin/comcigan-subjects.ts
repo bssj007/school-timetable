@@ -196,7 +196,7 @@ export const onRequest = async (context: any) => {
             return Array.isArray(val) && val[grade] && Array.isArray(val[grade][1]);
         }) || "";
 
-        if (dataset && keys.includes(dataset)) {
+        if (dataset && dataset !== 'COMCIGAN' && keys.includes(dataset)) {
             timedataProp = dataset;
         }
 

@@ -268,7 +268,7 @@ export default function DatasetManagerPanel({ adminPassword }: DatasetManagerPan
                                     />
                                     <div className="flex-1">
                                         <div className="font-semibold text-sm">수동 그룹 오버라이드</div>
-                                        <div className="text-xs text-gray-500 mt-1">관리자가 수동으로 강제 지정한 A~G 그룹 정보</div>
+                                        <div className="text-xs text-gray-500 mt-1">관리자가 수동으로 지정한 A~G 그룹 정보</div>
                                     </div>
                                     <div className="text-xl font-mono font-bold text-gray-700">
                                         {counts ? (counts.groupOverrides['2'] || 0) + (counts.groupOverrides['3'] || 0) : '-'}

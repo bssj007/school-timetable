@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS performance_assessments (
   grade INTEGER NOT NULL,
   classNum INTEGER NOT NULL,
   classTime INTEGER,
+  teacher TEXT,
+  classCode TEXT,
   isDone INTEGER DEFAULT 0,
   lastModifiedIp TEXT,
   createdAt TEXT DEFAULT (datetime('now')),

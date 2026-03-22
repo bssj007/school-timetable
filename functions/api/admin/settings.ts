@@ -37,17 +37,29 @@ export const onRequest = async (context: any) => {
         if (request.method === "POST") {
             const body = await request.json();
 
-            // Upsert each key-value pair
             const stmt = env.DB.prepare("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)");
             const batch = [];
+            let requiresCachePurge = false;
 
             for (const [key, value] of Object.entries(body)) {
                 // Store values as strings
                 batch.push(stmt.bind(key, String(value)));
+                
+                // If any dataset-related keys are updated, wipe the static JSON payload caches
+                if (key.includes('comcigan') || key.includes('dataset')) {
+                    requiresCachePurge = true;
+                }
             }
 
             if (batch.length > 0) {
                 await env.DB.batch(batch);
+                
+                if (requiresCachePurge) {
+                    try {
+                        console.log("[Settings API] Purging timetable_cache due to dataset boundary modifications");
+                        await env.DB.prepare("DELETE FROM timetable_cache WHERE cache_key LIKE 'gc_%'").run();
+                    } catch (e) { console.error("Cache purge failed", e); }
+                }
             }
 
             return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });

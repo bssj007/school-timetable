@@ -21,15 +21,16 @@ export const onRequest = async (context: any) => {
 
     const db = env.DB;
 
-    // 테이블 보장
+    // 테이블 보장 밑 컬럼 핫픽스
     try { await db.prepare(createTimetableCacheTable).run(); } catch (_) {}
+    try { await db.prepare("ALTER TABLE timetable_cache ADD COLUMN is_frozen INTEGER DEFAULT 0").run(); } catch (_) {}
 
     const method = request.method;
 
     // GET: 캐시 상태 조회
     if (method === 'GET') {
         try {
-            const { results } = await db.prepare("SELECT cache_key, dataset_id, updated_at, LENGTH(response_json) as data_size FROM timetable_cache ORDER BY cache_key").all();
+            const { results } = await db.prepare("SELECT cache_key, dataset_id, updated_at, LENGTH(response_json) as data_size, is_frozen FROM timetable_cache ORDER BY cache_key").all();
 
             // 현재 캐시 최대 유효 시간 설정값 조회
             let cacheMaxAgeMinutes = 5;
@@ -40,7 +41,7 @@ export const onRequest = async (context: any) => {
 
             const now = Date.now();
             const cacheEntries = (results || []).map((row: any) => {
-                const updatedAt = new Date(row.updated_at + 'Z').getTime();
+                const updatedAt = new Date((row.updated_at || "").replace(' ', 'T') + 'Z').getTime();
                 const ageMs = now - updatedAt;
                 return {
                     cacheKey: row.cache_key,
@@ -48,7 +49,8 @@ export const onRequest = async (context: any) => {
                     updatedAt: row.updated_at,
                     ageSec: Math.round(ageMs / 1000),
                     dataSize: row.data_size,
-                    isFresh: ageMs < (cacheMaxAgeMinutes * 60 * 1000)
+                    isFresh: row.is_frozen === 1 || ageMs < (cacheMaxAgeMinutes * 60 * 1000),
+                    isFrozen: row.is_frozen === 1
                 };
             });
 
@@ -58,7 +60,10 @@ export const onRequest = async (context: any) => {
                     cacheMaxAgeMinutes
                 }
             }), {
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache, no-store, must-revalidate'
+                }
             });
         } catch (e: any) {
             return new Response(JSON.stringify({ error: e.message }), {
@@ -71,30 +76,22 @@ export const onRequest = async (context: any) => {
     // POST: 수동 캐시 갱신
     if (method === 'POST') {
         try {
-            const body = await request.json();
-            const grades = body.grades || [1, 2, 3];
-
-            // comcigan.ts의 refreshCache를 직접 import하면 Cloudflare Pages Functions에서
-            // import 경로 문제가 생길 수 있으므로, 직접 fetch로 캐시를 갱신
             const results: any[] = [];
-            for (const grade of grades) {
-                try {
-                    // 직접 Comcigan에서 가져와 캐시에 저장 (UPSERT로 기존 캐시 덮어쓰기)
-                    // 기존 캐시를 삭제하지 않음 → 갱신 실패 시에도 기존 캐시 유지
-                    const { refreshCache } = await import('../comcigan' as any);
-                    await refreshCache(db, grade);
-                    
-                    // 저장 결과 확인
-                    const row = await db.prepare("SELECT updated_at, LENGTH(response_json) as data_size FROM timetable_cache WHERE cache_key = ?").bind(`grade_${grade}`).first();
-                    results.push({
-                        grade,
-                        success: !!row,
-                        updatedAt: row?.updated_at,
-                        dataSize: row?.data_size
-                    });
-                } catch (e: any) {
-                    results.push({ grade, success: false, error: e.message });
-                }
+            try {
+                // 직접 Comcigan에서 가져와 전교생 통합본(raw_data) 캐시에 저장
+                const { refreshCache } = await import('../comcigan' as any);
+                await refreshCache(db, 1);
+                
+                // 저장 결과 확인
+                const row = await db.prepare("SELECT updated_at, LENGTH(response_json) as data_size FROM timetable_cache WHERE cache_key = 'raw_data'").first();
+                results.push({
+                    global: true,
+                    success: !!row,
+                    updatedAt: row?.updated_at,
+                    dataSize: row?.data_size
+                });
+            } catch (e: any) {
+                results.push({ global: true, success: false, error: e.message });
             }
 
             return new Response(JSON.stringify({ success: true, results }), {
@@ -108,11 +105,20 @@ export const onRequest = async (context: any) => {
         }
     }
 
-    // PATCH: 캐시 설정 변경
+    // PATCH: 캐시 설정 변경 및 수동 동결 설정
     if (method === 'PATCH') {
         try {
             const body = await request.json();
-            const { cacheMaxAgeMinutes } = body;
+            const { action, cacheKey, freeze, cacheMaxAgeMinutes } = body;
+
+            if (action === 'toggle_freeze' && cacheKey) {
+                await db.prepare("UPDATE timetable_cache SET is_frozen = ?, updated_at = datetime('now') WHERE cache_key = ?")
+                    .bind(freeze ? 1 : 0, cacheKey)
+                    .run();
+                return new Response(JSON.stringify({ success: true, isFrozen: freeze }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
 
             if (cacheMaxAgeMinutes !== undefined) {
                 const minutes = Math.max(1, Math.min(60, parseInt(cacheMaxAgeMinutes)));

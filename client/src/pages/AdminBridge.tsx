@@ -568,7 +568,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                 <SelectContent>
                                                     <SelectItem value="SEMESTER_PLAN">MANUAL_PLAN (학기별 계획)</SelectItem>
                                                     <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
-                                                    {Array.isArray(datasetOptions) && datasetOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                                                    <SelectItem value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
@@ -583,7 +583,7 @@ export function BridgeManager({ adminPassword, goAutoFillAnalysis }: { adminPass
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
-                                                    {Array.isArray(datasetOptions) && datasetOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                                                    <SelectItem value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>

@@ -41,7 +41,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             return new Response(JSON.stringify({ error: "메시지를 입력해주세요." }), { status: 400 });
         }
 
-        await env.DB.prepare(
+        const result = await env.DB.prepare(
             "INSERT INTO bug_reports (grade, classNum, studentNumber, message) VALUES (?, ?, ?, ?)"
         ).bind(
             grade ? parseInt(grade) : null,
@@ -49,6 +49,29 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             studentNumber ? parseInt(studentNumber) : null,
             message.trim()
         ).run();
+
+        return new Response(JSON.stringify({ success: true, id: result.meta?.last_row_id }), {
+            headers: { "Content-Type": "application/json" }
+        });
+    } catch (error: any) {
+        return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
+};
+
+export const onRequestPatch: PagesFunction<Env> = async (context) => {
+    const { request, env } = context;
+
+    try {
+        const body = await request.json() as any;
+        const { id, message } = body;
+
+        if (!id || !message || !message.trim()) {
+            return new Response(JSON.stringify({ error: "id와 새로운 메시지를 입력해주세요." }), { status: 400 });
+        }
+
+        await env.DB.prepare(
+            "UPDATE bug_reports SET message = ? WHERE id = ?"
+        ).bind(message.trim(), parseInt(id)).run();
 
         return new Response(JSON.stringify({ success: true }), {
             headers: { "Content-Type": "application/json" }
