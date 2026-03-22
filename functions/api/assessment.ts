@@ -25,7 +25,8 @@ export const onRequest = async (context: any) => {
             const params: any[] = [grade, classNum];
 
             // Filter by dataset if provided, else filter by empty string (default manual)
-            const dataset = url.searchParams.get('dataset') || '';
+            const rawDataset = url.searchParams.get('dataset') || '';
+            const dataset = (rawDataset === 'MANUAL_PLAN' || rawDataset === 'SEMESTER_PLAN') ? rawDataset : 'COMCIGAN';
             query += " AND dataset = ?";
             params.push(dataset);
 
@@ -213,7 +214,8 @@ export const onRequest = async (context: any) => {
             }
 
             // 중복 체크: 같은 날짜, 같은 교시에 이미 수행평가가 있는지 확인
-            const dataset = body.dataset || '';
+            const rawDataset = body.dataset || '';
+            const dataset = (rawDataset === 'MANUAL_PLAN' || rawDataset === 'SEMESTER_PLAN') ? rawDataset : 'COMCIGAN';
 
             // 중복 체크
             if (classTime) {

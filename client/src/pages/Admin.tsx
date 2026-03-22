@@ -96,8 +96,7 @@ function ElectiveManager({ password }: { password: string }) {
     const timetableAllQuery = useQuery({
         queryKey: ["admin", "timetableAll", selectedGrade, selectedDataset],
         queryFn: async () => {
-            let targetDataset = selectedDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : selectedDataset;
-            if (!targetDataset && timetableProps && timetableProps.length > 0) targetDataset = timetableProps[0];
+            let targetDataset = selectedDataset === "_auto_" ? "COMCIGAN" : selectedDataset;
             if (!targetDataset) return [];
             const url = `/api/comcigan?type=timetable&grade=${selectedGrade}&classNum=all` +
                 (targetDataset !== '_auto_' ? `&dataset=${targetDataset}` : '');
@@ -142,7 +141,7 @@ function ElectiveManager({ password }: { password: string }) {
     useEffect(() => {
         if (settingsQuery.data) {
             if (!selectedDataset) {
-                setSelectedDataset('_auto_');
+                setSelectedDataset('COMCIGAN');
             }
         }
     }, [settingsQuery.data, selectedDataset]);
@@ -157,10 +156,8 @@ function ElectiveManager({ password }: { password: string }) {
         try {
             console.log("Fetching data for grade", selectedGrade);
 
-            let targetDataset = selectedDataset === "_auto_" ? (settingsQuery.data?.comcigan_dataset_selected || "") : selectedDataset;
-            if (!targetDataset && timetableProps && timetableProps.length > 0) {
-                targetDataset = timetableProps[0];
-            }
+            let targetDataset = selectedDataset === "_auto_" ? "COMCIGAN" : selectedDataset;
+            if (!targetDataset) targetDataset = "COMCIGAN";
 
             // 1. Fetch Comcigan Subjects
             let comciganData = [];
@@ -440,11 +437,8 @@ function ElectiveManager({ password }: { password: string }) {
                                 <SelectValue placeholder="데이터셋 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="_auto_">{autoLabel}</SelectItem>
+                                <SelectItem value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</SelectItem>
                                 <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
-                                {timetableProps.map((prop: string) => (
-                                    <SelectItem key={prop} value={prop}>{prop}</SelectItem>
-                                ))}
                             </SelectContent>
                         </Select>
                     </div>

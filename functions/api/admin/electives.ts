@@ -69,7 +69,8 @@ export const onRequest = async (context: any) => {
     if (method === 'GET') {
         const url = new URL(request.url);
         const grade = parseInt(url.searchParams.get('grade') || '0');
-        const dataset = url.searchParams.get('dataset') || '';
+        const originalDataset = url.searchParams.get('dataset') || '';
+        const dataset = (originalDataset === 'MANUAL_PLAN' || originalDataset === 'SEMESTER_PLAN') ? originalDataset : 'COMCIGAN';
 
         if (!grade) {
             return new Response('Grade is required', { status: 400 });
@@ -89,7 +90,8 @@ export const onRequest = async (context: any) => {
     if (method === 'POST') {
         try {
             const body = await request.json();
-            const { grade, subject, originalTeacher, classCode = '', fullTeacherName = '', className = '', fullSubjectName = '', isMovingClass, isCombinedClass, dataset = '' } = body;
+            const { grade, subject, originalTeacher, classCode = '', fullTeacherName = '', className = '', fullSubjectName = '', isMovingClass, isCombinedClass, dataset: bodyDataset = '' } = body;
+            const dataset = (bodyDataset === 'MANUAL_PLAN' || bodyDataset === 'SEMESTER_PLAN') ? bodyDataset : 'COMCIGAN';
 
             // Default isMovingClass to 1 (True) if not provided
             const movingVal = isMovingClass === false ? 0 : 1;
@@ -123,7 +125,7 @@ export const onRequest = async (context: any) => {
         try {
             const url = new URL(request.url);
             let id = url.searchParams.get('id');
-            let dataset = url.searchParams.get('dataset');
+            let queryDataset = url.searchParams.get('dataset');
             let grade = url.searchParams.get('grade');
 
             // Optionally read from body if not in query params
@@ -131,12 +133,15 @@ export const onRequest = async (context: any) => {
                 const body = await request.json();
                 if (body) {
                     if (!id && body.id) id = body.id;
-                    if (!dataset && body.dataset) dataset = body.dataset;
+                    if (!queryDataset && body.dataset) queryDataset = body.dataset;
                     if (body.grade) grade = body.grade; // grade alone isn't enough to delete, but useful for scoped deletion
                 }
             } catch (e) {
                 // Ignore JSON parse errors for DELETE requests without body
             }
+
+            const rawDataset = queryDataset || '';
+            const dataset = (rawDataset && rawDataset !== 'MANUAL_PLAN' && rawDataset !== 'SEMESTER_PLAN') ? 'COMCIGAN' : rawDataset;
 
             if (id) {
                 await env.DB.prepare("DELETE FROM elective_config WHERE id = ?").bind(id).run();

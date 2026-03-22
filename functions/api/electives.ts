@@ -151,7 +151,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
             const gradeStr = url.searchParams.get("grade");
             const classNumStr = url.searchParams.get("classNum");
             const studentNumberStr = url.searchParams.get("studentNumber");
-            const dataset = url.searchParams.get("dataset") ?? '';
+            const originalDataset = url.searchParams.get("dataset") ?? '';
+            const dataset = (originalDataset === 'MANUAL_PLAN' || originalDataset === 'SEMESTER_PLAN') ? originalDataset : 'COMCIGAN';
 
             if (!gradeStr || !classNumStr || !studentNumberStr) {
                 return new Response(JSON.stringify({ error: "Missing parameters" }), { status: 400 });
@@ -194,7 +195,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         // 2. Fetch ALL student profiles for a grade (admin pre-entry, dataset-aware)
         if (type === "all-students") {
             const gradeStr = url.searchParams.get("grade");
-            const dataset = url.searchParams.get("dataset") ?? '';
+            const originalDataset = url.searchParams.get("dataset") ?? '';
+            const dataset = (originalDataset === 'MANUAL_PLAN' || originalDataset === 'SEMESTER_PLAN') ? originalDataset : 'COMCIGAN';
             if (!gradeStr) {
                 return new Response(JSON.stringify({ error: "Grade is required" }), { status: 400 });
             }
@@ -214,7 +216,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
         // 3. Fetch Elective Config (Available Subjects)
         const grade = url.searchParams.get("grade");
-        const dataset = url.searchParams.get("dataset");
+        const originalDataset = url.searchParams.get("dataset") ?? '';
+        const dataset = (originalDataset === 'MANUAL_PLAN' || originalDataset === 'SEMESTER_PLAN') ? originalDataset : 'COMCIGAN';
         if (!grade) {
             return new Response(JSON.stringify({ error: "Grade is required" }), { status: 400 });
         }
@@ -241,7 +244,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
         const body = await request.json() as any;
         console.log("Received save request:", body);
-        const { grade, classNum, studentNumber, electives, dataset = '' } = body;
+        const { grade, classNum, studentNumber, electives, dataset: reqDataset = '' } = body;
+        const dataset = (reqDataset === 'MANUAL_PLAN' || reqDataset === 'SEMESTER_PLAN') ? reqDataset : 'COMCIGAN';
 
         if (!grade || !classNum || !studentNumber || !electives) {
             return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400 });
@@ -287,7 +291,8 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
         const grade = url.searchParams.get("grade");
         const classNum = url.searchParams.get("classNum");
         const studentNumber = url.searchParams.get("studentNumber");
-        const dataset = url.searchParams.get("dataset") ?? '';
+        const originalDataset = url.searchParams.get("dataset") ?? '';
+        const dataset = (originalDataset === 'MANUAL_PLAN' || originalDataset === 'SEMESTER_PLAN') ? originalDataset : 'COMCIGAN';
 
         if (!grade || !classNum || !studentNumber) {
             return new Response(JSON.stringify({ error: "Missing parameters for deletion" }), { status: 400 });
