@@ -2504,7 +2504,7 @@ export default function Dashboard() {
                   return (
                     <div
                       key={assessment.id}
-                      className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer ${isToday ? 'border-red-200' : ''}`}
+                      className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col h-full ${isToday ? 'border-red-200' : ''}`}
                       style={{ 
                         backgroundColor: cardBg,
                         backgroundImage: assessment.isPostponed ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.05) 10px, rgba(239, 68, 68, 0.05) 20px)' : 'none'

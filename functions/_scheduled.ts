@@ -12,12 +12,9 @@ export default {
     async scheduled(event: ScheduledEvent, env: any, ctx: any) {
         console.log('[Native Cron] Scheduled event triggered:', event.cron);
 
-        const hour = new Date(event.scheduledTime).getUTCHours();
-        const isDailyTick = (hour === 0); // UTC 0시 = KST 9시
-
         try {
             const { executeCronTasks } = await import('./server/cronLogic');
-            await executeCronTasks(env, isDailyTick);
+            await executeCronTasks(env);
             console.log('[Native Cron] Task sequence completed successfully');
         } catch (error) {
             console.error('[Native Cron] Scheduled task failed:', error);

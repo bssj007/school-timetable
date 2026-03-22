@@ -50,6 +50,23 @@ export const getDatasetMode = (overrideVal?: string) => {
     return 'COMCIGAN'; // treats all legacy "자료xxx" IDs and empty values as COMCIGAN
 };
 
+// Real-time ticking cache age component
+const LiveAgeText = React.memo(({ initialAgeSec, dataUpdatedAt }: { initialAgeSec: number, dataUpdatedAt: number }) => {
+    const [elapsed, setElapsed] = useState(0);
+    useEffect(() => {
+        setElapsed(0);
+        const timer = setInterval(() => {
+            setElapsed(Math.floor((Date.now() - dataUpdatedAt) / 1000));
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [dataUpdatedAt]);
+    
+    const sec = initialAgeSec + Math.max(0, elapsed);
+    if (sec < 60) return <>{sec}초 전</>;
+    if (sec < 3600) return <>{Math.floor(sec / 60)}분 {sec % 60}초 전</>;
+    return <>{Math.floor(sec / 3600)}시간 {Math.floor((sec % 3600) / 60)}분 전</>;
+});
+
 function ElectiveManager({ password }: { password: string }) {
     const [selectedGrade, setSelectedGrade] = useState<number>(2);
     const [selectedDataset, setSelectedDataset] = useState<string>('');
@@ -3713,26 +3730,20 @@ function DatasetDatesViewer({ rawData, adminPassword }: { rawData: any; adminPas
     
     // Extracted robust date mapping logic
     const datasetDateRanges: Record<string, string> = {};
-    if (rawData['일자'] && Array.isArray(rawData['일자'])) {
-        timetableProps.forEach((key, idx) => {
-            if (idx + 1 < rawData['일자'].length) {
-                datasetDateRanges[key] = rawData['일자'][idx + 1];
-            }
-        });
-    } else if (rawData['일자자료'] && Array.isArray(rawData['일자자료'])) {
+    
+    // Always prefer '일자자료' if it exists and has items, as it provides exact index bindings
+    if (rawData['일자자료'] && Array.isArray(rawData['일자자료']) && rawData['일자자료'].length > 0) {
         const dateList = rawData['일자자료'];
         dateList.forEach((dt: any) => {
             if (Array.isArray(dt) && dt.length >= 2) {
                 const targetKeyIdx = dt[0];
                 if (typeof targetKeyIdx === 'number' && targetKeyIdx >= 0 && targetKeyIdx < timetableProps.length) {
-                    // Format dates beautifully e.g., "26-03-23 ~ 26-03-28" -> "2026.03.23 ~ 2026.03.28"
                     let formattedRange = dt[1];
                     if (typeof formattedRange === 'string') {
                         formattedRange = formattedRange
                             .split('~')
                             .map(part => {
                                 let s = part.trim();
-                                // if it's strictly in YY-MM-DD format, convert to 20YY.MM.DD
                                 if (/^\d{2}-\d{2}-\d{2}$/.test(s)) {
                                     s = '20' + s.replace(/-/g, '.');
                                 }
@@ -3742,6 +3753,27 @@ function DatasetDatesViewer({ rawData, adminPassword }: { rawData: any; adminPas
                     }
                     datasetDateRanges[timetableProps[targetKeyIdx]] = formattedRange;
                 }
+            }
+        });
+    } else if (rawData['일자'] && Array.isArray(rawData['일자'])) {
+        // Fallback to older '일자' array mapping
+        const allDatasetKeys = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
+        allDatasetKeys.forEach((key, idx) => {
+            if (idx + 1 < rawData['일자'].length) {
+                let formattedRange = rawData['일자'][idx + 1];
+                if (typeof formattedRange === 'string') {
+                    formattedRange = formattedRange
+                        .split('~')
+                        .map(part => {
+                            let s = part.trim();
+                            if (/^\d{2}-\d{2}-\d{2}$/.test(s)) {
+                                s = '20' + s.replace(/-/g, '.');
+                            }
+                            return s;
+                        })
+                        .join(' ~ ');
+                }
+                datasetDateRanges[key] = formattedRange;
             }
         });
     }
@@ -4381,7 +4413,7 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                                             <div className="flex items-center gap-3 mt-1 text-xs text-blue-700">
                                                 <span className="flex items-center gap-1">
                                                     <Clock className="w-3 h-3" />
-                                                    {formatAge(rawEntry.ageSec)}
+                                                    <LiveAgeText initialAgeSec={rawEntry.ageSec} dataUpdatedAt={cacheStatusQuery.dataUpdatedAt || Date.now()} />
                                                 </span>
                                                 <span>가용 데이터셋: COMCIGAN 통합본 전체</span>
                                                 <span className="font-mono bg-blue-100 px-1 rounded">{Math.round((rawEntry.dataSize || 0) / 1024)}KB</span>

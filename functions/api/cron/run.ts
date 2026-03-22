@@ -6,7 +6,19 @@ export const onRequest = async (context: any) => {
     
     // Parse URL and extract token parameter for authorization
     const url = new URL(request.url);
-    const token = url.searchParams.get('token') || request.headers.get('Authorization')?.replace('Bearer ', '');
+    let bodyToken = null;
+    
+    if (request.method === 'POST') {
+        try {
+            // Attempt to parse JSON body if provided
+            const body = await request.clone().json();
+            if (body && body.token) bodyToken = body.token;
+        } catch (e) {
+            // Ignore non-JSON bodies
+        }
+    }
+
+    const token = url.searchParams.get('token') || request.headers.get('Authorization')?.replace('Bearer ', '') || bodyToken;
     
     // Validate the token against the backend admin password
     if (token !== envAdminPassword) {
@@ -16,13 +28,9 @@ export const onRequest = async (context: any) => {
         });
     }
 
-    // Determine the scope of the cron execution ('daily' triggers notification sweep and DB cleanup) 
-    const action = url.searchParams.get('action');
-    const isDailyTick = (action === 'daily');
-
     try {
-        await executeCronTasks(env, isDailyTick);
-        return new Response(JSON.stringify({ success: true, message: `Cron task executed via Webhook (isDailyTick: ${isDailyTick})` }), {
+        await executeCronTasks(env);
+        return new Response(JSON.stringify({ success: true, message: `Cron task executed via Webhook` }), {
             headers: { 'Content-Type': 'application/json' }
         });
     } catch (e: any) {
