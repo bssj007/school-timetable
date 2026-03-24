@@ -4923,6 +4923,20 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
         },
     });
 
+    // --- 날짜별 평균 별점 조회 (캐시와 독립) ---
+    const ratingsQuery = useQuery({
+        queryKey: ["meal", "ratings", "admin"],
+        queryFn: async () => {
+            const res = await fetch("/api/meal-ratings");
+            if (!res.ok) return [];
+            return res.json() as Promise<{ date: string; avg: number; count: number }[]>;
+        },
+        staleTime: 60_000,
+    });
+
+    const ratingsMap: Record<string, { avg: number; count: number }> = {};
+    (ratingsQuery.data ?? []).forEach(r => { ratingsMap[r.date] = { avg: r.avg, count: r.count }; });
+
     const deleteSuggestionMutation = useMutation({
         mutationFn: async (id: number) => {
             const res = await fetch(`/api/meal-suggestions?id=${id}`, {
@@ -4937,6 +4951,45 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
         },
         onError: () => toast.error("삭제에 실패했습니다."),
     });
+
+    // --- 급식 표시 설정 ---
+    const [cutoffHour, setCutoffHour] = useState(14);
+    const [ratingEnabled, setRatingEnabled] = useState(true);
+    const [emphasisEnabled, setEmphasisEnabled] = useState(true);
+    const [savedSettings, setSavedSettings] = useState({ cutoffHour: 14, ratingEnabled: true, emphasisEnabled: true });
+    const settingsDirty = cutoffHour !== savedSettings.cutoffHour || ratingEnabled !== savedSettings.ratingEnabled || emphasisEnabled !== savedSettings.emphasisEnabled;
+
+    // 설정 초기 로드
+    useEffect(() => {
+        fetch("/api/settings/public")
+            .then(r => r.json())
+            .then((s: any) => {
+                const h = s.meal_lunch_cutoff_hour ?? 14;
+                const r = s.meal_rating_enabled !== false;
+                const e = s.meal_emphasis_enabled !== false;
+                setCutoffHour(h); setRatingEnabled(r); setEmphasisEnabled(e);
+                setSavedSettings({ cutoffHour: h, ratingEnabled: r, emphasisEnabled: e });
+            }).catch(() => {});
+    }, []);
+
+    const saveMealSettings = async () => {
+        try {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({
+                    meal_lunch_cutoff_hour: String(cutoffHour),
+                    meal_rating_enabled: String(ratingEnabled),
+                    meal_emphasis_enabled: String(emphasisEnabled),
+                }),
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            setSavedSettings({ cutoffHour, ratingEnabled, emphasisEnabled });
+            toast.success("급식 설정이 저장되었습니다.");
+        } catch (e: any) {
+            toast.error(e.message);
+        }
+    };
 
     // --- 캐시 조회 ---
     const mealQuery = useQuery({
@@ -4988,6 +5041,79 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
 
     return (
         <div className="space-y-6">
+            {/* ── 급식 표시 설정 카드 ── */}
+            <Card className="w-full border-orange-200">
+                <CardHeader className="bg-orange-50/60 border-b border-orange-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-orange-800">
+                                <span className="text-lg">⚙️</span> 급식 표시 설정
+                            </CardTitle>
+                            <CardDescription>점심/석식 기준 시간 및 별점·강조 기능을 설정합니다.</CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" disabled={!settingsDirty}
+                                onClick={() => {
+                                    setCutoffHour(savedSettings.cutoffHour);
+                                    setRatingEnabled(savedSettings.ratingEnabled);
+                                    setEmphasisEnabled(savedSettings.emphasisEnabled);
+                                }}>
+                                취소
+                            </Button>
+                            <Button size="sm" disabled={!settingsDirty} onClick={saveMealSettings}
+                                className="bg-orange-500 hover:bg-orange-600 text-white">
+                                저장
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                    {/* 기준 시간 */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800">점심 → 석식 전환 기준 시간</p>
+                            <p className="text-xs text-slate-500 mt-0.5">이 시간 이전 = 점심 강조/별점, 이후 = 석식 강조/별점</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="number" min={0} max={23} value={cutoffHour}
+                                onChange={e => setCutoffHour(Math.max(0, Math.min(23, parseInt(e.target.value) || 0)))}
+                                className="w-16 border border-slate-200 rounded-lg px-2 py-1 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-orange-400"
+                            />
+                            <span className="text-sm text-slate-500">시 이후</span>
+                        </div>
+                    </div>
+                    {/* 구분선 */}
+                    <div className="border-t border-slate-100" />
+                    {/* 별점 토글 */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800">별점 시스템 활성화</p>
+                            <p className="text-xs text-slate-500 mt-0.5">학생들이 현재 식사에 별점을 남길 수 있습니다</p>
+                        </div>
+                        <button
+                            onClick={() => setRatingEnabled(v => !v)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${ratingEnabled ? "bg-violet-500" : "bg-gray-200"}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${ratingEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                        </button>
+                    </div>
+                    {/* 강조 토글 */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800">현재 식사 강조 표시 활성화</p>
+                            <p className="text-xs text-slate-500 mt-0.5">오늘 날짜에서 현재 시간에 해당하는 식사 박스를 강조합니다</p>
+                        </div>
+                        <button
+                            onClick={() => setEmphasisEnabled(v => !v)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${emphasisEnabled ? "bg-orange-500" : "bg-gray-200"}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${emphasisEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                        </button>
+                    </div>
+                </CardContent>
+            </Card>
+
             {/* ── 급식 건의 목록 카드 ── */}
             <Card className="w-full border-violet-200">
                 <CardHeader className="bg-violet-50/60 border-b border-violet-100">
@@ -5029,9 +5155,9 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
                                                 <Badge variant="secondary" className="text-[10px] bg-gray-100 text-gray-500">학번 미상</Badge>
                                             )}
                                             {s.ip && (
-                                                <Badge variant="outline" className="text-[10px] font-mono text-gray-400">IP: {s.ip}</Badge>
+                                                <Badge variant="outline" className="text-[10px] font-mono text-gray-600 border-gray-400">IP: {s.ip}</Badge>
                                             )}
-                                            <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                                            <span className="text-[10px] text-gray-600 font-medium whitespace-nowrap">
                                                 {(() => {
                                                     // ISO 8601 또는 SQLite "YYYY-MM-DD HH:MM:SS" 모두 처리
                                                     const iso = s.createdAt.includes("T")
@@ -5149,6 +5275,7 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
                                         <TableHead className="w-[120px]">날짜</TableHead>
                                         <TableHead>중식 메뉴</TableHead>
                                         <TableHead>석식 메뉴</TableHead>
+                                        <TableHead className="w-[90px] text-center">평균 별점</TableHead>
                                         <TableHead className="w-[170px] text-right">갱신 시각</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -5174,6 +5301,16 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
                                                             <Badge key={i} variant="secondary" className="text-xs bg-purple-50 text-purple-700 border-purple-200">{item}</Badge>
                                                         ))}
                                                     </div>
+                                                ) : (
+                                                    <span className="text-xs text-gray-300">—</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                {ratingsMap[meal.date] ? (
+                                                    <span className="text-xs text-violet-600 font-bold">
+                                                        ★ {ratingsMap[meal.date].avg.toFixed(1)}
+                                                        <span className="text-[10px] text-gray-400 ml-1">({ratingsMap[meal.date].count}명)</span>
+                                                    </span>
                                                 ) : (
                                                     <span className="text-xs text-gray-300">—</span>
                                                 )}

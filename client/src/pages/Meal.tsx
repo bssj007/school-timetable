@@ -1,6 +1,6 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useRef, useEffect } from "react";
-import { UtensilsCrossed, ChevronLeft, ChevronRight, Sun, Moon, MessageSquarePlus, X, Send, Loader2 } from "lucide-react";
+import { UtensilsCrossed, ChevronLeft, ChevronRight, Sun, Moon, MessageSquarePlus, X, Send, Loader2, Star } from "lucide-react";
 import { toast } from "sonner";
 
 interface MealEntry {
@@ -29,6 +29,103 @@ function formatDate(d: Date): string {
     const month = (d.getMonth() + 1).toString().padStart(2, '0');
     const day = d.getDate().toString().padStart(2, '0');
     return `${year}-${month}-${day}`;
+}
+
+// 쿠키에서 학번 파싱 (공통 유틸)
+function readStudentFromCookie(): { grade: number | null; classNum: number | null; studentNumber: number | null } {
+    try {
+        const match = document.cookie.match(/(^|;\s*)school_timetable_config=([^;]+)/);
+        if (match) {
+            const cfg = JSON.parse(decodeURIComponent(match[2]));
+            return {
+                grade: cfg.grade ? parseInt(cfg.grade) : null,
+                classNum: cfg.classNum ? parseInt(cfg.classNum) : null,
+                studentNumber: cfg.studentNumber ? parseInt(cfg.studentNumber) : null,
+            };
+        }
+    } catch (_) {}
+    return { grade: null, classNum: null, studentNumber: null };
+}
+
+// ── 별점 컴포넌트 ─────────────────────────────────────────────────
+function StarRating({ date }: { date: string }) {
+    const qc = useQueryClient();
+    const student = readStudentFromCookie();
+    const hasStudent = !!(student.grade && student.classNum && student.studentNumber);
+
+    const params = new URLSearchParams({ date });
+    if (hasStudent) {
+        params.set("grade", String(student.grade));
+        params.set("classNum", String(student.classNum));
+        params.set("studentNumber", String(student.studentNumber));
+    }
+
+    const ratingQuery = useQuery({
+        queryKey: ["meal-rating", date, student.grade, student.classNum, student.studentNumber],
+        queryFn: async () => {
+            const res = await fetch(`/api/meal-ratings?${params}`);
+            if (!res.ok) return { avg: null, count: 0, myRating: null };
+            return res.json() as Promise<{ avg: number | null; count: number; myRating: number | null }>;
+        },
+        staleTime: 30_000,
+    });
+
+    const [hovered, setHovered] = useState<number | null>(null);
+
+    const rateMutation = useMutation({
+        mutationFn: async (rating: number) => {
+            const res = await fetch("/api/meal-ratings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ date, ...student, rating }),
+            });
+            const data = await res.json() as any;
+            if (!res.ok) throw new Error(data.error || "별점 저장 실패");
+            return data;
+        },
+        onSuccess: (data) => {
+            qc.setQueryData(
+                ["meal-rating", date, student.grade, student.classNum, student.studentNumber],
+                { avg: data.avg, count: data.count, myRating: data.myRating }
+            );
+            toast.success("별점이 저장되었습니다!");
+        },
+        onError: (err: Error) => toast.error(err.message),
+    });
+
+    const myRating = ratingQuery.data?.myRating ?? null;
+    const avg = ratingQuery.data?.avg;
+    const count = ratingQuery.data?.count ?? 0;
+    const displayRating = hovered ?? myRating ?? 0;
+
+    return (
+        <div className="flex flex-col items-end gap-0.5">
+            <div className="flex items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                        key={star}
+                        onClick={() => rateMutation.mutate(star)}
+                        onMouseEnter={() => setHovered(star)}
+                        onMouseLeave={() => setHovered(null)}
+                        disabled={rateMutation.isPending}
+                        className="transition-transform hover:scale-125 active:scale-110 disabled:opacity-50"
+                        title={hasStudent ? `${star}점` : "학번을 설정해야 별점을 남길 수 있습니다"}
+                    >
+                        <Star
+                            className="w-5 h-5"
+                            fill={star <= displayRating ? "#7c3aed" : "none"}
+                            stroke={star <= displayRating ? "#7c3aed" : "#c4b5fd"}
+                        />
+                    </button>
+                ))}
+            </div>
+            {count > 0 && avg != null && (
+                <span className="text-[9px] text-violet-400 leading-none">
+                    ★ {avg.toFixed(1)} ({count}명)
+                </span>
+            )}
+        </div>
+    );
 }
 
 // ── 급식 건의 다이얼로그 ──────────────────────────────────────────
@@ -165,6 +262,28 @@ export default function MealPage() {
         staleTime: 0,
         refetchOnWindowFocus: true,
     });
+
+    // 급식 표시 설정 (공개 settings API)
+    const { data: mealSettings } = useQuery({
+        queryKey: ["meal-settings-public"],
+        queryFn: async () => {
+            const res = await fetch("/api/settings/public");
+            if (!res.ok) return null;
+            const s = await res.json() as any;
+            return {
+                cutoffHour: s.meal_lunch_cutoff_hour ?? 14,
+                ratingEnabled: s.meal_rating_enabled !== false,
+                emphasisEnabled: s.meal_emphasis_enabled !== false,
+            };
+        },
+        staleTime: 60_000,
+    });
+
+    const cutoffHour = mealSettings?.cutoffHour ?? 14;
+    const ratingEnabled = mealSettings?.ratingEnabled ?? true;
+    const emphasisEnabled = mealSettings?.emphasisEnabled ?? true;
+    // 현재 식사: 기준시간 이전=lunch, 이후=dinner
+    const currentMeal = today.getHours() < cutoffHour ? "lunch" : "dinner";
 
     // Build a map of date → MealEntry for quick lookup
     const mealMap = useMemo(() => {
@@ -321,12 +440,19 @@ export default function MealPage() {
                                     </div>
 
                                     {/* Lunch Box */}
-                                    <div className={`bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all hover:shadow-md ${isToday ? "ring-2 ring-orange-500 ring-offset-2" : ""}`}>
+                                    {(() => {
+                                        const isLunchActive = isToday && emphasisEnabled && currentMeal === "lunch";
+                                        const isDinnerActive = isToday && emphasisEnabled && currentMeal === "dinner";
+                                        const showRatingOnLunch = isToday && ratingEnabled && currentMeal === "lunch";
+                                        const showRatingOnDinner = isToday && ratingEnabled && currentMeal === "dinner";
+                                        return (<>
+                                    <div className={`bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all hover:shadow-md ${isLunchActive ? "ring-2 ring-orange-500 ring-offset-2" : ""}`}>
                                         <div className="bg-amber-50 px-3 py-2 flex items-center justify-between border-b border-amber-100">
                                             <div className="flex items-center gap-1.5">
                                                 <Sun className="w-3.5 h-3.5 text-amber-500" />
                                                 <span className="text-sm font-bold text-amber-700">중식</span>
                                             </div>
+                                            {showRatingOnLunch && <StarRating date={dateStr} />}
                                         </div>
                                         <div className="p-3 pb-4">
                                             {meal?.lunch && meal.lunch.length > 0 ? (
@@ -344,12 +470,13 @@ export default function MealPage() {
                                     </div>
 
                                     {/* Dinner Box */}
-                                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all hover:shadow-md">
+                                    <div className={`bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all hover:shadow-md ${isDinnerActive ? "ring-2 ring-indigo-500 ring-offset-2" : ""}`}>
                                         <div className="bg-indigo-50 px-3 py-2 flex items-center justify-between border-b border-indigo-100">
                                             <div className="flex items-center gap-1.5">
                                                 <Moon className="w-3.5 h-3.5 text-indigo-500" />
                                                 <span className="text-sm font-bold text-indigo-700">석식</span>
                                             </div>
+                                            {showRatingOnDinner && <StarRating date={dateStr} />}
                                         </div>
                                         <div className="p-3 pb-4">
                                             {meal?.dinner && meal.dinner.length > 0 ? (
@@ -365,6 +492,7 @@ export default function MealPage() {
                                             )}
                                         </div>
                                     </div>
+                                        </>); })()} 
                                 </div>
                             );
                         })}
