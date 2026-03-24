@@ -1465,14 +1465,14 @@ export default function Dashboard() {
 
       <div className="flex items-stretch gap-2 md:hidden mb-3">
         {/* Left column: toggle (top) + title (bottom) */}
-        <div className="flex flex-col justify-between gap-0.5 w-[140px] shrink-0">
+        <div className="flex flex-col justify-between gap-0.5 w-[136px] shrink-0">
           <div className="flex items-center gap-1">
-            <div className="flex-1 flex items-center justify-center gap-0.5 px-2.5 py-1.5 text-[13px] font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap">
+            <div className="flex-1 flex items-center justify-center gap-0.5 px-[9px] py-[5px] text-[12.5px] font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap">
               시간표
             </div>
             <a
               href="/meal"
-              className="flex-1 flex items-center justify-center gap-0.5 px-2.5 py-1.5 text-[13px] font-semibold rounded-full border border-orange-300 text-orange-500 hover:bg-orange-50 transition-colors whitespace-nowrap"
+              className="flex-1 flex items-center justify-center gap-0.5 px-[9px] py-[5px] text-[12.5px] font-semibold rounded-full border border-orange-300 text-orange-500 hover:bg-orange-50 transition-colors whitespace-nowrap"
             >
               급식표
             </a>
