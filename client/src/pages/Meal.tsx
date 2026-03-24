@@ -216,48 +216,61 @@ export default function MealPage() {
     return (
         <div className="min-h-screen bg-slate-50">
             <header className="bg-white sticky top-0 z-20 shadow-sm border-b border-slate-200">
-                <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-200">
-                            <UtensilsCrossed className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-xl font-bold text-slate-900">학교 급식표</h1>
-                            {lastUpdated && (
-                                <p className="text-[10px] text-slate-400 mt-0.5">업데이트: {lastUpdated}</p>
-                            )}
-                            {/* 급식 건의 버튼 (모바일) */}
-                            <button
-                                onClick={() => setShowSuggestion(true)}
-                                className="mt-1 flex items-center gap-1 text-[10px] font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-full px-2 py-0.5 transition-colors md:hidden"
-                            >
-                                <MessageSquarePlus className="w-3 h-3" />
-                                급식 건의
-                            </button>
+                <div className="max-w-6xl mx-auto px-4 py-3">
+                    {/* 첫 줄: 아이콘 + 제목 + 우측 버튼 */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 shrink-0 rounded-xl bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-200">
+                                <UtensilsCrossed className="w-4 h-4 text-white" />
+                            </div>
+                            <div className="min-w-0">
+                                <h1 className="text-lg font-bold text-slate-900 leading-tight">학교 급식표</h1>
+                                {lastUpdated && (
+                                    <p className="text-[10px] text-slate-400">{lastUpdated}</p>
+                                )}
+                            </div>
                         </div>
 
-                        {/* 시간표/급식표 toggle */}
-                        <div className="flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5 ml-2">
+                        {/* 모바일: 건의 버튼 / 데스크탑: 토글 + 건의 버튼 */}
+                        <div className="flex items-center gap-2 shrink-0 ml-3">
+                            {/* 시간표/급식표 토글 — 데스크탑만 */}
+                            <div className="hidden md:flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5">
+                                <a
+                                    href="/"
+                                    className="px-4 py-1.5 rounded-full text-sm font-semibold text-gray-500 hover:text-gray-800 hover:bg-white/60 transition-all whitespace-nowrap"
+                                >
+                                    📅 시간표
+                                </a>
+                                <div className="px-4 py-1.5 rounded-full bg-white text-sm font-semibold text-gray-800 shadow-sm whitespace-nowrap">
+                                    🍱 급식표
+                                </div>
+                            </div>
+
+                            {/* 급식 건의 버튼 */}
+                            <button
+                                onClick={() => setShowSuggestion(true)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500 hover:bg-violet-600 text-white text-xs font-bold transition-colors shadow-md shadow-violet-200"
+                            >
+                                <MessageSquarePlus className="w-3.5 h-3.5" />
+                                <span className="hidden xs:inline">급식 건의</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* 둘째 줄: 시간표/급식표 토글 — 모바일만 */}
+                    <div className="flex items-center gap-2 mt-2 md:hidden">
+                        <div className="flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5">
                             <a
                                 href="/"
-                                className="px-4 py-1.5 rounded-full text-sm font-semibold text-gray-500 hover:text-gray-800 hover:bg-white/60 transition-all whitespace-nowrap"
+                                className="px-3 py-1 rounded-full text-xs font-semibold text-gray-500 hover:text-gray-800 hover:bg-white/60 transition-all whitespace-nowrap"
                             >
                                 📅 시간표
                             </a>
-                            <div className="px-4 py-1.5 rounded-full bg-white text-sm font-semibold text-gray-800 shadow-sm whitespace-nowrap">
+                            <div className="px-3 py-1 rounded-full bg-white text-xs font-semibold text-gray-800 shadow-sm whitespace-nowrap">
                                 🍱 급식표
                             </div>
                         </div>
                     </div>
-
-                    {/* 급식 건의 버튼 (데스크탑) */}
-                    <button
-                        onClick={() => setShowSuggestion(true)}
-                        className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500 hover:bg-violet-600 text-white text-xs font-bold transition-colors shadow-md shadow-violet-200"
-                    >
-                        <MessageSquarePlus className="w-3.5 h-3.5" />
-                        급식 건의
-                    </button>
                 </div>
             </header>
 
