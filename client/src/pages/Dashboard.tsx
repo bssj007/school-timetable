@@ -1452,7 +1452,7 @@ export default function Dashboard() {
       </Dialog>
 
       <div className="flex flex-col gap-0.5 md:hidden mb-3">
-        {/* Top half: 급식/시간표 toggle */}
+        {/* Row 1: 급식/시간표 toggle */}
         <div className="flex items-center gap-2 px-0.5 pt-0.5">
           <a
             href="/meal"
@@ -1465,71 +1465,59 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Bottom half: existing title + selectors */}
-        <div className="flex flex-row justify-between items-center gap-2">
-          <div>
-            <h1 className="text-lg font-bold whitespace-nowrap">
-              {grade || '?'}-{classNum || '?'} 시간표
-            </h1>
-          </div>
+        {/* Row 2: selectors */}
+        <div className="flex items-center gap-[4px] justify-end">
+          <Select
+            value={grade}
+            onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
+          >
+            <SelectTrigger className="relative w-[80px] shrink min-w-[50px] h-9 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0" style={selectorStyle}>
+              <SelectValue placeholder="학년" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">1학년</SelectItem>
+              <SelectItem value="2">2학년</SelectItem>
+              <SelectItem value="3">3학년</SelectItem>
+            </SelectContent>
+          </Select>
 
-          <div className="flex flex-wrap items-center gap-1 justify-end">
-            <div className="flex items-center gap-[4px] md:gap-2">
-              <Select
-                value={grade}
-                onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
-              >
-                <SelectTrigger className="relative w-[80px] md:w-[90px] shrink min-w-[50px] h-9 md:h-10 bg-white px-2 text-lg md:text-sm font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0 md:[&>svg]:static" style={selectorStyle}>
-                  <SelectValue placeholder="학년" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">1학년</SelectItem>
-                  <SelectItem value="2">2학년</SelectItem>
-                  <SelectItem value="3">3학년</SelectItem>
-                </SelectContent>
-              </Select>
+          <Select
+            value={classNum}
+            onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
+          >
+            <SelectTrigger className="relative w-[70px] shrink min-w-[45px] h-9 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0" style={selectorStyle}>
+              <SelectValue placeholder="반" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
+                <SelectItem key={num} value={num.toString()}>{num}반</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-              <div className="flex items-center gap-1">
-                <Select
-                  value={classNum}
-                  onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
-                >
-                  <SelectTrigger className="relative w-[70px] md:w-[80px] shrink min-w-[45px] h-9 md:h-10 bg-white px-2 text-lg md:text-sm font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0 md:[&>svg]:static" style={selectorStyle}>
-                    <SelectValue placeholder="반" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
-                      <SelectItem key={num} value={num.toString()}>
-                        {num}반
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <Select
+            value={studentNumber}
+            onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
+          >
+            <SelectTrigger className="relative w-[70px] shrink min-w-[45px] h-9 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0" style={selectorStyle}>
+              <SelectValue placeholder="번호" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
+                <SelectItem key={num} value={num.toString()}>{num}번</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-              <div className="flex items-center gap-1">
-                <Select
-                  value={studentNumber}
-                  onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
-                >
-                  <SelectTrigger className="relative w-[70px] md:w-[80px] shrink min-w-[45px] h-9 md:h-10 bg-white px-2 text-lg md:text-sm font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0 md:[&>svg]:static" style={selectorStyle}>
-                    <SelectValue placeholder="번호" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
-                      <SelectItem key={num} value={num.toString()}>
-                        {num}번
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-
-          </div>
+        {/* Row 3: title */}
+        <div>
+          <h1 className="text-xl font-bold whitespace-nowrap">
+            {grade || '?'}-{classNum || '?'} 시간표
+          </h1>
         </div>
       </div>
+
 
 
       {/* Desktop Header (Outside Card) */}
