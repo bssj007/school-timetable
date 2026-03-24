@@ -200,7 +200,7 @@ export default function MealPage() {
             const header = document.querySelector("header");
             const headerH = header ? header.getBoundingClientRect().height : 80;
             const top = el.getBoundingClientRect().top + window.scrollY - headerH - 12; // 12px 여유
-            window.scrollTo({ top, behavior: "smooth" });
+            window.scrollTo({ top, behavior: "instant" });
         }, 150);
         return () => clearTimeout(timer);
     }, [weekOffset]);
