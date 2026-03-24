@@ -121,6 +121,15 @@ export default function MealPage() {
                 </div>
             </header>
 
+            {/* Debug Info (Temporary) */}
+            <div className="max-w-6xl mx-auto px-4 pt-4">
+                <div className="bg-slate-100 rounded-lg p-2 text-[10px] text-slate-500 font-mono">
+                    API Status: {isLoading ? "Loading..." : data ? "Loaded" : "None"} | 
+                    Total Days: {data?.meals?.length || 0} | 
+                    Sample Dates: {data?.meals?.slice(0, 3).map(m => m.date).join(", ")}
+                </div>
+            </div>
+
             {/* Navigation */}
             <div className="max-w-6xl mx-auto px-4 py-6">
                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex items-center justify-between mb-6">
