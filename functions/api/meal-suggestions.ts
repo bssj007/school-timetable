@@ -48,14 +48,17 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
                    request.headers.get("X-Forwarded-For")?.split(",")[0].trim() ||
                    "unknown";
 
+        const createdAt = new Date().toISOString();
+
         const result = await env.DB.prepare(
-            "INSERT INTO meal_suggestions (grade, classNum, studentNumber, ip, message) VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO meal_suggestions (grade, classNum, studentNumber, ip, message, createdAt) VALUES (?, ?, ?, ?, ?, ?)"
         ).bind(
             grade ? parseInt(grade) : null,
             classNum ? parseInt(classNum) : null,
             studentNumber ? parseInt(studentNumber) : null,
             ip,
-            message.trim()
+            message.trim(),
+            createdAt
         ).run();
 
         return new Response(JSON.stringify({ success: true, id: result.meta?.last_row_id }), {

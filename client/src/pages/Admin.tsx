@@ -5031,11 +5031,12 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
                                             {s.ip && (
                                                 <Badge variant="outline" className="text-[10px] font-mono text-gray-400">IP: {s.ip}</Badge>
                                             )}
-                                            <span className="text-[10px] text-gray-400 ml-auto whitespace-nowrap">
+                                            <span className="text-[10px] text-gray-400 whitespace-nowrap">
                                                 {(() => {
-                                                    // SQLite datetime('now') → "2026-03-25 01:38:49" (UTC, 공백 구분)
-                                                    // new Date()가 올바르게 파싱하려면 ISO 형식으로 변환 필요
-                                                    const iso = s.createdAt.replace(" ", "T") + (s.createdAt.includes("Z") ? "" : "Z");
+                                                    // ISO 8601 또는 SQLite "YYYY-MM-DD HH:MM:SS" 모두 처리
+                                                    const iso = s.createdAt.includes("T")
+                                                        ? s.createdAt
+                                                        : s.createdAt.replace(" ", "T") + "Z";
                                                     const d = new Date(iso);
                                                     if (isNaN(d.getTime())) return s.createdAt;
                                                     const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
