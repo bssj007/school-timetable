@@ -103,8 +103,7 @@ function MealSuggestionDialog({ onClose }: { onClose: () => void }) {
 
                 {/* 안내 */}
                 <div className="bg-violet-50 border border-violet-100 rounded-xl px-3 py-2 text-xs text-violet-700">
-                    💡 건의사항은 학생회에 전달하겠습니다!{" "}
-                    <span className="text-[10px] text-violet-400 line-through">(너무 부담갖지 마시고)</span>
+                    💡 건의사항은 학생회에 전달하겠습니다!
                 </div>
 
                 {/* 텍스트 입력 */}

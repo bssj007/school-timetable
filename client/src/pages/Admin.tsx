@@ -5031,8 +5031,15 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
                                             {s.ip && (
                                                 <Badge variant="outline" className="text-[10px] font-mono text-gray-400">IP: {s.ip}</Badge>
                                             )}
-                                            <span className="text-[10px] text-gray-400 ml-auto">
-                                                {new Date(s.createdAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
+                                            <span className="text-[10px] text-gray-400 ml-auto whitespace-nowrap">
+                                                {(() => {
+                                                    const d = new Date(s.createdAt);
+                                                    const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
+                                                    const day = DAYS[d.getDay()];
+                                                    const date = d.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric" });
+                                                    const time = d.toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit" });
+                                                    return `${date} (${day}) ${time}`;
+                                                })()}
                                             </span>
                                         </div>
                                         {/* 건의 내용 */}
@@ -5104,14 +5111,6 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
                             ) : (
                                 <><RefreshCw className="w-4 h-4 mr-2" /> 캐시 지금 갱신</>
                             )}
-                        </Button>
-                        <Button
-                            variant="outline"
-                            onClick={() => queryClient.invalidateQueries({ queryKey: ["meal"] })}
-                            disabled={mealQuery.isLoading}
-                        >
-                            <RefreshCw className={`w-4 h-4 mr-2 ${mealQuery.isFetching ? "animate-spin" : ""}`} />
-                            새로고침
                         </Button>
                         <span className="text-xs text-gray-400">데이터 출처: 부산교육청 급식 API</span>
                     </div>
