@@ -1451,27 +1451,29 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex flex-col gap-0.5 md:hidden mb-3">
-        {/* Row 1: 급식/시간표 toggle */}
-        <div className="flex items-center gap-2 px-0.5 pt-0.5">
-          <a
-            href="/meal"
-            className="flex-1 flex items-center justify-center gap-1 py-1 text-sm font-semibold rounded-full border border-orange-200 text-orange-500 hover:bg-orange-50 transition-colors"
-          >
-            🍱 급식표
-          </a>
-          <div className="flex-1 flex items-center justify-center gap-1 py-1 text-sm font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-            📅 시간표
+      <div className="flex items-stretch gap-2 md:hidden mb-3">
+        {/* Left column: toggle (top) + title (bottom) */}
+        <div className="flex flex-col justify-between gap-0.5 flex-1 min-w-0">
+          <div className="flex items-center gap-1">
+            <a
+              href="/meal"
+              className="flex items-center gap-0.5 px-2.5 py-1 text-xs font-semibold rounded-full border border-orange-300 text-orange-500 hover:bg-orange-50 transition-colors whitespace-nowrap"
+            >
+              급식표
+            </a>
+            <div className="flex items-center gap-0.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap">
+              시간표
+            </div>
           </div>
+          <h1 className="text-xl font-bold whitespace-nowrap">
+            {grade || '?'}-{classNum || '?'} 시간표
+          </h1>
         </div>
 
-        {/* Row 2: selectors */}
-        <div className="flex items-center gap-[4px] justify-end">
-          <Select
-            value={grade}
-            onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
-          >
-            <SelectTrigger className="relative w-[80px] shrink min-w-[50px] h-9 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0" style={selectorStyle}>
+        {/* Right column: selectors vertically centered */}
+        <div className="flex items-center gap-[3px] shrink-0">
+          <Select value={grade} onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}>
+            <SelectTrigger className="relative w-[76px] h-10 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-1.5 [&>svg]:z-0" style={selectorStyle}>
               <SelectValue placeholder="학년" />
             </SelectTrigger>
             <SelectContent>
@@ -1480,12 +1482,8 @@ export default function Dashboard() {
               <SelectItem value="3">3학년</SelectItem>
             </SelectContent>
           </Select>
-
-          <Select
-            value={classNum}
-            onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
-          >
-            <SelectTrigger className="relative w-[70px] shrink min-w-[45px] h-9 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0" style={selectorStyle}>
+          <Select value={classNum} onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}>
+            <SelectTrigger className="relative w-[64px] h-10 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-1.5 [&>svg]:z-0" style={selectorStyle}>
               <SelectValue placeholder="반" />
             </SelectTrigger>
             <SelectContent>
@@ -1494,12 +1492,8 @@ export default function Dashboard() {
               ))}
             </SelectContent>
           </Select>
-
-          <Select
-            value={studentNumber}
-            onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
-          >
-            <SelectTrigger className="relative w-[70px] shrink min-w-[45px] h-9 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-2 [&>svg]:z-0" style={selectorStyle}>
+          <Select value={studentNumber} onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}>
+            <SelectTrigger className="relative w-[64px] h-10 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-1.5 [&>svg]:z-0" style={selectorStyle}>
               <SelectValue placeholder="번호" />
             </SelectTrigger>
             <SelectContent>
@@ -1508,13 +1502,6 @@ export default function Dashboard() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-
-        {/* Row 3: title */}
-        <div>
-          <h1 className="text-xl font-bold whitespace-nowrap">
-            {grade || '?'}-{classNum || '?'} 시간표
-          </h1>
         </div>
       </div>
 
