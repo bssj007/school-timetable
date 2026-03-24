@@ -44,20 +44,17 @@ function MealSuggestionDialog({ onClose }: { onClose: () => void }) {
         mutationFn: async () => {
             if (!message.trim()) throw new Error("건의 내용을 입력해주세요.");
 
-            // 학번 정보 (로컬스토리지에서 시도)
+            // school_timetable_config 쿠키에서 학번 직접 파싱
             let grade: number | null = null;
             let classNum: number | null = null;
             let studentNumber: number | null = null;
             try {
-                const cookieMatch = document.cookie.match(/clientId=([^;]+)/);
-                if (cookieMatch) {
-                    const res = await fetch("/api/profile");
-                    if (res.ok) {
-                        const profile = await res.json() as any;
-                        grade = profile?.grade ?? null;
-                        classNum = profile?.classNum ?? null;
-                        studentNumber = profile?.studentNumber ?? null;
-                    }
+                const match = document.cookie.match(/(^|;\s*)school_timetable_config=([^;]+)/);
+                if (match) {
+                    const cfg = JSON.parse(decodeURIComponent(match[2]));
+                    grade = cfg.grade ? parseInt(cfg.grade) : null;
+                    classNum = cfg.classNum ? parseInt(cfg.classNum) : null;
+                    studentNumber = cfg.studentNumber ? parseInt(cfg.studentNumber) : null;
                 }
             } catch (_) {}
 
@@ -253,7 +250,7 @@ export default function MealPage() {
                         {/* 우측: 급식 건의 버튼 (항상 글자 포함) */}
                         <button
                             onClick={() => setShowSuggestion(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500 hover:bg-violet-600 text-white text-xs font-bold transition-colors shadow-md shadow-violet-200 shrink-0 ml-3"
+                        className="flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500 hover:bg-violet-600 text-white text-sm font-bold transition-colors shadow-md shadow-violet-200 shrink-0 ml-3"
                         >
                             <MessageSquarePlus className="w-3.5 h-3.5" />
                             급식 건의
