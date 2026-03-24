@@ -12,6 +12,7 @@ import { sql } from "drizzle-orm";
 import { adminRouter } from "../routes/admin";
 import { assessmentRouter } from "../routes/assessment";
 import { myIpRouter } from "../routes/my-ip";
+import { mealRouter } from "../routes/meal";
 import { runMigrations } from "./migrate";
 
 async function startServer() {
@@ -142,6 +143,7 @@ async function startServer() {
   app.use("/api/admin", adminRouter);
   app.use("/api/assessment", assessmentRouter);
   app.use("/api/my-ip", myIpRouter);
+  app.use("/api/meal", mealRouter);
 
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);

@@ -1,23 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
-import { UtensilsCrossed, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { UtensilsCrossed, ChevronLeft, ChevronRight, RefreshCw, Sun, Moon } from "lucide-react";
 
 interface MealEntry {
     date: string; // "YYYY-MM-DD"
-    items: string[];
+    lunch: string[];
+    dinner: string[];
     updated_at: string;
 }
 
 const WEEKDAY_KR = ["일", "월", "화", "수", "목", "금", "토"];
-const WEEKDAY_COLORS = [
-    "", // 일
-    "text-gray-700", // 월
-    "text-gray-700", // 화
-    "text-gray-700", // 수
-    "text-gray-700", // 목
-    "text-gray-700", // 금
-    "", // 토
-];
 
 function getWeekRange(base: Date): { start: Date; end: Date } {
     const day = base.getDay(); // 0=Sun
@@ -32,7 +24,10 @@ function getWeekRange(base: Date): { start: Date; end: Date } {
 }
 
 function formatDate(d: Date): string {
-    return d.toISOString().split("T")[0];
+    const year = d.getFullYear();
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 export default function MealPage() {
@@ -45,7 +40,7 @@ export default function MealPage() {
     const { start, end } = getWeekRange(baseDate);
 
     const { data, isLoading, error, refetch } = useQuery({
-        queryKey: ["meal"],
+        queryKey: ["meal", weekOffset],
         queryFn: async () => {
             const res = await fetch("/api/meal");
             if (!res.ok) throw new Error("식단 데이터를 불러오지 못했습니다.");
@@ -89,150 +84,125 @@ export default function MealPage() {
         : null;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50">
+        <div className="min-h-screen bg-slate-50">
             {/* Header */}
-            <header className="bg-white/80 backdrop-blur-md sticky top-0 z-10 shadow-sm border-b border-orange-100">
-                <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+            <header className="bg-white sticky top-0 z-20 shadow-sm border-b border-slate-200">
+                <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center shadow-md">
+                        <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-200">
                             <UtensilsCrossed className="w-5 h-5 text-white" />
                         </div>
                         <div>
-                            <h1 className="text-xl font-bold text-gray-900">🍱 급식 식단표</h1>
+                            <h1 className="text-xl font-bold text-slate-900">학교 급식표</h1>
                             {lastUpdated && (
-                                <p className="text-xs text-gray-400 leading-none mt-0.5">마지막 갱신: {lastUpdated}</p>
+                                <p className="text-[10px] text-slate-400 mt-0.5">업데이트: {lastUpdated}</p>
                             )}
                         </div>
                     </div>
                     <button
                         onClick={() => refetch()}
-                        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-orange-500 transition-colors px-2 py-1 rounded-lg hover:bg-orange-50"
+                        className="p-2 rounded-full hover:bg-slate-100 transition-colors"
+                        title="새로고침"
                     >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-                        새로고침
+                        <RefreshCw className={`w-5 h-5 text-slate-400 ${isLoading ? "animate-spin" : ""}`} />
                     </button>
                 </div>
             </header>
 
-            {/* Week Navigation */}
-            <div className="max-w-5xl mx-auto px-4 pt-6 pb-2">
-                <div className="flex items-center justify-between">
+            {/* Navigation */}
+            <div className="max-w-6xl mx-auto px-4 py-6">
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex items-center justify-between mb-6">
                     <button
                         onClick={() => setWeekOffset(w => w - 1)}
-                        className="flex items-center gap-1 px-3 py-2 rounded-xl bg-white border border-orange-100 text-gray-600 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-600 transition-all shadow-sm"
+                        className="p-2 rounded-xl hover:bg-slate-50 border border-slate-100 transition-all text-slate-600"
                     >
-                        <ChevronLeft className="w-4 h-4" />
-                        <span className="text-sm font-medium">이전 주</span>
+                        <ChevronLeft className="w-5 h-5" />
                     </button>
-
                     <div className="text-center">
-                        <p className="text-base font-bold text-gray-800">{weekLabel}</p>
-                        {weekOffset === 0 && (
-                            <p className="text-xs text-orange-500 font-medium mt-0.5">이번 주</p>
-                        )}
+                        <h2 className="text-lg font-bold text-slate-800">{weekLabel}</h2>
+                        {weekOffset === 0 && <span className="text-xs font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">이번 주</span>}
                     </div>
-
                     <button
                         onClick={() => setWeekOffset(w => w + 1)}
-                        className="flex items-center gap-1 px-3 py-2 rounded-xl bg-white border border-orange-100 text-gray-600 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-600 transition-all shadow-sm"
+                        className="p-2 rounded-xl hover:bg-slate-50 border border-slate-100 transition-all text-slate-600"
                     >
-                        <span className="text-sm font-medium">다음 주</span>
-                        <ChevronRight className="w-4 h-4" />
+                        <ChevronRight className="w-5 h-5" />
                     </button>
                 </div>
-            </div>
 
-            {/* Meal Grid */}
-            <main className="max-w-5xl mx-auto px-4 py-4 pb-16">
+                {/* Grid */}
                 {error ? (
-                    <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center mt-8">
-                        <p className="text-red-500 font-semibold text-lg">⚠️ 데이터 로드 실패</p>
-                        <p className="text-red-400 text-sm mt-1">{(error as Error).message}</p>
-                        <button
-                            onClick={() => refetch()}
-                            className="mt-4 px-4 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition-colors"
-                        >
-                            다시 시도
-                        </button>
+                    <div className="text-center py-20">
+                        <p className="text-red-500 font-medium">데이터를 불러오지 못했습니다.</p>
+                        <button onClick={() => refetch()} className="mt-4 text-slate-500 underline text-sm">다시 시도</button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 mt-2">
-                        {weekDays.map((day, idx) => {
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        {weekDays.map((day) => {
                             const dateStr = formatDate(day);
                             const meal = mealMap[dateStr];
                             const isToday = dateStr === todayStr;
                             const weekday = day.getDay();
-                            const weekdayLabel = WEEKDAY_KR[weekday];
 
                             return (
-                                <div
-                                    key={dateStr}
-                                    className={`
-                                        rounded-2xl p-4 flex flex-col min-h-[160px] transition-all
-                                        ${isToday
-                                            ? "bg-gradient-to-br from-orange-400 to-amber-500 shadow-lg shadow-orange-200 text-white"
-                                            : "bg-white border border-orange-100 shadow-sm hover:shadow-md hover:border-orange-200"
-                                        }
-                                    `}
-                                >
-                                    {/* Day Header */}
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div>
-                                            <span className={`text-xs font-bold uppercase tracking-wide ${isToday ? "text-orange-100" : "text-orange-400"}`}>
-                                                {weekdayLabel}
-                                            </span>
-                                            <p className={`text-2xl font-black leading-none mt-0.5 ${isToday ? "text-white" : "text-gray-800"}`}>
-                                                {day.getDate()}
-                                            </p>
-                                        </div>
-                                        {isToday && (
-                                            <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-full text-white">
-                                                오늘
-                                            </span>
-                                        )}
+                                <div key={dateStr} className={`flex flex-col gap-3 ${isToday ? "opacity-100" : "opacity-90"}`}>
+                                    {/* Date indicator */}
+                                    <div className={`p-3 rounded-2xl flex items-center justify-between ${isToday ? "bg-orange-500 text-white shadow-md" : "bg-white border border-slate-200 text-slate-800"}`}>
+                                        <span className="font-bold text-sm">{WEEKDAY_KR[weekday]}</span>
+                                        <span className="text-xl font-black">{day.getDate()}</span>
                                     </div>
 
-                                    {/* Meal Items */}
-                                    {isLoading ? (
-                                        <div className="flex-1 flex items-center justify-center">
-                                            <div className={`w-5 h-5 rounded-full border-2 animate-spin ${isToday ? "border-white/40 border-t-white" : "border-orange-200 border-t-orange-400"}`} />
+                                    {/* Lunch Box */}
+                                    <div className={`bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all hover:shadow-md ${isToday ? "ring-2 ring-orange-500 ring-offset-2" : ""}`}>
+                                        <div className="bg-amber-50 px-3 py-2 flex items-center justify-between border-b border-amber-100">
+                                            <div className="flex items-center gap-1.5">
+                                                <Sun className="w-3.5 h-3.5 text-amber-500" />
+                                                <span className="text-[11px] font-bold text-amber-700">중식</span>
+                                            </div>
                                         </div>
-                                    ) : meal && meal.items.length > 0 ? (
-                                        <ul className="flex-1 space-y-1">
-                                            {meal.items.map((item, i) => (
-                                                <li key={i} className={`text-xs leading-snug ${isToday ? "text-white/90" : "text-gray-600"}`}>
-                                                    {i === 0 ? (
-                                                        <span className={`font-semibold ${isToday ? "text-white" : "text-gray-900"}`}>
-                                                            {item}
-                                                        </span>
-                                                    ) : item}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        <div className="flex-1 flex items-center justify-center">
-                                            <p className={`text-xs text-center ${isToday ? "text-white/60" : "text-gray-300"}`}>
-                                                식단 정보 없음
-                                            </p>
+                                        <div className="p-3 pb-4">
+                                            {meal?.lunch && meal.lunch.length > 0 ? (
+                                                <ul className="space-y-1">
+                                                    {meal.lunch.map((item, i) => (
+                                                        <li key={i} className="text-[11px] leading-tight text-slate-600">
+                                                            {i === 0 ? <span className="font-bold text-slate-800 text-xs block mb-1">{item}</span> : item}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : (
+                                                <p className="text-[10px] text-slate-300 py-4 text-center">식단 없음</p>
+                                            )}
                                         </div>
-                                    )}
+                                    </div>
+
+                                    {/* Dinner Box */}
+                                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all hover:shadow-md">
+                                        <div className="bg-indigo-50 px-3 py-2 flex items-center justify-between border-b border-indigo-100">
+                                            <div className="flex items-center gap-1.5">
+                                                <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                                                <span className="text-[11px] font-bold text-indigo-700">석식</span>
+                                            </div>
+                                        </div>
+                                        <div className="p-3 pb-4">
+                                            {meal?.dinner && meal.dinner.length > 0 ? (
+                                                <ul className="space-y-1">
+                                                    {meal.dinner.map((item, i) => (
+                                                        <li key={i} className="text-[11px] leading-tight text-slate-600">
+                                                            {i === 0 ? <span className="font-bold text-slate-800 text-xs block mb-1">{item}</span> : item}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : (
+                                                <p className="text-[10px] text-slate-300 py-4 text-center">식단 없음</p>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             );
                         })}
                     </div>
                 )}
-
-                {/* Empty state */}
-                {!isLoading && !error && (data?.meals?.length ?? 0) === 0 && (
-                    <div className="text-center mt-12">
-                        <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-orange-100 flex items-center justify-center">
-                            <UtensilsCrossed className="w-10 h-10 text-orange-300" />
-                        </div>
-                        <p className="text-gray-500 font-semibold text-lg">아직 식단이 등록되지 않았습니다</p>
-                        <p className="text-gray-400 text-sm mt-1">관리자 페이지에서 식단 데이터를 불러와 주세요.</p>
-                    </div>
-                )}
-            </main>
+            </div>
         </div>
     );
 }
