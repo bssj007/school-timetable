@@ -1,4 +1,5 @@
 import { createMealCacheTable } from "../db_schema";
+import { adminPassword } from "../../server/adminPW";
 
 interface Env {
     DB: any;
@@ -10,10 +11,9 @@ const RIROSCHOOL_DB_ID = "2303";
 
 // ---- helpers ----
 
-function checkAdminAuth(request: Request, env: Env): boolean {
+function checkAdminAuth(request: Request): boolean {
     const headerPw = request.headers.get("X-Admin-Password");
-    const adminPw = env.ADMIN_PASSWORD || "";
-    return adminPw !== "" && headerPw === adminPw;
+    return headerPw === adminPassword;
 }
 
 async function ensureTable(env: Env) {
@@ -229,7 +229,7 @@ export const onRequestGet = async (context: { request: Request; env: Env; next: 
 export const onRequestPost = async (context: { request: Request; env: Env; next: () => Promise<Response> }): Promise<Response> => {
     const { request, env } = context;
 
-    if (!checkAdminAuth(request, env)) {
+    if (!checkAdminAuth(request)) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
 

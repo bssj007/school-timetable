@@ -5515,7 +5515,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
             </div>
 
             <Tabs defaultValue="assessments" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 lg:grid-cols-10 mb-8 h-auto">
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 mb-8 h-auto">
                     <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
                     <TabsTrigger value="users">사용자 관리</TabsTrigger>
                     <TabsTrigger value="electives">선택과목</TabsTrigger>
