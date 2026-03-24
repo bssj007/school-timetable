@@ -6,7 +6,7 @@ pages_build_output_dir = "dist/public"
 [[d1_databases]]
 binding = "DB"
 database_name = "school-timetable-db"
-database_id = "b35d2ce4-8ba8-4b6f-92fc-b0c94b9519ce"
+database_id = "7367c8d6-a8a7-41fc-8b97-742890a5bdce"
 
 # NOTE: Cloudflare Pages does not support cron triggers in wrangler.toml
 # Cron must be configured in Cloudflare Dashboard:
