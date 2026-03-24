@@ -85,7 +85,6 @@ export default function MealPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            {/* Header */}
             <header className="bg-white sticky top-0 z-20 shadow-sm border-b border-slate-200">
                 <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -97,6 +96,19 @@ export default function MealPage() {
                             {lastUpdated && (
                                 <p className="text-[10px] text-slate-400 mt-0.5">업데이트: {lastUpdated}</p>
                             )}
+                        </div>
+
+                        {/* 시간표/급식표 toggle */}
+                        <div className="flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5 ml-4">
+                            <a
+                                href="/"
+                                className="px-4 py-1.5 rounded-full text-sm font-semibold text-gray-500 hover:text-gray-800 hover:bg-white/60 transition-all whitespace-nowrap"
+                            >
+                                📅 시간표
+                            </a>
+                            <div className="px-4 py-1.5 rounded-full bg-white text-sm font-semibold text-gray-800 shadow-sm whitespace-nowrap">
+                                🍱 급식표
+                            </div>
                         </div>
                     </div>
                     <button
