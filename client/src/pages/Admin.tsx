@@ -4938,7 +4938,10 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
                 body: JSON.stringify({ username: riroId.trim(), password: riroPw }),
             });
             const data = await res.json() as any;
-            if (!res.ok) throw new Error(data.error || "불러오기 실패");
+            if (!res.ok) {
+                const debugStr = data.debug ? `\n[debug] ${JSON.stringify(data.debug)}` : "";
+                throw new Error((data.error || "불러오기 실패") + debugStr);
+            }
             return data;
         },
         onSuccess: (data) => {

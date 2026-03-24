@@ -214,11 +214,18 @@ export const onRequestPost = async (context: { request: Request; env: Env; next:
         try { loginJson = await loginRes.clone().json(); } catch (_) { }
 
         const code = loginJson?.code ?? loginJson?.result ?? loginJson?.status ?? null;
-        const isSuccess = code === "000" || code === 0 || code === "0" || loginJson?.success === true;
+        // Success: code is "000" (string) or 0 (number) — loose equality covers both
+        // Failure: code is 400 (number) per observed response
+        // eslint-disable-next-line eqeqeq
+        const isSuccess = loginJson !== null && (code == "000" || code === true || loginJson?.success === true);
 
         if (!isSuccess) {
+            const riroMsg = loginJson?.msg ?? "";
+            const errMsg = riroMsg
+                ? `로그인 실패: ${riroMsg}`
+                : "로그인에 실패했습니다. 아이디/비밀번호를 확인해주세요.";
             return new Response(
-                JSON.stringify({ error: "로그인에 실패했습니다. 아이디/비밀번호를 확인해주세요.", debug: loginJson }),
+                JSON.stringify({ error: errMsg, debug: loginJson }),
                 { status: 401 }
             );
         }
