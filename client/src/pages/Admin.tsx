@@ -4910,47 +4910,41 @@ function SpecialScheduleManager({ adminPassword }: { adminPassword: string }) {
 // ----------------------------------------------------------------------
 function MealManager({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
-    const [riroId, setRiroId] = useState("");
-    const [riroPw, setRiroPw] = useState("");
-    const [showPw, setShowPw] = useState(false);
-    const [fetchResult, setFetchResult] = useState<{ count: number; dates: string[]; updatedAt: string } | null>(null);
 
+    // --- 캐시 조회 ---
     const mealQuery = useQuery({
         queryKey: ["meal", "admin"],
         queryFn: async () => {
             const res = await fetch("/api/meal");
             if (!res.ok) throw new Error("식단 데이터 로드 실패");
-            return res.json() as Promise<{ meals: { date: string; items: string[]; updated_at: string }[]; lastUpdated: string | null }>;
+            return res.json() as Promise<{
+                meals: { date: string; lunch: string[]; dinner: string[]; updated_at: string }[];
+                lastUpdated: string | null;
+            }>;
         },
     });
 
-    const fetchMutation = useMutation({
+    // --- 캐시 갱신 (부산교육청 API 재스크래핑) ---
+    const refreshMutation = useMutation({
         mutationFn: async () => {
-            if (!riroId.trim() || !riroPw.trim()) {
-                throw new Error("아이디와 비밀번호를 모두 입력해주세요.");
-            }
             const res = await fetch("/api/meal", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     "X-Admin-Password": adminPassword,
                 },
-                body: JSON.stringify({ username: riroId.trim(), password: riroPw }),
+                body: JSON.stringify({}),
             });
             const data = await res.json() as any;
-            if (!res.ok) {
-                const debugStr = data.debug ? `\n[debug] ${JSON.stringify(data.debug)}` : "";
-                throw new Error((data.error || "불러오기 실패") + debugStr);
-            }
+            if (!res.ok) throw new Error(data.error || "갱신 실패");
             return data;
         },
-        onSuccess: (data) => {
-            toast.success(`식단 데이터 ${data.count}일치를 성공적으로 불러왔습니다.`);
-            setFetchResult({ count: data.count, dates: data.dates, updatedAt: data.updatedAt });
+        onSuccess: () => {
+            toast.success("식단 캐시가 갱신되었습니다.");
             queryClient.invalidateQueries({ queryKey: ["meal"] });
         },
         onError: (err: Error) => {
-            toast.error(err.message);
+            toast.error(`캐시 갱신 실패: ${err.message}`);
         },
     });
 
@@ -4959,117 +4953,143 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
         ? new Date(mealQuery.data.lastUpdated).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })
         : null;
 
+    const now = new Date();
+    const thisMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const thisMonthMeals = meals.filter((m) => m.date.startsWith(thisMonthStr));
+    const lunchCount = thisMonthMeals.filter((m) => m.lunch && m.lunch.length > 0).length;
+    const dinnerCount = thisMonthMeals.filter((m) => m.dinner && m.dinner.length > 0).length;
+
     return (
         <div className="space-y-6">
-            {/* Fetch Card */}
-            <Card className="w-full max-w-2xl">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <span>🍱</span> 식단 데이터 불러오기
+            {/* ── 캐시 현황 카드 ── */}
+            <Card className="w-full max-w-2xl border-amber-200">
+                <CardHeader className="bg-amber-50/60 border-b border-amber-100">
+                    <CardTitle className="flex items-center gap-2 text-amber-800">
+                        <Database className="w-5 h-5" />
+                        현재 식단 메뉴 캐시 현황
                     </CardTitle>
                     <CardDescription>
-                        리로스쿨 아이디와 비밀번호를 입력해 이번 주 식단 데이터를 수동으로 가져옵니다.
-                        아이디/비밀번호는 서버에 저장되지 않습니다.
+                        DB에 저장된 이번 달({thisMonthStr}) 식단 캐시 상태입니다.
+                        데이터가 없거나 오래된 경우 아래 버튼으로 갱신해주세요.
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="riro-id">리로스쿨 아이디</Label>
-                            <Input
-                                id="riro-id"
-                                value={riroId}
-                                onChange={(e) => setRiroId(e.target.value)}
-                                placeholder="아이디 입력"
-                                autoComplete="username"
-                            />
+                <CardContent className="pt-5 space-y-5">
+                    {/* 통계 */}
+                    <div className="grid grid-cols-3 gap-3">
+                        <div className="rounded-lg border bg-white p-3 text-center shadow-sm">
+                            <p className="text-2xl font-bold text-amber-600">{thisMonthMeals.length}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">이번 달 날짜 수</p>
                         </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="riro-pw">비밀번호</Label>
-                            <div className="relative">
-                                <Input
-                                    id="riro-pw"
-                                    type={showPw ? "text" : "password"}
-                                    value={riroPw}
-                                    onChange={(e) => setRiroPw(e.target.value)}
-                                    placeholder="비밀번호 입력"
-                                    autoComplete="current-password"
-                                    onKeyDown={(e) => { if (e.key === "Enter") fetchMutation.mutate(); }}
-                                />
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-                                    onClick={() => setShowPw(v => !v)}
-                                >
-                                    {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </Button>
-                            </div>
+                        <div className="rounded-lg border bg-white p-3 text-center shadow-sm">
+                            <p className="text-2xl font-bold text-blue-600">{lunchCount}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">중식 캐시 건수</p>
                         </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <Button
-                            onClick={() => fetchMutation.mutate()}
-                            disabled={fetchMutation.isPending || !riroId.trim() || !riroPw.trim()}
-                            className="bg-amber-500 hover:bg-amber-600 text-white"
-                        >
-                            {fetchMutation.isPending ? (
-                                <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> 불러오는 중...</>
-                            ) : (
-                                <><Download className="w-4 h-4 mr-2" /> 식단 데이터 불러오기</>
-                            )}
-                        </Button>
-                        {lastUpdated && (
-                            <span className="text-xs text-gray-400">마지막 갱신: {lastUpdated}</span>
-                        )}
+                        <div className="rounded-lg border bg-white p-3 text-center shadow-sm">
+                            <p className="text-2xl font-bold text-purple-600">{dinnerCount}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">석식 캐시 건수</p>
+                        </div>
                     </div>
 
-                    {fetchResult && (
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                            <p className="text-sm font-semibold text-green-700">✅ {fetchResult.count}일치 식단 저장 완료</p>
-                            <p className="text-xs text-green-600 mt-1">{fetchResult.dates.join(", ")}</p>
-                        </div>
-                    )}
+                    {/* 마지막 갱신 시각 */}
+                    <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 rounded-lg px-3 py-2 border">
+                        <Clock className="w-4 h-4 shrink-0 text-gray-400" />
+                        {lastUpdated
+                            ? <span>마지막 캐시 갱신: <strong className="text-gray-700">{lastUpdated}</strong></span>
+                            : <span className="text-gray-400">아직 캐시 데이터가 없습니다.</span>
+                        }
+                    </div>
+
+                    {/* 갱신 버튼 */}
+                    <div className="flex items-center gap-3 pt-1">
+                        <Button
+                            onClick={() => refreshMutation.mutate()}
+                            disabled={refreshMutation.isPending || mealQuery.isLoading}
+                            className="bg-amber-500 hover:bg-amber-600 text-white"
+                        >
+                            {refreshMutation.isPending ? (
+                                <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> 갱신 중...</>
+                            ) : (
+                                <><RefreshCw className="w-4 h-4 mr-2" /> 캐시 지금 갱신</>
+                            )}
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => queryClient.invalidateQueries({ queryKey: ["meal"] })}
+                            disabled={mealQuery.isLoading}
+                        >
+                            <RefreshCw className={`w-4 h-4 mr-2 ${mealQuery.isFetching ? "animate-spin" : ""}`} />
+                            새로고침
+                        </Button>
+                        <span className="text-xs text-gray-400">데이터 출처: 부산교육청 급식 API</span>
+                    </div>
                 </CardContent>
             </Card>
 
-            {/* Preview Card */}
+            {/* ── 캐시 상세 미리보기 카드 ── */}
             <Card className="w-full">
                 <CardHeader>
-                    <CardTitle>저장된 식단 미리보기</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                        <span>🍱</span> 캐시 식단 상세 미리보기
+                    </CardTitle>
                     <CardDescription>
-                        현재 DB에 저장된 식단 데이터입니다. ({meals.length}일치)
+                        DB에 저장된 이번 달 식단 캐시 전체입니다. (총 {meals.length}일치)
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     {mealQuery.isLoading ? (
-                        <p className="text-sm text-gray-400">로딩 중...</p>
+                        <p className="text-sm text-gray-400 py-6 text-center">로딩 중...</p>
                     ) : meals.length === 0 ? (
-                        <p className="text-sm text-gray-400">저장된 식단 데이터가 없습니다.</p>
+                        <div className="py-10 flex flex-col items-center gap-2 text-gray-400">
+                            <Database className="w-8 h-8 opacity-30" />
+                            <p className="text-sm">저장된 식단 캐시가 없습니다.</p>
+                            <p className="text-xs">위의 [캐시 지금 갱신] 버튼을 눌러 데이터를 가져오세요.</p>
+                        </div>
                     ) : (
-                        <div className="overflow-auto">
-                            <Table>
+                        <div className="overflow-auto rounded-md border">
+                            <Table className="min-w-[600px]">
                                 <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="w-[130px]">날짜</TableHead>
-                                        <TableHead>메뉴</TableHead>
-                                        <TableHead className="w-[180px] text-right">갱신 시각</TableHead>
+                                    <TableRow className="bg-gray-50">
+                                        <TableHead className="w-[120px]">날짜</TableHead>
+                                        <TableHead>중식 메뉴</TableHead>
+                                        <TableHead>석식 메뉴</TableHead>
+                                        <TableHead className="w-[170px] text-right">갱신 시각</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {meals.map((meal) => (
                                         <TableRow key={meal.date}>
-                                            <TableCell className="font-mono font-bold">{meal.date}</TableCell>
+                                            <TableCell className="font-mono font-bold text-sm">{meal.date}</TableCell>
                                             <TableCell>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {meal.items.map((item, i) => (
-                                                        <Badge key={i} variant="secondary" className="text-xs">{item}</Badge>
-                                                    ))}
-                                                </div>
+                                                {meal.lunch && meal.lunch.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {meal.lunch.map((item, i) => (
+                                                            <Badge key={i} variant="secondary" className="text-xs bg-blue-50 text-blue-700 border-blue-200">{item}</Badge>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-gray-300">—</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                {meal.dinner && meal.dinner.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {meal.dinner.map((item, i) => (
+                                                            <Badge key={i} variant="secondary" className="text-xs bg-purple-50 text-purple-700 border-purple-200">{item}</Badge>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-gray-300">—</span>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-right text-xs text-gray-400">
-                                                {new Date(meal.updated_at).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
+                                                {meal.updated_at
+                                                    ? new Date(
+                                                        isNaN(Number(meal.updated_at))
+                                                            ? meal.updated_at
+                                                            : Number(meal.updated_at) * 1000
+                                                    ).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })
+                                                    : "—"
+                                                }
                                             </TableCell>
                                         </TableRow>
                                     ))}

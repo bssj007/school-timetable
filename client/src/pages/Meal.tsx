@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
-import { UtensilsCrossed, ChevronLeft, ChevronRight, RefreshCw, Sun, Moon } from "lucide-react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { UtensilsCrossed, ChevronLeft, ChevronRight, Sun, Moon } from "lucide-react";
 
 interface MealEntry {
     date: string; // "YYYY-MM-DD"
@@ -32,6 +32,7 @@ function formatDate(d: Date): string {
 
 export default function MealPage() {
     const [weekOffset, setWeekOffset] = useState(0);
+    const todayDayRef = useRef<HTMLDivElement>(null);
 
     const today = new Date();
     const baseDate = new Date(today);
@@ -39,14 +40,15 @@ export default function MealPage() {
 
     const { start, end } = getWeekRange(baseDate);
 
-    const { data, isLoading, error, refetch } = useQuery({
+    const { data, isLoading, error } = useQuery({
         queryKey: ["meal", weekOffset],
         queryFn: async () => {
             const res = await fetch("/api/meal");
             if (!res.ok) throw new Error("식단 데이터를 불러오지 못했습니다.");
             return res.json() as Promise<{ meals: MealEntry[]; lastUpdated: string | null }>;
         },
-        staleTime: 5 * 60 * 1000,
+        staleTime: 0,
+        refetchOnWindowFocus: true,
     });
 
     // Build a map of date → MealEntry for quick lookup
@@ -68,6 +70,17 @@ export default function MealPage() {
     }, [start]);
 
     const todayStr = formatDate(today);
+
+    // 이번 주 보기일 때 오늘 카드로 자동 스크롤 (모바일 세로 레이아웃)
+    useEffect(() => {
+        if (weekOffset !== 0) return;
+        if (!todayDayRef.current) return;
+        // 헤더 높이 고려해 약간의 딜레이 후 스크롤
+        const timer = setTimeout(() => {
+            todayDayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 100);
+        return () => clearTimeout(timer);
+    }, [weekOffset]);
 
     const weekLabel = (() => {
         const startM = start.getMonth() + 1;
@@ -111,24 +124,10 @@ export default function MealPage() {
                             </div>
                         </div>
                     </div>
-                    <button
-                        onClick={() => refetch()}
-                        className="p-2 rounded-full hover:bg-slate-100 transition-colors"
-                        title="새로고침"
-                    >
-                        <RefreshCw className={`w-5 h-5 text-slate-400 ${isLoading ? "animate-spin" : ""}`} />
-                    </button>
                 </div>
             </header>
 
-            {/* Debug Info (Temporary) */}
-            <div className="max-w-6xl mx-auto px-4 pt-4">
-                <div className="bg-slate-100 rounded-lg p-2 text-[10px] text-slate-500 font-mono">
-                    API Status: {isLoading ? "Loading..." : data ? "Loaded" : "None"} | 
-                    Total Days: {data?.meals?.length || 0} | 
-                    Sample Dates: {data?.meals?.slice(0, 3).map(m => m.date).join(", ")}
-                </div>
-            </div>
+
 
             {/* Navigation */}
             <div className="max-w-6xl mx-auto px-4 py-6">
@@ -155,7 +154,7 @@ export default function MealPage() {
                 {error ? (
                     <div className="text-center py-20">
                         <p className="text-red-500 font-medium">데이터를 불러오지 못했습니다.</p>
-                        <button onClick={() => refetch()} className="mt-4 text-slate-500 underline text-sm">다시 시도</button>
+                        <button onClick={() => window.location.reload()} className="mt-4 text-slate-500 underline text-sm">다시 시도</button>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -166,7 +165,11 @@ export default function MealPage() {
                             const weekday = day.getDay();
 
                             return (
-                                <div key={dateStr} className={`flex flex-col gap-3 ${isToday ? "opacity-100" : "opacity-90"}`}>
+                                <div
+                                    key={dateStr}
+                                    ref={isToday ? todayDayRef : undefined}
+                                    className={`flex flex-col gap-3 scroll-mt-20 ${isToday ? "opacity-100" : "opacity-90"}`}
+                                >
                                     {/* Date indicator */}
                                     <div className={`p-3 rounded-2xl flex items-center justify-between ${isToday ? "bg-orange-500 text-white shadow-md" : "bg-white border border-slate-200 text-slate-800"}`}>
                                         <span className="font-bold text-sm">{WEEKDAY_KR[weekday]}</span>
