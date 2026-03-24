@@ -1346,7 +1346,19 @@ export default function Dashboard() {
               }}
             />
           </Link>
+        </div>
 
+        {/* Center: 시간표/급식표 segmented toggle */}
+        <div className="flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5">
+          <div className="px-5 py-1.5 rounded-full bg-white text-sm font-semibold text-gray-800 shadow-sm whitespace-nowrap">
+            📅 시간표
+          </div>
+          <a
+            href="/meal"
+            className="px-5 py-1.5 rounded-full text-sm font-semibold text-gray-500 hover:text-orange-500 hover:bg-white/60 transition-all whitespace-nowrap"
+          >
+            🍱 급식표
+          </a>
         </div>
 
         <div className="flex items-center gap-2">
