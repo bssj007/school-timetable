@@ -32,143 +32,57 @@ function parseKoreanDate(raw: string): string | null {
 }
 
 /**
- * Parse Riroschool meal_schedule.php HTML.
+ * Parse Riroschool meal_schedule.php HTML (weekly view).
+ *
+ * Actual structure:
+ *   <div class="meal_week_popup" meal_date="2026-03-24" meal_code="중식" uid="...">
+ *     <p>혼합잡곡밥<span>5</span></p>
+ *     <p>근대된장국<span>5.6.9</span></p>
+ *     ...
+ *   </div>
+ *
  * Returns [ { date: "YYYY-MM-DD", items: string[] }, ... ]
  */
 function parseMealHtml(html: string): { date: string; items: string[] }[] {
-    const results: { date: string; items: string[] }[] = [];
+    const dateMap: Record<string, string[]> = {};
 
-    // Find the main meal table — Riroschool uses a table with date headers and menu cells
-    // Strategy: find all <th> with Korean date patterns, then find associated <td> menu content
+    // Match every meal_week_popup block
+    const blockPattern = /<div[^>]+class="[^"]*meal_week_popup[^"]*"[^>]+meal_date="(\d{4}-\d{2}-\d{2})"[^>]*>([\s\S]*?)<\/div>/gi;
+    let block: RegExpExecArray | null;
 
-    // Extract all table cells with dates (thead cells) and menu cells (tbody cells)
-    // The structure is typically: one row per day column
+    while ((block = blockPattern.exec(html)) !== null) {
+        const date = block[1];
+        const inner = block[2];
 
-    // Try to find the weekly meal table
-    // The page contains a table where columns are days of the week
-    // Row 1: dates (th cells), remaining rows: menu items
+        // Extract <p> tags, strip <span> (allergy codes), clean text
+        const pPattern = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+        let pMatch: RegExpExecArray | null;
+        const items: string[] = [];
 
-    // Find all date cells
-    const datePattern = /(\d{4})년\s+(\d{1,2})월\s+(\d{1,2})일/g;
-
-    // Collect all date-like strings from the HTML with their positions
-    const dateMatches: { date: string; index: number }[] = [];
-    let match;
-    while ((match = datePattern.exec(html)) !== null) {
-        const y = match[1];
-        const mo = match[2].padStart(2, "0");
-        const d = match[3].padStart(2, "0");
-        dateMatches.push({ date: `${y}-${mo}-${d}`, index: match.index });
-    }
-
-    if (dateMatches.length === 0) return results;
-
-    // For each date, find the associated menu content
-    // Menu items are typically in the HTML between date columns
-    // We'll parse the table structure more carefully
-
-    // Split by table rows
-    const rowPattern = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-    const rows: string[] = [];
-    let rowMatch;
-    while ((rowMatch = rowPattern.exec(html)) !== null) {
-        rows.push(rowMatch[1]);
-    }
-
-    // Find the date header row: the row that contains the most date patterns
-    let dateRowIdx = -1;
-    let maxDateCount = 0;
-    for (let i = 0; i < rows.length; i++) {
-        const count = (rows[i].match(/\d{4}년\s+\d{1,2}월\s+\d{1,2}일/g) || []).length;
-        if (count > maxDateCount) {
-            maxDateCount = count;
-            dateRowIdx = i;
-        }
-    }
-
-    if (dateRowIdx === -1 || maxDateCount === 0) {
-        // Fallback: just use the unique dates found
-        return results;
-    }
-
-    // Extract column dates from the date row
-    const dateRow = rows[dateRowIdx];
-    const cellPattern = /<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi;
-    const dateCells: string[] = [];
-    let cellMatch;
-    while ((cellMatch = cellPattern.exec(dateRow)) !== null) {
-        dateCells.push(cellMatch[1]);
-    }
-
-    // Parse dates from cells
-    const colDates: (string | null)[] = dateCells.map(cell => {
-        const stripped = cell.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ");
-        return parseKoreanDate(stripped);
-    });
-
-    // For each subsequent row, extract menu items per column
-    // Accumulate menu text per column
-    const colMenus: string[][] = colDates.map(() => []);
-
-    for (let i = dateRowIdx + 1; i < rows.length; i++) {
-        const row = rows[i];
-        // Skip empty/separator rows
-        if (!row.trim() || row.includes("colspan") && (row.match(/colspan\s*=\s*["']?\d+/i)?.[0] ?? "").includes("5")) continue;
-
-        const cells: string[] = [];
-        let cm;
-        const cp = /<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi;
-        while ((cm = cp.exec(row)) !== null) {
-            cells.push(cm[1]);
-        }
-
-        // Map cells to columns (some cells may have colspan)
-        let colIdx = 0;
-        const cellsWithSpan: { content: string; span: number }[] = [];
-        const cellHtmlPattern = /<t[hd]([^>]*)>([\s\S]*?)<\/t[hd]>/gi;
-        let chm;
-        while ((chm = cellHtmlPattern.exec(row)) !== null) {
-            const attrs = chm[1];
-            const content = chm[2];
-            const spanMatch = attrs.match(/colspan\s*=\s*["']?(\d+)/i);
-            const span = spanMatch ? parseInt(spanMatch[1]) : 1;
-            cellsWithSpan.push({ content, span });
-        }
-
-        let ci = 0;
-        for (const { content, span } of cellsWithSpan) {
-            const text = content
-                .replace(/<br\s*\/?>/gi, "\n")
-                .replace(/<[^>]+>/g, "")
+        while ((pMatch = pPattern.exec(inner)) !== null) {
+            const text = pMatch[1]
+                .replace(/<span[^>]*>[\s\S]*?<\/span>/gi, "") // remove allergy spans
+                .replace(/<[^>]+>/g, "")                       // strip any remaining tags
                 .replace(/&nbsp;/g, " ")
                 .replace(/&amp;/g, "&")
                 .replace(/&lt;/g, "<")
                 .replace(/&gt;/g, ">")
-                .replace(/&quot;/g, '"')
                 .trim();
 
-            if (text && ci < colMenus.length) {
-                const items = text.split("\n").map(s => s.trim()).filter(s => s.length > 0 && s !== "-" && s !== "&nbsp;");
-                if (items.length > 0) {
-                    colMenus[ci].push(...items);
-                }
-            }
-            ci += span;
+            if (text && text !== "-") items.push(text);
         }
-    }
 
-    // Build results
-    for (let i = 0; i < colDates.length; i++) {
-        const date = colDates[i];
-        if (!date) continue;
-        const items = colMenus[i] || [];
         if (items.length > 0) {
-            results.push({ date, items });
+            if (!dateMap[date]) dateMap[date] = [];
+            dateMap[date].push(...items);
         }
     }
 
-    return results;
+    return Object.entries(dateMap)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, items]) => ({ date, items }));
 }
+
 
 // ---- GET /api/meal ----
 // Public: return stored meal data from DB
@@ -246,7 +160,31 @@ export const onRequestPost = async (context: { request: Request; env: Env; next:
             );
         }
 
-        // Step 1: Login to Riroschool via AJAX endpoint
+        // Step 1a: GET login page first to establish PHP session (PHPSESSID)
+        const signinPageUrl = `${RIROSCHOOL_BASE}/user.php?action=signin`;
+        const signinRes = await fetch(signinPageUrl, {
+            method: "GET",
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "text/html,application/xhtml+xml"
+            },
+            redirect: "follow"
+        });
+
+        // Extract the initial session cookie (PHPSESSID)
+        const extractCookies = (res: Response): string => {
+            const raw = res.headers.get("set-cookie") ?? "";
+            const parts: string[] = [];
+            raw.split(/,(?=[^;]+=)/).forEach(part => {
+                const token = part.trim().split(";")[0].trim();
+                if (token && token.includes("=")) parts.push(token);
+            });
+            return parts.join("; ");
+        };
+
+        const sessionCookie = extractCookies(signinRes);
+
+        // Step 1b: POST login via AJAX endpoint with session cookie
         const loginUrl = `${RIROSCHOOL_BASE}/ajax.php`;
         const loginPayload = new URLSearchParams({
             app: "user",
@@ -263,8 +201,9 @@ export const onRequestPost = async (context: { request: Request; env: Env; next:
             headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Referer": `${RIROSCHOOL_BASE}/user.php?action=signin`,
-                "X-Requested-With": "XMLHttpRequest"
+                "Referer": signinPageUrl,
+                "X-Requested-With": "XMLHttpRequest",
+                ...(sessionCookie ? { "Cookie": sessionCookie } : {})
             },
             body: loginPayload.toString(),
             redirect: "manual"
@@ -284,16 +223,21 @@ export const onRequestPost = async (context: { request: Request; env: Env; next:
             );
         }
 
-        // Collect session cookies
-        const rawCookie = loginRes.headers.get("set-cookie") ?? "";
-        const cookieStrings: string[] = [];
-        rawCookie.split(/,(?=[^;]+=)/).forEach(part => {
-            const token = part.trim().split(";")[0].trim();
-            if (token && token.includes("=")) cookieStrings.push(token);
+        // Merge session cookie with any new cookies from login response
+        const loginCookie = extractCookies(loginRes);
+        // Build final cookie: start with session, override with login cookies
+        const cookieMap: Record<string, string> = {};
+        [sessionCookie, loginCookie].join("; ").split("; ").forEach(pair => {
+            const eqIdx = pair.indexOf("=");
+            if (eqIdx > 0) {
+                const k = pair.substring(0, eqIdx).trim();
+                const v = pair.substring(eqIdx + 1).trim();
+                if (k) cookieMap[k] = v;
+            }
         });
-        const cookieHeader = cookieStrings.join("; ");
+        const cookieHeader = Object.entries(cookieMap).map(([k, v]) => `${k}=${v}`).join("; ");
 
-        // Step 2: Fetch meal schedule page
+        // Step 2: Fetch meal schedule page with session
         const mealUrl = `${RIROSCHOOL_BASE}/meal_schedule.php?db=${RIROSCHOOL_DB_ID}`;
         const mealRes = await fetch(mealUrl, {
             method: "GET",
