@@ -5033,7 +5033,11 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
                                             )}
                                             <span className="text-[10px] text-gray-400 ml-auto whitespace-nowrap">
                                                 {(() => {
-                                                    const d = new Date(s.createdAt);
+                                                    // SQLite datetime('now') → "2026-03-25 01:38:49" (UTC, 공백 구분)
+                                                    // new Date()가 올바르게 파싱하려면 ISO 형식으로 변환 필요
+                                                    const iso = s.createdAt.replace(" ", "T") + (s.createdAt.includes("Z") ? "" : "Z");
+                                                    const d = new Date(iso);
+                                                    if (isNaN(d.getTime())) return s.createdAt;
                                                     const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
                                                     const day = DAYS[d.getDay()];
                                                     const date = d.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric" });
