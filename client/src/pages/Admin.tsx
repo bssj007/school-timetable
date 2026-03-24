@@ -4911,6 +4911,33 @@ function SpecialScheduleManager({ adminPassword }: { adminPassword: string }) {
 function MealManager({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
 
+    // --- 급식 건의 목록 조회 ---
+    const suggestionsQuery = useQuery({
+        queryKey: ["meal", "suggestions", "admin"],
+        queryFn: async () => {
+            const res = await fetch("/api/meal-suggestions", {
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) return [];
+            return res.json() as Promise<{ id: number; grade: number | null; classNum: number | null; studentNumber: number | null; ip: string | null; message: string; createdAt: string }[]>;
+        },
+    });
+
+    const deleteSuggestionMutation = useMutation({
+        mutationFn: async (id: number) => {
+            const res = await fetch(`/api/meal-suggestions?id=${id}`, {
+                method: "DELETE",
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) throw new Error("삭제 실패");
+        },
+        onSuccess: () => {
+            toast.success("건의가 삭제되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["meal", "suggestions"] });
+        },
+        onError: () => toast.error("삭제에 실패했습니다."),
+    });
+
     // --- 캐시 조회 ---
     const mealQuery = useQuery({
         queryKey: ["meal", "admin"],
@@ -4961,6 +4988,72 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
 
     return (
         <div className="space-y-6">
+            {/* ── 급식 건의 목록 카드 ── */}
+            <Card className="w-full border-violet-200">
+                <CardHeader className="bg-violet-50/60 border-b border-violet-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-violet-800">
+                                <span className="text-lg">💬</span>
+                                급식 건의 목록
+                            </CardTitle>
+                            <CardDescription>
+                                학생들이 제출한 급식 건의사항입니다. ({Array.isArray(suggestionsQuery.data) ? suggestionsQuery.data.length : 0}건)
+                            </CardDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["meal", "suggestions"] })} disabled={suggestionsQuery.isFetching}>
+                            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${suggestionsQuery.isFetching ? "animate-spin" : ""}`} />
+                            새로고침
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="pt-4">
+                    {suggestionsQuery.isLoading ? (
+                        <p className="text-sm text-gray-400 text-center py-6">로딩 중...</p>
+                    ) : !Array.isArray(suggestionsQuery.data) || suggestionsQuery.data.length === 0 ? (
+                        <div className="py-8 flex flex-col items-center gap-1 text-gray-400">
+                            <p className="text-sm">아직 건의사항이 없습니다.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                            {suggestionsQuery.data.map((s) => (
+                                <div key={s.id} className="flex items-start gap-3 p-3 rounded-lg border border-violet-100 bg-violet-50/30 hover:bg-violet-50 transition-colors">
+                                    <div className="flex-1 min-w-0">
+                                        {/* 학번/IP */}
+                                        <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                                            {(s.grade || s.classNum || s.studentNumber) ? (
+                                                <Badge variant="secondary" className="text-[10px] bg-violet-100 text-violet-700 border-violet-200">
+                                                    {s.grade}학년 {s.classNum}반 {s.studentNumber}번
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="secondary" className="text-[10px] bg-gray-100 text-gray-500">학번 미상</Badge>
+                                            )}
+                                            {s.ip && (
+                                                <Badge variant="outline" className="text-[10px] font-mono text-gray-400">IP: {s.ip}</Badge>
+                                            )}
+                                            <span className="text-[10px] text-gray-400 ml-auto">
+                                                {new Date(s.createdAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
+                                            </span>
+                                        </div>
+                                        {/* 건의 내용 */}
+                                        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">{s.message}</p>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="shrink-0 text-red-400 hover:text-red-600 hover:bg-red-50 h-7 w-7 p-0"
+                                        onClick={() => { if (confirm("이 건의를 삭제하시겠습니까?")) deleteSuggestionMutation.mutate(s.id); }}
+                                        disabled={deleteSuggestionMutation.isPending}
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
             {/* ── 캐시 현황 카드 ── */}
             <Card className="w-full max-w-2xl border-amber-200">
                 <CardHeader className="bg-amber-50/60 border-b border-amber-100">
