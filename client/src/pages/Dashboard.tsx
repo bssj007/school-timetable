@@ -1463,7 +1463,7 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-stretch gap-2 md:hidden mb-3">
+      <div className="flex items-stretch gap-2 md:hidden mb-1.5">
         {/* Left column: toggle (top) + title (bottom) */}
         <div className="flex flex-col justify-between gap-0.5 w-[136px] shrink-0">
           <div className="flex items-center gap-1">
