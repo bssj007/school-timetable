@@ -6,26 +6,39 @@ export const mealRouter = express.Router();
 mealRouter.get("/", async (req, res) => {
   try {
     const rawMeals = await getMeals();
+    console.log(`[Meal API] Fetched ${rawMeals.length} records from DB`);
     
     // Group by date
     const grouped: Record<string, { lunch: string[], dinner: string[], createdAt: Date }> = {};
 
     rawMeals.forEach((m: any) => {
-      const date = m.date.replace(/\//g, "-");
+      if (!m.date) return;
+      
+      // Clean date format (handle YYYY/MM/DD and YYYY-MM-DD)
+      const date = m.date.replace(/\//g, "-").trim();
+      
       if (!grouped[date]) {
-        grouped[date] = { lunch: [], dinner: [], createdAt: m.createdAt };
+        grouped[date] = { 
+            lunch: [], 
+            dinner: [], 
+            createdAt: m.createdAt instanceof Date ? m.createdAt : new Date(m.createdAt) 
+        };
       }
       
-      const items = (m.content || "").split("\n").map((s: string) => s.trim()).filter((line: string) => line !== "");
+      const lines = (m.content || "").split("\n")
+        .map((s: string) => s.trim())
+        .filter((line: string) => line !== "" && line !== "식단 정보 없음");
+
       if (m.type === "석식") {
-        grouped[date].dinner = items;
+        grouped[date].dinner = lines;
       } else {
-        grouped[date].lunch = items;
+        grouped[date].lunch = lines;
       }
       
-      const d = m.createdAt instanceof Date ? m.createdAt : new Date(typeof m.createdAt === 'string' ? m.createdAt.replace(' ', 'T') : m.createdAt);
-      if (!isNaN(d.getTime()) && d > grouped[date].createdAt) {
-        grouped[date].createdAt = d;
+      // Update max createdAt
+      const ts = m.createdAt instanceof Date ? m.createdAt : new Date(m.createdAt);
+      if (!isNaN(ts.getTime()) && ts > grouped[date].createdAt) {
+        grouped[date].createdAt = ts;
       }
     });
 
@@ -36,10 +49,11 @@ mealRouter.get("/", async (req, res) => {
       updated_at: data.createdAt.toISOString()
     }));
 
+    // Find latest lastUpdated
     let lastUpdated: string | null = new Date().toISOString();
     if (rawMeals.length > 0) {
       const timestamps = rawMeals.map(m => {
-        const d = m.createdAt instanceof Date ? m.createdAt : new Date(typeof m.createdAt === 'string' ? m.createdAt.replace(' ', 'T') : m.createdAt);
+        const d = m.createdAt instanceof Date ? m.createdAt : new Date(m.createdAt);
         return isNaN(d.getTime()) ? 0 : d.getTime();
       });
       const maxTime = Math.max(...timestamps);
@@ -48,6 +62,7 @@ mealRouter.get("/", async (req, res) => {
       }
     }
 
+    console.log(`[Meal API] Returning ${meals.length} grouped days.`);
     res.json({ meals, lastUpdated });
   } catch (error) {
     console.error("Meal Route Error:", error);
