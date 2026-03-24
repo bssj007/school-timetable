@@ -1338,7 +1338,7 @@ export default function Dashboard() {
 
       {/* New Top Bar (Replaces Navigation on Desktop) */}
       <div className="hidden md:flex justify-between items-center mb-4">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
             <span
               dangerouslySetInnerHTML={{
@@ -1346,19 +1346,19 @@ export default function Dashboard() {
               }}
             />
           </Link>
-        </div>
 
-        {/* Center: 시간표/급식표 segmented toggle */}
-        <div className="flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5">
-          <div className="px-5 py-1.5 rounded-full bg-white text-sm font-semibold text-gray-800 shadow-sm whitespace-nowrap">
-            📅 시간표
+          {/* 시간표/급식표 toggle — right of site title */}
+          <div className="flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5">
+            <div className="px-4 py-1.5 rounded-full bg-white text-sm font-semibold text-gray-800 shadow-sm whitespace-nowrap">
+              📅 시간표
+            </div>
+            <a
+              href="/meal"
+              className="px-4 py-1.5 rounded-full text-sm font-semibold text-gray-500 hover:text-orange-500 hover:bg-white/60 transition-all whitespace-nowrap"
+            >
+              🍱 급식표
+            </a>
           </div>
-          <a
-            href="/meal"
-            className="px-5 py-1.5 rounded-full text-sm font-semibold text-gray-500 hover:text-orange-500 hover:bg-white/60 transition-all whitespace-nowrap"
-          >
-            🍱 급식표
-          </a>
         </div>
 
         <div className="flex items-center gap-2">
