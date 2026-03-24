@@ -6,7 +6,8 @@ export const ALL_TABLES = [
     "elective_config",
     "dataset_bridges",
     "bug_reports",
-    "timetable_cache"
+    "timetable_cache",
+    "meal_cache"
 ];
 
 export const createStudentProfilesTable = `
@@ -115,6 +116,14 @@ CREATE TABLE IF NOT EXISTS timetable_cache (
 );
 `;
 
+export const createMealCacheTable = `
+CREATE TABLE IF NOT EXISTS meal_cache (
+    date TEXT PRIMARY KEY,
+    menu_json TEXT NOT NULL,
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+`;
+
 export async function ensureAllTables(db: any) {
     try {
         await db.prepare(createStudentProfilesTable).run();
@@ -124,6 +133,7 @@ export async function ensureAllTables(db: any) {
         await db.prepare(createDatasetBridgesTable).run();
         await db.prepare(createBugReportsTable).run();
         await db.prepare(createTimetableCacheTable).run();
+        await db.prepare(createMealCacheTable).run();
         console.log("All tables ensured.");
     } catch (e) {
         console.error("Error ensuring tables:", e);

@@ -11,6 +11,7 @@ import OnboardingDialog from "./components/OnboardingDialog";
 import { UserConfigProvider } from "@/contexts/UserConfigContext";
 
 import FactoryReset from "./pages/FactoryReset";
+import Meal from "./pages/Meal";
 
 function Router() {
   return (
@@ -18,6 +19,7 @@ function Router() {
       <Route path={"/"} component={Dashboard} />
       <Route path={"/admin"} component={Admin} />
       <Route path={"/admin/factory-reset"} component={FactoryReset} />
+      <Route path={"/meal"} component={Meal} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -69,7 +71,7 @@ function App() {
         <UserConfigProvider>
           <TooltipProvider>
             <Toaster />
-            {location !== "/admin" && location !== "/admin/factory-reset" && (
+            {location !== "/admin" && location !== "/admin/factory-reset" && location !== "/meal" && (
               <div className={location === "/" ? "md:hidden" : ""}>
                 <Navigation />
               </div>

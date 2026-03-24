@@ -4904,6 +4904,182 @@ function SpecialScheduleManager({ adminPassword }: { adminPassword: string }) {
     );
 }
 
+// ----------------------------------------------------------------------
+// MealManager - 식단 데이터 수동 불러오기
+// Located under: 식단페이지 탭
+// ----------------------------------------------------------------------
+function MealManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [riroId, setRiroId] = useState("");
+    const [riroPw, setRiroPw] = useState("");
+    const [showPw, setShowPw] = useState(false);
+    const [fetchResult, setFetchResult] = useState<{ count: number; dates: string[]; updatedAt: string } | null>(null);
+
+    const mealQuery = useQuery({
+        queryKey: ["meal", "admin"],
+        queryFn: async () => {
+            const res = await fetch("/api/meal");
+            if (!res.ok) throw new Error("식단 데이터 로드 실패");
+            return res.json() as Promise<{ meals: { date: string; items: string[]; updated_at: string }[]; lastUpdated: string | null }>;
+        },
+    });
+
+    const fetchMutation = useMutation({
+        mutationFn: async () => {
+            if (!riroId.trim() || !riroPw.trim()) {
+                throw new Error("아이디와 비밀번호를 모두 입력해주세요.");
+            }
+            const res = await fetch("/api/meal", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify({ username: riroId.trim(), password: riroPw }),
+            });
+            const data = await res.json() as any;
+            if (!res.ok) throw new Error(data.error || "불러오기 실패");
+            return data;
+        },
+        onSuccess: (data) => {
+            toast.success(`식단 데이터 ${data.count}일치를 성공적으로 불러왔습니다.`);
+            setFetchResult({ count: data.count, dates: data.dates, updatedAt: data.updatedAt });
+            queryClient.invalidateQueries({ queryKey: ["meal"] });
+        },
+        onError: (err: Error) => {
+            toast.error(err.message);
+        },
+    });
+
+    const meals = mealQuery.data?.meals || [];
+    const lastUpdated = mealQuery.data?.lastUpdated
+        ? new Date(mealQuery.data.lastUpdated).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })
+        : null;
+
+    return (
+        <div className="space-y-6">
+            {/* Fetch Card */}
+            <Card className="w-full max-w-2xl">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <span>🍱</span> 식단 데이터 불러오기
+                    </CardTitle>
+                    <CardDescription>
+                        리로스쿨 아이디와 비밀번호를 입력해 이번 주 식단 데이터를 수동으로 가져옵니다.
+                        아이디/비밀번호는 서버에 저장되지 않습니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="riro-id">리로스쿨 아이디</Label>
+                            <Input
+                                id="riro-id"
+                                value={riroId}
+                                onChange={(e) => setRiroId(e.target.value)}
+                                placeholder="아이디 입력"
+                                autoComplete="username"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="riro-pw">비밀번호</Label>
+                            <div className="relative">
+                                <Input
+                                    id="riro-pw"
+                                    type={showPw ? "text" : "password"}
+                                    value={riroPw}
+                                    onChange={(e) => setRiroPw(e.target.value)}
+                                    placeholder="비밀번호 입력"
+                                    autoComplete="current-password"
+                                    onKeyDown={(e) => { if (e.key === "Enter") fetchMutation.mutate(); }}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                                    onClick={() => setShowPw(v => !v)}
+                                >
+                                    {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <Button
+                            onClick={() => fetchMutation.mutate()}
+                            disabled={fetchMutation.isPending || !riroId.trim() || !riroPw.trim()}
+                            className="bg-amber-500 hover:bg-amber-600 text-white"
+                        >
+                            {fetchMutation.isPending ? (
+                                <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> 불러오는 중...</>
+                            ) : (
+                                <><Download className="w-4 h-4 mr-2" /> 식단 데이터 불러오기</>
+                            )}
+                        </Button>
+                        {lastUpdated && (
+                            <span className="text-xs text-gray-400">마지막 갱신: {lastUpdated}</span>
+                        )}
+                    </div>
+
+                    {fetchResult && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                            <p className="text-sm font-semibold text-green-700">✅ {fetchResult.count}일치 식단 저장 완료</p>
+                            <p className="text-xs text-green-600 mt-1">{fetchResult.dates.join(", ")}</p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Preview Card */}
+            <Card className="w-full">
+                <CardHeader>
+                    <CardTitle>저장된 식단 미리보기</CardTitle>
+                    <CardDescription>
+                        현재 DB에 저장된 식단 데이터입니다. ({meals.length}일치)
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {mealQuery.isLoading ? (
+                        <p className="text-sm text-gray-400">로딩 중...</p>
+                    ) : meals.length === 0 ? (
+                        <p className="text-sm text-gray-400">저장된 식단 데이터가 없습니다.</p>
+                    ) : (
+                        <div className="overflow-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-[130px]">날짜</TableHead>
+                                        <TableHead>메뉴</TableHead>
+                                        <TableHead className="w-[180px] text-right">갱신 시각</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {meals.map((meal) => (
+                                        <TableRow key={meal.date}>
+                                            <TableCell className="font-mono font-bold">{meal.date}</TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {meal.items.map((item, i) => (
+                                                        <Badge key={i} variant="secondary" className="text-xs">{item}</Badge>
+                                                    ))}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right text-xs text-gray-400">
+                                                {new Date(meal.updated_at).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
 export default function Admin() {
     const [password, setPassword] = useState("");
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -5339,7 +5515,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
             </div>
 
             <Tabs defaultValue="assessments" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 mb-8 h-auto">
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 lg:grid-cols-10 mb-8 h-auto">
                     <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
                     <TabsTrigger value="users">사용자 관리</TabsTrigger>
                     <TabsTrigger value="electives">선택과목</TabsTrigger>
@@ -5377,6 +5553,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         value="etc"
                     >
                         기타
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="meal"
+                        className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800"
+                    >
+                        🍱 식단페이지
                     </TabsTrigger>
                 </TabsList>
 
@@ -6241,6 +6423,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
 
                 <TabsContent value="etc" className="space-y-6">
                     <EtcManager adminPassword={password} />
+                </TabsContent>
+
+                <TabsContent value="meal" className="space-y-6">
+                    <MealManager adminPassword={password} />
                 </TabsContent>
             </Tabs >
 
