@@ -246,52 +246,60 @@ export const onRequestPost = async (context: { request: Request; env: Env; next:
             );
         }
 
-        // Step 1: Login to Riroschool
-        const loginUrl = `${RIROSCHOOL_BASE}/user.php`;
-        const loginFormData = new URLSearchParams({
-            action: "signin",
-            user_id: username,
-            user_pw: password,
-            redirect_link: `/meal_schedule.php?db=${RIROSCHOOL_DB_ID}`
+        // Step 1: Login to Riroschool via AJAX endpoint
+        const loginUrl = `${RIROSCHOOL_BASE}/ajax.php`;
+        const loginPayload = new URLSearchParams({
+            app: "user",
+            mode: "login",
+            userType: "1",
+            id: username,
+            pw: password,
+            deeplink: "",
+            redirect_link: ""
         });
 
         const loginRes = await fetch(loginUrl, {
             method: "POST",
             headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": "Mozilla/5.0 (compatible; SchoolTimetable/1.0)",
-                "Referer": RIROSCHOOL_BASE
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Referer": `${RIROSCHOOL_BASE}/user.php?action=signin`,
+                "X-Requested-With": "XMLHttpRequest"
             },
-            body: loginFormData.toString(),
-            redirect: "manual" // Don't auto-follow to capture cookies
+            body: loginPayload.toString(),
+            redirect: "manual"
         });
 
-        // Collect cookies from login response
-        const setCookieHeaders: string[] = [];
-        loginRes.headers.forEach((value, key) => {
-            if (key.toLowerCase() === "set-cookie") {
-                setCookieHeaders.push(value);
-            }
-        });
+        // Parse JSON response to check login success
+        let loginJson: any = null;
+        try { loginJson = await loginRes.clone().json(); } catch (_) { }
 
-        // Extract session cookie values
-        const cookieStrings = setCookieHeaders.map(c => c.split(";")[0]);
-        const cookieHeader = cookieStrings.join("; ");
+        const code = loginJson?.code ?? loginJson?.result ?? loginJson?.status ?? null;
+        const isSuccess = code === "000" || code === 0 || code === "0" || loginJson?.success === true;
 
-        if (!cookieHeader) {
+        if (!isSuccess) {
             return new Response(
-                JSON.stringify({ error: "로그인에 실패했습니다. 아이디/비밀번호를 확인해주세요." }),
+                JSON.stringify({ error: "로그인에 실패했습니다. 아이디/비밀번호를 확인해주세요.", debug: loginJson }),
                 { status: 401 }
             );
         }
+
+        // Collect session cookies
+        const rawCookie = loginRes.headers.get("set-cookie") ?? "";
+        const cookieStrings: string[] = [];
+        rawCookie.split(/,(?=[^;]+=)/).forEach(part => {
+            const token = part.trim().split(";")[0].trim();
+            if (token && token.includes("=")) cookieStrings.push(token);
+        });
+        const cookieHeader = cookieStrings.join("; ");
 
         // Step 2: Fetch meal schedule page
         const mealUrl = `${RIROSCHOOL_BASE}/meal_schedule.php?db=${RIROSCHOOL_DB_ID}`;
         const mealRes = await fetch(mealUrl, {
             method: "GET",
             headers: {
-                "Cookie": cookieHeader,
-                "User-Agent": "Mozilla/5.0 (compatible; SchoolTimetable/1.0)",
+                ...(cookieHeader ? { "Cookie": cookieHeader } : {}),
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 "Referer": RIROSCHOOL_BASE
             },
             redirect: "follow"
@@ -306,8 +314,8 @@ export const onRequestPost = async (context: { request: Request; env: Env; next:
 
         const html = await mealRes.text();
 
-        // Check if redirected to login (not authenticated)
-        if (html.includes("action=signin") || html.includes("로그인") && !html.includes("meal_schedule")) {
+        // Check if redirected back to login
+        if (html.includes("action=signin") && !html.includes("meal_schedule")) {
             return new Response(
                 JSON.stringify({ error: "로그인 세션이 유효하지 않습니다. 아이디/비밀번호를 확인해주세요." }),
                 { status: 401 }
