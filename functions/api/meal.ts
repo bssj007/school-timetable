@@ -171,18 +171,33 @@ export const onRequestPost = async (context: { request: Request; env: Env; next:
             redirect: "follow"
         });
 
-        // Extract the initial session cookie (PHPSESSID)
-        const extractCookies = (res: Response): string => {
-            const raw = res.headers.get("set-cookie") ?? "";
-            const parts: string[] = [];
-            raw.split(/,(?=[^;]+=)/).forEach(part => {
-                const token = part.trim().split(";")[0].trim();
-                if (token && token.includes("=")) parts.push(token);
+        // Extract cookies from a response — handles multiple Set-Cookie headers including
+        // AWSALB (base64 values with = signs) correctly by iterating headers individually
+        const extractCookieMap = (res: Response): Record<string, string> => {
+            const map: Record<string, string> = {};
+            res.headers.forEach((value, key) => {
+                if (key.toLowerCase() !== "set-cookie") return;
+                // Each value is one Set-Cookie: name=val; Path=...; etc.
+                const semi = value.indexOf(";");
+                const token = semi > 0 ? value.substring(0, semi) : value;
+                const eq = token.indexOf("=");
+                if (eq > 0) {
+                    const k = token.substring(0, eq).trim();
+                    const v = token.substring(eq + 1).trim();
+                    if (k) map[k] = v;
+                }
             });
-            return parts.join("; ");
+            return map;
         };
 
-        const sessionCookie = extractCookies(signinRes);
+        const mergeCookies = (...maps: Record<string, string>[]): string => {
+            const merged: Record<string, string> = {};
+            for (const m of maps) Object.assign(merged, m);
+            return Object.entries(merged).map(([k, v]) => `${k}=${v}`).join("; ");
+        };
+
+        const sessionCookieMap = extractCookieMap(signinRes);
+        const sessionCookie = mergeCookies(sessionCookieMap);
 
         // Step 1b: POST login via AJAX endpoint with session cookie
         const loginUrl = `${RIROSCHOOL_BASE}/ajax.php`;
@@ -230,19 +245,9 @@ export const onRequestPost = async (context: { request: Request; env: Env; next:
             );
         }
 
-        // Merge session cookie with any new cookies from login response
-        const loginCookie = extractCookies(loginRes);
-        // Build final cookie: start with session, override with login cookies
-        const cookieMap: Record<string, string> = {};
-        [sessionCookie, loginCookie].join("; ").split("; ").forEach(pair => {
-            const eqIdx = pair.indexOf("=");
-            if (eqIdx > 0) {
-                const k = pair.substring(0, eqIdx).trim();
-                const v = pair.substring(eqIdx + 1).trim();
-                if (k) cookieMap[k] = v;
-            }
-        });
-        const cookieHeader = Object.entries(cookieMap).map(([k, v]) => `${k}=${v}`).join("; ");
+        // Merge session cookies with any new cookies from login response
+        const loginCookieMap = extractCookieMap(loginRes);
+        const cookieHeader = mergeCookies(sessionCookieMap, loginCookieMap);
 
         // Step 2: Fetch meal schedule page with session
         const mealUrl = `${RIROSCHOOL_BASE}/meal_schedule.php?db=${RIROSCHOOL_DB_ID}`;
