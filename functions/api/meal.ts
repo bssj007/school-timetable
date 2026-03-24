@@ -214,23 +214,23 @@ export const onRequestPost = async (context: { request: Request; env: Env; next:
         const loginRes = await fetch(loginUrl, {
             method: "POST",
             headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 "Referer": signinPageUrl,
+                "Origin": RIROSCHOOL_BASE,
                 "X-Requested-With": "XMLHttpRequest",
                 ...(sessionCookie ? { "Cookie": sessionCookie } : {})
             },
             body: loginPayload.toString(),
-            redirect: "manual"
+            redirect: "follow"  // follow to always get the JSON body
         });
 
-        // Parse JSON response to check login success
+        // Read body as text first, then parse JSON — exposes raw response on failure
+        const loginText = await loginRes.text();
         let loginJson: any = null;
-        try { loginJson = await loginRes.clone().json(); } catch (_) { }
+        try { loginJson = JSON.parse(loginText); } catch (_) { }
 
         const code = loginJson?.code ?? loginJson?.result ?? loginJson?.status ?? null;
-        // Success: code is "000" (string) or 0 (number) — loose equality covers both
-        // Failure: code is 400 (number) per observed response
         // eslint-disable-next-line eqeqeq
         const isSuccess = loginJson !== null && (code == "000" || code === true || loginJson?.success === true);
 
@@ -240,7 +240,7 @@ export const onRequestPost = async (context: { request: Request; env: Env; next:
                 ? `로그인 실패: ${riroMsg}`
                 : "로그인에 실패했습니다. 아이디/비밀번호를 확인해주세요.";
             return new Response(
-                JSON.stringify({ error: errMsg, debug: loginJson }),
+                JSON.stringify({ error: errMsg, debug: loginJson, rawText: loginText.substring(0, 500), httpStatus: loginRes.status }),
                 { status: 401 }
             );
         }
