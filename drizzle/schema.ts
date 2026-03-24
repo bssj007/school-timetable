@@ -129,3 +129,19 @@ export const meals = mysqlTable("meals", {
 
 export type Meal = typeof meals.$inferSelect;
 export type InsertMeal = typeof meals.$inferInsert;
+
+export const studentProfiles = mysqlTable("student_profiles", {
+  studentId: int("student_id").primaryKey(),
+  electives: text("electives"),
+  updatedAt: int("updatedAt", { mode: 'timestamp' }).defaultNow().notNull(),
+});
+
+export const ipProfiles = mysqlTable("ip_profiles", {
+  ip: varchar("ip").primaryKey(),
+  studentId: int("student_id"),
+  kakaoId: varchar("kakaoId"),
+  kakaoNickname: varchar("kakaoNickname"),
+  lastAccess: int("lastAccess", { mode: 'timestamp' }).defaultNow().notNull(),
+  modificationCount: int("modificationCount").default(0),
+  userAgent: text("userAgent"),
+});
