@@ -4904,6 +4904,439 @@ function SpecialScheduleManager({ adminPassword }: { adminPassword: string }) {
     );
 }
 
+// ----------------------------------------------------------------------
+// MealManager - 식단 데이터 수동 불러오기
+// Located under: 식단페이지 탭
+// ----------------------------------------------------------------------
+function MealManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    // --- 급식 건의 목록 조회 ---
+    const suggestionsQuery = useQuery({
+        queryKey: ["meal", "suggestions", "admin"],
+        queryFn: async () => {
+            const res = await fetch("/api/meal-suggestions", {
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) return [];
+            return res.json() as Promise<{ id: number; grade: number | null; classNum: number | null; studentNumber: number | null; ip: string | null; message: string; createdAt: string }[]>;
+        },
+    });
+
+    // --- 날짜별 평균 별점 조회 (캐시와 독립) ---
+    const ratingsQuery = useQuery({
+        queryKey: ["meal", "ratings", "admin"],
+        queryFn: async () => {
+            const res = await fetch("/api/meal-ratings");
+            if (!res.ok) return [];
+            return res.json() as Promise<{ date: string; avg: number; count: number }[]>;
+        },
+        staleTime: 60_000,
+    });
+
+    const ratingsMap: Record<string, { avg: number; count: number }> = {};
+    (ratingsQuery.data ?? []).forEach(r => { ratingsMap[r.date] = { avg: r.avg, count: r.count }; });
+
+    const deleteSuggestionMutation = useMutation({
+        mutationFn: async (id: number) => {
+            const res = await fetch(`/api/meal-suggestions?id=${id}`, {
+                method: "DELETE",
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) throw new Error("삭제 실패");
+        },
+        onSuccess: () => {
+            toast.success("건의가 삭제되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["meal", "suggestions"] });
+        },
+        onError: () => toast.error("삭제에 실패했습니다."),
+    });
+
+    // --- 급식 표시 설정 ---
+    const [cutoffHour, setCutoffHour] = useState(14);
+    const [ratingEnabled, setRatingEnabled] = useState(true);
+    const [emphasisEnabled, setEmphasisEnabled] = useState(true);
+    const [savedSettings, setSavedSettings] = useState({ cutoffHour: 14, ratingEnabled: true, emphasisEnabled: true });
+    const settingsDirty = cutoffHour !== savedSettings.cutoffHour || ratingEnabled !== savedSettings.ratingEnabled || emphasisEnabled !== savedSettings.emphasisEnabled;
+
+    // 설정 초기 로드
+    useEffect(() => {
+        fetch("/api/settings/public")
+            .then(r => r.json())
+            .then((s: any) => {
+                const h = s.meal_lunch_cutoff_hour ?? 14;
+                const r = s.meal_rating_enabled !== false;
+                const e = s.meal_emphasis_enabled !== false;
+                setCutoffHour(h); setRatingEnabled(r); setEmphasisEnabled(e);
+                setSavedSettings({ cutoffHour: h, ratingEnabled: r, emphasisEnabled: e });
+            }).catch(() => {});
+    }, []);
+
+    const saveMealSettings = async () => {
+        try {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({
+                    meal_lunch_cutoff_hour: String(cutoffHour),
+                    meal_rating_enabled: String(ratingEnabled),
+                    meal_emphasis_enabled: String(emphasisEnabled),
+                }),
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            setSavedSettings({ cutoffHour, ratingEnabled, emphasisEnabled });
+            toast.success("급식 설정이 저장되었습니다.");
+        } catch (e: any) {
+            toast.error(e.message);
+        }
+    };
+
+    // --- 캐시 조회 ---
+    const mealQuery = useQuery({
+        queryKey: ["meal", "admin"],
+        queryFn: async () => {
+            const res = await fetch("/api/meal");
+            if (!res.ok) throw new Error("식단 데이터 로드 실패");
+            return res.json() as Promise<{
+                meals: { date: string; lunch: string[]; dinner: string[]; updated_at: string }[];
+                lastUpdated: string | null;
+            }>;
+        },
+    });
+
+    // --- 캐시 갱신 (부산교육청 API 재스크래핑) ---
+    const refreshMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch("/api/meal", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify({}),
+            });
+            const data = await res.json() as any;
+            if (!res.ok) throw new Error(data.error || "갱신 실패");
+            return data;
+        },
+        onSuccess: () => {
+            toast.success("식단 캐시가 갱신되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["meal"] });
+        },
+        onError: (err: Error) => {
+            toast.error(`캐시 갱신 실패: ${err.message}`);
+        },
+    });
+
+    const meals = mealQuery.data?.meals || [];
+    const lastUpdated = mealQuery.data?.lastUpdated
+        ? new Date(mealQuery.data.lastUpdated).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })
+        : null;
+
+    const now = new Date();
+    const thisMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const thisMonthMeals = meals.filter((m) => m.date.startsWith(thisMonthStr));
+    const lunchCount = thisMonthMeals.filter((m) => m.lunch && m.lunch.length > 0).length;
+    const dinnerCount = thisMonthMeals.filter((m) => m.dinner && m.dinner.length > 0).length;
+
+    return (
+        <div className="space-y-6">
+            {/* ── 급식 표시 설정 카드 ── */}
+            <Card className="w-full border-orange-200">
+                <CardHeader className="bg-orange-50/60 border-b border-orange-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-orange-800">
+                                <span className="text-lg">⚙️</span> 급식 표시 설정
+                            </CardTitle>
+                            <CardDescription>점심/석식 기준 시간 및 별점·강조 기능을 설정합니다.</CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" disabled={!settingsDirty}
+                                onClick={() => {
+                                    setCutoffHour(savedSettings.cutoffHour);
+                                    setRatingEnabled(savedSettings.ratingEnabled);
+                                    setEmphasisEnabled(savedSettings.emphasisEnabled);
+                                }}>
+                                취소
+                            </Button>
+                            <Button size="sm" disabled={!settingsDirty} onClick={saveMealSettings}
+                                className="bg-orange-500 hover:bg-orange-600 text-white">
+                                저장
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                    {/* 기준 시간 */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800">점심 → 석식 전환 기준 시간</p>
+                            <p className="text-xs text-slate-500 mt-0.5">이 시간 이전 = 점심 강조/별점, 이후 = 석식 강조/별점</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="number" min={0} max={23} value={cutoffHour}
+                                onChange={e => setCutoffHour(Math.max(0, Math.min(23, parseInt(e.target.value) || 0)))}
+                                className="w-16 border border-slate-200 rounded-lg px-2 py-1 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-orange-400"
+                            />
+                            <span className="text-sm text-slate-500">시 이후</span>
+                        </div>
+                    </div>
+                    {/* 구분선 */}
+                    <div className="border-t border-slate-100" />
+                    {/* 별점 토글 */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800">별점 시스템 활성화</p>
+                            <p className="text-xs text-slate-500 mt-0.5">학생들이 현재 식사에 별점을 남길 수 있습니다</p>
+                        </div>
+                        <button
+                            onClick={() => setRatingEnabled(v => !v)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${ratingEnabled ? "bg-violet-500" : "bg-gray-200"}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${ratingEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                        </button>
+                    </div>
+                    {/* 강조 토글 */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800">현재 식사 강조 표시 활성화</p>
+                            <p className="text-xs text-slate-500 mt-0.5">오늘 날짜에서 현재 시간에 해당하는 식사 박스를 강조합니다</p>
+                        </div>
+                        <button
+                            onClick={() => setEmphasisEnabled(v => !v)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${emphasisEnabled ? "bg-orange-500" : "bg-gray-200"}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${emphasisEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                        </button>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* ── 급식 건의 목록 카드 ── */}
+            <Card className="w-full border-violet-200">
+                <CardHeader className="bg-violet-50/60 border-b border-violet-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-violet-800">
+                                <span className="text-lg">💬</span>
+                                급식 건의 목록
+                            </CardTitle>
+                            <CardDescription>
+                                학생들이 제출한 급식 건의사항입니다. ({Array.isArray(suggestionsQuery.data) ? suggestionsQuery.data.length : 0}건)
+                            </CardDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["meal", "suggestions"] })} disabled={suggestionsQuery.isFetching}>
+                            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${suggestionsQuery.isFetching ? "animate-spin" : ""}`} />
+                            새로고침
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="pt-4">
+                    {suggestionsQuery.isLoading ? (
+                        <p className="text-sm text-gray-400 text-center py-6">로딩 중...</p>
+                    ) : !Array.isArray(suggestionsQuery.data) || suggestionsQuery.data.length === 0 ? (
+                        <div className="py-8 flex flex-col items-center gap-1 text-gray-400">
+                            <p className="text-sm">아직 건의사항이 없습니다.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                            {suggestionsQuery.data.map((s) => (
+                                <div key={s.id} className="flex items-start gap-3 p-3 rounded-lg border border-violet-100 bg-violet-50/30 hover:bg-violet-50 transition-colors">
+                                    <div className="flex-1 min-w-0">
+                                        {/* 학번/IP */}
+                                        <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                                            {(s.grade || s.classNum || s.studentNumber) ? (
+                                                <Badge variant="secondary" className="text-[10px] bg-violet-100 text-violet-700 border-violet-200">
+                                                    {s.grade}학년 {s.classNum}반 {s.studentNumber}번
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="secondary" className="text-[10px] bg-gray-100 text-gray-500">학번 미상</Badge>
+                                            )}
+                                            {s.ip && (
+                                                <Badge variant="outline" className="text-[10px] font-mono text-gray-600 border-gray-400">IP: {s.ip}</Badge>
+                                            )}
+                                            <span className="text-[10px] text-gray-600 font-medium whitespace-nowrap">
+                                                {(() => {
+                                                    // ISO 8601 또는 SQLite "YYYY-MM-DD HH:MM:SS" 모두 처리
+                                                    const iso = s.createdAt.includes("T")
+                                                        ? s.createdAt
+                                                        : s.createdAt.replace(" ", "T") + "Z";
+                                                    const d = new Date(iso);
+                                                    if (isNaN(d.getTime())) return s.createdAt;
+                                                    const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
+                                                    const day = DAYS[d.getDay()];
+                                                    const date = d.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric" });
+                                                    const time = d.toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit" });
+                                                    return `${date} (${day}) ${time}`;
+                                                })()}
+                                            </span>
+                                        </div>
+                                        {/* 건의 내용 */}
+                                        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">{s.message}</p>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="shrink-0 text-red-400 hover:text-red-600 hover:bg-red-50 h-7 w-7 p-0"
+                                        onClick={() => { if (confirm("이 건의를 삭제하시겠습니까?")) deleteSuggestionMutation.mutate(s.id); }}
+                                        disabled={deleteSuggestionMutation.isPending}
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* ── 캐시 현황 카드 ── */}
+            <Card className="w-full max-w-2xl border-amber-200">
+                <CardHeader className="bg-amber-50/60 border-b border-amber-100">
+                    <CardTitle className="flex items-center gap-2 text-amber-800">
+                        <Database className="w-5 h-5" />
+                        현재 식단 메뉴 캐시 현황
+                    </CardTitle>
+                    <CardDescription>
+                        DB에 저장된 이번 달({thisMonthStr}) 식단 캐시 상태입니다.
+                        데이터가 없거나 오래된 경우 아래 버튼으로 갱신해주세요.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-5 space-y-5">
+                    {/* 통계 */}
+                    <div className="grid grid-cols-3 gap-3">
+                        <div className="rounded-lg border bg-white p-3 text-center shadow-sm">
+                            <p className="text-2xl font-bold text-amber-600">{thisMonthMeals.length}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">이번 달 날짜 수</p>
+                        </div>
+                        <div className="rounded-lg border bg-white p-3 text-center shadow-sm">
+                            <p className="text-2xl font-bold text-blue-600">{lunchCount}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">중식 캐시 건수</p>
+                        </div>
+                        <div className="rounded-lg border bg-white p-3 text-center shadow-sm">
+                            <p className="text-2xl font-bold text-purple-600">{dinnerCount}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">석식 캐시 건수</p>
+                        </div>
+                    </div>
+
+                    {/* 마지막 갱신 시각 */}
+                    <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 rounded-lg px-3 py-2 border">
+                        <Clock className="w-4 h-4 shrink-0 text-gray-400" />
+                        {lastUpdated
+                            ? <span>마지막 캐시 갱신: <strong className="text-gray-700">{lastUpdated}</strong></span>
+                            : <span className="text-gray-400">아직 캐시 데이터가 없습니다.</span>
+                        }
+                    </div>
+
+                    {/* 갱신 버튼 */}
+                    <div className="flex items-center gap-3 pt-1">
+                        <Button
+                            onClick={() => refreshMutation.mutate()}
+                            disabled={refreshMutation.isPending || mealQuery.isLoading}
+                            className="bg-amber-500 hover:bg-amber-600 text-white"
+                        >
+                            {refreshMutation.isPending ? (
+                                <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> 갱신 중...</>
+                            ) : (
+                                <><RefreshCw className="w-4 h-4 mr-2" /> 캐시 지금 갱신</>
+                            )}
+                        </Button>
+                        <span className="text-xs text-gray-400">데이터 출처: 부산교육청 급식 API</span>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* ── 캐시 상세 미리보기 카드 ── */}
+            <Card className="w-full">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <span>🍱</span> 캐시 식단 상세 미리보기
+                    </CardTitle>
+                    <CardDescription>
+                        DB에 저장된 이번 달 식단 캐시 전체입니다. (총 {meals.length}일치)
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {mealQuery.isLoading ? (
+                        <p className="text-sm text-gray-400 py-6 text-center">로딩 중...</p>
+                    ) : meals.length === 0 ? (
+                        <div className="py-10 flex flex-col items-center gap-2 text-gray-400">
+                            <Database className="w-8 h-8 opacity-30" />
+                            <p className="text-sm">저장된 식단 캐시가 없습니다.</p>
+                            <p className="text-xs">위의 [캐시 지금 갱신] 버튼을 눌러 데이터를 가져오세요.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-auto rounded-md border">
+                            <Table className="min-w-[600px]">
+                                <TableHeader>
+                                    <TableRow className="bg-gray-50">
+                                        <TableHead className="w-[120px]">날짜</TableHead>
+                                        <TableHead>중식 메뉴</TableHead>
+                                        <TableHead>석식 메뉴</TableHead>
+                                        <TableHead className="w-[90px] text-center">평균 별점</TableHead>
+                                        <TableHead className="w-[170px] text-right">갱신 시각</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {meals.map((meal) => (
+                                        <TableRow key={meal.date}>
+                                            <TableCell className="font-mono font-bold text-sm">{meal.date}</TableCell>
+                                            <TableCell>
+                                                {meal.lunch && meal.lunch.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {meal.lunch.map((item, i) => (
+                                                            <Badge key={i} variant="secondary" className="text-xs bg-blue-50 text-blue-700 border-blue-200">{item}</Badge>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-gray-300">—</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                {meal.dinner && meal.dinner.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {meal.dinner.map((item, i) => (
+                                                            <Badge key={i} variant="secondary" className="text-xs bg-purple-50 text-purple-700 border-purple-200">{item}</Badge>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-gray-300">—</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                {ratingsMap[meal.date] ? (
+                                                    <span className="text-xs text-violet-600 font-bold">
+                                                        ★ {ratingsMap[meal.date].avg.toFixed(1)}
+                                                        <span className="text-[10px] text-gray-400 ml-1">({ratingsMap[meal.date].count}명)</span>
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs text-gray-300">—</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-right text-xs text-gray-400">
+                                                {meal.updated_at
+                                                    ? new Date(
+                                                        isNaN(Number(meal.updated_at))
+                                                            ? meal.updated_at
+                                                            : Number(meal.updated_at) * 1000
+                                                    ).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })
+                                                    : "—"
+                                                }
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
 export default function Admin() {
     const [password, setPassword] = useState("");
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -5377,6 +5810,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         value="etc"
                     >
                         기타
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="meal"
+                        className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800"
+                    >
+                        🍱 식단페이지
                     </TabsTrigger>
                 </TabsList>
 
@@ -6241,6 +6680,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
 
                 <TabsContent value="etc" className="space-y-6">
                     <EtcManager adminPassword={password} />
+                </TabsContent>
+
+                <TabsContent value="meal" className="space-y-6">
+                    <MealManager adminPassword={password} />
                 </TabsContent>
             </Tabs >
 

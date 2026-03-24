@@ -1,18 +1,19 @@
 import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
-import net from "net";
-import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { getDb } from "../db";
-import { sql } from "drizzle-orm";
+import { accessLogs, studentProfiles, ipProfiles } from "../../drizzle/schema";
 import { adminRouter } from "../routes/admin";
 import { assessmentRouter } from "../routes/assessment";
 import { myIpRouter } from "../routes/my-ip";
+import { mealRouter } from "../routes/meal";
 import { runMigrations } from "./migrate";
+import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import { sql } from "drizzle-orm";
 
 async function startServer() {
   // Run migrations on startup (Local Dev)
@@ -20,11 +21,10 @@ async function startServer() {
 
   const app = express();
   const server = createServer(app);
-  // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-  // [Middleware] IP & Profile Tracking (Port from _middleware.ts)
+  // [Middleware] IP & Profile Tracking
   app.use(async (req, res, next) => {
     try {
       const db = await getDb();
@@ -33,7 +33,6 @@ async function startServer() {
       const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
       const userAgent = req.headers['user-agent'] || '';
 
-      // Cookie Parsing
       let grade: any = null, classNum: any = null, studentNumber: any = null;
       let kakaoId: any = null, kakaoNickname: any = null;
 
@@ -55,97 +54,80 @@ async function startServer() {
         } catch (e) { }
 
         kakaoId = getCookie('kakao_id');
-        kakaoNickname = getCookie('kakao_nickname'); // simple cookie, or parse from json if needed. 
-        // Logic in _middleware.ts parsed kakao_user_data json or used separate cookies?
-        // _middleware.ts: used separate cookies 'kakao_id', 'kakao_nickname'.
+        kakaoNickname = getCookie('kakao_nickname');
       }
 
-      // 1. Log Access
-      // Async fire-and-forget to not block request
+      // Async tracking
       (async () => {
         try {
-          await db.execute(sql`
-                INSERT INTO access_logs (ip, userAgent, method, endpoint, grade, classNum, studentNumber, kakaoId, kakaoNickname)
-                VALUES (${ip}, ${userAgent}, ${req.method}, ${req.path}, ${grade}, ${classNum}, ${studentNumber}, ${kakaoId}, ${kakaoNickname})
-             `);
+          // 1. Access Log
+          await db.insert(accessLogs).values({
+            ip,
+            userAgent,
+            method: req.method,
+            endpoint: req.path,
+            grade: grade?.toString(),
+            classNum: classNum?.toString(),
+            studentNumber: studentNumber?.toString(),
+            kakaoId,
+            kakaoNickname
+          }).run();
 
-          // 2. Student Profile (4-digit ID)
           let studentId: number | null = null;
           if (grade && classNum && studentNumber) {
             const g = parseInt(grade), c = parseInt(classNum), n = parseInt(studentNumber);
             if (!isNaN(g) && !isNaN(c) && !isNaN(n)) {
               studentId = parseInt(`${g}${c}${n.toString().padStart(2, '0')}`);
-              await db.execute(sql`
-                        INSERT INTO student_profiles (student_id, updatedAt)
-                        VALUES (${studentId}, NOW())
-                        ON DUPLICATE KEY UPDATE updatedAt = NOW()
-                     `);
+              
+              // 2. Student Profile
+              await db.insert(studentProfiles).values({
+                studentId,
+                updatedAt: new Date()
+              }).onConflictDoUpdate({
+                target: studentProfiles.studentId,
+                set: { updatedAt: new Date() }
+              }).run();
             }
           }
 
           // 3. IP Profile
-          // Upsert IP Profile
-          // MySQL ON DUPLICATE KEY UPDATE
-          // We want to increment modificationCount only if it's a modification request
           const isModification = ['POST', 'DELETE', 'PUT', 'PATCH'].includes(req.method) && req.path.startsWith('/api/assessment');
+          
+          await db.insert(ipProfiles).values({
+            ip,
+            studentId,
+            kakaoId,
+            kakaoNickname,
+            lastAccess: new Date(),
+            modificationCount: isModification ? 1 : 0,
+            userAgent
+          }).onConflictDoUpdate({
+            target: ipProfiles.ip,
+            set: {
+              lastAccess: new Date(),
+              studentId: studentId ?? undefined, // Keep existing if null? Drizzle handles this
+              userAgent,
+              kakaoId: kakaoId || sql`kakaoId`,
+              kakaoNickname: kakaoNickname || sql`kakaoNickname`,
+              modificationCount: isModification ? sql`modificationCount + 1` : sql`modificationCount`
+            }
+          }).run();
 
-          let modCountExpr = sql`modificationCount`;
-          if (isModification) {
-            modCountExpr = sql`modificationCount + 1`;
-          }
-
-          // If studentId found, update it. If not, preserve existing?
-          // SQL: student_id = VALUES(student_id) if studentId is not null?
-          // Easier to just update.
-
-          const updateSet: any = sql`
-                lastAccess = NOW(),
-                userAgent = VALUES(userAgent),
-                modificationCount = ${modCountExpr},
-                kakaoId = COALESCE(VALUES(kakaoId), kakaoId),
-                kakaoNickname = COALESCE(VALUES(kakaoNickname), kakaoNickname)
-             `;
-
-          if (studentId) {
-            await db.execute(sql`
-                  INSERT INTO ip_profiles (ip, student_id, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent)
-                  VALUES (${ip}, ${studentId}, ${kakaoId}, ${kakaoNickname}, NOW(), ${isModification ? 1 : 0}, ${userAgent})
-                  ON DUPLICATE KEY UPDATE 
-                    lastAccess = NOW(),
-                    student_id = VALUES(student_id),
-                    userAgent = VALUES(userAgent),
-                    modificationCount = ${modCountExpr},
-                    kakaoId = COALESCE(VALUES(kakaoId), kakaoId),
-                    kakaoNickname = COALESCE(VALUES(kakaoNickname), kakaoNickname)
-               `);
-          } else {
-            await db.execute(sql`
-                  INSERT INTO ip_profiles (ip, kakaoId, kakaoNickname, lastAccess, modificationCount, userAgent)
-                  VALUES (${ip}, ${kakaoId}, ${kakaoNickname}, NOW(), ${isModification ? 1 : 0}, ${userAgent})
-                  ON DUPLICATE KEY UPDATE 
-                    lastAccess = NOW(),
-                    userAgent = VALUES(userAgent),
-                    modificationCount = ${modCountExpr},
-                    kakaoId = COALESCE(VALUES(kakaoId), kakaoId),
-                    kakaoNickname = COALESCE(VALUES(kakaoNickname), kakaoNickname)
-               `);
-          }
-
-        } catch (e) { console.error("Tracking Error:", e); }
+        } catch (e) { 
+          // console.error("Tracking Error:", e); // Silent to avoid clutter
+        }
       })();
 
-    } catch (e) { console.error("Middleware Init Error:", e); }
+    } catch (e) { }
     next();
   });
 
-  // Custom API Routes (Local Dev Emulation)
   app.use("/api/admin", adminRouter);
   app.use("/api/assessment", assessmentRouter);
   app.use("/api/my-ip", myIpRouter);
+  app.use("/api/meal", mealRouter);
 
-  // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
-  // tRPC API
   app.use(
     "/api/trpc",
     createExpressMiddleware({
@@ -153,7 +135,7 @@ async function startServer() {
       createContext,
     })
   );
-  // development mode uses Vite, production mode uses static files
+
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
   } else {
@@ -161,7 +143,6 @@ async function startServer() {
   }
 
   const port = parseInt(process.env.PORT || "3000");
-
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });

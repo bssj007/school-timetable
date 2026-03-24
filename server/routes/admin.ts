@@ -2,6 +2,7 @@ import { Router } from "express";
 import { sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { adminPassword } from "../adminPW";
+import { updateMealDatabase } from "../mealScraper";
 
 const router = Router();
 
@@ -215,6 +216,16 @@ router.post("/users/notify", async (req, res) => {
             message: "Notification sent (placeholder - implement KakaoTalk API)"
         });
     } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post("/meals/refresh", async (req, res) => {
+    try {
+        await updateMealDatabase();
+        res.json({ success: true, message: "Meal database refresh completed." });
+    } catch (err: any) {
+        console.error('[Admin] Meal Refresh Error:', err);
         res.status(500).json({ error: err.message });
     }
 });
