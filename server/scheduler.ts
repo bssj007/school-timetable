@@ -1,6 +1,7 @@
 import { users, notificationLogs, kakaoTokens } from '../drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
+import { updateMealDatabase } from './mealScraper';
 
 export async function runDailyChecks(env: any) {
     if (!env.DB) return;
@@ -19,6 +20,9 @@ export async function runDailyChecks(env: any) {
     if (existingLog) return; // Already ran
 
     console.log("[Scheduler] Running daily checks for:", todayDate);
+    
+    // 0. Update meals
+    await updateMealDatabase(env);
 
     // 2. Find Assessments Due Tomorrow
     const tomorrow = new Date();
