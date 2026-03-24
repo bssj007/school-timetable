@@ -126,7 +126,7 @@ function MealSuggestionDialog({ onClose }: { onClose: () => void }) {
                     }}
                 />
                 <div className="flex items-center justify-between text-[10px] text-slate-300">
-                    <span>Ctrl+Enter로 전송</span>
+                    <span className="hidden md:block">Ctrl+Enter로 전송</span>
                     <span>{message.length}/500</span>
                 </div>
 
@@ -320,8 +320,8 @@ export default function MealPage() {
                                 >
                                     {/* Date indicator */}
                                     <div className={`p-3 rounded-2xl flex items-center justify-between ${isToday ? "bg-orange-500 text-white shadow-md" : "bg-white border border-slate-200 text-slate-800"}`}>
-                                        <span className="font-bold text-sm">{WEEKDAY_KR[weekday]}</span>
-                                        <span className="text-xl font-black">{day.getDate()}</span>
+                                        <span className="font-bold text-base">{WEEKDAY_KR[weekday]}</span>
+                                        <span className="text-2xl font-black">{day.getDate()}</span>
                                     </div>
 
                                     {/* Lunch Box */}
@@ -329,20 +329,20 @@ export default function MealPage() {
                                         <div className="bg-amber-50 px-3 py-2 flex items-center justify-between border-b border-amber-100">
                                             <div className="flex items-center gap-1.5">
                                                 <Sun className="w-3.5 h-3.5 text-amber-500" />
-                                                <span className="text-[11px] font-bold text-amber-700">중식</span>
+                                                <span className="text-sm font-bold text-amber-700">중식</span>
                                             </div>
                                         </div>
                                         <div className="p-3 pb-4">
                                             {meal?.lunch && meal.lunch.length > 0 ? (
                                                 <ul className="space-y-1">
                                                     {meal.lunch.map((item, i) => (
-                                                        <li key={i} className="text-[11px] leading-tight text-slate-600">
-                                                            {i === 0 ? <span className="font-bold text-slate-800 text-xs block mb-1">{item}</span> : item}
+                                                        <li key={i} className="text-xs leading-snug text-slate-600">
+                                                            {i === 0 ? <span className="font-bold text-slate-800 text-sm block mb-1">{item}</span> : item}
                                                         </li>
                                                     ))}
                                                 </ul>
                                             ) : (
-                                                <p className="text-[10px] text-slate-300 py-4 text-center">식단 없음</p>
+                                                <p className="text-xs text-slate-300 py-4 text-center">식단 없음</p>
                                             )}
                                         </div>
                                     </div>
@@ -352,20 +352,20 @@ export default function MealPage() {
                                         <div className="bg-indigo-50 px-3 py-2 flex items-center justify-between border-b border-indigo-100">
                                             <div className="flex items-center gap-1.5">
                                                 <Moon className="w-3.5 h-3.5 text-indigo-500" />
-                                                <span className="text-[11px] font-bold text-indigo-700">석식</span>
+                                                <span className="text-sm font-bold text-indigo-700">석식</span>
                                             </div>
                                         </div>
                                         <div className="p-3 pb-4">
                                             {meal?.dinner && meal.dinner.length > 0 ? (
                                                 <ul className="space-y-1">
                                                     {meal.dinner.map((item, i) => (
-                                                        <li key={i} className="text-[11px] leading-tight text-slate-600">
-                                                            {i === 0 ? <span className="font-bold text-slate-800 text-xs block mb-1">{item}</span> : item}
+                                                        <li key={i} className="text-xs leading-snug text-slate-600">
+                                                            {i === 0 ? <span className="font-bold text-slate-800 text-sm block mb-1">{item}</span> : item}
                                                         </li>
                                                     ))}
                                                 </ul>
                                             ) : (
-                                                <p className="text-[10px] text-slate-300 py-4 text-center">식단 없음</p>
+                                                <p className="text-xs text-slate-300 py-4 text-center">식단 없음</p>
                                             )}
                                         </div>
                                     </div>
