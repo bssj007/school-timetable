@@ -81,10 +81,10 @@ function MealSuggestionDialog({ onClose }: { onClose: () => void }) {
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
-            <div className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-200">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
                 {/* 헤더 */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -106,7 +106,8 @@ function MealSuggestionDialog({ onClose }: { onClose: () => void }) {
 
                 {/* 안내 */}
                 <div className="bg-violet-50 border border-violet-100 rounded-xl px-3 py-2 text-xs text-violet-700">
-                    💡 건의사항은 학번·IP와 함께 관리자에게 전달됩니다.
+                    💡 건의사항은 학생회에 전달하겠습니다!{" "}
+                    <span className="text-[10px] text-violet-400 line-through">(너무 부담갖지 마시고)</span>
                 </div>
 
                 {/* 텍스트 입력 */}
@@ -114,7 +115,7 @@ function MealSuggestionDialog({ onClose }: { onClose: () => void }) {
                     ref={textareaRef}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    placeholder="예: 불고기 메뉴 자주 나왔으면 좋겠어요! / 채소 반찬이 더 다양하면 좋겠어요."
+                    placeholder="예) 애미야 국이 짜다!"
                     className="w-full h-32 resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-transparent transition-all"
                     maxLength={500}
                     onKeyDown={(e) => {
@@ -192,10 +193,15 @@ export default function MealPage() {
     // 이번 주 보기일 때 오늘 카드로 자동 스크롤 (모바일 세로 레이아웃)
     useEffect(() => {
         if (weekOffset !== 0) return;
-        if (!todayDayRef.current) return;
         const timer = setTimeout(() => {
-            todayDayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 100);
+            const el = todayDayRef.current;
+            if (!el) return;
+            // sticky 헤더 높이를 동적으로 측정
+            const header = document.querySelector("header");
+            const headerH = header ? header.getBoundingClientRect().height : 80;
+            const top = el.getBoundingClientRect().top + window.scrollY - headerH - 12; // 12px 여유
+            window.scrollTo({ top, behavior: "smooth" });
+        }, 150);
         return () => clearTimeout(timer);
     }, [weekOffset]);
 
@@ -217,8 +223,9 @@ export default function MealPage() {
         <div className="min-h-screen bg-slate-50">
             <header className="bg-white sticky top-0 z-20 shadow-sm border-b border-slate-200">
                 <div className="max-w-6xl mx-auto px-4 py-3">
-                    {/* 첫 줄: 아이콘 + 제목 + 우측 버튼 */}
+                    {/* 첫 줄: 아이콘 + 제목 [+데스크탑: 토글] + 우측 건의 버튼 */}
                     <div className="flex items-center justify-between">
+                        {/* 좌측: 아이콘 + 제목 + 데스크탑 토글 */}
                         <div className="flex items-center gap-3 min-w-0">
                             <div className="w-9 h-9 shrink-0 rounded-xl bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-200">
                                 <UtensilsCrossed className="w-4 h-4 text-white" />
@@ -229,12 +236,8 @@ export default function MealPage() {
                                     <p className="text-[10px] text-slate-400">{lastUpdated}</p>
                                 )}
                             </div>
-                        </div>
-
-                        {/* 모바일: 건의 버튼 / 데스크탑: 토글 + 건의 버튼 */}
-                        <div className="flex items-center gap-2 shrink-0 ml-3">
-                            {/* 시간표/급식표 토글 — 데스크탑만 */}
-                            <div className="hidden md:flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5">
+                            {/* 시간표/급식표 토글 — 데스크탑: 제목 바로 오른쪽 */}
+                            <div className="hidden md:flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5 ml-2">
                                 <a
                                     href="/"
                                     className="px-4 py-1.5 rounded-full text-sm font-semibold text-gray-500 hover:text-gray-800 hover:bg-white/60 transition-all whitespace-nowrap"
@@ -245,16 +248,16 @@ export default function MealPage() {
                                     🍱 급식표
                                 </div>
                             </div>
-
-                            {/* 급식 건의 버튼 */}
-                            <button
-                                onClick={() => setShowSuggestion(true)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500 hover:bg-violet-600 text-white text-xs font-bold transition-colors shadow-md shadow-violet-200"
-                            >
-                                <MessageSquarePlus className="w-3.5 h-3.5" />
-                                <span className="hidden xs:inline">급식 건의</span>
-                            </button>
                         </div>
+
+                        {/* 우측: 급식 건의 버튼 (항상 글자 포함) */}
+                        <button
+                            onClick={() => setShowSuggestion(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500 hover:bg-violet-600 text-white text-xs font-bold transition-colors shadow-md shadow-violet-200 shrink-0 ml-3"
+                        >
+                            <MessageSquarePlus className="w-3.5 h-3.5" />
+                            급식 건의
+                        </button>
                     </div>
 
                     {/* 둘째 줄: 시간표/급식표 토글 — 모바일만 */}
