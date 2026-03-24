@@ -1348,7 +1348,7 @@ export default function Dashboard() {
           </Link>
 
           {/* 시간표/급식표 toggle — right of site title */}
-          <div className="flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5">
+          <div className="flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5 ml-4">
             <div className="px-4 py-1.5 rounded-full bg-white text-sm font-semibold text-gray-800 shadow-sm whitespace-nowrap">
               📅 시간표
             </div>
@@ -1482,8 +1482,8 @@ export default function Dashboard() {
           </h1>
         </div>
 
-        {/* Right column: selectors vertically centered */}
-        <div className="flex items-center gap-[3px] shrink-0">
+        {/* Right column: selectors right-aligned */}
+        <div className="flex items-center gap-[3px] shrink-0 ml-auto">
           <Select value={grade} onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}>
             <SelectTrigger className="relative w-[80px] h-10 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-1.5 [&>svg]:z-0" style={selectorStyle}>
               <SelectValue placeholder="학년" />
