@@ -1831,8 +1831,8 @@ export default function Dashboard() {
                               const dayItems = timetableByDay[weekdayIdx] || [];
                               const item = dayItems.find((t) => t.classTime === classTime);
 
-                              // 표준 시간표 모드: 날짜/수행평가/과거 무시
-                              const isStandardPrint = printTimetableType === 'standard';
+                              // 표준 시간표 모드: 날짜/수행평가/과거 무시 (인쇄 모드에서만 적용)
+                              const isStandardPrint = printMode === 'printer' && printTimetableType === 'standard';
 
                               // 오늘 날짜인지 확인
                               const today = new Date();
@@ -2122,8 +2122,8 @@ export default function Dashboard() {
                       </tbody>
                       </table>
 
-                      {/* 특수일정 오버레이 (Absolute Table) - 표준 시간표 모드에서는 숨김 */}
-                      {settings?.special_schedules_enabled && printTimetableType !== 'standard' && (
+                      {/* 특수일정 오버레이 (Absolute Table) - 표준 시간표 인쇄 모드에서는 숨김 */}
+                      {settings?.special_schedules_enabled && !(printMode === 'printer' && printTimetableType === 'standard') && (
                         <table aria-hidden="true" className={`absolute top-0 left-0 w-full min-h-full h-full border-collapse table-fixed pointer-events-none z-10 transition-all duration-300 ${isElectiveMissingImmediate ? "hidden" : ""}`}>
                           <thead>
                             <tr>
