@@ -764,14 +764,38 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 }
 
                 if (subject || isChanged) {
+                    // Decode the original (baseline) subject for standard print mode
+                    let baseSubject = subject;
+                    let baseTeacher = teacher;
+                    if (isChanged && baseData && baseData[grade]?.[classNum]?.[weekday]) {
+                        const baseCode = baseData[grade][classNum][weekday][period] || 0;
+                        if (baseCode) {
+                            let bTeacherIdx = 0, bSubjectIdx = 0;
+                            if (bunri === 100) {
+                                bTeacherIdx = Math.floor(baseCode / bunri);
+                                bSubjectIdx = baseCode % bunri;
+                            } else {
+                                bTeacherIdx = baseCode % bunri;
+                                bSubjectIdx = Math.floor(baseCode / bunri);
+                            }
+                            baseSubject = subjects[bSubjectIdx] ? subjects[bSubjectIdx].replace(/_/g, "") : "";
+                            baseTeacher = teachers[bTeacherIdx] || "";
+                        } else {
+                            baseSubject = "";
+                            baseTeacher = "";
+                        }
+                    }
+
                     result.push({
                         grade,
                         class: classNum,
-                        weekday: weekday - 1, // Convert to 0-indexed (0=Mon, 4=Fri)
+                        weekday: weekday - 1,
                         classTime: period,
-                        subject, // Empty string if cancelled
+                        subject,
                         teacher,
-                        isChanged
+                        isChanged,
+                        baseSubject,
+                        baseTeacher,
                     });
                 }
             }

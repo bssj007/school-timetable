@@ -229,6 +229,8 @@ export default function Dashboard() {
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printMode, setPrintMode] = useState<'select' | 'printer'>('select');
   const [includeAssessments, setIncludeAssessments] = useState(true);
+  const [printTimetableType, setPrintTimetableType] = useState<'standard' | 'current'>('standard');
+  const [isPrinting, setIsPrinting] = useState(false); // true ONLY during window.print() — never affects main screen
 
   // Preset Constants
   const PRINT_PRESETS = [
@@ -256,6 +258,7 @@ export default function Dashboard() {
   const resetPrintOptions = () => {
     setPrintMode('select');
     setIncludeAssessments(true);
+    setPrintTimetableType('standard');
     setPrintPreset('desk');
     setPrintTheme('color');
     setPrintWidth('9');
@@ -311,12 +314,14 @@ export default function Dashboard() {
   // 인쇄 핸들러
   const handlePrint = () => {
     setShowPrintOptions(false);
+    setIsPrinting(true); // Lock in standard/current mode for the upcoming print
 
     // Track print metric
     fetch('/api/action/print', { method: 'POST' }).catch(() => { });
 
     setTimeout(() => {
       window.print();
+      setIsPrinting(false); // Restore — main screen is now normal again
       resetPrintOptions();
     }, 100);
   };
@@ -647,6 +652,77 @@ export default function Dashboard() {
     }
     return cellGroups;
   }, [allClassesTimetable, electiveConfigs, grade, settings?.elective_group_overrides]);
+
+  // 표준 인쇄 모드용: 기준 데이터셋(baseline)으로 매핑된 전체 시간표
+  const baselineAllClassesTimetable = useMemo(() => {
+    if (!rawTimetableData) return [];
+    return (rawTimetableData as any[])
+      .filter(item => {
+        // 현재 주차에만 존재하고 baseline에 없는 셀(변경: 추가)는 제외
+        if (item.isChanged && (item.baseSubject === '' || item.baseSubject == null)) return false;
+        return true;
+      })
+      .map(item => ({
+        ...item,
+        subject: item.baseSubject ?? item.subject,
+        teacher: item.baseTeacher ?? item.teacher,
+        isChanged: false,
+      }));
+  }, [rawTimetableData]);
+
+  // 표준 인쇄 모드용: baseline 데이터를 이용한 선택과목 그룹 계산
+  const baselineComputedGroups = useMemo(() => {
+    if (grade !== '2' && grade !== '3') return {};
+    if (!baselineAllClassesTimetable || baselineAllClassesTimetable.length === 0) return {};
+    const cellGroups: Record<string, string> = {};
+    if (electiveConfigs && electiveConfigs.length > 0) {
+      const subjectTeacherToGroups = new Map<string, string[]>();
+      const subjectToGroups = new Map<string, string[]>();
+      electiveConfigs.forEach((c: any) => {
+        const isFreePeriod = ['\ube48\uad50\uc2e4', '\uacf5\uac15', 'Empty', 'Free'].some(k => (c.subject || '').includes(k));
+        if ((c.isMovingClass !== 0 || isFreePeriod) && c.classCode) {
+          const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
+          const subj = c.subject.trim();
+          const existing = subjectToGroups.get(subj) || [];
+          subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
+          const teacherNames: string[] = [];
+          if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
+          if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
+          Array.from(new Set(teacherNames)).forEach((tName: string) => {
+            const key = `${subj}|${tName}`;
+            const existingKey = subjectTeacherToGroups.get(key) || [];
+            subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
+          });
+        }
+      });
+      for (let w = 0; w < 5; w++) {
+        for (let p = 1; p <= 7; p++) {
+          const slots = baselineAllClassesTimetable.filter((t: any) => t.weekday === w && t.classTime === p);
+          if (slots.length === 0) continue;
+          const groupCounts: Record<string, number> = {};
+          slots.forEach((slot: any) => {
+            const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
+            let groups = subjectTeacherToGroups.get(key);
+            if (!groups || groups.length === 0) groups = subjectToGroups.get(slot.subject.trim());
+            if (groups) groups.forEach(g => { groupCounts[g] = (groupCounts[g] || 0) + 1; });
+          });
+          const entries = Object.entries(groupCounts);
+          if (entries.length > 0) {
+            entries.sort((a, b) => b[1] - a[1]);
+            if (entries[0][1] >= 1) cellGroups[`${w}-${p}`] = entries[0][0];
+          }
+        }
+      }
+    }
+    if (settings?.elective_group_overrides?.[grade]) {
+      const gradeOverrides = settings.elective_group_overrides[grade];
+      for (const [cellKey, overrideValue] of Object.entries(gradeOverrides)) {
+        if (overrideValue === 'NONE') delete cellGroups[cellKey];
+        else if (typeof overrideValue === 'string') cellGroups[cellKey] = overrideValue;
+      }
+    }
+    return cellGroups;
+  }, [baselineAllClassesTimetable, electiveConfigs, grade, settings?.elective_group_overrides]);
 
   // 2. 컴시간에서 시간표 가져오기
   const fetchFromComcigan = useMutation({
@@ -1798,13 +1874,20 @@ export default function Dashboard() {
                             const currentDate = toDateString(weekDates[idx]);
                             const todayStr = toDateString(new Date());
                             const isPast = currentDate < todayStr;
+                            // In standard mode (print): treat all columns as neutral (non-past)
+                            const isStandardPrint = printTimetableType === 'standard';
 
                             return (
-                              <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70 print:!opacity-100 capturing:!opacity-100" : ""}`}>
+                              <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${(!isStandardPrint && isPast) ? "opacity-70 print:!opacity-100 capturing:!opacity-100" : ""}`}>
                                 <div className="text-sm font-semibold">{day}</div>
-                                <div className="text-[10px] md:text-xs text-gray-500 font-normal">
+                                <div className="text-[10px] md:text-xs text-gray-500 font-normal print:hidden capturing:hidden">
                                   {formatDate(weekDates[idx])}
                                 </div>
+                                {!isStandardPrint && (
+                                  <div className="text-[10px] md:text-xs text-gray-500 font-normal hidden print:block capturing:block">
+                                    {formatDate(weekDates[idx])}
+                                  </div>
+                                )}
                               </th>
                             );
                           })}
@@ -1822,14 +1905,17 @@ export default function Dashboard() {
                               const dayItems = timetableByDay[weekdayIdx] || [];
                               const item = dayItems.find((t) => t.classTime === classTime);
 
+                              // isStandardPrint: only true during actual window.print() call
+                              const isStandardPrint = isPrinting && printTimetableType === 'standard';
+
                               // 오늘 날짜인지 확인
                               const today = new Date();
                               const todayStr = toDateString(today);
-                              const isToday = todayStr === currentDate;
-                              const isPast = currentDate < todayStr;
+                              const isToday = !isStandardPrint && (todayStr === currentDate);
+                              const isPast = !isStandardPrint && (currentDate < todayStr);
 
-                              // 해당 날짜와 교시에 수행평가가 있는지 확인
-                              const cellAssessments = assessments ? assessments.filter(a => {
+                              // 해당 날짜와 교시에 수행평가가 있는지 확인 (표준 모드에서는 비표시)
+                              const cellAssessments = (!isStandardPrint && includeAssessments && assessments) ? assessments.filter(a => {
                                 if (settings?.hide_past_assessments && isPast) return false;
 
                                 // Check item subject if it exists, otherwise check if group is active
@@ -1855,6 +1941,9 @@ export default function Dashboard() {
 
                                 return true;
                               }) : [];
+
+                              // 표준 모드에서는 날짜 변경 틴트도 숨김
+                              const showChangedTint = !isStandardPrint;
 
                               // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
                               let bgColor = "bg-yellow-50 hover:bg-yellow-100";
@@ -1902,7 +1991,7 @@ export default function Dashboard() {
                                 bgColor = "bg-red-50 hover:bg-red-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50";
                               }
 
-                              if (item && item.isChanged && !cellInlineStyle && !isPast && cellAssessments.length === 0) {
+                              if (item && item.isChanged && !isStandardPrint && !cellInlineStyle && !isPast && cellAssessments.length === 0) {
                                 const tColor = settings?.changed_class_tint_color || '#fef08a';
                                 const tOpacity = settings?.changed_class_tint_opacity !== undefined ? parseFloat(settings.changed_class_tint_opacity) : 1.0;
                                 const h = tColor.replace('#', '');
@@ -1923,12 +2012,18 @@ export default function Dashboard() {
                               // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
                               const isSubjectDisabled = item && (!item.subject.trim() || ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex)));
 
-                              const group = computedGroups[`${weekdayIdx}-${classTime}`];
+                              const group = (isStandardPrint ? baselineComputedGroups : computedGroups)[`${weekdayIdx}-${classTime}`];
                               const electiveSelection = currentProfile?.electives?.[group];
                               let displaySubject = item ? item.subject : "-";
                               let displayTeacher = item ? item.teacher : "";
-                              // displaySubject가 항상 문자열이도록 보장 (elective 데이터 손상 방어)
+                              
+                              // 표준 시간표 모드: 기준 데이터셋(자료481)의 데이터를 '초기값'으로 설정 (선택과목 처리 전)
+                              if (isStandardPrint && item) {
+                                displaySubject = (item as any).baseSubject ?? displaySubject;
+                                displayTeacher = (item as any).baseTeacher ?? displayTeacher;
+                              }
 
+                              // displaySubject가 항상 문자열이도록 보장 (elective 데이터 손상 방어)
                               let isElectiveActive = false;
                               let isCancelledByFreePeriod = false;
                               let displayClassName = ""; // 반(반이름) 표시용
@@ -1938,8 +2033,9 @@ export default function Dashboard() {
                                 const electiveTeachers = electiveSelection.teacher
                                   ? electiveSelection.teacher.split(",").map((t: string) => t.trim()).filter(Boolean)
                                   : [];
-                                const slotItems = allClassesTimetable.filter(
-                                  t => t.weekday === weekdayIdx && t.classTime === classTime
+                                const slotSourceData = isStandardPrint ? baselineAllClassesTimetable : allClassesTimetable;
+                                const slotItems = (slotSourceData as any[]).filter(
+                                  (t: any) => t.weekday === weekdayIdx && t.classTime === classTime
                                 );
 
                                 const matchingSlot = slotItems.find(
@@ -1947,11 +2043,12 @@ export default function Dashboard() {
                                 );
 
                                 // 선택과목이 없고 빈교실/공강만 있으면 취소선 표시
+                                // (표준 인쇄 모드에서는 현재 주 데이터에 의한 취소선 금지)
                                 const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free"];
                                 const hasFreePeriodSlot = slotItems.some(t =>
                                   FREE_KEYWORDS.some(k => t.subject.trim().includes(k))
                                 );
-                                if (!matchingSlot && hasFreePeriodSlot) {
+                                if (!isStandardPrint && !matchingSlot && hasFreePeriodSlot) {
                                   isCancelledByFreePeriod = true;
                                 }
 
@@ -1965,7 +2062,8 @@ export default function Dashboard() {
 
                                 if (configEntry?.fullTeacherName) {
                                   displayTeacher = configEntry.fullTeacherName;
-                                } else if (matchingSlot) {
+                                } else if (matchingSlot && !isStandardPrint) {
+                                  // 현재 주 슬롯에서 선생님 가져오기 (표준 인쇄 모드에서는 사용 안 함)
                                   displayTeacher = matchingSlot.teacher;
                                 } else if (electiveTeachers.length > 0) {
                                   displayTeacher = electiveTeachers[0];
@@ -2033,6 +2131,7 @@ export default function Dashboard() {
                                   }}
                                   className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-all overflow-hidden
                                 ${bgColor} ${pastStyle} ${selectionStyle} ${relocationStyle}
+                                ${(item && item.isChanged && !isStandardPrint && !isPast && cellAssessments.length === 0) ? 'is-changed' : ''}
                                 ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
                                   style={cellInlineStyle}
@@ -2042,7 +2141,7 @@ export default function Dashboard() {
                                       <span>{group}</span><span className="hidden md:inline">그룹</span>
                                     </div>
                                   )}
-                                  <div className="flex flex-col items-center justify-center h-full min-h-0">
+                                  <div className="flex flex-col items-center justify-center h-full min-h-0 print:overflow-hidden print:max-h-full">
                                     {item || isElectiveActive ? (
                                       <>
                                         <div
@@ -2100,8 +2199,8 @@ export default function Dashboard() {
                       </tbody>
                       </table>
 
-                      {/* 특수일정 오버레이 (Absolute Table) */}
-                      {settings?.special_schedules_enabled && (
+                      {/* 특수일정 오버레이 — 표준 인쇄 중에만 숨김, 메인 화면은 항상 표시 */}
+                      {settings?.special_schedules_enabled && !(isPrinting && printTimetableType === 'standard') && (
                         <table aria-hidden="true" className={`absolute top-0 left-0 w-full min-h-full h-full border-collapse table-fixed pointer-events-none z-10 transition-all duration-300 ${isElectiveMissingImmediate ? "hidden" : ""}`}>
                           <thead>
                             <tr>
@@ -2174,6 +2273,30 @@ export default function Dashboard() {
           <div className="flex flex-col gap-4 py-4">
             {printMode === 'select' ? (
               <>
+                {/* 시간표 유형 토글 */}
+                <div className="flex gap-1 bg-gray-100 rounded-lg p-1 border">
+                  <button
+                    onClick={() => setPrintTimetableType('standard')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${
+                      printTimetableType === 'standard'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    표준 시간표
+                  </button>
+                  <button
+                    onClick={() => setPrintTimetableType('current')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${
+                      printTimetableType === 'current'
+                        ? 'bg-green-200 text-green-800 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    현재 주차 시간표
+                  </button>
+                </div>
+
                 {settings?.allow_png_download !== false && (
                   <Button onClick={handleDownloadPng} className="w-full flex items-center justify-center gap-2 h-12">
                     <ImageIcon className="w-5 h-5" />
@@ -2185,24 +2308,26 @@ export default function Dashboard() {
                   프린터로 출력
                 </Button>
 
-                <div className="flex items-center space-x-2 mt-4 bg-gray-50 border rounded-lg p-3">
-                  <Checkbox
-                    id="include-assessments"
-                    checked={includeAssessments}
-                    onCheckedChange={(checked) => setIncludeAssessments(!!checked)}
-                  />
-                  <div className="grid gap-1.5 leading-none">
-                    <label
-                      htmlFor="include-assessments"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                    >
-                      수행평가 일정 포함
-                    </label>
-                    <p className="text-xs text-gray-500">
-                      * 현재 보고 있는 주차 기준으로 표기됩니다.
-                    </p>
+                {printTimetableType === 'current' && (
+                  <div className="flex items-center space-x-2 mt-4 bg-gray-50 border rounded-lg p-3">
+                    <Checkbox
+                      id="include-assessments"
+                      checked={includeAssessments}
+                      onCheckedChange={(checked) => setIncludeAssessments(!!checked)}
+                    />
+                    <div className="grid gap-1.5 leading-none">
+                      <label
+                        htmlFor="include-assessments"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        수행평가 일정 포함
+                      </label>
+                      <p className="text-xs text-gray-500">
+                        * 현재 보고 있는 주차 기준으로 표기됩니다.
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
               </>
             ) : (
               <>
@@ -2911,3 +3036,4 @@ export default function Dashboard() {
     </div>
   );
 }
+
