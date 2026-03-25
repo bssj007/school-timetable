@@ -2033,6 +2033,7 @@ export default function Dashboard() {
                                   }}
                                   className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-all overflow-hidden
                                 ${bgColor} ${pastStyle} ${selectionStyle} ${relocationStyle}
+                                ${(item && item.isChanged && !isPast && cellAssessments.length === 0) ? 'is-changed' : ''}
                                 ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
                                   style={cellInlineStyle}

@@ -300,14 +300,22 @@
   }
 
   /* Exclude visual effects for printing as requested, but keep assessment backgrounds */
-  #timetable-container[data-print-theme="simple"] td,
-  #timetable-container[data-print-theme="simple"] div,
+  /* Scope to main table only — NOT the overlay table (aria-hidden) */
+  #timetable-container[data-print-theme="simple"] table:not([aria-hidden="true"]) td,
+  #timetable-container[data-print-theme="simple"] table:not([aria-hidden="true"]) div,
   #timetable-container[data-print-theme="simple"] .bg-red-50,
   #timetable-container[data-print-theme="simple"] .bg-yellow-50,
   #timetable-container[data-print-theme="simple"] .bg-gray-200 {
     background-color: transparent !important;
     box-shadow: none !important;
     animation: none !important;
+  }
+
+  /* Simple theme: show special schedule overlay with a gray background (will grayscale via filter) */
+  #timetable-container[data-print-theme="simple"] table[aria-hidden="true"] td .absolute {
+    background-color: rgba(200, 200, 200, 0.35) !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* Keep blue background for assessments during print */
@@ -362,6 +370,29 @@
   /* Simple Theme Overrides (Grayscale) */
   #timetable-container[data-print-theme="simple"] table {
     filter: grayscale(100%) !important;
+  }
+
+  /* Simple theme: show changed cells as a subtle gray stripe */
+  #timetable-container[data-print-theme="simple"] td.is-changed {
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 4px,
+      rgba(0,0,0,0.07) 4px,
+      rgba(0,0,0,0.07) 8px
+    ) !important;
+    background-color: transparent !important;
+  }
+
+  /* Color theme: force the inline yellow tint to print */
+  #timetable-container[data-print-theme="color"] td.is-changed {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Pink theme: show changed cells with a slightly deeper pink to distinguish */
+  #timetable-container[data-print-theme="pink"] td.is-changed {
+    background-color: #f9a8d4 !important;
   }
 
   /* Pink Theme Overrides */
