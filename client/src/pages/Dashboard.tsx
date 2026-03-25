@@ -2018,8 +2018,6 @@ export default function Dashboard() {
                                 }
                               }
 
-                              }
-
                               let relocationStyle = "";
                               if (relocatingAssessment) {
                                 if (displaySubject.trim() === relocatingAssessment.subject.trim()) {
