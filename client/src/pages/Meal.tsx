@@ -103,32 +103,34 @@ function StarRating({ date, type, readOnly = false }: { date: string; type: "lun
 
     return (
         <div className="flex flex-col items-end gap-0.5">
-            <div className="flex items-center gap-0.5">
-                {[1, 2, 3, 4, 5].map((star) => {
-                    const isFilled = star <= displayRating;
-                    const fillColor = readOnly ? (isFilled ? "#94a3b8" : "none") : (isFilled ? "#7c3aed" : "none");
-                    const strokeColor = readOnly ? (isFilled ? "#94a3b8" : "#cbd5e1") : (isFilled ? "#7c3aed" : "#c4b5fd");
+            {!(readOnly && myRating === null) && (
+                <div className="flex items-center gap-0.5">
+                    {[1, 2, 3, 4, 5].map((star) => {
+                        const isFilled = star <= displayRating;
+                        const fillColor = readOnly ? (isFilled ? "#94a3b8" : "none") : (isFilled ? "#7c3aed" : "none");
+                        const strokeColor = readOnly ? (isFilled ? "#94a3b8" : "#cbd5e1") : (isFilled ? "#7c3aed" : "#c4b5fd");
 
-                    return (
-                        <button
-                            key={star}
-                            onClick={() => !readOnly && rateMutation.mutate(star)}
-                            onMouseEnter={() => !readOnly && setHovered(star)}
-                            onMouseLeave={() => !readOnly && setHovered(null)}
-                            disabled={readOnly || rateMutation.isPending}
-                            className={`transition-transform ${!readOnly ? "hover:scale-125 active:scale-110" : ""} disabled:opacity-50`}
-                            title={readOnly ? "과거의 별점은 수정할 수 없습니다" : (hasStudent ? `${star}점` : "학번을 설정해야 별점을 남길 수 있습니다")}
-                            style={{ cursor: readOnly ? "default" : "pointer" }}
-                        >
-                            <Star
-                                className="w-5 h-5"
-                                fill={fillColor}
-                                stroke={strokeColor}
-                            />
-                        </button>
-                    );
-                })}
-            </div>
+                        return (
+                            <button
+                                key={star}
+                                onClick={() => !readOnly && rateMutation.mutate(star)}
+                                onMouseEnter={() => !readOnly && setHovered(star)}
+                                onMouseLeave={() => !readOnly && setHovered(null)}
+                                disabled={readOnly || rateMutation.isPending}
+                                className={`transition-transform ${!readOnly ? "hover:scale-125 active:scale-110" : ""} disabled:opacity-50`}
+                                title={readOnly ? "과거의 별점은 수정할 수 없습니다" : (hasStudent ? `${star}점` : "학번을 설정해야 별점을 남길 수 있습니다")}
+                                style={{ cursor: readOnly ? "default" : "pointer" }}
+                            >
+                                <Star
+                                    className="w-5 h-5"
+                                    fill={fillColor}
+                                    stroke={strokeColor}
+                                />
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
             {count > 0 && avg != null && (
                 <span className={`text-[9px] leading-none ${readOnly ? "text-slate-400" : "text-violet-400"}`}>
                     ★ {avg.toFixed(1)} ({count}명)
