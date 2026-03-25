@@ -229,6 +229,7 @@ export default function Dashboard() {
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printMode, setPrintMode] = useState<'select' | 'printer'>('select');
   const [includeAssessments, setIncludeAssessments] = useState(true);
+  const [printTimetableType, setPrintTimetableType] = useState<'standard' | 'current'>('standard');
 
   // Preset Constants
   const PRINT_PRESETS = [
@@ -256,6 +257,7 @@ export default function Dashboard() {
   const resetPrintOptions = () => {
     setPrintMode('select');
     setIncludeAssessments(true);
+    setPrintTimetableType('standard');
     setPrintPreset('desk');
     setPrintTheme('color');
     setPrintWidth('9');
@@ -2175,6 +2177,30 @@ export default function Dashboard() {
           <div className="flex flex-col gap-4 py-4">
             {printMode === 'select' ? (
               <>
+                {/* 시간표 유형 토글 */}
+                <div className="flex bg-gray-100 rounded-lg p-1 border">
+                  <button
+                    onClick={() => setPrintTimetableType('standard')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${
+                      printTimetableType === 'standard'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    표준 시간표
+                  </button>
+                  <button
+                    onClick={() => setPrintTimetableType('current')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${
+                      printTimetableType === 'current'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    현재 주차 시간표
+                  </button>
+                </div>
+
                 {settings?.allow_png_download !== false && (
                   <Button onClick={handleDownloadPng} className="w-full flex items-center justify-center gap-2 h-12">
                     <ImageIcon className="w-5 h-5" />
@@ -2186,24 +2212,26 @@ export default function Dashboard() {
                   프린터로 출력
                 </Button>
 
-                <div className="flex items-center space-x-2 mt-4 bg-gray-50 border rounded-lg p-3">
-                  <Checkbox
-                    id="include-assessments"
-                    checked={includeAssessments}
-                    onCheckedChange={(checked) => setIncludeAssessments(!!checked)}
-                  />
-                  <div className="grid gap-1.5 leading-none">
-                    <label
-                      htmlFor="include-assessments"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                    >
-                      수행평가 일정 포함
-                    </label>
-                    <p className="text-xs text-gray-500">
-                      * 현재 보고 있는 주차 기준으로 표기됩니다.
-                    </p>
+                {printTimetableType === 'current' && (
+                  <div className="flex items-center space-x-2 mt-4 bg-gray-50 border rounded-lg p-3">
+                    <Checkbox
+                      id="include-assessments"
+                      checked={includeAssessments}
+                      onCheckedChange={(checked) => setIncludeAssessments(!!checked)}
+                    />
+                    <div className="grid gap-1.5 leading-none">
+                      <label
+                        htmlFor="include-assessments"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        수행평가 일정 포함
+                      </label>
+                      <p className="text-xs text-gray-500">
+                        * 현재 보고 있는 주차 기준으로 표기됩니다.
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
               </>
             ) : (
               <>
