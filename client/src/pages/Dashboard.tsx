@@ -1991,7 +1991,7 @@ export default function Dashboard() {
                                 bgColor = "bg-red-50 hover:bg-red-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50";
                               }
 
-                              if (item && item.isChanged && showChangedTint && !cellInlineStyle && !isPast && cellAssessments.length === 0) {
+                              if (item && item.isChanged && !isStandardPrint && !cellInlineStyle && !isPast && cellAssessments.length === 0) {
                                 const tColor = settings?.changed_class_tint_color || '#fef08a';
                                 const tOpacity = settings?.changed_class_tint_opacity !== undefined ? parseFloat(settings.changed_class_tint_opacity) : 1.0;
                                 const h = tColor.replace('#', '');
@@ -2131,7 +2131,7 @@ export default function Dashboard() {
                                   }}
                                   className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-all overflow-hidden
                                 ${bgColor} ${pastStyle} ${selectionStyle} ${relocationStyle}
-                                ${(item && item.isChanged && showChangedTint && !isPast && cellAssessments.length === 0) ? 'is-changed' : ''}
+                                ${(item && item.isChanged && !isStandardPrint && !isPast && cellAssessments.length === 0) ? 'is-changed' : ''}
                                 ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
                                   style={cellInlineStyle}
@@ -3036,3 +3036,4 @@ export default function Dashboard() {
     </div>
   );
 }
+
