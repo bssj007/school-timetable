@@ -1800,13 +1800,20 @@ export default function Dashboard() {
                             const currentDate = toDateString(weekDates[idx]);
                             const todayStr = toDateString(new Date());
                             const isPast = currentDate < todayStr;
+                            // In standard mode (print): treat all columns as neutral (non-past)
+                            const isStandardPrint = printTimetableType === 'standard';
 
                             return (
-                              <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70 print:!opacity-100 capturing:!opacity-100" : ""}`}>
+                              <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${(!isStandardPrint && isPast) ? "opacity-70 print:!opacity-100 capturing:!opacity-100" : ""}`}>
                                 <div className="text-sm font-semibold">{day}</div>
-                                <div className="text-[10px] md:text-xs text-gray-500 font-normal">
+                                <div className="text-[10px] md:text-xs text-gray-500 font-normal print:hidden capturing:hidden">
                                   {formatDate(weekDates[idx])}
                                 </div>
+                                {!isStandardPrint && (
+                                  <div className="text-[10px] md:text-xs text-gray-500 font-normal hidden print:block capturing:block">
+                                    {formatDate(weekDates[idx])}
+                                  </div>
+                                )}
                               </th>
                             );
                           })}
@@ -1824,14 +1831,17 @@ export default function Dashboard() {
                               const dayItems = timetableByDay[weekdayIdx] || [];
                               const item = dayItems.find((t) => t.classTime === classTime);
 
+                              // 표준 시간표 모드: 날짜/수행평가/과거 무시
+                              const isStandardPrint = printTimetableType === 'standard';
+
                               // 오늘 날짜인지 확인
                               const today = new Date();
                               const todayStr = toDateString(today);
-                              const isToday = todayStr === currentDate;
-                              const isPast = currentDate < todayStr;
+                              const isToday = !isStandardPrint && (todayStr === currentDate);
+                              const isPast = !isStandardPrint && (currentDate < todayStr);
 
-                              // 해당 날짜와 교시에 수행평가가 있는지 확인
-                              const cellAssessments = assessments ? assessments.filter(a => {
+                              // 해당 날짜와 교시에 수행평가가 있는지 확인 (표준 모드에서는 비표시)
+                              const cellAssessments = (!isStandardPrint && includeAssessments && assessments) ? assessments.filter(a => {
                                 if (settings?.hide_past_assessments && isPast) return false;
 
                                 // Check item subject if it exists, otherwise check if group is active
@@ -1857,6 +1867,9 @@ export default function Dashboard() {
 
                                 return true;
                               }) : [];
+
+                              // 표준 모드에서는 날짜 변경 틴트도 숨김
+                              const showChangedTint = !isStandardPrint;
 
                               // 배경색 결정: 수행평가가 있으면 파란색(과거는 회색), 없고 오늘이면 연한 붉은색, 그 외는 기본
                               let bgColor = "bg-yellow-50 hover:bg-yellow-100";
@@ -1904,7 +1917,7 @@ export default function Dashboard() {
                                 bgColor = "bg-red-50 hover:bg-red-100 group-data-[print-theme=color]:print:!bg-yellow-50 group-data-[print-theme=color]:capturing:!bg-yellow-50 group-data-[print-theme=simple]:print:!bg-yellow-50 group-data-[print-theme=simple]:capturing:!bg-yellow-50";
                               }
 
-                              if (item && item.isChanged && !cellInlineStyle && !isPast && cellAssessments.length === 0) {
+                              if (item && item.isChanged && showChangedTint && !cellInlineStyle && !isPast && cellAssessments.length === 0) {
                                 const tColor = settings?.changed_class_tint_color || '#fef08a';
                                 const tOpacity = settings?.changed_class_tint_opacity !== undefined ? parseFloat(settings.changed_class_tint_opacity) : 1.0;
                                 const h = tColor.replace('#', '');
@@ -2103,8 +2116,8 @@ export default function Dashboard() {
                       </tbody>
                       </table>
 
-                      {/* 특수일정 오버레이 (Absolute Table) */}
-                      {settings?.special_schedules_enabled && (
+                      {/* 특수일정 오버레이 (Absolute Table) - 표준 시간표 모드에서는 숨김 */}
+                      {settings?.special_schedules_enabled && printTimetableType !== 'standard' && (
                         <table aria-hidden="true" className={`absolute top-0 left-0 w-full min-h-full h-full border-collapse table-fixed pointer-events-none z-10 transition-all duration-300 ${isElectiveMissingImmediate ? "hidden" : ""}`}>
                           <thead>
                             <tr>
@@ -2193,7 +2206,7 @@ export default function Dashboard() {
                     onClick={() => setPrintTimetableType('current')}
                     className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${
                       printTimetableType === 'current'
-                        ? 'bg-white text-blue-600 shadow-sm'
+                        ? 'bg-green-100 text-green-700 shadow-sm'
                         : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
