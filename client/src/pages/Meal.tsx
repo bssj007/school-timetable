@@ -48,7 +48,7 @@ function readStudentFromCookie(): { grade: number | null; classNum: number | nul
 }
 
 // ── 별점 컴포넌트 ─────────────────────────────────────────────────
-function StarRating({ date }: { date: string }) {
+function StarRating({ date, readOnly = false }: { date: string; readOnly?: boolean }) {
     const qc = useQueryClient();
     const student = readStudentFromCookie();
     const hasStudent = !!(student.grade && student.classNum && student.studentNumber);
@@ -96,31 +96,41 @@ function StarRating({ date }: { date: string }) {
     const myRating = ratingQuery.data?.myRating ?? null;
     const avg = ratingQuery.data?.avg;
     const count = ratingQuery.data?.count ?? 0;
+    
+    if (readOnly && count === 0 && myRating === null) return null;
+
     const displayRating = hovered ?? myRating ?? 0;
 
     return (
         <div className="flex flex-col items-end gap-0.5">
             <div className="flex items-center gap-0.5">
-                {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                        key={star}
-                        onClick={() => rateMutation.mutate(star)}
-                        onMouseEnter={() => setHovered(star)}
-                        onMouseLeave={() => setHovered(null)}
-                        disabled={rateMutation.isPending}
-                        className="transition-transform hover:scale-125 active:scale-110 disabled:opacity-50"
-                        title={hasStudent ? `${star}점` : "학번을 설정해야 별점을 남길 수 있습니다"}
-                    >
-                        <Star
-                            className="w-5 h-5"
-                            fill={star <= displayRating ? "#7c3aed" : "none"}
-                            stroke={star <= displayRating ? "#7c3aed" : "#c4b5fd"}
-                        />
-                    </button>
-                ))}
+                {[1, 2, 3, 4, 5].map((star) => {
+                    const isFilled = star <= displayRating;
+                    const fillColor = readOnly ? (isFilled ? "#94a3b8" : "none") : (isFilled ? "#7c3aed" : "none");
+                    const strokeColor = readOnly ? (isFilled ? "#94a3b8" : "#cbd5e1") : (isFilled ? "#7c3aed" : "#c4b5fd");
+
+                    return (
+                        <button
+                            key={star}
+                            onClick={() => !readOnly && rateMutation.mutate(star)}
+                            onMouseEnter={() => !readOnly && setHovered(star)}
+                            onMouseLeave={() => !readOnly && setHovered(null)}
+                            disabled={readOnly || rateMutation.isPending}
+                            className={`transition-transform ${!readOnly ? "hover:scale-125 active:scale-110" : ""} disabled:opacity-50`}
+                            title={readOnly ? "과거의 별점은 수정할 수 없습니다" : (hasStudent ? `${star}점` : "학번을 설정해야 별점을 남길 수 있습니다")}
+                            style={{ cursor: readOnly ? "default" : "pointer" }}
+                        >
+                            <Star
+                                className="w-5 h-5"
+                                fill={fillColor}
+                                stroke={strokeColor}
+                            />
+                        </button>
+                    );
+                })}
             </div>
             {count > 0 && avg != null && (
-                <span className="text-[9px] text-violet-400 leading-none">
+                <span className={`text-[9px] leading-none ${readOnly ? "text-slate-400" : "text-violet-400"}`}>
                     ★ {avg.toFixed(1)} ({count}명)
                 </span>
             )}
@@ -443,8 +453,9 @@ export default function MealPage() {
                                     {(() => {
                                         const isLunchActive = isToday && emphasisEnabled && currentMeal === "lunch";
                                         const isDinnerActive = isToday && emphasisEnabled && currentMeal === "dinner";
-                                        const showRatingOnLunch = isToday && ratingEnabled && currentMeal === "lunch";
-                                        const showRatingOnDinner = isToday && ratingEnabled && currentMeal === "dinner";
+                                        const isPast = dateStr < todayStr;
+                                        const showRatingOnLunch = (isToday || isPast) && ratingEnabled;
+                                        const showRatingOnDinner = (isToday || isPast) && ratingEnabled;
                                         return (<>
                                     <div className={`bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all hover:shadow-md ${isLunchActive ? "ring-2 ring-orange-500 ring-offset-2" : ""}`}>
                                         <div className="bg-amber-50 px-3 py-2 flex items-center justify-between border-b border-amber-100">
@@ -452,7 +463,7 @@ export default function MealPage() {
                                                 <Sun className="w-3.5 h-3.5 text-amber-500" />
                                                 <span className="text-sm font-bold text-amber-700">중식</span>
                                             </div>
-                                            {showRatingOnLunch && <StarRating date={dateStr} />}
+                                            {showRatingOnLunch && <StarRating date={dateStr} readOnly={isPast} />}
                                         </div>
                                         <div className="p-3 pb-4">
                                             {meal?.lunch && meal.lunch.length > 0 ? (
@@ -476,7 +487,7 @@ export default function MealPage() {
                                                 <Moon className="w-3.5 h-3.5 text-indigo-500" />
                                                 <span className="text-sm font-bold text-indigo-700">석식</span>
                                             </div>
-                                            {showRatingOnDinner && <StarRating date={dateStr} />}
+                                            {showRatingOnDinner && <StarRating date={dateStr} readOnly={isPast} />}
                                         </div>
                                         <div className="p-3 pb-4">
                                             {meal?.dinner && meal.dinner.length > 0 ? (
