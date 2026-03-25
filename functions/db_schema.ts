@@ -142,12 +142,13 @@ export const createMealRatingsTable = `
 CREATE TABLE IF NOT EXISTS meal_ratings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date TEXT NOT NULL,
+    type TEXT NOT NULL,
     grade INTEGER,
     classNum INTEGER,
     studentNumber INTEGER,
     rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
     createdAt TEXT,
-    UNIQUE(date, grade, classNum, studentNumber)
+    UNIQUE(date, type, grade, classNum, studentNumber)
 );
 `;
 

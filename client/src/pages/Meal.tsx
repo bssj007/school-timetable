@@ -48,12 +48,12 @@ function readStudentFromCookie(): { grade: number | null; classNum: number | nul
 }
 
 // ── 별점 컴포넌트 ─────────────────────────────────────────────────
-function StarRating({ date, readOnly = false }: { date: string; readOnly?: boolean }) {
+function StarRating({ date, type, readOnly = false }: { date: string; type: "lunch" | "dinner"; readOnly?: boolean }) {
     const qc = useQueryClient();
     const student = readStudentFromCookie();
     const hasStudent = !!(student.grade && student.classNum && student.studentNumber);
 
-    const params = new URLSearchParams({ date });
+    const params = new URLSearchParams({ date, type });
     if (hasStudent) {
         params.set("grade", String(student.grade));
         params.set("classNum", String(student.classNum));
@@ -61,7 +61,7 @@ function StarRating({ date, readOnly = false }: { date: string; readOnly?: boole
     }
 
     const ratingQuery = useQuery({
-        queryKey: ["meal-rating", date, student.grade, student.classNum, student.studentNumber],
+        queryKey: ["meal-rating", date, type, student.grade, student.classNum, student.studentNumber],
         queryFn: async () => {
             const res = await fetch(`/api/meal-ratings?${params}`);
             if (!res.ok) return { avg: null, count: 0, myRating: null };
@@ -77,7 +77,7 @@ function StarRating({ date, readOnly = false }: { date: string; readOnly?: boole
             const res = await fetch("/api/meal-ratings", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ date, ...student, rating }),
+                body: JSON.stringify({ date, type, ...student, rating }),
             });
             const data = await res.json() as any;
             if (!res.ok) throw new Error(data.error || "별점 저장 실패");
@@ -85,7 +85,7 @@ function StarRating({ date, readOnly = false }: { date: string; readOnly?: boole
         },
         onSuccess: (data) => {
             qc.setQueryData(
-                ["meal-rating", date, student.grade, student.classNum, student.studentNumber],
+                ["meal-rating", date, type, student.grade, student.classNum, student.studentNumber],
                 { avg: data.avg, count: data.count, myRating: data.myRating }
             );
             toast.success("별점이 저장되었습니다!");
@@ -463,7 +463,7 @@ export default function MealPage() {
                                                 <Sun className="w-3.5 h-3.5 text-amber-500" />
                                                 <span className="text-sm font-bold text-amber-700">중식</span>
                                             </div>
-                                            {showRatingOnLunch && <StarRating date={dateStr} readOnly={isPast} />}
+                                            {showRatingOnLunch && <StarRating date={dateStr} type="lunch" readOnly={isPast} />}
                                         </div>
                                         <div className="p-3 pb-4">
                                             {meal?.lunch && meal.lunch.length > 0 ? (
@@ -487,7 +487,7 @@ export default function MealPage() {
                                                 <Moon className="w-3.5 h-3.5 text-indigo-500" />
                                                 <span className="text-sm font-bold text-indigo-700">석식</span>
                                             </div>
-                                            {showRatingOnDinner && <StarRating date={dateStr} readOnly={isPast} />}
+                                            {showRatingOnDinner && <StarRating date={dateStr} type="dinner" readOnly={isPast} />}
                                         </div>
                                         <div className="p-3 pb-4">
                                             {meal?.dinner && meal.dinner.length > 0 ? (

@@ -4929,13 +4929,17 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
         queryFn: async () => {
             const res = await fetch("/api/meal-ratings");
             if (!res.ok) return [];
-            return res.json() as Promise<{ date: string; avg: number; count: number }[]>;
+            return res.json() as Promise<{ date: string; type: string; avg: number; count: number }[]>;
         },
         staleTime: 60_000,
     });
 
-    const ratingsMap: Record<string, { avg: number; count: number }> = {};
-    (ratingsQuery.data ?? []).forEach(r => { ratingsMap[r.date] = { avg: r.avg, count: r.count }; });
+    const ratingsMap: Record<string, { lunch?: { avg: number; count: number }, dinner?: { avg: number; count: number } }> = {};
+    (ratingsQuery.data ?? []).forEach(r => {
+        if (!ratingsMap[r.date]) ratingsMap[r.date] = {};
+        if (r.type === "lunch") ratingsMap[r.date].lunch = { avg: r.avg, count: r.count };
+        if (r.type === "dinner") ratingsMap[r.date].dinner = { avg: r.avg, count: r.count };
+    });
 
     const deleteSuggestionMutation = useMutation({
         mutationFn: async (id: number) => {
@@ -5305,15 +5309,25 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
                                                     <span className="text-xs text-gray-300">—</span>
                                                 )}
                                             </TableCell>
-                                            <TableCell className="text-center">
-                                                {ratingsMap[meal.date] ? (
-                                                    <span className="text-xs text-violet-600 font-bold">
-                                                        ★ {ratingsMap[meal.date].avg.toFixed(1)}
-                                                        <span className="text-[10px] text-gray-400 ml-1">({ratingsMap[meal.date].count}명)</span>
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-xs text-gray-300">—</span>
-                                                )}
+                                            <TableCell className="text-center space-y-1">
+                                                {ratingsMap[meal.date]?.lunch ? (
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-1 rounded">중</span>
+                                                        <span className="text-xs text-violet-600 font-bold">
+                                                            ★ {ratingsMap[meal.date]!.lunch!.avg.toFixed(1)}
+                                                            <span className="text-[10px] text-gray-400 ml-1">({ratingsMap[meal.date]!.lunch!.count}명)</span>
+                                                        </span>
+                                                    </div>
+                                                ) : <div className="text-[10px] text-gray-300">중: —</div>}
+                                                {ratingsMap[meal.date]?.dinner ? (
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1 rounded">석</span>
+                                                        <span className="text-xs text-violet-600 font-bold">
+                                                            ★ {ratingsMap[meal.date]!.dinner!.avg.toFixed(1)}
+                                                            <span className="text-[10px] text-gray-400 ml-1">({ratingsMap[meal.date]!.dinner!.count}명)</span>
+                                                        </span>
+                                                    </div>
+                                                ) : <div className="text-[10px] text-gray-300">석: —</div>}
                                             </TableCell>
                                             <TableCell className="text-right text-xs text-gray-400">
                                                 {meal.updated_at
