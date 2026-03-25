@@ -1945,8 +1945,14 @@ export default function Dashboard() {
                               const electiveSelection = currentProfile?.electives?.[group];
                               let displaySubject = item ? item.subject : "-";
                               let displayTeacher = item ? item.teacher : "";
-                              // displaySubject가 항상 문자열이도록 보장 (elective 데이터 손상 방어)
+                              
+                              // 표준 시간표 모드: 기준 데이터셋(자료481)의 데이터를 '초기값'으로 설정 (선택과목 처리 전)
+                              if (isStandardPrint && item) {
+                                displaySubject = (item as any).baseSubject ?? displaySubject;
+                                displayTeacher = (item as any).baseTeacher ?? displayTeacher;
+                              }
 
+                              // displaySubject가 항상 문자열이도록 보장 (elective 데이터 손상 방어)
                               let isElectiveActive = false;
                               let isCancelledByFreePeriod = false;
                               let displayClassName = ""; // 반(반이름) 표시용
@@ -2012,14 +2018,6 @@ export default function Dashboard() {
                                 }
                               }
 
-                              // 표준 시간표 모드: 기준 데이터셋(자료481)의 데이터만 사용.
-                              // 변경 유무와 무관하게 모든 셀에 적용:
-                              //   변경 없는 셀 → baseSubject = subject (동일)
-                              //   변경된 셀 → baseSubject = 원래 기준과목
-                              //   현재 주차만 있는 신규 셀 → baseSubject = "" (기준엔 없으므로 빈칸)
-                              if (isStandardPrint && item) {
-                                displaySubject = (item as any).baseSubject ?? displaySubject;
-                                displayTeacher = (item as any).baseTeacher ?? displayTeacher;
                               }
 
                               let relocationStyle = "";
