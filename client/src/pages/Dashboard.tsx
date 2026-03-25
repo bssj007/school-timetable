@@ -2042,7 +2042,7 @@ export default function Dashboard() {
                                       <span>{group}</span><span className="hidden md:inline">그룹</span>
                                     </div>
                                   )}
-                                  <div className="flex flex-col items-center justify-center h-full min-h-0">
+                                  <div className="flex flex-col items-center justify-center h-full min-h-0 print:overflow-hidden print:max-h-full">
                                     {item || isElectiveActive ? (
                                       <>
                                         <div
