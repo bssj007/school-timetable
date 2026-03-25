@@ -2012,15 +2012,15 @@ export default function Dashboard() {
                                 }
                               }
 
-                              // 표준 시간표 모드: 변경된 셀은 기준(자료481) 과목으로 덮어씀
-                              if (isStandardPrint && item?.isChanged) {
+                              // 표준 시간표 모드: 기준 데이터셋(자료481)의 데이터만 사용.
+                              // 변경 유무와 무관하게 모든 셀에 적용:
+                              //   변경 없는 셀 → baseSubject = subject (동일)
+                              //   변경된 셀 → baseSubject = 원래 기준과목
+                              //   현재 주차만 있는 신규 셀 → baseSubject = "" (기준엔 없으므로 빈칸)
+                              if (isStandardPrint && item) {
                                 displaySubject = (item as any).baseSubject ?? displaySubject;
                                 displayTeacher = (item as any).baseTeacher ?? displayTeacher;
                               }
-
-                              // 표준 모드에서 현재 주만 있는 수업(주차에만 추가, 표준에 없음) 숨김
-                              const isNewWeekOnly = isStandardPrint && !!item?.isChanged && !((item as any).baseSubject);
-                              const effectiveItem = isNewWeekOnly ? null : item;
 
                               let relocationStyle = "";
                               if (relocatingAssessment) {
@@ -2061,8 +2061,8 @@ export default function Dashboard() {
                                   }}
                                   className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-all overflow-hidden
                                 ${bgColor} ${pastStyle} ${selectionStyle} ${relocationStyle}
-                                ${(effectiveItem && effectiveItem.isChanged && !isStandardPrint && !isPast && cellAssessments.length === 0) ? 'is-changed' : ''}
-                                ${(effectiveItem || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
+                                ${(item && item.isChanged && !isPast && cellAssessments.length === 0) ? 'is-changed' : ''}
+                                ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
                                   style={cellInlineStyle}
                                 >
