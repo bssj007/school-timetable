@@ -67,7 +67,8 @@ function StarRating({ date, type, readOnly = false }: { date: string; type: "lun
             if (!res.ok) return { avg: null, count: 0, myRating: null };
             return res.json() as Promise<{ avg: number | null; count: number; myRating: number | null }>;
         },
-        staleTime: 30_000,
+        staleTime: 5000,
+        refetchInterval: 5000,
     });
 
     const [hovered, setHovered] = useState<number | null>(null);
