@@ -653,6 +653,77 @@ export default function Dashboard() {
     return cellGroups;
   }, [allClassesTimetable, electiveConfigs, grade, settings?.elective_group_overrides]);
 
+  // 표준 인쇄 모드용: 기준 데이터셋(baseline)으로 매핑된 전체 시간표
+  const baselineAllClassesTimetable = useMemo(() => {
+    if (!rawTimetableData) return [];
+    return (rawTimetableData as any[])
+      .filter(item => {
+        // 현재 주차에만 존재하고 baseline에 없는 셀(변경: 추가)는 제외
+        if (item.isChanged && (item.baseSubject === '' || item.baseSubject == null)) return false;
+        return true;
+      })
+      .map(item => ({
+        ...item,
+        subject: item.baseSubject ?? item.subject,
+        teacher: item.baseTeacher ?? item.teacher,
+        isChanged: false,
+      }));
+  }, [rawTimetableData]);
+
+  // 표준 인쇄 모드용: baseline 데이터를 이용한 선택과목 그룹 계산
+  const baselineComputedGroups = useMemo(() => {
+    if (grade !== '2' && grade !== '3') return {};
+    if (!baselineAllClassesTimetable || baselineAllClassesTimetable.length === 0) return {};
+    const cellGroups: Record<string, string> = {};
+    if (electiveConfigs && electiveConfigs.length > 0) {
+      const subjectTeacherToGroups = new Map<string, string[]>();
+      const subjectToGroups = new Map<string, string[]>();
+      electiveConfigs.forEach((c: any) => {
+        const isFreePeriod = ['\ube48\uad50\uc2e4', '\uacf5\uac15', 'Empty', 'Free'].some(k => (c.subject || '').includes(k));
+        if ((c.isMovingClass !== 0 || isFreePeriod) && c.classCode) {
+          const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
+          const subj = c.subject.trim();
+          const existing = subjectToGroups.get(subj) || [];
+          subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
+          const teacherNames: string[] = [];
+          if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
+          if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
+          Array.from(new Set(teacherNames)).forEach((tName: string) => {
+            const key = `${subj}|${tName}`;
+            const existingKey = subjectTeacherToGroups.get(key) || [];
+            subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
+          });
+        }
+      });
+      for (let w = 0; w < 5; w++) {
+        for (let p = 1; p <= 7; p++) {
+          const slots = baselineAllClassesTimetable.filter((t: any) => t.weekday === w && t.classTime === p);
+          if (slots.length === 0) continue;
+          const groupCounts: Record<string, number> = {};
+          slots.forEach((slot: any) => {
+            const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
+            let groups = subjectTeacherToGroups.get(key);
+            if (!groups || groups.length === 0) groups = subjectToGroups.get(slot.subject.trim());
+            if (groups) groups.forEach(g => { groupCounts[g] = (groupCounts[g] || 0) + 1; });
+          });
+          const entries = Object.entries(groupCounts);
+          if (entries.length > 0) {
+            entries.sort((a, b) => b[1] - a[1]);
+            if (entries[0][1] >= 1) cellGroups[`${w}-${p}`] = entries[0][0];
+          }
+        }
+      }
+    }
+    if (settings?.elective_group_overrides?.[grade]) {
+      const gradeOverrides = settings.elective_group_overrides[grade];
+      for (const [cellKey, overrideValue] of Object.entries(gradeOverrides)) {
+        if (overrideValue === 'NONE') delete cellGroups[cellKey];
+        else if (typeof overrideValue === 'string') cellGroups[cellKey] = overrideValue;
+      }
+    }
+    return cellGroups;
+  }, [baselineAllClassesTimetable, electiveConfigs, grade, settings?.elective_group_overrides]);
+
   // 2. 컴시간에서 시간표 가져오기
   const fetchFromComcigan = useMutation({
     mutationFn: async () => {
@@ -1941,7 +2012,7 @@ export default function Dashboard() {
                               // 빈교실/공강 확인 (시각적 효과 없음, 클릭만 막음)
                               const isSubjectDisabled = item && (!item.subject.trim() || ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "Empty", "Free"].some(ex => item.subject.trim().includes(ex)));
 
-                              const group = computedGroups[`${weekdayIdx}-${classTime}`];
+                              const group = (isStandardPrint ? baselineComputedGroups : computedGroups)[`${weekdayIdx}-${classTime}`];
                               const electiveSelection = currentProfile?.electives?.[group];
                               let displaySubject = item ? item.subject : "-";
                               let displayTeacher = item ? item.teacher : "";
@@ -1962,8 +2033,9 @@ export default function Dashboard() {
                                 const electiveTeachers = electiveSelection.teacher
                                   ? electiveSelection.teacher.split(",").map((t: string) => t.trim()).filter(Boolean)
                                   : [];
-                                const slotItems = allClassesTimetable.filter(
-                                  t => t.weekday === weekdayIdx && t.classTime === classTime
+                                const slotSourceData = isStandardPrint ? baselineAllClassesTimetable : allClassesTimetable;
+                                const slotItems = (slotSourceData as any[]).filter(
+                                  (t: any) => t.weekday === weekdayIdx && t.classTime === classTime
                                 );
 
                                 const matchingSlot = slotItems.find(
