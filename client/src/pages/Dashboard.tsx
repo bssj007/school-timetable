@@ -2009,6 +2009,12 @@ export default function Dashboard() {
                                 }
                               }
 
+                              // 표준 시간표 모드: 변경된 셀은 기준(자료481) 과목으로 덮어씀
+                              if (isStandardPrint && item?.isChanged) {
+                                displaySubject = (item as any).baseSubject ?? displaySubject;
+                                displayTeacher = (item as any).baseTeacher ?? displayTeacher;
+                              }
+
                               let relocationStyle = "";
                               if (relocatingAssessment) {
                                 if (displaySubject.trim() === relocatingAssessment.subject.trim()) {
@@ -2206,8 +2212,8 @@ export default function Dashboard() {
                     onClick={() => setPrintTimetableType('current')}
                     className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${
                       printTimetableType === 'current'
-                        ? 'bg-green-100 text-green-700 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-700'
+                        ? 'bg-green-200 text-green-800 shadow-sm'
+                        : 'bg-green-50 text-green-600 hover:bg-green-100'
                     }`}
                   >
                     현재 주차 시간표
