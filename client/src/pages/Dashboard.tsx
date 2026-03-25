@@ -2018,6 +2018,10 @@ export default function Dashboard() {
                                 displayTeacher = (item as any).baseTeacher ?? displayTeacher;
                               }
 
+                              // 표준 모드에서 현재 주만 있는 수업(주차에만 추가, 표준에 없음) 숨김
+                              const isNewWeekOnly = isStandardPrint && !!item?.isChanged && !((item as any).baseSubject);
+                              const effectiveItem = isNewWeekOnly ? null : item;
+
                               let relocationStyle = "";
                               if (relocatingAssessment) {
                                 if (displaySubject.trim() === relocatingAssessment.subject.trim()) {
@@ -2057,8 +2061,8 @@ export default function Dashboard() {
                                   }}
                                   className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-all overflow-hidden
                                 ${bgColor} ${pastStyle} ${selectionStyle} ${relocationStyle}
-                                ${(item && item.isChanged && !isPast && cellAssessments.length === 0) ? 'is-changed' : ''}
-                                ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
+                                ${(effectiveItem && effectiveItem.isChanged && !isStandardPrint && !isPast && cellAssessments.length === 0) ? 'is-changed' : ''}
+                                ${(effectiveItem || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
                                   style={cellInlineStyle}
                                 >
