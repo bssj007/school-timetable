@@ -230,6 +230,7 @@ export default function Dashboard() {
   const [printMode, setPrintMode] = useState<'select' | 'printer'>('select');
   const [includeAssessments, setIncludeAssessments] = useState(true);
   const [printTimetableType, setPrintTimetableType] = useState<'standard' | 'current'>('standard');
+  const [isPrinting, setIsPrinting] = useState(false); // true ONLY during window.print() — never affects main screen
 
   // Preset Constants
   const PRINT_PRESETS = [
@@ -313,12 +314,14 @@ export default function Dashboard() {
   // 인쇄 핸들러
   const handlePrint = () => {
     setShowPrintOptions(false);
+    setIsPrinting(true); // Lock in standard/current mode for the upcoming print
 
     // Track print metric
     fetch('/api/action/print', { method: 'POST' }).catch(() => { });
 
     setTimeout(() => {
       window.print();
+      setIsPrinting(false); // Restore — main screen is now normal again
       resetPrintOptions();
     }, 100);
   };
@@ -1831,8 +1834,8 @@ export default function Dashboard() {
                               const dayItems = timetableByDay[weekdayIdx] || [];
                               const item = dayItems.find((t) => t.classTime === classTime);
 
-                              // 표준 시간표 모드: 날짜/수행평가/과거 무시 (인쇄 모드에서만 적용)
-                              const isStandardPrint = printMode === 'printer' && printTimetableType === 'standard';
+                              // isStandardPrint: only true during actual window.print() call
+                              const isStandardPrint = isPrinting && printTimetableType === 'standard';
 
                               // 오늘 날짜인지 확인
                               const today = new Date();
@@ -2122,8 +2125,8 @@ export default function Dashboard() {
                       </tbody>
                       </table>
 
-                      {/* 특수일정 오버레이 (Absolute Table) - 표준 시간표 인쇄 모드에서는 숨김 */}
-                      {settings?.special_schedules_enabled && !(printMode === 'printer' && printTimetableType === 'standard') && (
+                      {/* 특수일정 오버레이 — 표준 인쇄 중에만 숨김, 메인 화면은 항상 표시 */}
+                      {settings?.special_schedules_enabled && !(isPrinting && printTimetableType === 'standard') && (
                         <table aria-hidden="true" className={`absolute top-0 left-0 w-full min-h-full h-full border-collapse table-fixed pointer-events-none z-10 transition-all duration-300 ${isElectiveMissingImmediate ? "hidden" : ""}`}>
                           <thead>
                             <tr>
@@ -2197,7 +2200,7 @@ export default function Dashboard() {
             {printMode === 'select' ? (
               <>
                 {/* 시간표 유형 토글 */}
-                <div className="flex bg-gray-100 rounded-lg p-1 border">
+                <div className="flex gap-1 bg-gray-100 rounded-lg p-1 border">
                   <button
                     onClick={() => setPrintTimetableType('standard')}
                     className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${
