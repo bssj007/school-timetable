@@ -1793,14 +1793,14 @@ export default function Dashboard() {
                       <table className={`w-full min-h-full h-full border-collapse table-fixed transition-all duration-300 ${isElectiveMissingImmediate ? "blur-[3px] opacity-60 pointer-events-none select-none" : ""}`}>
                       <thead>
                         <tr>
-                          <th className="border p-1 md:p-2 print:p-1 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
+                          <th className="border p-1 md:p-2 bg-gray-50 w-8 md:w-10 text-sm font-medium">교시</th>
                           {weekdayNames.map((day, idx) => {
                             const currentDate = toDateString(weekDates[idx]);
                             const todayStr = toDateString(new Date());
                             const isPast = currentDate < todayStr;
 
                             return (
-                              <th key={day} className={`border p-1 md:p-2 print:p-1 bg-gray-50 ${isPast ? "opacity-70 print:!opacity-100 capturing:!opacity-100" : ""}`}>
+                              <th key={day} className={`border p-1 md:p-2 bg-gray-50 ${isPast ? "opacity-70 print:!opacity-100 capturing:!opacity-100" : ""}`}>
                                 <div className="text-sm font-semibold">{day}</div>
                                 <div className="text-[10px] md:text-xs text-gray-500 font-normal">
                                   {formatDate(weekDates[idx])}
@@ -1813,7 +1813,7 @@ export default function Dashboard() {
                       <tbody>
                         {Array.from({ length: 7 }, (_, i) => i + 1).map((classTime) => (
                           <tr key={classTime}>
-                            <td className="border p-1 md:p-2 print:p-1 text-center font-medium bg-gray-50 text-sm w-8 md:w-10">
+                            <td className="border p-1 md:p-2 text-center font-medium bg-gray-50 text-sm w-8 md:w-10">
                               {classTime}
                             </td>
                             {Array.from({ length: 5 }, (_, weekdayIdx) => {
@@ -2031,7 +2031,7 @@ export default function Dashboard() {
                                       }
                                     }
                                   }}
-                                  className={`border p-1 md:p-2 print:p-[2px] text-center h-16 md:h-20 print:h-auto print:min-h-[1.5cm] relative transition-all overflow-hidden
+                                  className={`border p-1 md:p-2 text-center h-16 md:h-20 relative transition-all overflow-hidden
                                 ${bgColor} ${pastStyle} ${selectionStyle} ${relocationStyle}
                                 ${(item || isElectiveActive) && (!isPast || cellAssessments.length > 0) ? "cursor-pointer" : "cursor-default"}
                               `}
@@ -2105,9 +2105,9 @@ export default function Dashboard() {
                         <table aria-hidden="true" className={`absolute top-0 left-0 w-full min-h-full h-full border-collapse table-fixed pointer-events-none z-10 transition-all duration-300 ${isElectiveMissingImmediate ? "hidden" : ""}`}>
                           <thead>
                             <tr>
-                              <th className="border-transparent p-1 md:p-2 print:p-1 bg-transparent w-8 md:w-10 text-sm font-medium"><div className="invisible">교시</div></th>
+                              <th className="border-transparent p-1 md:p-2 bg-transparent w-8 md:w-10 text-sm font-medium"><div className="invisible">교시</div></th>
                               {weekdayNames.map((day, idx) => (
-                                <th key={day} className="border-transparent bg-transparent p-1 md:p-2 print:p-1 font-medium w-1/5 relative">
+                                <th key={day} className="border-transparent bg-transparent p-1 md:p-2 font-medium w-1/5 relative">
                                   <div className="text-sm font-semibold invisible">{day}</div>
                                   <div className="text-[10px] md:text-xs font-normal invisible">
                                     {formatDate(weekDates[idx])}
@@ -2119,7 +2119,7 @@ export default function Dashboard() {
                           <tbody>
                             {Array.from({ length: 7 }, (_, i) => i + 1).map((classTime) => (
                               <tr key={classTime}>
-                                <td className="border-transparent bg-transparent p-1 md:p-2 print:p-1 text-center text-sm w-8 md:w-10 opacity-0">{classTime}</td>
+                                <td className="border-transparent bg-transparent p-1 md:p-2 text-center text-sm w-8 md:w-10 opacity-0">{classTime}</td>
                                 {Array.from({ length: 5 }, (_, weekdayIdx) => {
                                   const currentDate = toDateString(weekDates[weekdayIdx]);
                                   const specialSchedule = settings?.special_schedules?.find((s: any) => 

@@ -337,9 +337,8 @@
   #timetable-container td {
     border: 1px solid black !important;
     color: black !important;
-    height: 4cqh !important;
-    /* Min height buffer */
     padding: 0.5cqh !important;
+    overflow: hidden !important;
   }
 
   /* Print Themes */
