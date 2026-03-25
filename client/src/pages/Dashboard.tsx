@@ -2216,7 +2216,7 @@ export default function Dashboard() {
                     className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${
                       printTimetableType === 'current'
                         ? 'bg-green-200 text-green-800 shadow-sm'
-                        : 'bg-green-50 text-green-600 hover:bg-green-100'
+                        : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
                     현재 주차 시간표
