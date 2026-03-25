@@ -1971,11 +1971,12 @@ export default function Dashboard() {
                                 );
 
                                 // 선택과목이 없고 빈교실/공강만 있으면 취소선 표시
+                                // (표준 인쇄 모드에서는 현재 주 데이터에 의한 취소선 금지)
                                 const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free"];
                                 const hasFreePeriodSlot = slotItems.some(t =>
                                   FREE_KEYWORDS.some(k => t.subject.trim().includes(k))
                                 );
-                                if (!matchingSlot && hasFreePeriodSlot) {
+                                if (!isStandardPrint && !matchingSlot && hasFreePeriodSlot) {
                                   isCancelledByFreePeriod = true;
                                 }
 
@@ -1989,7 +1990,8 @@ export default function Dashboard() {
 
                                 if (configEntry?.fullTeacherName) {
                                   displayTeacher = configEntry.fullTeacherName;
-                                } else if (matchingSlot) {
+                                } else if (matchingSlot && !isStandardPrint) {
+                                  // 현재 주 슬롯에서 선생님 가져오기 (표준 인쇄 모드에서는 사용 안 함)
                                   displayTeacher = matchingSlot.teacher;
                                 } else if (electiveTeachers.length > 0) {
                                   displayTeacher = electiveTeachers[0];
