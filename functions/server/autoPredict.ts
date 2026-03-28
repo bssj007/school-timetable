@@ -3,12 +3,13 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
 
     if (!previewMode && !bypassPauseCheck) {
         try {
-            const pauseRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'auto_predict_paused'").first();
-            if (pauseRow && pauseRow.value === 'true') {
+            const { results: pauseResults } = await db.prepare("SELECT value FROM system_settings WHERE key = 'auto_predict_paused'").all();
+            if (pauseResults && pauseResults.length > 0 && pauseResults[0].value === 'true') {
                 console.log("[autoPredict] Auto prediction is PAUSED. Skipping evaluation.");
                 return assessments;
             }
         } catch (e) {
+            console.error("[autoPredict] Error checking pause state:", e);
             // Table might not exist or other error, proceed normally
         }
     }
