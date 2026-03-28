@@ -5937,8 +5937,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     return 0;
                                 });
 
-                                const activeAssessments = sortedAssessments.filter((a: any) => new Date(a.dueDate + 'T23:59:59') >= now);
-                                const expiredAssessments = sortedAssessments.filter((a: any) => new Date(a.dueDate + 'T23:59:59') < now);
+                                // 연기된 수행평가는 연기된 날짜(tempDueDate)를 기준으로 만료 여부 판단
+                                const getEffectiveDate = (a: any) => a.tempDueDate || a.dueDate;
+                                const activeAssessments = sortedAssessments.filter((a: any) => new Date(getEffectiveDate(a) + 'T23:59:59') >= now);
+                                const expiredAssessments = sortedAssessments.filter((a: any) => new Date(getEffectiveDate(a) + 'T23:59:59') < now);
 
                                 return (
                                     <div className="space-y-6">
