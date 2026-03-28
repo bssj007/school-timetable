@@ -120,32 +120,6 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
 
         const baseAssSubject = assessment.subject.replace(/\s*\(.*$/, '').trim();
 
-        // 비선택과목(음감비 등) 반 전체 평가 = 반마다 수업 시간이 다르므로 엔진이 단일 시간으로 수렴 불가
-        // 선택과목은 동일 그룹 전체가 같은 요일/교시에 수업하므로 예측 유효 → 서로 다르므로 예측 무의미
-        if (assessment.classNum === 0) {
-            // 이 과목이 elective_config에 등록된 선택과목인지 확인
-            const ctx = contextMap.get(
-                `${(assessment.dataset !== 'MANUAL_PLAN' && assessment.dataset !== 'SEMESTER_PLAN') ? 'COMCIGAN' : assessment.dataset}_${assessment.grade}_${
-                    (() => {
-                        const dObj2 = new Date(assessment.dueDate);
-                        const day2 = dObj2.getDay();
-                        const diff2 = dObj2.getDate() - day2 + (day2 === 0 ? -6 : 1);
-                        const mon2 = new Date(dObj2.setDate(diff2));
-                        return `${mon2.getFullYear()}-${String(mon2.getMonth() + 1).padStart(2, '0')}-${String(mon2.getDate()).padStart(2, '0')}`;
-                    })()
-                }`
-            );
-            const electivesForGrade = ctx?.electives || electivesByGrade[assessment.grade] || [];
-            const isElective = electivesForGrade.some((cfg: any) =>
-                (cfg.subject === baseAssSubject || cfg.fullSubjectName === baseAssSubject)
-            );
-            if (!isElective) {
-                // 비선택과목은 이동수업 그룹이 없어서 반마다 시간이 모두 다름 → 자동연기 예측 보류
-                console.log(`[autoPredict] Skipping classNum=0 non-elective: ${baseAssSubject} (grade ${assessment.grade})`);
-                return assessment;
-            }
-        }
-
         // 이동수업(classNum=0): teacher로 1차 필터 후 과목 탐색 → 일반 수업: 해당 반만
         const originalW = new Date(assessment.dueDate).getDay() - 1;
         const originalTime = assessment.classTime;
@@ -231,7 +205,41 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
                     return true;
                 });
             }
-            // teacher 정보 없음: 과목명으로만 탐색 (공강 제외)
+            // teacher 정보 없음 - elective_config에 이 과목의 선생님 정보가 있으면 폴백으로 사용
+            // (음감비처럼 이동 X + 그룹 O 과목이 다른 반에 낙슐 없도록 교사명으로 1차 필터)
+            const electiveConfigsForSubject = ctx.electives.filter((c: any) =>
+                c.subject === baseAssSubject || c.fullSubjectName === baseAssSubject
+            );
+            if (electiveConfigsForSubject.length > 0) {
+                // elective_config의 originalTeacher / fullTeacherName을 knownTeacherNames로 수집
+                const knownTeacherNames = new Set<string>();
+                for (const ec of electiveConfigsForSubject) {
+                    if (ec.originalTeacher) {
+                        const nm = String(ec.originalTeacher).replace(/\*.*$/, '').trim();
+                        if (nm) knownTeacherNames.add(nm);
+                    }
+                    if (ec.fullTeacherName) {
+                        for (const n of String(ec.fullTeacherName).split(/[,、]+/)) {
+                            const nm = n.replace(/\*.*$/, '').trim();
+                            if (nm) knownTeacherNames.add(nm);
+                        }
+                    }
+                }
+                if (knownTeacherNames.size > 0) {
+                    return tbl.filter((t: any) => {
+                        if (t.weekday !== w) return false;
+                        if ((t.subject || '').replace(/\s*\(.*$/, '').trim() !== baseAssSubject) return false;
+                        const slotTeacher = (t.teacher || '').replace(/\*.*$/, '').trim();
+                        const teacherMatch = [...knownTeacherNames].some(name =>
+                            slotTeacher === name || slotTeacher.startsWith(name) || name.startsWith(slotTeacher)
+                        );
+                        if (!teacherMatch) return false;
+                        if (originalClassesWithSubject.size > 0 && !originalClassesWithSubject.has(t.class)) return false;
+                        return true;
+                    });
+                }
+            }
+            // teacher/elective_config 모두 없음: 과목명으로만 탐색 + originalClassesWithSubject 제한
             return tbl.filter((t: any) => {
                 if (t.weekday !== w) return false;
                 if ((t.subject || '').replace(/\s*\(.*$/, '').trim() !== baseAssSubject) return false;
@@ -246,16 +254,22 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
             });
         };
         const checkSubjectMatch = (slot: any, tbl: any[]) => {
-            // 메인 대시보드와 동일한 취소선(공강) 처리된 이동수업 슬롯 제외 로직 복구
+            // 이동수업/전체 평가: 공강 처리된 슬롯 제외
+            // 핵심: 다른 반의 공강이 간섭하지 않도록 originalClassesWithSubject 내 반들만 기준으로 공강 여부 판별
             if (assessment.classNum === 0) {
                 const blockSlots = tbl.filter((t: any) => t.weekday === slot.weekday && t.classTime === slot.classTime);
+                // 원본 교시의 해당 과목 수강 반 목록이 있으면 그 반들만 조사 (다른 반의 공강이 영향을 주지 않도록)
+                const relevantSlots = originalClassesWithSubject.size > 0
+                    ? blockSlots.filter((t: any) => originalClassesWithSubject.has(t.class))
+                    : blockSlots;
                 const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free"];
-                const hasFreePeriodSlot = blockSlots.some((t: any) => FREE_KEYWORDS.some(k => (t.subject || '').trim().includes(k)));
-                
+                const hasFreePeriodSlot = relevantSlots.some((t: any) =>
+                    FREE_KEYWORDS.some(k => (t.subject || '').trim().includes(k))
+                );
                 if (hasFreePeriodSlot) {
-                    const exactMatch = blockSlots.find((t: any) => (t.subject || '').trim() === baseAssSubject);
+                    const exactMatch = relevantSlots.find((t: any) => (t.subject || '').trim() === baseAssSubject);
                     if (!exactMatch) {
-                        return false; // 정확한 문자열 일치 과목이 없으면 대시보드에서 취소선(공강) 처리되므로 매칭에서 제외
+                        return false; // 원본 수강 반 기준으로 공강 처리된 경우 매칭 제외
                     }
                 }
             }
