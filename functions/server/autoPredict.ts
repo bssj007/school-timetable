@@ -149,17 +149,9 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             if (assessment.classNum !== 0) {
                 return tbl.filter((t: any) => {
                     if (t.weekday !== w) return false;
-                    // 1. 본인 반이거나 반 정보가 없는 공통 슬롯
+                    // 1. 오직 본인 반이거나 컴시간 누락용 전체 공통 공강 슬롯만 허용
                     if (!t.class || t.class.toString() === assessment.classNum.toString()) return true;
-                    
-                    // 2. 다른 반 데이터라도 이동수업 특성상 동일 과목이 나오면 해당 블록으로 간주하여 포함시킴 (대시보드 갭필링 대체)
-                    const tSubj = (t.subject || '').replace(/\s*\(.*$/, '').trim();
-                    if (tSubj === baseAssSubject) return true;
-                    
-                    // 3. 선택과목 별칭 교차 확인
-                    const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === t.subject && cfg.originalTeacher === t.teacher);
-                    if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) return true;
-                    
+                    // 다른 반 데이터를 끌어오는 오지랖(갭필링) 로직은 일반 과목에서 오배정을 유발하므로 원천 차단함.
                     return false;
                 });
             }
@@ -236,7 +228,12 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             let isSubjectMatch = false;
             const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
             
-            if (slot.subject === baseAssSubject) {
+            // 일반 과목이 스스로의 과목을 제대로 인식하도록 괄호 뗀 버전을 최우선 비교
+            const slotSubjStripped = (slot.subject || '').replace(/\s*\(.*$/, '').trim();
+
+            if (slotSubjStripped === baseAssSubject) {
+                isSubjectMatch = true;
+            } else if (slot.subject === baseAssSubject) {
                 isSubjectMatch = true;
             } else if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) {
                 isSubjectMatch = true;
