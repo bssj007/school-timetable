@@ -151,17 +151,14 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
             if (assessment.classNum !== 0) {
                 return tbl.filter((t: any) => {
                     if (t.weekday !== w) return false;
-                    // 1. 본인 반이거나 반 정보가 없는 공통 슬롯
+                    // 본인 반이거나 반 정보가 없는 공통 슬롯만 포함
+                    // (다른 반의 동일 과목을 포함하면 고아 판별 오진 발생 → 비선택과목 복구 감지 오작동)
                     if (!t.class || t.class.toString() === assessment.classNum.toString()) return true;
-                    
-                    // 2. 다른 반 데이터라도 이동수업 특성상 동일 과목이 나오면 해당 블록으로 간주하여 포함시킴 (대시보드 갭필링 대체)
-                    const tSubj = (t.subject || '').replace(/\s*\(.*$/, '').trim();
-                    if (tSubj === baseAssSubject) return true;
-                    
-                    // 3. 선택과목 별칭 교차 확인
+
+                    // 선택과목 별칭 교차 확인 (본인 반 내 데이터의 elective 별칭만 허용)
                     const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === t.subject && cfg.originalTeacher === t.teacher);
                     if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) return true;
-                    
+
                     return false;
                 });
             }
