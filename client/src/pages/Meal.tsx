@@ -484,11 +484,11 @@ export default function MealPage() {
                                         </div>
                                         <div className="p-3 pb-4">
                                             {meal?.lunch && meal.lunch.length > 0 ? (
-                                                <ul className="space-y-2">
+                                                <ul className="space-y-1 md:space-y-2">
                                                     {meal.lunch.map((raw, i) => {
                                                         const { name, allergens } = parseMenuItem(raw);
                                                         return (
-                                                            <li key={i} className={`flex items-baseline justify-between gap-2 ${i > 0 ? 'border-t border-slate-50 pt-1.5' : ''}`}>
+                                                            <li key={i} className={`flex items-baseline justify-between gap-2 ${i > 0 ? 'border-t border-slate-50 pt-1 md:pt-1.5' : ''}`}>
                                                                 {i === 0 ? (
                                                                     <span className="font-extrabold text-slate-900 text-[15px] leading-snug flex-1">{name}</span>
                                                                 ) : (
@@ -518,11 +518,11 @@ export default function MealPage() {
                                         </div>
                                         <div className="p-3 pb-4">
                                             {meal?.dinner && meal.dinner.length > 0 ? (
-                                                <ul className="space-y-2">
+                                                <ul className="space-y-1 md:space-y-2">
                                                     {meal.dinner.map((raw, i) => {
                                                         const { name, allergens } = parseMenuItem(raw);
                                                         return (
-                                                            <li key={i} className={`flex items-baseline justify-between gap-2 ${i > 0 ? 'border-t border-slate-50 pt-1.5' : ''}`}>
+                                                            <li key={i} className={`flex items-baseline justify-between gap-2 ${i > 0 ? 'border-t border-slate-50 pt-1 md:pt-1.5' : ''}`}>
                                                                 {i === 0 ? (
                                                                     <span className="font-extrabold text-slate-900 text-[15px] leading-snug flex-1">{name}</span>
                                                                 ) : (
