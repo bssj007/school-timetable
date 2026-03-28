@@ -31,6 +31,15 @@ function formatDate(d: Date): string {
     return `${year}-${month}-${day}`;
 }
 
+// 음식명과 알레르기 번호를 분리: "닭곰탕&사리 (5.6.15)" → { name: "닭곰탕&사리", allergens: "5.6.15" }
+function parseMenuItem(raw: string): { name: string; allergens: string | null } {
+    const match = raw.match(/^(.+?)\s*\(([\d.,\s]+)\)\s*$/);
+    if (match) {
+        return { name: match[1].trim(), allergens: match[2].trim() };
+    }
+    return { name: raw.trim(), allergens: null };
+}
+
 // 쿠키에서 학번 파싱 (공통 유틸)
 function readStudentFromCookie(): { grade: number | null; classNum: number | null; studentNumber: number | null } {
     try {
@@ -419,8 +428,9 @@ export default function MealPage() {
                     </button>
                     <div className="text-center">
                         <h2 className="text-lg font-bold text-slate-800">{weekLabel}</h2>
-                        {weekOffset === baseOffset && weekOffset === 0 && <span className="text-xs font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">이번 주</span>}
-                        {weekOffset === baseOffset && baseOffset === 1 && <span className="text-xs font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">다음 주</span>}
+                        <span className={`text-base font-bold ${weekOffset === 0 ? "text-red-500" : weekOffset > 0 ? "text-blue-500" : "text-slate-700"}`}>
+                            {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset > 1 ? `${weekOffset}주 후` : `${Math.abs(weekOffset)}주 전`}
+                        </span>
                     </div>
                     <button
                         onClick={() => setWeekOffset(w => w + 1)}
@@ -474,12 +484,22 @@ export default function MealPage() {
                                         </div>
                                         <div className="p-3 pb-4">
                                             {meal?.lunch && meal.lunch.length > 0 ? (
-                                                <ul className="space-y-1">
-                                                    {meal.lunch.map((item, i) => (
-                                                        <li key={i} className="text-xs leading-snug text-slate-600">
-                                                            {i === 0 ? <span className="font-bold text-slate-800 text-sm block mb-1">{item}</span> : item}
-                                                        </li>
-                                                    ))}
+                                                <ul className="space-y-2">
+                                                    {meal.lunch.map((raw, i) => {
+                                                        const { name, allergens } = parseMenuItem(raw);
+                                                        return (
+                                                            <li key={i} className={`flex items-baseline justify-between gap-2 ${i > 0 ? 'border-t border-slate-50 pt-1.5' : ''}`}>
+                                                                {i === 0 ? (
+                                                                    <span className="font-extrabold text-slate-900 text-[15px] leading-snug flex-1">{name}</span>
+                                                                ) : (
+                                                                    <span className="text-sm text-slate-700 leading-snug flex-1">{name}</span>
+                                                                )}
+                                                                {allergens && (
+                                                                    <span className="text-[10px] text-slate-300 shrink-0 leading-snug tabular-nums">{allergens}</span>
+                                                                )}
+                                                            </li>
+                                                        );
+                                                    })}
                                                 </ul>
                                             ) : (
                                                 <p className="text-xs text-slate-300 py-4 text-center">식단 없음</p>
@@ -498,12 +518,22 @@ export default function MealPage() {
                                         </div>
                                         <div className="p-3 pb-4">
                                             {meal?.dinner && meal.dinner.length > 0 ? (
-                                                <ul className="space-y-1">
-                                                    {meal.dinner.map((item, i) => (
-                                                        <li key={i} className="text-xs leading-snug text-slate-600">
-                                                            {i === 0 ? <span className="font-bold text-slate-800 text-sm block mb-1">{item}</span> : item}
-                                                        </li>
-                                                    ))}
+                                                <ul className="space-y-2">
+                                                    {meal.dinner.map((raw, i) => {
+                                                        const { name, allergens } = parseMenuItem(raw);
+                                                        return (
+                                                            <li key={i} className={`flex items-baseline justify-between gap-2 ${i > 0 ? 'border-t border-slate-50 pt-1.5' : ''}`}>
+                                                                {i === 0 ? (
+                                                                    <span className="font-extrabold text-slate-900 text-[15px] leading-snug flex-1">{name}</span>
+                                                                ) : (
+                                                                    <span className="text-sm text-slate-700 leading-snug flex-1">{name}</span>
+                                                                )}
+                                                                {allergens && (
+                                                                    <span className="text-[10px] text-slate-300 shrink-0 leading-snug tabular-nums">{allergens}</span>
+                                                                )}
+                                                            </li>
+                                                        );
+                                                    })}
                                                 </ul>
                                             ) : (
                                                 <p className="text-xs text-slate-300 py-4 text-center">식단 없음</p>
