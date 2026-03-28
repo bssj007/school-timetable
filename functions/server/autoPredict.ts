@@ -109,7 +109,14 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
 
         // 공강/빈교실 판별 함수 - checkSubjectMatch보다 먼저 선언
         const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free", "창체", "창의적", "자습", "동아리", "점심", "채플", "홈룸", "담임", "HR"];
-        const isFreePeriod = (subject: string) => FREE_KEYWORDS.some(k => (subject || '').includes(k));
+        const isFreePeriod = (subject: string, teacher?: string) => {
+            const s = (subject || '').trim();
+            const t = (teacher || '').trim();
+            if (s === '') return true; // 비어있는 과목은 공강으로 취급
+            if (FREE_KEYWORDS.some(k => s.includes(k))) return true;
+            if (FREE_KEYWORDS.some(k => t.includes(k))) return true;
+            return false;
+        };
 
         // 이동수업(classNum=0): teacher로 1차 필터 후 과목 탐색 → 일반 수업: 해당 반만
         const originalW = new Date(assessment.dueDate).getDay() - 1;
@@ -182,7 +189,7 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
                 }
 
                 return tbl.filter((t: any) => {
-                    if (t.weekday !== w || isFreePeriod(t.subject || '')) return false;
+                    if (t.weekday !== w || isFreePeriod(t.subject, t.teacher)) return false;
                     const slotTeacher = (t.teacher || '').replace(/\*.*$/, '').trim();
                     const teacherMatch = [...knownTeacherNames].some(name =>
                         slotTeacher === name || slotTeacher.startsWith(name) || name.startsWith(slotTeacher)
@@ -199,7 +206,7 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             // teacher 정보 없음: 과목명으로만 탐색 (공강 제외)
             return tbl.filter((t: any) => {
                 if (t.weekday !== w) return false;
-                if (isFreePeriod(t.subject || '')) return false;
+                if (isFreePeriod(t.subject, t.teacher)) return false;
                 if ((t.subject || '').replace(/\s*\(.*$/, '').trim() !== baseAssSubject) return false;
                 
                 // 이동수업 블록(그룹) 일치 여부 검증
@@ -211,9 +218,19 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
                 return true;
             });
         };
-        const checkSubjectMatch = (slot: any) => {
+        const checkSubjectMatch = (slot: any, tbl: any[]) => {
             // 공강/빈교실 슬롯은 어떤 경우도 매칭 불가
-            if (isFreePeriod(slot.subject || '')) return false;
+            if (isFreePeriod(slot.subject, slot.teacher)) return false;
+
+            // 추가 조건: 메인 대시보드에서 "취소선 + 파란색 (공강)"으로 처리되는 뭉개진 이동수업 슬롯 제외
+            if (assessment.classNum === 0) {
+                const blockSlots = tbl.filter((t: any) => t.weekday === slot.weekday && t.classTime === slot.classTime);
+                const hasFreePeriodSlot = blockSlots.some((t: any) => isFreePeriod(t.subject, t.teacher));
+                if (hasFreePeriodSlot) {
+                    const exactMatch = blockSlots.find((t: any) => (t.subject || '').trim() === baseAssSubject);
+                    if (!exactMatch) return false;
+                }
+            }
 
             // 1. 과목명 매칭 확인
             let isSubjectMatch = false;
@@ -297,8 +314,8 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             let foundMatch = false;
             if (matchingSlots.length > 0) {
                 for (const slot of matchingSlots) {
-                    if (isFreePeriod(slot.subject || '')) continue; // 공강은 매칭 제외
-                    if (checkSubjectMatch(slot)) {
+                    if (isFreePeriod(slot.subject, slot.teacher)) continue; // 공강은 매칭 제외
+                    if (checkSubjectMatch(slot, ctx.timetable)) {
                         foundMatch = true;
                         break;
                     }
@@ -319,9 +336,9 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             for (let w = currentW; w < 5 && !foundNext; w++) {
                 const daySlots = getSlots(w).sort((x: any, y: any) => x.classTime - y.classTime);
                 for (const t of daySlots) {
-                    if (isFreePeriod(t.subject || '')) continue; // 공강 슬롯 제외
+                    if (isFreePeriod(t.subject, t.teacher)) continue; // 공강 슬롯 제외
                     if (w === currentW && t.classTime <= targetTime) continue; // Must be strictly AFTER the original time on the same day
-                    if (checkSubjectMatch(t)) {
+                    if (checkSubjectMatch(t, ctx.timetable)) {
                         foundNext = true;
                         const matchDate = new Date(targetDateObj);
                         matchDate.setDate(targetDateObj.getDate() + (w - currentW));
@@ -336,8 +353,8 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             for (let w = 0; w <= currentW && !foundNext; w++) {
                 const daySlots = getNextSlots(w).sort((x: any, y: any) => x.classTime - y.classTime);
                 for (const t of daySlots) {
-                    if (isFreePeriod(t.subject || '')) continue; // 공강 슬롯 제외
-                    if (checkSubjectMatch(t)) {
+                    if (isFreePeriod(t.subject, t.teacher)) continue; // 공강 슬롯 제외
+                    if (checkSubjectMatch(t, nextCtx.timetable)) {
                         foundNext = true;
                         const matchDate = new Date(targetDateObj);
                         // Jump to Monday of next week, then add w days
