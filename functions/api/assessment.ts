@@ -208,7 +208,7 @@ export const onRequest = async (context: any) => {
         if (request.method === 'POST') {
             const action = url.searchParams.get('action');
 
-            if (action === 'predict' || action === 'preview') {
+            if (action === 'predict' || action === 'preview' || action === 'force_predict') {
                 try {
                     // Fetch all valid assessments across the whole school
                     // We only predict for assessments that haven't been manually deleted
@@ -224,9 +224,12 @@ export const onRequest = async (context: any) => {
                             return new Response(JSON.stringify({ success: true, data: previewResults }), {
                                 headers: { 'Content-Type': 'application/json' }
                             });
-                        } else {
+                        } else if (action === 'force_predict') {
                             // applyAutoPredictions updates SQLite directly via db.prepare()
                             await applyAutoPredictions(results, env.DB, false, true); // force execution bypassing pause
+                        } else {
+                            // standard predict (respects pause check)
+                            await applyAutoPredictions(results, env.DB, false, false);
                         }
                     }
                     

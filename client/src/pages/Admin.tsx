@@ -8983,7 +8983,7 @@ function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
 
     const forcePredictMutation = useMutation({
         mutationFn: async () => {
-            const res = await fetch("/api/assessment?action=predict", {
+            const res = await fetch("/api/assessment?action=force_predict", {
                 method: "POST"
             });
             if (!res.ok) throw new Error("강제 실행 실패");
