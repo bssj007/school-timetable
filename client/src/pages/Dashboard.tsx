@@ -994,7 +994,7 @@ export default function Dashboard() {
           grade: parseInt(grade),
           classNum: parseInt(classNum),
           classTime: data.classTime ? parseInt(data.classTime) : null,
-          dataset: datasetId || '',
+          dataset: datasetType || '',
           teacher: data.teacher,
           classCode: data.classCode,
         }),
@@ -1035,7 +1035,7 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...data,
-          dataset: datasetId || ''
+          dataset: datasetType || ''
         }),
       });
 

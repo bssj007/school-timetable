@@ -57,9 +57,6 @@ async function scrapeAndSave(env: Env) {
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
     const { env } = context;
     try {
-        await env.DB.prepare(CREATE_MEALS_TABLE).run();
-
-        // Always check: if no data for this month, scrape first
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth() + 1;
@@ -67,11 +64,23 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
         // DB stores dates as YYYY/MM/DD
         const thisMonthPrefix = `${year}/${monthStr}`;
 
-        const countResult = await env.DB.prepare(
-            "SELECT COUNT(*) as cnt FROM meals WHERE date LIKE ?"
-        ).bind(`${thisMonthPrefix}%`).first();
+        let count = 0;
+        try {
+            const countResult = await env.DB.prepare(
+                "SELECT COUNT(*) as cnt FROM meals WHERE date LIKE ?"
+            ).bind(`${thisMonthPrefix}%`).first();
+            count = countResult?.cnt ?? 0;
+        } catch (e: any) {
+            // Auto layout table if missing
+            if (e.message && e.message.includes("no such table")) {
+                console.log("[Meal API] Target table missing, running migration.");
+                await env.DB.prepare(CREATE_MEALS_TABLE).run();
+                count = 0;
+            } else {
+                throw e;
+            }
+        }
 
-        const count = countResult?.cnt ?? 0;
         if (count === 0) {
             console.log("[API] No meals for this month in DB, scraping now...");
             await scrapeAndSave(env);
@@ -98,7 +107,10 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
         const lastUpdated = meals.reduce((acc: any, m: any) => m.updated_at > acc ? m.updated_at : acc, '');
 
         return new Response(JSON.stringify({ meals, lastUpdated: lastUpdated || null }), {
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 
+                'Content-Type': 'application/json',
+                'Cache-Control': 'public, max-age=60, s-maxage=300'
+            }
         });
     } catch (error: any) {
         console.error("[Meal API] Error:", error);

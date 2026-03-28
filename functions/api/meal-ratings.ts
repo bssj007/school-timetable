@@ -49,13 +49,24 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     const studentNumber = url.searchParams.get("studentNumber");
 
     try {
-        await ensureMealRatingsSchema(env.DB);
-
         if (date && type) {
             // 특정 날짜/타입의 평균 + 내 별점
-            const avgRow = await env.DB.prepare(
-                "SELECT AVG(rating) as avg, COUNT(*) as count FROM meal_ratings WHERE date = ? AND type = ?"
-            ).bind(date, type).first();
+            let avgRow: any;
+            try {
+                avgRow = await env.DB.prepare(
+                    "SELECT AVG(rating) as avg, COUNT(*) as count FROM meal_ratings WHERE date = ? AND type = ?"
+                ).bind(date, type).first();
+            } catch (e: any) {
+                if (e.message && (e.message.includes("no such table") || e.message.includes("no such column"))) {
+                    console.log("[Meal Ratings API] Schema missing, running auto-heal.");
+                    await ensureMealRatingsSchema(env.DB);
+                    avgRow = await env.DB.prepare(
+                        "SELECT AVG(rating) as avg, COUNT(*) as count FROM meal_ratings WHERE date = ? AND type = ?"
+                    ).bind(date, type).first();
+                } else {
+                    throw e;
+                }
+            }
 
             let myRating: number | null = null;
             if (grade && classNum && studentNumber) {
@@ -75,9 +86,22 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
         }
 
         // 모든 날짜, 타입별 평균 (관리자용)
-        const rows = await env.DB.prepare(
-            "SELECT date, type, AVG(rating) as avg, COUNT(*) as count FROM meal_ratings GROUP BY date, type ORDER BY date DESC"
-        ).all();
+        let rows: any;
+        try {
+            rows = await env.DB.prepare(
+                "SELECT date, type, AVG(rating) as avg, COUNT(*) as count FROM meal_ratings GROUP BY date, type ORDER BY date DESC"
+            ).all();
+        } catch (e: any) {
+            if (e.message && (e.message.includes("no such table") || e.message.includes("no such column"))) {
+                console.log("[Meal Ratings API] Schema missing in Admin get, running auto-heal.");
+                await ensureMealRatingsSchema(env.DB);
+                rows = await env.DB.prepare(
+                    "SELECT date, type, AVG(rating) as avg, COUNT(*) as count FROM meal_ratings GROUP BY date, type ORDER BY date DESC"
+                ).all();
+            } else {
+                throw e;
+            }
+        }
 
         return new Response(JSON.stringify(rows.results || []), {
             headers: { "Content-Type": "application/json" }
