@@ -374,6 +374,24 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
 
         assessment.isOrphan = isOrphan;
 
+        // [복구 감지] 시간표가 복구되어 원본 슬롯이 다시 유효해진 경우
+        // 자동 연기가 걸려있었다면 → tempDueDate 초기화로 원본 날짜 복구
+        // 수동 연기(isAutoPredicted=0 + tempDueDate 있음)는 건드리지 않음
+        if (!isOrphan && assessment.isAutoPredicted && assessment.tempDueDate) {
+            assessment.tempDueDate = null;
+            assessment.tempClassTime = null;
+            assessment.isAutoPredicted = 0;
+            if (!previewMode) {
+                try {
+                    await db.prepare(
+                        "UPDATE performance_assessments SET tempDueDate = NULL, tempClassTime = NULL, isAutoPredicted = 0 WHERE id = ?"
+                    ).bind(assessment.id).run();
+                } catch (e: any) {
+                    console.error("[autoPredict] Failed to reset restored prediction:", e);
+                }
+            }
+        }
+
         // Auto predict if orphan and NO manual tempDueDate
         // If it was already auto-predicted, we still run the search to ensure it hasn't shifted further
         if (isOrphan && (!assessment.tempDueDate || assessment.isAutoPredicted) && currentW !== -1) {
