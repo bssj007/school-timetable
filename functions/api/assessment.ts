@@ -208,7 +208,7 @@ export const onRequest = async (context: any) => {
         if (request.method === 'POST') {
             const action = url.searchParams.get('action');
 
-            if (action === 'predict') {
+            if (action === 'predict' || action === 'preview') {
                 try {
                     // Fetch all valid assessments across the whole school
                     // We only predict for assessments that haven't been manually deleted
@@ -217,15 +217,24 @@ export const onRequest = async (context: any) => {
                     
                     if (results && results.length > 0) {
                         const { applyAutoPredictions } = await import('../server/autoPredict');
-                        // applyAutoPredictions updates SQLite directly via db.prepare()
-                        await applyAutoPredictions(results, env.DB);
+                        
+                        if (action === 'preview') {
+                            // Run in preview mode (does not save to DB)
+                            const previewResults = await applyAutoPredictions(results, env.DB, true);
+                            return new Response(JSON.stringify({ success: true, data: previewResults }), {
+                                headers: { 'Content-Type': 'application/json' }
+                            });
+                        } else {
+                            // applyAutoPredictions updates SQLite directly via db.prepare()
+                            await applyAutoPredictions(results, env.DB, false);
+                        }
                     }
                     
                     return new Response(JSON.stringify({ success: true }), {
                         headers: { 'Content-Type': 'application/json' }
                     });
                 } catch (e: any) {
-                    console.error("[Assessment API/Predict] Error:", e);
+                    console.error(`[Assessment API/${action}] Error:`, e);
                     return new Response(JSON.stringify({ error: e.message }), { status: 500 });
                 }
             }

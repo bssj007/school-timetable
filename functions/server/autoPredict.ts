@@ -1,14 +1,16 @@
-export async function applyAutoPredictions(assessments: any[], db: any): Promise<any[]> {
+export async function applyAutoPredictions(assessments: any[], db: any, previewMode: boolean = false): Promise<any[]> {
     if (!assessments || assessments.length === 0) return assessments;
 
-    try {
-        const pauseRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'auto_predict_paused'").first();
-        if (pauseRow && pauseRow.value === 'true') {
-            console.log("[autoPredict] Auto prediction is PAUSED. Skipping evaluation.");
-            return assessments;
+    if (!previewMode) {
+        try {
+            const pauseRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'auto_predict_paused'").first();
+            if (pauseRow && pauseRow.value === 'true') {
+                console.log("[autoPredict] Auto prediction is PAUSED. Skipping evaluation.");
+                return assessments;
+            }
+        } catch (e) {
+            // Table might not exist or other error, proceed normally
         }
-    } catch (e) {
-        // Table might not exist or other error, proceed normally
     }
 
     // We need to fetch timetable & electives for all involved datasets and grades
@@ -149,9 +151,17 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             if (assessment.classNum !== 0) {
                 return tbl.filter((t: any) => {
                     if (t.weekday !== w) return false;
-                    // 1. 오직 본인 반이거나 컴시간 누락용 전체 공통 공강 슬롯만 허용
+                    // 1. 본인 반이거나 반 정보가 없는 공통 슬롯
                     if (!t.class || t.class.toString() === assessment.classNum.toString()) return true;
-                    // 다른 반 데이터를 끌어오는 오지랖(갭필링) 로직은 일반 과목에서 오배정을 유발하므로 원천 차단함.
+                    
+                    // 2. 다른 반 데이터라도 이동수업 특성상 동일 과목이 나오면 해당 블록으로 간주하여 포함시킴 (대시보드 갭필링 대체)
+                    const tSubj = (t.subject || '').replace(/\s*\(.*$/, '').trim();
+                    if (tSubj === baseAssSubject) return true;
+                    
+                    // 3. 선택과목 별칭 교차 확인
+                    const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === t.subject && cfg.originalTeacher === t.teacher);
+                    if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) return true;
+                    
                     return false;
                 });
             }
@@ -228,12 +238,7 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             let isSubjectMatch = false;
             const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
             
-            // 일반 과목이 스스로의 과목을 제대로 인식하도록 괄호 뗀 버전을 최우선 비교
-            const slotSubjStripped = (slot.subject || '').replace(/\s*\(.*$/, '').trim();
-
-            if (slotSubjStripped === baseAssSubject) {
-                isSubjectMatch = true;
-            } else if (slot.subject === baseAssSubject) {
+            if (slot.subject === baseAssSubject) {
                 isSubjectMatch = true;
             } else if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) {
                 isSubjectMatch = true;
@@ -368,21 +373,23 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
                     assessment.isAutoPredicted = 1;
                     
                     // Persist to DB
-                    try {
-                        const q = "UPDATE performance_assessments SET tempDueDate = ?, tempClassTime = ?, isAutoPredicted = 1 WHERE id = ?";
-                        await db.prepare(q).bind(nextSlot.date, nextSlot.classTime, assessment.id).run();
-                    } catch (e: any) {
-                        if (e.message && e.message.includes("no such column") && e.message.includes("isAutoPredicted")) {
-                            console.log("[autoPredict] Adding isAutoPredicted column to DB");
-                            try {
-                                await db.prepare("ALTER TABLE performance_assessments ADD COLUMN isAutoPredicted INTEGER DEFAULT 0").run();
-                                await db.prepare("UPDATE performance_assessments SET tempDueDate = ?, tempClassTime = ?, isAutoPredicted = 1 WHERE id = ?")
-                                        .bind(nextSlot.date, nextSlot.classTime, assessment.id).run();
-                            } catch (alterErr) {
-                                console.error("[autoPredict] Failed to add column:", alterErr);
+                    if (!previewMode) {
+                        try {
+                            const q = "UPDATE performance_assessments SET tempDueDate = ?, tempClassTime = ?, isAutoPredicted = 1 WHERE id = ?";
+                            await db.prepare(q).bind(nextSlot.date, nextSlot.classTime, assessment.id).run();
+                        } catch (e: any) {
+                            if (e.message && e.message.includes("no such column") && e.message.includes("isAutoPredicted")) {
+                                console.log("[autoPredict] Adding isAutoPredicted column to DB");
+                                try {
+                                    await db.prepare("ALTER TABLE performance_assessments ADD COLUMN isAutoPredicted INTEGER DEFAULT 0").run();
+                                    await db.prepare("UPDATE performance_assessments SET tempDueDate = ?, tempClassTime = ?, isAutoPredicted = 1 WHERE id = ?")
+                                            .bind(nextSlot.date, nextSlot.classTime, assessment.id).run();
+                                } catch (alterErr) {
+                                    console.error("[autoPredict] Failed to add column:", alterErr);
+                                }
+                            } else {
+                                console.error("[autoPredict] Failed to update DB:", e);
                             }
-                        } else {
-                            console.error("[autoPredict] Failed to update DB:", e);
                         }
                     }
                 }
@@ -392,17 +399,19 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
         return assessment;
     }));
     
-    // Log the successful execution time
-    resultPromises.then(async () => {
-        try {
-            await db.prepare("CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT)").run();
-            const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000).toISOString();
-            const q = "INSERT INTO system_settings (key, value) VALUES ('last_auto_predict_time', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
-            await db.prepare(q).bind(kstNow).run();
-        } catch (e) {
-            console.error("[autoPredict] Failed to log execution time:", e);
-        }
-    }).catch((e: any) => console.error("[autoPredict] Promise failed:", e));
+    if (!previewMode) {
+        // Log the successful execution time
+        resultPromises.then(async () => {
+            try {
+                await db.prepare("CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT)").run();
+                const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000).toISOString();
+                const q = "INSERT INTO system_settings (key, value) VALUES ('last_auto_predict_time', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
+                await db.prepare(q).bind(kstNow).run();
+            } catch (e) {
+                console.error("[autoPredict] Failed to log execution time:", e);
+            }
+        }).catch((e: any) => console.error("[autoPredict] Promise failed:", e));
+    }
 
     return resultPromises;
 }

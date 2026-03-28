@@ -8993,9 +8993,34 @@ function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
             queryClient.invalidateQueries({ queryKey: ["admin", "autoPredictSettings"] });
             queryClient.invalidateQueries({ queryKey: ["assessments"] });
             toast.success("자동 연기 엔진 강제 실행이 완료되었습니다.");
+            setPreviewData(null); // Clear preview when actual force operation occurs
         },
         onError: () => {
             toast.error("엔진 강제 실행 중 오류가 발생했습니다.");
+        }
+    });
+
+    const [previewData, setPreviewData] = useState<any[] | null>(null);
+    const previewMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch("/api/assessment?action=preview", {
+                method: "POST"
+            });
+            if (!res.ok) throw new Error("미리보기 실행 실패");
+            return res.json();
+        },
+        onSuccess: (res) => {
+            if (res.data) {
+                const predictedList = res.data.filter(
+                    (a: any) => a.isAutoPredicted === 1 && !a.isDone && !a.isDeleted
+                );
+                setPreviewData(predictedList);
+                toast.success("미리보기 시뮬레이션 완료");
+            }
+        },
+        onError: () => {
+            toast.error("미리보기 실행 중 오류가 발생했습니다.");
+            setPreviewData(null);
         }
     });
 
@@ -9047,22 +9072,90 @@ function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
                         <p className="font-semibold text-sm text-gray-700">마지막 백그라운드 자동 연산 시작</p>
                         <p className="text-sm text-blue-600 font-bold">{elapsedText}</p>
                     </div>
-                    <Button 
-                        variant="secondary" 
-                        size="sm"
-                        onClick={() => forcePredictMutation.mutate()}
-                        disabled={forcePredictMutation.isPending || isPaused}
-                        className="bg-white hover:bg-gray-100 shadow-sm border border-gray-200"
-                    >
-                        {forcePredictMutation.isPending ? "실행 중..." : "지금 즉시 재연산"}
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => previewMutation.mutate()}
+                            disabled={previewMutation.isPending || isPaused}
+                            className="bg-white hover:bg-slate-50 border-slate-300 shadow-sm"
+                        >
+                            {previewMutation.isPending ? "시뮬레이션 중..." : "👀 결과 미리보기 (DB 반영 안됨)"}
+                        </Button>
+                        <Button 
+                            variant="secondary" 
+                            size="sm"
+                            onClick={() => forcePredictMutation.mutate()}
+                            disabled={forcePredictMutation.isPending || isPaused}
+                            className="bg-white hover:bg-gray-100 shadow-sm border border-gray-200"
+                        >
+                            {forcePredictMutation.isPending ? "실행 중..." : "지금 즉시 재연산"}
+                        </Button>
+                    </div>
                 </div>
                 {isPaused && (
                     <div className="mt-2 text-xs text-red-500 font-semibold bg-red-50 p-3 rounded-lg flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4" /> 일시정지 상태에서는 수동 강제 재연산 버튼도 비활성화됩니다.
+                        <AlertCircle className="w-4 h-4" /> 일시정지 상태에서는 연산 버튼들이 비활성화됩니다.
                     </div>
                 )}
             </CardContent>
+
+            {previewData !== null && (
+                <div className="border-t border-gray-100 bg-gray-50/50 p-6 rounded-b-xl animate-in fade-in slide-in-from-top-4">
+                    <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-md font-bold text-indigo-900 flex items-center gap-2">
+                            <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">✨</span>
+                            결과 미리보기 (Live 시뮬레이션)
+                        </h4>
+                        <span className="text-xs font-semibold px-2 py-1 bg-white border border-gray-200 rounded text-gray-600 shadow-sm">
+                            총 <span className="text-indigo-600 font-bold">{previewData.length}</span>건
+                        </span>
+                    </div>
+
+                    {previewData.length === 0 ? (
+                        <div className="text-center py-10 bg-white rounded-lg border border-dashed border-gray-300">
+                            <span className="text-gray-400 text-sm">연기가 예측되는 수행평가가 없습니다. (시간표 이상 없음)</span>
+                        </div>
+                    ) : (
+                        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+                            <Table className="text-sm">
+                                <TableHeader className="bg-gray-50/80">
+                                    <TableRow>
+                                        <TableHead className="w-24 font-bold text-center">반</TableHead>
+                                        <TableHead className="font-bold">평가 내용</TableHead>
+                                        <TableHead className="font-bold">기존 일정 (결강)</TableHead>
+                                        <TableHead className="font-bold">엔진 예측(연기) 결과</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {previewData.map((a: any) => (
+                                        <TableRow key={a.id} className="hover:bg-slate-50/50">
+                                            <TableCell className="text-center font-medium bg-gray-50/30 text-gray-600 border-r border-gray-100">
+                                                {a.grade}학년 {a.classNum > 0 ? `${a.classNum}반` : '전체'}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="space-y-0.5">
+                                                    <div className="font-bold text-gray-800 break-all">{a.subject}</div>
+                                                    <div className="text-xs text-gray-500 truncate max-w-[200px]">{a.title}</div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-gray-400 text-xs">
+                                                <span className="line-through">{a.dueDate} {a.classTime ? `${a.classTime}교시` : ''}</span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center text-sm font-bold text-indigo-700 bg-indigo-50/50 p-1.5 rounded w-max">
+                                                    <ArrowRight className="w-3.5 h-3.5 mr-1" />
+                                                    {a.tempDueDate} {a.tempClassTime ? `${a.tempClassTime}교시` : ''}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </div>
+            )}
         </Card>
     );
 }
