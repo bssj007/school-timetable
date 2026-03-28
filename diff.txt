@@ -1,0 +1,68 @@
+diff --git a/functions/server/autoPredict.ts b/functions/server/autoPredict.ts
+index 242cc0f..9d49ed0 100644
+--- a/functions/server/autoPredict.ts
++++ b/functions/server/autoPredict.ts
+@@ -33,22 +33,37 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
+ 
+     }
+ 
+-    // Fetch context data
+-    for (const ctx of contextMap.values()) {
++    // 1. One-time Global Data Loading
++    const { getTimetable } = await import('../api/comcigan' as any);
++    
++    let cachedRawDataString: string | undefined = undefined;
++    try {
++        const rawDataRow = await db.prepare("SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'").first();
++        if (rawDataRow && rawDataRow.response_json) {
++            cachedRawDataString = rawDataRow.response_json as string;
++        }
++    } catch (e) { }
++
++    // 2. Pre-fetch common elective configs
++    // We only need electives for the grades that are present in the contextMap
++    const neededGrades = Array.from(new Set(Array.from(contextMap.values()).map((ctx: any) => ctx.grade)));
++    const electivesByGrade: Record<number, any[]> = {};
++    
++    await Promise.all(neededGrades.map(async (grade) => {
+         try {
+-            // Electives
+-            const { results: electives } = await db.prepare("SELECT * FROM elective_config WHERE grade = ?").bind(ctx.grade).all();
+-            ctx.electives = electives || [];
++            const { results: electives } = await db.prepare("SELECT * FROM elective_config WHERE grade = ?").bind(grade).all();
++            electivesByGrade[grade as number] = electives || [];
++        } catch (e) {
++            electivesByGrade[grade as number] = [];
++            console.error(`[applyAutoPredictions] Elective fetch error for grade ${grade}`, e);
++        }
++    }));
+ 
+-            // Timetable fetching via Unified API
+-            const { getTimetable } = await import('../api/comcigan' as any);
+-            let cachedRawDataString: string | undefined = undefined;
+-            try {
+-                const rawDataRow = await db.prepare("SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'").first();
+-                if (rawDataRow && rawDataRow.response_json) {
+-                    cachedRawDataString = rawDataRow.response_json as string;
+-                }
+-            } catch (e) { }
++    // 3. Parallel Context Data Fetching (getTimetable is now very fast thanks to cachedRawDataString)
++    await Promise.all(Array.from(contextMap.values()).map(async (ctx: any) => {
++        try {
++            // Assign pre-fetched electives
++            ctx.electives = electivesByGrade[ctx.grade] || [];
+ 
+             const dsParam = ctx.dataset === 'COMCIGAN' ? null : ctx.dataset;
+             // Pass ctx.targetDate so the engine resolves the correct timetable structure for that specific week
+@@ -59,9 +74,9 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
+                  ctx.timetable = json.data || [];
+             }
+         } catch (e) {
+-            console.error('[applyAutoPredictions] Context fetch error', e); 
++            console.error(`[applyAutoPredictions] Context fetch error for ${ctx.targetDate}`, e); 
+         }
+-    }
++    }));
+ 
+     // Evaluate orphans and collect Promises (since we added DB await)
+     return Promise.all(assessments.map(async assessment => {

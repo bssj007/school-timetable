@@ -37,12 +37,7 @@ export const onRequest = async (context: any) => {
                     .bind(...params)
                     .all();
 
-                const { applyAutoPredictions } = await import('../server/autoPredict');
-                // 기존 백그라운드 분리로 인한 프론트엔드 연기 날짜 표시 누락 버그 해결 
-                // 이제 autoPredict 내부 로직이 병목 없이 최적화되었으므로 동기적으로 안심하고 예측 변환 결과를 리턴함
-                const predictedResults = await applyAutoPredictions(results, env.DB);
-
-                return new Response(JSON.stringify(predictedResults), {
+                return new Response(JSON.stringify(results), {
                     headers: { 'Content-Type': 'application/json' }
                 });
             } catch (e: any) {
@@ -94,10 +89,7 @@ export const onRequest = async (context: any) => {
                     // Retry original query
                     const { results } = await env.DB.prepare(query).bind(...params).all();
 
-                    const { applyAutoPredictions } = await import('../server/autoPredict');
-                    const predictedResults = await applyAutoPredictions(results, env.DB);
-
-                    return new Response(JSON.stringify(predictedResults), {
+                    return new Response(JSON.stringify(results), {
                          headers: { 'Content-Type': 'application/json' }
                     });
                 }
@@ -109,10 +101,7 @@ export const onRequest = async (context: any) => {
                     // Retry original query
                     const { results } = await env.DB.prepare(query).bind(...params).all();
 
-                    const { applyAutoPredictions } = await import('../server/autoPredict');
-                    const predictedResults = await applyAutoPredictions(results, env.DB);
-
-                    return new Response(JSON.stringify(predictedResults), {
+                    return new Response(JSON.stringify(results), {
                          headers: { 'Content-Type': 'application/json' }
                     });
                 }
@@ -126,10 +115,7 @@ export const onRequest = async (context: any) => {
                     // Retry original query
                     const { results } = await env.DB.prepare(query).bind(...params).all();
 
-                    const { applyAutoPredictions } = await import('../server/autoPredict');
-                    const predictedResults = await applyAutoPredictions(results, env.DB);
-
-                    return new Response(JSON.stringify(predictedResults), {
+                    return new Response(JSON.stringify(results), {
                          headers: { 'Content-Type': 'application/json' }
                     });
                 }
@@ -143,10 +129,7 @@ export const onRequest = async (context: any) => {
                     // Retry original query
                     const { results } = await env.DB.prepare(query).bind(...params).all();
 
-                    const { applyAutoPredictions } = await import('../server/autoPredict');
-                    const predictedResults = await applyAutoPredictions(results, env.DB);
-
-                    return new Response(JSON.stringify(predictedResults), {
+                    return new Response(JSON.stringify(results), {
                          headers: { 'Content-Type': 'application/json' }
                     });
                 }
