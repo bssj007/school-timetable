@@ -221,8 +221,32 @@ export const onRequest = async (context: any) => {
             }
         }
 
-        // POST: 추가
+        // POST: 추가 또는 자동예측
         if (request.method === 'POST') {
+            const action = url.searchParams.get('action');
+
+            if (action === 'predict') {
+                try {
+                    // Fetch all valid assessments across the whole school
+                    // We only predict for assessments that haven't been manually deleted
+                    const query = "SELECT * FROM performance_assessments WHERE isDeleted = 0";
+                    const { results } = await env.DB.prepare(query).all();
+                    
+                    if (results && results.length > 0) {
+                        const { applyAutoPredictions } = await import('../server/autoPredict');
+                        // applyAutoPredictions updates SQLite directly via db.prepare()
+                        await applyAutoPredictions(results, env.DB);
+                    }
+                    
+                    return new Response(JSON.stringify({ success: true }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                } catch (e: any) {
+                    console.error("[Assessment API/Predict] Error:", e);
+                    return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+                }
+            }
+
             const body = await request.json();
             const { subject, title, dueDate, description, grade, classNum, classTime, teacher, classCode } = body;
 

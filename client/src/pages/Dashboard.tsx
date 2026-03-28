@@ -782,6 +782,24 @@ export default function Dashboard() {
     refetchInterval: 2000,
   });
 
+  // 3.5 수행평가 백그라운드 재연산 (SWR 아키텍처 도입)
+  useQuery({
+    queryKey: ['assessments_predict'],
+    queryFn: async () => {
+      try {
+        const res = await fetch('/api/assessment?action=predict', { method: 'POST' });
+        if (res.ok) {
+           queryClient.invalidateQueries({ queryKey: ['assessments'] });
+        }
+      } catch (e) {
+        console.warn('Background autoPredict trigger failed', e);
+      }
+      return true;
+    },
+    refetchOnWindowFocus: true,     // 화면으로 다시 돌아올 때 1번 트리거
+    staleTime: 10 * 1000,           // 연속 트리거 방지 (10초 쿨타임)
+  });
+
   // 학생이 실제로 수강하는 과목 목록 계산 (수행평가 고아상태 필터링용)
   const myActualSubjects = useMemo(() => {
     const subjects = new Set<string>();

@@ -5570,6 +5570,25 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
         refetchInterval: 5000,
     });
 
+    // 백그라운드 재연산 (SWR)
+    useQuery({
+        queryKey: ['admin_assessments_predict'],
+        queryFn: async () => {
+            try {
+                const res = await fetch('/api/assessment?action=predict', { method: 'POST' });
+                if (res.ok) {
+                    queryClient.invalidateQueries({ queryKey: ["admin", "assessments"] });
+                }
+            } catch (e) {
+                console.warn('Background autoPredict trigger failed', e);
+            }
+            return true;
+        },
+        enabled: isAuthenticated,
+        refetchOnWindowFocus: true,     // 화면으로 다시 돌아올 때 1번 트리거
+        staleTime: 10 * 1000,           // 연속 트리거 방지 (10초 쿨타임)
+    });
+
     // Get unique datasets present in assessments
     const assessmentDatasets = useMemo(() => {
         if (!assessments || !Array.isArray(assessments)) return [];
