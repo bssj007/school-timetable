@@ -226,9 +226,13 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
                     }
                 }
                 if (knownTeacherNames.size > 0) {
+                    console.log(`[autoPredict] elective teacher fallback for "${baseAssSubject}": teachers=[${[...knownTeacherNames].join(',')}] originalTime=${originalTime}`);
                     return tbl.filter((t: any) => {
                         if (t.weekday !== w) return false;
                         if ((t.subject || '').replace(/\s*\(.*$/, '').trim() !== baseAssSubject) return false;
+                        // classTime 제약: 같은 선생님이 다른 반에 다른 교시에 가르치는 경우 제외
+                        // (예: 이나*가 A반에 2교시, B반에 3교시 music을 가르칠 때 3교시 슬롯 차단)
+                        if (originalTime && t.classTime !== originalTime) return false;
                         const slotTeacher = (t.teacher || '').replace(/\*.*$/, '').trim();
                         const teacherMatch = [...knownTeacherNames].some(name =>
                             slotTeacher === name || slotTeacher.startsWith(name) || name.startsWith(slotTeacher)
