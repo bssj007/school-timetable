@@ -255,7 +255,9 @@ function MealSuggestionDialog({ onClose }: { onClose: () => void }) {
 
 // ── 메인 페이지 ──────────────────────────────────────────────────
 export default function MealPage() {
-    const [weekOffset, setWeekOffset] = useState(0);
+    // 주말(토=6, 일=0)에는 다음 주 급식표를 기본으로 표시 (Dashboard와 동일)
+    const baseOffset = (() => { const d = new Date().getDay(); return (d === 0 || d === 6) ? 1 : 0; })();
+    const [weekOffset, setWeekOffset] = useState(baseOffset);
     const [showSuggestion, setShowSuggestion] = useState(false);
     const todayDayRef = useRef<HTMLDivElement>(null);
 
@@ -318,9 +320,10 @@ export default function MealPage() {
 
     const todayStr = formatDate(today);
 
-    // 이번 주 보기일 때 오늘 카드로 자동 스크롤 (모바일 세로 레이아웃)
+    // 기본 표시 주차일 때만 오늘 카드로 자동 스크롤 (모바일 세로 레이아웃)
+    // 주말에는 baseOffset=1(다음 주)이 기본이고, 다음 주엔 오늘 카드가 없으므로 스크롤 건너뜀
     useEffect(() => {
-        if (weekOffset !== 0) return;
+        if (weekOffset !== baseOffset || baseOffset !== 0) return;
         const timer = setTimeout(() => {
             const el = todayDayRef.current;
             if (!el) return;
@@ -416,7 +419,8 @@ export default function MealPage() {
                     </button>
                     <div className="text-center">
                         <h2 className="text-lg font-bold text-slate-800">{weekLabel}</h2>
-                        {weekOffset === 0 && <span className="text-xs font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">이번 주</span>}
+                        {weekOffset === baseOffset && weekOffset === 0 && <span className="text-xs font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">이번 주</span>}
+                        {weekOffset === baseOffset && baseOffset === 1 && <span className="text-xs font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">다음 주</span>}
                     </div>
                     <button
                         onClick={() => setWeekOffset(w => w + 1)}
