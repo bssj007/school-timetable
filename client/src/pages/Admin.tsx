@@ -9077,7 +9077,7 @@ function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
                             variant="outline" 
                             size="sm"
                             onClick={() => previewMutation.mutate()}
-                            disabled={previewMutation.isPending || isPaused}
+                            disabled={previewMutation.isPending}
                             className="bg-white hover:bg-slate-50 border-slate-300 shadow-sm"
                         >
                             {previewMutation.isPending ? "시뮬레이션 중..." : "👀 결과 미리보기 (DB 반영 안됨)"}
@@ -9086,7 +9086,7 @@ function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
                             variant="secondary" 
                             size="sm"
                             onClick={() => forcePredictMutation.mutate()}
-                            disabled={forcePredictMutation.isPending || isPaused}
+                            disabled={forcePredictMutation.isPending}
                             className="bg-white hover:bg-gray-100 shadow-sm border border-gray-200"
                         >
                             {forcePredictMutation.isPending ? "실행 중..." : "지금 즉시 재연산"}
@@ -9094,8 +9094,8 @@ function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
                     </div>
                 </div>
                 {isPaused && (
-                    <div className="mt-2 text-xs text-red-500 font-semibold bg-red-50 p-3 rounded-lg flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4" /> 일시정지 상태에서는 연산 버튼들이 비활성화됩니다.
+                    <div className="mt-2 text-xs text-orange-600 font-semibold bg-orange-50 p-3 rounded-lg flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" /> 일시정지 상태입니다. 백그라운드 자동 연산이 중지되며, 필요 시 우측의 버튼으로 수동 연산이 가능합니다.
                     </div>
                 )}
             </CardContent>

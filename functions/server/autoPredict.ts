@@ -1,7 +1,7 @@
-export async function applyAutoPredictions(assessments: any[], db: any, previewMode: boolean = false): Promise<any[]> {
+export async function applyAutoPredictions(assessments: any[], db: any, previewMode: boolean = false, bypassPauseCheck: boolean = false): Promise<any[]> {
     if (!assessments || assessments.length === 0) return assessments;
 
-    if (!previewMode) {
+    if (!previewMode && !bypassPauseCheck) {
         try {
             const pauseRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'auto_predict_paused'").first();
             if (pauseRow && pauseRow.value === 'true') {

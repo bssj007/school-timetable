@@ -226,7 +226,7 @@ export const onRequest = async (context: any) => {
                             });
                         } else {
                             // applyAutoPredictions updates SQLite directly via db.prepare()
-                            await applyAutoPredictions(results, env.DB, false);
+                            await applyAutoPredictions(results, env.DB, false, true); // force execution bypassing pause
                         }
                     }
                     
