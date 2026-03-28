@@ -1,6 +1,16 @@
 export async function applyAutoPredictions(assessments: any[], db: any): Promise<any[]> {
     if (!assessments || assessments.length === 0) return assessments;
 
+    try {
+        const pauseRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'auto_predict_paused'").first();
+        if (pauseRow && pauseRow.value === 'true') {
+            console.log("[autoPredict] Auto prediction is PAUSED. Skipping evaluation.");
+            return assessments;
+        }
+    } catch (e) {
+        // Table might not exist or other error, proceed normally
+    }
+
     // We need to fetch timetable & electives for all involved datasets and grades
     const contextMap = new Map(); 
     
@@ -79,7 +89,7 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
     }));
 
     // Evaluate orphans and collect Promises (since we added DB await)
-    return Promise.all(assessments.map(async assessment => {
+    const resultPromises = Promise.all(assessments.map(async assessment => {
         if (assessment.isDone || assessment.isDeleted) return assessment;
 
         let ds = assessment.dataset || '';
@@ -384,4 +394,18 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
 
         return assessment;
     }));
+    
+    // Log the successful execution time
+    resultPromises.then(async () => {
+        try {
+            await db.prepare("CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT)").run();
+            const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000).toISOString();
+            const q = "INSERT INTO system_settings (key, value) VALUES ('last_auto_predict_time', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
+            await db.prepare(q).bind(kstNow).run();
+        } catch (e) {
+            console.error("[autoPredict] Failed to log execution time:", e);
+        }
+    }).catch((e: any) => console.error("[autoPredict] Promise failed:", e));
+
+    return resultPromises;
 }

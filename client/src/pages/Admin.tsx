@@ -4020,11 +4020,19 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 </Button>
                 <Button
                     variant={selectedMenu === "unresolved-issues" ? "default" : "ghost"}
-                    className="justify-start whitespace-nowrap text-left text-orange-600 hover:text-orange-700"
+                    className="justify-start whitespace-nowrap text-left text-orange-600 hover:text-orange-700 hover:bg-orange-50 font-medium"
                     onClick={() => setSelectedMenu("unresolved-issues")}
                 >
                     <AlertCircle className="w-4 h-4 mr-2" />
                     미해결 문제
+                </Button>
+                <Button
+                    variant={selectedMenu === "auto-predict-settings" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-medium"
+                    onClick={() => setSelectedMenu("auto-predict-settings")}
+                >
+                    <Settings className="w-4 h-4 mr-2" />
+                    수행평가 예측 엔진
                 </Button>
                 <Button
                     variant={selectedMenu === "special-schedules" ? "default" : "ghost"}
@@ -4267,6 +4275,16 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <SpecialScheduleManager adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+                {selectedMenu === "auto-predict-settings" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-indigo-600">수행평가 자동 연기 엔진</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <AutoPredictSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -8918,5 +8936,133 @@ function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+// ----------------------------------------------------------------------
+// AutoPredictSettings - Controls auto predict algorithm Pause and Manual Trigger
+// Located under: 기타 > 수행평가 예측 엔진
+// ----------------------------------------------------------------------
+function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    const { data: settingsData, isLoading } = useQuery({
+        queryKey: ["admin", "autoPredictSettings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 불러오기 실패");
+            return res.json();
+        }
+    });
+
+    const isPaused = settingsData?.auto_predict_paused === 'true';
+    const lastTime = settingsData?.last_auto_predict_time;
+
+    const saveSettingMutation = useMutation({
+        mutationFn: async (payload: Record<string, string>) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("저장 실패");
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "autoPredictSettings"] });
+            toast.success("설정이 변경되었습니다.");
+        },
+        onError: () => {
+            toast.error("설정 변경에 실패했습니다.");
+        }
+    });
+
+    const forcePredictMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch("/api/assessment?action=predict", {
+                method: "POST"
+            });
+            if (!res.ok) throw new Error("강제 실행 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "autoPredictSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["assessments"] });
+            toast.success("자동 연기 엔진 강제 실행이 완료되었습니다.");
+        },
+        onError: () => {
+            toast.error("엔진 강제 실행 중 오류가 발생했습니다.");
+        }
+    });
+
+    if (isLoading) {
+        return <div className="text-gray-400 p-4 shrink-0 mt-8">설정을 불러오는 중...</div>;
+    }
+
+    const elapsedText = (() => {
+        if (!lastTime) return "기록 없음";
+        const date = new Date(lastTime);
+        const now = new Date(new Date().getTime() + 9 * 60 * 60 * 1000); // KST Now
+        const diffMs = now.getTime() - date.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        
+        if (diffMins < 1) return `방금 전 (${date.toLocaleTimeString('ko-KR')})`;
+        if (diffMins < 60) return `${diffMins}분 전 (${date.toLocaleTimeString('ko-KR')})`;
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours}시간 전 (${date.toLocaleTimeString('ko-KR')})`;
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays}일 전 (${date.toLocaleDateString('ko-KR')})`;
+    })();
+
+    return (
+        <Card className="w-full max-w-2xl mt-8">
+            <CardHeader>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <CardTitle>수행평가 자동 연기 엔진 제어</CardTitle>
+                        <CardDescription>결강된 수행평가를 빈 시간으로 갱신하는 엔진의 동작을 관리합니다.</CardDescription>
+                    </div>
+                    {isPaused && <span className="text-xs font-bold px-2 py-1 bg-red-100 text-red-600 rounded drop-shadow-sm">일시정지 됨</span>}
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="flex justify-between items-center rounded-lg border p-4 bg-white">
+                    <div className="space-y-0.5">
+                        <Label className="text-base font-bold text-gray-800">엔진 가동 일시정지</Label>
+                        <p className="text-sm text-gray-500">엔진을 중지하면 결강이 발생해도 시간표를 검색하거나 날짜를 밀어내지 않습니다.</p>
+                    </div>
+                    <Switch
+                        checked={isPaused}
+                        onCheckedChange={(checked) => saveSettingMutation.mutate({ auto_predict_paused: checked ? 'true' : 'false' })}
+                        disabled={saveSettingMutation.isPending}
+                    />
+                </div>
+
+                <div className="flex justify-between items-center bg-gray-50 rounded-lg p-4 border border-gray-100">
+                    <div className="space-y-1">
+                        <p className="font-semibold text-sm text-gray-700">마지막 백그라운드 자동 연산 시작</p>
+                        <p className="text-sm text-blue-600 font-bold">{elapsedText}</p>
+                    </div>
+                    <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={() => forcePredictMutation.mutate()}
+                        disabled={forcePredictMutation.isPending || isPaused}
+                        className="bg-white hover:bg-gray-100 shadow-sm border border-gray-200"
+                    >
+                        {forcePredictMutation.isPending ? "실행 중..." : "지금 즉시 재연산"}
+                    </Button>
+                </div>
+                {isPaused && (
+                    <div className="mt-2 text-xs text-red-500 font-semibold bg-red-50 p-3 rounded-lg flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" /> 일시정지 상태에서는 수동 강제 재연산 버튼도 비활성화됩니다.
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     );
 }
