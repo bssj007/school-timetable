@@ -190,6 +190,12 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
                     }
                 }
 
+                // elective_config에서 이 과목이 이동수업인지 확인
+                // 이동 X + 그룹 O 과목의 경우: 같은 선생님이 다른 반에서 다른 교시에 동일 과목을 가르치므로
+                // originalTime(원본 교시)과 같은 교시만 허용 (이동 O는 교시가 바뀔 수 있으므로 제약 없음)
+                const isNonMovingGrouped = electiveConfigs.length > 0 &&
+                    electiveConfigs.some((ec: any) => ec.isMovingClass === 0);
+
                 return tbl.filter((t: any) => {
                     if (t.weekday !== w) return false;
                     const slotTeacher = (t.teacher || '').replace(/\*.*$/, '').trim();
@@ -197,7 +203,10 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
                         slotTeacher === name || slotTeacher.startsWith(name) || name.startsWith(slotTeacher)
                     );
                     if (!teacherMatch) return false;
-                    
+
+                    // 이동 X 그룹 과목: 같은 선생님이 다른 반에 다른 교시에 가르칠 경우 원본 교시와 다른 슬롯 차단
+                    if (isNonMovingGrouped && originalTime && t.classTime !== originalTime) return false;
+
                     // 이동수업 블록(그룹) 일치 여부 검증
                     if (originalClassesWithSubject.size > 0 && !originalClassesWithSubject.has(t.class)) {
                         return false;
