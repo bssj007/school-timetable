@@ -180,22 +180,26 @@ export const onRequest = async (context: any) => {
             let isStale = false;
             if (db) {
                 try {
-                    const rawDataRow = await db.prepare("SELECT response_json, updated_at FROM timetable_cache WHERE cache_key = 'raw_data'").first();
+                    const batchRes = await db.batch([
+                        db.prepare("SELECT response_json, updated_at FROM timetable_cache WHERE cache_key = 'raw_data'"),
+                        db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_cache_max_age_minutes'")
+                    ]);
+
+                    const rawDataRow = batchRes[0].results?.[0];
                     if (rawDataRow && rawDataRow.response_json) {
                         let cacheMaxAgeMs = DEFAULT_CACHE_MAX_AGE_MS;
-                        try {
-                            const maxAgeRow = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_cache_max_age_minutes'").first();
-                            if (maxAgeRow && maxAgeRow.value) {
-                                cacheMaxAgeMs = parseInt(maxAgeRow.value as string) * 60 * 1000;
-                            }
-                        } catch (_) {}
+                        
+                        const maxAgeRow = batchRes[1].results?.[0];
+                        if (maxAgeRow && maxAgeRow.value) {
+                            cacheMaxAgeMs = parseInt(maxAgeRow.value as string) * 60 * 1000;
+                        }
                         
                         const age = Date.now() - new Date((rawDataRow.updated_at as string || "").replace(' ', 'T') + 'Z').getTime();
                         if (age >= cacheMaxAgeMs) {
                             isStale = true;
                         }
                         cachedRawDataString = rawDataRow.response_json as string;
-                        console.log(`[Comcigan Cache] raw_data read, age=${Math.round(age/1000)}s, stale=${isStale}`);
+                        console.log(`[Comcigan Cache] raw_data read via batch, age=${Math.round(age/1000)}s, stale=${isStale}`);
                     }
                 } catch (e) { }
             }

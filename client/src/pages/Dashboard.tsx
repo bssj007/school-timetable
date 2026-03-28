@@ -450,28 +450,30 @@ export default function Dashboard() {
   });
 
   // Extract persistent datasetId for use in effects (fallback to actual timetable response)
-  const datasetId = (rawTimetableData as any)?.originalDatasetId || (rawTimetableData as any)?.datasetId || '';
+  const rawDatasetId = (rawTimetableData as any)?.originalDatasetId || (rawTimetableData as any)?.datasetId || '';
+  // Optimization: Pre-calculate datasetType ("COMCIGAN" vs "MANUAL_PLAN") so dependent queries can start immediately.
+  const datasetType = (rawDatasetId === 'MANUAL_PLAN' || rawDatasetId === 'SEMESTER_PLAN') ? rawDatasetId : 'COMCIGAN';
 
   // 1.5 선택과목 데이터 및 프로필 조회 (2, 3학년용)
   const { data: electiveConfigs, isFetching: isElectiveConfigsFetching } = useQuery({
-    queryKey: ['electiveConfigs', grade, datasetId],
+    queryKey: ['electiveConfigs', grade, datasetType],
     queryFn: async () => {
-      if ((grade !== "2" && grade !== "3") || !datasetId) return [];
-      const res = await fetch(`/api/electives?grade=${grade}&dataset=${datasetId}`);
+      if ((grade !== "2" && grade !== "3")) return [];
+      const res = await fetch(`/api/electives?grade=${grade}&dataset=${datasetType}`);
       if (!res.ok) {
         if (res.status === 404) return [];
         throw new Error(`Failed to fetch elective configs: ${res.status}`);
       }
       return res.json();
     },
-    enabled: (grade === "2" || grade === "3") && !!datasetId
+    enabled: (grade === "2" || grade === "3")
   });
 
   const { data: studentProfile } = useQuery({
-    queryKey: ['studentProfile', grade, classNum, studentNumber, datasetId],
+    queryKey: ['studentProfile', grade, classNum, studentNumber, datasetType],
     queryFn: async () => {
-      if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber || !datasetId) return null;
-      const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&dataset=${datasetId}`);
+      if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber) return null;
+      const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&dataset=${datasetType}`);
       if (!res.ok) {
         if (res.status === 404) return null;
         throw new Error(`Failed to fetch student profile: ${res.status}`);
@@ -486,7 +488,7 @@ export default function Dashboard() {
       }
       return data;
     },
-    enabled: !!grade && !!classNum && !!studentNumber && (grade === "2" || grade === "3") && !!datasetId
+    enabled: !!grade && !!classNum && !!studentNumber && (grade === "2" || grade === "3")
   });
 
   const lastValidProfileRef = React.useRef<any>(null);
@@ -510,7 +512,7 @@ export default function Dashboard() {
       return;
     }
 
-    if (!classNum || !studentNumber || !datasetId || !electiveConfigs) {
+    if (!classNum || !studentNumber || !electiveConfigs) {
       // Still loading necessary contexts
       return;
     }
@@ -541,7 +543,7 @@ export default function Dashboard() {
     setIsElectiveEntered(isFullyEntered);
     setShowElectiveWarning(!isFullyEntered);
 
-  }, [grade, classNum, studentNumber, datasetId, currentProfile, electiveConfigs]);
+  }, [grade, classNum, studentNumber, datasetType, currentProfile, electiveConfigs]);
 
   const { timetableData, allClassesTimetable } = useMemo(() => {
     if (!rawTimetableData) return { timetableData: [], allClassesTimetable: [] };
@@ -760,11 +762,11 @@ export default function Dashboard() {
 
   // 3. 수행평가 목록 조회
   const { data: allAssessments, isLoading: assessmentLoading } = useQuery({
-    queryKey: ['assessments', grade, classNum, datasetId],
+    queryKey: ['assessments', grade, classNum, datasetType],
     queryFn: async () => {
       if (!grade || !classNum) return [];
       try {
-        const datasetQuery = datasetId ? `&dataset=${encodeURIComponent(datasetId)}` : '';
+        const datasetQuery = datasetType ? `&dataset=${encodeURIComponent(datasetType)}` : '';
         const res = await fetch(`/api/assessment?grade=${grade}&classNum=${classNum}${datasetQuery}`);
         if (!res.ok) {
           if (res.status === 404) return [];
