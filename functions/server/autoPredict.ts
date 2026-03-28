@@ -376,17 +376,6 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
                     }
                 }
             }
-        } else if (!isOrphan && assessment.isAutoPredicted) {
-            assessment.tempDueDate = null;
-            assessment.tempClassTime = null;
-            assessment.isAutoPredicted = 0;
-            // Rollback in DB
-            try {
-                const q = "UPDATE performance_assessments SET tempDueDate = NULL, tempClassTime = NULL, isAutoPredicted = 0 WHERE id = ?";
-                await db.prepare(q).bind(assessment.id).run();
-            } catch (e: any) {
-                console.error("[autoPredict] Failed to rollback in DB:", e);
-            }
         }
 
         return assessment;
