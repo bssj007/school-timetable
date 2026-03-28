@@ -9030,17 +9030,19 @@ function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
 
     const elapsedText = (() => {
         if (!lastTime) return "기록 없음";
-        const date = new Date(lastTime);
-        const now = new Date(new Date().getTime() + 9 * 60 * 60 * 1000); // KST Now
+        const date = new Date(lastTime); // UTC 타임스탬프 파싱
+        const now = new Date();          // 현재 UTC (오프셋 없이 비교)
         const diffMs = now.getTime() - date.getTime();
         const diffMins = Math.floor(diffMs / 60000);
-        
-        if (diffMins < 1) return `방금 전 (${date.toLocaleTimeString('ko-KR')})`;
-        if (diffMins < 60) return `${diffMins}분 전 (${date.toLocaleTimeString('ko-KR')})`;
+        const timeStr = date.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' });
+        const dateStr = date.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' });
+
+        if (diffMins < 1) return `방금 전 (${timeStr})`;
+        if (diffMins < 60) return `${diffMins}분 전 (${timeStr})`;
         const diffHours = Math.floor(diffMins / 60);
-        if (diffHours < 24) return `${diffHours}시간 전 (${date.toLocaleTimeString('ko-KR')})`;
+        if (diffHours < 24) return `${diffHours}시간 전 (${timeStr})`;
         const diffDays = Math.floor(diffHours / 24);
-        return `${diffDays}일 전 (${date.toLocaleDateString('ko-KR')})`;
+        return `${diffDays}일 전 (${dateStr})`;
     })();
 
     return (

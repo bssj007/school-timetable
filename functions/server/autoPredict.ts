@@ -469,9 +469,9 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
         resultPromises.then(async () => {
             try {
                 await db.prepare("CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT)").run();
-                const kstNow = new Date(new Date().getTime() + 9 * 60 * 60 * 1000).toISOString();
+                const nowUtc = new Date().toISOString(); // UTC 저장 (프론트엔드에서 Asia/Seoul 변환)
                 const q = "INSERT INTO system_settings (key, value) VALUES ('last_auto_predict_time', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
-                await db.prepare(q).bind(kstNow).run();
+                await db.prepare(q).bind(nowUtc).run();
             } catch (e) {
                 console.error("[autoPredict] Failed to log execution time:", e);
             }
