@@ -120,6 +120,31 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
 
         const baseAssSubject = assessment.subject.replace(/\s*\(.*$/, '').trim();
 
+        // 비선택과목(음감비 등) 반 전체 평가 = 반마다 수업 시간이 다르므로 엔진이 단일 시간으로 수렴 불가
+        // 선택과목은 동일 그룹 전체가 같은 요일/교시에 수업하므로 예측 유효 → 서로 다르므로 예측 무의미
+        if (assessment.classNum === 0) {
+            // 이 과목이 elective_config에 등록된 선택과목인지 확인
+            const ctx = contextMap.get(
+                `${(assessment.dataset !== 'MANUAL_PLAN' && assessment.dataset !== 'SEMESTER_PLAN') ? 'COMCIGAN' : assessment.dataset}_${assessment.grade}_${
+                    (() => {
+                        const dObj2 = new Date(assessment.dueDate);
+                        const day2 = dObj2.getDay();
+                        const diff2 = dObj2.getDate() - day2 + (day2 === 0 ? -6 : 1);
+                        const mon2 = new Date(dObj2.setDate(diff2));
+                        return `${mon2.getFullYear()}-${String(mon2.getMonth() + 1).padStart(2, '0')}-${String(mon2.getDate()).padStart(2, '0')}`;
+                    })()
+                }`
+            );
+            const electivesForGrade = ctx?.electives || electivesByGrade[assessment.grade] || [];
+            const isElective = electivesForGrade.some((cfg: any) =>
+                (cfg.subject === baseAssSubject || cfg.fullSubjectName === baseAssSubject)
+            );
+            if (!isElective) {
+                // 비선택과목은 이동수업 그룹이 없어서 반마다 시간이 모두 다름 → 자동연기 예측 보류
+                console.log(`[autoPredict] Skipping classNum=0 non-elective: ${baseAssSubject} (grade ${assessment.grade})`);
+                return assessment;
+            }
+        }
 
         // 이동수업(classNum=0): teacher로 1차 필터 후 과목 탐색 → 일반 수업: 해당 반만
         const originalW = new Date(assessment.dueDate).getDay() - 1;
@@ -168,7 +193,7 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
             }
             // 이동수업: teacher로 엄격 필터
             // assessment.teacher + elective_config fullTeacherName/originalTeacher 모두 비교
-            if (assessment.teacher) {
+            if (assessment.teacher && assessment.teacher.trim() !== '') {
                 // targetTeachers를 쉼표 등으로 분리하여 다중 선생님 대응
                 const targetTeachers = assessment.teacher.split(/[,、]+/).map((t: string) => t.replace(/\*.*$/, '').trim());
 
@@ -239,19 +264,13 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
             let isSubjectMatch = false;
             const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
             
-            if (slot.subject === baseAssSubject) {
+            if (slot.subject === baseAssSubject || slot.subject.replace(/\s*\(.*$/, '').trim() === baseAssSubject) {
                 isSubjectMatch = true;
             } else if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) {
                 isSubjectMatch = true;
             } else {
-                const genericConfig = ctx.electives.find((cfg: any) => (cfg.subject.trim() === baseAssSubject || cfg.fullSubjectName?.trim() === baseAssSubject));
-                if (genericConfig && genericConfig.classCode && specificConfig && specificConfig.classCode) {
-                    const codesA = genericConfig.classCode.split(',').map((s: string) => s.replace(/그룹/g, '').trim()).filter(Boolean);
-                    const codesB = specificConfig.classCode.split(',').map((s: string) => s.replace(/그룹/g, '').trim()).filter(Boolean);
-                    if (codesA.length > 0 && codesA.some((c: string) => codesB.includes(c))) {
-                        isSubjectMatch = true;
-                    }
-                }
+                // We MUST ONLY match exact subject names. 
+                // Group code fallback was intentionally disabled to prevent substituting '공강' or other subjects.
             }
 
             if (!isSubjectMatch) return false;
