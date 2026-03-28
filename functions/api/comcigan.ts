@@ -357,6 +357,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     let datasetSelectedGrade1: string | null = null;
     let finalDataset: string | null = null;
     let manualPlanData: any = null;
+    let fallbackDataset: string | null = null;       // comcigan_fallback_dataset (표준 데이터셋)
+    let fallbackDatasetGrade1: string | null = null; // comcigan_fallback_dataset_grade1
 
     if (db) {
         try {
@@ -376,6 +378,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 results.forEach((row: any) => {
                     if (row.key === 'comcigan_dataset_selected') datasetSelected = row.value;
                     if (row.key === 'comcigan_dataset_selected_grade1') datasetSelectedGrade1 = row.value;
+                    if (row.key === 'comcigan_fallback_dataset') fallbackDataset = row.value;             // [FIX] 표준 데이터셋 파싱
+                    if (row.key === 'comcigan_fallback_dataset_grade1') fallbackDatasetGrade1 = row.value; // [FIX] 1학년 표준 데이터셋 파싱
                     if (row.key === 'dataset_ip_overrides') {
                         try {
                             ipOverridesFound = JSON.parse(row.value);
@@ -486,9 +490,23 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     }
 
     // Infer the Comcigan standard baseline dataset dynamically.
-    // The baseline is typically the highest numbered dataset that does NOT have specific date bounds.
+    // The baseline is typically the highest numbered dataset that does NOT have specific date bounds
+    // AND actually contains non-zero schedule data (to exclude empty future-reserved datasets like 자료542).
     let baselineDatasetId = "";
-    const unboundedDatasets = timetableProps.filter(key => !datasetDateRanges[key]);
+    const unboundedDatasets = timetableProps.filter(key => {
+        if (datasetDateRanges[key]) return false; // 날짜 범위 있는 것은 제외
+        // [FIX] 완전히 빈 데이터셋(자료542 등)을 baseline 후보에서 제외
+        const d = rawData[key];
+        if (!d || !d[grade]) return false;
+        for (const cls of Object.keys(d[grade])) {
+            if (parseInt(cls) <= 0) continue;
+            for (let w = 1; w <= 5; w++) {
+                const dayData = d[grade][cls]?.[w];
+                if (Array.isArray(dayData) && dayData.some((v: any) => v !== 0)) return true;
+            }
+        }
+        return false; // 데이터가 없으면 후보에서 제외
+    });
     const baselineCandidates = unboundedDatasets.length > 0 ? unboundedDatasets : timetableProps;
     
     if (baselineCandidates.length > 0) {
@@ -498,17 +516,32 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         }, { key: baselineCandidates[0], num: -1 });
         baselineDatasetId = maxKeyItem.key;
     }
+    console.log(`[Comcigan Debug] baselineDatasetId inferred as: ${baselineDatasetId} (from unboundedDatasets: ${unboundedDatasets.join(', ')})`);
+
+    // Helper: 관리자가 설정한 표준 데이터셋 (grade별) 해석
+    const resolveAdminFallback = (): string | null => {
+        const candidateFb = grade === 1 ? (fallbackDatasetGrade1 ?? fallbackDataset) : fallbackDataset;
+        if (candidateFb && candidateFb !== '_auto_' && timetableProps.includes(candidateFb)) {
+            return candidateFb;
+        }
+        return null;
+    };
 
     // When the target date is beyond the cached comcigan range, skip date-matching and
     // directly use designatedDatasetId (the admin-configured standard dataset for this grade).
     if (isOutOfRange) {
-        console.log(`[Comcigan Debug] isOutOfRange=true. Forcing standard dataset. designatedDatasetId=${designatedDatasetId}, finalDataset=${finalDataset}, baselineDatasetId=${baselineDatasetId}`);
+        console.log(`[Comcigan Debug] isOutOfRange=true. Forcing standard dataset. designatedDatasetId=${designatedDatasetId}, finalDataset=${finalDataset}, fallbackDataset=${fallbackDataset}, baselineDatasetId=${baselineDatasetId}`);
         if (designatedDatasetId && designatedDatasetId !== '_auto_' && (timetableProps.includes(designatedDatasetId) || designatedDatasetId === 'MANUAL_PLAN')) {
             timedataProp = designatedDatasetId;
         } else if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
             timedataProp = finalDataset;
         } else {
-            timedataProp = baselineDatasetId || timetableProps[0] || "";
+            // [FIX] _auto_ 모드일 때: 관리자가 설정한 표준 데이터셋 우선, 그 다음 동적 추론
+            const adminFallback = resolveAdminFallback();
+            timedataProp = adminFallback || baselineDatasetId || timetableProps[0] || "";
+            if (adminFallback) {
+                console.log(`[Comcigan Debug] Out-of-range: Using admin fallback dataset: ${adminFallback}`);
+            }
         }
         isFallbackApplied = true;
         console.log(`[Comcigan Debug] Out-of-range fallback resolved to: ${timedataProp}`);
@@ -528,7 +561,9 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
                 timedataProp = finalDataset;
             } else {
-                timedataProp = baselineDatasetId || timetableProps[0] || "";
+                // [FIX] 관리자가 설정한 표준 데이터셋 우선 시도
+                const adminFallback = resolveAdminFallback();
+                timedataProp = adminFallback || baselineDatasetId || timetableProps[0] || "";
             }
             isFallbackApplied = true;
         }
@@ -553,8 +588,9 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
                 timedataProp = finalDataset;
             } else {
-                // If completely out of bounds, use the dynamically inferred baseline standard timetable
-                timedataProp = baselineDatasetId || timetableProps[0] || "";
+                // [FIX] 관리자가 설정한 표준 데이터셋 우선, 그 다음 동적 추론 baseline
+                const adminFallback = resolveAdminFallback();
+                timedataProp = adminFallback || baselineDatasetId || timetableProps[0] || "";
             }
             isFallbackApplied = true;
         }
