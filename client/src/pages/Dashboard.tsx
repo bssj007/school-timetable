@@ -425,16 +425,18 @@ export default function Dashboard() {
             ...item,
             weekday: item.weekday
           })) as TimetableItem[];
-          // Attach datasetId for downstream queries
+          // Attach datasetId and debugTokens for downstream queries
           (mappedData as any).datasetId = result.datasetId;
           (mappedData as any).originalDatasetId = result.originalDatasetId || result.datasetId;
           (mappedData as any).ipOverrideApplied = result.ipOverrideApplied;
+          (mappedData as any).debugTokens = result.debugTokens || null;
           return mappedData;
         }
         const emptyArray = [] as TimetableItem[];
         (emptyArray as any).datasetId = result.datasetId;
         (emptyArray as any).originalDatasetId = result.originalDatasetId || result.datasetId;
         (emptyArray as any).ipOverrideApplied = result.ipOverrideApplied;
+        (emptyArray as any).debugTokens = result.debugTokens || null;
         return emptyArray;
       } catch (e) {
         console.error('Failed to fetch timetable', e);
@@ -1814,14 +1816,15 @@ export default function Dashboard() {
                 </style>
                 <div ref={timetableRef} id="timetable-container" className="group" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
                   {/* System Dataset Config UI (Debug) */}
-                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled && (
+                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled && (settings?.comcigan_debug_whitelist_hit !== false) && (
                     <div className="print:hidden capturing:hidden text-[10px] md:text-xs text-gray-400 text-right mb-1 tracking-tight flex flex-wrap items-center justify-end gap-1 md:gap-2 pr-1">
-                      <span className="text-blue-500 font-semibold text-xs border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">현재 데이터셋: {(rawTimetableData as any)?.datasetId}{((rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.originalDatasetId !== (rawTimetableData as any)?.datasetId) ? ` (원본: ${(rawTimetableData as any)?.originalDatasetId})` : ''}</span>
+                      <span className="text-blue-500 font-semibold text-xs border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">사용중: {(rawTimetableData as any)?.datasetId}{((rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.originalDatasetId !== (rawTimetableData as any)?.datasetId) ? ` (설정: ${(rawTimetableData as any)?.originalDatasetId})` : ''}</span>
                       <span className="hidden md:inline">|</span>
-                      <span>1학년: {(rawTimetableData as any).debugTokens.override1 && (rawTimetableData as any).debugTokens.override1 !== '_auto_' ? '단독선택(O)' : '단독선택(X)'} / 기본FB{(rawTimetableData as any).debugTokens.fallback1 && (rawTimetableData as any).debugTokens.fallback1 !== '_auto_' ? '(O)' : '(X)'}</span>
+                      <span>1학년: {(rawTimetableData as any).debugTokens.override1 && (rawTimetableData as any).debugTokens.override1 !== '_auto_' ? `고정(${(rawTimetableData as any).debugTokens.override1})` : '자동'}</span>
                       <span className="hidden md:inline">|</span>
-                      <span>2,3학년: {(rawTimetableData as any).debugTokens.override23 && (rawTimetableData as any).debugTokens.override23 !== '_auto_' ? '단독선택(O)' : '단독선택(X)'} / 기본FB{(rawTimetableData as any).debugTokens.fallback23 && (rawTimetableData as any).debugTokens.fallback23 !== '_auto_' ? '(O)' : '(X)'}</span>
+                      <span>2,3학년: {(rawTimetableData as any).debugTokens.override23 && (rawTimetableData as any).debugTokens.override23 !== '_auto_' ? `고정(${(rawTimetableData as any).debugTokens.override23})` : '자동'}</span>
                       {(rawTimetableData as any).debugTokens.isFallbackApplied && <span className="text-red-400 font-bold ml-1">(! Fallback 가동중)</span>}
+                      {(rawTimetableData as any)?.ipOverrideApplied && <span className="text-orange-500 font-bold ml-1">(IP 오버라이드: {(rawTimetableData as any)?.ipOverrideApplied})</span>}
                     </div>
                   )}
 

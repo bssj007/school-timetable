@@ -6767,6 +6767,9 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     const [fallbackPropGrade1, setFallbackPropGrade1] = useState<string>('');
     // Debug UI overlay toggle
     const [debugOverlay, setDebugOverlay] = useState<boolean>(false);
+    // Debug overlay IP whitelist
+    const [debugWhitelist, setDebugWhitelist] = useState<string[]>([]);
+    const [newDebugIp, setNewDebugIp] = useState<string>('');
     // IP Overrides state
     const [ipOverrides, setIpOverrides] = useState<Record<string, { grade1?: string, default?: string, memo?: string }>>({});
     
@@ -6797,6 +6800,15 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
             setFallbackProp(settingsQuery.data.comcigan_fallback_dataset || '_auto_');
             setFallbackPropGrade1(settingsQuery.data.comcigan_fallback_dataset_grade1 || '_auto_');
             setDebugOverlay(settingsQuery.data.comcigan_debug_overlay_enabled === 'true');
+            if (settingsQuery.data.comcigan_debug_whitelist) {
+                try {
+                    setDebugWhitelist(JSON.parse(settingsQuery.data.comcigan_debug_whitelist));
+                } catch (e) {
+                    setDebugWhitelist([]);
+                }
+            } else {
+                setDebugWhitelist([]);
+            }
 
             if (settingsQuery.data.dataset_ip_overrides) {
                 try {
@@ -7060,6 +7072,73 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                         <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_debug_overlay_enabled: debugOverlay ? 'true' : 'false' })} disabled={debugOverlay === (settingsQuery.data?.comcigan_debug_overlay_enabled === 'true') || saveMutation.isPending}>
                             {saveMutation.isPending ? "저장 중..." : "저장"}
                         </Button>
+                    </div>
+                </div>
+
+                {/* Debug Overlay IP Whitelist */}
+                <div className="space-y-3 border rounded-lg p-4 bg-slate-50">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-700">디버그 표시 허용 IP</span>
+                        <span className="text-xs text-slate-400">비어있으면 모든 IP에서 표시 · IP 추가 시 목록 IP에만 표시</span>
+                    </div>
+                    {debugWhitelist.length === 0 ? (
+                        <div className="text-xs text-center py-2 text-gray-400 bg-white border rounded">허용 IP 없음 (모든 접속자에게 표시)</div>
+                    ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                            {debugWhitelist.map(ip => (
+                                <span key={ip} className="inline-flex items-center gap-1 text-xs font-mono bg-white border rounded px-2 py-0.5">
+                                    {ip}
+                                    <button
+                                        className="text-red-400 hover:text-red-600 ml-0.5"
+                                        onClick={() => {
+                                            const next = debugWhitelist.filter(x => x !== ip);
+                                            setDebugWhitelist(next);
+                                            saveMutation.mutate({ comcigan_debug_whitelist: JSON.stringify(next) });
+                                        }}
+                                    >✕</button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    <div className="flex gap-2 pt-1">
+                        <Input
+                            value={newDebugIp}
+                            onChange={e => setNewDebugIp(e.target.value)}
+                            placeholder="추가할 IP 주소"
+                            className="text-sm font-mono h-8 text-xs"
+                            onKeyDown={e => {
+                                if (e.key === 'Enter' && newDebugIp.trim()) {
+                                    const next = [...debugWhitelist.filter(x => x !== newDebugIp.trim()), newDebugIp.trim()];
+                                    setDebugWhitelist(next);
+                                    saveMutation.mutate({ comcigan_debug_whitelist: JSON.stringify(next) });
+                                    setNewDebugIp('');
+                                }
+                            }}
+                        />
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 text-xs shrink-0"
+                            onClick={async () => {
+                                try {
+                                    const res = await fetch('/api/my-ip');
+                                    const data = await res.json();
+                                    if (data.ip) setNewDebugIp(data.ip);
+                                } catch { toast.error('IP 조회 실패'); }
+                            }}
+                        >내 IP</Button>
+                        <Button
+                            size="sm"
+                            className="h-8 text-xs shrink-0"
+                            disabled={!newDebugIp.trim() || saveMutation.isPending}
+                            onClick={() => {
+                                if (!newDebugIp.trim()) return;
+                                const next = [...debugWhitelist.filter(x => x !== newDebugIp.trim()), newDebugIp.trim()];
+                                setDebugWhitelist(next);
+                                saveMutation.mutate({ comcigan_debug_whitelist: JSON.stringify(next) });
+                                setNewDebugIp('');
+                            }}
+                        >추가</Button>
                     </div>
                 </div>
 
