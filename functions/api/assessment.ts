@@ -300,6 +300,7 @@ export const onRequest = async (context: any) => {
                      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
                 ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null).run();
 
+                try { const { applyAutoPredictions } = await import('../server/autoPredict'); const { results } = await env.DB.prepare("SELECT * FROM performance_assessments WHERE isDeleted = 0").all(); await applyAutoPredictions(results, env.DB); } catch(e) { console.error("[Assessment API/POST] Predict error:", e); }
                 return new Response(JSON.stringify({ success: true, result }), {
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -346,6 +347,7 @@ export const onRequest = async (context: any) => {
                          VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
                     ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null).run();
 
+                    try { const { applyAutoPredictions } = await import('../server/autoPredict'); const { results } = await env.DB.prepare("SELECT * FROM performance_assessments WHERE isDeleted = 0").all(); await applyAutoPredictions(results, env.DB); } catch(e) { console.error("[Assessment API/POST] Predict error:", e); }
                     return new Response(JSON.stringify({ success: true, result }), {
                         headers: { 'Content-Type': 'application/json' }
                     });
@@ -431,6 +433,7 @@ export const onRequest = async (context: any) => {
                 }
             }
 
+            try { const { applyAutoPredictions } = await import('../server/autoPredict'); const { results } = await env.DB.prepare("SELECT * FROM performance_assessments WHERE isDeleted = 0").all(); await applyAutoPredictions(results, env.DB); } catch(e) { console.error("[Assessment API/DELETE] Predict error:", e); }
             return new Response(JSON.stringify({ success: true }), {
                 headers: { 'Content-Type': 'application/json' }
             });
@@ -511,6 +514,7 @@ export const onRequest = async (context: any) => {
 
             try {
                 const result = await env.DB.prepare(query).bind(...values).run();
+                try { const { applyAutoPredictions } = await import('../server/autoPredict'); const { results } = await env.DB.prepare("SELECT * FROM performance_assessments WHERE isDeleted = 0").all(); await applyAutoPredictions(results, env.DB); } catch(e) { console.error("[Assessment API/PATCH] Predict error:", e); }
                 return new Response(JSON.stringify({ success: true, result }), {
                     headers: { 'Content-Type': 'application/json' }
                 });
