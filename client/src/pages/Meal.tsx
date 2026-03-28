@@ -495,7 +495,7 @@ export default function MealPage() {
                                                                     <span className="text-sm text-slate-700 leading-snug flex-1">{name}</span>
                                                                 )}
                                                                 {allergens && (
-                                                                    <span className="text-[10px] text-slate-400 shrink-0 leading-snug tabular-nums">{allergens}</span>
+                                                                    <span className="text-[10px] text-slate-500 shrink-0 leading-snug tabular-nums">{allergens}</span>
                                                                 )}
                                                             </li>
                                                         );
@@ -529,7 +529,7 @@ export default function MealPage() {
                                                                     <span className="text-sm text-slate-700 leading-snug flex-1">{name}</span>
                                                                 )}
                                                                 {allergens && (
-                                                                    <span className="text-[10px] text-slate-400 shrink-0 leading-snug tabular-nums">{allergens}</span>
+                                                                    <span className="text-[10px] text-slate-500 shrink-0 leading-snug tabular-nums">{allergens}</span>
                                                                 )}
                                                             </li>
                                                         );
