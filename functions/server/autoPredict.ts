@@ -151,11 +151,15 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
             if (assessment.classNum !== 0) {
                 return tbl.filter((t: any) => {
                     if (t.weekday !== w) return false;
-                    // 본인 반이거나 반 정보가 없는 공통 슬롯만 포함
-                    // (다른 반의 동일 과목을 포함하면 고아 판별 오진 발생 → 비선택과목 복구 감지 오작동)
+                    // 1. 본인 반이거나 반 정보가 없는 공통 슬롯
                     if (!t.class || t.class.toString() === assessment.classNum.toString()) return true;
 
-                    // 선택과목 별칭 교차 확인 (본인 반 내 데이터의 elective 별칭만 허용)
+                    // 2. 다른 반이어도 과목명이 일치하면 포함 (별칭/축약명 불일치 보완)
+                    // 단, 복구 감지 시에는 엄격한 2차 검증을 별도로 수행하므로 오판 위험 없음
+                    const tSubj = (t.subject || '').replace(/\s*\(.*$/, '').trim();
+                    if (tSubj === baseAssSubject) return true;
+
+                    // 3. 선택과목 별칭 교차 확인
                     const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === t.subject && cfg.originalTeacher === t.teacher);
                     if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) return true;
 
@@ -188,10 +192,10 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
                 }
 
                 // elective_config에서 이 과목이 이동수업인지 확인
-                // 이동 X + 그룹 O 과목의 경우: 같은 선생님이 다른 반에서 다른 교시에 동일 과목을 가르치므로
-                // originalTime(원본 교시)과 같은 교시만 허용 (이동 O는 교시가 바뀔 수 있으므로 제약 없음)
+                // 모든 config 항목이 isMovingClass=0 일 때만 비이동 그룹으로 판정
+                // 하나라도 isMovingClass=1 이면 이동수업 → classTime 제약 없음
                 const isNonMovingGrouped = electiveConfigs.length > 0 &&
-                    electiveConfigs.some((ec: any) => ec.isMovingClass === 0);
+                    electiveConfigs.every((ec: any) => ec.isMovingClass === 0);
 
                 return tbl.filter((t: any) => {
                     if (t.weekday !== w) return false;
@@ -232,13 +236,14 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
                     }
                 }
                 if (knownTeacherNames.size > 0) {
-                    console.log(`[autoPredict] elective teacher fallback for "${baseAssSubject}": teachers=[${[...knownTeacherNames].join(',')}] originalTime=${originalTime}`);
+                    // 모든 config가 isMovingClass=0일 때만 classTime 제약 적용
+                    const allNonMoving = electiveConfigsForSubject.every((ec: any) => ec.isMovingClass === 0);
+                    console.log(`[autoPredict] elective teacher fallback for "${baseAssSubject}": teachers=[${[...knownTeacherNames].join(',')}] originalTime=${originalTime} allNonMoving=${allNonMoving}`);
                     return tbl.filter((t: any) => {
                         if (t.weekday !== w) return false;
                         if ((t.subject || '').replace(/\s*\(.*$/, '').trim() !== baseAssSubject) return false;
-                        // classTime 제약: 같은 선생님이 다른 반에 다른 교시에 가르치는 경우 제외
-                        // (예: 이나*가 A반에 2교시, B반에 3교시 music을 가르칠 때 3교시 슬롯 차단)
-                        if (originalTime && t.classTime !== originalTime) return false;
+                        // 모든 config가 비이동(isMovingClass=0)인 경우만 classTime 제약
+                        if (allNonMoving && originalTime && t.classTime !== originalTime) return false;
                         const slotTeacher = (t.teacher || '').replace(/\*.*$/, '').trim();
                         const teacherMatch = [...knownTeacherNames].some(name =>
                             slotTeacher === name || slotTeacher.startsWith(name) || name.startsWith(slotTeacher)
@@ -375,16 +380,30 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
         // 자동 연기가 걸려있었다면 → tempDueDate 초기화로 원본 날짜 복구
         // 수동 연기(isAutoPredicted=0 + tempDueDate 있음)는 건드리지 않음
         if (!isOrphan && assessment.isAutoPredicted && assessment.tempDueDate) {
-            assessment.tempDueDate = null;
-            assessment.tempClassTime = null;
-            assessment.isAutoPredicted = 0;
-            if (!previewMode) {
-                try {
-                    await db.prepare(
-                        "UPDATE performance_assessments SET tempDueDate = NULL, tempClassTime = NULL, isAutoPredicted = 0 WHERE id = ?"
-                    ).bind(assessment.id).run();
-                } catch (e: any) {
-                    console.error("[autoPredict] Failed to reset restored prediction:", e);
+            // classNum !== 0 과목: 조건 2(다른 반 동일 과목)로 isOrphan=false가 될 수 있어
+            // 본인 반 슬롯만으로 엄격하게 재검증 후 복구를 확정함
+            let confirmedRestored = true;
+            if (assessment.classNum !== 0 && currentW >= 0) {
+                const ownClassSlots = ctx.timetable.filter((t: any) =>
+                    t.weekday === currentW &&
+                    t.class != null && t.class.toString() === assessment.classNum.toString() &&
+                    (targetTime ? t.classTime === targetTime : true)
+                );
+                confirmedRestored = ownClassSlots.some((slot: any) => checkSubjectMatch(slot, ctx.timetable));
+            }
+
+            if (confirmedRestored) {
+                assessment.tempDueDate = null;
+                assessment.tempClassTime = null;
+                assessment.isAutoPredicted = 0;
+                if (!previewMode) {
+                    try {
+                        await db.prepare(
+                            "UPDATE performance_assessments SET tempDueDate = NULL, tempClassTime = NULL, isAutoPredicted = 0 WHERE id = ?"
+                        ).bind(assessment.id).run();
+                    } catch (e: any) {
+                        console.error("[autoPredict] Failed to reset restored prediction:", e);
+                    }
                 }
             }
         }
