@@ -425,16 +425,18 @@ export default function Dashboard() {
             ...item,
             weekday: item.weekday
           })) as TimetableItem[];
-          // Attach datasetId for downstream queries
+          // Attach datasetId and debugTokens for downstream queries
           (mappedData as any).datasetId = result.datasetId;
           (mappedData as any).originalDatasetId = result.originalDatasetId || result.datasetId;
           (mappedData as any).ipOverrideApplied = result.ipOverrideApplied;
+          (mappedData as any).debugTokens = result.debugTokens || null;
           return mappedData;
         }
         const emptyArray = [] as TimetableItem[];
         (emptyArray as any).datasetId = result.datasetId;
         (emptyArray as any).originalDatasetId = result.originalDatasetId || result.datasetId;
         (emptyArray as any).ipOverrideApplied = result.ipOverrideApplied;
+        (emptyArray as any).debugTokens = result.debugTokens || null;
         return emptyArray;
       } catch (e) {
         console.error('Failed to fetch timetable', e);
@@ -448,28 +450,30 @@ export default function Dashboard() {
   });
 
   // Extract persistent datasetId for use in effects (fallback to actual timetable response)
-  const datasetId = (rawTimetableData as any)?.originalDatasetId || (rawTimetableData as any)?.datasetId || '';
+  const rawDatasetId = (rawTimetableData as any)?.originalDatasetId || (rawTimetableData as any)?.datasetId || '';
+  // Optimization: Pre-calculate datasetType ("COMCIGAN" vs "MANUAL_PLAN") so dependent queries can start immediately.
+  const datasetType = (rawDatasetId === 'MANUAL_PLAN' || rawDatasetId === 'SEMESTER_PLAN') ? rawDatasetId : 'COMCIGAN';
 
   // 1.5 선택과목 데이터 및 프로필 조회 (2, 3학년용)
   const { data: electiveConfigs, isFetching: isElectiveConfigsFetching } = useQuery({
-    queryKey: ['electiveConfigs', grade, datasetId],
+    queryKey: ['electiveConfigs', grade, datasetType],
     queryFn: async () => {
-      if ((grade !== "2" && grade !== "3") || !datasetId) return [];
-      const res = await fetch(`/api/electives?grade=${grade}&dataset=${datasetId}`);
+      if ((grade !== "2" && grade !== "3")) return [];
+      const res = await fetch(`/api/electives?grade=${grade}&dataset=${datasetType}`);
       if (!res.ok) {
         if (res.status === 404) return [];
         throw new Error(`Failed to fetch elective configs: ${res.status}`);
       }
       return res.json();
     },
-    enabled: (grade === "2" || grade === "3") && !!datasetId
+    enabled: (grade === "2" || grade === "3")
   });
 
   const { data: studentProfile } = useQuery({
-    queryKey: ['studentProfile', grade, classNum, studentNumber, datasetId],
+    queryKey: ['studentProfile', grade, classNum, studentNumber, datasetType],
     queryFn: async () => {
-      if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber || !datasetId) return null;
-      const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&dataset=${datasetId}`);
+      if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber) return null;
+      const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&dataset=${datasetType}`);
       if (!res.ok) {
         if (res.status === 404) return null;
         throw new Error(`Failed to fetch student profile: ${res.status}`);
@@ -484,7 +488,7 @@ export default function Dashboard() {
       }
       return data;
     },
-    enabled: !!grade && !!classNum && !!studentNumber && (grade === "2" || grade === "3") && !!datasetId
+    enabled: !!grade && !!classNum && !!studentNumber && (grade === "2" || grade === "3")
   });
 
   const lastValidProfileRef = React.useRef<any>(null);
@@ -508,7 +512,7 @@ export default function Dashboard() {
       return;
     }
 
-    if (!classNum || !studentNumber || !datasetId || !electiveConfigs) {
+    if (!classNum || !studentNumber || !electiveConfigs) {
       // Still loading necessary contexts
       return;
     }
@@ -539,7 +543,7 @@ export default function Dashboard() {
     setIsElectiveEntered(isFullyEntered);
     setShowElectiveWarning(!isFullyEntered);
 
-  }, [grade, classNum, studentNumber, datasetId, currentProfile, electiveConfigs]);
+  }, [grade, classNum, studentNumber, datasetType, currentProfile, electiveConfigs]);
 
   const { timetableData, allClassesTimetable } = useMemo(() => {
     if (!rawTimetableData) return { timetableData: [], allClassesTimetable: [] };
@@ -758,11 +762,11 @@ export default function Dashboard() {
 
   // 3. 수행평가 목록 조회
   const { data: allAssessments, isLoading: assessmentLoading } = useQuery({
-    queryKey: ['assessments', grade, classNum, datasetId],
+    queryKey: ['assessments', grade, classNum, datasetType],
     queryFn: async () => {
       if (!grade || !classNum) return [];
       try {
-        const datasetQuery = datasetId ? `&dataset=${encodeURIComponent(datasetId)}` : '';
+        const datasetQuery = datasetType ? `&dataset=${encodeURIComponent(datasetType)}` : '';
         const res = await fetch(`/api/assessment?grade=${grade}&classNum=${classNum}${datasetQuery}`);
         if (!res.ok) {
           if (res.status === 404) return [];
@@ -776,6 +780,24 @@ export default function Dashboard() {
     },
     enabled: !!grade && !!classNum,
     refetchInterval: 2000,
+  });
+
+  // 3.5 수행평가 백그라운드 재연산 (SWR 아키텍처 도입)
+  useQuery({
+    queryKey: ['assessments_predict'],
+    queryFn: async () => {
+      try {
+        const res = await fetch('/api/assessment?action=predict', { method: 'POST' });
+        if (res.ok) {
+           queryClient.invalidateQueries({ queryKey: ['assessments'] });
+        }
+      } catch (e) {
+        console.warn('Background autoPredict trigger failed', e);
+      }
+      return true;
+    },
+    refetchOnWindowFocus: true,     // 화면으로 다시 돌아올 때 1번 트리거
+    staleTime: 10 * 1000,           // 연속 트리거 방지 (10초 쿨타임)
   });
 
   // 학생이 실제로 수강하는 과목 목록 계산 (수행평가 고아상태 필터링용)
@@ -990,7 +1012,7 @@ export default function Dashboard() {
           grade: parseInt(grade),
           classNum: parseInt(classNum),
           classTime: data.classTime ? parseInt(data.classTime) : null,
-          dataset: datasetId || '',
+          dataset: datasetType || '',
           teacher: data.teacher,
           classCode: data.classCode,
         }),
@@ -1031,7 +1053,7 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...data,
-          dataset: datasetId || ''
+          dataset: datasetType || ''
         }),
       });
 
@@ -1814,14 +1836,15 @@ export default function Dashboard() {
                 </style>
                 <div ref={timetableRef} id="timetable-container" className="group" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
                   {/* System Dataset Config UI (Debug) */}
-                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled && (
+                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled && (settings?.comcigan_debug_whitelist_hit !== false) && (
                     <div className="print:hidden capturing:hidden text-[10px] md:text-xs text-gray-400 text-right mb-1 tracking-tight flex flex-wrap items-center justify-end gap-1 md:gap-2 pr-1">
-                      <span className="text-blue-500 font-semibold text-xs border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">현재 데이터셋: {(rawTimetableData as any)?.datasetId}{((rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.originalDatasetId !== (rawTimetableData as any)?.datasetId) ? ` (원본: ${(rawTimetableData as any)?.originalDatasetId})` : ''}</span>
+                      <span className="text-blue-500 font-semibold text-xs border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">사용중: {(rawTimetableData as any)?.datasetId}{((rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.originalDatasetId !== (rawTimetableData as any)?.datasetId) ? ` (설정: ${(rawTimetableData as any)?.originalDatasetId})` : ''}</span>
                       <span className="hidden md:inline">|</span>
-                      <span>1학년: {(rawTimetableData as any).debugTokens.override1 && (rawTimetableData as any).debugTokens.override1 !== '_auto_' ? '단독선택(O)' : '단독선택(X)'} / 기본FB{(rawTimetableData as any).debugTokens.fallback1 && (rawTimetableData as any).debugTokens.fallback1 !== '_auto_' ? '(O)' : '(X)'}</span>
+                      <span>1학년: {(rawTimetableData as any).debugTokens.override1 && (rawTimetableData as any).debugTokens.override1 !== '_auto_' ? `고정(${(rawTimetableData as any).debugTokens.override1})` : '자동'}</span>
                       <span className="hidden md:inline">|</span>
-                      <span>2,3학년: {(rawTimetableData as any).debugTokens.override23 && (rawTimetableData as any).debugTokens.override23 !== '_auto_' ? '단독선택(O)' : '단독선택(X)'} / 기본FB{(rawTimetableData as any).debugTokens.fallback23 && (rawTimetableData as any).debugTokens.fallback23 !== '_auto_' ? '(O)' : '(X)'}</span>
+                      <span>2,3학년: {(rawTimetableData as any).debugTokens.override23 && (rawTimetableData as any).debugTokens.override23 !== '_auto_' ? `고정(${(rawTimetableData as any).debugTokens.override23})` : '자동'}</span>
                       {(rawTimetableData as any).debugTokens.isFallbackApplied && <span className="text-red-400 font-bold ml-1">(! Fallback 가동중)</span>}
+                      {(rawTimetableData as any)?.ipOverrideApplied && <span className="text-orange-500 font-bold ml-1">(IP 오버라이드: {(rawTimetableData as any)?.ipOverrideApplied})</span>}
                     </div>
                   )}
 

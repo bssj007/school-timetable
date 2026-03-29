@@ -1,5 +1,18 @@
-export async function applyAutoPredictions(assessments: any[], db: any): Promise<any[]> {
+export async function applyAutoPredictions(assessments: any[], db: any, previewMode: boolean = false, bypassPauseCheck: boolean = false): Promise<any[]> {
     if (!assessments || assessments.length === 0) return assessments;
+
+    if (!previewMode && !bypassPauseCheck) {
+        try {
+            const { results: pauseResults } = await db.prepare("SELECT value FROM system_settings WHERE key = 'auto_predict_paused'").all();
+            if (pauseResults && pauseResults.length > 0 && pauseResults[0].value === 'true') {
+                console.log("[autoPredict] Auto prediction is PAUSED. Skipping evaluation.");
+                return assessments;
+            }
+        } catch (e) {
+            console.error("[autoPredict] Error checking pause state:", e);
+            // Table might not exist or other error, proceed normally
+        }
+    }
 
     // We need to fetch timetable & electives for all involved datasets and grades
     const contextMap = new Map(); 
@@ -33,22 +46,37 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
 
     }
 
-    // Fetch context data
-    for (const ctx of contextMap.values()) {
-        try {
-            // Electives
-            const { results: electives } = await db.prepare("SELECT * FROM elective_config WHERE grade = ?").bind(ctx.grade).all();
-            ctx.electives = electives || [];
+    // 1. One-time Global Data Loading
+    const { getTimetable } = await import('../api/comcigan' as any);
+    
+    let cachedRawDataString: string | undefined = undefined;
+    try {
+        const rawDataRow = await db.prepare("SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'").first();
+        if (rawDataRow && rawDataRow.response_json) {
+            cachedRawDataString = rawDataRow.response_json as string;
+        }
+    } catch (e) { }
 
-            // Timetable fetching via Unified API
-            const { getTimetable } = await import('../api/comcigan' as any);
-            let cachedRawDataString: string | undefined = undefined;
-            try {
-                const rawDataRow = await db.prepare("SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'").first();
-                if (rawDataRow && rawDataRow.response_json) {
-                    cachedRawDataString = rawDataRow.response_json as string;
-                }
-            } catch (e) { }
+    // 2. Pre-fetch common elective configs
+    // We only need electives for the grades that are present in the contextMap
+    const neededGrades = Array.from(new Set(Array.from(contextMap.values()).map((ctx: any) => ctx.grade)));
+    const electivesByGrade: Record<number, any[]> = {};
+    
+    await Promise.all(neededGrades.map(async (grade) => {
+        try {
+            const { results: electives } = await db.prepare("SELECT * FROM elective_config WHERE grade = ?").bind(grade).all();
+            electivesByGrade[grade as number] = electives || [];
+        } catch (e) {
+            electivesByGrade[grade as number] = [];
+            console.error(`[applyAutoPredictions] Elective fetch error for grade ${grade}`, e);
+        }
+    }));
+
+    // 3. Parallel Context Data Fetching (getTimetable is now very fast thanks to cachedRawDataString)
+    await Promise.all(Array.from(contextMap.values()).map(async (ctx: any) => {
+        try {
+            // Assign pre-fetched electives
+            ctx.electives = electivesByGrade[ctx.grade] || [];
 
             const dsParam = ctx.dataset === 'COMCIGAN' ? null : ctx.dataset;
             // Pass ctx.targetDate so the engine resolves the correct timetable structure for that specific week
@@ -59,12 +87,12 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
                  ctx.timetable = json.data || [];
             }
         } catch (e) {
-            console.error('[applyAutoPredictions] Context fetch error', e); 
+            console.error(`[applyAutoPredictions] Context fetch error for ${ctx.targetDate}`, e); 
         }
-    }
+    }));
 
     // Evaluate orphans and collect Promises (since we added DB await)
-    return Promise.all(assessments.map(async assessment => {
+    const resultPromises = Promise.all(assessments.map(async assessment => {
         if (assessment.isDone || assessment.isDeleted) return assessment;
 
         let ds = assessment.dataset || '';
@@ -91,10 +119,6 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
         const aDay = targetDateObj.getDay();
 
         const baseAssSubject = assessment.subject.replace(/\s*\(.*$/, '').trim();
-
-        // 공강/빈교실 판별 함수 - checkSubjectMatch보다 먼저 선언
-        const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free", "창체", "창의적", "자습", "동아리", "점심", "채플", "홈룸", "담임", "HR"];
-        const isFreePeriod = (subject: string) => FREE_KEYWORDS.some(k => (subject || '').includes(k));
 
         // 이동수업(classNum=0): teacher로 1차 필터 후 과목 탐색 → 일반 수업: 해당 반만
         const originalW = new Date(assessment.dueDate).getDay() - 1;
@@ -129,21 +153,22 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
                     if (t.weekday !== w) return false;
                     // 1. 본인 반이거나 반 정보가 없는 공통 슬롯
                     if (!t.class || t.class.toString() === assessment.classNum.toString()) return true;
-                    
-                    // 2. 다른 반 데이터라도 이동수업 특성상 동일 과목이 나오면 해당 블록으로 간주하여 포함시킴 (대시보드 갭필링 대체)
+
+                    // 2. 다른 반이어도 과목명이 일치하면 포함 (별칭/축약명 불일치 보완)
+                    // 단, 복구 감지 시에는 엄격한 2차 검증을 별도로 수행하므로 오판 위험 없음
                     const tSubj = (t.subject || '').replace(/\s*\(.*$/, '').trim();
                     if (tSubj === baseAssSubject) return true;
-                    
+
                     // 3. 선택과목 별칭 교차 확인
                     const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === t.subject && cfg.originalTeacher === t.teacher);
                     if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) return true;
-                    
+
                     return false;
                 });
             }
             // 이동수업: teacher로 엄격 필터
             // assessment.teacher + elective_config fullTeacherName/originalTeacher 모두 비교
-            if (assessment.teacher) {
+            if (assessment.teacher && assessment.teacher.trim() !== '') {
                 // targetTeachers를 쉼표 등으로 분리하여 다중 선생님 대응
                 const targetTeachers = assessment.teacher.split(/[,、]+/).map((t: string) => t.replace(/\*.*$/, '').trim());
 
@@ -166,14 +191,23 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
                     }
                 }
 
+                // elective_config에서 이 과목이 이동수업인지 확인
+                // 모든 config 항목이 isMovingClass=0 일 때만 비이동 그룹으로 판정
+                // 하나라도 isMovingClass=1 이면 이동수업 → classTime 제약 없음
+                const isNonMovingGrouped = electiveConfigs.length > 0 &&
+                    electiveConfigs.every((ec: any) => ec.isMovingClass === 0);
+
                 return tbl.filter((t: any) => {
-                    if (t.weekday !== w || isFreePeriod(t.subject || '')) return false;
+                    if (t.weekday !== w) return false;
                     const slotTeacher = (t.teacher || '').replace(/\*.*$/, '').trim();
                     const teacherMatch = [...knownTeacherNames].some(name =>
                         slotTeacher === name || slotTeacher.startsWith(name) || name.startsWith(slotTeacher)
                     );
                     if (!teacherMatch) return false;
-                    
+
+                    // 이동 X 그룹 과목: 같은 선생님이 다른 반에 다른 교시에 가르칠 경우 원본 교시와 다른 슬롯 차단
+                    if (isNonMovingGrouped && originalTime && t.classTime !== originalTime) return false;
+
                     // 이동수업 블록(그룹) 일치 여부 검증
                     if (originalClassesWithSubject.size > 0 && !originalClassesWithSubject.has(t.class)) {
                         return false;
@@ -181,10 +215,48 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
                     return true;
                 });
             }
-            // teacher 정보 없음: 과목명으로만 탐색 (공강 제외)
+            // teacher 정보 없음 - elective_config에 이 과목의 선생님 정보가 있으면 폴백으로 사용
+            // (음감비처럼 이동 X + 그룹 O 과목이 다른 반에 낙슐 없도록 교사명으로 1차 필터)
+            const electiveConfigsForSubject = ctx.electives.filter((c: any) =>
+                c.subject === baseAssSubject || c.fullSubjectName === baseAssSubject
+            );
+            if (electiveConfigsForSubject.length > 0) {
+                // elective_config의 originalTeacher / fullTeacherName을 knownTeacherNames로 수집
+                const knownTeacherNames = new Set<string>();
+                for (const ec of electiveConfigsForSubject) {
+                    if (ec.originalTeacher) {
+                        const nm = String(ec.originalTeacher).replace(/\*.*$/, '').trim();
+                        if (nm) knownTeacherNames.add(nm);
+                    }
+                    if (ec.fullTeacherName) {
+                        for (const n of String(ec.fullTeacherName).split(/[,、]+/)) {
+                            const nm = n.replace(/\*.*$/, '').trim();
+                            if (nm) knownTeacherNames.add(nm);
+                        }
+                    }
+                }
+                if (knownTeacherNames.size > 0) {
+                    // 모든 config가 isMovingClass=0일 때만 classTime 제약 적용
+                    const allNonMoving = electiveConfigsForSubject.every((ec: any) => ec.isMovingClass === 0);
+                    console.log(`[autoPredict] elective teacher fallback for "${baseAssSubject}": teachers=[${[...knownTeacherNames].join(',')}] originalTime=${originalTime} allNonMoving=${allNonMoving}`);
+                    return tbl.filter((t: any) => {
+                        if (t.weekday !== w) return false;
+                        if ((t.subject || '').replace(/\s*\(.*$/, '').trim() !== baseAssSubject) return false;
+                        // 모든 config가 비이동(isMovingClass=0)인 경우만 classTime 제약
+                        if (allNonMoving && originalTime && t.classTime !== originalTime) return false;
+                        const slotTeacher = (t.teacher || '').replace(/\*.*$/, '').trim();
+                        const teacherMatch = [...knownTeacherNames].some(name =>
+                            slotTeacher === name || slotTeacher.startsWith(name) || name.startsWith(slotTeacher)
+                        );
+                        if (!teacherMatch) return false;
+                        if (originalClassesWithSubject.size > 0 && !originalClassesWithSubject.has(t.class)) return false;
+                        return true;
+                    });
+                }
+            }
+            // teacher/elective_config 모두 없음: 과목명으로만 탐색 + originalClassesWithSubject 제한
             return tbl.filter((t: any) => {
                 if (t.weekday !== w) return false;
-                if (isFreePeriod(t.subject || '')) return false;
                 if ((t.subject || '').replace(/\s*\(.*$/, '').trim() !== baseAssSubject) return false;
                 
                 // 이동수업 블록(그룹) 일치 여부 검증
@@ -196,27 +268,38 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
                 return true;
             });
         };
-        const checkSubjectMatch = (slot: any) => {
-            // 공강/빈교실 슬롯은 어떤 경우도 매칭 불가
-            if (isFreePeriod(slot.subject || '')) return false;
+        const checkSubjectMatch = (slot: any, tbl: any[]) => {
+            // 이동수업/전체 평가: 공강 처리된 슬롯 제외
+            // 핵심: 다른 반의 공강이 간섭하지 않도록 originalClassesWithSubject 내 반들만 기준으로 공강 여부 판별
+            if (assessment.classNum === 0) {
+                const blockSlots = tbl.filter((t: any) => t.weekday === slot.weekday && t.classTime === slot.classTime);
+                // 원본 교시의 해당 과목 수강 반 목록이 있으면 그 반들만 조사 (다른 반의 공강이 영향을 주지 않도록)
+                const relevantSlots = originalClassesWithSubject.size > 0
+                    ? blockSlots.filter((t: any) => originalClassesWithSubject.has(t.class))
+                    : blockSlots;
+                const FREE_KEYWORDS = ["빈교실", "공강", "Empty", "Free"];
+                const hasFreePeriodSlot = relevantSlots.some((t: any) =>
+                    FREE_KEYWORDS.some(k => (t.subject || '').trim().includes(k))
+                );
+                if (hasFreePeriodSlot) {
+                    const exactMatch = relevantSlots.find((t: any) => (t.subject || '').trim() === baseAssSubject);
+                    if (!exactMatch) {
+                        return false; // 원본 수강 반 기준으로 공강 처리된 경우 매칭 제외
+                    }
+                }
+            }
 
             // 1. 과목명 매칭 확인
             let isSubjectMatch = false;
             const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === slot.subject && cfg.originalTeacher === slot.teacher);
             
-            if (slot.subject === baseAssSubject) {
+            if (slot.subject === baseAssSubject || slot.subject.replace(/\s*\(.*$/, '').trim() === baseAssSubject) {
                 isSubjectMatch = true;
             } else if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) {
                 isSubjectMatch = true;
             } else {
-                const genericConfig = ctx.electives.find((cfg: any) => (cfg.subject.trim() === baseAssSubject || cfg.fullSubjectName?.trim() === baseAssSubject));
-                if (genericConfig && genericConfig.classCode && specificConfig && specificConfig.classCode) {
-                    const codesA = genericConfig.classCode.split(',').map((s: string) => s.replace(/그룹/g, '').trim()).filter(Boolean);
-                    const codesB = specificConfig.classCode.split(',').map((s: string) => s.replace(/그룹/g, '').trim()).filter(Boolean);
-                    if (codesA.length > 0 && codesA.some((c: string) => codesB.includes(c))) {
-                        isSubjectMatch = true;
-                    }
-                }
+                // We MUST ONLY match exact subject names. 
+                // Group code fallback was intentionally disabled to prevent substituting '공강' or other subjects.
             }
 
             if (!isSubjectMatch) return false;
@@ -282,8 +365,7 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             let foundMatch = false;
             if (matchingSlots.length > 0) {
                 for (const slot of matchingSlots) {
-                    if (isFreePeriod(slot.subject || '')) continue; // 공강은 매칭 제외
-                    if (checkSubjectMatch(slot)) {
+                    if (checkSubjectMatch(slot, ctx.timetable)) {
                         foundMatch = true;
                         break;
                     }
@@ -293,6 +375,38 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
         }
 
         assessment.isOrphan = isOrphan;
+
+        // [복구 감지] 시간표가 복구되어 원본 슬롯이 다시 유효해진 경우
+        // 자동 연기가 걸려있었다면 → tempDueDate 초기화로 원본 날짜 복구
+        // 수동 연기(isAutoPredicted=0 + tempDueDate 있음)는 건드리지 않음
+        if (!isOrphan && assessment.isAutoPredicted && assessment.tempDueDate) {
+            // classNum !== 0 과목: 조건 2(다른 반 동일 과목)로 isOrphan=false가 될 수 있어
+            // 본인 반 슬롯만으로 엄격하게 재검증 후 복구를 확정함
+            let confirmedRestored = true;
+            if (assessment.classNum !== 0 && currentW >= 0) {
+                const ownClassSlots = ctx.timetable.filter((t: any) =>
+                    t.weekday === currentW &&
+                    t.class != null && t.class.toString() === assessment.classNum.toString() &&
+                    (targetTime ? t.classTime === targetTime : true)
+                );
+                confirmedRestored = ownClassSlots.some((slot: any) => checkSubjectMatch(slot, ctx.timetable));
+            }
+
+            if (confirmedRestored) {
+                assessment.tempDueDate = null;
+                assessment.tempClassTime = null;
+                assessment.isAutoPredicted = 0;
+                if (!previewMode) {
+                    try {
+                        await db.prepare(
+                            "UPDATE performance_assessments SET tempDueDate = NULL, tempClassTime = NULL, isAutoPredicted = 0 WHERE id = ?"
+                        ).bind(assessment.id).run();
+                    } catch (e: any) {
+                        console.error("[autoPredict] Failed to reset restored prediction:", e);
+                    }
+                }
+            }
+        }
 
         // Auto predict if orphan and NO manual tempDueDate
         // If it was already auto-predicted, we still run the search to ensure it hasn't shifted further
@@ -304,9 +418,8 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             for (let w = currentW; w < 5 && !foundNext; w++) {
                 const daySlots = getSlots(w).sort((x: any, y: any) => x.classTime - y.classTime);
                 for (const t of daySlots) {
-                    if (isFreePeriod(t.subject || '')) continue; // 공강 슬롯 제외
                     if (w === currentW && t.classTime <= targetTime) continue; // Must be strictly AFTER the original time on the same day
-                    if (checkSubjectMatch(t)) {
+                    if (checkSubjectMatch(t, ctx.timetable)) {
                         foundNext = true;
                         const matchDate = new Date(targetDateObj);
                         matchDate.setDate(targetDateObj.getDate() + (w - currentW));
@@ -321,8 +434,7 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
             for (let w = 0; w <= currentW && !foundNext; w++) {
                 const daySlots = getNextSlots(w).sort((x: any, y: any) => x.classTime - y.classTime);
                 for (const t of daySlots) {
-                    if (isFreePeriod(t.subject || '')) continue; // 공강 슬롯 제외
-                    if (checkSubjectMatch(t)) {
+                    if (checkSubjectMatch(t, nextCtx.timetable)) {
                         foundNext = true;
                         const matchDate = new Date(targetDateObj);
                         // Jump to Monday of next week, then add w days
@@ -342,38 +454,45 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
                     assessment.isAutoPredicted = 1;
                     
                     // Persist to DB
-                    try {
-                        const q = "UPDATE performance_assessments SET tempDueDate = ?, tempClassTime = ?, isAutoPredicted = 1 WHERE id = ?";
-                        await db.prepare(q).bind(nextSlot.date, nextSlot.classTime, assessment.id).run();
-                    } catch (e: any) {
-                        if (e.message && e.message.includes("no such column") && e.message.includes("isAutoPredicted")) {
-                            console.log("[autoPredict] Adding isAutoPredicted column to DB");
-                            try {
-                                await db.prepare("ALTER TABLE performance_assessments ADD COLUMN isAutoPredicted INTEGER DEFAULT 0").run();
-                                await db.prepare("UPDATE performance_assessments SET tempDueDate = ?, tempClassTime = ?, isAutoPredicted = 1 WHERE id = ?")
-                                        .bind(nextSlot.date, nextSlot.classTime, assessment.id).run();
-                            } catch (alterErr) {
-                                console.error("[autoPredict] Failed to add column:", alterErr);
+                    if (!previewMode) {
+                        try {
+                            const q = "UPDATE performance_assessments SET tempDueDate = ?, tempClassTime = ?, isAutoPredicted = 1 WHERE id = ?";
+                            await db.prepare(q).bind(nextSlot.date, nextSlot.classTime, assessment.id).run();
+                        } catch (e: any) {
+                            if (e.message && e.message.includes("no such column") && e.message.includes("isAutoPredicted")) {
+                                console.log("[autoPredict] Adding isAutoPredicted column to DB");
+                                try {
+                                    await db.prepare("ALTER TABLE performance_assessments ADD COLUMN isAutoPredicted INTEGER DEFAULT 0").run();
+                                    await db.prepare("UPDATE performance_assessments SET tempDueDate = ?, tempClassTime = ?, isAutoPredicted = 1 WHERE id = ?")
+                                            .bind(nextSlot.date, nextSlot.classTime, assessment.id).run();
+                                } catch (alterErr) {
+                                    console.error("[autoPredict] Failed to add column:", alterErr);
+                                }
+                            } else {
+                                console.error("[autoPredict] Failed to update DB:", e);
                             }
-                        } else {
-                            console.error("[autoPredict] Failed to update DB:", e);
                         }
                     }
                 }
-            }
-        } else if (!isOrphan && assessment.isAutoPredicted) {
-            assessment.tempDueDate = null;
-            assessment.tempClassTime = null;
-            assessment.isAutoPredicted = 0;
-            // Rollback in DB
-            try {
-                const q = "UPDATE performance_assessments SET tempDueDate = NULL, tempClassTime = NULL, isAutoPredicted = 0 WHERE id = ?";
-                await db.prepare(q).bind(assessment.id).run();
-            } catch (e: any) {
-                console.error("[autoPredict] Failed to rollback in DB:", e);
             }
         }
 
         return assessment;
     }));
+    
+    if (!previewMode) {
+        // Log the successful execution time
+        resultPromises.then(async () => {
+            try {
+                await db.prepare("CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT)").run();
+                const nowUtc = new Date().toISOString(); // UTC 저장 (프론트엔드에서 Asia/Seoul 변환)
+                const q = "INSERT INTO system_settings (key, value) VALUES ('last_auto_predict_time', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
+                await db.prepare(q).bind(nowUtc).run();
+            } catch (e) {
+                console.error("[autoPredict] Failed to log execution time:", e);
+            }
+        }).catch((e: any) => console.error("[autoPredict] Promise failed:", e));
+    }
+
+    return resultPromises;
 }

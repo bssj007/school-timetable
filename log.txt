@@ -1,0 +1,108 @@
+commit cf4e98fd77ea0bba9f82638f605f9bad47f6642d
+Author: phphjs7657 <116333696+phphjs7657@users.noreply.github.com>
+Date:   Sat Mar 28 15:45:07 2026 +0900
+
+    메인페이지_로딩시간 최적화_2안
+
+diff --git a/functions/server/autoPredict.ts b/functions/server/autoPredict.ts
+index 242cc0f..9d49ed0 100644
+--- a/functions/server/autoPredict.ts
++++ b/functions/server/autoPredict.ts
+@@ -33,22 +33,37 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
+ 
+     }
+ 
+-    // Fetch context data
+-    for (const ctx of contextMap.values()) {
++    // 1. One-time Global Data Loading
++    const { getTimetable } = await import('../api/comcigan' as any);
++    
++    let cachedRawDataString: string | undefined = undefined;
++    try {
++        const rawDataRow = await db.prepare("SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'").first();
++        if (rawDataRow && rawDataRow.response_json) {
++            cachedRawDataString = rawDataRow.response_json as string;
++        }
++    } catch (e) { }
++
++    // 2. Pre-fetch common elective configs
++    // We only need electives for the grades that are present in the contextMap
++    const neededGrades = Array.from(new Set(Array.from(contextMap.values()).map((ctx: any) => ctx.grade)));
++    const electivesByGrade: Record<number, any[]> = {};
++    
++    await Promise.all(neededGrades.map(async (grade) => {
+         try {
+-            // Electives
+-            const { results: electives } = await db.prepare("SELECT * FROM elective_config WHERE grade = ?").bind(ctx.grade).all();
+-            ctx.electives = electives || [];
++            const { results: electives } = await db.prepare("SELECT * FROM elective_config WHERE grade = ?").bind(grade).all();
++            electivesByGrade[grade as number] = electives || [];
++        } catch (e) {
++            electivesByGrade[grade as number] = [];
++            console.error(`[applyAutoPredictions] Elective fetch error for grade ${grade}`, e);
++        }
++    }));
+ 
+-            // Timetable fetching via Unified API
+-            const { getTimetable } = await import('../api/comcigan' as any);
+-            let cachedRawDataString: string | undefined = undefined;
+-            try {
+-                const rawDataRow = await db.prepare("SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'").first();
+-                if (rawDataRow && rawDataRow.response_json) {
+-                    cachedRawDataString = rawDataRow.response_json as string;
+-                }
+-            } catch (e) { }
++    // 3. Parallel Context Data Fetching (getTimetable is now very fast thanks to cachedRawDataString)
++    await Promise.all(Array.from(contextMap.values()).map(async (ctx: any) => {
++        try {
++            // Assign pre-fetched electives
++            ctx.electives = electivesByGrade[ctx.grade] || [];
+ 
+             const dsParam = ctx.dataset === 'COMCIGAN' ? null : ctx.dataset;
+             // Pass ctx.targetDate so the engine resolves the correct timetable structure for that specific week
+@@ -59,9 +74,9 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
+                  ctx.timetable = json.data || [];
+             }
+         } catch (e) {
+-            console.error('[applyAutoPredictions] Context fetch error', e); 
++            console.error(`[applyAutoPredictions] Context fetch error for ${ctx.targetDate}`, e); 
+         }
+-    }
++    }));
+ 
+     // Evaluate orphans and collect Promises (since we added DB await)
+     return Promise.all(assessments.map(async assessment => {
+
+commit 66914557e134944de69ab85f84451e673503cc45
+Author: phphjs7657 <116333696+phphjs7657@users.noreply.github.com>
+Date:   Sun Mar 22 23:29:02 2026 +0900
+
+    자동연기기능fixC
+
+diff --git a/functions/server/autoPredict.ts b/functions/server/autoPredict.ts
+index 74725b8..242cc0f 100644
+--- a/functions/server/autoPredict.ts
++++ b/functions/server/autoPredict.ts
+@@ -125,7 +125,21 @@ export async function applyAutoPredictions(assessments: any[], db: any): Promise
+         // tbl 파라미터로 현재 주 또는 다음 주 시간표를 선택할 수 있음
+         const buildGetSlots = (tbl: any[]) => (w: number) => {
+             if (assessment.classNum !== 0) {
+-                return tbl.filter((t: any) => (!t.class || t.class.toString() === assessment.classNum.toString()) && t.weekday === w);
++                return tbl.filter((t: any) => {
++                    if (t.weekday !== w) return false;
++                    // 1. 본인 반이거나 반 정보가 없는 공통 슬롯
++                    if (!t.class || t.class.toString() === assessment.classNum.toString()) return true;
++                    
++                    // 2. 다른 반 데이터라도 이동수업 특성상 동일 과목이 나오면 해당 블록으로 간주하여 포함시킴 (대시보드 갭필링 대체)
++                    const tSubj = (t.subject || '').replace(/\s*\(.*$/, '').trim();
++                    if (tSubj === baseAssSubject) return true;
++                    
++                    // 3. 선택과목 별칭 교차 확인
++                    const specificConfig = ctx.electives.find((cfg: any) => cfg.subject === t.subject && cfg.originalTeacher === t.teacher);
++                    if (specificConfig && specificConfig.fullSubjectName === baseAssSubject) return true;
++                    
++                    return false;
++                });
+             }
+             // 이동수업: teacher로 엄격 필터
+             // assessment.teacher + elective_config fullTeacherName/originalTeacher 모두 비교

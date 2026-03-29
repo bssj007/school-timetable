@@ -4020,11 +4020,19 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 </Button>
                 <Button
                     variant={selectedMenu === "unresolved-issues" ? "default" : "ghost"}
-                    className="justify-start whitespace-nowrap text-left text-orange-600 hover:text-orange-700"
+                    className="justify-start whitespace-nowrap text-left text-orange-600 hover:text-orange-700 hover:bg-orange-50 font-medium"
                     onClick={() => setSelectedMenu("unresolved-issues")}
                 >
                     <AlertCircle className="w-4 h-4 mr-2" />
                     미해결 문제
+                </Button>
+                <Button
+                    variant={selectedMenu === "auto-predict-settings" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-medium"
+                    onClick={() => setSelectedMenu("auto-predict-settings")}
+                >
+                    <Settings className="w-4 h-4 mr-2" />
+                    수행평가 예측 엔진
                 </Button>
                 <Button
                     variant={selectedMenu === "special-schedules" ? "default" : "ghost"}
@@ -4267,6 +4275,16 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <SpecialScheduleManager adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+                {selectedMenu === "auto-predict-settings" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-indigo-600">수행평가 자동 연기 엔진</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <AutoPredictSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -5570,6 +5588,25 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
         refetchInterval: 5000,
     });
 
+    // 백그라운드 재연산 (SWR)
+    useQuery({
+        queryKey: ['admin_assessments_predict'],
+        queryFn: async () => {
+            try {
+                const res = await fetch('/api/assessment?action=predict', { method: 'POST' });
+                if (res.ok) {
+                    queryClient.invalidateQueries({ queryKey: ["admin", "assessments"] });
+                }
+            } catch (e) {
+                console.warn('Background autoPredict trigger failed', e);
+            }
+            return true;
+        },
+        enabled: isAuthenticated,
+        refetchOnWindowFocus: true,     // 화면으로 다시 돌아올 때 1번 트리거
+        staleTime: 10 * 1000,           // 연속 트리거 방지 (10초 쿨타임)
+    });
+
     // Get unique datasets present in assessments
     const assessmentDatasets = useMemo(() => {
         if (!assessments || !Array.isArray(assessments)) return [];
@@ -5937,8 +5974,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     return 0;
                                 });
 
-                                const activeAssessments = sortedAssessments.filter((a: any) => new Date(a.dueDate + 'T23:59:59') >= now);
-                                const expiredAssessments = sortedAssessments.filter((a: any) => new Date(a.dueDate + 'T23:59:59') < now);
+                                // 연기된 수행평가는 연기된 날짜(tempDueDate)를 기준으로 만료 여부 판단
+                                const getEffectiveDate = (a: any) => a.tempDueDate || a.dueDate;
+                                const activeAssessments = sortedAssessments.filter((a: any) => new Date(getEffectiveDate(a) + 'T23:59:59') >= now);
+                                const expiredAssessments = sortedAssessments.filter((a: any) => new Date(getEffectiveDate(a) + 'T23:59:59') < now);
 
                                 return (
                                     <div className="space-y-6">
@@ -6765,6 +6804,9 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
     const [fallbackPropGrade1, setFallbackPropGrade1] = useState<string>('');
     // Debug UI overlay toggle
     const [debugOverlay, setDebugOverlay] = useState<boolean>(false);
+    // Debug overlay IP whitelist
+    const [debugWhitelist, setDebugWhitelist] = useState<string[]>([]);
+    const [newDebugIp, setNewDebugIp] = useState<string>('');
     // IP Overrides state
     const [ipOverrides, setIpOverrides] = useState<Record<string, { grade1?: string, default?: string, memo?: string }>>({});
     
@@ -6795,6 +6837,15 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
             setFallbackProp(settingsQuery.data.comcigan_fallback_dataset || '_auto_');
             setFallbackPropGrade1(settingsQuery.data.comcigan_fallback_dataset_grade1 || '_auto_');
             setDebugOverlay(settingsQuery.data.comcigan_debug_overlay_enabled === 'true');
+            if (settingsQuery.data.comcigan_debug_whitelist) {
+                try {
+                    setDebugWhitelist(JSON.parse(settingsQuery.data.comcigan_debug_whitelist));
+                } catch (e) {
+                    setDebugWhitelist([]);
+                }
+            } else {
+                setDebugWhitelist([]);
+            }
 
             if (settingsQuery.data.dataset_ip_overrides) {
                 try {
@@ -7058,6 +7109,73 @@ function DatasetSelector({ rawData, adminPassword }: { rawData: any; adminPasswo
                         <Button size="sm" onClick={() => saveMutation.mutate({ comcigan_debug_overlay_enabled: debugOverlay ? 'true' : 'false' })} disabled={debugOverlay === (settingsQuery.data?.comcigan_debug_overlay_enabled === 'true') || saveMutation.isPending}>
                             {saveMutation.isPending ? "저장 중..." : "저장"}
                         </Button>
+                    </div>
+                </div>
+
+                {/* Debug Overlay IP Whitelist */}
+                <div className="space-y-3 border rounded-lg p-4 bg-slate-50">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-700">디버그 표시 허용 IP</span>
+                        <span className="text-xs text-slate-400">비어있으면 모든 IP에서 표시 · IP 추가 시 목록 IP에만 표시</span>
+                    </div>
+                    {debugWhitelist.length === 0 ? (
+                        <div className="text-xs text-center py-2 text-gray-400 bg-white border rounded">허용 IP 없음 (모든 접속자에게 표시)</div>
+                    ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                            {debugWhitelist.map(ip => (
+                                <span key={ip} className="inline-flex items-center gap-1 text-xs font-mono bg-white border rounded px-2 py-0.5">
+                                    {ip}
+                                    <button
+                                        className="text-red-400 hover:text-red-600 ml-0.5"
+                                        onClick={() => {
+                                            const next = debugWhitelist.filter(x => x !== ip);
+                                            setDebugWhitelist(next);
+                                            saveMutation.mutate({ comcigan_debug_whitelist: JSON.stringify(next) });
+                                        }}
+                                    >✕</button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    <div className="flex gap-2 pt-1">
+                        <Input
+                            value={newDebugIp}
+                            onChange={e => setNewDebugIp(e.target.value)}
+                            placeholder="추가할 IP 주소"
+                            className="text-sm font-mono h-8 text-xs"
+                            onKeyDown={e => {
+                                if (e.key === 'Enter' && newDebugIp.trim()) {
+                                    const next = [...debugWhitelist.filter(x => x !== newDebugIp.trim()), newDebugIp.trim()];
+                                    setDebugWhitelist(next);
+                                    saveMutation.mutate({ comcigan_debug_whitelist: JSON.stringify(next) });
+                                    setNewDebugIp('');
+                                }
+                            }}
+                        />
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 text-xs shrink-0"
+                            onClick={async () => {
+                                try {
+                                    const res = await fetch('/api/my-ip');
+                                    const data = await res.json();
+                                    if (data.ip) setNewDebugIp(data.ip);
+                                } catch { toast.error('IP 조회 실패'); }
+                            }}
+                        >내 IP</Button>
+                        <Button
+                            size="sm"
+                            className="h-8 text-xs shrink-0"
+                            disabled={!newDebugIp.trim() || saveMutation.isPending}
+                            onClick={() => {
+                                if (!newDebugIp.trim()) return;
+                                const next = [...debugWhitelist.filter(x => x !== newDebugIp.trim()), newDebugIp.trim()];
+                                setDebugWhitelist(next);
+                                saveMutation.mutate({ comcigan_debug_whitelist: JSON.stringify(next) });
+                                setNewDebugIp('');
+                            }}
+                        >추가</Button>
                     </div>
                 </div>
 
@@ -8818,5 +8936,228 @@ function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+// ----------------------------------------------------------------------
+// AutoPredictSettings - Controls auto predict algorithm Pause and Manual Trigger
+// Located under: 기타 > 수행평가 예측 엔진
+// ----------------------------------------------------------------------
+function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    const { data: settingsData, isLoading } = useQuery({
+        queryKey: ["admin", "autoPredictSettings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 불러오기 실패");
+            return res.json();
+        }
+    });
+
+    const isPaused = settingsData?.auto_predict_paused === 'true';
+    const lastTime = settingsData?.last_auto_predict_time;
+
+    const saveSettingMutation = useMutation({
+        mutationFn: async (payload: Record<string, string>) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("저장 실패");
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "autoPredictSettings"] });
+            toast.success("설정이 변경되었습니다.");
+        },
+        onError: () => {
+            toast.error("설정 변경에 실패했습니다.");
+        }
+    });
+
+    const forcePredictMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch("/api/assessment?action=force_predict", {
+                method: "POST"
+            });
+            if (!res.ok) throw new Error("강제 실행 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "autoPredictSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["assessments"] });
+            toast.success("자동 연기 엔진 강제 실행이 완료되었습니다.");
+            setPreviewData(null); // Clear preview when actual force operation occurs
+        },
+        onError: () => {
+            toast.error("엔진 강제 실행 중 오류가 발생했습니다.");
+        }
+    });
+
+    const [previewData, setPreviewData] = useState<any[] | null>(null);
+    const previewMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch("/api/assessment?action=preview", {
+                method: "POST"
+            });
+            if (!res.ok) throw new Error("미리보기 실행 실패");
+            return res.json();
+        },
+        onSuccess: (res) => {
+            if (res.data) {
+                const predictedList = res.data.filter(
+                    (a: any) => a.isAutoPredicted === 1 && !a.isDone && !a.isDeleted
+                );
+                setPreviewData(predictedList);
+                toast.success("미리보기 시뮬레이션 완료");
+            }
+        },
+        onError: () => {
+            toast.error("미리보기 실행 중 오류가 발생했습니다.");
+            setPreviewData(null);
+        }
+    });
+
+    if (isLoading) {
+        return <div className="text-gray-400 p-4 shrink-0 mt-8">설정을 불러오는 중...</div>;
+    }
+
+    const elapsedText = (() => {
+        if (!lastTime) return "기록 없음";
+        const date = new Date(lastTime); // UTC 타임스탬프 파싱
+        const now = new Date();          // 현재 UTC (오프셋 없이 비교)
+        const diffMs = now.getTime() - date.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        const timeStr = date.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' });
+        const dateStr = date.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' });
+
+        if (diffMins < 1) return `방금 전 (${timeStr})`;
+        if (diffMins < 60) return `${diffMins}분 전 (${timeStr})`;
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours}시간 전 (${timeStr})`;
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays}일 전 (${dateStr})`;
+    })();
+
+    return (
+        <Card className="w-full max-w-2xl mt-8">
+            <CardHeader>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <CardTitle>수행평가 자동 연기 엔진 제어</CardTitle>
+                        <CardDescription>결강된 수행평가를 빈 시간으로 갱신하는 엔진의 동작을 관리합니다.</CardDescription>
+                    </div>
+                    {isPaused && <span className="text-xs font-bold px-2 py-1 bg-red-100 text-red-600 rounded drop-shadow-sm">일시정지 됨</span>}
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="flex justify-between items-center rounded-lg border p-4 bg-white">
+                    <div className="space-y-0.5">
+                        <Label className="text-base font-bold text-gray-800">엔진 가동 일시정지</Label>
+                        <p className="text-sm text-gray-500">엔진을 중지하면 결강이 발생해도 시간표를 검색하거나 날짜를 밀어내지 않습니다.</p>
+                    </div>
+                    <Switch
+                        checked={isPaused}
+                        onCheckedChange={(checked) => saveSettingMutation.mutate({ auto_predict_paused: checked ? 'true' : 'false' })}
+                        disabled={saveSettingMutation.isPending}
+                    />
+                </div>
+
+                <div className="flex justify-between items-center bg-gray-50 rounded-lg p-4 border border-gray-100">
+                    <div className="space-y-1">
+                        <p className="font-semibold text-sm text-gray-700">마지막 백그라운드 자동 연산 시작</p>
+                        <p className="text-sm text-blue-600 font-bold">{elapsedText}</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => previewMutation.mutate()}
+                            disabled={previewMutation.isPending}
+                            className="bg-white hover:bg-slate-50 border-slate-300 shadow-sm"
+                        >
+                            {previewMutation.isPending ? "시뮬레이션 중..." : "👀 결과 미리보기 (DB 반영 안됨)"}
+                        </Button>
+                        <Button 
+                            variant="secondary" 
+                            size="sm"
+                            onClick={() => forcePredictMutation.mutate()}
+                            disabled={forcePredictMutation.isPending}
+                            className="bg-white hover:bg-gray-100 shadow-sm border border-gray-200"
+                        >
+                            {forcePredictMutation.isPending ? "실행 중..." : "지금 즉시 재연산"}
+                        </Button>
+                    </div>
+                </div>
+                {isPaused && (
+                    <div className="mt-2 text-xs text-orange-600 font-semibold bg-orange-50 p-3 rounded-lg flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" /> 일시정지 상태입니다. 백그라운드 자동 연산이 중지되며, 필요 시 우측의 버튼으로 수동 연산이 가능합니다.
+                    </div>
+                )}
+            </CardContent>
+
+            {previewData !== null && (
+                <div className="border-t border-gray-100 bg-gray-50/50 p-6 rounded-b-xl animate-in fade-in slide-in-from-top-4">
+                    <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-md font-bold text-indigo-900 flex items-center gap-2">
+                            <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">✨</span>
+                            결과 미리보기 (Live 시뮬레이션)
+                        </h4>
+                        <span className="text-xs font-semibold px-2 py-1 bg-white border border-gray-200 rounded text-gray-600 shadow-sm">
+                            총 <span className="text-indigo-600 font-bold">{previewData.length}</span>건
+                        </span>
+                    </div>
+
+                    {previewData.length === 0 ? (
+                        <div className="text-center py-10 bg-white rounded-lg border border-dashed border-gray-300">
+                            <span className="text-gray-400 text-sm">연기가 예측되는 수행평가가 없습니다. (시간표 이상 없음)</span>
+                        </div>
+                    ) : (
+                        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+                            <Table className="text-sm">
+                                <TableHeader className="bg-gray-50/80">
+                                    <TableRow>
+                                        <TableHead className="w-24 font-bold text-center">반</TableHead>
+                                        <TableHead className="font-bold">평가 내용</TableHead>
+                                        <TableHead className="font-bold">기존 일정 (결강)</TableHead>
+                                        <TableHead className="font-bold">엔진 예측(연기) 결과</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {previewData.map((a: any) => (
+                                        <TableRow key={a.id} className="hover:bg-slate-50/50">
+                                            <TableCell className="text-center font-medium bg-gray-50/30 text-gray-600 border-r border-gray-100">
+                                                {a.grade}학년 {a.classNum > 0 ? `${a.classNum}반` : '전체'}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="space-y-0.5">
+                                                    <div className="font-bold text-gray-800 break-all">{a.subject}</div>
+                                                    <div className="text-xs text-gray-500 truncate max-w-[200px]">{a.title}</div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-gray-400 text-xs">
+                                                <span className="line-through">{a.dueDate} {a.classTime ? `${a.classTime}교시` : ''}</span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center text-sm font-bold text-indigo-700 bg-indigo-50/50 p-1.5 rounded w-max">
+                                                    <ArrowRight className="w-3.5 h-3.5 mr-1" />
+                                                    {a.tempDueDate} {a.tempClassTime ? `${a.tempClassTime}교시` : ''}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </div>
+            )}
+        </Card>
     );
 }
