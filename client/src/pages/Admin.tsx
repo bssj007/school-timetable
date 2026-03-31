@@ -5020,7 +5020,14 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
             const res = await fetch("/api/meal");
             if (!res.ok) throw new Error("식단 데이터 로드 실패");
             return res.json() as Promise<{
-                meals: { date: string; lunch: string[]; dinner: string[]; updated_at: string }[];
+                meals: { 
+                    date: string; 
+                    lunch: string[]; 
+                    dinner: string[]; 
+                    lunch_is_manual?: boolean; 
+                    dinner_is_manual?: boolean; 
+                    updated_at: string 
+                }[];
                 lastUpdated: string | null;
             }>;
         },
@@ -5047,6 +5054,54 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
         },
         onError: (err: Error) => {
             toast.error(`캐시 갱신 실패: ${err.message}`);
+        },
+    });
+
+    // --- 식단 수동 입력 상태 ---
+    const [manualDate, setManualDate] = useState(() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    });
+    const [manualType, setManualType] = useState<"중식"|"석식">("중식");
+    const [manualContent, setManualContent] = useState("");
+
+    const manualAddMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch("/api/meal", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ mode: "manual_add", date: manualDate, type: manualType, content: manualContent }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "수동 입력 실패");
+            return data;
+        },
+        onSuccess: () => {
+            toast.success("수동 식단이 저장되었습니다.");
+            setManualContent("");
+            queryClient.invalidateQueries({ queryKey: ["meal"] });
+        },
+        onError: (err: Error) => toast.error(err.message),
+    });
+
+    const manualDeleteMutation = useMutation({
+        mutationFn: async ({ date, type }: { date: string, type: string }) => {
+            if (!confirm(`정말로 ${date}의 ${type} 수동 설정을 삭제하겠습니까?\n이후 갱신 시 자동 스크래핑된 내용으로 채워질 수 있습니다.`)) throw new Error("cancelled");
+            const res = await fetch("/api/meal", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ mode: "manual_delete", date, type }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "수동 설정 삭제 실패");
+            return data;
+        },
+        onSuccess: () => {
+            toast.success("수동 설정이 삭제되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["meal"] });
+        },
+        onError: (err: Error) => {
+            if (err.message !== "cancelled") toast.error(err.message);
         },
     });
 
@@ -5270,6 +5325,63 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
                 </CardContent>
             </Card>
 
+            {/* ── 수동 식단 입력 카드 ── */}
+            <Card className="w-full max-w-2xl border-pink-200">
+                <CardHeader className="bg-pink-50/60 border-b border-pink-100">
+                    <CardTitle className="flex items-center gap-2 text-pink-800">
+                        <Edit2 className="w-5 h-5" />
+                        식단 수동 설정 및 오버라이드
+                    </CardTitle>
+                    <CardDescription>
+                        스크래핑이 오작동하거나 메뉴가 잘못되었을 때 수동으로 식단을 강제 적용할 수 있습니다. 
+                        수동 지정된 식단은 캐시를 갱신해도 덮어써지지 않고 유지됩니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-5 space-y-4">
+                    <div className="flex gap-3 items-center">
+                        <Input 
+                            type="date"
+                            value={manualDate}
+                            onChange={e => setManualDate(e.target.value)}
+                            className="bg-white"
+                        />
+                        <Select value={manualType} onValueChange={(val: any) => setManualType(val)}>
+                            <SelectTrigger className="w-32 bg-white">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="중식">중식</SelectItem>
+                                <SelectItem value="석식">석식</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    
+                    <Textarea
+                        placeholder="메뉴를 줄바꿈하여 입력하세요. (예:&#10;현미밥&#10;된장찌개&#10;배추김치)"
+                        value={manualContent}
+                        onChange={e => setManualContent(e.target.value)}
+                        className="min-h-[120px] bg-white text-sm"
+                    />
+
+                    <div className="flex justify-end gap-2">
+                        <Button 
+                            variant="outline"
+                            onClick={() => setManualContent("")}
+                            disabled={manualAddMutation.isPending}
+                        >
+                            입력 비우기
+                        </Button>
+                        <Button
+                            className="bg-pink-600 hover:bg-pink-700 text-white"
+                            onClick={() => manualAddMutation.mutate()}
+                            disabled={!manualDate || !manualContent.trim() || manualAddMutation.isPending}
+                        >
+                            수동 식단 저장하기
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+
             {/* ── 캐시 상세 미리보기 카드 ── */}
             <Card className="w-full">
                 <CardHeader>
@@ -5307,10 +5419,18 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
                                             <TableCell className="font-mono font-bold text-sm">{meal.date}</TableCell>
                                             <TableCell>
                                                 {meal.lunch && meal.lunch.length > 0 ? (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {meal.lunch.map((item, i) => (
-                                                            <Badge key={i} variant="secondary" className="text-xs bg-blue-50 text-blue-700 border-blue-200">{item}</Badge>
-                                                        ))}
+                                                    <div className="flex flex-col gap-1">
+                                                        {meal.lunch_is_manual && <Badge className="w-fit bg-pink-500 font-normal">수동 설정 유지됨</Badge>}
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {meal.lunch.map((item, i) => (
+                                                                <Badge key={i} variant="secondary" className={`text-xs ${meal.lunch_is_manual ? 'bg-pink-50 text-pink-700 border-pink-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>{item}</Badge>
+                                                            ))}
+                                                        </div>
+                                                        {meal.lunch_is_manual && (
+                                                            <Button variant="ghost" size="sm" className="h-6 w-fit text-xs text-red-500 px-2 mt-1" onClick={() => manualDeleteMutation.mutate({ date: meal.date, type: "중식" })}>
+                                                                수동 삭제 (초기화)
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <span className="text-xs text-gray-300">—</span>
@@ -5318,10 +5438,18 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
                                             </TableCell>
                                             <TableCell>
                                                 {meal.dinner && meal.dinner.length > 0 ? (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {meal.dinner.map((item, i) => (
-                                                            <Badge key={i} variant="secondary" className="text-xs bg-purple-50 text-purple-700 border-purple-200">{item}</Badge>
-                                                        ))}
+                                                    <div className="flex flex-col gap-1">
+                                                        {meal.dinner_is_manual && <Badge className="w-fit bg-pink-500 font-normal">수동 설정 유지됨</Badge>}
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {meal.dinner.map((item, i) => (
+                                                                <Badge key={i} variant="secondary" className={`text-xs ${meal.dinner_is_manual ? 'bg-pink-50 text-pink-700 border-pink-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>{item}</Badge>
+                                                            ))}
+                                                        </div>
+                                                        {meal.dinner_is_manual && (
+                                                            <Button variant="ghost" size="sm" className="h-6 w-fit text-xs text-red-500 px-2 mt-1" onClick={() => manualDeleteMutation.mutate({ date: meal.date, type: "석식" })}>
+                                                                수동 삭제 (초기화)
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <span className="text-xs text-gray-300">—</span>
