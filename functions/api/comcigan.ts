@@ -323,6 +323,25 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     
     const rawData = JSON.parse(jsonString);
 
+    // Sanitize rawData to clean string codes starting with '>' (indicating changed/subbed classes in Comcigan)
+    const sanitizeTimetable = (obj: any) => {
+        if (!obj || typeof obj !== 'object') return;
+        for (const key of Object.keys(obj)) {
+            const val = obj[key];
+            if (typeof val === 'string' && val.startsWith('>')) {
+                obj[key] = parseInt(val.replace(/>/g, ''), 10) || 0;
+            } else if (typeof val === 'object') {
+                sanitizeTimetable(val);
+            }
+        }
+    };
+    
+    for (const key of Object.keys(rawData)) {
+        if (key.startsWith('자료') && rawData[key]) {
+            sanitizeTimetable(rawData[key]);
+        }
+    }
+
     const keys = Object.keys(rawData);
     const teacherProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].some((s: any) => typeof s === 'string' && s.endsWith('*'))) || "";
 
