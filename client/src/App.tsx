@@ -12,6 +12,7 @@ import { UserConfigProvider } from "@/contexts/UserConfigContext";
 
 import FactoryReset from "./pages/FactoryReset";
 import Meal from "./pages/Meal";
+import TeacherPage from "./pages/TeacherPage";
 
 function Router() {
   return (
@@ -20,6 +21,7 @@ function Router() {
       <Route path={"/admin"} component={Admin} />
       <Route path={"/admin/factory-reset"} component={FactoryReset} />
       <Route path={"/meal"} component={Meal} />
+      <Route path={"/teacher"} component={TeacherPage} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

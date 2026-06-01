@@ -90,6 +90,16 @@ export default function Navigation() {
                 </Button>
               )}
 
+              <Link href="/teacher">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-full px-3 font-bold text-xs border-blue-200 hover:bg-blue-50 text-blue-600 flex items-center gap-1 shadow-sm"
+                >
+                  <span>👨‍🏫 교사용</span>
+                </Button>
+              </Link>
+
               {kakaoUser ? (
                 <div className="flex items-center gap-2 sm:gap-3 bg-gray-50 pr-1 pl-3 py-1 rounded-full border border-gray-100">
                   <div className="hidden sm:flex flex-col items-end">

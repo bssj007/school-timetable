@@ -1456,6 +1456,12 @@ export default function Dashboard() {
             >
               🍱 급식표
             </a>
+            <a
+              href="/teacher"
+              className="px-4 py-1.5 rounded-full text-sm font-semibold text-gray-500 hover:text-blue-500 hover:bg-white/60 transition-all whitespace-nowrap"
+            >
+              👨‍🏫 교사용
+            </a>
           </div>
         </div>
 
@@ -2954,7 +2960,12 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
-      <div className="mt-2 flex justify-end">
+      <div className="mt-2 flex justify-end gap-4">
+        <Link href="/teacher">
+          <Button variant="ghost" size="sm" className="text-gray-400 hover:text-blue-500 hover:bg-transparent text-xs font-normal h-auto p-0">
+            교사용 페이지
+          </Button>
+        </Link>
         <Link href="/admin">
           <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-transparent text-xs font-normal h-auto p-0">
             관리사무소
