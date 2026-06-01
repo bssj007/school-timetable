@@ -761,6 +761,16 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 }
             }
 
+            let isDayEmpty = true;
+            if (classData[weekday] && Array.isArray(classData[weekday])) {
+                for (let p = 1; p < classData[weekday].length; p++) {
+                    if (classData[weekday][p] !== 0) {
+                        isDayEmpty = false;
+                        break;
+                    }
+                }
+            }
+
             for (let period = 1; period <= loopLimit; period++) {
                 let code = (classData[weekday] && classData[weekday][period]) ? classData[weekday][period] : 0;
 
@@ -773,8 +783,10 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                     // hasn't been published yet and we use the baseline as a placeholder.
                     // When the weekly dataset HAS real data (isEmptyDataset=false), code=0 means
                     // the period is genuinely free/cancelled, so we must NOT overwrite it.
+                    // [FIX] If the current day is NOT completely empty (meaning other periods have classes),
+                    // we allow cell-level fallback to baseCode so elective slots or subbed classes aren't left blank.
                     if (code === 0 && baseCode !== 0) {
-                        if (isEmptyDataset) {
+                        if (isEmptyDataset || !isDayEmpty) {
                             code = baseCode;
                         }
                     }
