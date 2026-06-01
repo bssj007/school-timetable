@@ -150,6 +150,25 @@ export const onRequest = async (context: any) => {
                 }), { status: 503, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
             }
 
+            // Sanitize rawData to clean string codes starting with '>' (indicating changed/subbed classes in Comcigan)
+            const sanitizeTimetable = (obj: any) => {
+                if (!obj || typeof obj !== 'object') return;
+                for (const key of Object.keys(obj)) {
+                    const val = obj[key];
+                    if (typeof val === 'string' && val.startsWith('>')) {
+                        obj[key] = parseInt(val.replace(/>/g, ''), 10) || 0;
+                    } else if (typeof val === 'object') {
+                        sanitizeTimetable(val);
+                    }
+                }
+            };
+
+            for (const key of Object.keys(rawData)) {
+                if (key.startsWith('자료') && rawData[key]) {
+                    sanitizeTimetable(rawData[key]);
+                }
+            }
+
             return new Response(JSON.stringify({
                 success: true,
                 teachers: rawData['자료446'] || [],

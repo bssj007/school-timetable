@@ -132,11 +132,14 @@ export default function TeacherPage() {
   const selectedSchedule = timetableData?.timetable?.[tId];
 
   // Decode cell value
-  const decodeCell = (val: number) => {
-    if (!val || val === 0) return null;
-    const classNum = val % 100;
-    const grade = Math.floor(val / 100) % 10;
-    const subjectId = Math.floor(val / 1000);
+  const decodeCell = (val: any) => {
+    if (!val) return null;
+    let numVal = typeof val === 'number' ? val : parseInt(String(val).replace(/>/g, ''), 10);
+    if (!numVal || isNaN(numVal) || numVal === 0) return null;
+    
+    const classNum = numVal % 100;
+    const grade = Math.floor(numVal / 100) % 10;
+    const subjectId = Math.floor(numVal / 1000);
     const subjectName = timetableData?.subjects?.[subjectId] || "알 수 없음";
     return { classNum, grade, subjectName };
   };

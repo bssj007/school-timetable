@@ -27,13 +27,15 @@ export default function TeacherTimetable() {
     staleTime: 5 * 60 * 1000, 
   });
 
-  const decodeCell = (val: number) => {
-    if (!val || val === 0) return null;
+  const decodeCell = (val: any) => {
+    if (!val) return null;
+    let numVal = typeof val === 'number' ? val : parseInt(String(val).replace(/>/g, ''), 10);
+    if (!numVal || isNaN(numVal) || numVal === 0) return null;
     
     // Decoding formula: (Subject * 1000) + (Grade * 100) + Class
-    const classNum = val % 100;
-    const grade = Math.floor(val / 100) % 10;
-    const subjectId = Math.floor(val / 1000);
+    const classNum = numVal % 100;
+    const grade = Math.floor(numVal / 100) % 10;
+    const subjectId = Math.floor(numVal / 1000);
     
     const subjectName = data?.subjects?.[subjectId] || "알 수 없음";
     
