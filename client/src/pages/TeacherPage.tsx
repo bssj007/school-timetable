@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -340,13 +340,112 @@ export default function TeacherPage() {
     return map;
   }, [electiveConfigsG2, electiveConfigsG3]);
 
-  const getTeacherDisplayName = (rawName: string) => {
+  const teacherSubjectsMap = useMemo(() => {
+    const map = new Map<number, string[]>();
+    if (!timetableData?.timetable || !timetableData?.subjects) return map;
+    
+    timetableData.timetable.forEach((schedule: any, tId: number) => {
+      if (!schedule) return;
+      const subjects = new Set<string>();
+      for (let d = 1; d <= 5; d++) {
+        const daySchedule = schedule[d];
+        if (!daySchedule) continue;
+        for (let p = 1; p < daySchedule.length; p++) {
+          const val = daySchedule[p];
+          if (!val) continue;
+          let numVal = typeof val === 'number' ? val : parseInt(String(val).replace(/>/g, ''), 10);
+          if (!numVal || isNaN(numVal) || numVal === 0) continue;
+          
+          const subjectId = Math.floor(numVal / 1000);
+          const subjectName = timetableData.subjects[subjectId];
+          if (subjectName) {
+            subjects.add(subjectName);
+          }
+        }
+      }
+      map.set(tId, Array.from(subjects));
+    });
+    return map;
+  }, [timetableData]);
+
+  const getTeacherDisplayName = useCallback((rawName: string, idx?: number) => {
+    if (idx !== undefined && teacherSubjectsMap) {
+      const subjects = teacherSubjectsMap.get(idx) || [];
+      const allConfigs = [...(electiveConfigsG2 || []), ...(electiveConfigsG3 || [])];
+      
+      // Try to find a config that matches both the raw name and one of the subjects the teacher teaches
+      for (const c of allConfigs) {
+        if (c.originalTeacher && c.fullTeacherName && c.subject) {
+          const rawNames = c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean);
+          const indexInConfig = rawNames.indexOf(rawName);
+          if (indexInConfig !== -1) {
+            const configSubject = c.subject.trim();
+            const hasSubjectMatch = subjects.some(s => s.trim() === configSubject || s.includes(configSubject) || configSubject.includes(s));
+            if (hasSubjectMatch) {
+              const fullNames = c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean);
+              const full = fullNames[indexInConfig] || fullNames[0];
+              if (full) return full;
+            }
+          }
+        }
+      }
+      
+      // Fallback: Try to find ANY config matching the raw name
+      for (const c of allConfigs) {
+        if (c.originalTeacher && c.fullTeacherName) {
+          const rawNames = c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean);
+          const indexInConfig = rawNames.indexOf(rawName);
+          if (indexInConfig !== -1) {
+            const fullNames = c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean);
+            const full = fullNames[indexInConfig] || fullNames[0];
+            if (full) return full;
+          }
+        }
+      }
+    }
     return teacherMap.get(rawName) || rawName;
-  };
+  }, [teacherSubjectsMap, electiveConfigsG2, electiveConfigsG3, teacherMap]);
+
+  const teacherOptions = useMemo(() => {
+    if (!timetableData?.teachers) return [];
+    
+    const options = timetableData.teachers.map((name, idx) => {
+      if (idx === 0) return null; // Skip '*'
+      const shouldIgnore = ignoreKeywords.some((kw: string) => name.includes(kw));
+      if (shouldIgnore) return null;
+      
+      const displayName = getTeacherDisplayName(name, idx);
+      const subjects = teacherSubjectsMap.get(idx) || [];
+      
+      return {
+        idx,
+        rawName: name,
+        displayName,
+        subjects,
+      };
+    }).filter(Boolean) as { idx: number; rawName: string; displayName: string; subjects: string[] }[];
+    
+    const displayNameCounts = new Map<string, number>();
+    options.forEach(opt => {
+      displayNameCounts.set(opt.displayName, (displayNameCounts.get(opt.displayName) || 0) + 1);
+    });
+    
+    return options.map(opt => {
+      const count = displayNameCounts.get(opt.displayName) || 0;
+      let label = opt.displayName;
+      if (count > 1 && opt.subjects.length > 0) {
+        label = `${opt.displayName} (${opt.subjects.join(', ')})`;
+      }
+      return {
+        ...opt,
+        label,
+      };
+    });
+  }, [timetableData, ignoreKeywords, teacherSubjectsMap, getTeacherDisplayName]);
 
   const tId = parseInt(selectedTeacherId, 10);
   const rawTeacherName = timetableData?.teachers?.[tId] || "";
-  const teacherName = getTeacherDisplayName(rawTeacherName);
+  const teacherName = getTeacherDisplayName(rawTeacherName, tId);
   const selectedSchedule = timetableData?.timetable?.[tId];
 
   // Decode cell value
@@ -693,7 +792,7 @@ export default function TeacherPage() {
                     >
                       <span>
                         {selectedTeacherId
-                          ? `${getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)])} 선생님`
+                          ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
                           : "교사 선택"}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -705,25 +804,20 @@ export default function TeacherPage() {
                       <CommandList className="max-h-[250px]">
                         <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
                         <CommandGroup>
-                          {timetableData.teachers.map((name, idx) => {
-                            if (idx === 0) return null; // Skip '*'
-                            const shouldIgnore = ignoreKeywords.some((kw: string) => name.includes(kw));
-                            if (shouldIgnore) return null;
-                            
-                            const displayName = getTeacherDisplayName(name);
-                            const isSelected = selectedTeacherId === idx.toString();
+                          {teacherOptions.map((opt) => {
+                            const isSelected = selectedTeacherId === opt.idx.toString();
                             
                             return (
                               <CommandItem
-                                key={idx}
-                                value={displayName}
+                                key={opt.idx}
+                                value={opt.label}
                                 onSelect={() => {
-                                  setSelectedTeacherId(idx.toString());
+                                  setSelectedTeacherId(opt.idx.toString());
                                   setOpenCombobox(false);
                                 }}
                                 className="flex items-center justify-between text-sm font-medium cursor-pointer"
                               >
-                                <span>{displayName} 선생님</span>
+                                <span>{opt.label} 선생님</span>
                                 <Check
                                   className={cn(
                                     "h-4 w-4 text-blue-600",
