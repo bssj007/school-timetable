@@ -2628,7 +2628,7 @@ export default function Dashboard() {
                       {assessment.subject}
                     </span>
                     {assessment.isTeacherCreated === 1 && (
-                      <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold border border-emerald-200">
+                      <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold border border-emerald-200 whitespace-nowrap">
                         선생님 직접 등록
                       </span>
                     )}
@@ -2861,7 +2861,7 @@ export default function Dashboard() {
                               {assessment.subject}
                             </span>
                             {assessment.isTeacherCreated === 1 && (
-                              <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold border border-emerald-200">
+                              <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold border border-emerald-200 whitespace-nowrap">
                                 선생님 직접 등록
                               </span>
                             )}
