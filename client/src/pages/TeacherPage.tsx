@@ -841,15 +841,18 @@ export default function TeacherPage() {
                                   
                                   {/* Assessments Badge */}
                                   {cellAssessments.length > 0 ? (
-                                    <div className="mt-0.5 flex flex-wrap gap-0.5 justify-center w-full">
+                                    <div className="mt-0.5 flex flex-col gap-0.5 items-stretch w-full">
                                       {cellAssessments.map(a => (
-                                        <span 
+                                        <div 
                                           key={a.id}
-                                          className="text-[8px] md:text-[10px] px-1 py-0.5 rounded-full bg-indigo-600 text-white font-semibold shadow-sm leading-none whitespace-nowrap"
+                                          className="text-[8px] md:text-[10px] px-1.5 py-0.5 rounded bg-indigo-600 text-white font-semibold shadow-sm leading-tight flex items-center justify-between gap-1 w-full"
                                           title={`[${a.description || '수행'}] ${a.title}`}
                                         >
-                                          {a.description && a.description.includes("차") ? a.description : '평가'}
-                                        </span>
+                                          <span className="truncate flex-1 text-left">{a.title}</span>
+                                          <span className="shrink-0 text-[7px] md:text-[8px] bg-indigo-800/80 px-1 py-0.5 rounded font-bold whitespace-nowrap">
+                                            {a.description && a.description.includes("차") ? a.description : '평가'}
+                                          </span>
+                                        </div>
                                       ))}
                                     </div>
                                   ) : (
