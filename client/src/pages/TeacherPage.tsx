@@ -10,6 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Link } from "wouter";
+import { cn } from "@/lib/utils";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
+import { ChevronsUpDown, Check } from "lucide-react";
 
 interface TeacherTimetableResponse {
   success: boolean;
@@ -174,6 +178,7 @@ export default function TeacherPage() {
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(() => {
     return localStorage.getItem("teacher-page-selected-teacher") || "1";
   });
+  const [openCombobox, setOpenCombobox] = useState(false);
   const [weekOffset, setWeekOffset] = useState<number>(0);
   
   const [selectedCell, setSelectedCell] = useState<{
@@ -317,8 +322,31 @@ export default function TeacherPage() {
     return rawVal.split(',').map((k: string) => k.trim()).filter(Boolean);
   }, [settings]);
 
+  const teacherMap = useMemo(() => {
+    const map = new Map<string, string>();
+    const allConfigs = [...(electiveConfigsG2 || []), ...(electiveConfigsG3 || [])];
+    allConfigs.forEach((c: any) => {
+      if (c.originalTeacher && c.fullTeacherName) {
+        const rawNames = c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean);
+        const fullNames = c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean);
+        rawNames.forEach((raw: string, idx: number) => {
+          const full = fullNames[idx] || fullNames[0];
+          if (raw && full) {
+            map.set(raw, full);
+          }
+        });
+      }
+    });
+    return map;
+  }, [electiveConfigsG2, electiveConfigsG3]);
+
+  const getTeacherDisplayName = (rawName: string) => {
+    return teacherMap.get(rawName) || rawName;
+  };
+
   const tId = parseInt(selectedTeacherId, 10);
-  const teacherName = timetableData?.teachers?.[tId] || "";
+  const rawTeacherName = timetableData?.teachers?.[tId] || "";
+  const teacherName = getTeacherDisplayName(rawTeacherName);
   const selectedSchedule = timetableData?.timetable?.[tId];
 
   // Decode cell value
@@ -655,23 +683,61 @@ export default function TeacherPage() {
             {/* Teacher Select */}
             {timetableData && (
               <div className="w-full sm:w-60">
-                <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
-                  <SelectTrigger className="w-full bg-white rounded-full border-gray-200 shadow-sm text-sm font-semibold">
-                    <SelectValue placeholder="교사 선택" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    {timetableData.teachers.map((name, idx) => {
-                      if (idx === 0) return null; // Skip '*'
-                      const shouldIgnore = ignoreKeywords.some((kw: string) => name.includes(kw));
-                      if (shouldIgnore) return null;
-                      return (
-                        <SelectItem key={idx} value={idx.toString()} className="font-medium text-sm">
-                          {name} 선생님
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openCombobox}
+                      className="w-full justify-between bg-white rounded-full border-gray-200 shadow-sm text-sm font-semibold h-10 px-4 hover:bg-white"
+                    >
+                      <span>
+                        {selectedTeacherId
+                          ? `${getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)])} 선생님`
+                          : "교사 선택"}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-60 p-0" align="end">
+                    <Command>
+                      <CommandInput placeholder="선생님 이름 검색..." className="h-9" />
+                      <CommandList className="max-h-[250px]">
+                        <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
+                        <CommandGroup>
+                          {timetableData.teachers.map((name, idx) => {
+                            if (idx === 0) return null; // Skip '*'
+                            const shouldIgnore = ignoreKeywords.some((kw: string) => name.includes(kw));
+                            if (shouldIgnore) return null;
+                            
+                            const displayName = getTeacherDisplayName(name);
+                            const isSelected = selectedTeacherId === idx.toString();
+                            
+                            return (
+                              <CommandItem
+                                key={idx}
+                                value={displayName}
+                                onSelect={() => {
+                                  setSelectedTeacherId(idx.toString());
+                                  setOpenCombobox(false);
+                                }}
+                                className="flex items-center justify-between text-sm font-medium cursor-pointer"
+                              >
+                                <span>{displayName} 선생님</span>
+                                <Check
+                                  className={cn(
+                                    "h-4 w-4 text-blue-600",
+                                    isSelected ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             )}
           </div>
