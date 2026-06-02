@@ -51,6 +51,7 @@ interface AssessmentItem {
   isAutoPredicted?: boolean | number;
   teacher?: string;
   classCode?: string;
+  isTeacherCreated?: number;
 }
 
 // 주의 시작일 계산 (월요일 기준)
@@ -2626,6 +2627,11 @@ export default function Dashboard() {
                     <span className="font-semibold text-lg text-gray-900">
                       {assessment.subject}
                     </span>
+                    {assessment.isTeacherCreated === 1 && (
+                      <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold border border-emerald-200">
+                        선생님 직접 등록
+                      </span>
+                    )}
                     {assessment.classCode && (
                       <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full font-medium">
                         {assessment.classCode}그룹
@@ -2652,8 +2658,8 @@ export default function Dashboard() {
                       </span>
                     )}
                   </div>
-                  {/* 과거 날짜가 아닐 때만 수정/삭제 버튼 표시 */}
-                  {assessment.dueDate >= toDateString(new Date()) && (
+                  {/* 과거 날짜가 아닐 때만 수정/삭제 버튼 표시 (선생님이 직접 등록한 경우 수정/삭제 불가) */}
+                  {assessment.dueDate >= toDateString(new Date()) && assessment.isTeacherCreated !== 1 && (
                     <div className="flex bg-gray-100 rounded-md">
                       <Button
                         variant="ghost"
@@ -2676,15 +2682,14 @@ export default function Dashboard() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  )
-                  }
+                  )}
                 </div>
                 <p className="text-gray-700 mb-2">{assessment.title}</p>
                 <div className="flex justify-between items-end mt-2">
                   <div className="text-xs text-gray-500">
                     {assessment.dueDate}
                   </div>
-                  {assessment.dueDate >= toDateString(new Date()) && (
+                  {assessment.dueDate >= toDateString(new Date()) && assessment.isTeacherCreated !== 1 && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -2855,6 +2860,11 @@ export default function Dashboard() {
                             <span className="font-bold text-lg text-blue-600">
                               {assessment.subject}
                             </span>
+                            {assessment.isTeacherCreated === 1 && (
+                              <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold border border-emerald-200">
+                                선생님 직접 등록
+                              </span>
+                            )}
                             <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                               {assessment.description}
                             </span>
@@ -2925,7 +2935,7 @@ export default function Dashboard() {
                             </>
                           )}
                         </div>
-                        {assessment.isPostponed && (
+                        {assessment.isPostponed && assessment.isTeacherCreated !== 1 && (
                           <Button 
                             variant="outline" 
                             size="sm" 

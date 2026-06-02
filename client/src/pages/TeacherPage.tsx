@@ -30,6 +30,7 @@ interface AssessmentItem {
   dataset?: string;
   teacher?: string;
   classCode?: string;
+  isTeacherCreated?: number;
 }
 
 // Helper: Get Monday of the week
@@ -308,6 +309,14 @@ export default function TeacherPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const ignoreKeywords = useMemo(() => {
+    if (!settings) return ['빈교', '공강', '학년', '채', '창'];
+    const rawVal = settings.teacher_ignore_keywords;
+    if (rawVal === undefined) return ['빈교', '공강', '학년', '채', '창'];
+    if (!rawVal) return []; // Explicitly cleared by admin
+    return rawVal.split(',').map((k: string) => k.trim()).filter(Boolean);
+  }, [settings]);
+
   const tId = parseInt(selectedTeacherId, 10);
   const teacherName = timetableData?.teachers?.[tId] || "";
   const selectedSchedule = timetableData?.timetable?.[tId];
@@ -443,7 +452,7 @@ export default function TeacherPage() {
   // Mutate: Delete Assessment
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/assessment?id=${id}`, {
+      const res = await fetch(`/api/assessment?id=${id}&role=teacher`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Failed to delete');
@@ -556,6 +565,7 @@ export default function TeacherPage() {
       dataset: resolvedDataset,
       teacher: formData.teacher,
       classCode: formData.classCode,
+      isTeacherCreated: 1,
     });
   };
 
@@ -652,6 +662,8 @@ export default function TeacherPage() {
                   <SelectContent className="max-h-[300px]">
                     {timetableData.teachers.map((name, idx) => {
                       if (idx === 0) return null; // Skip '*'
+                      const shouldIgnore = ignoreKeywords.some((kw: string) => name.includes(kw));
+                      if (shouldIgnore) return null;
                       return (
                         <SelectItem key={idx} value={idx.toString()} className="font-medium text-sm">
                           {name} 선생님

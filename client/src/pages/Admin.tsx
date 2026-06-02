@@ -4042,6 +4042,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <Calendar className="w-4 h-4 mr-2" />
                     특수일정 관리
                 </Button>
+                <Button
+                    variant={selectedMenu === "teacher-ignore-keywords" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-teal-600 hover:text-teal-700 hover:bg-teal-50 font-medium"
+                    onClick={() => setSelectedMenu("teacher-ignore-keywords")}
+                >
+                    <Ban className="w-4 h-4 mr-2" />
+                    교사명 무시 키워드
+                </Button>
                 {/* Additional list items can go here later */}
             </div>
 
@@ -4288,8 +4296,156 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                     </div>
                 )}
+                {selectedMenu === "teacher-ignore-keywords" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-teal-600">교사명 무시 키워드 설정</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <TeacherIgnoreKeywordsSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
+    );
+}
+
+// ----------------------------------------------------------------------
+// TeacherIgnoreKeywordsSettings - 교사명 무시 키워드 관리
+// ----------------------------------------------------------------------
+function TeacherIgnoreKeywordsSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [newKeyword, setNewKeyword] = useState("");
+    const [keywordsList, setKeywordsList] = useState<string[]>(['빈교', '공강', '학년', '채', '창']);
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data && settingsQuery.data.teacher_ignore_keywords !== undefined) {
+            const val = settingsQuery.data.teacher_ignore_keywords;
+            if (val) {
+                setKeywordsList(val.split(',').map((k: string) => k.trim()).filter(Boolean));
+            } else {
+                setKeywordsList([]);
+            }
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (newValue: string) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({ teacher_ignore_keywords: newValue })
+            });
+            if (!res.ok) throw new Error("Failed to save settings");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("설정이 저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err) => {
+            toast.error(`저장 실패: ${err.message}`);
+        }
+    });
+
+    const handleAddKeyword = () => {
+        const trimmed = newKeyword.trim();
+        if (!trimmed) return;
+        if (keywordsList.includes(trimmed)) {
+            toast.error("이미 존재하는 키워드입니다.");
+            return;
+        }
+        const next = [...keywordsList, trimmed];
+        setKeywordsList(next);
+        saveMutation.mutate(next.join(','));
+        setNewKeyword("");
+    };
+
+    const handleRemoveKeyword = (kw: string) => {
+        const next = keywordsList.filter(x => x !== kw);
+        setKeywordsList(next);
+        saveMutation.mutate(next.join(','));
+    };
+
+    const handleResetDefault = () => {
+        if (confirm("기본 무시 키워드로 초기화하시겠습니까? (빈교, 공강, 학년, 채, 창)")) {
+            const next = ['빈교', '공강', '학년', '채', '창'];
+            setKeywordsList(next);
+            saveMutation.mutate(next.join(','));
+        }
+    };
+
+    if (settingsQuery.isLoading) return <div className="p-4">설정을 불러오는 중...</div>;
+
+    return (
+        <Card className="w-full max-w-2xl border-slate-100 shadow-sm bg-white">
+            <CardHeader className="pb-4">
+                <CardTitle className="text-base font-bold text-gray-700">교사명 무시 키워드 설정</CardTitle>
+                <CardDescription className="text-xs text-gray-500">
+                    /teacher 페이지의 교사 선택 리스트에서 제외할 이름 키워드를 지정합니다.<br />
+                    키워드가 포함된 교사는 목록에서 표시되지 않습니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="space-y-4 border rounded-lg p-4 bg-slate-50 border-gray-100">
+                    <div className="flex items-center justify-between pb-2 border-b border-gray-200">
+                        <span className="text-xs font-semibold text-slate-700 font-bold">무시 키워드 목록</span>
+                        <Button size="sm" variant="outline" className="text-[10px] h-7 rounded-full" onClick={handleResetDefault}>기본값으로 재설정</Button>
+                    </div>
+                    {keywordsList.length === 0 ? (
+                        <div className="text-xs text-center py-4 text-gray-400 bg-white border rounded border-gray-100">지정된 무시 키워드가 없습니다.</div>
+                    ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                            {keywordsList.map(kw => (
+                                <Badge key={kw} variant="secondary" className="inline-flex items-center gap-1.5 text-xs bg-white border border-gray-200 px-2.5 py-1 text-slate-700 rounded-full font-medium">
+                                    {kw}
+                                    <button
+                                        type="button"
+                                        className="text-red-400 hover:text-red-600 font-bold text-xs"
+                                        onClick={() => handleRemoveKeyword(kw)}
+                                    >✕</button>
+                                </Badge>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="space-y-4 border rounded-lg p-4 bg-white border-gray-100">
+                    <span className="text-xs font-semibold text-slate-700 block mb-2 font-bold">새 키워드 추가</span>
+                    <div className="flex gap-2">
+                        <Input
+                            value={newKeyword}
+                            onChange={e => setNewKeyword(e.target.value)}
+                            placeholder="예: 빈교"
+                            className="text-xs h-9"
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                    handleAddKeyword();
+                                }
+                            }}
+                        />
+                        <Button onClick={handleAddKeyword} disabled={!newKeyword.trim() || saveMutation.isPending} className="bg-blue-600 hover:bg-blue-700 text-xs h-9 px-4 rounded-md">
+                            추가
+                        </Button>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
     );
 }
 
