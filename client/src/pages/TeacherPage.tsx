@@ -75,6 +75,97 @@ function extractClassCode(subject: string): string {
   return "";
 }
 
+// Helper: Compute dynamic group mapping per grade
+function getComputedGroupsForGrade(
+  grade: string,
+  allClassesTimetable: any[],
+  electiveConfigs: any[],
+  settings: any
+): Record<string, string> {
+  if (grade !== "2" && grade !== "3") {
+    return {};
+  }
+  if (!allClassesTimetable || allClassesTimetable.length === 0) {
+    return {};
+  }
+
+  const cellGroups: Record<string, string> = {};
+
+  if (electiveConfigs && electiveConfigs.length > 0) {
+    const subjectTeacherToGroups = new Map<string, string[]>();
+    const subjectToGroups = new Map<string, string[]>();
+
+    electiveConfigs.forEach((c: any) => {
+      const isFreePeriod = ["빈교실", "공강", "Empty", "Free"].some(k => (c.subject || "").includes(k));
+      if ((c.isMovingClass !== 0 || isFreePeriod) && c.classCode) {
+        const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
+        const subj = c.subject.trim();
+
+        const existing = subjectToGroups.get(subj) || [];
+        subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
+
+        const teacherNames = [];
+        if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
+        if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
+
+        const uniqueTeachers = Array.from(new Set(teacherNames));
+
+        uniqueTeachers.forEach((tName: string) => {
+          const key = `${subj}|${tName}`;
+          const existingKey = subjectTeacherToGroups.get(key) || [];
+          subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
+        });
+      }
+    });
+
+    for (let w = 0; w < 5; w++) {
+      for (let p = 1; p <= 7; p++) {
+        const slots = allClassesTimetable.filter(t => t.weekday === w && t.classTime === p);
+        if (slots.length === 0) continue;
+
+        const groupCounts: Record<string, number> = {};
+        slots.forEach(slot => {
+          const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
+          let groups = subjectTeacherToGroups.get(key);
+
+          if (!groups || groups.length === 0) {
+            groups = subjectToGroups.get(slot.subject.trim());
+          }
+
+          if (groups) {
+            groups.forEach(g => {
+              groupCounts[g] = (groupCounts[g] || 0) + 1;
+            });
+          }
+        });
+
+        const entries = Object.entries(groupCounts);
+        if (entries.length > 0) {
+          entries.sort((a, b) => b[1] - a[1]);
+          const maxGroup = entries[0][0];
+          const maxCount = entries[0][1];
+          if (maxCount >= 1) {
+            cellGroups[`${w}-${p}`] = maxGroup;
+          }
+        }
+      }
+    }
+  }
+
+  if (settings?.elective_group_overrides?.[grade]) {
+    const gradeOverrides = settings.elective_group_overrides[grade];
+    for (const [cellKey, overrideValue] of Object.entries(gradeOverrides)) {
+      if (overrideValue === "NONE") {
+        delete cellGroups[cellKey];
+      } else if (typeof overrideValue === "string") {
+        cellGroups[cellKey] = overrideValue;
+      }
+    }
+  }
+  return cellGroups;
+}
+
+
 export default function TeacherPage() {
   const queryClient = useQueryClient();
   
@@ -91,6 +182,7 @@ export default function TeacherPage() {
     grade: number;
     classNum: number;
     subjectName: string;
+    cellGroup?: string;
   } | null>(null);
   
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -115,6 +207,95 @@ export default function TeacherPage() {
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
   const weekdays = ['월', '화', '수', '목', '금'];
+
+  // Fetch Public Settings
+  const { data: settings } = useQuery({
+    queryKey: ['publicSettings-teacher'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/public');
+      if (!res.ok) return {};
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const targetDate = toDateString(weekDates[0]);
+
+  // Fetch all class timetables for Grade 1, 2, and 3 to resolve datasets and elective groups
+  const { data: grade1Timetable } = useQuery({
+    queryKey: ['timetable-all', '1', targetDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/comcigan?type=timetable&grade=1&classNum=all&targetDate=${encodeURIComponent(targetDate)}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: grade2Timetable } = useQuery({
+    queryKey: ['timetable-all', '2', targetDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/comcigan?type=timetable&grade=2&classNum=all&targetDate=${encodeURIComponent(targetDate)}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: grade3Timetable } = useQuery({
+    queryKey: ['timetable-all', '3', targetDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/comcigan?type=timetable&grade=3&classNum=all&targetDate=${encodeURIComponent(targetDate)}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const g1DatasetType = useMemo(() => {
+    const rawDatasetId = grade1Timetable?.originalDatasetId || grade1Timetable?.datasetId || '';
+    return (rawDatasetId === 'MANUAL_PLAN' || rawDatasetId === 'SEMESTER_PLAN') ? rawDatasetId : 'COMCIGAN';
+  }, [grade1Timetable]);
+
+  const g2DatasetType = useMemo(() => {
+    const rawDatasetId = grade2Timetable?.originalDatasetId || grade2Timetable?.datasetId || '';
+    return (rawDatasetId === 'MANUAL_PLAN' || rawDatasetId === 'SEMESTER_PLAN') ? rawDatasetId : 'COMCIGAN';
+  }, [grade2Timetable]);
+
+  const g3DatasetType = useMemo(() => {
+    const rawDatasetId = grade3Timetable?.originalDatasetId || grade3Timetable?.datasetId || '';
+    return (rawDatasetId === 'MANUAL_PLAN' || rawDatasetId === 'SEMESTER_PLAN') ? rawDatasetId : 'COMCIGAN';
+  }, [grade3Timetable]);
+
+  // Fetch Elective Configurations for Grade 2 and 3 using their resolved datasets
+  const { data: electiveConfigsG2 } = useQuery({
+    queryKey: ['electiveConfigs-teacher', '2', g2DatasetType],
+    queryFn: async () => {
+      const res = await fetch(`/api/electives?grade=2&dataset=${g2DatasetType}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!g2DatasetType,
+  });
+
+  const { data: electiveConfigsG3 } = useQuery({
+    queryKey: ['electiveConfigs-teacher', '3', g3DatasetType],
+    queryFn: async () => {
+      const res = await fetch(`/api/electives?grade=3&dataset=${g3DatasetType}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!g3DatasetType,
+  });
+
+  // Compute elective groups for Grade 2 and Grade 3
+  const computedGroupsG2 = useMemo(() => {
+    return getComputedGroupsForGrade('2', grade2Timetable?.data || [], electiveConfigsG2 || [], settings);
+  }, [grade2Timetable?.data, electiveConfigsG2, settings]);
+
+  const computedGroupsG3 = useMemo(() => {
+    return getComputedGroupsForGrade('3', grade3Timetable?.data || [], electiveConfigsG3 || [], settings);
+  }, [grade3Timetable?.data, electiveConfigsG3, settings]);
 
   // 1. Fetch Teacher Timetable
   const { data: timetableData, isLoading: isTimetableLoading, isError: isTimetableError, refetch: refetchTimetable, isFetching: isTimetableFetching } = useQuery<TeacherTimetableResponse>({
@@ -176,12 +357,20 @@ export default function TeacherPage() {
 
   // 2. Fetch Assessments for all taught classes concurrently
   const { data: allAssessments, isLoading: isAssessmentsLoading, refetch: refetchAssessments } = useQuery<AssessmentItem[]>({
-    queryKey: ['teacher-assessments', taughtClasses, weekOffset],
+    queryKey: ['teacher-assessments', taughtClasses, weekOffset, g1DatasetType, g2DatasetType, g3DatasetType],
     queryFn: async () => {
       if (taughtClasses.length === 0) return [];
       
       const promises = taughtClasses.map(async (cls) => {
-        const res = await fetch(`/api/assessment?grade=${cls.grade}&classNum=${cls.classNum}&dataset=COMCIGAN`);
+        let resolvedDataset = 'COMCIGAN';
+        if (cls.grade === 1) {
+          resolvedDataset = g1DatasetType;
+        } else if (cls.grade === 2) {
+          resolvedDataset = g2DatasetType;
+        } else if (cls.grade === 3) {
+          resolvedDataset = g3DatasetType;
+        }
+        const res = await fetch(`/api/assessment?grade=${cls.grade}&classNum=${cls.classNum}&dataset=${resolvedDataset}`);
         if (!res.ok) return [];
         return res.json();
       });
@@ -198,7 +387,7 @@ export default function TeacherPage() {
       });
       return Array.from(uniqueMap.values());
     },
-    enabled: taughtClasses.length > 0,
+    enabled: taughtClasses.length > 0 && !!g1DatasetType && !!g2DatasetType && !!g3DatasetType,
     staleTime: 30 * 1000,
   });
 
@@ -278,13 +467,30 @@ export default function TeacherPage() {
 
     const dateStr = toDateString(weekDates[dayIndex]);
     
+    // Resolve group for this cell
+    let cellGroup = "";
+    if (decoded.grade === 2) {
+      cellGroup = computedGroupsG2[`${dayIndex}-${period}`] || "";
+    } else if (decoded.grade === 3) {
+      cellGroup = computedGroupsG3[`${dayIndex}-${period}`] || "";
+    }
+    
     // Check if there are assessments already
-    const cellAssessments = (allAssessments || []).filter(a => 
-      a.grade === decoded.grade &&
-      (a.classNum === decoded.classNum || a.classNum === 0) &&
-      a.dueDate === dateStr &&
-      a.classTime === period
-    );
+    const cellAssessments = (allAssessments || []).filter(a => {
+      if (a.grade !== decoded.grade) return false;
+      if (a.classNum !== decoded.classNum && a.classNum !== 0) return false;
+      if (a.dueDate !== dateStr) return false;
+      if (a.classTime !== period) return false;
+      
+      // Group check matching Dashboard.tsx
+      if (a.classCode && a.classCode.trim()) {
+        const allowedGroups = a.classCode.split(",").map((s: string) => s.trim()).filter(Boolean);
+        if (cellGroup && allowedGroups.length > 0 && !allowedGroups.includes(cellGroup)) {
+          return false;
+        }
+      }
+      return true;
+    });
 
     if (cellAssessments.length > 0) {
       // Open edit/view mode for the first assessment in cell (or list them)
@@ -309,6 +515,7 @@ export default function TeacherPage() {
         grade: decoded.grade,
         classNum: decoded.classNum,
         subjectName: decoded.subjectName,
+        cellGroup,
       });
       
       setFormData({
@@ -318,7 +525,7 @@ export default function TeacherPage() {
         classTime: String(period),
         round: "1",
         teacher: teacherName,
-        classCode: extractClassCode(decoded.subjectName),
+        classCode: cellGroup || extractClassCode(decoded.subjectName),
       });
       
       setShowAddDialog(true);
@@ -329,6 +536,15 @@ export default function TeacherPage() {
     e.preventDefault();
     if (!selectedCell) return;
 
+    let resolvedDataset = 'COMCIGAN';
+    if (selectedCell.grade === 1) {
+      resolvedDataset = g1DatasetType;
+    } else if (selectedCell.grade === 2) {
+      resolvedDataset = g2DatasetType;
+    } else if (selectedCell.grade === 3) {
+      resolvedDataset = g3DatasetType;
+    }
+
     createMutation.mutate({
       subject: formData.subject,
       title: formData.content,
@@ -337,7 +553,7 @@ export default function TeacherPage() {
       grade: selectedCell.grade,
       classNum: selectedCell.classNum,
       classTime: parseInt(formData.classTime, 10),
-      dataset: 'COMCIGAN',
+      dataset: resolvedDataset,
       teacher: formData.teacher,
       classCode: formData.classCode,
     });
@@ -498,13 +714,32 @@ export default function TeacherPage() {
                           const cellData = decodeCell(val);
                           const cellDateStr = toDateString(weekDates[dayIndex]);
                           
+                          // Resolve group for this cell
+                          let cellGroup = "";
+                          if (cellData) {
+                            if (cellData.grade === 2) {
+                              cellGroup = computedGroupsG2[`${dayIndex}-${p}`] || "";
+                            } else if (cellData.grade === 3) {
+                              cellGroup = computedGroupsG3[`${dayIndex}-${p}`] || "";
+                            }
+                          }
+                          
                           // Find assessments for this slot
-                          const cellAssessments = cellData ? (allAssessments || []).filter(a => 
-                            a.grade === cellData.grade &&
-                            (a.classNum === cellData.classNum || a.classNum === 0) &&
-                            a.dueDate === cellDateStr &&
-                            a.classTime === p
-                          ) : [];
+                          const cellAssessments = cellData ? (allAssessments || []).filter(a => {
+                            if (a.grade !== cellData.grade) return false;
+                            if (a.classNum !== cellData.classNum && a.classNum !== 0) return false;
+                            if (a.dueDate !== cellDateStr) return false;
+                            if (a.classTime !== p) return false;
+                            
+                            // Group check matching Dashboard.tsx
+                            if (a.classCode && a.classCode.trim()) {
+                              const allowedGroups = a.classCode.split(",").map((s: string) => s.trim()).filter(Boolean);
+                              if (cellGroup && allowedGroups.length > 0 && !allowedGroups.includes(cellGroup)) {
+                                return false;
+                              }
+                            }
+                            return true;
+                          }) : [];
 
                           return (
                             <td 
@@ -519,7 +754,7 @@ export default function TeacherPage() {
                                   {/* Class & Subject */}
                                   <div className="flex flex-col gap-1 items-start">
                                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">
-                                      {cellData.grade}-{cellData.classNum}
+                                      {cellData.grade}-{cellData.classNum}{cellGroup ? ` (${cellGroup})` : ''}
                                     </span>
                                     <span className="font-bold text-[13px] text-slate-800 tracking-tight leading-tight">
                                       {cellData.subjectName}
