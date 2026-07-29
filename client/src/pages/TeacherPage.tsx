@@ -527,6 +527,114 @@ export default function TeacherPage() {
     staleTime: 30 * 1000,
   });
 
+  // Build class+group nav tabs for the right panel
+  // Each tab = { grade, classNum, group } — moving class ABCD are split separately
+  const classTabs = useMemo(() => {
+    const tabs: { id: string; grade: number; classNum: number; group: string; label: string }[] = [];
+    if (!selectedSchedule || !allAssessments) return tabs;
+
+    const seenIds = new Set<string>();
+
+    taughtClasses.forEach(({ grade, classNum }) => {
+      const classAssessments = (allAssessments || []).filter(
+        a => a.grade === grade && (a.classNum === classNum || a.classNum === 0)
+      );
+
+      const groupsInAss = new Set<string>();
+      classAssessments.forEach(a => {
+        if (a.classCode && a.classCode.trim()) {
+          a.classCode.split(',').map(s => s.trim()).filter(Boolean).forEach(g => groupsInAss.add(g));
+        }
+      });
+
+      if (grade === 2) {
+        for (let d = 1; d <= 5; d++) {
+          const daySchedule = selectedSchedule[d];
+          if (!daySchedule) continue;
+          for (let p = 1; p < daySchedule.length; p++) {
+            const val = daySchedule[p];
+            const decoded = decodeCell(val);
+            if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
+              const cellG = computedGroupsG2[`${d - 1}-${p}`];
+              if (cellG) groupsInAss.add(cellG);
+            }
+          }
+        }
+      } else if (grade === 3) {
+        for (let d = 1; d <= 5; d++) {
+          const daySchedule = selectedSchedule[d];
+          if (!daySchedule) continue;
+          for (let p = 1; p < daySchedule.length; p++) {
+            const val = daySchedule[p];
+            const decoded = decodeCell(val);
+            if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
+              const cellG = computedGroupsG3[`${d - 1}-${p}`];
+              if (cellG) groupsInAss.add(cellG);
+            }
+          }
+        }
+      }
+
+      if (groupsInAss.size > 0) {
+        const sortedGroups = Array.from(groupsInAss).sort();
+        sortedGroups.forEach(grp => {
+          const id = `${grade}-${classNum}-${grp}`;
+          if (!seenIds.has(id)) {
+            seenIds.add(id);
+            tabs.push({ id, grade, classNum, group: grp, label: `${grade}-${classNum}(${grp})` });
+          }
+        });
+        const baseId = `${grade}-${classNum}-`;
+        if (!seenIds.has(baseId)) {
+          seenIds.add(baseId);
+          tabs.push({ id: baseId, grade, classNum, group: '', label: `${grade}-${classNum}반` });
+        }
+      } else {
+        const id = `${grade}-${classNum}-`;
+        if (!seenIds.has(id)) {
+          seenIds.add(id);
+          tabs.push({ id, grade, classNum, group: '', label: `${grade}-${classNum}반` });
+        }
+      }
+    });
+
+    tabs.sort((a, b) => {
+      if (a.grade !== b.grade) return a.grade - b.grade;
+      if (a.classNum !== b.classNum) return a.classNum - b.classNum;
+      return a.group.localeCompare(b.group);
+    });
+
+    return tabs;
+  }, [taughtClasses, allAssessments, selectedSchedule, computedGroupsG2, computedGroupsG3]);
+
+  const [selectedTabId, setSelectedTabId] = useState<string>('');
+
+  // Auto-select first tab
+  useEffect(() => {
+    if (classTabs.length > 0 && !classTabs.find(t => t.id === selectedTabId)) {
+      setSelectedTabId(classTabs[0].id);
+    }
+  }, [classTabs]);
+
+  const selectedTab = classTabs.find(t => t.id === selectedTabId) || classTabs[0] || null;
+
+  // Filter assessments for selected tab
+  const panelAssessments = useMemo(() => {
+    if (!selectedTab || !allAssessments) return [];
+    const { grade, classNum, group } = selectedTab;
+    return allAssessments.filter(a => {
+      if (a.grade !== grade) return false;
+      if (a.classNum !== classNum && a.classNum !== 0) return false;
+      if (group) {
+        if (a.classCode && a.classCode.trim()) {
+          const allowedGroups = a.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
+          if (!allowedGroups.includes(group)) return false;
+        }
+      }
+      return true;
+    }).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  }, [selectedTab, allAssessments]);
+
   // Mutate: Create Assessment
   const createMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -713,7 +821,10 @@ export default function TeacherPage() {
   };
 
   return (
-    <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-6">
+    <div className="w-full min-h-screen px-2 md:px-4 py-4 md:py-6">
+      <div className="flex gap-4 xl:gap-6 items-start">
+      {/* ===== LEFT COLUMN: existing timetable ===== */}
+      <div className="flex-1 min-w-0">
       
       {/* Top Banner */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
@@ -970,6 +1081,136 @@ export default function TeacherPage() {
           ) : null}
         </CardContent>
       </Card>
+
+      </div>{/* end left column */}
+
+      {/* ===== RIGHT COLUMN: Assessment Viewer Panel ===== */}
+      <div className="w-[320px] xl:w-[360px] shrink-0 flex flex-col" style={{ position: 'sticky', top: '1rem', maxHeight: 'calc(100vh - 2rem)' }}>
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden flex flex-col h-full" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
+          {/* Panel Header */}
+          <div className="px-5 pt-5 pb-4 bg-gradient-to-br from-indigo-600 to-blue-500 text-white flex-shrink-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xl">📋</span>
+              <h2 className="text-lg font-extrabold tracking-tight leading-tight">
+                {teacherName ? `${teacherName} 선생님!` : '선생님!'}
+              </h2>
+            </div>
+            <p className="text-indigo-100 text-xs font-medium">수행평가 전체 목록</p>
+          </div>
+
+          {/* Class Navigation Tabs */}
+          <div className="flex-shrink-0 border-b border-slate-100 bg-slate-50">
+            <div className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
+              {classTabs.length === 0 ? (
+                <span className="text-xs text-slate-400 py-1 px-2">담당 반 없음</span>
+              ) : (
+                classTabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSelectedTabId(tab.id)}
+                    className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all duration-150
+                      ${
+                        selectedTabId === tab.id
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'
+                      }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Assessment List */}
+          <div className="flex-1 overflow-y-auto px-4 py-3">
+            {isAssessmentsLoading ? (
+              <div className="space-y-2 mt-2">
+                {[1,2,3].map(i => (
+                  <div key={i} className="h-16 rounded-xl bg-slate-100 animate-pulse" />
+                ))}
+              </div>
+            ) : panelAssessments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                <span className="text-3xl mb-2">📭</span>
+                <p className="text-xs font-medium">등록된 수행평가가 없습니다.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {panelAssessments.map(a => {
+                  const dateObj = new Date(a.dueDate);
+                  const mmdd = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+                  const weekdayNames = ['일','월','화','수','목','금','토'];
+                  const wd = weekdayNames[dateObj.getDay()];
+                  return (
+                    <div
+                      key={a.id}
+                      className="rounded-xl border border-slate-100 bg-slate-50 hover:bg-indigo-50/60 hover:border-indigo-200 transition-all duration-150 p-3 cursor-pointer"
+                      onClick={() => {
+                        setSelectedAssessment(a);
+                        const roundNum = a.description ? a.description.replace('차', '').trim() : '1';
+                        setFormData({
+                          assessmentDate: a.dueDate,
+                          subject: a.subject,
+                          content: a.title,
+                          classTime: String(a.classTime || ''),
+                          round: roundNum,
+                          teacher: a.teacher || teacherName,
+                          classCode: a.classCode || '',
+                        });
+                        setShowEditDialog(true);
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                              {a.grade}-{a.classNum === 0 ? '전체' : a.classNum}반
+                              {a.classCode ? ` (${a.classCode})` : ''}
+                            </span>
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">
+                              {a.subject}
+                            </span>
+                            {a.classTime && (
+                              <span className="text-[10px] text-slate-400 font-medium">{a.classTime}교시</span>
+                            )}
+                          </div>
+                          <p className="text-xs font-bold text-slate-800 leading-tight truncate" title={a.title}>
+                            {a.title}
+                          </p>
+                          {a.teacher && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">{a.teacher} 선생님</p>
+                          )}
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-[11px] font-extrabold text-indigo-600">{mmdd}</div>
+                          <div className="text-[9px] text-slate-400">{wd}요일</div>
+                          {a.description && (
+                            <div className="mt-1 text-[9px] bg-indigo-600 text-white rounded px-1 py-0.5 font-bold">
+                              {a.description}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Panel Footer: count */}
+          {!isAssessmentsLoading && (
+            <div className="flex-shrink-0 border-t border-slate-100 px-4 py-2 bg-slate-50">
+              <p className="text-[10px] text-slate-400 font-medium text-center">
+                총 {panelAssessments.length}건의 수행평가
+              </p>
+            </div>
+          )}
+        </div>
+      </div>{/* end right column */}
+
+      </div>{/* end flex row */}
 
       {/* Add Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
