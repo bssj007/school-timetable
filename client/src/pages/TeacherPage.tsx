@@ -960,28 +960,33 @@ export default function TeacherPage() {
             <div className="w-full overflow-x-auto">
               <table className="w-full border-collapse bg-white table-fixed">
                 <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="w-8 md:w-10 h-8 md:h-10 bg-gray-50/60 text-gray-400 font-bold text-[10px] md:text-xs text-center border-r border-gray-100">교시</th>
+                  <tr className="border-b-2 border-slate-200">
+                    <th className="w-8 md:w-10 h-10 bg-slate-800 text-slate-400 font-bold text-[10px] md:text-xs text-center border-r border-slate-700 rounded-tl-lg">교시</th>
                     {weekdays.map((day, idx) => {
                       const dDate = weekDates[idx];
+                      const todayStr = toDateString(new Date());
+                      const cellDateStrH = toDateString(dDate);
+                      const isToday = cellDateStrH === todayStr;
                       const formattedD = `${dDate.getMonth() + 1}/${dDate.getDate()}`;
                       return (
-                        <th key={day} className="h-8 md:h-10 bg-gray-50 text-gray-700 font-bold text-xs md:text-sm border-r border-gray-100 last:border-r-0">
+                        <th key={day} className={`h-10 font-bold text-xs md:text-sm border-r border-slate-700 last:border-r-0 ${
+                          isToday ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-200'
+                        }`}>
                           <div className="flex flex-col items-center justify-center">
-                            <span className="text-gray-900 text-xs md:text-sm">{day}요일</span>
-                            <span className="text-[9px] md:text-[11px] text-gray-400 font-medium mt-0.5">{formattedD}</span>
+                            <span className={`text-xs md:text-sm font-extrabold ${isToday ? 'text-white' : 'text-slate-100'}`}>{day}요일</span>
+                            <span className={`text-[9px] md:text-[10px] font-semibold mt-0.5 ${isToday ? 'text-indigo-200' : 'text-slate-400'}`}>{formattedD}</span>
                           </div>
                         </th>
                       );
                     })}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-slate-100">
                   {Array.from({ length: maxPeriods }).map((_, periodIndex) => {
                     const p = periodIndex + 1;
                     return (
-                      <tr key={p} className="hover:bg-slate-50/40 transition-colors">
-                        <td className="w-8 md:w-10 h-16 md:h-20 text-center font-extrabold text-xs md:text-lg text-gray-400 bg-gray-50/30 border-r border-gray-100">
+                      <tr key={p} className={`transition-colors ${p % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'}`}>
+                        <td className="w-8 md:w-10 h-16 md:h-20 text-center font-extrabold text-sm md:text-base text-slate-500 bg-slate-800/5 border-r border-slate-200">
                           {p}
                         </td>
                         {weekdays.map((_, dayIndex) => {
@@ -989,6 +994,8 @@ export default function TeacherPage() {
                           const val = selectedSchedule[d]?.[p];
                           const cellData = decodeCell(val);
                           const cellDateStr = toDateString(weekDates[dayIndex]);
+                          const todayStr2 = toDateString(new Date());
+                          const isTodayCol = cellDateStr === todayStr2;
                           
                           // Resolve group for this cell
                           let cellGroup = "";
@@ -1017,37 +1024,60 @@ export default function TeacherPage() {
                             return true;
                           }) : [];
 
+                          // Grade-based color palette
+                          const gradeColors = cellData ? (
+                            cellData.grade === 1
+                              ? { bg: 'bg-teal-50', badgeBg: 'bg-teal-100', badgeText: 'text-teal-700', subjectText: 'text-teal-900', hover: 'hover:bg-teal-100/60', assessBg: 'bg-teal-600', assessDark: 'bg-teal-800/80', borderAcc: 'border-l-teal-500' }
+                              : cellData.grade === 2
+                              ? { bg: 'bg-violet-50', badgeBg: 'bg-violet-100', badgeText: 'text-violet-700', subjectText: 'text-violet-900', hover: 'hover:bg-violet-100/60', assessBg: 'bg-violet-600', assessDark: 'bg-violet-800/80', borderAcc: 'border-l-violet-500' }
+                              : { bg: 'bg-amber-50', badgeBg: 'bg-amber-100', badgeText: 'text-amber-700', subjectText: 'text-amber-900', hover: 'hover:bg-amber-100/60', assessBg: 'bg-amber-500', assessDark: 'bg-amber-700/80', borderAcc: 'border-l-amber-500' }
+                          ) : null;
+
+                          const hasAssessment = cellAssessments.length > 0;
+
                           return (
                             <td 
                               key={d} 
-                              className={`border-r border-gray-100 last:border-r-0 p-1 md:p-1.5 align-top transition-all duration-200 relative group h-16 md:h-20
-                                ${cellData ? 'cursor-pointer hover:bg-blue-50/20' : 'bg-gray-50/10'} 
-                                ${cellAssessments.length > 0 ? 'bg-indigo-50/20 border-l-2 border-l-indigo-400' : ''}`}
+                              className={[
+                                'border-r border-slate-100 last:border-r-0 p-1 md:p-1.5 align-top transition-all duration-150 relative group h-16 md:h-20',
+                                isTodayCol && !cellData ? 'bg-indigo-50/30' : '',
+                                cellData ? `cursor-pointer ${gradeColors!.bg} ${gradeColors!.hover}` : 'bg-transparent',
+                                hasAssessment ? `border-l-2 ${gradeColors!.borderAcc}` : 'border-l border-l-transparent',
+                              ].join(' ')}
                               onClick={() => cellData && handleCellClick(dayIndex, p, val)}
                             >
                               {cellData ? (
                                 <div className="flex flex-col h-full justify-between gap-1">
                                   {/* Class & Subject */}
                                   <div className="flex flex-col gap-0.5 md:gap-1 items-start w-full">
-                                    <span className="text-[8px] md:text-[10px] px-1 md:px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">
+                                    <span className={`text-[8px] md:text-[9px] px-1 md:px-1.5 py-0.5 rounded-full font-bold ${gradeColors!.badgeBg} ${gradeColors!.badgeText}`}>
                                       {cellData.grade}-{cellData.classNum}{cellGroup ? `(${cellGroup})` : ''}
                                     </span>
-                                    <span className={`font-bold text-slate-800 tracking-tight leading-tight truncate w-full ${(cellData.subjectName || "").length > 6 ? 'text-[8px] md:text-[10px] break-keep' : (cellData.subjectName || "").length > 4 ? 'text-[9px] md:text-[11px]' : 'text-[10px] md:text-sm'}`} title={cellData.subjectName}>
+                                    <span
+                                      className={`font-bold tracking-tight leading-tight truncate w-full ${gradeColors!.subjectText} ${
+                                        (cellData.subjectName || "").length > 6
+                                          ? 'text-[8px] md:text-[10px] break-keep'
+                                          : (cellData.subjectName || "").length > 4
+                                          ? 'text-[9px] md:text-[11px]'
+                                          : 'text-[10px] md:text-sm'
+                                      }`}
+                                      title={cellData.subjectName}
+                                    >
                                       {cellData.subjectName}
                                     </span>
                                   </div>
                                   
                                   {/* Assessments Badge */}
-                                  {cellAssessments.length > 0 ? (
+                                  {hasAssessment ? (
                                     <div className="mt-0.5 flex flex-col gap-0.5 items-stretch w-full">
                                       {cellAssessments.map(a => (
                                         <div 
                                           key={a.id}
-                                          className="text-[8px] md:text-[10px] px-1.5 py-0.5 rounded bg-indigo-600 text-white font-semibold shadow-sm leading-tight flex items-center justify-between gap-1 w-full"
+                                          className={`text-[8px] md:text-[9px] px-1.5 py-0.5 rounded-md font-semibold shadow-sm leading-tight flex items-center justify-between gap-1 w-full text-white ${gradeColors!.assessBg}`}
                                           title={`[${a.description || '수행'}] ${a.title}`}
                                         >
                                           <span className="truncate flex-1 text-left">{a.title}</span>
-                                          <span className="shrink-0 text-[7px] md:text-[8px] bg-indigo-800/80 px-1 py-0.5 rounded font-bold whitespace-nowrap">
+                                          <span className={`shrink-0 text-[6px] md:text-[7px] px-1 py-0.5 rounded font-bold whitespace-nowrap ${gradeColors!.assessDark}`}>
                                             {a.description && a.description.includes("차") ? a.description : '평가'}
                                           </span>
                                         </div>
@@ -1055,7 +1085,7 @@ export default function TeacherPage() {
                                     </div>
                                   ) : (
                                     <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-auto flex items-center justify-center py-0.5">
-                                      <span className="text-[9px] md:text-[10px] text-blue-500 font-bold flex items-center gap-0.5">
+                                      <span className={`text-[9px] md:text-[10px] font-bold flex items-center gap-0.5 ${gradeColors!.badgeText}`}>
                                         <Plus className="w-2.5 h-2.5 md:w-3 md:h-3" /> 등록
                                       </span>
                                     </div>
