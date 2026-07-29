@@ -829,21 +829,13 @@ export default function TeacherPage() {
       {/* Top Banner */}
       <div className="flex flex-col gap-3 mb-5">
         {/* Title row */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 flex items-center gap-2">
-              👨‍🏫 <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
-            </h1>
-            <p className="text-gray-500 text-sm mt-1">
-              시간표에서 수업이 들어있는 칸을 클릭하여 수행평가를 간편하게 등록하고 관리할 수 있습니다.
-            </p>
-          </div>
-          <Link href="/">
-            <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-2 shrink-0">
-              <Home className="w-4 h-4" />
-              학생 시간표로 돌아가기
-            </Button>
-          </Link>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900">
+            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">
+            시간표에서 수업이 들어있는 칸을 클릭하여 수행평가를 간편하게 등록하고 관리할 수 있습니다.
+          </p>
         </div>
 
         {/* Controls row */}
@@ -939,6 +931,14 @@ export default function TeacherPage() {
           >
             <RefreshCw className={`w-4 h-4 ${isTimetableFetching ? 'animate-spin' : ''}`} />
           </Button>
+
+          {/* Home button — moved to right end of controls row */}
+          <Link href="/" className="ml-auto">
+            <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-2 shrink-0">
+              <Home className="w-4 h-4" />
+              학생 시간표로 돌아가기
+            </Button>
+          </Link>
         </div>
       </div>
 

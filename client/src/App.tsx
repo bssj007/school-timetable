@@ -73,7 +73,7 @@ function App() {
         <UserConfigProvider>
           <TooltipProvider>
             <Toaster />
-            {location !== "/admin" && location !== "/admin/factory-reset" && location !== "/meal" && (
+            {location !== "/admin" && location !== "/admin/factory-reset" && location !== "/meal" && location !== "/teacher" && (
               <div className={location === "/" ? "md:hidden" : ""}>
                 <Navigation />
               </div>
