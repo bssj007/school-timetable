@@ -957,35 +957,38 @@ export default function TeacherPage() {
               <p className="text-sm text-red-400">네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.</p>
             </div>
           ) : timetableData && selectedSchedule ? (
-            <div className="w-full overflow-x-auto rounded-lg border-2 border-green-800 shadow-lg">
-              <table className="w-full border-collapse table-fixed" style={{ background: '#f0faf0' }}>
+            <div className="w-full overflow-x-auto" style={{ border: '1px solid #d0d0d0' }}>
+              <table className="w-full table-fixed" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
                 <thead>
-                  <tr style={{ background: '#1a5c30', borderBottom: '3px solid #0d3d1f' }}>
-                    <th
-                      className="w-8 md:w-10 h-10 text-center font-black text-[10px] md:text-xs"
-                      style={{ color: '#86efac', borderRight: '2px solid #0d3d1f' }}
-                    >
-                      교시
-                    </th>
+                  <tr>
+                    {/* Corner cell */}
+                    <th style={{ width: 36, height: 22, background: '#f2f2f2', borderRight: '1px solid #d0d0d0', borderBottom: '1px solid #d0d0d0', position: 'sticky', top: 0, zIndex: 2 }} />
                     {weekdays.map((day, idx) => {
                       const dDate = weekDates[idx];
                       const todayStr = toDateString(new Date());
-                      const cellDateStrH = toDateString(dDate);
-                      const isToday = cellDateStrH === todayStr;
+                      const isToday = toDateString(dDate) === todayStr;
                       const formattedD = `${dDate.getMonth() + 1}/${dDate.getDate()}`;
                       return (
                         <th
                           key={day}
-                          className="h-10 font-black text-xs md:text-sm"
                           style={{
-                            background: isToday ? '#f59e0b' : '#1a5c30',
-                            color: isToday ? '#1a1a00' : '#dcfce7',
-                            borderRight: '2px solid #0d3d1f',
+                            height: 22,
+                            background: isToday ? '#cee8d0' : '#f2f2f2',
+                            borderRight: '1px solid #d0d0d0',
+                            borderBottom: isToday ? '2px solid #217346' : '1px solid #d0d0d0',
+                            color: isToday ? '#1a5c30' : '#595959',
+                            fontWeight: 700,
+                            fontSize: 11,
+                            textAlign: 'center',
+                            userSelect: 'none',
+                            position: 'sticky',
+                            top: 0,
+                            zIndex: 2,
                           }}
                         >
-                          <div className="flex flex-col items-center justify-center">
-                            <span className="text-xs md:text-sm font-black">{day}요일</span>
-                            <span className="text-[9px] md:text-[10px] font-bold mt-0.5" style={{ opacity: 0.75 }}>{formattedD}</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
+                            <span>{day}요일</span>
+                            <span style={{ fontSize: 9, fontWeight: 500, opacity: 0.75 }}>{formattedD}</span>
                           </div>
                         </th>
                       );
@@ -995,13 +998,22 @@ export default function TeacherPage() {
                 <tbody>
                   {Array.from({ length: maxPeriods }).map((_, periodIndex) => {
                     const p = periodIndex + 1;
-                    const rowBg = p % 2 === 0 ? '#e2f5e6' : '#f0faf0';
                     return (
-                      <tr key={p} style={{ borderBottom: '1px solid #a3d9a8' }}>
-                        {/* Period number cell */}
+                      <tr key={p}>
+                        {/* Row number cell — Excel row header */}
                         <td
-                          className="w-8 md:w-10 h-16 md:h-20 text-center font-black text-sm md:text-base"
-                          style={{ background: '#1a5c30', color: '#86efac', borderRight: '3px solid #0d3d1f' }}
+                          style={{
+                            width: 36,
+                            height: 72,
+                            background: '#f2f2f2',
+                            borderRight: '1px solid #d0d0d0',
+                            borderBottom: '1px solid #d0d0d0',
+                            textAlign: 'center',
+                            fontWeight: 700,
+                            fontSize: 12,
+                            color: '#595959',
+                            userSelect: 'none',
+                          }}
                         >
                           {p}
                         </td>
@@ -1010,8 +1022,7 @@ export default function TeacherPage() {
                           const val = selectedSchedule[d]?.[p];
                           const cellData = decodeCell(val);
                           const cellDateStr = toDateString(weekDates[dayIndex]);
-                          const todayStr2 = toDateString(new Date());
-                          const isTodayCol = cellDateStr === todayStr2;
+                          const isToday = cellDateStr === toDateString(new Date());
 
                           // Resolve group
                           let cellGroup = "";
@@ -1020,96 +1031,123 @@ export default function TeacherPage() {
                             else if (cellData.grade === 3) cellGroup = computedGroupsG3[`${dayIndex}-${p}`] || "";
                           }
 
-                          // Find assessments
+                          // Assessments
                           const cellAssessments = cellData ? (allAssessments || []).filter(a => {
                             if (a.grade !== cellData.grade) return false;
                             if (a.classNum !== cellData.classNum && a.classNum !== 0) return false;
                             if (a.dueDate !== cellDateStr) return false;
                             if (a.classTime !== p) return false;
                             if (a.classCode && a.classCode.trim()) {
-                              const allowedGroups = a.classCode.split(",").map((s: string) => s.trim()).filter(Boolean);
-                              if (cellGroup && allowedGroups.length > 0 && !allowedGroups.includes(cellGroup)) return false;
+                              const ag = a.classCode.split(",").map((s: string) => s.trim()).filter(Boolean);
+                              if (cellGroup && ag.length > 0 && !ag.includes(cellGroup)) return false;
                             }
                             return true;
                           }) : [];
-
                           const hasAssessment = cellAssessments.length > 0;
 
-                          // Cell background logic
-                          let cellBg = isTodayCol ? '#fef9c3' : rowBg; // today col: light yellow
-                          let cellStyle: React.CSSProperties = {
-                            background: cellBg,
-                            borderRight: '1px solid #a3d9a8',
-                            borderLeft: hasAssessment ? '3px solid #dc2626' : '1px solid #a3d9a8',
-                            cursor: cellData ? 'pointer' : 'default',
-                            transition: 'background 0.12s',
-                          };
-
-                          if (cellData && !hasAssessment) {
-                            cellStyle.background = isTodayCol ? '#fde68a' : '#c6eacb';
-                          }
-                          if (cellData && hasAssessment) {
-                            cellStyle.background = isTodayCol ? '#fde68a' : '#b7dfbd';
-                          }
+                          // Excel-style cell background:
+                          // empty cell: white (today col: very light yellow-green)
+                          // class cell: white (Excel cells are white; we add subtle tint)
+                          // assessment cell: Excel conditional formatting light green
+                          const baseBg = isToday ? '#f0f9f2' : '#ffffff';
+                          const classBg = hasAssessment
+                            ? (isToday ? '#d6f0da' : '#e8f5e9')   // conditional format: light green
+                            : (isToday ? '#eaf7ed' : '#f7fdf8');  // class but no assessment: barely tinted
+                          const cellBg = cellData ? classBg : baseBg;
 
                           return (
                             <td
                               key={d}
-                              className="p-1 md:p-1.5 align-top relative group h-16 md:h-20"
-                              style={cellStyle}
+                              className="group"
+                              style={{
+                                height: 72,
+                                background: cellBg,
+                                borderRight: '1px solid #d0d0d0',
+                                borderBottom: '1px solid #d0d0d0',
+                                borderLeft: hasAssessment ? '2px solid #217346' : '1px solid #d0d0d0',
+                                padding: '4px 5px',
+                                verticalAlign: 'top',
+                                cursor: cellData ? 'pointer' : 'default',
+                                transition: 'outline 0.08s',
+                                outline: 'none',
+                                position: 'relative',
+                              }}
                               onClick={() => cellData && handleCellClick(dayIndex, p, val)}
-                              onMouseEnter={e => { if (cellData) (e.currentTarget as HTMLElement).style.background = isTodayCol ? '#fcd34d' : '#a3d9a8'; }}
-                              onMouseLeave={e => { if (cellData) (e.currentTarget as HTMLElement).style.background = cellData && hasAssessment ? (isTodayCol ? '#fde68a' : '#b7dfbd') : (cellData ? (isTodayCol ? '#fde68a' : '#c6eacb') : cellBg); }}
+                              onMouseEnter={e => {
+                                if (cellData) {
+                                  (e.currentTarget as HTMLElement).style.outline = '2px solid #217346';
+                                  (e.currentTarget as HTMLElement).style.zIndex = '1';
+                                }
+                              }}
+                              onMouseLeave={e => {
+                                (e.currentTarget as HTMLElement).style.outline = 'none';
+                                (e.currentTarget as HTMLElement).style.zIndex = 'auto';
+                              }}
                             >
                               {cellData ? (
-                                <div className="flex flex-col h-full justify-between gap-1">
-                                  {/* Class & Subject */}
-                                  <div className="flex flex-col gap-0.5 items-start w-full">
-                                    <span
-                                      className="text-[8px] md:text-[9px] px-1 md:px-1.5 py-0.5 rounded font-black"
-                                      style={{ background: '#1a5c30', color: '#86efac' }}
-                                    >
+                                <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: 2 }}>
+                                  {/* Class label */}
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                    <span style={{
+                                      fontSize: 9,
+                                      fontWeight: 700,
+                                      padding: '1px 4px',
+                                      borderRadius: 2,
+                                      background: '#217346',
+                                      color: '#ffffff',
+                                      display: 'inline-block',
+                                      lineHeight: 1.4,
+                                    }}>
                                       {cellData.grade}-{cellData.classNum}{cellGroup ? `(${cellGroup})` : ''}
                                     </span>
-                                    <span
-                                      className={`font-black tracking-tight leading-tight truncate w-full ${
-                                        (cellData.subjectName || "").length > 6
-                                          ? 'text-[8px] md:text-[10px] break-keep'
-                                          : (cellData.subjectName || "").length > 4
-                                          ? 'text-[9px] md:text-[11px]'
-                                          : 'text-[10px] md:text-sm'
-                                      }`}
-                                      style={{ color: '#0d3d1f' }}
+                                    <span style={{
+                                      fontWeight: 700,
+                                      color: '#1a1a1a',
+                                      lineHeight: 1.3,
+                                      fontSize: (cellData.subjectName || '').length > 6 ? 9 : (cellData.subjectName || '').length > 4 ? 10 : 12,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      maxWidth: '100%',
+                                    }}
                                       title={cellData.subjectName}
                                     >
                                       {cellData.subjectName}
                                     </span>
                                   </div>
 
-                                  {/* Assessment badges */}
+                                  {/* Assessment badges — Excel conditional format style */}
                                   {hasAssessment ? (
-                                    <div className="mt-0.5 flex flex-col gap-0.5 items-stretch w-full">
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                       {cellAssessments.map(a => (
                                         <div
                                           key={a.id}
-                                          className="text-[8px] md:text-[9px] px-1.5 py-0.5 font-bold leading-tight flex items-center justify-between gap-1 w-full text-white rounded"
-                                          style={{ background: '#dc2626' }}
+                                          style={{
+                                            fontSize: 8,
+                                            fontWeight: 700,
+                                            padding: '1px 4px',
+                                            borderRadius: 2,
+                                            background: '#217346',
+                                            color: '#ffffff',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            gap: 2,
+                                            lineHeight: 1.4,
+                                          }}
                                           title={`[${a.description || '수행'}] ${a.title}`}
                                         >
-                                          <span className="truncate flex-1 text-left">{a.title}</span>
-                                          <span
-                                            className="shrink-0 text-[6px] md:text-[7px] px-1 py-0.5 rounded font-black whitespace-nowrap"
-                                            style={{ background: '#991b1b' }}
-                                          >
-                                            {a.description && a.description.includes("차") ? a.description : '평가'}
+                                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.title}</span>
+                                          <span style={{ fontSize: 7, background: '#145230', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                            {a.description && a.description.includes('차') ? a.description : '평가'}
                                           </span>
                                         </div>
                                       ))}
                                     </div>
                                   ) : (
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-auto flex items-center justify-center py-0.5">
-                                      <span className="text-[9px] md:text-[10px] font-bold flex items-center gap-0.5" style={{ color: '#166534' }}>
-                                        <Plus className="w-2.5 h-2.5 md:w-3 md:h-3" /> 등록
+                                    <div className="opacity-0 group-hover:opacity-100" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 'auto', transition: 'opacity 0.12s' }}>
+                                      <span style={{ fontSize: 9, fontWeight: 700, color: '#217346', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        <Plus style={{ width: 10, height: 10 }} /> 등록
                                       </span>
                                     </div>
                                   )}
