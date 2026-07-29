@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent } from "@/components/ui/card";
+
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCw, ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -827,127 +827,120 @@ export default function TeacherPage() {
       <div className="flex-1 min-w-0">
       
       {/* Top Banner */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 flex items-center gap-2">
-            👨‍🏫 <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">
-            시간표에서 수업이 들어있는 칸을 클릭하여 수행평가를 간편하게 등록하고 관리할 수 있습니다.
-          </p>
+      <div className="flex flex-col gap-3 mb-5">
+        {/* Title row */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 flex items-center gap-2">
+              👨‍🏫 <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
+            </h1>
+            <p className="text-gray-500 text-sm mt-1">
+              시간표에서 수업이 들어있는 칸을 클릭하여 수행평가를 간편하게 등록하고 관리할 수 있습니다.
+            </p>
+          </div>
+          <Link href="/">
+            <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-2 shrink-0">
+              <Home className="w-4 h-4" />
+              학생 시간표로 돌아가기
+            </Button>
+          </Link>
         </div>
-        <Link href="/">
-          <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-2">
-            <Home className="w-4 h-4" />
-            학생 시간표로 돌아가기
-          </Button>
-        </Link>
-      </div>
 
-      {/* Control Card */}
-      <Card className="mb-6 border-slate-100 bg-white/60 backdrop-blur-md shadow-sm">
-        <CardHeader className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pb-4 border-b border-slate-50">
-          <div className="flex items-center gap-2">
-            <CardTitle className="text-base font-bold text-gray-700">관리 환경 설정</CardTitle>
+        {/* Controls row */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Week navigation */}
+          <div className="flex items-center bg-gray-100/80 rounded-full p-1 border border-gray-200">
             <Button
               variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-gray-500 hover:text-blue-600 rounded-full"
-              onClick={() => {
-                refetchTimetable();
-                refetchAssessments();
-              }}
-              title="데이터 새로고침"
-              disabled={isTimetableFetching}
+              size="sm"
+              className="w-8 h-8 p-0 rounded-full hover:bg-white"
+              onClick={() => setWeekOffset(weekOffset - 1)}
+              disabled={weekOffset <= -2}
             >
-              <RefreshCw className={`w-4 h-4 ${isTimetableFetching ? 'animate-spin' : ''}`} />
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-xs font-semibold text-gray-600 px-3 min-w-[100px] text-center">
+              {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`} ({weekRangeText})
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-8 h-8 p-0 rounded-full hover:bg-white"
+              onClick={() => setWeekOffset(weekOffset + 1)}
+              disabled={weekOffset >= 8}
+            >
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Week navigation */}
-            <div className="flex items-center justify-center bg-gray-100/80 rounded-full p-1 border border-gray-200">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-8 h-8 p-0 rounded-full hover:bg-white"
-                onClick={() => setWeekOffset(weekOffset - 1)}
-                disabled={weekOffset <= -2} // limit to past 2 weeks
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-xs font-semibold text-gray-600 px-3 min-w-[100px] text-center">
-                {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`} ({weekRangeText})
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-8 h-8 p-0 rounded-full hover:bg-white"
-                onClick={() => setWeekOffset(weekOffset + 1)}
-                disabled={weekOffset >= 8} // limit to 8 weeks in advance
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
 
-            {/* Teacher Select */}
-            {timetableData && (
-              <div className="w-full sm:w-60">
-                <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={openCombobox}
-                      className="w-full justify-between bg-white rounded-full border-gray-200 shadow-sm text-sm font-semibold h-10 px-4 hover:bg-white"
-                    >
-                      <span>
-                        {selectedTeacherId
-                          ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
-                          : "교사 선택"}
-                      </span>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-60 p-0" align="end">
-                    <Command>
-                      <CommandInput placeholder="선생님 이름 검색..." className="h-9" />
-                      <CommandList className="max-h-[250px]">
-                        <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
-                        <CommandGroup>
-                          {teacherOptions.map((opt) => {
-                            const isSelected = selectedTeacherId === opt.idx.toString();
-                            
-                            return (
-                              <CommandItem
-                                key={opt.idx}
-                                value={opt.label}
-                                onSelect={() => {
-                                  setSelectedTeacherId(opt.idx.toString());
-                                  setOpenCombobox(false);
-                                }}
-                                className="flex items-center justify-between text-sm font-medium cursor-pointer"
-                              >
-                                <span>{opt.label} 선생님</span>
-                                <Check
-                                  className={cn(
-                                    "h-4 w-4 text-blue-600",
-                                    isSelected ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-      </Card>
+          {/* Teacher Select */}
+          {timetableData && (
+            <div className="w-52">
+              <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openCombobox}
+                    className="w-full justify-between bg-white rounded-full border-gray-200 shadow-sm text-sm font-semibold h-9 px-4 hover:bg-white"
+                  >
+                    <span className="truncate">
+                      {selectedTeacherId
+                        ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
+                        : "교사 선택"}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-60 p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="선생님 이름 검색..." className="h-9" />
+                    <CommandList className="max-h-[250px]">
+                      <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
+                      <CommandGroup>
+                        {teacherOptions.map((opt) => {
+                          const isSelected = selectedTeacherId === opt.idx.toString();
+                          return (
+                            <CommandItem
+                              key={opt.idx}
+                              value={opt.label}
+                              onSelect={() => {
+                                setSelectedTeacherId(opt.idx.toString());
+                                setOpenCombobox(false);
+                              }}
+                              className="flex items-center justify-between text-sm font-medium cursor-pointer"
+                            >
+                              <span>{opt.label} 선생님</span>
+                              <Check
+                                className={cn(
+                                  "h-4 w-4 text-blue-600",
+                                  isSelected ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
+
+          {/* Refresh button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-gray-400 hover:text-blue-600 rounded-full border border-gray-200 bg-white"
+            onClick={() => { refetchTimetable(); refetchAssessments(); }}
+            title="데이터 새로고침"
+            disabled={isTimetableFetching}
+          >
+            <RefreshCw className={`w-4 h-4 ${isTimetableFetching ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+      </div>
 
       {/* Main Timetable Card */}
       <Card className="w-full shadow-sm overflow-hidden border-slate-100 bg-white">
