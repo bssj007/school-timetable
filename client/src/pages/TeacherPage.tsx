@@ -938,7 +938,7 @@ export default function TeacherPage() {
           </Link>
         </div>
       </div>
-      </div>{/* end top section */}
+
 
       {/* ===== CONTENT AREA: flex-col on mobile (panel top, table bottom), flex-row on desktop ===== */}
       <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-4 xl:gap-6">
