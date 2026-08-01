@@ -821,10 +821,10 @@ export default function TeacherPage() {
   };
 
   return (
-    <div className="w-full min-h-screen px-2 md:px-4 py-4 md:py-6">
-      <div className="flex gap-4 xl:gap-6 items-start">
+    <div className="w-full h-screen px-2 md:px-4 py-4 md:py-6 overflow-hidden" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="flex gap-4 xl:gap-6 items-start flex-1 min-h-0">
       {/* ===== LEFT COLUMN: existing timetable ===== */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex flex-col" style={{ minHeight: 0 }}>
       
       {/* Top Banner */}
       <div className="flex flex-col gap-3 mb-5">
@@ -942,14 +942,14 @@ export default function TeacherPage() {
         </div>
       </div>
 
-      {/* Main Timetable Card */}
-      <Card className="w-full shadow-sm overflow-hidden border-slate-100 bg-white">
-        <CardContent className="p-0">
+      {/* Main Timetable — no card wrapper, fills remaining height */}
+      <div className="flex-1 min-h-0 overflow-hidden" style={{ border: '1px solid #d0d0d0', borderRadius: 8, background: '#fff' }}>
           {isTimetableLoading ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
               <Skeleton className="h-[400px] w-full" />
             </div>
+          
           ) : isTimetableError ? (
             <div className="text-center py-16 text-red-500 bg-red-50 rounded-lg m-6 flex flex-col items-center justify-center gap-2">
               <AlertCircle className="w-8 h-8" />
@@ -957,8 +957,8 @@ export default function TeacherPage() {
               <p className="text-sm text-red-400">네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.</p>
             </div>
           ) : timetableData && selectedSchedule ? (
-            <div className="w-full overflow-x-auto" style={{ border: '1px solid #d0d0d0' }}>
-              <table className="w-full table-fixed" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
+            <div className="w-full h-full overflow-auto" style={{ display: 'flex', flexDirection: 'column' }}>
+              <table className="w-full table-fixed" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px', height: '100%' }}>
                 <thead>
                   <tr>
                     {/* Corner cell */}
@@ -999,12 +999,12 @@ export default function TeacherPage() {
                   {Array.from({ length: maxPeriods }).map((_, periodIndex) => {
                     const p = periodIndex + 1;
                     return (
-                      <tr key={p}>
+                      <tr key={p} style={{ height: `${100 / maxPeriods}%` }}>
                         {/* Row number cell — Excel row header */}
                         <td
                           style={{
                             width: 36,
-                            height: 72,
+                            height: 'auto',
                             background: '#f2f2f2',
                             borderRight: '1px solid #d0d0d0',
                             borderBottom: '1px solid #d0d0d0',
@@ -1060,7 +1060,7 @@ export default function TeacherPage() {
                               key={d}
                               className="group"
                               style={{
-                                height: 72,
+                                height: 'auto',
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
                                 borderBottom: '1px solid #d0d0d0',
@@ -1163,8 +1163,7 @@ export default function TeacherPage() {
               </table>
             </div>
           ) : null}
-        </CardContent>
-      </Card>
+      </div>
 
       </div>{/* end left column */}
 
