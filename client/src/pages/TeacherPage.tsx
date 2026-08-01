@@ -822,7 +822,7 @@ export default function TeacherPage() {
 
   return (
     <div className="w-full h-screen px-2 md:px-4 py-4 md:py-6 overflow-hidden" style={{ display: 'flex', flexDirection: 'column' }}>
-      <div className="flex gap-4 xl:gap-6 items-start flex-1 min-h-0">
+      <div className="flex gap-4 xl:gap-6 items-stretch flex-1 min-h-0">
       {/* ===== LEFT COLUMN: existing timetable ===== */}
       <div className="flex-1 min-w-0 flex flex-col" style={{ minHeight: 0 }}>
       
@@ -943,7 +943,7 @@ export default function TeacherPage() {
       </div>
 
       {/* Main Timetable — no card wrapper, fills remaining height */}
-      <div className="flex-1 min-h-0 overflow-hidden" style={{ border: '1px solid #d0d0d0', borderRadius: 8, background: '#fff' }}>
+      <div className="flex-1 min-h-0" style={{ border: '1px solid #d0d0d0', borderRadius: 8, background: '#fff', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {isTimetableLoading ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
@@ -957,7 +957,7 @@ export default function TeacherPage() {
               <p className="text-sm text-red-400">네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.</p>
             </div>
           ) : timetableData && selectedSchedule ? (
-            <div className="w-full h-full overflow-auto" style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, overflow: 'auto', height: '100%', minHeight: 0 }}>
               <table className="w-full table-fixed" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px', height: '100%' }}>
                 <thead>
                   <tr>
@@ -995,11 +995,11 @@ export default function TeacherPage() {
                     })}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody style={{ height: '100%' }}>
                   {Array.from({ length: maxPeriods }).map((_, periodIndex) => {
                     const p = periodIndex + 1;
                     return (
-                      <tr key={p} style={{ height: `${100 / maxPeriods}%` }}>
+                      <tr key={p} style={{ height: `calc((100% - 22px) / ${maxPeriods})` }}>
                         {/* Row number cell — Excel row header */}
                         <td
                           style={{
