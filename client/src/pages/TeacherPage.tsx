@@ -221,7 +221,8 @@ export default function TeacherPage() {
       if (!res.ok) return {};
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 5000,
+    refetchOnWindowFocus: true,
   });
 
   const targetDate = toDateString(weekDates[0]);
@@ -234,7 +235,9 @@ export default function TeacherPage() {
       if (!res.ok) return null;
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 5000,
+    retry: true,
+    retryDelay: 3000,
   });
 
   const { data: grade2Timetable } = useQuery({
@@ -244,7 +247,9 @@ export default function TeacherPage() {
       if (!res.ok) return null;
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 5000,
+    retry: true,
+    retryDelay: 3000,
   });
 
   const { data: grade3Timetable } = useQuery({
@@ -254,7 +259,9 @@ export default function TeacherPage() {
       if (!res.ok) return null;
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 5000,
+    retry: true,
+    retryDelay: 3000,
   });
 
   const g1DatasetType = useMemo(() => {
@@ -310,7 +317,9 @@ export default function TeacherPage() {
       if (!res.ok) throw new Error("Failed to fetch teacher timetable");
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 5000,
+    retry: true,
+    retryDelay: 3000,
     refetchInterval: 2 * 60 * 1000,
   });
 
@@ -524,8 +533,8 @@ export default function TeacherPage() {
       return Array.from(uniqueMap.values());
     },
     enabled: taughtClasses.length > 0 && !!g1DatasetType && !!g2DatasetType && !!g3DatasetType,
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    staleTime: 5000,
+    refetchInterval: 2000,
   });
 
   // Build class+group nav tabs for the right panel
