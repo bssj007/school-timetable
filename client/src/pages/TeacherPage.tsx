@@ -1168,7 +1168,7 @@ export default function TeacherPage() {
       </div>{/* end left column */}
 
       {/* ===== RIGHT COLUMN: Assessment Viewer Panel ===== */}
-      <div className="w-[320px] xl:w-[360px] shrink-0 flex flex-col" style={{ position: 'sticky', top: '1rem', maxHeight: 'calc(100vh - 2rem)' }}>
+      <div className="w-[320px] xl:w-[360px] shrink-0 flex flex-col" style={{ position: 'sticky', top: '1rem', maxHeight: 'calc(100vh - 2rem)', alignSelf: 'flex-start' }}>
         <div className="rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden flex flex-col h-full" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
           {/* Panel Header */}
           <div className="px-5 pt-5 pb-4 bg-gradient-to-br from-indigo-600 to-blue-500 text-white flex-shrink-0">
