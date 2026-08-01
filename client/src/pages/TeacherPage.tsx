@@ -822,12 +822,9 @@ export default function TeacherPage() {
 
   return (
     <div className="w-full h-screen px-2 md:px-4 py-4 md:py-6 overflow-hidden" style={{ display: 'flex', flexDirection: 'column' }}>
-      <div className="flex gap-4 xl:gap-6 items-stretch flex-1 min-h-0">
-      {/* ===== LEFT COLUMN: existing timetable ===== */}
-      <div className="flex-1 min-w-0 flex flex-col" style={{ minHeight: 0 }}>
-      
-      {/* Top Banner */}
-      <div className="flex flex-col gap-3 mb-5">
+
+      {/* ===== TOP SECTION: Title + Controls (always at top on all breakpoints) ===== */}
+      <div className="flex-shrink-0 flex flex-col gap-3 mb-4">
         {/* Title row */}
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900">
@@ -941,6 +938,13 @@ export default function TeacherPage() {
           </Link>
         </div>
       </div>
+      </div>{/* end top section */}
+
+      {/* ===== CONTENT AREA: flex-col on mobile (panel top, table bottom), flex-row on desktop ===== */}
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-4 xl:gap-6">
+
+      {/* ===== TIMETABLE COLUMN: order-2 on mobile (bottom), order-1 on desktop (left) ===== */}
+      <div className="flex-1 min-w-0 flex flex-col order-2 md:order-1" style={{ minHeight: 0 }}>
 
       {/* Main Timetable — no card wrapper, fills remaining height */}
       <div className="flex-1 min-h-0" style={{ border: '1px solid #d0d0d0', borderRadius: 8, background: '#fff', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -1165,11 +1169,11 @@ export default function TeacherPage() {
           ) : null}
       </div>
 
-      </div>{/* end left column */}
+      </div>{/* end timetable column */}
 
-      {/* ===== RIGHT COLUMN: Assessment Viewer Panel ===== */}
-      <div className="w-[320px] xl:w-[360px] shrink-0 flex flex-col" style={{ position: 'sticky', top: '1rem', maxHeight: 'calc(100vh - 2rem)', alignSelf: 'flex-start' }}>
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden flex flex-col h-full" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
+      {/* ===== RIGHT PANEL: order-1 on mobile (top, limited height), order-2 on desktop (right, sticky) ===== */}
+      <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-1 md:order-2 max-h-[40vh] md:max-h-[calc(100vh-2rem)] md:sticky md:top-4" style={{ alignSelf: 'flex-start' }}>
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden flex flex-col max-h-[40vh] md:max-h-[calc(100vh-2rem)]">
           {/* Panel Header */}
           <div className="px-5 pt-5 pb-4 bg-gradient-to-br from-indigo-600 to-blue-500 text-white flex-shrink-0">
             <div className="flex items-center gap-2 mb-1">
@@ -1291,9 +1295,9 @@ export default function TeacherPage() {
             </div>
           )}
         </div>
-      </div>{/* end right column */}
+      </div>{/* end right panel */}
 
-      </div>{/* end flex row */}
+      </div>{/* end content area */}
 
       {/* Add Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
