@@ -1,9 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent } from "@/components/ui/card";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { RefreshCw, ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -304,7 +303,7 @@ export default function TeacherPage() {
   }, [grade3Timetable?.data, electiveConfigsG3, settings]);
 
   // 1. Fetch Teacher Timetable
-  const { data: timetableData, isLoading: isTimetableLoading, isError: isTimetableError, refetch: refetchTimetable, isFetching: isTimetableFetching } = useQuery<TeacherTimetableResponse>({
+  const { data: timetableData, isLoading: isTimetableLoading, isError: isTimetableError } = useQuery<TeacherTimetableResponse>({
     queryKey: ['teacher-timetable'],
     queryFn: async () => {
       const res = await fetch('/api/comcigan?type=teacher_timetable');
@@ -312,6 +311,7 @@ export default function TeacherPage() {
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
+    refetchInterval: 2 * 60 * 1000,
   });
 
   const ignoreKeywords = useMemo(() => {
@@ -492,7 +492,7 @@ export default function TeacherPage() {
   }, [selectedSchedule]);
 
   // 2. Fetch Assessments for all taught classes concurrently
-  const { data: allAssessments, isLoading: isAssessmentsLoading, refetch: refetchAssessments } = useQuery<AssessmentItem[]>({
+  const { data: allAssessments, isLoading: isAssessmentsLoading } = useQuery<AssessmentItem[]>({
     queryKey: ['teacher-assessments', taughtClasses, weekOffset, g1DatasetType, g2DatasetType, g3DatasetType],
     queryFn: async () => {
       if (taughtClasses.length === 0) return [];
@@ -525,6 +525,7 @@ export default function TeacherPage() {
     },
     enabled: taughtClasses.length > 0 && !!g1DatasetType && !!g2DatasetType && !!g3DatasetType,
     staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
   });
 
   // Build class+group nav tabs for the right panel
@@ -917,23 +918,12 @@ export default function TeacherPage() {
             </div>
           )}
 
-          {/* Refresh button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 text-gray-400 hover:text-blue-600 rounded-full border border-gray-200 bg-white"
-            onClick={() => { refetchTimetable(); refetchAssessments(); }}
-            title="데이터 새로고침"
-            disabled={isTimetableFetching}
-          >
-            <RefreshCw className={`w-4 h-4 ${isTimetableFetching ? 'animate-spin' : ''}`} />
-          </Button>
-
-          {/* Home button — moved to right end of controls row */}
+          {/* Home button */}
           <Link href="/" className="ml-auto">
-            <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-2 shrink-0">
-              <Home className="w-4 h-4" />
-              학생 시간표로 돌아가기
+            <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-1.5 shrink-0 text-xs md:text-sm">
+              <Home className="w-3.5 h-3.5" />
+              <span className="md:hidden">학생 시간표</span>
+              <span className="hidden md:inline">학생 시간표로 돌아가기</span>
             </Button>
           </Link>
         </div>
