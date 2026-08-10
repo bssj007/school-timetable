@@ -833,109 +833,25 @@ export default function TeacherPage() {
   return (
     <div className="w-full h-screen px-2 md:px-4 py-4 md:py-6 overflow-hidden" style={{ display: 'flex', flexDirection: 'column' }}>
 
-      {/* ===== TOP SECTION: Title + Controls (always at top on all breakpoints) ===== */}
-      <div className="flex-shrink-0 flex flex-col gap-3 mb-4">
-        {/* Title row */}
+      {/* ===== TOP SECTION: Title + Home Button ===== */}
+      <div className="flex-shrink-0 flex items-center justify-between gap-3 mb-3">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900">
+          <h1 className="text-xl md:text-2xl font-extrabold text-gray-900">
             <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h1>
-          <p className="text-gray-500 text-sm mt-1">
+          <p className="text-gray-500 text-xs sm:text-sm mt-0.5">
             시간표에서 수업이 들어있는 칸을 클릭하여 수행평가를 간편하게 등록하고 관리할 수 있습니다.
           </p>
         </div>
 
-        {/* Controls row */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Week navigation */}
-          <div className="flex items-center bg-gray-100/80 rounded-full p-1 border border-gray-200">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-8 h-8 p-0 rounded-full hover:bg-white"
-              onClick={() => setWeekOffset(weekOffset - 1)}
-              disabled={weekOffset <= -2}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-xs font-semibold text-gray-600 px-3 min-w-[100px] text-center">
-              {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`} ({weekRangeText})
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-8 h-8 p-0 rounded-full hover:bg-white"
-              onClick={() => setWeekOffset(weekOffset + 1)}
-              disabled={weekOffset >= 8}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* Teacher Select */}
-          {timetableData && (
-            <div className="w-52">
-              <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={openCombobox}
-                    className="w-full justify-between bg-white rounded-full border-gray-200 shadow-sm text-sm font-semibold h-9 px-4 hover:bg-white"
-                  >
-                    <span className="truncate">
-                      {selectedTeacherId
-                        ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
-                        : "교사 선택"}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-60 p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="선생님 이름 검색..." className="h-9" />
-                    <CommandList className="max-h-[250px]">
-                      <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
-                      <CommandGroup>
-                        {teacherOptions.map((opt) => {
-                          const isSelected = selectedTeacherId === opt.idx.toString();
-                          return (
-                            <CommandItem
-                              key={opt.idx}
-                              value={opt.label}
-                              onSelect={() => {
-                                setSelectedTeacherId(opt.idx.toString());
-                                setOpenCombobox(false);
-                              }}
-                              className="flex items-center justify-between text-sm font-medium cursor-pointer"
-                            >
-                              <span>{opt.label} 선생님</span>
-                              <Check
-                                className={cn(
-                                  "h-4 w-4 text-blue-600",
-                                  isSelected ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-          )}
-
-          {/* Home button */}
-          <Link href="/" className="ml-auto">
-            <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-1.5 shrink-0 text-xs md:text-sm">
-              <Home className="w-3.5 h-3.5" />
-              <span className="md:hidden">학생 시간표</span>
-              <span className="hidden md:inline">학생 시간표로 돌아가기</span>
-            </Button>
-          </Link>
-        </div>
+        {/* Home button */}
+        <Link href="/">
+          <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-1.5 shrink-0 text-xs md:text-sm">
+            <Home className="w-3.5 h-3.5" />
+            <span className="md:hidden">학생 시간표</span>
+            <span className="hidden md:inline">학생 시간표로 돌아가기</span>
+          </Button>
+        </Link>
       </div>
 
 
@@ -1173,14 +1089,97 @@ export default function TeacherPage() {
       {/* ===== RIGHT PANEL: order-1 on mobile (top, limited height), order-2 on desktop (right, sticky) ===== */}
       <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-1 md:order-2 max-h-[40vh] md:max-h-[calc(100vh-2rem)] md:sticky md:top-4" style={{ alignSelf: 'flex-start' }}>
         <div className="rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden flex flex-col max-h-[40vh] md:max-h-[calc(100vh-2rem)]">
-          {/* Panel Header */}
-          <div className="px-5 pt-5 pb-4 bg-gradient-to-br from-indigo-600 to-blue-500 text-white flex-shrink-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xl">📋</span>
-              <h2 className="text-lg font-extrabold tracking-tight leading-tight">
-                {teacherName ? `${teacherName} 선생님!` : '선생님!'}
-              </h2>
+          {/* Panel Header: Title transformed into Teacher Picker + Integrated Week Navigator */}
+          <div className="px-4 py-3.5 sm:px-5 sm:py-4 bg-gradient-to-br from-indigo-600 to-blue-600 text-white flex-shrink-0 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+              {/* Teacher Combobox Popover as Card Title */}
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <span className="text-xl shrink-0">📋</span>
+                {timetableData ? (
+                  <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        role="combobox"
+                        aria-expanded={openCombobox}
+                        className="flex items-center gap-1 px-2.5 py-1 -ml-1 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-white font-extrabold text-base sm:text-lg tracking-tight leading-tight transition-all duration-150 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer group max-w-full"
+                      >
+                        <span className="truncate">
+                          {selectedTeacherId
+                            ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
+                            : "교사 선택"}
+                        </span>
+                        <ChevronsUpDown className="w-4 h-4 text-indigo-200 group-hover:text-white shrink-0 transition-colors ml-0.5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-0 shadow-xl border-slate-200" align="start">
+                      <Command>
+                        <CommandInput placeholder="선생님 이름 검색..." className="h-9" />
+                        <CommandList className="max-h-[250px]">
+                          <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
+                          <CommandGroup>
+                            {teacherOptions.map((opt) => {
+                              const isSelected = selectedTeacherId === opt.idx.toString();
+                              return (
+                                <CommandItem
+                                  key={opt.idx}
+                                  value={opt.label}
+                                  onSelect={() => {
+                                    setSelectedTeacherId(opt.idx.toString());
+                                    setOpenCombobox(false);
+                                  }}
+                                  className="flex items-center justify-between text-sm font-medium cursor-pointer"
+                                >
+                                  <span>{opt.label} 선생님</span>
+                                  <Check
+                                    className={cn(
+                                      "h-4 w-4 text-indigo-600",
+                                      isSelected ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <h2 className="text-lg font-extrabold tracking-tight leading-tight">
+                    {teacherName ? `${teacherName} 선생님!` : '선생님!'}
+                  </h2>
+                )}
+              </div>
+
+              {/* Week navigation integrated inside Card Header */}
+              <div className="flex items-center bg-white/15 hover:bg-white/20 transition-colors rounded-full p-0.5 border border-white/25 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
+                  onClick={() => setWeekOffset(weekOffset - 1)}
+                  disabled={weekOffset <= -2}
+                  title="이전 주"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-xs font-bold text-white px-2 min-w-[85px] sm:min-w-[95px] text-center select-none">
+                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`} ({weekRangeText})
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
+                  onClick={() => setWeekOffset(weekOffset + 1)}
+                  disabled={weekOffset >= 8}
+                  title="다음 주"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
+
             <p className="text-indigo-100 text-xs font-medium">수행평가 전체 목록</p>
           </div>
 
