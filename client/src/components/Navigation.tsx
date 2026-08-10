@@ -3,11 +3,27 @@ import { Link } from "wouter";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { LogOut, AlertTriangle } from "lucide-react";
+import { LogOut, AlertTriangle, Download } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+
+// Helper: Download PC Desktop .url Shortcut
+function downloadDesktopShortcut(title: string = "성지수행_시간표_수행평가") {
+  const url = window.location.href;
+  const content = `[InternetShortcut]\r\nURL=${url}\r\nIconIndex=0\r\n`;
+  const blob = new Blob([content], { type: 'application/x-msshortcut' });
+  const blobUrl = URL.createObjectURL(blob);
+  
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = `${title}.url`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(blobUrl);
+}
 
 export default function Navigation() {
   const { kakaoUser, refreshKakaoUser, grade, classNum, studentNumber } = useUserConfig();
@@ -77,6 +93,21 @@ export default function Navigation() {
             </Link>
 
             <div className="flex items-center gap-2 sm:gap-3">
+              {/* PC Only Desktop Shortcut Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden md:inline-flex h-9 rounded-full px-3 font-semibold text-xs border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm"
+                onClick={() => {
+                  downloadDesktopShortcut("성지수행_시간표_수행평가");
+                  toast.success("바탕화면 바로가기(.url) 파일이 다운로드되었습니다. 다운로드된 파일을 바탕화면으로 옮겨서 사용하세요.");
+                }}
+                title="PC 바탕화면에 바로가기 파일 다운로드"
+              >
+                <Download className="h-3.5 w-3.5 mr-1.5 text-blue-600" />
+                바탕화면에 바로가기 추가
+              </Button>
+
               {/* Mobile-only Bug Report Button */}
               {isBugReportEnabled && (
                 <Button

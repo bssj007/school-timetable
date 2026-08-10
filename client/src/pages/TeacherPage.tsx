@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,6 @@ import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
-import { ChevronsUpDown, Check } from "lucide-react";
 
 interface TeacherTimetableResponse {
   success: boolean;
@@ -34,6 +33,22 @@ interface AssessmentItem {
   teacher?: string;
   classCode?: string;
   isTeacherCreated?: number;
+}
+
+// Helper: Download PC Desktop .url Shortcut
+function downloadDesktopShortcut(title: string = "교사용_수행평가_등록시스템") {
+  const url = window.location.href;
+  const content = `[InternetShortcut]\r\nURL=${url}\r\nIconIndex=0\r\n`;
+  const blob = new Blob([content], { type: 'application/x-msshortcut' });
+  const blobUrl = URL.createObjectURL(blob);
+  
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = `${title}.url`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(blobUrl);
 }
 
 // Helper: Get Monday of the week
@@ -452,6 +467,19 @@ export default function TeacherPage() {
     });
   }, [timetableData, ignoreKeywords, teacherSubjectsMap, getTeacherDisplayName]);
 
+  const [showTeacherSelectModal, setShowTeacherSelectModal] = useState(false);
+  const [teacherSearchQuery, setTeacherSearchQuery] = useState("");
+
+  const filteredTeacherOptions = useMemo(() => {
+    if (!teacherSearchQuery.trim()) return teacherOptions;
+    const q = teacherSearchQuery.trim().toLowerCase();
+    return teacherOptions.filter(opt => {
+      const matchName = opt.displayName.toLowerCase().includes(q) || opt.rawName.toLowerCase().includes(q) || opt.label.toLowerCase().includes(q);
+      const matchSubject = opt.subjects.some(s => s.toLowerCase().includes(q));
+      return matchName || matchSubject;
+    });
+  }, [teacherOptions, teacherSearchQuery]);
+
   const tId = parseInt(selectedTeacherId, 10);
   const rawTeacherName = timetableData?.teachers?.[tId] || "";
   const teacherName = getTeacherDisplayName(rawTeacherName, tId);
@@ -831,10 +859,10 @@ export default function TeacherPage() {
   };
 
   return (
-    <div className="w-full h-screen px-2 md:px-4 py-4 md:py-6 overflow-hidden" style={{ display: 'flex', flexDirection: 'column' }}>
+    <div className="w-full min-h-screen px-2 md:px-4 py-3 md:py-6 bg-slate-50/30">
 
       {/* ===== TOP SECTION: Title + Home Button ===== */}
-      <div className="flex-shrink-0 flex items-center justify-between gap-3 mb-3">
+      <div className="flex items-center justify-between gap-3 mb-3">
         <div>
           <h1 className="text-xl md:text-2xl font-extrabold text-gray-900">
             <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
@@ -844,25 +872,43 @@ export default function TeacherPage() {
           </p>
         </div>
 
-        {/* Home button */}
-        <Link href="/">
-          <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-1.5 shrink-0 text-xs md:text-sm">
-            <Home className="w-3.5 h-3.5" />
-            <span className="md:hidden">학생 시간표</span>
-            <span className="hidden md:inline">학생 시간표로 돌아가기</span>
+        {/* Action buttons (PC Desktop Shortcut + Home Button) */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* PC Only Desktop Shortcut Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden md:inline-flex rounded-full shadow-sm gap-1.5 text-xs md:text-sm bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
+            onClick={() => {
+              downloadDesktopShortcut("교사용_수행평가_등록시스템");
+              toast.success("바탕화면 바로가기(.url) 파일이 다운로드되었습니다. 다운로드된 파일을 바탕화면으로 옮겨서 사용하세요.");
+            }}
+            title="PC 바탕화면에 바로가기 파일 다운로드"
+          >
+            <Download className="w-3.5 h-3.5 text-blue-600" />
+            <span>바탕화면에 바로가기 추가</span>
           </Button>
-        </Link>
+
+          {/* Home button */}
+          <Link href="/">
+            <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-1.5 shrink-0 text-xs md:text-sm">
+              <Home className="w-3.5 h-3.5" />
+              <span className="md:hidden">학생 시간표</span>
+              <span className="hidden md:inline">학생 시간표로 돌아가기</span>
+            </Button>
+          </Link>
+        </div>
       </div>
 
 
       {/* ===== CONTENT AREA: flex-col on mobile (panel top, table bottom), flex-row on desktop ===== */}
-      <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-4 xl:gap-6">
+      <div className="flex flex-col md:flex-row gap-4 xl:gap-6 items-start">
 
       {/* ===== TIMETABLE COLUMN: order-2 on mobile (bottom), order-1 on desktop (left) ===== */}
-      <div className="flex-1 min-w-0 flex flex-col order-2 md:order-1" style={{ minHeight: 0 }}>
+      <div className="w-full md:flex-1 min-w-0 flex flex-col order-2 md:order-1">
 
-      {/* Main Timetable — no card wrapper, fills remaining height */}
-      <div className="flex-1 min-h-0" style={{ border: '1px solid #d0d0d0', borderRadius: 8, background: '#fff', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Main Timetable — Card wrapper with natural table height and scroll support */}
+      <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
           {isTimetableLoading ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
@@ -876,12 +922,12 @@ export default function TeacherPage() {
               <p className="text-sm text-red-400">네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.</p>
             </div>
           ) : timetableData && selectedSchedule ? (
-            <div style={{ flex: 1, overflow: 'auto', height: '100%', minHeight: 0 }}>
-              <table className="w-full table-fixed" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px', height: '100%' }}>
+            <div className="w-full overflow-x-auto">
+              <table className="w-full table-fixed min-w-[340px]" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
                 <thead>
                   <tr>
                     {/* Corner cell */}
-                    <th style={{ width: 36, height: 22, background: '#f2f2f2', borderRight: '1px solid #d0d0d0', borderBottom: '1px solid #d0d0d0', position: 'sticky', top: 0, zIndex: 2 }} />
+                    <th style={{ width: 36, height: 26, background: '#f2f2f2', borderRight: '1px solid #d0d0d0', borderBottom: '1px solid #d0d0d0', position: 'sticky', top: 0, zIndex: 2 }} />
                     {weekdays.map((day, idx) => {
                       const dDate = weekDates[idx];
                       const todayStr = toDateString(new Date());
@@ -891,7 +937,7 @@ export default function TeacherPage() {
                         <th
                           key={day}
                           style={{
-                            height: 22,
+                            height: 26,
                             background: isToday ? '#cee8d0' : '#f2f2f2',
                             borderRight: '1px solid #d0d0d0',
                             borderBottom: isToday ? '2px solid #217346' : '1px solid #d0d0d0',
@@ -914,16 +960,16 @@ export default function TeacherPage() {
                     })}
                   </tr>
                 </thead>
-                <tbody style={{ height: '100%' }}>
+                <tbody>
                   {Array.from({ length: maxPeriods }).map((_, periodIndex) => {
                     const p = periodIndex + 1;
                     return (
-                      <tr key={p} style={{ height: `calc((100% - 22px) / ${maxPeriods})` }}>
+                      <tr key={p} style={{ height: '52px' }}>
                         {/* Row number cell — Excel row header */}
                         <td
                           style={{
                             width: 36,
-                            height: 'auto',
+                            height: '52px',
                             background: '#f2f2f2',
                             borderRight: '1px solid #d0d0d0',
                             borderBottom: '1px solid #d0d0d0',
@@ -965,9 +1011,6 @@ export default function TeacherPage() {
                           const hasAssessment = cellAssessments.length > 0;
 
                           // Excel-style cell background:
-                          // empty cell: white (today col: very light yellow-green)
-                          // class cell: white (Excel cells are white; we add subtle tint)
-                          // assessment cell: Excel conditional formatting light green
                           const baseBg = isToday ? '#f0f9f2' : '#ffffff';
                           const classBg = hasAssessment
                             ? (isToday ? '#d6f0da' : '#e8f5e9')   // conditional format: light green
@@ -979,7 +1022,7 @@ export default function TeacherPage() {
                               key={d}
                               className="group"
                               style={{
-                                height: 'auto',
+                                height: '52px',
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
                                 borderBottom: '1px solid #d0d0d0',
@@ -1086,65 +1129,30 @@ export default function TeacherPage() {
 
       </div>{/* end timetable column */}
 
-      {/* ===== RIGHT PANEL: order-1 on mobile (top, limited height), order-2 on desktop (right, sticky) ===== */}
-      <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-1 md:order-2 max-h-[40vh] md:max-h-[calc(100vh-2rem)] md:sticky md:top-4" style={{ alignSelf: 'flex-start' }}>
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden flex flex-col max-h-[40vh] md:max-h-[calc(100vh-2rem)]">
+      {/* ===== RIGHT PANEL: order-1 on mobile (top, compact), order-2 on desktop (right, sticky) ===== */}
+      <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-1 md:order-2 md:sticky md:top-4">
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-md overflow-hidden flex flex-col">
           {/* Panel Header: Title transformed into Teacher Picker + Integrated Week Navigator */}
           <div className="px-4 py-3.5 sm:px-5 sm:py-4 bg-gradient-to-br from-indigo-600 to-blue-600 text-white flex-shrink-0 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-              {/* Teacher Combobox Popover as Card Title */}
+              {/* Teacher Picker Title Button */}
               <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                <span className="text-xl shrink-0">📋</span>
                 {timetableData ? (
-                  <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        role="combobox"
-                        aria-expanded={openCombobox}
-                        className="flex items-center gap-1 px-2.5 py-1 -ml-1 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-white font-extrabold text-base sm:text-lg tracking-tight leading-tight transition-all duration-150 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer group max-w-full"
-                      >
-                        <span className="truncate">
-                          {selectedTeacherId
-                            ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
-                            : "교사 선택"}
-                        </span>
-                        <ChevronsUpDown className="w-4 h-4 text-indigo-200 group-hover:text-white shrink-0 transition-colors ml-0.5" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-64 p-0 shadow-xl border-slate-200" align="start">
-                      <Command>
-                        <CommandInput placeholder="선생님 이름 검색..." className="h-9" />
-                        <CommandList className="max-h-[250px]">
-                          <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
-                          <CommandGroup>
-                            {teacherOptions.map((opt) => {
-                              const isSelected = selectedTeacherId === opt.idx.toString();
-                              return (
-                                <CommandItem
-                                  key={opt.idx}
-                                  value={opt.label}
-                                  onSelect={() => {
-                                    setSelectedTeacherId(opt.idx.toString());
-                                    setOpenCombobox(false);
-                                  }}
-                                  className="flex items-center justify-between text-sm font-medium cursor-pointer"
-                                >
-                                  <span>{opt.label} 선생님</span>
-                                  <Check
-                                    className={cn(
-                                      "h-4 w-4 text-indigo-600",
-                                      isSelected ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                </CommandItem>
-                              );
-                            })}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTeacherSearchQuery("");
+                      setShowTeacherSelectModal(true);
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-white font-extrabold text-base sm:text-lg tracking-tight leading-tight transition-all duration-150 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer group max-w-full"
+                  >
+                    <span className="truncate">
+                      {selectedTeacherId
+                        ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
+                        : "교사 선택"}
+                    </span>
+                    <ChevronsUpDown className="w-4 h-4 text-indigo-200 group-hover:text-white shrink-0 transition-colors ml-0.5" />
+                  </button>
                 ) : (
                   <h2 className="text-lg font-extrabold tracking-tight leading-tight">
                     {teacherName ? `${teacherName} 선생님!` : '선생님!'}
@@ -1208,7 +1216,7 @@ export default function TeacherPage() {
           </div>
 
           {/* Assessment List */}
-          <div className="flex-1 overflow-y-auto px-4 py-3">
+          <div className="overflow-y-auto px-4 py-3 max-h-[220px] md:max-h-[calc(100vh-220px)]">
             {isAssessmentsLoading ? (
               <div className="space-y-2 mt-2">
                 {[1,2,3].map(i => (
@@ -1216,8 +1224,8 @@ export default function TeacherPage() {
                 ))}
               </div>
             ) : panelAssessments.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                <span className="text-3xl mb-2">📭</span>
+              <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                <span className="text-2xl mb-1">📭</span>
                 <p className="text-xs font-medium">등록된 수행평가가 없습니다.</p>
               </div>
             ) : (
@@ -1524,6 +1532,98 @@ export default function TeacherPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clean Teacher Selection Popup Dialog */}
+      <Dialog open={showTeacherSelectModal} onOpenChange={setShowTeacherSelectModal}>
+        <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+          {/* Modal Header */}
+          <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-4 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-extrabold flex items-center gap-2 text-white">
+                <span className="text-xl">📋</span>
+                선생님 선택
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-indigo-100 text-xs mt-1 font-medium">
+              시간표 및 수행평가 목록을 조회할 선생님을 선택해 주세요.
+            </p>
+          </div>
+
+          {/* Search Bar */}
+          <div className="p-3 bg-slate-50 border-b border-slate-100">
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Input
+                type="text"
+                placeholder="선생님 이름 또는 과목 검색..."
+                value={teacherSearchQuery}
+                onChange={(e) => setTeacherSearchQuery(e.target.value)}
+                className="pl-9 pr-8 bg-white border-slate-200 text-sm h-10 rounded-xl focus-visible:ring-indigo-500"
+                autoFocus
+              />
+              {teacherSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setTeacherSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Teacher List */}
+          <div className="max-h-[340px] overflow-y-auto p-2 space-y-1">
+            {filteredTeacherOptions.length === 0 ? (
+              <div className="py-12 text-center text-slate-400">
+                <p className="text-sm font-medium">검색 결과가 없습니다.</p>
+              </div>
+            ) : (
+              filteredTeacherOptions.map((opt) => {
+                const isSelected = selectedTeacherId === opt.idx.toString();
+                return (
+                  <button
+                    key={opt.idx}
+                    type="button"
+                    onClick={() => {
+                      setSelectedTeacherId(opt.idx.toString());
+                      setShowTeacherSelectModal(false);
+                      setTeacherSearchQuery("");
+                      toast.success(`${opt.displayName} 선생님이 선택되었습니다.`);
+                    }}
+                    className={cn(
+                      "w-full text-left px-3.5 py-3 rounded-xl flex items-center justify-between transition-all duration-150 gap-2 border",
+                      isSelected
+                        ? "bg-indigo-50/90 border-indigo-200 text-indigo-900 font-bold shadow-xs"
+                        : "bg-white border-transparent hover:bg-slate-50 text-slate-800 font-medium active:bg-slate-100"
+                    )}
+                  >
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-sm font-bold truncate">{opt.displayName} 선생님</span>
+                      {opt.subjects && opt.subjects.length > 0 && (
+                        <span className="text-xs text-slate-400 font-normal truncate mt-0.5">
+                          {opt.subjects.join(", ")}
+                        </span>
+                      )}
+                    </div>
+
+                    {isSelected ? (
+                      <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400 font-semibold px-2.5 py-1 rounded-md bg-slate-100 shrink-0">
+                        선택
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
