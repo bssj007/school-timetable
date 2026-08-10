@@ -859,10 +859,10 @@ export default function TeacherPage() {
   };
 
   return (
-    <div className="w-full min-h-screen md:h-screen md:overflow-hidden px-2 md:px-4 py-2 md:py-4 bg-slate-50/30 flex flex-col">
+    <div className="w-full min-h-screen px-2 md:px-4 py-2 md:py-6 bg-slate-50/30">
 
       {/* ===== TOP SECTION: Title + Home Button ===== */}
-      <div className="flex items-center justify-between gap-2 mb-2 md:mb-3 flex-shrink-0">
+      <div className="flex items-center justify-between gap-2 mb-2 md:mb-3">
         <div className="min-w-0">
           <h1 className="text-base sm:text-lg md:text-2xl font-extrabold text-gray-900 truncate leading-tight">
             <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
@@ -902,13 +902,13 @@ export default function TeacherPage() {
 
 
       {/* ===== CONTENT AREA: flex-col on mobile (panel top, table bottom), flex-row on desktop ===== */}
-      <div className="flex flex-col md:flex-row gap-4 xl:gap-6 items-start md:items-stretch flex-1 min-h-0">
+      <div className="flex flex-col md:flex-row gap-4 xl:gap-6 items-start">
 
       {/* ===== TIMETABLE COLUMN: order-2 on mobile (bottom), order-1 on desktop (left) ===== */}
-      <div className="w-full md:flex-1 min-w-0 flex flex-col order-2 md:order-1 md:h-full md:min-h-0">
+      <div className="w-full md:flex-1 min-w-0 flex flex-col order-2 md:order-1">
 
-      {/* Main Timetable — Card wrapper with natural table height on mobile and full height on PC */}
-      <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto md:flex-1 md:min-h-0 md:h-full flex flex-col">
+      {/* Main Timetable — Card wrapper */}
+      <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
           {isTimetableLoading ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
@@ -922,8 +922,8 @@ export default function TeacherPage() {
               <p className="text-sm text-red-400">네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.</p>
             </div>
           ) : timetableData && selectedSchedule ? (
-            <div className="w-full overflow-x-auto md:flex-1 md:min-h-0 md:h-full flex flex-col">
-              <table className="w-full table-fixed min-w-[340px] md:h-full" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
+            <div className="w-full overflow-x-auto">
+              <table className="w-full table-fixed min-w-[340px]" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
                 <thead>
                   <tr>
                     {/* Corner cell */}
@@ -960,14 +960,14 @@ export default function TeacherPage() {
                     })}
                   </tr>
                 </thead>
-                <tbody className="md:h-full">
+                <tbody>
                   {Array.from({ length: maxPeriods }).map((_, periodIndex) => {
                     const p = periodIndex + 1;
                     return (
-                      <tr key={p} className="h-[52px] md:h-[calc((100%-26px)/7)]">
+                      <tr key={p} className="h-[52px] md:h-[84px]">
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[52px] md:h-auto"
+                          className="h-[52px] md:h-[84px]"
                           style={{
                             width: 36,
                             background: '#f2f2f2',
@@ -1020,7 +1020,7 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[52px] md:h-auto"
+                              className="group h-[52px] md:h-[84px]"
                               style={{
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
@@ -1129,8 +1129,8 @@ export default function TeacherPage() {
       </div>{/* end timetable column */}
 
       {/* ===== RIGHT PANEL: order-1 on mobile (top, compact), order-2 on desktop (right, sticky) ===== */}
-      <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-1 md:order-2 md:h-full md:min-h-0">
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-md overflow-hidden flex flex-col md:h-full md:min-h-0">
+      <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-1 md:order-2 md:sticky md:top-4">
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-md overflow-hidden flex flex-col md:max-h-[calc(100vh-2rem)]">
           {/* Panel Header: Title transformed into Teacher Picker + Integrated Week Navigator */}
           <div className="px-3.5 py-2.5 sm:px-5 sm:py-3 bg-gradient-to-br from-indigo-600 to-blue-600 text-white flex-shrink-0 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1213,7 +1213,7 @@ export default function TeacherPage() {
           </div>
 
           {/* Assessment List */}
-          <div className="overflow-y-auto px-4 py-2.5 max-h-[130px] md:max-h-none md:flex-1">
+          <div className="overflow-y-auto px-4 py-2.5 max-h-[130px] md:max-h-[calc(100vh-200px)]">
             {isAssessmentsLoading ? (
               <div className="space-y-2 mt-1">
                 {[1,2].map(i => (
