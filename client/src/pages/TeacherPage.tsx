@@ -860,52 +860,53 @@ export default function TeacherPage() {
 
   return (
     <div className="w-full min-h-screen px-2 md:px-4 py-2 md:py-6 bg-slate-50/30">
+      <div className="max-w-[1240px] mx-auto w-full">
 
-      {/* ===== TOP SECTION: Title + Home Button ===== */}
-      <div className="flex items-center justify-between gap-2 mb-2 md:mb-3">
-        <div className="min-w-0">
-          <h1 className="text-base sm:text-lg md:text-2xl font-extrabold text-gray-900 truncate leading-tight">
-            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
-          </h1>
-          <p className="hidden md:block text-gray-500 text-xs sm:text-sm mt-0.5">
-            시간표에서 수업이 들어있는 칸을 클릭하여 수행평가를 간편하게 등록하고 관리할 수 있습니다.
-          </p>
-        </div>
+        {/* ===== TOP SECTION: Title + Home Button ===== */}
+        <div className="flex items-center justify-between gap-2 mb-2 md:mb-3">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-lg md:text-2xl font-extrabold text-gray-900 truncate leading-tight">
+              <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
+            </h1>
+            <p className="hidden md:block text-gray-500 text-xs sm:text-sm mt-0.5">
+              시간표에서 수업이 들어있는 칸을 클릭하여 수행평가를 간편하게 등록하고 관리할 수 있습니다.
+            </p>
+          </div>
 
-        {/* Action buttons (PC Desktop Shortcut + Home Button) */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* PC Only Desktop Shortcut Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="hidden md:inline-flex rounded-full shadow-sm gap-1.5 text-xs md:text-sm bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
-            onClick={() => {
-              downloadDesktopShortcut("교사용_수행평가_등록시스템");
-              toast.success("바탕화면 바로가기(.url) 파일이 다운로드되었습니다. 다운로드된 파일을 바탕화면으로 옮겨서 사용하세요.");
-            }}
-            title="PC 바탕화면에 바로가기 파일 다운로드"
-          >
-            <Download className="w-3.5 h-3.5 text-blue-600" />
-            <span>바탕화면에 바로가기 추가</span>
-          </Button>
-
-          {/* Home button */}
-          <Link href="/">
-            <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-1 shrink-0 h-8 text-xs md:text-sm px-2.5 md:px-3">
-              <Home className="w-3.5 h-3.5" />
-              <span className="md:hidden">학생 시간표</span>
-              <span className="hidden md:inline">학생 시간표로 돌아가기</span>
+          {/* Action buttons (PC Desktop Shortcut + Home Button) */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* PC Only Desktop Shortcut Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden md:inline-flex rounded-full shadow-sm gap-1.5 text-xs md:text-sm bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
+              onClick={() => {
+                downloadDesktopShortcut("교사용_수행평가_등록시스템");
+                toast.success("바탕화면 바로가기(.url) 파일이 다운로드되었습니다. 다운로드된 파일을 바탕화면으로 옮겨서 사용하세요.");
+              }}
+              title="PC 바탕화면에 바로가기 파일 다운로드"
+            >
+              <Download className="w-3.5 h-3.5 text-blue-600" />
+              <span>바탕화면에 바로가기 추가</span>
             </Button>
-          </Link>
+
+            {/* Home button */}
+            <Link href="/">
+              <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-1 shrink-0 h-8 text-xs md:text-sm px-2.5 md:px-3">
+                <Home className="w-3.5 h-3.5" />
+                <span className="md:hidden">학생 시간표</span>
+                <span className="hidden md:inline">학생 시간표로 돌아가기</span>
+              </Button>
+            </Link>
+          </div>
         </div>
-      </div>
 
 
-      {/* ===== CONTENT AREA: flex-col on mobile (panel top, table bottom), flex-row on desktop ===== */}
-      <div className="flex flex-col md:flex-row gap-4 xl:gap-6 items-start">
+        {/* ===== CONTENT AREA: flex-col on mobile (panel top, table bottom), flex-row on desktop ===== */}
+        <div className="flex flex-col md:flex-row gap-4 xl:gap-6 items-start">
 
-      {/* ===== TIMETABLE COLUMN: order-2 on mobile (bottom), order-1 on desktop (left) ===== */}
-      <div className="w-full md:flex-1 min-w-0 flex flex-col order-2 md:order-1">
+        {/* ===== TIMETABLE COLUMN: order-2 on mobile (bottom), order-1 on desktop (left) ===== */}
+        <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-2 md:order-1">
 
       {/* Main Timetable — Card wrapper */}
       <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
@@ -1298,9 +1299,10 @@ export default function TeacherPage() {
             </div>
           )}
         </div>
-      </div>{/* end right panel */}
+        </div>{/* end right panel */}
 
-      </div>{/* end content area */}
+        </div>{/* end content area */}
+      </div>{/* end max-w wrapper */}
 
       {/* Add Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
