@@ -865,7 +865,7 @@ export default function TeacherPage() {
       <div className="flex items-center justify-between gap-2 mb-2 md:mb-3">
         <div className="min-w-0">
           <h1 className="text-base sm:text-lg md:text-2xl font-extrabold text-gray-900 truncate leading-tight">
-            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
+            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h1>
           <p className="hidden md:block text-gray-500 text-xs sm:text-sm mt-0.5">
             시간표에서 수업이 들어있는 칸을 클릭하여 수행평가를 간편하게 등록하고 관리할 수 있습니다.
