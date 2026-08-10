@@ -1214,15 +1214,15 @@ export default function TeacherPage() {
           </div>
 
           {/* Assessment List */}
-          <div className="overflow-y-auto px-4 py-3 max-h-[220px] md:max-h-[calc(100vh-220px)]">
+          <div className="overflow-y-auto px-4 py-2.5 max-h-[130px] md:max-h-[calc(100vh-220px)]">
             {isAssessmentsLoading ? (
-              <div className="space-y-2 mt-2">
-                {[1,2,3].map(i => (
-                  <div key={i} className="h-16 rounded-xl bg-slate-100 animate-pulse" />
+              <div className="space-y-2 mt-1">
+                {[1,2].map(i => (
+                  <div key={i} className="h-12 rounded-xl bg-slate-100 animate-pulse" />
                 ))}
               </div>
             ) : panelAssessments.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+              <div className="flex flex-col items-center justify-center py-5 text-slate-400">
                 <span className="text-2xl mb-1">📭</span>
                 <p className="text-xs font-medium">등록된 수행평가가 없습니다.</p>
               </div>
