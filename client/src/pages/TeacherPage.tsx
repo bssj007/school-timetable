@@ -859,21 +859,21 @@ export default function TeacherPage() {
   };
 
   return (
-    <div className="w-full min-h-screen px-2 md:px-4 py-3 md:py-6 bg-slate-50/30">
+    <div className="w-full min-h-screen px-2 md:px-4 py-2 md:py-6 bg-slate-50/30">
 
       {/* ===== TOP SECTION: Title + Home Button ===== */}
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <div>
-          <h1 className="text-xl md:text-2xl font-extrabold text-gray-900">
+      <div className="flex items-center justify-between gap-2 mb-2 md:mb-3">
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-lg md:text-2xl font-extrabold text-gray-900 truncate leading-tight">
             <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h1>
-          <p className="text-gray-500 text-xs sm:text-sm mt-0.5">
+          <p className="hidden md:block text-gray-500 text-xs sm:text-sm mt-0.5">
             시간표에서 수업이 들어있는 칸을 클릭하여 수행평가를 간편하게 등록하고 관리할 수 있습니다.
           </p>
         </div>
 
         {/* Action buttons (PC Desktop Shortcut + Home Button) */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* PC Only Desktop Shortcut Button */}
           <Button
             variant="outline"
@@ -891,7 +891,7 @@ export default function TeacherPage() {
 
           {/* Home button */}
           <Link href="/">
-            <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-1.5 shrink-0 text-xs md:text-sm">
+            <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-1 shrink-0 h-8 text-xs md:text-sm px-2.5 md:px-3">
               <Home className="w-3.5 h-3.5" />
               <span className="md:hidden">학생 시간표</span>
               <span className="hidden md:inline">학생 시간표로 돌아가기</span>
@@ -1133,8 +1133,8 @@ export default function TeacherPage() {
       <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-1 md:order-2 md:sticky md:top-4">
         <div className="rounded-2xl border border-slate-200 bg-white shadow-md overflow-hidden flex flex-col">
           {/* Panel Header: Title transformed into Teacher Picker + Integrated Week Navigator */}
-          <div className="px-4 py-3.5 sm:px-5 sm:py-4 bg-gradient-to-br from-indigo-600 to-blue-600 text-white flex-shrink-0 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+          <div className="px-3.5 py-2.5 sm:px-5 sm:py-3 bg-gradient-to-br from-indigo-600 to-blue-600 text-white flex-shrink-0 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               {/* Teacher Picker Title Button */}
               <div className="flex items-center gap-1.5 min-w-0 flex-1">
                 {timetableData ? (
@@ -1187,8 +1187,6 @@ export default function TeacherPage() {
                 </Button>
               </div>
             </div>
-
-            <p className="text-indigo-100 text-xs font-medium">수행평가 전체 목록</p>
           </div>
 
           {/* Class Navigation Tabs */}
