@@ -1387,9 +1387,9 @@ export default function TeacherPage() {
 
       {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
       <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4">
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-md overflow-hidden flex flex-col md:max-h-[calc(100vh-2rem)]">
+        <div className="md:rounded-2xl md:border md:border-slate-200 md:bg-white md:shadow-md md:overflow-hidden flex flex-col md:max-h-[calc(100vh-2rem)]">
           {/* Teacher Picker — slim bar, no colored banner */}
-          <div className="px-3 py-2 border-b border-slate-100 bg-white flex-shrink-0 flex items-center justify-between gap-2">
+          <div className="px-1 md:px-3 py-2 border-b border-slate-100 flex-shrink-0 flex items-center justify-between gap-2">
             {timetableData ? (
               <button
                 type="button"
@@ -1494,7 +1494,7 @@ export default function TeacherPage() {
                 onMouseLeave={handleTabMouseLeave}
                 onMouseUp={handleTabMouseUp}
                 onMouseMove={handleTabMouseMove}
-                className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
+                className="flex gap-1 overflow-x-auto px-1 md:px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
                 style={{ scrollbarWidth: 'none' }}
               >
                 {filteredClassTabs.map(tab => (
@@ -1519,7 +1519,7 @@ export default function TeacherPage() {
           )}
 
           {/* Assessment List */}
-          <div className="overflow-y-auto px-4 py-2.5 md:max-h-[calc(100vh-200px)]">
+          <div className="overflow-y-auto px-1 md:px-4 py-2.5 md:max-h-[calc(100vh-200px)]">
             {filteredClassTabs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-5 text-slate-400">
                 <span className="text-2xl mb-1">📢</span>
