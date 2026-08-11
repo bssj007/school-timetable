@@ -1841,20 +1841,19 @@ export default function TeacherPage() {
       <Dialog open={showTeacherSelectModal} onOpenChange={setShowTeacherSelectModal}>
         <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
           {/* Modal Header */}
-          <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-4 text-white">
+          <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-4 py-3 sm:px-5 sm:py-4 text-white">
             <DialogHeader>
-              <DialogTitle className="text-lg font-extrabold flex items-center gap-2 text-white">
-                <span className="text-xl">📋</span>
+              <DialogTitle className="text-base sm:text-lg font-extrabold text-white">
                 선생님 선택
               </DialogTitle>
             </DialogHeader>
-            <p className="text-indigo-100 text-xs mt-1 font-medium">
+            <p className="text-indigo-100 text-[11px] sm:text-xs mt-0.5 font-medium">
               시간표 및 수행평가 목록을 조회할 선생님을 선택해 주세요.
             </p>
           </div>
 
           {/* Search Bar */}
-          <div className="p-3 bg-slate-50 border-b border-slate-100">
+          <div className="p-2.5 sm:p-3 bg-slate-50 border-b border-slate-100">
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <Input
@@ -1862,7 +1861,7 @@ export default function TeacherPage() {
                 placeholder="선생님 이름 또는 과목 검색..."
                 value={teacherSearchQuery}
                 onChange={(e) => setTeacherSearchQuery(e.target.value)}
-                className="pl-9 pr-8 bg-white border-slate-200 text-sm h-10 rounded-xl focus-visible:ring-indigo-500"
+                className="pl-9 pr-8 bg-white border-slate-200 text-sm h-9 sm:h-10 rounded-xl focus-visible:ring-indigo-500"
                 autoFocus
               />
               {teacherSearchQuery && (
@@ -1878,7 +1877,7 @@ export default function TeacherPage() {
           </div>
 
           {/* Teacher List */}
-          <div className="max-h-[340px] overflow-y-auto p-2 space-y-1">
+          <div className="max-h-[240px] sm:max-h-[340px] overflow-y-auto p-2 space-y-1">
             {filteredTeacherOptions.length === 0 ? (
               <div className="py-12 text-center text-slate-400">
                 <p className="text-sm font-medium">검색 결과가 없습니다.</p>
