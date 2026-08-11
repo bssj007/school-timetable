@@ -1088,12 +1088,13 @@ export default function TeacherPage() {
     <div 
       className="w-full min-h-screen px-2 md:px-4 py-2 md:py-6"
       style={{
-        backgroundColor: '#f4ece1',
+        backgroundColor: '#f1e6d4',
         backgroundImage: `
-          radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.6) 0%, rgba(230, 218, 200, 0.85) 100%),
-          repeating-linear-gradient(90deg, rgba(160, 125, 85, 0.035) 0px, rgba(160, 125, 85, 0.035) 1px, transparent 1px, transparent 12px),
-          repeating-linear-gradient(0deg, rgba(140, 105, 65, 0.025) 0px, rgba(140, 105, 65, 0.025) 2px, transparent 2px, transparent 18px),
-          url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0.4 0 0 0 0  0.3 0 0 0 0  0.2 0 0 0 0  0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")
+          radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.5) 0%, rgba(220, 204, 182, 0.9) 100%),
+          repeating-linear-gradient(90deg, rgba(140, 95, 50, 0.075) 0px, rgba(140, 95, 50, 0.075) 1.5px, transparent 1.5px, transparent 11px),
+          repeating-linear-gradient(91.5deg, rgba(165, 120, 75, 0.05) 0px, rgba(165, 120, 75, 0.05) 2px, transparent 2px, transparent 22px),
+          repeating-linear-gradient(0deg, rgba(120, 80, 40, 0.04) 0px, rgba(120, 80, 40, 0.04) 1px, transparent 1px, transparent 15px),
+          url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='woodGrain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.02 0.35' numOctaves='4' result='noise'/%3E%3CfeColorMatrix type='matrix' values='0.4 0.2 0.1 0 0  0.3 0.15 0.08 0 0  0.2 0.1 0.05 0 0  0 0 0 0.11 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23woodGrain)'/%3E%3C/svg%3E")
         `,
         backgroundAttachment: 'fixed',
       }}
