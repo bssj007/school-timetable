@@ -774,6 +774,19 @@ export default function TeacherPage() {
     { bg: '#86efac', activeBg: '#15803d' }, // light green
   ];
 
+  // Standard Korean school period start times (컴시간알리미 reference)
+  const PERIOD_TIMES: Record<number, string> = {
+    1: '8:30',
+    2: '9:30',
+    3: '10:30',
+    4: '11:30',
+    5: '13:00',
+    6: '14:00',
+    7: '15:00',
+    8: '16:00',
+    9: '17:00',
+  };
+
   // Drag-to-scroll state & handlers for class navigation tabs
   const tabContainerRef = useRef<HTMLDivElement>(null);
   const isMouseDownRef = useRef(false);
@@ -1213,13 +1226,15 @@ export default function TeacherPage() {
                             borderRight: '1px solid #d0d0d0',
                             borderBottom: '1px solid #d0d0d0',
                             textAlign: 'center',
-                            fontWeight: 700,
-                            fontSize: 12,
-                            color: '#595959',
+                            verticalAlign: 'middle',
                             userSelect: 'none',
+                            padding: '2px 0',
                           }}
                         >
-                          {p}
+                          <div style={{ fontWeight: 700, fontSize: 12, color: '#595959', lineHeight: 1.2 }}>{p}</div>
+                          {PERIOD_TIMES[p] && (
+                            <div style={{ fontSize: 8, color: '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
+                          )}
                         </td>
                         {weekdays.map((_, dayIndex) => {
                           const d = dayIndex + 1;
