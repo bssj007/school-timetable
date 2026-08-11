@@ -1085,17 +1085,47 @@ export default function TeacherPage() {
   };
 
   return (
-    <div className="w-full min-h-screen px-2 md:px-4 py-2 md:py-6 bg-slate-50/30">
+    <div 
+      className="w-full min-h-screen px-2 md:px-4 py-2 md:py-6 relative"
+      style={{
+        backgroundColor: '#4a2c17',
+        backgroundImage: `
+          radial-gradient(ellipse at 50% 25%, rgba(255, 235, 205, 0.14) 0%, rgba(0, 0, 0, 0.55) 95%),
+          repeating-linear-gradient(
+            88deg,
+            rgba(0, 0, 0, 0.06) 0px,
+            rgba(0, 0, 0, 0.06) 2px,
+            transparent 2px,
+            transparent 7px
+          ),
+          repeating-linear-gradient(
+            92deg,
+            rgba(255, 240, 210, 0.04) 0px,
+            rgba(255, 240, 210, 0.04) 3px,
+            transparent 3px,
+            transparent 14px
+          ),
+          linear-gradient(
+            180deg,
+            #6d3e1f 0%,
+            #542e14 35%,
+            #41210b 70%,
+            #2f1505 100%
+          )
+        `,
+        boxShadow: 'inset 0 0 120px rgba(0,0,0,0.65)',
+      }}
+    >
       <div className="max-w-[1240px] mx-auto w-full">
 
         {/* ===== TOP SECTION: Title + Home Button ===== */}
         <div className="flex items-center justify-between gap-2 mb-3 md:mb-3">
           <div className="min-w-0">
-            <h1 className="text-base sm:text-xl md:text-3xl font-extrabold text-gray-900 truncate leading-tight">
-              <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent hidden md:inline">교사용 수행평가 등록 시스템</span>
-              <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent md:hidden"> </span>
+            <h1 className="text-base sm:text-xl md:text-3xl font-extrabold text-amber-100 truncate leading-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+              <span className="bg-gradient-to-r from-amber-100 via-amber-200 to-yellow-400 bg-clip-text text-transparent hidden md:inline">교사용 수행평가 등록 시스템</span>
+              <span className="bg-gradient-to-r from-amber-100 via-amber-200 to-yellow-400 bg-clip-text text-transparent md:hidden"> </span>
             </h1>
-            <p className="hidden md:block text-gray-500 text-xs sm:text-sm mt-0.5">
+            <p className="hidden md:block text-amber-200/80 text-xs sm:text-sm mt-0.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
               시간표에서 수업이 들어있는 칸을 클릭하여 수행평가를 간편하게 등록하고 관리할 수 있습니다.
             </p>
           </div>
@@ -1106,14 +1136,14 @@ export default function TeacherPage() {
             <Button
               variant="outline"
               size="sm"
-              className="hidden md:inline-flex rounded-full shadow-sm gap-1.5 text-xs md:text-sm bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
+              className="hidden md:inline-flex rounded-full shadow-md gap-1.5 text-xs md:text-sm bg-white/95 hover:bg-white border-amber-900/30 text-amber-950 font-bold backdrop-blur-sm"
               onClick={() => {
                 downloadDesktopShortcut("교사용_수행평가_등록시스템");
                 toast.success("바탕화면 바로가기(.url) 파일이 다운로드되었습니다. 다운로드된 파일을 바탕화면으로 옮겨서 사용하세요.");
               }}
               title="PC 바탕화면에 바로가기 파일 다운로드"
             >
-              <Download className="w-3.5 h-3.5 text-blue-600" />
+              <Download className="w-3.5 h-3.5 text-amber-700" />
               <span>바탕화면에 바로가기 추가</span>
             </Button>
 
@@ -1127,8 +1157,8 @@ export default function TeacherPage() {
 
         {/* ===== MOBILE ONLY: Title + Week nav row — order-1 (above timetable) ===== */}
         <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5">
-          <h2 className="text-lg font-extrabold truncate leading-tight">
-            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
+          <h2 className="text-lg font-extrabold truncate leading-tight drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
+            <span className="bg-gradient-to-r from-amber-100 via-amber-200 to-yellow-400 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h2>
           <div className="flex items-center bg-indigo-600 rounded-full p-0.5 border border-indigo-400 shrink-0">
             <Button
