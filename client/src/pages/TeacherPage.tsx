@@ -845,15 +845,19 @@ export default function TeacherPage() {
     return [...taughtSubjects].sort();
   }, [taughtSubjects]);
 
-  // Auto-select first subject tab when teacher or subjectTabs changes
+  // Auto-select first subject tab ONLY when teacher changes (not on every taughtSubjects re-render)
   useEffect(() => {
     if (subjectTabs.length > 0) {
-      setSelectedSubjectFilter(subjectTabs[0]);
+      setSelectedSubjectFilter(prev => {
+        // Keep existing selection if it's still valid; otherwise pick first
+        if (prev && subjectTabs.includes(prev)) return prev;
+        return subjectTabs[0];
+      });
     } else {
       setSelectedSubjectFilter('');
     }
-  }, [selectedTeacherId, subjectTabs.join(',')]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTeacherId]);
 
   // Filter assessments for selected tab & selected teacher
   const panelAssessments = useMemo(() => {
@@ -1068,7 +1072,7 @@ export default function TeacherPage() {
         <div className="flex items-center justify-between gap-2 mb-2 md:mb-3">
           <div className="min-w-0">
             <h1 className="text-base sm:text-lg md:text-2xl font-extrabold text-gray-900 truncate leading-tight">
-              <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent hidden md:inline">수행평가 등록 시스템</span>
+              <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent hidden md:inline">교사용 수행평가 등록 시스템</span>
               <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent md:hidden"> </span>
             </h1>
             <p className="hidden md:block text-gray-500 text-xs sm:text-sm mt-0.5">
@@ -1101,10 +1105,10 @@ export default function TeacherPage() {
         {/* ===== CONTENT AREA: flex-col on mobile (panel top, title+week, table bottom), flex-row on desktop ===== */}
         <div className="flex flex-col md:flex-row gap-2 md:gap-4 xl:gap-6 items-start">
 
-        {/* ===== MOBILE ONLY: Title + Week nav row — order-2 between card (order-1) and timetable (order-3) ===== */}
-        <div className="md:hidden w-full order-2 flex items-center justify-between gap-2 px-0.5">
-          <h2 className="text-base font-extrabold truncate leading-tight">
-            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">수행평가 등록 시스템</span>
+        {/* ===== MOBILE ONLY: Title + Week nav row — order-1 (above timetable) ===== */}
+        <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5">
+          <h2 className="text-sm font-extrabold truncate leading-tight">
+            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h2>
           <div className="flex items-center bg-indigo-600 rounded-full p-0.5 border border-indigo-400 shrink-0">
             <Button
@@ -1133,8 +1137,8 @@ export default function TeacherPage() {
           </div>
         </div>
 
-        {/* ===== TIMETABLE COLUMN: order-3 on mobile (bottom), order-1 on desktop (left) ===== */}
-        <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-3 md:order-1">
+        {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
+        <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-2 md:order-1">
 
       {/* Main Timetable — Card wrapper */}
       <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
@@ -1360,8 +1364,8 @@ export default function TeacherPage() {
 
       </div>{/* end timetable column */}
 
-      {/* ===== RIGHT PANEL: order-1 on mobile (top, compact), order-2 on desktop (right, sticky) ===== */}
-      <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-1 md:order-2 md:sticky md:top-4">
+      {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
+      <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4">
         <div className="rounded-2xl border border-slate-200 bg-white shadow-md overflow-hidden flex flex-col md:max-h-[calc(100vh-2rem)]">
           {/* Panel Header: Title transformed into Teacher Picker + Integrated Week Navigator */}
           <div className="px-3.5 py-2.5 sm:px-5 sm:py-3 bg-gradient-to-br from-indigo-600 to-blue-600 text-white flex-shrink-0 shadow-sm">
@@ -1433,13 +1437,14 @@ export default function TeacherPage() {
                     <button
                       key={subject}
                       onClick={() => setSelectedSubjectFilter(subject)}
-                      className="flex-1 py-2 px-1 text-[11px] font-bold transition-all duration-150 leading-tight text-center"
+                      className="flex-1 py-2 px-1 text-[11px] font-bold transition-colors duration-150 leading-tight text-center"
                       style={{
                         color: isActive ? '#fff' : color.activeBg,
                         backgroundColor: isActive
-                          ? color.activeBg          // active = vivid full color
-                          : `${color.bg}20`,        // inactive = very light (~12% opacity)
+                          ? color.activeBg
+                          : `${color.bg}20`,
                         borderBottom: `3px solid ${isActive ? color.activeBg : `${color.activeBg}40`}`,
+                        WebkitTapHighlightColor: 'transparent',
                       }}
                     >
                       {subject}
@@ -1484,7 +1489,7 @@ export default function TeacherPage() {
           )}
 
           {/* Assessment List */}
-          <div className="overflow-y-auto px-4 py-2.5 max-h-[130px] md:max-h-[calc(100vh-200px)]">
+          <div className="overflow-y-auto px-4 py-2.5 md:max-h-[calc(100vh-200px)]">
             {filteredClassTabs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-5 text-slate-400">
                 <span className="text-2xl mb-1">📢</span>
