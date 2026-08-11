@@ -1068,16 +1068,17 @@ export default function TeacherPage() {
         <div className="flex items-center justify-between gap-2 mb-2 md:mb-3">
           <div className="min-w-0">
             <h1 className="text-base sm:text-lg md:text-2xl font-extrabold text-gray-900 truncate leading-tight">
-              <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
+              <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent hidden md:inline">교사용 수행평가 등록 시스템</span>
+              <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent md:hidden"> </span>
             </h1>
             <p className="hidden md:block text-gray-500 text-xs sm:text-sm mt-0.5">
               시간표에서 수업이 들어있는 칸을 클릭하여 수행평가를 간편하게 등록하고 관리할 수 있습니다.
             </p>
           </div>
 
-          {/* Action buttons (PC Desktop Shortcut + Home Button) */}
+          {/* Action buttons: PC Desktop Shortcut only (no home button) */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* PC Only Desktop Shortcut Button */}
+            {/* PC Only Desktop Shortcut Button */}}
             <Button
               variant="outline"
               size="sm"
@@ -1092,23 +1093,48 @@ export default function TeacherPage() {
               <span>바탕화면에 바로가기 추가</span>
             </Button>
 
-            {/* Home button */}
-            <Link href="/">
-              <Button variant="outline" size="sm" className="rounded-full shadow-sm gap-1 shrink-0 h-8 text-xs md:text-sm px-2.5 md:px-3">
-                <Home className="w-3.5 h-3.5" />
-                <span className="md:hidden">학생 시간표</span>
-                <span className="hidden md:inline">학생 시간표로 돌아가기</span>
-              </Button>
-            </Link>
           </div>
         </div>
 
 
-        {/* ===== CONTENT AREA: flex-col on mobile (panel top, table bottom), flex-row on desktop ===== */}
-        <div className="flex flex-col md:flex-row gap-4 xl:gap-6 items-start">
 
-        {/* ===== TIMETABLE COLUMN: order-2 on mobile (bottom), order-1 on desktop (left) ===== */}
-        <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-2 md:order-1">
+        {/* ===== CONTENT AREA: flex-col on mobile (panel top, title+week, table bottom), flex-row on desktop ===== */}
+        <div className="flex flex-col md:flex-row gap-2 md:gap-4 xl:gap-6 items-start">
+
+        {/* ===== MOBILE ONLY: Title + Week nav row — order-2 between card (order-1) and timetable (order-3) ===== */}
+        <div className="md:hidden w-full order-2 flex items-center justify-between gap-2 px-0.5">
+          <h2 className="text-sm font-extrabold truncate leading-tight">
+            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">\uad50\uc0ac\uc6a9 \uc218\ud589\ud3c9\uac00 \ub4f1\ub85d \uc2dc\uc2a4\ud15c</span>
+          </h2>
+          <div className="flex items-center bg-indigo-600 rounded-full p-0.5 border border-indigo-400 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
+              onClick={() => setWeekOffset(weekOffset - 1)}
+              disabled={weekOffset <= -2}
+              title="\uc774\uc804 \uc8fc"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <span className="text-[10px] font-bold text-white px-1.5 text-center select-none whitespace-nowrap">
+              {weekOffset === 0 ? "\uc774\ubc88 \uc8fc" : weekOffset === 1 ? "\ub2e4\uc74c \uc8fc" : weekOffset < 0 ? `${Math.abs(weekOffset)}\uc8fc \uc804` : `${weekOffset}\uc8fc \ud6c4`} ({weekRangeText})
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
+              onClick={() => setWeekOffset(weekOffset + 1)}
+              disabled={weekOffset >= 8}
+              title="\ub2e4\uc74c \uc8fc"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+
+        {/* ===== TIMETABLE COLUMN: order-3 on mobile (bottom), order-1 on desktop (left) ===== */}
+        <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-3 md:order-1">
 
       {/* Main Timetable — Card wrapper */}
       <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
@@ -1365,20 +1391,20 @@ export default function TeacherPage() {
                 )}
               </div>
 
-              {/* Week navigation integrated inside Card Header */}
-              <div className="flex items-center bg-white/15 hover:bg-white/20 transition-colors rounded-full p-0.5 border border-white/25 shrink-0">
+              {/* Week navigation integrated inside Card Header — desktop only */}
+              <div className="hidden md:flex items-center bg-white/15 hover:bg-white/20 transition-colors rounded-full p-0.5 border border-white/25 shrink-0">
                 <Button
                   variant="ghost"
                   size="sm"
                   className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
                   onClick={() => setWeekOffset(weekOffset - 1)}
                   disabled={weekOffset <= -2}
-                  title="이전 주"
+                  title="\uc774\uc804 \uc8fc"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="text-xs font-bold text-white px-2 min-w-[85px] sm:min-w-[95px] text-center select-none">
-                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`} ({weekRangeText})
+                  {weekOffset === 0 ? "\uc774\ubc88 \uc8fc" : weekOffset === 1 ? "\ub2e4\uc74c \uc8fc" : weekOffset < 0 ? `${Math.abs(weekOffset)}\uc8fc \uc804` : `${weekOffset}\uc8fc \ud6c4`} ({weekRangeText})
                 </span>
                 <Button
                   variant="ghost"
@@ -1386,7 +1412,7 @@ export default function TeacherPage() {
                   className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
                   onClick={() => setWeekOffset(weekOffset + 1)}
                   disabled={weekOffset >= 8}
-                  title="다음 주"
+                  title="\ub2e4\uc74c \uc8fc"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
