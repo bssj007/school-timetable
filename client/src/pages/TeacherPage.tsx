@@ -1068,7 +1068,7 @@ export default function TeacherPage() {
         <div className="flex items-center justify-between gap-2 mb-2 md:mb-3">
           <div className="min-w-0">
             <h1 className="text-base sm:text-lg md:text-2xl font-extrabold text-gray-900 truncate leading-tight">
-              <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent hidden md:inline">교사용 수행평가 등록 시스템</span>
+              <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent hidden md:inline">수행평가 등록 시스템</span>
               <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent md:hidden"> </span>
             </h1>
             <p className="hidden md:block text-gray-500 text-xs sm:text-sm mt-0.5">
@@ -1103,8 +1103,8 @@ export default function TeacherPage() {
 
         {/* ===== MOBILE ONLY: Title + Week nav row — order-2 between card (order-1) and timetable (order-3) ===== */}
         <div className="md:hidden w-full order-2 flex items-center justify-between gap-2 px-0.5">
-          <h2 className="text-sm font-extrabold truncate leading-tight">
-            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
+          <h2 className="text-base font-extrabold truncate leading-tight">
+            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">수행평가 등록 시스템</span>
           </h2>
           <div className="flex items-center bg-indigo-600 rounded-full p-0.5 border border-indigo-400 shrink-0">
             <Button
@@ -1117,7 +1117,7 @@ export default function TeacherPage() {
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-xs font-bold text-white px-2 text-center select-none whitespace-nowrap">
+            <span className="text-sm font-bold text-white px-2 min-w-[120px] text-center select-none whitespace-nowrap">
               {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`} ({weekRangeText})
             </span>
             <Button
