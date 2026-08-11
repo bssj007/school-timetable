@@ -622,6 +622,34 @@ export default function TeacherPage() {
     }
   }
 
+  // Current time based period determination (1-9)
+  const [currentPeriod, setCurrentPeriod] = useState<number | null>(null);
+
+  useEffect(() => {
+    const calcCurrentPeriod = () => {
+      const now = new Date();
+      const minutes = now.getHours() * 60 + now.getMinutes();
+
+      if (minutes >= 8 * 60 + 30 && minutes < 9 * 60 + 25) return 1;
+      if (minutes >= 9 * 60 + 30 && minutes < 10 * 60 + 25) return 2;
+      if (minutes >= 10 * 60 + 30 && minutes < 11 * 60 + 25) return 3;
+      if (minutes >= 11 * 60 + 30 && minutes < 12 * 60 + 25) return 4;
+      if (minutes >= 13 * 60 + 20 && minutes < 14 * 60 + 15) return 5;
+      if (minutes >= 14 * 60 + 20 && minutes < 15 * 60 + 15) return 6;
+      if (minutes >= 15 * 60 + 20 && minutes < 16 * 60 + 15) return 7;
+      if (minutes >= 16 * 60 + 20 && minutes < 17 * 60 + 15) return 8;
+      if (minutes >= 17 * 60 + 20 && minutes < 18 * 60 + 15) return 9;
+      return null;
+    };
+
+    setCurrentPeriod(calcCurrentPeriod());
+    const interval = setInterval(() => {
+      setCurrentPeriod(calcCurrentPeriod());
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Scan and gather unique classes taught by selected teacher
   const taughtClasses = useMemo(() => {
     if (!selectedSchedule) return [];
@@ -1144,8 +1172,12 @@ export default function TeacherPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
-              onClick={() => setWeekOffset(weekOffset - 1)}
+              className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none"
+              style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+              onClick={(e) => {
+                setWeekOffset(prev => prev - 1);
+                (e.currentTarget as HTMLElement).blur();
+              }}
               disabled={weekOffset <= -2}
               title="이전 주"
             >
@@ -1160,8 +1192,12 @@ export default function TeacherPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
-              onClick={() => setWeekOffset(weekOffset + 1)}
+              className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none"
+              style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+              onClick={(e) => {
+                setWeekOffset(prev => prev + 1);
+                (e.currentTarget as HTMLElement).blur();
+              }}
               disabled={weekOffset >= 8}
               title="다음 주"
             >
@@ -1229,6 +1265,7 @@ export default function TeacherPage() {
                 <tbody>
                   {Array.from({ length: maxPeriods }).map((_, periodIndex) => {
                     const p = periodIndex + 1;
+                    const isCurrentPeriod = currentPeriod === p && weekOffset === 0;
                     return (
                       <tr key={p} className="h-[52px] md:h-[84px]">
                         {/* Row number cell — Excel row header */}
@@ -1236,8 +1273,8 @@ export default function TeacherPage() {
                           className="h-[52px] max-h-[52px] md:h-[84px] md:max-h-[84px] overflow-hidden"
                           style={{
                             width: 36,
-                            background: '#f2f2f2',
-                            borderRight: '1px solid #d0d0d0',
+                            background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
+                            borderRight: isCurrentPeriod ? '2px solid #217346' : '1px solid #d0d0d0',
                             borderBottom: '1px solid #d0d0d0',
                             textAlign: 'center',
                             verticalAlign: 'middle',
@@ -1245,9 +1282,9 @@ export default function TeacherPage() {
                             padding: '2px 0',
                           }}
                         >
-                          <div style={{ fontWeight: 700, fontSize: 12, color: '#595959', lineHeight: 1.2 }}>{p}</div>
+                          <div style={{ fontWeight: 700, fontSize: 12, color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
                           {PERIOD_TIMES[p] && (
-                            <div style={{ fontSize: 8, color: '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
+                            <div style={{ fontSize: 8, color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
                           )}
                         </td>
                         {weekdays.map((_, dayIndex) => {
@@ -1255,7 +1292,6 @@ export default function TeacherPage() {
                           const val = selectedSchedule[d]?.[p];
                           const cellData = decodeCell(val);
                           const cellDateStr = toDateString(weekDates[dayIndex]);
-                          const isToday = cellDateStr === toDateString(new Date());
 
                           // Resolve group
                           let cellGroup = "";
@@ -1279,11 +1315,9 @@ export default function TeacherPage() {
                           }) : [];
                           const hasAssessment = cellAssessments.length > 0;
 
-                          // Excel-style cell background:
-                          const baseBg = isToday ? '#f0f9f2' : '#ffffff';
-                          const classBg = hasAssessment
-                            ? (isToday ? '#fdf2f8' : '#fff5f7')   // conditional format: soft light pink
-                            : (isToday ? '#eaf7ed' : '#f7fdf8');  // class but no assessment: barely tinted
+                          // Clean cell background (no today column background tint):
+                          const baseBg = '#ffffff';
+                          const classBg = hasAssessment ? '#fff5f7' : '#ffffff';
                           const cellBg = cellData ? classBg : baseBg;
 
                           return (
@@ -1431,8 +1465,12 @@ export default function TeacherPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
-                onClick={() => setWeekOffset(weekOffset - 1)}
+                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none"
+                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                onClick={(e) => {
+                  setWeekOffset(prev => prev - 1);
+                  (e.currentTarget as HTMLElement).blur();
+                }}
                 disabled={weekOffset <= -2}
                 title="이전 주"
               >
@@ -1447,8 +1485,12 @@ export default function TeacherPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
-                onClick={() => setWeekOffset(weekOffset + 1)}
+                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none"
+                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                onClick={(e) => {
+                  setWeekOffset(prev => prev + 1);
+                  (e.currentTarget as HTMLElement).blur();
+                }}
                 disabled={weekOffset >= 8}
                 title="다음 주"
               >
