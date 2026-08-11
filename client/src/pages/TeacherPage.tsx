@@ -1088,26 +1088,10 @@ export default function TeacherPage() {
     <div 
       className="w-full min-h-screen px-2 md:px-4 py-2 md:py-6"
       style={{
-        backgroundColor: '#f5e4c3',
+        backgroundColor: '#f6e7c9',
         backgroundImage: `
-          radial-gradient(circle at 50% 0%, rgba(255, 253, 245, 0.65) 0%, rgba(235, 215, 180, 0.85) 100%),
-          repeating-linear-gradient(90deg, 
-            rgba(215, 170, 105, 0.25) 0px, 
-            rgba(215, 170, 105, 0.25) 2.5px, 
-            transparent 2.5px, 
-            transparent 26px,
-            rgba(195, 150, 85, 0.18) 26px,
-            rgba(195, 150, 85, 0.18) 29px,
-            transparent 29px,
-            transparent 52px
-          ),
-          repeating-linear-gradient(89.5deg,
-            rgba(225, 185, 125, 0.15) 0px,
-            rgba(225, 185, 125, 0.15) 1px,
-            transparent 1px,
-            transparent 7px
-          ),
-          url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='pineGrain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.005 0.22' numOctaves='3' result='noise'/%3E%3CfeColorMatrix type='matrix' values='0.6 0.3 0.1 0 0  0.5 0.3 0.1 0 0  0.3 0.2 0.05 0 0  0 0 0 0.16 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23pineGrain)'/%3E%3C/svg%3E")
+          radial-gradient(ellipse at 50% 0%, rgba(255, 254, 248, 0.7) 0%, rgba(232, 212, 178, 0.88) 100%),
+          url("data:image/svg+xml,%3Csvg viewBox='0 0 600 600' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='organicWood'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.005 0.07' numOctaves='4' result='noise'/%3E%3CfeColorMatrix type='matrix' values='0.7 0.35 0.12 0 0  0.55 0.3 0.1 0 0  0.35 0.2 0.05 0 0  0 0 0 0.17 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23organicWood)'/%3E%3C/svg%3E")
         `,
         backgroundAttachment: 'fixed',
       }}
@@ -1553,7 +1537,9 @@ export default function TeacherPage() {
             {filteredClassTabs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-5 text-slate-400">
                 <span className="text-2xl mb-1">📢</span>
-                <p className="text-xs font-medium">이번 주 수행평가가 없습니다.</p>
+                <p className="text-xs font-medium">
+                  {effectiveSubjectFilter ? `등록된 [${effectiveSubjectFilter}] 수행평가가 없습니다.` : "등록된 수행평가가 없습니다."}
+                </p>
               </div>
             ) : isAssessmentsLoading ? (
               <div className="space-y-2 mt-1">
@@ -1564,7 +1550,9 @@ export default function TeacherPage() {
             ) : panelAssessments.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-5 text-slate-400">
                 <span className="text-2xl mb-1">📭</span>
-                <p className="text-xs font-medium">등록된 수행평가가 없습니다.</p>
+                <p className="text-xs font-medium">
+                  {effectiveSubjectFilter ? `등록된 [${effectiveSubjectFilter}] 수행평가가 없습니다.` : "등록된 수행평가가 없습니다."}
+                </p>
               </div>
             ) : (
               <div className="space-y-0 md:space-y-2">
