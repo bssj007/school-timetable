@@ -1393,11 +1393,9 @@ export default function TeacherPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">날짜</label>
-                <Input
-                  value={formatDateWithDay(formData.assessmentDate)}
-                  readOnly
-                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
-                />
+                <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
+                  {formatDateWithDay(formData.assessmentDate)}
+                </div>
               </div>
               
               <div>
@@ -1417,40 +1415,32 @@ export default function TeacherPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">과목</label>
-                <Input
-                  value={formData.subject}
-                  readOnly
-                  className="bg-gray-50 font-bold text-sm text-gray-700 cursor-default"
-                />
+                <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
+                  {formData.subject}
+                </div>
               </div>
               
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">교시</label>
-                <Input
-                  value={formData.classTime ? `${formData.classTime}교시` : ""}
-                  readOnly
-                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
-                />
+                <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
+                  {formData.classTime ? `${formData.classTime}교시` : ""}
+                </div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">담당 교사</label>
-                <Input
-                  value={formData.teacher}
-                  readOnly
-                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
-                />
+                <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
+                  {formData.teacher || teacherName}
+                </div>
               </div>
               
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">반/그룹 (이동수업)</label>
-                <Input
-                  value={formData.classCode || "공통"}
-                  readOnly
-                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
-                />
+                <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
+                  {formData.classCode || "공통"}
+                </div>
               </div>
             </div>
 
@@ -1511,11 +1501,9 @@ export default function TeacherPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">날짜</label>
-                <Input
-                  value={formatDateWithDay(formData.assessmentDate)}
-                  readOnly
-                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
-                />
+                <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
+                  {formatDateWithDay(formData.assessmentDate)}
+                </div>
               </div>
               
               <div>
@@ -1535,11 +1523,9 @@ export default function TeacherPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">과목</label>
-                <Input
-                  value={formData.subject}
-                  readOnly
-                  className="bg-gray-50 font-bold text-sm text-gray-700 cursor-default"
-                />
+                <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
+                  {formData.subject}
+                </div>
               </div>
               
               <div>
@@ -1559,20 +1545,16 @@ export default function TeacherPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">담당 교사</label>
-                <Input
-                  value={formData.teacher}
-                  readOnly
-                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
-                />
+                <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
+                  {formData.teacher || teacherName}
+                </div>
               </div>
               
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">반/그룹 (이동수업)</label>
-                <Input
-                  value={formData.classCode || "공통"}
-                  readOnly
-                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
-                />
+                <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
+                  {formData.classCode || "공통"}
+                </div>
               </div>
             </div>
 
