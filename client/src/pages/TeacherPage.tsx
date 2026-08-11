@@ -85,10 +85,11 @@ function toDateString(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-// Helper: Format date string YYYY-MM-DD to include day of week (e.g. 2026-08-12 (수))
-function formatDateWithDay(dateStr: string): string {
+// Helper: Format date string YYYY-MM-DD to include day of week and optional period without year (e.g. 08-13 (목) 2교시)
+function formatDateWithDay(dateStr: string, classTime?: string | number | null): string {
   if (!dateStr) return "";
   const parts = dateStr.split('-');
+  let formatted = dateStr;
   if (parts.length === 3) {
     const y = parseInt(parts[0], 10);
     const m = parseInt(parts[1], 10);
@@ -96,9 +97,12 @@ function formatDateWithDay(dateStr: string): string {
     const dateObj = new Date(y, m - 1, d);
     const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
     const dayOfWeek = weekdays[dateObj.getDay()];
-    return `${dateStr} (${dayOfWeek})`;
+    formatted = `${parts[1]}-${parts[2]} (${dayOfWeek})`;
   }
-  return dateStr;
+  if (classTime) {
+    formatted += ` ${classTime}교시`;
+  }
+  return formatted;
 }
 
 // Helper: Check if assessment subject matches one of teacher's taught subjects
@@ -1623,9 +1627,9 @@ export default function TeacherPage() {
           <form onSubmit={handleAddSubmit} className="space-y-4 pt-3">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">날짜</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">일시</label>
                 <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
-                  {formatDateWithDay(formData.assessmentDate)}
+                  {formatDateWithDay(formData.assessmentDate, formData.classTime)}
                 </div>
               </div>
               
@@ -1648,22 +1652,6 @@ export default function TeacherPage() {
                 <label className="block text-xs font-semibold text-gray-500 mb-1">과목</label>
                 <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
                   {formData.subject}
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">교시</label>
-                <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
-                  {formData.classTime ? `${formData.classTime}교시` : ""}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">담당 교사</label>
-                <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
-                  {formData.teacher || teacherName}
                 </div>
               </div>
               
@@ -1731,9 +1719,9 @@ export default function TeacherPage() {
           <form onSubmit={handleUpdateSubmit} className="space-y-4 pt-3">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">날짜</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">일시</label>
                 <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
-                  {formatDateWithDay(formData.assessmentDate)}
+                  {formatDateWithDay(formData.assessmentDate, formData.classTime)}
                 </div>
               </div>
               
@@ -1756,28 +1744,6 @@ export default function TeacherPage() {
                 <label className="block text-xs font-semibold text-gray-500 mb-1">과목</label>
                 <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
                   {formData.subject}
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">교시</label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-gray-200 bg-background px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={formData.classTime}
-                  onChange={(e) => setFormData({ ...formData, classTime: e.target.value })}
-                >
-                  {Array.from({ length: 7 }).map((_, idx) => (
-                    <option key={idx + 1} value={String(idx + 1)}>{idx + 1}교시</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">담당 교사</label>
-                <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
-                  {formData.teacher || teacherName}
                 </div>
               </div>
               
