@@ -759,16 +759,18 @@ export default function TeacherPage() {
   const [selectedTabId, setSelectedTabId] = useState<string>('');
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('전체');
 
-  // Bookmark tab color palette
+  // Bookmark tab color palette — diverse pastel tones
   const BOOKMARK_COLORS = [
-    { bg: '#ef4444', text: '#fff', activeBg: '#dc2626' }, // red
-    { bg: '#f97316', text: '#fff', activeBg: '#ea580c' }, // orange
-    { bg: '#eab308', text: '#fff', activeBg: '#ca8a04' }, // yellow
-    { bg: '#22c55e', text: '#fff', activeBg: '#16a34a' }, // green
-    { bg: '#06b6d4', text: '#fff', activeBg: '#0891b2' }, // cyan
-    { bg: '#6366f1', text: '#fff', activeBg: '#4f46e5' }, // indigo
-    { bg: '#a855f7', text: '#fff', activeBg: '#9333ea' }, // purple
-    { bg: '#ec4899', text: '#fff', activeBg: '#db2777' }, // pink
+    { bg: '#f472b6', activeBg: '#be185d' }, // rose pink
+    { bg: '#60a5fa', activeBg: '#1d4ed8' }, // sky blue
+    { bg: '#34d399', activeBg: '#047857' }, // mint green
+    { bg: '#a78bfa', activeBg: '#6d28d9' }, // soft violet
+    { bg: '#fb923c', activeBg: '#c2410c' }, // peach orange
+    { bg: '#2dd4bf', activeBg: '#0f766e' }, // teal
+    { bg: '#fbbf24', activeBg: '#b45309' }, // warm amber
+    { bg: '#f87171', activeBg: '#b91c1c' }, // coral red
+    { bg: '#818cf8', activeBg: '#3730a3' }, // periwinkle
+    { bg: '#86efac', activeBg: '#15803d' }, // light green
   ];
 
   // Drag-to-scroll state & handlers for class navigation tabs
