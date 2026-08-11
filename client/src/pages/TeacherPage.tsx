@@ -829,12 +829,11 @@ export default function TeacherPage() {
     return subjectTabs[0] ?? '';
   }, [selectedSubjectFilter, subjectTabs]);
 
-  // Reset manual selection only when teacher changes (inline, during render)
-  const prevTeacherIdRef = useRef(selectedTeacherId);
-  if (prevTeacherIdRef.current !== selectedTeacherId) {
-    prevTeacherIdRef.current = selectedTeacherId;
-    if (selectedSubjectFilter !== null) setSelectedSubjectFilter(null);
-  }
+  // Reset manual selection when teacher changes — useEffect is safe, avoids setState-during-render
+  useEffect(() => {
+    setSelectedSubjectFilter(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTeacherId]);
 
   // Filter classTabs to only show tabs relevant to selected subject
   const filteredClassTabs = useMemo(() => {
@@ -1207,7 +1206,7 @@ export default function TeacherPage() {
                       <tr key={p} className="h-[52px] md:h-[84px]">
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[52px] md:h-[84px]"
+                          className="h-[52px] max-h-[52px] md:h-[84px] md:max-h-[84px] overflow-hidden"
                           style={{
                             width: 36,
                             background: '#f2f2f2',
@@ -1261,7 +1260,7 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[52px] md:h-[84px]"
+                              className="group h-[52px] max-h-[52px] md:h-[84px] md:max-h-[84px] overflow-hidden"
                               style={{
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
@@ -1440,8 +1439,19 @@ export default function TeacherPage() {
                   return (
                     <button
                       key={subject}
-                      onTouchStart={() => setSelectedSubjectFilter(subject)}
-                      onClick={() => setSelectedSubjectFilter(subject)}
+                      onPointerDown={(e) => {
+                        // Record pointer position on down
+                        (e.currentTarget as any)._tapStartX = e.clientX;
+                        (e.currentTarget as any)._tapStartY = e.clientY;
+                      }}
+                      onPointerUp={(e) => {
+                        // Only count as tap if pointer didn't move much (not a scroll)
+                        const dx = e.clientX - ((e.currentTarget as any)._tapStartX ?? e.clientX);
+                        const dy = e.clientY - ((e.currentTarget as any)._tapStartY ?? e.clientY);
+                        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+                          setSelectedSubjectFilter(subject);
+                        }
+                      }}
                       className="flex-1 py-2 px-1 text-[11px] font-bold leading-tight text-center"
                       style={{
                         color: isActive ? '#fff' : color.activeBg,
@@ -1449,6 +1459,7 @@ export default function TeacherPage() {
                         borderBottom: `3px solid ${isActive ? color.activeBg : `${color.activeBg}30`}`,
                         WebkitTapHighlightColor: 'transparent',
                         touchAction: 'manipulation',
+                        userSelect: 'none',
                       }}
                     >
                       {subject}
