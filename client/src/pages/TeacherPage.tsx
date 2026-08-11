@@ -1537,7 +1537,7 @@ export default function TeacherPage() {
                 <p className="text-xs font-medium">등록된 수행평가가 없습니다.</p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-0 md:space-y-2">
                 {panelAssessments.map(a => {
                   const dateObj = new Date(a.dueDate);
                   const mmdd = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
@@ -1546,7 +1546,7 @@ export default function TeacherPage() {
                   return (
                     <div
                       key={a.id}
-                      className="rounded-xl border border-slate-100 bg-slate-50 hover:bg-indigo-50/60 hover:border-indigo-200 transition-all duration-150 p-3 cursor-pointer"
+                      className="border-b border-slate-100/80 last:border-b-0 md:border md:border-slate-100 py-2.5 px-1 md:p-3 md:rounded-xl md:bg-slate-50 hover:bg-indigo-50/60 md:hover:border-indigo-200 transition-all duration-150 cursor-pointer"
                       onClick={() => {
                         setSelectedAssessment(a);
                         const roundNum = a.description ? a.description.replace('차', '').trim() : '1';
