@@ -300,6 +300,9 @@ export default function TeacherPage() {
 
   const targetDate = toDateString(weekDates[0]);
 
+  // Fixed current-week date for assessment panel (always weekOffset=0)
+  const currentWeekDate = useMemo(() => toDateString(getMonday(new Date())), []);
+
   // Fetch all class timetables for Grade 1, 2, and 3 to resolve datasets and elective groups
   const { data: grade1Timetable } = useQuery({
     queryKey: ['timetable-all', '1', targetDate],
@@ -351,6 +354,49 @@ export default function TeacherPage() {
     const rawDatasetId = grade3Timetable?.originalDatasetId || grade3Timetable?.datasetId || '';
     return (rawDatasetId === 'MANUAL_PLAN' || rawDatasetId === 'SEMESTER_PLAN') ? rawDatasetId : 'COMCIGAN';
   }, [grade3Timetable]);
+
+  // Fetch current-week timetables to resolve fixed panel datasets
+  const { data: grade1TimetableNow } = useQuery({
+    queryKey: ['timetable-all-now', '1', currentWeekDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/comcigan?type=timetable&grade=1&classNum=all&targetDate=${encodeURIComponent(currentWeekDate)}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    staleTime: 60000,
+  });
+  const { data: grade2TimetableNow } = useQuery({
+    queryKey: ['timetable-all-now', '2', currentWeekDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/comcigan?type=timetable&grade=2&classNum=all&targetDate=${encodeURIComponent(currentWeekDate)}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    staleTime: 60000,
+  });
+  const { data: grade3TimetableNow } = useQuery({
+    queryKey: ['timetable-all-now', '3', currentWeekDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/comcigan?type=timetable&grade=3&classNum=all&targetDate=${encodeURIComponent(currentWeekDate)}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    staleTime: 60000,
+  });
+
+  // Fixed panel dataset types (always current week, not affected by week navigation)
+  const panelG1Dataset = useMemo(() => {
+    const raw = grade1TimetableNow?.originalDatasetId || grade1TimetableNow?.datasetId || '';
+    return (raw === 'MANUAL_PLAN' || raw === 'SEMESTER_PLAN') ? raw : 'COMCIGAN';
+  }, [grade1TimetableNow]);
+  const panelG2Dataset = useMemo(() => {
+    const raw = grade2TimetableNow?.originalDatasetId || grade2TimetableNow?.datasetId || '';
+    return (raw === 'MANUAL_PLAN' || raw === 'SEMESTER_PLAN') ? raw : 'COMCIGAN';
+  }, [grade2TimetableNow]);
+  const panelG3Dataset = useMemo(() => {
+    const raw = grade3TimetableNow?.originalDatasetId || grade3TimetableNow?.datasetId || '';
+    return (raw === 'MANUAL_PLAN' || raw === 'SEMESTER_PLAN') ? raw : 'COMCIGAN';
+  }, [grade3TimetableNow]);
 
   // Fetch Elective Configurations for Grade 2 and 3 using their resolved datasets
   const { data: electiveConfigsG2 } = useQuery({
@@ -594,18 +640,19 @@ export default function TeacherPage() {
 
   // 2. Fetch Assessments for all taught classes concurrently
   const { data: allAssessments, isLoading: isAssessmentsLoading } = useQuery<AssessmentItem[]>({
-    queryKey: ['teacher-assessments', taughtClasses, weekOffset, g1DatasetType, g2DatasetType, g3DatasetType],
+    // weekOffset excluded: assessment panel shows ALL weeks regardless of timetable navigation
+    queryKey: ['teacher-assessments', taughtClasses, panelG1Dataset, panelG2Dataset, panelG3Dataset],
     queryFn: async () => {
       if (taughtClasses.length === 0) return [];
       
       const promises = taughtClasses.map(async (cls) => {
         let resolvedDataset = 'COMCIGAN';
         if (cls.grade === 1) {
-          resolvedDataset = g1DatasetType;
+          resolvedDataset = panelG1Dataset;
         } else if (cls.grade === 2) {
-          resolvedDataset = g2DatasetType;
+          resolvedDataset = panelG2Dataset;
         } else if (cls.grade === 3) {
-          resolvedDataset = g3DatasetType;
+          resolvedDataset = panelG3Dataset;
         }
         const res = await fetch(`/api/assessment?grade=${cls.grade}&classNum=${cls.classNum}&dataset=${resolvedDataset}`);
         if (!res.ok) return [];
@@ -624,7 +671,7 @@ export default function TeacherPage() {
       });
       return Array.from(uniqueMap.values());
     },
-    enabled: taughtClasses.length > 0 && !!g1DatasetType && !!g2DatasetType && !!g3DatasetType,
+    enabled: taughtClasses.length > 0 && !!panelG1Dataset && !!panelG2Dataset && !!panelG3Dataset,
     staleTime: 5000,
     refetchInterval: 2000,
   });
