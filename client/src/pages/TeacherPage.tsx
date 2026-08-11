@@ -1123,8 +1123,11 @@ export default function TeacherPage() {
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-sm font-bold text-white px-2 min-w-[120px] text-center select-none whitespace-nowrap">
-              {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`} ({weekRangeText})
+            <span className="flex flex-col items-center min-w-[88px] px-1 select-none">
+              <span className="text-sm font-bold text-white leading-tight whitespace-nowrap">
+                {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
+              </span>
+              <span className="text-[9px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
             </span>
             <Button
               variant="ghost"
