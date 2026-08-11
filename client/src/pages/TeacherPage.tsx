@@ -101,14 +101,46 @@ function formatDateWithDay(dateStr: string): string {
   return dateStr;
 }
 
-// Helper: Check if assessment teacher matches current teacher
-function matchTeacher(aTeacher?: string, targetTeacher?: string, rawTargetTeacher?: string): boolean {
-  if (!aTeacher || !targetTeacher) return true;
-  const cleanA = aTeacher.replace(/선생님$/, '').trim();
-  const cleanTarget = targetTeacher.replace(/선생님$/, '').trim();
-  const cleanRaw = (rawTargetTeacher || '').replace(/선생님$/, '').trim();
-  if (!cleanA || !cleanTarget) return true;
-  return cleanA === cleanTarget || (cleanRaw ? cleanA === cleanRaw : false);
+// Helper: Check if assessment subject matches one of teacher's taught subjects
+function isSubjectMatch(assessmentSubject?: string, taughtSubjects?: string[]): boolean {
+  if (!assessmentSubject || !taughtSubjects || taughtSubjects.length === 0) return true;
+  const cleanAssSub = assessmentSubject.replace(/\(.*?\)/g, '').replace(/\s+/g, '').toLowerCase();
+  
+  return taughtSubjects.some(ts => {
+    const cleanTs = ts.replace(/\(.*?\)/g, '').replace(/\s+/g, '').toLowerCase();
+    return cleanAssSub.includes(cleanTs) || cleanTs.includes(cleanAssSub);
+  });
+}
+
+// Helper: Check if assessment matches current teacher by name and taught subjects
+function matchTeacherAndSubject(
+  a: { teacher?: string; subject?: string },
+  currentTeacherName: string,
+  currentRawTeacherName: string,
+  taughtSubjects: string[]
+): boolean {
+  if (!currentTeacherName) return true;
+  
+  const cleanCurrent = currentTeacherName.replace(/선생님$/, '').trim();
+  const cleanRaw = (currentRawTeacherName || '').replace(/선생님$/, '').trim();
+
+  // 1. If assessment has a teacher specified, enforce teacher match
+  if (a.teacher && a.teacher.trim()) {
+    const cleanA = a.teacher.replace(/선생님$/, '').trim();
+    const isTeacherMatched = cleanA === cleanCurrent || (cleanRaw ? cleanA === cleanRaw : false);
+    if (!isTeacherMatched) {
+      return false; // Created by another teacher
+    }
+  }
+
+  // 2. Enforce subject match against subjects taught by current teacher
+  if (a.subject && taughtSubjects && taughtSubjects.length > 0) {
+    if (!isSubjectMatch(a.subject, taughtSubjects)) {
+      return false; // Subject is not taught by this teacher
+    }
+  }
+
+  return true;
 }
 
 // Helper: Extract elective group (e.g. "A" from "Subject(A)" or "A그룹")
@@ -511,6 +543,12 @@ export default function TeacherPage() {
   const teacherName = getTeacherDisplayName(rawTeacherName, tId);
   const selectedSchedule = timetableData?.timetable?.[tId];
 
+  // Subjects taught by the selected teacher
+  const taughtSubjects = useMemo(() => {
+    if (isNaN(tId) || !teacherSubjectsMap) return [];
+    return teacherSubjectsMap.get(tId) || [];
+  }, [tId, teacherSubjectsMap]);
+
   // Decode cell value
   const decodeCell = (val: any) => {
     if (!val) return null;
@@ -601,7 +639,7 @@ export default function TeacherPage() {
 
     taughtClasses.forEach(({ grade, classNum }) => {
       const classAssessments = (allAssessments || []).filter(
-        a => matchTeacher(a.teacher, teacherName, rawTeacherName) && a.grade === grade && (a.classNum === classNum || a.classNum === 0)
+        a => matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects) && a.grade === grade && (a.classNum === classNum || a.classNum === 0)
       );
 
       const groupsInAss = new Set<string>();
@@ -669,7 +707,7 @@ export default function TeacherPage() {
     });
 
     return tabs;
-  }, [taughtClasses, allAssessments, selectedSchedule, computedGroupsG2, computedGroupsG3, teacherName, rawTeacherName]);
+  }, [taughtClasses, allAssessments, selectedSchedule, computedGroupsG2, computedGroupsG3, teacherName, rawTeacherName, taughtSubjects]);
 
   const [selectedTabId, setSelectedTabId] = useState<string>('');
 
@@ -720,7 +758,7 @@ export default function TeacherPage() {
     if (!selectedTab || !allAssessments) return [];
     const { grade, classNum, group } = selectedTab;
     return allAssessments.filter(a => {
-      if (!matchTeacher(a.teacher, teacherName, rawTeacherName)) return false;
+      if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
       if (a.grade !== grade) return false;
       if (a.classNum !== classNum && a.classNum !== 0) return false;
       if (group) {
@@ -731,7 +769,7 @@ export default function TeacherPage() {
       }
       return true;
     }).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  }, [selectedTab, allAssessments, teacherName, rawTeacherName]);
+  }, [selectedTab, allAssessments, teacherName, rawTeacherName, taughtSubjects]);
 
   // Mutate: Create Assessment
   const createMutation = useMutation({
@@ -819,7 +857,7 @@ export default function TeacherPage() {
     
     // Check if there are assessments already
     const cellAssessments = (allAssessments || []).filter(a => {
-      if (!matchTeacher(a.teacher, teacherName, rawTeacherName)) return false;
+      if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
       if (a.grade !== decoded.grade) return false;
       if (a.classNum !== decoded.classNum && a.classNum !== 0) return false;
       if (a.dueDate !== dateStr) return false;
@@ -1060,7 +1098,7 @@ export default function TeacherPage() {
 
                           // Assessments
                           const cellAssessments = cellData ? (allAssessments || []).filter(a => {
-                            if (!matchTeacher(a.teacher, teacherName, rawTeacherName)) return false;
+                            if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
                             if (a.grade !== cellData.grade) return false;
                             if (a.classNum !== cellData.classNum && a.classNum !== 0) return false;
                             if (a.dueDate !== cellDateStr) return false;
