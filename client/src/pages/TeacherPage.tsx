@@ -1569,14 +1569,6 @@ export default function TeacherPage() {
             )}
           </div>
 
-          {/* Panel Footer: count */}
-          {!isAssessmentsLoading && (
-            <div className="flex-shrink-0 border-t border-slate-100 px-4 py-2 bg-slate-50">
-              <p className="text-[10px] text-slate-400 font-medium text-center">
-                총 {panelAssessments.length}건의 수행평가
-              </p>
-            </div>
-          )}
         </div>
         </div>{/* end right panel */}
 
