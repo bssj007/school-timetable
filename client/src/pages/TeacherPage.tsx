@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -99,6 +99,16 @@ function formatDateWithDay(dateStr: string): string {
     return `${dateStr} (${dayOfWeek})`;
   }
   return dateStr;
+}
+
+// Helper: Check if assessment teacher matches current teacher
+function matchTeacher(aTeacher?: string, targetTeacher?: string, rawTargetTeacher?: string): boolean {
+  if (!aTeacher || !targetTeacher) return true;
+  const cleanA = aTeacher.replace(/선생님$/, '').trim();
+  const cleanTarget = targetTeacher.replace(/선생님$/, '').trim();
+  const cleanRaw = (rawTargetTeacher || '').replace(/선생님$/, '').trim();
+  if (!cleanA || !cleanTarget) return true;
+  return cleanA === cleanTarget || (cleanRaw ? cleanA === cleanRaw : false);
 }
 
 // Helper: Extract elective group (e.g. "A" from "Subject(A)" or "A그룹")
@@ -591,7 +601,7 @@ export default function TeacherPage() {
 
     taughtClasses.forEach(({ grade, classNum }) => {
       const classAssessments = (allAssessments || []).filter(
-        a => a.grade === grade && (a.classNum === classNum || a.classNum === 0)
+        a => matchTeacher(a.teacher, teacherName, rawTeacherName) && a.grade === grade && (a.classNum === classNum || a.classNum === 0)
       );
 
       const groupsInAss = new Set<string>();
@@ -659,9 +669,42 @@ export default function TeacherPage() {
     });
 
     return tabs;
-  }, [taughtClasses, allAssessments, selectedSchedule, computedGroupsG2, computedGroupsG3]);
+  }, [taughtClasses, allAssessments, selectedSchedule, computedGroupsG2, computedGroupsG3, teacherName, rawTeacherName]);
 
   const [selectedTabId, setSelectedTabId] = useState<string>('');
+
+  // Drag-to-scroll state & handlers for class navigation tabs
+  const tabContainerRef = useRef<HTMLDivElement>(null);
+  const isMouseDownRef = useRef(false);
+  const startXRef = useRef(0);
+  const scrollLeftRef = useRef(0);
+  const isDraggingTabsRef = useRef(false);
+
+  const handleTabMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!tabContainerRef.current) return;
+    isMouseDownRef.current = true;
+    startXRef.current = e.pageX - tabContainerRef.current.offsetLeft;
+    scrollLeftRef.current = tabContainerRef.current.scrollLeft;
+    isDraggingTabsRef.current = false;
+  };
+
+  const handleTabMouseLeave = () => {
+    isMouseDownRef.current = false;
+  };
+
+  const handleTabMouseUp = () => {
+    isMouseDownRef.current = false;
+  };
+
+  const handleTabMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isMouseDownRef.current || !tabContainerRef.current) return;
+    const x = e.pageX - tabContainerRef.current.offsetLeft;
+    const walk = (x - startXRef.current) * 1.5;
+    if (Math.abs(walk) > 4) {
+      isDraggingTabsRef.current = true;
+    }
+    tabContainerRef.current.scrollLeft = scrollLeftRef.current - walk;
+  };
 
   // Auto-select first tab
   useEffect(() => {
@@ -672,11 +715,12 @@ export default function TeacherPage() {
 
   const selectedTab = classTabs.find(t => t.id === selectedTabId) || classTabs[0] || null;
 
-  // Filter assessments for selected tab
+  // Filter assessments for selected tab & selected teacher
   const panelAssessments = useMemo(() => {
     if (!selectedTab || !allAssessments) return [];
     const { grade, classNum, group } = selectedTab;
     return allAssessments.filter(a => {
+      if (!matchTeacher(a.teacher, teacherName, rawTeacherName)) return false;
       if (a.grade !== grade) return false;
       if (a.classNum !== classNum && a.classNum !== 0) return false;
       if (group) {
@@ -687,7 +731,7 @@ export default function TeacherPage() {
       }
       return true;
     }).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  }, [selectedTab, allAssessments]);
+  }, [selectedTab, allAssessments, teacherName, rawTeacherName]);
 
   // Mutate: Create Assessment
   const createMutation = useMutation({
@@ -775,6 +819,7 @@ export default function TeacherPage() {
     
     // Check if there are assessments already
     const cellAssessments = (allAssessments || []).filter(a => {
+      if (!matchTeacher(a.teacher, teacherName, rawTeacherName)) return false;
       if (a.grade !== decoded.grade) return false;
       if (a.classNum !== decoded.classNum && a.classNum !== 0) return false;
       if (a.dueDate !== dateStr) return false;
@@ -1015,6 +1060,7 @@ export default function TeacherPage() {
 
                           // Assessments
                           const cellAssessments = cellData ? (allAssessments || []).filter(a => {
+                            if (!matchTeacher(a.teacher, teacherName, rawTeacherName)) return false;
                             if (a.grade !== cellData.grade) return false;
                             if (a.classNum !== cellData.classNum && a.classNum !== 0) return false;
                             if (a.dueDate !== cellDateStr) return false;
@@ -1209,14 +1255,25 @@ export default function TeacherPage() {
 
           {/* Class Navigation Tabs */}
           <div className="flex-shrink-0 border-b border-slate-100 bg-slate-50">
-            <div className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
+            <div
+              ref={tabContainerRef}
+              onMouseDown={handleTabMouseDown}
+              onMouseLeave={handleTabMouseLeave}
+              onMouseUp={handleTabMouseUp}
+              onMouseMove={handleTabMouseMove}
+              className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
+              style={{ scrollbarWidth: 'none' }}
+            >
               {classTabs.length === 0 ? (
                 <span className="text-xs text-slate-400 py-1 px-2">담당 반 없음</span>
               ) : (
                 classTabs.map(tab => (
                   <button
                     key={tab.id}
-                    onClick={() => setSelectedTabId(tab.id)}
+                    onClick={() => {
+                      if (isDraggingTabsRef.current) return;
+                      setSelectedTabId(tab.id);
+                    }}
                     className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all duration-150
                       ${
                         selectedTabId === tab.id
