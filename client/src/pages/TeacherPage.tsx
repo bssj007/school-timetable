@@ -757,16 +757,41 @@ export default function TeacherPage() {
     tabContainerRef.current.scrollLeft = scrollLeftRef.current - walk;
   };
 
-  // Auto-select first tab
+  // Auto-select first tab (based on full classTabs — will be refined after filteredClassTabs is computed)
   useEffect(() => {
     if (classTabs.length > 0 && !classTabs.find(t => t.id === selectedTabId)) {
       setSelectedTabId(classTabs[0].id);
     }
   }, [classTabs]);
 
-  const selectedTab = classTabs.find(t => t.id === selectedTabId) || classTabs[0] || null;
+  // Filter classTabs to only show tabs relevant to selected subject
+  const filteredClassTabs = useMemo(() => {
+    if (!selectedSubjectFilter || !allAssessments) return classTabs;
+    return classTabs.filter(tab => {
+      return allAssessments.some(a => {
+        if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
+        if (a.subject !== selectedSubjectFilter) return false;
+        if (a.grade !== tab.grade) return false;
+        if (a.classNum !== tab.classNum && a.classNum !== 0) return false;
+        if (tab.group && a.classCode && a.classCode.trim()) {
+          const allowedGroups = a.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
+          if (!allowedGroups.includes(tab.group)) return false;
+        }
+        return true;
+      });
+    });
+  }, [classTabs, selectedSubjectFilter, allAssessments, teacherName, rawTeacherName, taughtSubjects]);
 
-  // Subject tabs derived from all assessments for current teacher
+  // Auto-select first filtered tab when subject or filteredClassTabs changes
+  useEffect(() => {
+    if (filteredClassTabs.length > 0 && !filteredClassTabs.find(t => t.id === selectedTabId)) {
+      setSelectedTabId(filteredClassTabs[0].id);
+    }
+  }, [filteredClassTabs]);
+
+  const selectedTab = filteredClassTabs.find(t => t.id === selectedTabId) || filteredClassTabs[0] || null;
+
+  // Subject tabs derived from all assessments for current teacher (no '전체')
   const subjectTabs = useMemo(() => {
     if (!allAssessments) return [];
     const subjects = new Set<string>();
@@ -774,13 +799,18 @@ export default function TeacherPage() {
       if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return;
       if (a.subject) subjects.add(a.subject);
     });
-    return ['전체', ...Array.from(subjects).sort()];
+    return Array.from(subjects).sort();
   }, [allAssessments, teacherName, rawTeacherName, taughtSubjects]);
 
-  // Reset subject filter when teacher changes
+  // Auto-select first subject tab when teacher or subjectTabs changes
   useEffect(() => {
-    setSelectedSubjectFilter('전체');
-  }, [selectedTeacherId]);
+    if (subjectTabs.length > 0) {
+      setSelectedSubjectFilter(subjectTabs[0]);
+    } else {
+      setSelectedSubjectFilter('');
+    }
+  }, [selectedTeacherId, subjectTabs.join(',')]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 
   // Filter assessments for selected tab & selected teacher
   const panelAssessments = useMemo(() => {
@@ -796,7 +826,7 @@ export default function TeacherPage() {
           if (!allowedGroups.includes(group)) return false;
         }
       }
-      if (selectedSubjectFilter !== '전체' && a.subject !== selectedSubjectFilter) return false;
+      if (selectedSubjectFilter && a.subject !== selectedSubjectFilter) return false;
       return true;
     }).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   }, [selectedTab, allAssessments, teacherName, rawTeacherName, taughtSubjects, selectedSubjectFilter]);
@@ -1323,30 +1353,24 @@ export default function TeacherPage() {
 
           {/* Subject Bookmark Tabs */}
           {subjectTabs.length > 1 && (
-            <div className="flex-shrink-0 bg-white border-b border-slate-100">
-              <div
-                className="flex gap-0 overflow-x-auto scrollbar-hide select-none"
-                style={{ scrollbarWidth: 'none' }}
-              >
+            <div className="flex-shrink-0 bg-white border-b border-slate-200">
+              <div className="flex w-full">
                 {subjectTabs.map((subject, idx) => {
-                  const colorIdx = idx === 0 ? -1 : (idx - 1) % BOOKMARK_COLORS.length;
-                  const color = colorIdx >= 0 ? BOOKMARK_COLORS[colorIdx] : null;
+                  const colorIdx = idx % BOOKMARK_COLORS.length;
+                  const color = BOOKMARK_COLORS[colorIdx];
                   const isActive = selectedSubjectFilter === subject;
+                  // light = 15% opacity bg, dark = full color bg
                   return (
                     <button
                       key={subject}
                       onClick={() => setSelectedSubjectFilter(subject)}
-                      className="shrink-0 relative px-3 py-2 text-[11px] font-bold transition-all duration-150"
+                      className="flex-1 py-2 px-1 text-[11px] font-bold transition-all duration-150 leading-tight text-center"
                       style={{
-                        color: isActive
-                          ? (color ? '#fff' : '#4f46e5')
-                          : (color ? color.bg : '#64748b'),
+                        color: isActive ? '#fff' : color.activeBg,
                         backgroundColor: isActive
-                          ? (color ? color.activeBg : '#eef2ff')
-                          : 'transparent',
-                        borderBottom: isActive
-                          ? `3px solid ${color ? color.activeBg : '#6366f1'}`
-                          : '3px solid transparent',
+                          ? color.activeBg
+                          : `${color.bg}26`, // ~15% opacity hex
+                        borderBottom: `3px solid ${color.activeBg}`,
                       }}
                     >
                       {subject}
@@ -1368,10 +1392,10 @@ export default function TeacherPage() {
               className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
               style={{ scrollbarWidth: 'none' }}
             >
-              {classTabs.length === 0 ? (
-                <span className="text-xs text-slate-400 py-1 px-2">담당 반 없음</span>
+              {filteredClassTabs.length === 0 ? (
+                <span className="text-xs text-slate-400 py-1 px-2">해당 반 없음</span>
               ) : (
-                classTabs.map(tab => (
+                filteredClassTabs.map(tab => (
                   <button
                     key={tab.id}
                     onClick={() => {
