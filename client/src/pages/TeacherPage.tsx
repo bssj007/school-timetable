@@ -85,6 +85,22 @@ function toDateString(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+// Helper: Format date string YYYY-MM-DD to include day of week (e.g. 2026-08-12 (수))
+function formatDateWithDay(dateStr: string): string {
+  if (!dateStr) return "";
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    const d = parseInt(parts[2], 10);
+    const dateObj = new Date(y, m - 1, d);
+    const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+    const dayOfWeek = weekdays[dateObj.getDay()];
+    return `${dateStr} (${dayOfWeek})`;
+  }
+  return dateStr;
+}
+
 // Helper: Extract elective group (e.g. "A" from "Subject(A)" or "A그룹")
 function extractClassCode(subject: string): string {
   const match = subject.match(/\((.*?)\)/);
@@ -1014,7 +1030,7 @@ export default function TeacherPage() {
                           // Excel-style cell background:
                           const baseBg = isToday ? '#f0f9f2' : '#ffffff';
                           const classBg = hasAssessment
-                            ? (isToday ? '#d6f0da' : '#e8f5e9')   // conditional format: light green
+                            ? (isToday ? '#fdf2f8' : '#fff5f7')   // conditional format: soft light pink
                             : (isToday ? '#eaf7ed' : '#f7fdf8');  // class but no assessment: barely tinted
                           const cellBg = cellData ? classBg : baseBg;
 
@@ -1026,7 +1042,7 @@ export default function TeacherPage() {
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
                                 borderBottom: '1px solid #d0d0d0',
-                                borderLeft: hasAssessment ? '2px solid #217346' : '1px solid #d0d0d0',
+                                borderLeft: hasAssessment ? '2px solid #ec4899' : '1px solid #d0d0d0',
                                 padding: '4px 5px',
                                 verticalAlign: 'top',
                                 cursor: cellData ? 'pointer' : 'default',
@@ -1037,7 +1053,7 @@ export default function TeacherPage() {
                               onClick={() => cellData && handleCellClick(dayIndex, p, val)}
                               onMouseEnter={e => {
                                 if (cellData) {
-                                  (e.currentTarget as HTMLElement).style.outline = '2px solid #217346';
+                                  (e.currentTarget as HTMLElement).style.outline = hasAssessment ? '2px solid #ec4899' : '2px solid #217346';
                                   (e.currentTarget as HTMLElement).style.zIndex = '1';
                                 }
                               }}
@@ -1047,7 +1063,7 @@ export default function TeacherPage() {
                               }}
                             >
                               {cellData ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: 2 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>
                                   {/* Class label */}
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                     <span style={{
@@ -1059,6 +1075,7 @@ export default function TeacherPage() {
                                       color: '#ffffff',
                                       display: 'inline-block',
                                       lineHeight: 1.4,
+                                      width: 'fit-content',
                                     }}>
                                       {cellData.grade}-{cellData.classNum}{cellGroup ? `(${cellGroup})` : ''}
                                     </span>
@@ -1078,9 +1095,9 @@ export default function TeacherPage() {
                                     </span>
                                   </div>
 
-                                  {/* Assessment badges — Excel conditional format style */}
+                                  {/* Assessment badges — uncolored (white/transparent background) with pink border, positioned directly below subject name */}
                                   {hasAssessment ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 1 }}>
                                       {cellAssessments.map(a => (
                                         <div
                                           key={a.id}
@@ -1088,9 +1105,10 @@ export default function TeacherPage() {
                                             fontSize: 8,
                                             fontWeight: 700,
                                             padding: '1px 4px',
-                                            borderRadius: 2,
-                                            background: '#217346',
-                                            color: '#ffffff',
+                                            borderRadius: 3,
+                                            background: '#ffffff',
+                                            border: '1px solid #ec4899',
+                                            color: '#db2777',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'space-between',
@@ -1100,7 +1118,7 @@ export default function TeacherPage() {
                                           title={`[${a.description || '수행'}] ${a.title}`}
                                         >
                                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.title}</span>
-                                          <span style={{ fontSize: 7, background: '#145230', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                          <span style={{ fontSize: 7, border: '1px solid #f472b6', color: '#be185d', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap', background: '#fdf2f8' }}>
                                             {a.description && a.description.includes('차') ? a.description : '평가'}
                                           </span>
                                         </div>
@@ -1319,10 +1337,9 @@ export default function TeacherPage() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">날짜</label>
                 <Input
-                  type="date"
-                  value={formData.assessmentDate}
+                  value={formatDateWithDay(formData.assessmentDate)}
                   readOnly
-                  className="bg-gray-50 font-medium text-sm text-gray-700"
+                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
                 />
               </div>
               
@@ -1346,7 +1363,7 @@ export default function TeacherPage() {
                 <Input
                   value={formData.subject}
                   readOnly
-                  className="bg-gray-50 font-bold text-sm text-gray-700"
+                  className="bg-gray-50 font-bold text-sm text-gray-700 cursor-default"
                 />
               </div>
               
@@ -1355,7 +1372,7 @@ export default function TeacherPage() {
                 <Input
                   value={formData.classTime ? `${formData.classTime}교시` : ""}
                   readOnly
-                  className="bg-gray-50 font-medium text-sm text-gray-700"
+                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
                 />
               </div>
             </div>
@@ -1365,20 +1382,17 @@ export default function TeacherPage() {
                 <label className="block text-xs font-semibold text-gray-500 mb-1">담당 교사</label>
                 <Input
                   value={formData.teacher}
-                  onChange={(e) => setFormData({ ...formData, teacher: e.target.value })}
-                  placeholder="교사 이름"
-                  required
-                  className="font-medium text-sm border-gray-200"
+                  readOnly
+                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
                 />
               </div>
               
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">반/그룹 (이동수업)</label>
                 <Input
-                  value={formData.classCode}
-                  onChange={(e) => setFormData({ ...formData, classCode: e.target.value })}
-                  placeholder="예: A, B (공통이면 비워둠)"
-                  className="font-medium text-sm border-gray-200"
+                  value={formData.classCode || "공통"}
+                  readOnly
+                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
                 />
               </div>
             </div>
@@ -1441,11 +1455,9 @@ export default function TeacherPage() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">날짜</label>
                 <Input
-                  type="date"
-                  value={formData.assessmentDate}
-                  onChange={(e) => setFormData({ ...formData, assessmentDate: e.target.value })}
-                  required
-                  className="font-medium text-sm text-gray-700 border-gray-200"
+                  value={formatDateWithDay(formData.assessmentDate)}
+                  readOnly
+                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
                 />
               </div>
               
@@ -1469,7 +1481,7 @@ export default function TeacherPage() {
                 <Input
                   value={formData.subject}
                   readOnly
-                  className="bg-gray-50 font-bold text-sm text-gray-700"
+                  className="bg-gray-50 font-bold text-sm text-gray-700 cursor-default"
                 />
               </div>
               
@@ -1492,20 +1504,17 @@ export default function TeacherPage() {
                 <label className="block text-xs font-semibold text-gray-500 mb-1">담당 교사</label>
                 <Input
                   value={formData.teacher}
-                  onChange={(e) => setFormData({ ...formData, teacher: e.target.value })}
-                  placeholder="교사 이름"
-                  required
-                  className="font-medium text-sm border-gray-200"
+                  readOnly
+                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
                 />
               </div>
               
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">반/그룹 (이동수업)</label>
                 <Input
-                  value={formData.classCode}
-                  onChange={(e) => setFormData({ ...formData, classCode: e.target.value })}
-                  placeholder="예: A, B"
-                  className="font-medium text-sm border-gray-200"
+                  value={formData.classCode || "공통"}
+                  readOnly
+                  className="bg-gray-50 font-medium text-sm text-gray-700 cursor-default"
                 />
               </div>
             </div>
