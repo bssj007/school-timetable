@@ -1104,31 +1104,31 @@ export default function TeacherPage() {
         {/* ===== MOBILE ONLY: Title + Week nav row — order-2 between card (order-1) and timetable (order-3) ===== */}
         <div className="md:hidden w-full order-2 flex items-center justify-between gap-2 px-0.5">
           <h2 className="text-sm font-extrabold truncate leading-tight">
-            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">\uad50\uc0ac\uc6a9 \uc218\ud589\ud3c9\uac00 \ub4f1\ub85d \uc2dc\uc2a4\ud15c</span>
+            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h2>
           <div className="flex items-center bg-indigo-600 rounded-full p-0.5 border border-indigo-400 shrink-0">
             <Button
               variant="ghost"
               size="sm"
-              className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
+              className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
               onClick={() => setWeekOffset(weekOffset - 1)}
               disabled={weekOffset <= -2}
-              title="\uc774\uc804 \uc8fc"
+              title="이전 주"
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
+              <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-[10px] font-bold text-white px-1.5 text-center select-none whitespace-nowrap">
-              {weekOffset === 0 ? "\uc774\ubc88 \uc8fc" : weekOffset === 1 ? "\ub2e4\uc74c \uc8fc" : weekOffset < 0 ? `${Math.abs(weekOffset)}\uc8fc \uc804` : `${weekOffset}\uc8fc \ud6c4`} ({weekRangeText})
+            <span className="text-xs font-bold text-white px-2 text-center select-none whitespace-nowrap">
+              {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`} ({weekRangeText})
             </span>
             <Button
               variant="ghost"
               size="sm"
-              className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
+              className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
               onClick={() => setWeekOffset(weekOffset + 1)}
               disabled={weekOffset >= 8}
-              title="\ub2e4\uc74c \uc8fc"
+              title="다음 주"
             >
-              <ChevronRight className="h-3.5 w-3.5" />
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -1437,9 +1437,9 @@ export default function TeacherPage() {
                       style={{
                         color: isActive ? '#fff' : color.activeBg,
                         backgroundColor: isActive
-                          ? color.activeBg
-                          : `${color.bg}26`, // ~15% opacity hex
-                        borderBottom: `3px solid ${color.activeBg}`,
+                          ? color.activeBg          // active = vivid full color
+                          : `${color.bg}20`,        // inactive = very light (~12% opacity)
+                        borderBottom: `3px solid ${isActive ? color.activeBg : `${color.activeBg}40`}`,
                       }}
                     >
                       {subject}
