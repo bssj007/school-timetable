@@ -792,15 +792,11 @@ export default function TeacherPage() {
   const selectedTab = filteredClassTabs.find(t => t.id === selectedTabId) || filteredClassTabs[0] || null;
 
   // Subject tabs derived from all assessments for current teacher (no '전체')
+  // Subject tabs always derived from taughtSubjects (visible even when no assessments)
   const subjectTabs = useMemo(() => {
-    if (!allAssessments) return [];
-    const subjects = new Set<string>();
-    allAssessments.forEach(a => {
-      if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return;
-      if (a.subject) subjects.add(a.subject);
-    });
-    return Array.from(subjects).sort();
-  }, [allAssessments, teacherName, rawTeacherName, taughtSubjects]);
+    if (!taughtSubjects || taughtSubjects.length === 0) return [];
+    return [...taughtSubjects].sort();
+  }, [taughtSubjects]);
 
   // Auto-select first subject tab when teacher or subjectTabs changes
   useEffect(() => {
@@ -1381,21 +1377,19 @@ export default function TeacherPage() {
             </div>
           )}
 
-          {/* Class Navigation Tabs */}
-          <div className="flex-shrink-0 border-b border-slate-100 bg-slate-50">
-            <div
-              ref={tabContainerRef}
-              onMouseDown={handleTabMouseDown}
-              onMouseLeave={handleTabMouseLeave}
-              onMouseUp={handleTabMouseUp}
-              onMouseMove={handleTabMouseMove}
-              className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
-              style={{ scrollbarWidth: 'none' }}
-            >
-              {filteredClassTabs.length === 0 ? (
-                <span className="text-xs text-slate-400 py-1 px-2">해당 반 없음</span>
-              ) : (
-                filteredClassTabs.map(tab => (
+          {/* Class Navigation Tabs — hidden when no classes match selected subject */}
+          {filteredClassTabs.length > 0 && (
+            <div className="flex-shrink-0 border-b border-slate-100 bg-slate-50">
+              <div
+                ref={tabContainerRef}
+                onMouseDown={handleTabMouseDown}
+                onMouseLeave={handleTabMouseLeave}
+                onMouseUp={handleTabMouseUp}
+                onMouseMove={handleTabMouseMove}
+                className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
+                style={{ scrollbarWidth: 'none' }}
+              >
+                {filteredClassTabs.map(tab => (
                   <button
                     key={tab.id}
                     onClick={() => {
@@ -1411,14 +1405,19 @@ export default function TeacherPage() {
                   >
                     {tab.label}
                   </button>
-                ))
-              )}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Assessment List */}
           <div className="overflow-y-auto px-4 py-2.5 max-h-[130px] md:max-h-[calc(100vh-200px)]">
-            {isAssessmentsLoading ? (
+            {filteredClassTabs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-5 text-slate-400">
+                <span className="text-2xl mb-1">📢</span>
+                <p className="text-xs font-medium">이번 주 수행평가가 없습니다.</p>
+              </div>
+            ) : isAssessmentsLoading ? (
               <div className="space-y-2 mt-1">
                 {[1,2].map(i => (
                   <div key={i} className="h-12 rounded-xl bg-slate-100 animate-pulse" />
