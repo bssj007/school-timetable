@@ -1085,7 +1085,7 @@ export default function TeacherPage() {
       <div className="max-w-[1240px] mx-auto w-full">
 
         {/* ===== TOP SECTION: Title + Home Button ===== */}
-        <div className="flex items-center justify-between gap-2 mb-2 md:mb-3">
+        <div className="flex items-center justify-between gap-2 mb-3 md:mb-3">
           <div className="min-w-0">
             <h1 className="text-base sm:text-xl md:text-3xl font-extrabold text-gray-900 truncate leading-tight">
               <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent hidden md:inline">교사용 수행평가 등록 시스템</span>
@@ -1119,11 +1119,11 @@ export default function TeacherPage() {
 
 
         {/* ===== CONTENT AREA: flex-col on mobile (panel top, title+week, table bottom), flex-row on desktop ===== */}
-        <div className="flex flex-col md:flex-row gap-2 md:gap-4 xl:gap-6 items-start">
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4 xl:gap-6 items-start">
 
         {/* ===== MOBILE ONLY: Title + Week nav row — order-1 (above timetable) ===== */}
         <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5">
-          <h2 className="text-base font-extrabold truncate leading-tight">
+          <h2 className="text-lg font-extrabold truncate leading-tight">
             <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h2>
           <div className="flex items-center bg-indigo-600 rounded-full p-0.5 border border-indigo-400 shrink-0">
