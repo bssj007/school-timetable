@@ -710,6 +710,19 @@ export default function TeacherPage() {
   }, [taughtClasses, allAssessments, selectedSchedule, computedGroupsG2, computedGroupsG3, teacherName, rawTeacherName, taughtSubjects]);
 
   const [selectedTabId, setSelectedTabId] = useState<string>('');
+  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('전체');
+
+  // Bookmark tab color palette
+  const BOOKMARK_COLORS = [
+    { bg: '#ef4444', text: '#fff', activeBg: '#dc2626' }, // red
+    { bg: '#f97316', text: '#fff', activeBg: '#ea580c' }, // orange
+    { bg: '#eab308', text: '#fff', activeBg: '#ca8a04' }, // yellow
+    { bg: '#22c55e', text: '#fff', activeBg: '#16a34a' }, // green
+    { bg: '#06b6d4', text: '#fff', activeBg: '#0891b2' }, // cyan
+    { bg: '#6366f1', text: '#fff', activeBg: '#4f46e5' }, // indigo
+    { bg: '#a855f7', text: '#fff', activeBg: '#9333ea' }, // purple
+    { bg: '#ec4899', text: '#fff', activeBg: '#db2777' }, // pink
+  ];
 
   // Drag-to-scroll state & handlers for class navigation tabs
   const tabContainerRef = useRef<HTMLDivElement>(null);
@@ -753,6 +766,22 @@ export default function TeacherPage() {
 
   const selectedTab = classTabs.find(t => t.id === selectedTabId) || classTabs[0] || null;
 
+  // Subject tabs derived from all assessments for current teacher
+  const subjectTabs = useMemo(() => {
+    if (!allAssessments) return [];
+    const subjects = new Set<string>();
+    allAssessments.forEach(a => {
+      if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return;
+      if (a.subject) subjects.add(a.subject);
+    });
+    return ['전체', ...Array.from(subjects).sort()];
+  }, [allAssessments, teacherName, rawTeacherName, taughtSubjects]);
+
+  // Reset subject filter when teacher changes
+  useEffect(() => {
+    setSelectedSubjectFilter('전체');
+  }, [selectedTeacherId]);
+
   // Filter assessments for selected tab & selected teacher
   const panelAssessments = useMemo(() => {
     if (!selectedTab || !allAssessments) return [];
@@ -767,9 +796,10 @@ export default function TeacherPage() {
           if (!allowedGroups.includes(group)) return false;
         }
       }
+      if (selectedSubjectFilter !== '전체' && a.subject !== selectedSubjectFilter) return false;
       return true;
     }).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  }, [selectedTab, allAssessments, teacherName, rawTeacherName, taughtSubjects]);
+  }, [selectedTab, allAssessments, teacherName, rawTeacherName, taughtSubjects, selectedSubjectFilter]);
 
   // Mutate: Create Assessment
   const createMutation = useMutation({
@@ -1291,6 +1321,42 @@ export default function TeacherPage() {
             </div>
           </div>
 
+          {/* Subject Bookmark Tabs */}
+          {subjectTabs.length > 1 && (
+            <div className="flex-shrink-0 bg-white border-b border-slate-100">
+              <div
+                className="flex gap-0 overflow-x-auto scrollbar-hide select-none"
+                style={{ scrollbarWidth: 'none' }}
+              >
+                {subjectTabs.map((subject, idx) => {
+                  const colorIdx = idx === 0 ? -1 : (idx - 1) % BOOKMARK_COLORS.length;
+                  const color = colorIdx >= 0 ? BOOKMARK_COLORS[colorIdx] : null;
+                  const isActive = selectedSubjectFilter === subject;
+                  return (
+                    <button
+                      key={subject}
+                      onClick={() => setSelectedSubjectFilter(subject)}
+                      className="shrink-0 relative px-3 py-2 text-[11px] font-bold transition-all duration-150"
+                      style={{
+                        color: isActive
+                          ? (color ? '#fff' : '#4f46e5')
+                          : (color ? color.bg : '#64748b'),
+                        backgroundColor: isActive
+                          ? (color ? color.activeBg : '#eef2ff')
+                          : 'transparent',
+                        borderBottom: isActive
+                          ? `3px solid ${color ? color.activeBg : '#6366f1'}`
+                          : '3px solid transparent',
+                      }}
+                    >
+                      {subject}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Class Navigation Tabs */}
           <div className="flex-shrink-0 border-b border-slate-100 bg-slate-50">
             <div
@@ -1370,7 +1436,6 @@ export default function TeacherPage() {
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
                               {a.grade}-{a.classNum === 0 ? '전체' : a.classNum}반
-                              {a.classCode ? ` (${a.classCode})` : ''}
                             </span>
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">
                               {a.subject}
@@ -1383,12 +1448,17 @@ export default function TeacherPage() {
                             {a.title}
                           </p>
                           {a.teacher && (
-                            <p className="text-[10px] text-slate-400 mt-0.5">{a.teacher} 선생님</p>
+                            <p className="hidden md:block text-[10px] text-slate-400 mt-0.5">{a.teacher} 선생님</p>
                           )}
                         </div>
                         <div className="shrink-0 text-right">
-                          <div className="text-[11px] font-extrabold text-indigo-600">{mmdd}</div>
-                          <div className="text-[9px] text-slate-400">{wd}요일</div>
+                          {/* Mobile: date + day on one line */}
+                          <div className="md:hidden text-[11px] font-extrabold text-indigo-600 whitespace-nowrap">
+                            {mmdd} <span className="font-semibold text-slate-400">({wd})</span>
+                          </div>
+                          {/* Desktop: stacked */}
+                          <div className="hidden md:block text-[11px] font-extrabold text-indigo-600">{mmdd}</div>
+                          <div className="hidden md:block text-[9px] text-slate-400">{wd}요일</div>
                           {a.description && (
                             <div className="mt-1 text-[9px] bg-indigo-600 text-white rounded px-1 py-0.5 font-bold">
                               {a.description}
