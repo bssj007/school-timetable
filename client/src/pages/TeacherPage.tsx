@@ -1078,7 +1078,7 @@ export default function TeacherPage() {
 
           {/* Action buttons: PC Desktop Shortcut only (no home button) */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* PC Only Desktop Shortcut Button */}}
+            {/* PC Only Desktop Shortcut Button */}
             <Button
               variant="outline"
               size="sm"
