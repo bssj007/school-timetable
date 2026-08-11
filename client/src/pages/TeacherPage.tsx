@@ -708,86 +708,6 @@ export default function TeacherPage() {
     refetchInterval: 2000,
   });
 
-  // Build class+group nav tabs for the right panel
-  // Each tab = { grade, classNum, group } — moving class ABCD are split separately
-  const classTabs = useMemo(() => {
-    const tabs: { id: string; grade: number; classNum: number; group: string; label: string }[] = [];
-    if (!selectedSchedule || !allAssessments) return tabs;
-
-    const seenIds = new Set<string>();
-
-    taughtClasses.forEach(({ grade, classNum }) => {
-      const classAssessments = (allAssessments || []).filter(
-        a => matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects) && a.grade === grade && (a.classNum === classNum || a.classNum === 0)
-      );
-
-      const groupsInAss = new Set<string>();
-      classAssessments.forEach(a => {
-        if (a.classCode && a.classCode.trim()) {
-          a.classCode.split(',').map(s => s.trim()).filter(Boolean).forEach(g => groupsInAss.add(g));
-        }
-      });
-
-      if (grade === 2) {
-        for (let d = 1; d <= 5; d++) {
-          const daySchedule = selectedSchedule[d];
-          if (!daySchedule) continue;
-          for (let p = 1; p < daySchedule.length; p++) {
-            const val = daySchedule[p];
-            const decoded = decodeCell(val);
-            if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
-              const cellG = computedGroupsG2[`${d - 1}-${p}`];
-              if (cellG) groupsInAss.add(cellG);
-            }
-          }
-        }
-      } else if (grade === 3) {
-        for (let d = 1; d <= 5; d++) {
-          const daySchedule = selectedSchedule[d];
-          if (!daySchedule) continue;
-          for (let p = 1; p < daySchedule.length; p++) {
-            const val = daySchedule[p];
-            const decoded = decodeCell(val);
-            if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
-              const cellG = computedGroupsG3[`${d - 1}-${p}`];
-              if (cellG) groupsInAss.add(cellG);
-            }
-          }
-        }
-      }
-
-      if (groupsInAss.size > 0) {
-        const sortedGroups = Array.from(groupsInAss).sort();
-        sortedGroups.forEach(grp => {
-          const id = `${grade}-${classNum}-${grp}`;
-          if (!seenIds.has(id)) {
-            seenIds.add(id);
-            tabs.push({ id, grade, classNum, group: grp, label: `${grade}-${classNum}(${grp})` });
-          }
-        });
-        const baseId = `${grade}-${classNum}-`;
-        if (!seenIds.has(baseId)) {
-          seenIds.add(baseId);
-          tabs.push({ id: baseId, grade, classNum, group: '', label: `${grade}-${classNum}반` });
-        }
-      } else {
-        const id = `${grade}-${classNum}-`;
-        if (!seenIds.has(id)) {
-          seenIds.add(id);
-          tabs.push({ id, grade, classNum, group: '', label: `${grade}-${classNum}반` });
-        }
-      }
-    });
-
-    tabs.sort((a, b) => {
-      if (a.grade !== b.grade) return a.grade - b.grade;
-      if (a.classNum !== b.classNum) return a.classNum - b.classNum;
-      return a.group.localeCompare(b.group);
-    });
-
-    return tabs;
-  }, [taughtClasses, allAssessments, selectedSchedule, computedGroupsG2, computedGroupsG3, teacherName, rawTeacherName, taughtSubjects]);
-
   const [selectedTabId, setSelectedTabId] = useState<string>('');
   // null = no manual selection (auto-pick first subject)
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string | null>(null);
@@ -879,6 +799,92 @@ export default function TeacherPage() {
     setSelectedSubjectFilter(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTeacherId]);
+
+  // Build class+group nav tabs for the right panel (filtered by effectiveSubjectFilter)
+  const classTabs = useMemo(() => {
+    const tabs: { id: string; grade: number; classNum: number; group: string; label: string }[] = [];
+    if (!selectedSchedule || !allAssessments) return tabs;
+
+    const seenIds = new Set<string>();
+
+    taughtClasses.forEach(({ grade, classNum }) => {
+      const classAssessments = (allAssessments || []).filter(
+        a => matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects) &&
+             a.grade === grade &&
+             (a.classNum === classNum || a.classNum === 0) &&
+             (!effectiveSubjectFilter || a.subject === effectiveSubjectFilter)
+      );
+
+      const groupsInAss = new Set<string>();
+      classAssessments.forEach(a => {
+        if (a.classCode && a.classCode.trim()) {
+          a.classCode.split(',').map(s => s.trim()).filter(Boolean).forEach(g => groupsInAss.add(g));
+        }
+      });
+
+      if (grade === 2) {
+        for (let d = 1; d <= 5; d++) {
+          const daySchedule = selectedSchedule[d];
+          if (!daySchedule) continue;
+          for (let p = 1; p < daySchedule.length; p++) {
+            const val = daySchedule[p];
+            const decoded = decodeCell(val);
+            if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
+              if (!effectiveSubjectFilter || isSubjectMatch(decoded.subjectName, [effectiveSubjectFilter])) {
+                const cellG = computedGroupsG2[`${d - 1}-${p}`];
+                if (cellG) groupsInAss.add(cellG);
+              }
+            }
+          }
+        }
+      } else if (grade === 3) {
+        for (let d = 1; d <= 5; d++) {
+          const daySchedule = selectedSchedule[d];
+          if (!daySchedule) continue;
+          for (let p = 1; p < daySchedule.length; p++) {
+            const val = daySchedule[p];
+            const decoded = decodeCell(val);
+            if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
+              if (!effectiveSubjectFilter || isSubjectMatch(decoded.subjectName, [effectiveSubjectFilter])) {
+                const cellG = computedGroupsG3[`${d - 1}-${p}`];
+                if (cellG) groupsInAss.add(cellG);
+              }
+            }
+          }
+        }
+      }
+
+      if (groupsInAss.size > 0) {
+        const sortedGroups = Array.from(groupsInAss).sort();
+        sortedGroups.forEach(grp => {
+          const id = `${grade}-${classNum}-${grp}`;
+          if (!seenIds.has(id)) {
+            seenIds.add(id);
+            tabs.push({ id, grade, classNum, group: grp, label: `${grade}-${classNum}(${grp})` });
+          }
+        });
+        const baseId = `${grade}-${classNum}-`;
+        if (!seenIds.has(baseId)) {
+          seenIds.add(baseId);
+          tabs.push({ id: baseId, grade, classNum, group: '', label: `${grade}-${classNum}반` });
+        }
+      } else {
+        const id = `${grade}-${classNum}-`;
+        if (!seenIds.has(id)) {
+          seenIds.add(id);
+          tabs.push({ id, grade, classNum, group: '', label: `${grade}-${classNum}반` });
+        }
+      }
+    });
+
+    tabs.sort((a, b) => {
+      if (a.grade !== b.grade) return a.grade - b.grade;
+      if (a.classNum !== b.classNum) return a.classNum - b.classNum;
+      return a.group.localeCompare(b.group);
+    });
+
+    return tabs;
+  }, [taughtClasses, allAssessments, selectedSchedule, computedGroupsG2, computedGroupsG3, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
 
   // Filter classTabs to only show tabs relevant to selected subject
   const filteredClassTabs = useMemo(() => {
