@@ -814,6 +814,28 @@ export default function TeacherPage() {
     }
   }, [classTabs]);
 
+  // Subject tabs derived from taughtSubjects (visible even when no assessments)
+  const subjectTabs = useMemo(() => {
+    if (!taughtSubjects || taughtSubjects.length === 0) return [];
+    return [...taughtSubjects].sort();
+  }, [taughtSubjects]);
+
+  // Effective subject filter: use manual selection if valid, else auto-pick first subject
+  // Declared BEFORE filteredClassTabs to avoid Temporal Dead Zone
+  const effectiveSubjectFilter = useMemo(() => {
+    if (selectedSubjectFilter && subjectTabs.includes(selectedSubjectFilter)) {
+      return selectedSubjectFilter;
+    }
+    return subjectTabs[0] ?? '';
+  }, [selectedSubjectFilter, subjectTabs]);
+
+  // Reset manual selection only when teacher changes (inline, during render)
+  const prevTeacherIdRef = useRef(selectedTeacherId);
+  if (prevTeacherIdRef.current !== selectedTeacherId) {
+    prevTeacherIdRef.current = selectedTeacherId;
+    if (selectedSubjectFilter !== null) setSelectedSubjectFilter(null);
+  }
+
   // Filter classTabs to only show tabs relevant to selected subject
   const filteredClassTabs = useMemo(() => {
     if (!effectiveSubjectFilter || !allAssessments) return classTabs;
@@ -832,7 +854,7 @@ export default function TeacherPage() {
     });
   }, [classTabs, effectiveSubjectFilter, allAssessments, teacherName, rawTeacherName, taughtSubjects]);
 
-  // Auto-select first filtered tab when subject or filteredClassTabs changes
+  // Auto-select first filtered tab when filteredClassTabs changes
   useEffect(() => {
     if (filteredClassTabs.length > 0 && !filteredClassTabs.find(t => t.id === selectedTabId)) {
       setSelectedTabId(filteredClassTabs[0].id);
@@ -840,30 +862,6 @@ export default function TeacherPage() {
   }, [filteredClassTabs]);
 
   const selectedTab = filteredClassTabs.find(t => t.id === selectedTabId) || filteredClassTabs[0] || null;
-
-  // Subject tabs derived from all assessments for current teacher (no '전체')
-  // Subject tabs always derived from taughtSubjects (visible even when no assessments)
-  const subjectTabs = useMemo(() => {
-    if (!taughtSubjects || taughtSubjects.length === 0) return [];
-    return [...taughtSubjects].sort();
-  }, [taughtSubjects]);
-
-  // Effective subject filter: use manual selection if valid, else auto-pick first subject
-  // This avoids any useEffect-based resets that could flicker on mobile touch
-  const effectiveSubjectFilter = useMemo(() => {
-    if (selectedSubjectFilter && subjectTabs.includes(selectedSubjectFilter)) {
-      return selectedSubjectFilter;
-    }
-    return subjectTabs[0] ?? '';
-  }, [selectedSubjectFilter, subjectTabs]);
-
-  // Reset manual selection only when teacher changes
-  const prevTeacherIdRef = useRef(selectedTeacherId);
-  if (prevTeacherIdRef.current !== selectedTeacherId) {
-    prevTeacherIdRef.current = selectedTeacherId;
-    // Synchronously reset during render (safe for derived state pattern)
-    if (selectedSubjectFilter !== null) setSelectedSubjectFilter(null);
-  }
 
   // Filter assessments for selected tab & selected teacher
   const panelAssessments = useMemo(() => {
@@ -1077,7 +1075,7 @@ export default function TeacherPage() {
         {/* ===== TOP SECTION: Title + Home Button ===== */}
         <div className="flex items-center justify-between gap-2 mb-2 md:mb-3">
           <div className="min-w-0">
-            <h1 className="text-base sm:text-lg md:text-2xl font-extrabold text-gray-900 truncate leading-tight">
+            <h1 className="text-base sm:text-xl md:text-3xl font-extrabold text-gray-900 truncate leading-tight">
               <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent hidden md:inline">교사용 수행평가 등록 시스템</span>
               <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent md:hidden"> </span>
             </h1>
@@ -1113,7 +1111,7 @@ export default function TeacherPage() {
 
         {/* ===== MOBILE ONLY: Title + Week nav row — order-1 (above timetable) ===== */}
         <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5">
-          <h2 className="text-sm font-extrabold truncate leading-tight">
+          <h2 className="text-base font-extrabold truncate leading-tight">
             <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h2>
           <div className="flex items-center bg-indigo-600 rounded-full p-0.5 border border-indigo-400 shrink-0">
