@@ -1400,8 +1400,8 @@ export default function TeacherPage() {
       </div>{/* end timetable column */}
 
       {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
-      <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4">
-        <div className="md:rounded-2xl md:border md:border-slate-200 md:bg-white md:shadow-md md:overflow-hidden flex flex-col md:max-h-[calc(100vh-2rem)]">
+      <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4 h-fit">
+        <div className="md:rounded-2xl md:border md:border-slate-200 md:bg-white md:shadow-md md:overflow-hidden flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
           {/* Teacher Picker — slim bar, no colored banner */}
           <div className="px-1 md:px-3 py-2 border-b border-slate-100 flex-shrink-0 flex items-center justify-between gap-2">
             {timetableData ? (
@@ -1609,8 +1609,10 @@ export default function TeacherPage() {
                           <div className="hidden md:block text-[11px] font-extrabold text-indigo-600">{mmdd}</div>
                           <div className="hidden md:block text-[9px] text-slate-400">{wd}요일</div>
                           {a.description && (
-                            <div className="mt-1 text-[9px] bg-indigo-600 text-white rounded px-1 py-0.5 font-bold">
-                              {a.description}
+                            <div className="mt-1 flex justify-end">
+                              <span className="text-[10px] bg-indigo-600 text-white rounded-md px-1.5 py-0.5 font-extrabold whitespace-nowrap shadow-xs">
+                                {a.description}
+                              </span>
                             </div>
                           )}
                         </div>
