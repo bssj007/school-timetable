@@ -772,6 +772,27 @@ export default function TeacherPage() {
     tabContainerRef.current.scrollLeft = scrollLeftRef.current - walk;
   };
 
+  // Subject tabs derived from taughtSubjects (visible even when no assessments)
+  const subjectTabs = useMemo(() => {
+    if (!taughtSubjects || taughtSubjects.length === 0) return [];
+    return [...taughtSubjects].sort();
+  }, [taughtSubjects]);
+
+  // Effective subject filter: use manual selection if valid, else auto-pick first subject
+  // Declared BEFORE classTabs and filteredClassTabs to avoid Temporal Dead Zone
+  const effectiveSubjectFilter = useMemo(() => {
+    if (selectedSubjectFilter && subjectTabs.includes(selectedSubjectFilter)) {
+      return selectedSubjectFilter;
+    }
+    return subjectTabs[0] ?? '';
+  }, [selectedSubjectFilter, subjectTabs]);
+
+  // Reset manual selection when teacher changes — useEffect is safe, avoids setState-during-render
+  useEffect(() => {
+    setSelectedSubjectFilter(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTeacherId]);
+
   // Build class+group nav tabs for the right panel (filtered by effectiveSubjectFilter)
   const classTabs = useMemo(() => {
     const tabs: { id: string; grade: number; classNum: number; group: string; label: string }[] = [];
