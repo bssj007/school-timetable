@@ -757,7 +757,8 @@ export default function TeacherPage() {
   }, [taughtClasses, allAssessments, selectedSchedule, computedGroupsG2, computedGroupsG3, teacherName, rawTeacherName, taughtSubjects]);
 
   const [selectedTabId, setSelectedTabId] = useState<string>('');
-  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('전체');
+  // null = no manual selection (auto-pick first subject)
+  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string | null>(null);
 
   // Bookmark tab color palette — diverse pastel tones
   const BOOKMARK_COLORS = [
@@ -815,11 +816,11 @@ export default function TeacherPage() {
 
   // Filter classTabs to only show tabs relevant to selected subject
   const filteredClassTabs = useMemo(() => {
-    if (!selectedSubjectFilter || !allAssessments) return classTabs;
+    if (!effectiveSubjectFilter || !allAssessments) return classTabs;
     return classTabs.filter(tab => {
       return allAssessments.some(a => {
         if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
-        if (a.subject !== selectedSubjectFilter) return false;
+        if (a.subject !== effectiveSubjectFilter) return false;
         if (a.grade !== tab.grade) return false;
         if (a.classNum !== tab.classNum && a.classNum !== 0) return false;
         if (tab.group && a.classCode && a.classCode.trim()) {
@@ -829,7 +830,7 @@ export default function TeacherPage() {
         return true;
       });
     });
-  }, [classTabs, selectedSubjectFilter, allAssessments, teacherName, rawTeacherName, taughtSubjects]);
+  }, [classTabs, effectiveSubjectFilter, allAssessments, teacherName, rawTeacherName, taughtSubjects]);
 
   // Auto-select first filtered tab when subject or filteredClassTabs changes
   useEffect(() => {
@@ -847,19 +848,22 @@ export default function TeacherPage() {
     return [...taughtSubjects].sort();
   }, [taughtSubjects]);
 
-  // Auto-select first subject tab ONLY when teacher changes (not on every taughtSubjects re-render)
-  useEffect(() => {
-    if (subjectTabs.length > 0) {
-      setSelectedSubjectFilter(prev => {
-        // Keep existing selection if it's still valid; otherwise pick first
-        if (prev && subjectTabs.includes(prev)) return prev;
-        return subjectTabs[0];
-      });
-    } else {
-      setSelectedSubjectFilter('');
+  // Effective subject filter: use manual selection if valid, else auto-pick first subject
+  // This avoids any useEffect-based resets that could flicker on mobile touch
+  const effectiveSubjectFilter = useMemo(() => {
+    if (selectedSubjectFilter && subjectTabs.includes(selectedSubjectFilter)) {
+      return selectedSubjectFilter;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTeacherId]);
+    return subjectTabs[0] ?? '';
+  }, [selectedSubjectFilter, subjectTabs]);
+
+  // Reset manual selection only when teacher changes
+  const prevTeacherIdRef = useRef(selectedTeacherId);
+  if (prevTeacherIdRef.current !== selectedTeacherId) {
+    prevTeacherIdRef.current = selectedTeacherId;
+    // Synchronously reset during render (safe for derived state pattern)
+    if (selectedSubjectFilter !== null) setSelectedSubjectFilter(null);
+  }
 
   // Filter assessments for selected tab & selected teacher
   const panelAssessments = useMemo(() => {
@@ -875,10 +879,10 @@ export default function TeacherPage() {
           if (!allowedGroups.includes(group)) return false;
         }
       }
-      if (selectedSubjectFilter && a.subject !== selectedSubjectFilter) return false;
+      if (effectiveSubjectFilter && a.subject !== effectiveSubjectFilter) return false;
       return true;
     }).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  }, [selectedTab, allAssessments, teacherName, rawTeacherName, taughtSubjects, selectedSubjectFilter]);
+  }, [selectedTab, allAssessments, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
 
   // Mutate: Create Assessment
   const createMutation = useMutation({
@@ -1372,60 +1376,58 @@ export default function TeacherPage() {
       {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
       <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4">
         <div className="rounded-2xl border border-slate-200 bg-white shadow-md overflow-hidden flex flex-col md:max-h-[calc(100vh-2rem)]">
-          {/* Panel Header: Title transformed into Teacher Picker + Integrated Week Navigator */}
-          <div className="px-3.5 py-2.5 sm:px-5 sm:py-3 bg-gradient-to-br from-indigo-600 to-blue-600 text-white flex-shrink-0 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {/* Teacher Picker Title Button */}
-              <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                {timetableData ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTeacherSearchQuery("");
-                      setShowTeacherSelectModal(true);
-                    }}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-white font-extrabold text-base sm:text-lg tracking-tight leading-tight transition-all duration-150 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer group max-w-full"
-                  >
-                    <span className="truncate">
-                      {selectedTeacherId
-                        ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
-                        : "교사 선택"}
-                    </span>
-                    <ChevronsUpDown className="w-4 h-4 text-indigo-200 group-hover:text-white shrink-0 transition-colors ml-0.5" />
-                  </button>
-                ) : (
-                  <h2 className="text-lg font-extrabold tracking-tight leading-tight">
-                    {teacherName ? `${teacherName} 선생님!` : '선생님!'}
-                  </h2>
-                )}
-              </div>
-
-              {/* Week navigation integrated inside Card Header — desktop only */}
-              <div className="hidden md:flex items-center bg-white/15 hover:bg-white/20 transition-colors rounded-full p-0.5 border border-white/25 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
-                  onClick={() => setWeekOffset(weekOffset - 1)}
-                  disabled={weekOffset <= -2}
-                  title="\uc774\uc804 \uc8fc"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-xs font-bold text-white px-2 min-w-[85px] sm:min-w-[95px] text-center select-none">
-                  {weekOffset === 0 ? "\uc774\ubc88 \uc8fc" : weekOffset === 1 ? "\ub2e4\uc74c \uc8fc" : weekOffset < 0 ? `${Math.abs(weekOffset)}\uc8fc \uc804` : `${weekOffset}\uc8fc \ud6c4`} ({weekRangeText})
+          {/* Teacher Picker — slim bar, no colored banner */}
+          <div className="px-3 py-2 border-b border-slate-100 bg-white flex-shrink-0 flex items-center justify-between gap-2">
+            {timetableData ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setTeacherSearchQuery("");
+                  setShowTeacherSelectModal(true);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors border border-indigo-200 focus:outline-none cursor-pointer group max-w-full"
+              >
+                <span className="truncate">
+                  {selectedTeacherId
+                    ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
+                    : "교사 선택"}
                 </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
-                  onClick={() => setWeekOffset(weekOffset + 1)}
-                  disabled={weekOffset >= 8}
-                  title="\ub2e4\uc74c \uc8fc"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+                <ChevronsUpDown className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0 ml-0.5" />
+              </button>
+            ) : (
+              <span className="text-sm font-extrabold text-slate-700">
+                {teacherName ? `${teacherName} 선생님` : '선생님'}
+              </span>
+            )}
+
+            {/* Desktop week nav */}
+            <div className="hidden md:flex items-center bg-indigo-600 rounded-full p-0.5 border border-indigo-400 shrink-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
+                onClick={() => setWeekOffset(weekOffset - 1)}
+                disabled={weekOffset <= -2}
+                title="이전 주"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="flex flex-col items-center min-w-[88px] px-1 select-none">
+                <span className="text-xs font-bold text-white leading-tight whitespace-nowrap">
+                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
+                </span>
+                <span className="text-[9px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
+                onClick={() => setWeekOffset(weekOffset + 1)}
+                disabled={weekOffset >= 8}
+                title="다음 주"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
           </div>
 
@@ -1436,20 +1438,19 @@ export default function TeacherPage() {
                 {subjectTabs.map((subject, idx) => {
                   const colorIdx = idx % BOOKMARK_COLORS.length;
                   const color = BOOKMARK_COLORS[colorIdx];
-                  const isActive = selectedSubjectFilter === subject;
-                  // light = 15% opacity bg, dark = full color bg
+                  const isActive = effectiveSubjectFilter === subject;
                   return (
                     <button
                       key={subject}
+                      onTouchStart={() => setSelectedSubjectFilter(subject)}
                       onClick={() => setSelectedSubjectFilter(subject)}
-                      className="flex-1 py-2 px-1 text-[11px] font-bold transition-colors duration-150 leading-tight text-center"
+                      className="flex-1 py-2 px-1 text-[11px] font-bold leading-tight text-center"
                       style={{
                         color: isActive ? '#fff' : color.activeBg,
-                        backgroundColor: isActive
-                          ? color.activeBg
-                          : `${color.bg}20`,
-                        borderBottom: `3px solid ${isActive ? color.activeBg : `${color.activeBg}40`}`,
+                        backgroundColor: isActive ? `${color.activeBg}BF` : `${color.bg}20`,
+                        borderBottom: `3px solid ${isActive ? color.activeBg : `${color.activeBg}30`}`,
                         WebkitTapHighlightColor: 'transparent',
+                        touchAction: 'manipulation',
                       }}
                     >
                       {subject}
