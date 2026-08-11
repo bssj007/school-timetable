@@ -764,14 +764,14 @@ export default function TeacherPage() {
   const BOOKMARK_COLORS = [
     { bg: '#f472b6', activeBg: '#be185d' }, // rose pink
     { bg: '#60a5fa', activeBg: '#1d4ed8' }, // sky blue
-    { bg: '#34d399', activeBg: '#047857' }, // mint green
+    { bg: '#fde047', activeBg: '#a16207' }, // lemon yellow
     { bg: '#a78bfa', activeBg: '#6d28d9' }, // soft violet
     { bg: '#fb923c', activeBg: '#c2410c' }, // peach orange
     { bg: '#2dd4bf', activeBg: '#0f766e' }, // teal
     { bg: '#fbbf24', activeBg: '#b45309' }, // warm amber
     { bg: '#f87171', activeBg: '#b91c1c' }, // coral red
     { bg: '#818cf8', activeBg: '#3730a3' }, // periwinkle
-    { bg: '#86efac', activeBg: '#15803d' }, // light green
+    { bg: '#fcd34d', activeBg: '#92400e' }, // golden yellow
   ];
 
   // Standard Korean school period start times (컴시간알리미 reference)
@@ -780,9 +780,9 @@ export default function TeacherPage() {
     2: '9:30',
     3: '10:30',
     4: '11:30',
-    5: '13:00',
-    6: '14:00',
-    7: '15:00',
+    5: '13:20',
+    6: '14:20',
+    7: '15:20',
     8: '16:00',
     9: '17:00',
   };
@@ -1130,15 +1130,15 @@ export default function TeacherPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
+              className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
               onClick={() => setWeekOffset(weekOffset - 1)}
               disabled={weekOffset <= -2}
               title="이전 주"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-3.5 w-3.5" />
             </Button>
-            <span className="flex flex-col items-center min-w-[88px] px-1 select-none">
-              <span className="text-sm font-bold text-white leading-tight whitespace-nowrap">
+            <span className="flex flex-col items-center min-w-[72px] px-0.5 select-none">
+              <span className="text-xs font-bold text-white leading-tight whitespace-nowrap">
                 {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
               </span>
               <span className="text-[9px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
@@ -1146,12 +1146,12 @@ export default function TeacherPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
+              className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
               onClick={() => setWeekOffset(weekOffset + 1)}
               disabled={weekOffset >= 8}
               title="다음 주"
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
@@ -1417,14 +1417,14 @@ export default function TeacherPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
+                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
                 onClick={() => setWeekOffset(weekOffset - 1)}
                 disabled={weekOffset <= -2}
                 title="이전 주"
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-3.5 w-3.5" />
               </Button>
-              <span className="flex flex-col items-center min-w-[88px] px-1 select-none">
+              <span className="flex flex-col items-center min-w-[72px] px-0.5 select-none">
                 <span className="text-xs font-bold text-white leading-tight whitespace-nowrap">
                   {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
                 </span>
@@ -1433,12 +1433,12 @@ export default function TeacherPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
+                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 hover:text-white active:bg-white/40 disabled:opacity-40"
                 onClick={() => setWeekOffset(weekOffset + 1)}
                 disabled={weekOffset >= 8}
                 title="다음 주"
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
