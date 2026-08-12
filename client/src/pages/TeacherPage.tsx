@@ -988,11 +988,30 @@ export default function TeacherPage() {
       ...(electiveConfigsG3 || []).map((c: any) => ({ ...c, grade: 3 })),
     ];
     allConfigs.forEach((c: any) => {
-      if (!c.className || !c.classCode || !c.subject) return;
+      if (!c.classCode || !c.subject) return;
       const codes = c.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
+
+      // className이 JSON 객체 형식일 수 있음: {"A":"2-3반","C":"2-3반"}
+      let classNameObj: Record<string, string> = {};
+      let plainClassName = '';
+      if (c.className) {
+        const trimmedCN = (c.className as string).trim();
+        if (trimmedCN.startsWith('{')) {
+          try {
+            classNameObj = JSON.parse(trimmedCN) as Record<string, string>;
+          } catch {
+            plainClassName = trimmedCN;
+          }
+        } else {
+          plainClassName = trimmedCN;
+        }
+      }
+
       codes.forEach((code: string) => {
         const key = `${c.grade}-${(c.subject || '').trim()}-${code}`;
-        map.set(key, c.className.trim());
+        // JSON 형식이면 해당 코드의 값, 아니면 일반 문자열
+        const resolvedName = classNameObj[code] || plainClassName;
+        if (resolvedName) map.set(key, resolvedName);
       });
     });
     return map;
