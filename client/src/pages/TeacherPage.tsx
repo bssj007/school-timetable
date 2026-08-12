@@ -825,7 +825,21 @@ export default function TeacherPage() {
             if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
               if (!effectiveSubjectFilter || isSubjectMatch(decoded.subjectName, [effectiveSubjectFilter])) {
                 const cellG = computedGroupsG2[`${d - 1}-${p}`];
-                if (cellG) groupsInAss.add(cellG);
+                if (cellG) {
+                  // 교수 검증: 이 선생님이 실제로 해당 갑 부의 선택과목 담당인지 확인
+                  const isValidElective = (electiveConfigsG2 || []).some((c: any) => {
+                    if (!c.classCode) return false;
+                    const groups = c.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
+                    if (!groups.includes(cellG)) return false;
+                    if (!isSubjectMatch(decoded.subjectName, [(c.subject || '').trim()])) return false;
+                    const teacherNames = [
+                      ...(c.originalTeacher || '').split(',').map((t: string) => t.trim()),
+                      ...(c.fullTeacherName || '').split(',').map((t: string) => t.trim()),
+                    ].filter(Boolean);
+                    return teacherNames.some(t => t === teacherName || t === rawTeacherName);
+                  });
+                  if (isValidElective) groupsInAss.add(cellG);
+                }
               }
             }
           }
@@ -840,7 +854,21 @@ export default function TeacherPage() {
             if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
               if (!effectiveSubjectFilter || isSubjectMatch(decoded.subjectName, [effectiveSubjectFilter])) {
                 const cellG = computedGroupsG3[`${d - 1}-${p}`];
-                if (cellG) groupsInAss.add(cellG);
+                if (cellG) {
+                  // 교수 검증: 이 선생님이 실제로 해당 갑 부의 선택과목 담당인지 확인
+                  const isValidElective = (electiveConfigsG3 || []).some((c: any) => {
+                    if (!c.classCode) return false;
+                    const groups = c.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
+                    if (!groups.includes(cellG)) return false;
+                    if (!isSubjectMatch(decoded.subjectName, [(c.subject || '').trim()])) return false;
+                    const teacherNames = [
+                      ...(c.originalTeacher || '').split(',').map((t: string) => t.trim()),
+                      ...(c.fullTeacherName || '').split(',').map((t: string) => t.trim()),
+                    ].filter(Boolean);
+                    return teacherNames.some(t => t === teacherName || t === rawTeacherName);
+                  });
+                  if (isValidElective) groupsInAss.add(cellG);
+                }
               }
             }
           }
@@ -877,7 +905,7 @@ export default function TeacherPage() {
     });
 
     return tabs;
-  }, [taughtClasses, allAssessments, selectedSchedule, computedGroupsG2, computedGroupsG3, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
+  }, [taughtClasses, allAssessments, selectedSchedule, computedGroupsG2, computedGroupsG3, electiveConfigsG2, electiveConfigsG3, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
 
   // Auto-select first tab (based on full classTabs — will be refined after filteredClassTabs is computed)
   useEffect(() => {
