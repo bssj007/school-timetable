@@ -1148,7 +1148,7 @@ export default function TeacherPage() {
 
   return (
     <div 
-      className="w-full min-h-screen px-2 md:px-4 py-2 md:py-4 flex flex-col"
+      className="w-full min-h-screen md:h-full px-2 md:px-4 py-2 md:py-4 flex flex-col"
       style={{
         backgroundColor: '#f6e7c9',
         backgroundImage: `
