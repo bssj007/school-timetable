@@ -12,7 +12,8 @@ export default function OnboardingDialog() {
     const [location] = useLocation();
 
     const isSystemAdmin = location.startsWith("/admin");
-    const isOpen = !isConfigured && !isSystemAdmin;
+    const isTeacherPage = location.startsWith("/teacher");
+    const isOpen = !isConfigured && !isSystemAdmin && !isTeacherPage;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

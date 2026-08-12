@@ -796,24 +796,15 @@ export default function TeacherPage() {
   // Build class+group nav tabs for the right panel (filtered by effectiveSubjectFilter)
   const classTabs = useMemo(() => {
     const tabs: { id: string; grade: number; classNum: number; group: string; label: string }[] = [];
-    if (!selectedSchedule || !allAssessments) return tabs;
+    if (!selectedSchedule) return tabs;
 
     const seenIds = new Set<string>();
 
     taughtClasses.forEach(({ grade, classNum }) => {
-      const classAssessments = (allAssessments || []).filter(
-        a => matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects) &&
-             a.grade === grade &&
-             (a.classNum === classNum || a.classNum === 0) &&
-             (!effectiveSubjectFilter || a.subject === effectiveSubjectFilter)
-      );
-
       const groupsInAss = new Set<string>();
-      classAssessments.forEach(a => {
-        if (a.classCode && a.classCode.trim()) {
-          a.classCode.split(',').map(s => s.trim()).filter(Boolean).forEach(g => groupsInAss.add(g));
-        }
-      });
+      // 그룹 탭은 시간표(+electiveConfig 검증) 기준으로만 생성한다.
+      // 수행평가 classCode는 "해당 수행평가의 대상 그룹"이지,
+      // "선생님이 담당하는 그룹"이 아니므로 탭 생성에 사용하지 않는다.
 
       if (grade === 2) {
         for (let d = 1; d <= 5; d++) {
@@ -905,7 +896,7 @@ export default function TeacherPage() {
     });
 
     return tabs;
-  }, [taughtClasses, allAssessments, selectedSchedule, computedGroupsG2, computedGroupsG3, electiveConfigsG2, electiveConfigsG3, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
+  }, [taughtClasses, selectedSchedule, computedGroupsG2, computedGroupsG3, electiveConfigsG2, electiveConfigsG3, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
 
   // Auto-select first tab (based on full classTabs — will be refined after filteredClassTabs is computed)
   useEffect(() => {
