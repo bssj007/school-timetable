@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon, ThumbsUp, X } from "lucide-react";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon, ThumbsUp, X, Bell } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
@@ -173,6 +173,33 @@ export default function Dashboard() {
   const [showBugReportDialog, setShowBugReportDialog] = useState(false);
   const [bugReportMessage, setBugReportMessage] = useState("");
   const [isBugReportSending, setIsBugReportSending] = useState(false);
+
+  // ── 알림 프레임워크 ─────────────────────────────────────────────────
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationRef = useRef<HTMLDivElement>(null);
+
+  // TODO: 실제 알림 API 연동 시 이 배열을 서버 데이터로 교체
+  const notificationItems: Array<{
+    id: number;
+    title: string;
+    message: string;
+    time: string;
+    read: boolean;
+    type: 'info' | 'assessment' | 'system';
+  }> = [];
+  const unreadNotificationCount = notificationItems.filter(n => !n.read).length;
+
+  useEffect(() => {
+    if (!showNotifications) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showNotifications]);
+  // ────────────────────────────────────────────────────────────────────
 
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -1483,50 +1510,109 @@ export default function Dashboard() {
               오류신고
             </Button>
           )}
-          {kakaoUser ? (
-            <div className="flex items-center gap-2 sm:gap-3 bg-gray-50 pr-1 pl-3 py-1 rounded-full border border-gray-100">
-              <div className="hidden sm:flex flex-col items-end">
-                <span className="text-[10px] text-gray-400 font-medium leading-none mb-1">카카오 연동됨</span>
-                <span className="text-sm font-bold text-gray-800 leading-none">{kakaoUser.nickname}</span>
-              </div>
-              <Avatar className="h-8 w-8 border-2 border-white shadow-sm">
-                <AvatarImage src={kakaoUser.thumbnailImage} alt={kakaoUser.nickname} />
-                <AvatarFallback className="bg-blue-100 text-blue-600 text-xs font-bold">
-                  {kakaoUser.nickname ? kakaoUser.nickname.substring(0, 1) : 'U'}
-                </AvatarFallback>
-              </Avatar>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full"
-                onClick={handleLogout}
-                title="로그아웃"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
+          {/* 알림 벨 버튼 — PC·모바일 공통 */}
+          <div className="relative" ref={notificationRef}>
             <Button
-              variant="default"
-              size="sm"
-              disabled={isKakaoRestricted}
-              className={`h-9 rounded-full px-4 font-bold text-xs ${isKakaoRestricted ? 'bg-gray-200 text-gray-500 opacity-70 cursor-not-allowed' : 'bg-yellow-400 hover:bg-yellow-500 text-gray-900'}`}
-              onClick={() => {
-                if (!isKakaoRestricted) {
-                  window.location.href = '/api/kakao/login';
-                }
-              }}
+              id="notification-bell-btn"
+              variant="ghost"
+              size="icon"
+              className="relative h-9 w-9 rounded-full hover:bg-gray-100 transition-all duration-200"
+              onClick={() => setShowNotifications(prev => !prev)}
+              aria-label="알림"
             >
-              {isKakaoRestricted ? (
-                "개발 중"
-              ) : (
-                <>
-                  <img src="https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png" alt="Kakao" className="h-4 w-4 mr-2" />
-                  카카오 연동
-                </>
+              <Bell
+                className={`h-5 w-5 transition-colors duration-200 ${
+                  showNotifications ? 'text-blue-500' : 'text-gray-500'
+                }`}
+              />
+              {/* 읽지 않은 알림 뱃지 */}
+              {unreadNotificationCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-[5px] text-[10px] font-bold leading-none text-white bg-red-500 rounded-full shadow ring-2 ring-white">
+                  {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                </span>
               )}
             </Button>
-          )}
+
+            {/* 알림 드롭다운 패널 */}
+            {showNotifications && (
+              <div className="absolute right-0 top-11 z-50 w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+                {/* 패널 헤더 */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
+                  <div className="flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-gray-700" />
+                    <span className="font-bold text-sm text-gray-800">알림</span>
+                    {unreadNotificationCount > 0 && (
+                      <span className="flex items-center justify-center h-5 min-w-[20px] px-1.5 text-[10px] font-bold text-white bg-red-500 rounded-full">
+                        {unreadNotificationCount}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {unreadNotificationCount > 0 && (
+                      <button
+                        className="text-[11px] text-blue-500 hover:text-blue-700 font-semibold px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+                        onClick={() => { /* TODO: 모두 읽음 API */ }}
+                      >
+                        모두 읽음
+                      </button>
+                    )}
+                    <button
+                      className="h-7 w-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
+                      onClick={() => setShowNotifications(false)}
+                      aria-label="알림 닫기"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 알림 목록 */}
+                <div className="max-h-[340px] overflow-y-auto">
+                  {notificationItems.length === 0 ? (
+                    /* 빈 상태 */
+                    <div className="flex flex-col items-center justify-center py-12 px-4 gap-3">
+                      <div className="w-14 h-14 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100">
+                        <Bell className="h-6 w-6 text-gray-300" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-gray-400">아직 알림이 없어요</p>
+                        <p className="text-xs text-gray-300 mt-1">새로운 알림이 오면 여기에 표시됩니다</p>
+                      </div>
+                    </div>
+                  ) : (
+                    /* 알림 아이템 목록 */
+                    <div className="divide-y divide-gray-50">
+                      {notificationItems.map((notif) => (
+                        <div
+                          key={notif.id}
+                          className={`flex items-start gap-3 px-4 py-3.5 hover:bg-gray-50 cursor-pointer transition-colors ${
+                            !notif.read ? 'bg-blue-50/50' : ''
+                          }`}
+                        >
+                          {/* 읽음/안읽음 점 */}
+                          <div
+                            className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${
+                              !notif.read ? 'bg-blue-500' : 'bg-gray-200'
+                            }`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-800">{notif.title}</p>
+                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{notif.message}</p>
+                            <p className="text-[11px] text-gray-400 mt-1.5 font-medium">{notif.time}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 패널 푸터 */}
+                <div className="border-t border-gray-100 px-4 py-2.5 bg-gray-50/60">
+                  <p className="text-[11px] text-center text-gray-400">알림 기능은 준비 중입니다</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1764,12 +1850,7 @@ export default function Dashboard() {
                 <span className={`text-lg md:text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
                   <span>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}</span>
                 </span>
-                {kakaoUser && (
-                  <div className="md:hidden flex items-center justify-center gap-2 bg-green-50 text-green-700 px-3 py-1 mt-2 rounded-md border border-green-100 text-sm">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    <span className="font-semibold"><span>{kakaoUser.nickname}</span></span>
-                  </div>
-                )}
+                {/* 모바일 카카오 뱃지 제거됨 — 알림 벨은 상단 헤더에 통합 */}
               </div>
 
               {/* Desktop Selectors */}
