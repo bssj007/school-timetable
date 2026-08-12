@@ -105,6 +105,22 @@ function formatDateWithDay(dateStr: string, classTime?: string | number | null):
   return formatted;
 }
 
+// Helper: classCode is stored as either simple "A" / "A,C" or JSON {"A":"2-3반","C":"2-3반"}
+// Returns array of group code strings: ["A", "C"]
+function parseClassCode(classCode: string | null | undefined): string[] {
+  if (!classCode || !classCode.trim()) return [];
+  const trimmed = classCode.trim();
+  if (trimmed.startsWith('{')) {
+    try {
+      const obj = JSON.parse(trimmed) as Record<string, string>;
+      return Object.keys(obj).filter(Boolean);
+    } catch {
+      // fall through
+    }
+  }
+  return trimmed.split(',').map(s => s.trim()).filter(Boolean);
+}
+
 // Helper: Check if assessment subject matches one of teacher's taught subjects
 function isSubjectMatch(assessmentSubject?: string, taughtSubjects?: string[]): boolean {
   if (!assessmentSubject || !taughtSubjects || taughtSubjects.length === 0) return true;
@@ -804,9 +820,8 @@ export default function TeacherPage() {
 
     taughtClasses.forEach(({ grade, classNum }) => {
       const groupsInAss = new Set<string>();
-      // 그룹 탭은 시간표(+electiveConfig 검증) 기준으로만 생성한다.
-      // hasMatchingCell: 이 선생님이 해당 (grade, classNum, 과목필터) 조합을 실제로 담당하는지 추적
       let hasMatchingCell = false;
+      let hasPlainCell = false; // 그룹 없는 일반반 셀 존재 여부
 
       if (grade === 2) {
         for (let d = 1; d <= 5; d++) {
@@ -817,10 +832,9 @@ export default function TeacherPage() {
             const decoded = decodeCell(val);
             if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
               if (!effectiveSubjectFilter || isSubjectMatch(decoded.subjectName, [effectiveSubjectFilter])) {
-                hasMatchingCell = true; // 이 class에 매칭 셀이 존재함
+                hasMatchingCell = true;
                 const cellG = computedGroupsG2[`${d - 1}-${p}`];
                 if (cellG) {
-                  // 교수 검증: 이 선생님이 실제로 해당 갑 부의 선택과목 담당인지 확인
                   const isValidElective = (electiveConfigsG2 || []).some((c: any) => {
                     if (!c.classCode) return false;
                     const groups = c.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
@@ -833,6 +847,9 @@ export default function TeacherPage() {
                     return teacherNames.some(t => t === teacherName || t === rawTeacherName);
                   });
                   if (isValidElective) groupsInAss.add(cellG);
+                } else {
+                  // 그룹 없는 일반반 셀
+                  hasPlainCell = true;
                 }
               }
             }
@@ -847,10 +864,9 @@ export default function TeacherPage() {
             const decoded = decodeCell(val);
             if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
               if (!effectiveSubjectFilter || isSubjectMatch(decoded.subjectName, [effectiveSubjectFilter])) {
-                hasMatchingCell = true; // 이 class에 매칭 셀이 존재함
+                hasMatchingCell = true;
                 const cellG = computedGroupsG3[`${d - 1}-${p}`];
                 if (cellG) {
-                  // 교수 검증: 이 선생님이 실제로 해당 갑 부의 선택과목 담당인지 확인
                   const isValidElective = (electiveConfigsG3 || []).some((c: any) => {
                     if (!c.classCode) return false;
                     const groups = c.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
@@ -863,6 +879,8 @@ export default function TeacherPage() {
                     return teacherNames.some(t => t === teacherName || t === rawTeacherName);
                   });
                   if (isValidElective) groupsInAss.add(cellG);
+                } else {
+                  hasPlainCell = true;
                 }
               }
             }
@@ -871,6 +889,7 @@ export default function TeacherPage() {
       } else {
         // 1학년 등 grade 2/3 외: 과목필터 무관하게 탭 허용
         hasMatchingCell = true;
+        hasPlainCell = true;
       }
 
       // 매칭 셀이 없는 경우(=이 class에서 해당 과목을 안 가르침) → 탭 생성 안 함
@@ -885,10 +904,13 @@ export default function TeacherPage() {
             tabs.push({ id, grade, classNum, group: grp, label: `${grade}-${classNum}(${grp})` });
           }
         });
-        const baseId = `${grade}-${classNum}-`;
-        if (!seenIds.has(baseId)) {
-          seenIds.add(baseId);
-          tabs.push({ id: baseId, grade, classNum, group: '', label: `${grade}-${classNum}반` });
+        // 일반반 탭은 실제 일반반(그룹 없는) 셀이 있을 때만 추가
+        if (hasPlainCell) {
+          const baseId = `${grade}-${classNum}-`;
+          if (!seenIds.has(baseId)) {
+            seenIds.add(baseId);
+            tabs.push({ id: baseId, grade, classNum, group: '', label: `${grade}-${classNum}반` });
+          }
         }
       } else {
         const id = `${grade}-${classNum}-`;
@@ -938,7 +960,7 @@ export default function TeacherPage() {
 
       // classNum=0은 "전체반"(이동수업 그룹 수업) — classCode(그룹)가 있어야 유효
       if (a.classNum === 0) {
-        const aGroups = (a.classCode || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+        const aGroups = parseClassCode(a.classCode);
         // classCode가 없으면 모순(오류 데이터) — 어느 탭에서도 표시 안 함
         if (aGroups.length === 0) return false;
         // 현재 탭의 group과 classCode가 일치해야 함
@@ -948,7 +970,7 @@ export default function TeacherPage() {
         if (a.classNum !== classNum) return false;
         // 그룹 탭인 경우 classCode도 확인
         if (group && a.classCode && a.classCode.trim()) {
-          const allowedGroups = a.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
+          const allowedGroups = parseClassCode(a.classCode);
           if (!allowedGroups.includes(group)) return false;
         }
       }
@@ -1671,14 +1693,22 @@ export default function TeacherPage() {
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
                               {(() => {
                                 if (a.classNum !== 0) return `${a.grade}-${a.classNum}반`;
-                                if (!a.classCode || !a.classCode.trim()) return `${a.grade}-전체반`;
-                                // classCode(그룹코드)에서 관리페이지 입력 강의반명 조회
-                                const codes = a.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
+                                // classCode를 JSON/CSV 양쪽 형식으로 파싱해 그룹코드 추출
+                                const codes = parseClassCode(a.classCode);
+                                if (codes.length === 0) return `${a.grade}-전체반`;
+                                // 그룹코드로 관리페이지 강의반명 조회
                                 const classNames = codes
                                   .map((code: string) => lectureClassNameMap.get(`${a.grade}-${(a.subject || '').trim()}-${code}`))
                                   .filter(Boolean);
-                                if (classNames.length > 0) return `강의반(${classNames.join(', ')})`;
-                                return `강의반(${a.classCode.trim()})`; // fallback
+                                // 고유 강의반명만 표시
+                                const uniqueNames = (classNames as string[]).filter((v, i, arr) => arr.indexOf(v) === i);
+                                if (uniqueNames.length > 0) {
+                                  return codes.length === 1
+                                    ? `${uniqueNames[0]}(${codes[0]})`
+                                    : `강의반(${codes.join(', ')})`;
+                                }
+                                // fallback: 그룹코드 그대로
+                                return codes.length === 1 ? `강의반(${codes[0]})` : `강의반(${codes.join(', ')})`;
                               })()}
                             </span>
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">
