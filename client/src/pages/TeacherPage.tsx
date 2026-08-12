@@ -1120,7 +1120,7 @@ export default function TeacherPage() {
 
   return (
     <div 
-      className="w-full min-h-screen px-2 md:px-4 py-2 md:py-6"
+      className="w-full min-h-screen px-2 md:px-4 py-2 md:py-6 flex flex-col"
       style={{
         backgroundColor: '#f6e7c9',
         backgroundImage: `
@@ -1130,10 +1130,10 @@ export default function TeacherPage() {
         backgroundAttachment: 'fixed',
       }}
     >
-      <div className="max-w-[1240px] mx-auto w-full">
+      <div className="max-w-[1240px] mx-auto w-full flex-1 flex flex-col min-h-0">
 
         {/* ===== TOP SECTION: Title + Home Button ===== */}
-        <div className="flex items-center justify-between gap-2 mb-3 md:mb-3">
+        <div className="flex items-center justify-between gap-2 mb-3 md:mb-3 flex-shrink-0">
           <div className="min-w-0">
             <h1 className="text-base sm:text-xl md:text-3xl font-extrabold text-gray-900 truncate leading-tight">
               <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent hidden md:inline">교사용 수행평가 등록 시스템</span>
@@ -1144,8 +1144,46 @@ export default function TeacherPage() {
             </p>
           </div>
 
-          {/* Action buttons: PC Desktop Shortcut only (no home button) */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Action buttons: PC Week Selector + PC Desktop Shortcut */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* PC Only Week Selector (Above table right side) */}
+            <div className="hidden md:flex items-center bg-indigo-600 rounded-full p-0.5 border border-indigo-400 shadow-xs shrink-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
+                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                onClick={(e) => {
+                  setWeekOffset(prev => prev - 1);
+                  (e.currentTarget as HTMLElement).blur();
+                }}
+                disabled={weekOffset <= -2}
+                title="이전 주"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <span className="flex flex-col items-center min-w-[76px] px-1 select-none">
+                <span className="text-xs font-bold text-white leading-tight whitespace-nowrap">
+                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
+                </span>
+                <span className="text-[9px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
+                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                onClick={(e) => {
+                  setWeekOffset(prev => prev + 1);
+                  (e.currentTarget as HTMLElement).blur();
+                }}
+                disabled={weekOffset >= 8}
+                title="다음 주"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+
             {/* PC Only Desktop Shortcut Button */}
             <Button
               variant="outline"
@@ -1160,17 +1198,16 @@ export default function TeacherPage() {
               <Download className="w-3.5 h-3.5 text-blue-600" />
               <span>바탕화면에 바로가기 추가</span>
             </Button>
-
           </div>
         </div>
 
 
 
         {/* ===== CONTENT AREA: flex-col on mobile (panel top, title+week, table bottom), flex-row on desktop ===== */}
-        <div className="flex flex-col md:flex-row gap-3 md:gap-4 xl:gap-6 items-start">
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4 xl:gap-6 items-start md:items-stretch flex-1 min-h-0">
 
         {/* ===== MOBILE ONLY: Title + Week nav row — order-1 (above timetable) ===== */}
-        <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5">
+        <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 flex-shrink-0">
           <h2 className="text-lg font-extrabold truncate leading-tight">
             <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h2>
@@ -1213,10 +1250,10 @@ export default function TeacherPage() {
         </div>
 
         {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
-        <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-2 md:order-1">
+        <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-2 md:order-1 flex-1 min-h-0">
 
       {/* Main Timetable — Card wrapper */}
-      <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
+      <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:min-h-[calc(100vh-120px)]">
           {isTimetableLoading ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
@@ -1230,8 +1267,8 @@ export default function TeacherPage() {
               <p className="text-sm text-red-400">네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.</p>
             </div>
           ) : timetableData && selectedSchedule ? (
-            <div className="w-full overflow-x-auto">
-              <table className="w-full table-fixed min-w-[340px]" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
+            <div className="w-full overflow-x-auto flex-1 flex flex-col">
+              <table className="w-full table-fixed min-w-[340px] flex-1 h-full" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
                 <thead>
                   <tr>
                     {/* Corner cell */}
@@ -1273,10 +1310,10 @@ export default function TeacherPage() {
                     const p = periodIndex + 1;
                     const isCurrentPeriod = currentPeriod === p && weekOffset === 0;
                     return (
-                      <tr key={p} className="h-[52px] md:h-[84px]">
+                      <tr key={p} className="h-[52px] md:h-auto">
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[52px] max-h-[52px] md:h-[84px] md:max-h-[84px] overflow-hidden"
+                          className="h-[52px] md:h-auto overflow-hidden"
                           style={{
                             width: 36,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
@@ -1329,7 +1366,7 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[52px] max-h-[52px] md:h-[84px] md:max-h-[84px] overflow-hidden"
+                              className="group h-[52px] md:h-auto overflow-hidden"
                               style={{
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
@@ -1440,8 +1477,8 @@ export default function TeacherPage() {
       </div>{/* end timetable column */}
 
       {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
-      <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4 h-fit">
-        <div className="md:rounded-2xl md:border md:border-slate-200 md:bg-white md:shadow-md md:overflow-hidden flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
+      <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4 md:h-full">
+        <div className="md:rounded-2xl md:border md:border-slate-200 md:bg-white md:shadow-md md:overflow-hidden flex flex-col h-fit md:h-full md:min-h-[calc(100vh-120px)]">
           {/* Teacher Picker — slim bar, no colored banner */}
           <div className="px-1 md:px-3 py-2 border-b border-slate-100 flex-shrink-0 flex items-center justify-between gap-2">
             {timetableData ? (
@@ -1465,44 +1502,6 @@ export default function TeacherPage() {
                 {teacherName ? `${teacherName} 선생님` : '선생님'}
               </span>
             )}
-
-            {/* Desktop week nav */}
-            <div className="hidden md:flex items-center bg-indigo-600 rounded-full p-0.5 border border-indigo-400 shrink-0">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none"
-                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
-                onClick={(e) => {
-                  setWeekOffset(prev => prev - 1);
-                  (e.currentTarget as HTMLElement).blur();
-                }}
-                disabled={weekOffset <= -2}
-                title="이전 주"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </Button>
-              <span className="flex flex-col items-center min-w-[72px] px-0.5 select-none">
-                <span className="text-xs font-bold text-white leading-tight whitespace-nowrap">
-                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
-                </span>
-                <span className="text-[9px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none"
-                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
-                onClick={(e) => {
-                  setWeekOffset(prev => prev + 1);
-                  (e.currentTarget as HTMLElement).blur();
-                }}
-                disabled={weekOffset >= 8}
-                title="다음 주"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Button>
-            </div>
           </div>
 
           {/* Subject Bookmark Tabs */}
@@ -1581,7 +1580,7 @@ export default function TeacherPage() {
           )}
 
           {/* Assessment List */}
-          <div className="overflow-y-auto px-1 md:px-4 py-2.5 md:max-h-[calc(100vh-200px)]">
+          <div className="overflow-y-auto px-1 md:px-4 py-2.5 flex-1 min-h-0">
             {filteredClassTabs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-5 text-slate-400">
                 <span className="text-2xl mb-1">📢</span>
