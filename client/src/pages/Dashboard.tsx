@@ -1516,15 +1516,11 @@ export default function Dashboard() {
               id="notification-bell-btn"
               variant="ghost"
               size="icon"
-              className="relative h-9 w-9 rounded-full hover:bg-gray-100 transition-all duration-200"
+              className="relative h-9 w-9 rounded-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 shadow-sm transition-all duration-200"
               onClick={() => setShowNotifications(prev => !prev)}
               aria-label="알림"
             >
-              <Bell
-                className={`h-5 w-5 transition-colors duration-200 ${
-                  showNotifications ? 'text-blue-500' : 'text-gray-500'
-                }`}
-              />
+              <Bell className="h-4 w-4" />
               {/* 읽지 않은 알림 뱃지 */}
               {unreadNotificationCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-[5px] text-[10px] font-bold leading-none text-white bg-red-500 rounded-full shadow ring-2 ring-white">
