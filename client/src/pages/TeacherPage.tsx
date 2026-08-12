@@ -402,35 +402,37 @@ export default function TeacherPage() {
     return (raw === 'MANUAL_PLAN' || raw === 'SEMESTER_PLAN') ? raw : 'COMCIGAN';
   }, [grade3TimetableNow]);
 
-  // Fetch Elective Configurations for Grade 2 and 3 using their resolved datasets
+  // Fetch Elective Configurations for Grade 2 and 3
+  // panelG2Dataset/panelG3Dataset는 현재 실제 주(weekOffset=0) 기준 — 주 탐색과 무관
   const { data: electiveConfigsG2 } = useQuery({
-    queryKey: ['electiveConfigs-teacher', '2', g2DatasetType],
+    queryKey: ['electiveConfigs-teacher', '2', panelG2Dataset],
     queryFn: async () => {
-      const res = await fetch(`/api/electives?grade=2&dataset=${g2DatasetType}`);
+      const res = await fetch(`/api/electives?grade=2&dataset=${panelG2Dataset}`);
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!g2DatasetType,
+    enabled: !!panelG2Dataset,
   });
 
   const { data: electiveConfigsG3 } = useQuery({
-    queryKey: ['electiveConfigs-teacher', '3', g3DatasetType],
+    queryKey: ['electiveConfigs-teacher', '3', panelG3Dataset],
     queryFn: async () => {
-      const res = await fetch(`/api/electives?grade=3&dataset=${g3DatasetType}`);
+      const res = await fetch(`/api/electives?grade=3&dataset=${panelG3Dataset}`);
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!g3DatasetType,
+    enabled: !!panelG3Dataset,
   });
 
   // Compute elective groups for Grade 2 and Grade 3
+  // grade2TimetableNow/grade3TimetableNow는 항상 현재 실제 주 데이터 — 주 탐색과 무관
   const computedGroupsG2 = useMemo(() => {
-    return getComputedGroupsForGrade('2', grade2Timetable?.data || [], electiveConfigsG2 || [], settings);
-  }, [grade2Timetable?.data, electiveConfigsG2, settings]);
+    return getComputedGroupsForGrade('2', grade2TimetableNow?.data || [], electiveConfigsG2 || [], settings);
+  }, [grade2TimetableNow?.data, electiveConfigsG2, settings]);
 
   const computedGroupsG3 = useMemo(() => {
-    return getComputedGroupsForGrade('3', grade3Timetable?.data || [], electiveConfigsG3 || [], settings);
-  }, [grade3Timetable?.data, electiveConfigsG3, settings]);
+    return getComputedGroupsForGrade('3', grade3TimetableNow?.data || [], electiveConfigsG3 || [], settings);
+  }, [grade3TimetableNow?.data, electiveConfigsG3, settings]);
 
   // 1. Fetch Teacher Timetable
   const { data: timetableData, isLoading: isTimetableLoading, isError: isTimetableError } = useQuery<TeacherTimetableResponse>({
