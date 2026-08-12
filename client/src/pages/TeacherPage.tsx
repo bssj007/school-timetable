@@ -936,19 +936,13 @@ export default function TeacherPage() {
       if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
       if (a.grade !== grade) return false;
 
-      // classNum=0은 "전체반"(이동수업 그룹 수업) — 반 번호 대신 그룹(classCode)으로 필터
+      // classNum=0은 "전체반"(이동수업 그룹 수업) — classCode(그룹)가 있어야 유효
       if (a.classNum === 0) {
-        // 전체반 수행평가의 classCode(그룹 정보)와 현재 탭의 group을 매칭
         const aGroups = (a.classCode || '').split(',').map((s: string) => s.trim()).filter(Boolean);
-        if (group) {
-          // 그룹 탭: 해당 그룹이 classCode에 포함된 전체반 수행평가만 허용
-          if (aGroups.length > 0 && !aGroups.includes(group)) return false;
-          // classCode가 비어있는 전체반 수행평가는 그룹 탭에 표시하지 않음
-          if (aGroups.length === 0) return false;
-        } else {
-          // 일반반 탭(group=''): classCode가 없는 전체반 수행평가만 허용
-          if (aGroups.length > 0) return false;
-        }
+        // classCode가 없으면 모순(오류 데이터) — 어느 탭에서도 표시 안 함
+        if (aGroups.length === 0) return false;
+        // 현재 탭의 group과 classCode가 일치해야 함
+        if (!aGroups.includes(group || '')) return false;
       } else {
         // 일반 반 수행평가: 탭의 classNum과 일치해야 함
         if (a.classNum !== classNum) return false;
