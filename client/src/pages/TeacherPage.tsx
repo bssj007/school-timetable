@@ -1144,7 +1144,7 @@ export default function TeacherPage() {
             </p>
           </div>
 
-          {/* Action buttons: PC Desktop Shortcut only (no home button) */}
+          {/* Action buttons: PC Desktop Shortcut + Desktop Week Selector */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* PC Only Desktop Shortcut Button */}
             <Button
@@ -1161,6 +1161,43 @@ export default function TeacherPage() {
               <span>바탕화면에 바로가기 추가</span>
             </Button>
 
+            {/* Desktop Week Selector */}
+            <div className="hidden md:flex items-center bg-indigo-600 rounded-full p-0.5 border border-indigo-400 shrink-0 shadow-sm">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
+                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                onClick={(e) => {
+                  setWeekOffset(prev => prev - 1);
+                  (e.currentTarget as HTMLElement).blur();
+                }}
+                disabled={weekOffset <= -2}
+                title="이전 주"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <span className="flex flex-col items-center min-w-[72px] px-0.5 select-none">
+                <span className="text-xs font-bold text-white leading-tight whitespace-nowrap">
+                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
+                </span>
+                <span className="text-[9px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
+                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                onClick={(e) => {
+                  setWeekOffset(prev => prev + 1);
+                  (e.currentTarget as HTMLElement).blur();
+                }}
+                disabled={weekOffset >= 8}
+                title="다음 주"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -1465,44 +1502,6 @@ export default function TeacherPage() {
                 {teacherName ? `${teacherName} 선생님` : '선생님'}
               </span>
             )}
-
-            {/* Desktop week nav */}
-            <div className="hidden md:flex items-center bg-indigo-600 rounded-full p-0.5 border border-indigo-400 shrink-0">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none"
-                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
-                onClick={(e) => {
-                  setWeekOffset(prev => prev - 1);
-                  (e.currentTarget as HTMLElement).blur();
-                }}
-                disabled={weekOffset <= -2}
-                title="이전 주"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </Button>
-              <span className="flex flex-col items-center min-w-[72px] px-0.5 select-none">
-                <span className="text-xs font-bold text-white leading-tight whitespace-nowrap">
-                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
-                </span>
-                <span className="text-[9px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none"
-                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
-                onClick={(e) => {
-                  setWeekOffset(prev => prev + 1);
-                  (e.currentTarget as HTMLElement).blur();
-                }}
-                disabled={weekOffset >= 8}
-                title="다음 주"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Button>
-            </div>
           </div>
 
           {/* Subject Bookmark Tabs */}
