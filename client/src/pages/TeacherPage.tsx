@@ -958,6 +958,24 @@ export default function TeacherPage() {
     }).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   }, [selectedTab, allAssessments, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
 
+  // 이동수업 수행평가의 강의반명(관리페이지 입력값) 조회 맵
+  const lectureClassNameMap = useMemo(() => {
+    const map = new Map<string, string>(); // key: `${grade}-${subject}-${classCode}` → className
+    const allConfigs = [
+      ...(electiveConfigsG2 || []).map((c: any) => ({ ...c, grade: 2 })),
+      ...(electiveConfigsG3 || []).map((c: any) => ({ ...c, grade: 3 })),
+    ];
+    allConfigs.forEach((c: any) => {
+      if (!c.className || !c.classCode || !c.subject) return;
+      const codes = c.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
+      codes.forEach((code: string) => {
+        const key = `${c.grade}-${(c.subject || '').trim()}-${code}`;
+        map.set(key, c.className.trim());
+      });
+    });
+    return map;
+  }, [electiveConfigsG2, electiveConfigsG3]);
+
   // Mutate: Create Assessment
   const createMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -1651,7 +1669,17 @@ export default function TeacherPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
-                              {a.grade}-{a.classNum === 0 ? '전체' : a.classNum}반
+                              {(() => {
+                                if (a.classNum !== 0) return `${a.grade}-${a.classNum}반`;
+                                if (!a.classCode || !a.classCode.trim()) return `${a.grade}-전체반`;
+                                // classCode(그룹코드)에서 관리페이지 입력 강의반명 조회
+                                const codes = a.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
+                                const classNames = codes
+                                  .map((code: string) => lectureClassNameMap.get(`${a.grade}-${(a.subject || '').trim()}-${code}`))
+                                  .filter(Boolean);
+                                if (classNames.length > 0) return `강의반(${classNames.join(', ')})`;
+                                return `강의반(${a.classCode.trim()})`; // fallback
+                              })()}
                             </span>
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">
                               {a.subject}
