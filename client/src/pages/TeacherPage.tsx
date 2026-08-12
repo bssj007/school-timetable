@@ -1582,31 +1582,27 @@ export default function TeacherPage() {
             </div>
           )}
 
-          {/* Assessment List */}
+          {/* Assessment List — 임시: 수행평가 존재 여부와 무관히 항상 표시 */}
+          {(() => {
+            const tempAssessments = (allAssessments || []).filter(a =>
+              matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)
+            ).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+            return (
           <div className="overflow-y-auto px-1 md:px-4 py-2.5 md:max-h-[calc(100vh-200px)]">
-            {filteredClassTabs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-5 text-slate-400">
-                <span className="text-2xl mb-1">📢</span>
-                <p className="text-xs font-medium">
-                  {effectiveSubjectFilter ? `등록된 [${effectiveSubjectFilter}] 수행평가가 없습니다.` : "등록된 수행평가가 없습니다."}
-                </p>
-              </div>
-            ) : isAssessmentsLoading ? (
+            {isAssessmentsLoading ? (
               <div className="space-y-2 mt-1">
                 {[1,2].map(i => (
                   <div key={i} className="h-12 rounded-xl bg-slate-100 animate-pulse" />
                 ))}
               </div>
-            ) : panelAssessments.length === 0 ? (
+            ) : tempAssessments.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-5 text-slate-400">
                 <span className="text-2xl mb-1">📭</span>
-                <p className="text-xs font-medium">
-                  {effectiveSubjectFilter ? `등록된 [${effectiveSubjectFilter}] 수행평가가 없습니다.` : "등록된 수행평가가 없습니다."}
-                </p>
+                <p className="text-xs font-medium">등록된 수행평가가 없습니다.</p>
               </div>
             ) : (
               <div className="space-y-0 md:space-y-2">
-                {panelAssessments.map(a => {
+                {tempAssessments.map(a => {
                   const dateObj = new Date(a.dueDate);
                   const mmdd = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
                   const weekdayNames = ['일','월','화','수','목','금','토'];
@@ -1673,8 +1669,9 @@ export default function TeacherPage() {
               </div>
             )}
           </div>
-
-        </div>
+            );
+          })()}
+        </div>{/* end inner card */}
         </div>{/* end right panel */}
 
         </div>{/* end content area */}
