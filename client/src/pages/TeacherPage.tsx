@@ -803,8 +803,8 @@ export default function TeacherPage() {
     taughtClasses.forEach(({ grade, classNum }) => {
       const groupsInAss = new Set<string>();
       // 그룹 탭은 시간표(+electiveConfig 검증) 기준으로만 생성한다.
-      // 수행평가 classCode는 "해당 수행평가의 대상 그룹"이지,
-      // "선생님이 담당하는 그룹"이 아니므로 탭 생성에 사용하지 않는다.
+      // hasMatchingCell: 이 선생님이 해당 (grade, classNum, 과목필터) 조합을 실제로 담당하는지 추적
+      let hasMatchingCell = false;
 
       if (grade === 2) {
         for (let d = 1; d <= 5; d++) {
@@ -815,6 +815,7 @@ export default function TeacherPage() {
             const decoded = decodeCell(val);
             if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
               if (!effectiveSubjectFilter || isSubjectMatch(decoded.subjectName, [effectiveSubjectFilter])) {
+                hasMatchingCell = true; // 이 class에 매칭 셀이 존재함
                 const cellG = computedGroupsG2[`${d - 1}-${p}`];
                 if (cellG) {
                   // 교수 검증: 이 선생님이 실제로 해당 갑 부의 선택과목 담당인지 확인
@@ -844,6 +845,7 @@ export default function TeacherPage() {
             const decoded = decodeCell(val);
             if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
               if (!effectiveSubjectFilter || isSubjectMatch(decoded.subjectName, [effectiveSubjectFilter])) {
+                hasMatchingCell = true; // 이 class에 매칭 셀이 존재함
                 const cellG = computedGroupsG3[`${d - 1}-${p}`];
                 if (cellG) {
                   // 교수 검증: 이 선생님이 실제로 해당 갑 부의 선택과목 담당인지 확인
@@ -864,7 +866,13 @@ export default function TeacherPage() {
             }
           }
         }
+      } else {
+        // 1학년 등 grade 2/3 외: 과목필터 무관하게 탭 허용
+        hasMatchingCell = true;
       }
+
+      // 매칭 셀이 없는 경우(=이 class에서 해당 과목을 안 가르침) → 탭 생성 안 함
+      if (!hasMatchingCell && effectiveSubjectFilter) return;
 
       if (groupsInAss.size > 0) {
         const sortedGroups = Array.from(groupsInAss).sort();
@@ -905,23 +913,9 @@ export default function TeacherPage() {
     }
   }, [classTabs]);
 
-  // Filter classTabs to only show tabs relevant to selected subject
-  const filteredClassTabs = useMemo(() => {
-    if (!effectiveSubjectFilter || !allAssessments) return classTabs;
-    return classTabs.filter(tab => {
-      return allAssessments.some(a => {
-        if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
-        if (a.subject !== effectiveSubjectFilter) return false;
-        if (a.grade !== tab.grade) return false;
-        if (a.classNum !== tab.classNum && a.classNum !== 0) return false;
-        if (tab.group && a.classCode && a.classCode.trim()) {
-          const allowedGroups = a.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
-          if (!allowedGroups.includes(tab.group)) return false;
-        }
-        return true;
-      });
-    });
-  }, [classTabs, effectiveSubjectFilter, allAssessments, teacherName, rawTeacherName, taughtSubjects]);
+  // filteredClassTabs: 탭은 시간표(선생님이 가르치는 것) 기준으로 결정되며,
+  // 수행평가 존재 여부와 무관하게 표시된다. (classTabs에서 이미 subject 필터 적용됨)
+  const filteredClassTabs = useMemo(() => classTabs, [classTabs]);
 
   // Auto-select first filtered tab when filteredClassTabs changes
   useEffect(() => {
