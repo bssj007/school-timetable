@@ -4,6 +4,7 @@ export const ALL_TABLES = [
     "ip_profiles",
     "student_profiles",
     "elective_config",
+    "elective_presets",
     "dataset_bridges",
     "bug_reports",
     "timetable_cache",
@@ -82,6 +83,20 @@ CREATE TABLE IF NOT EXISTS elective_config (
     isCombinedClass INTEGER DEFAULT 0,
     dataset TEXT DEFAULT '',
     updatedAt TEXT DEFAULT (datetime('now'))
+);
+`;
+
+// 학번별 선택과목 사전지정 — 이름과 무관, 새 사용자 첫 접속 시 1회 적용
+export const createElectivePresetsTable = `
+CREATE TABLE IF NOT EXISTS elective_presets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    grade INTEGER NOT NULL,
+    classNum INTEGER NOT NULL,
+    studentNumber INTEGER NOT NULL,
+    electives TEXT,
+    dataset TEXT DEFAULT '',
+    updatedAt TEXT DEFAULT (datetime('now')),
+    UNIQUE(grade, classNum, studentNumber)
 );
 `;
 
@@ -249,6 +264,7 @@ export async function ensureAllTables(db: any) {
         await db.prepare(createIpProfilesTable).run();
         await db.prepare(createCookieProfilesTable).run();
         await db.prepare(createElectiveConfigTable).run();
+        await db.prepare(createElectivePresetsTable).run();
         await db.prepare(createDatasetBridgesTable).run();
         await db.prepare(createBugReportsTable).run();
         await db.prepare(createTimetableCacheTable).run();

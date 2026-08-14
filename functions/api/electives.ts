@@ -169,8 +169,50 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
                 "SELECT * FROM student_profiles WHERE name = ? AND grade = ? AND classNum = ? AND studentNumber = ?"
             ).bind(studentName, grade, classNum, studentNumber).first();
 
-            if (!profile) {
-                return new Response(JSON.stringify(null), { headers: { "Content-Type": "application/json" } });
+            // ── 프리셋 자동 적용 (신규 사용자 / 선택과목 미설정) ─────────────────
+            // 프로필 없거나 현재 dataset의 electives가 비어있는 경우에만 적용
+            const hasExistingElectives = profile && !!getElectivesForDataset(profile, dataset);
+
+            if (!hasExistingElectives) {
+                // elective_presets에서 (grade, classNum, studentNumber) 조회
+                const preset = await env.DB.prepare(
+                    "SELECT * FROM elective_presets WHERE grade = ? AND classNum = ? AND studentNumber = ?"
+                ).bind(grade, classNum, studentNumber).first().catch(() => null);
+
+                if (preset && preset.electives) {
+                    // 사전지정 존재 → student_profiles에 저장 (이후 사용자 데이터로 취급)
+                    if (!profile) {
+                        // 프로필 자체가 없으면 생성
+                        await env.DB.prepare(`
+                            INSERT INTO student_profiles (name, grade, classNum, studentNumber, electives, dataset, updatedAt)
+                            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                            ON CONFLICT(name, grade, classNum, studentNumber)
+                            DO UPDATE SET electives = excluded.electives, dataset = excluded.dataset, updatedAt = datetime('now')
+                        `).bind(studentName, grade, classNum, studentNumber, preset.electives, preset.dataset || dataset).run()
+                          .catch((e: any) => console.error("[Preset] Insert failed:", e.message));
+                    } else {
+                        // 프로필은 있지만 electives 비어있음 → preset으로 채우기
+                        const updated = setElectivesForDataset(profile, dataset, JSON.parse(preset.electives));
+                        await env.DB.prepare(
+                            "UPDATE student_profiles SET electives = ?, dataset = ?, updatedAt = datetime('now') WHERE name = ? AND grade = ? AND classNum = ? AND studentNumber = ?"
+                        ).bind(updated.electives, updated.datasetCol, studentName, grade, classNum, studentNumber).run()
+                          .catch((e: any) => console.error("[Preset] Update failed:", e.message));
+                    }
+
+                    // 적용된 프리셋 데이터 반환
+                    const presetElectives = JSON.parse(preset.electives);
+                    console.log(`[Preset] Applied preset for ${grade}-${classNum}-${studentNumber} (student: ${studentName})`);
+                    return new Response(JSON.stringify({
+                        grade, classNum, studentNumber, name: studentName,
+                        electives: preset.electives, dataset,
+                        _presetApplied: true
+                    }), { headers: { "Content-Type": "application/json" } });
+                }
+
+                // 프리셋도 없으면 기존대로 null
+                if (!profile) {
+                    return new Response(JSON.stringify(null), { headers: { "Content-Type": "application/json" } });
+                }
             }
 
             const electives = getElectivesForDataset(profile, dataset);
