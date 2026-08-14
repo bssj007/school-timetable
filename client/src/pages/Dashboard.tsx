@@ -3051,7 +3051,7 @@ export default function Dashboard() {
 
       {/* Instruction Notification */}
       {
-        showInstructionTooltip && !showElectiveDialog && !useUserConfig().instructionDismissedV2 && (
+        showInstructionTooltip && (settings?.promotion_popup_enabled !== false) && !showElectiveDialog && !useUserConfig().instructionDismissedV2 && (
           <div className="fixed bottom-4 right-4 z-[9999] bg-white dark:bg-gray-800 border border-orange-200 shadow-lg rounded-lg p-6 md:p-8 max-w-[90vw] md:max-w-xl animate-in slide-in-from-bottom-2 fade-in duration-300">
             <div className="flex flex-col gap-4 md:gap-6">
               <div className="flex flex-col gap-1 md:gap-2">

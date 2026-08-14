@@ -7,7 +7,7 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'elective_input_mode_grade2', 'elective_input_mode_grade3', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'show_target_class_main_menu', 'promotion_reset_days', 'assessment_distrust_threshold', 'assessment_positive_color', 'assessment_positive_ratio', 'assessment_negative_color', 'assessment_negative_ratio', 'assessment_timetable_color', 'changed_class_tint_color', 'changed_class_tint_opacity', 'comcigan_debug_overlay_enabled', 'comcigan_debug_whitelist', 'special_schedules', 'special_schedules_enabled', 'meal_lunch_cutoff_hour', 'meal_rating_enabled', 'meal_emphasis_enabled', 'teacher_ignore_keywords', 'semester_key')").all();
+        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'elective_input_mode_grade2', 'elective_input_mode_grade3', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'show_target_class_main_menu', 'promotion_popup_enabled', 'promotion_reset_days', 'assessment_distrust_threshold', 'assessment_positive_color', 'assessment_positive_ratio', 'assessment_negative_color', 'assessment_negative_ratio', 'assessment_timetable_color', 'changed_class_tint_color', 'changed_class_tint_opacity', 'comcigan_debug_overlay_enabled', 'comcigan_debug_whitelist', 'special_schedules', 'special_schedules_enabled', 'meal_lunch_cutoff_hour', 'meal_rating_enabled', 'meal_emphasis_enabled', 'teacher_ignore_keywords', 'semester_key')").all();
 
         const settings: any = {};
         if (rows && rows.results) {
@@ -60,6 +60,7 @@ export const onRequest = async (context: any) => {
             samsung_install_button_visible: settings['samsung_install_button_visible'] !== 'false', // default true
             pwa_install_button_visible: settings['pwa_install_button_visible'] !== 'false', // default true
             show_target_class_main_menu: settings['show_target_class_main_menu'] !== 'false', // default true
+            promotion_popup_enabled: settings['promotion_popup_enabled'] !== 'false', // default true
             promotion_reset_days: settings['promotion_reset_days'] || '0',
             assessment_distrust_threshold: settings['assessment_distrust_threshold'] || '3',
             assessment_positive_color: settings['assessment_positive_color'] || '#22c55e',

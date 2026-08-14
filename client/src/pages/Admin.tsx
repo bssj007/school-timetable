@@ -3103,7 +3103,7 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                 <div className="space-y-8">
                     {/* Graph 1: Unique Students */}
                     <div>
-                        <h4 className="text-sm font-semibold text-gray-600 mb-3">고유 접속자 수 (학번 기준)</h4>
+                        <h4 className="text-sm font-semibold text-gray-600 mb-3">고유 접속자 수 (학번-이름 기준)</h4>
                         <div className="h-64 w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={buckets}>
@@ -3130,9 +3130,9 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                                     <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                                     <Tooltip
                                         labelFormatter={(v) => `구간: ${v}`}
-                                        formatter={(v: number) => [`${v}명`, '고유 접속자']}
+                                        formatter={(v: number) => [`${v}명`, '고유 접속자 (학번-이름)']}
                                     />
-                                    <Bar dataKey="uniqueStudents" name="고유 접속자" radius={[4, 4, 0, 0]}>
+                                    <Bar dataKey="uniqueStudents" name="고유 접속자 (학번-이름)" radius={[4, 4, 0, 0]}>
                                         {buckets.map((entry: any, index: number) => (
                                             <Cell key={`cell-${index}`} fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-blue)" : "#3b82f6"} />
                                         ))}
@@ -3220,7 +3220,7 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                     {/* Summary stats */}
                     <div className="flex gap-4 text-sm text-gray-500 border-t pt-3">
                         <span>구간 수: {buckets.length}</span>
-                        <span>총 고유 접속자(학번): {buckets.reduce((s: number, b: any) => s + b.uniqueStudents, 0)}명</span>
+                        <span>총 고유 접속자(학번-이름): {buckets.reduce((s: number, b: any) => s + b.uniqueStudents, 0)}명</span>
                         <span>총 고유 IP: {buckets.reduce((s: number, b: any) => s + (b.uniqueIPs || 0), 0)}개</span>
                         <span>총 접속: {buckets.reduce((s: number, b: any) => s + b.totalVisits, 0)}회</span>
                         {excludeApplied && <span className="text-orange-500">제외: {excludeApplied}</span>}
@@ -9377,7 +9377,7 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
 
 // ----------------------------------------------------------------------
 // PromotionSettings - Controls when to reset the assessment instruction popup
-// Located under: 기타 > 홍보
+// Located under: 기타 > 수행평가 팝업 설정
 // ----------------------------------------------------------------------
 function PromotionSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
@@ -9391,6 +9391,8 @@ function PromotionSettings({ adminPassword }: { adminPassword: string }) {
             return res.json();
         }
     });
+
+    const isPromotionEnabled = settingsData?.promotion_popup_enabled !== false;
 
     useEffect(() => {
         if (settingsData && settingsData.promotion_reset_days !== undefined) {
@@ -9415,7 +9417,7 @@ function PromotionSettings({ adminPassword }: { adminPassword: string }) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin", "promotionSettings"] });
             queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
-            toast.success("홍보 설정이 저장되었습니다.");
+            toast.success("수행평가 팝업 설정이 저장되었습니다.");
         },
         onError: () => {
             toast.error("설정 저장에 실패했습니다.");
@@ -9430,50 +9432,79 @@ function PromotionSettings({ adminPassword }: { adminPassword: string }) {
     const isDirty = resetDays !== originalDays;
 
     return (
-        <Card className="w-full max-w-2xl mt-8">
-            <CardHeader>
-                <CardTitle>수행평가 입력 독려 (홍보) 팝업 설정</CardTitle>
-                <CardDescription>
-                    일반 사용자가 수행평가를 적극적으로 입력하도록 유도하는 "수행평가 추가" 도움말 팝업의 재구동 시점을 설정합니다.<br />
-                    설정한 기간(일) 동안 앱 전체에 새로운 수행평가가 올라오지 않으면, 이전에 팝업을 닫았던 사용자라도 다시 팝업이 노출됩니다.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="space-y-3 pt-4">
-                    <Label className="font-medium text-sm">팝업 초기화 기준일 (미등록 기간)</Label>
-                    <div className="flex items-center space-x-2">
-                        <Input
-                            type="number"
-                            min={0}
-                            value={resetDays}
-                            onChange={(e) => setResetDays(parseInt(e.target.value) || 0)}
-                            className="w-24"
+        <div className="space-y-6 max-w-2xl mt-4">
+            {/* 1. 장려 팝업 On/Off 스위치 */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">수행평가 입력 독려 (장려) 팝업 활성화</CardTitle>
+                    <CardDescription>
+                        일반 사용자에게 시간표의 칸을 클릭하여 수행평가를 추가하도록 유도하는 독려 팝업의 표시 여부를 설정합니다.
+                        스위치를 끄면 모든 사용자에게 장려 팝업이 일절 노출되지 않습니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center gap-4">
+                        <Switch
+                            id="promotion-popup-toggle"
+                            checked={isPromotionEnabled}
+                            onCheckedChange={(checked) => saveSettingMutation.mutate({ promotion_popup_enabled: checked ? "true" : "false" })}
+                            disabled={saveSettingMutation.isPending}
                         />
-                        <span className="text-sm font-medium">일 동안 새 수행평가 등록이 없으면 팝업 다시 표시</span>
+                        <Label htmlFor="promotion-popup-toggle" className="cursor-pointer">
+                            {isPromotionEnabled
+                                ? <span className="text-green-700 font-medium">✅ 장려 팝업 켜짐 (표시 중)</span>
+                                : <span className="text-gray-500 font-medium">🔴 장려 팝업 꺼짐 (비활성화)</span>
+                            }
+                        </Label>
                     </div>
-                </div>
+                </CardContent>
+            </Card>
 
-                <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
-                    <p>💡 <strong>0일</strong>로 설정 시 이 기능이 <strong>비활성화</strong>되며, 사용자가 한 번 팝업을 닫으면 다시는 표시되지 않습니다.</p>
-                </div>
+            {/* 2. 팝업 재구동 기준일 설정 */}
+            <Card className={!isPromotionEnabled ? "opacity-50 pointer-events-none" : ""}>
+                <CardHeader>
+                    <CardTitle className="text-base">팝업 재구동 기준일 (미등록 기간)</CardTitle>
+                    <CardDescription>
+                        설정한 기간(일) 동안 새로운 수행평가가 등록되지 않으면, 이전에 팝업을 닫았던 사용자에게도 다시 팝업이 노출됩니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                        <Label className="font-medium text-sm">초기화 기준일</Label>
+                        <div className="flex items-center space-x-2">
+                            <Input
+                                type="number"
+                                min={0}
+                                value={resetDays}
+                                onChange={(e) => setResetDays(parseInt(e.target.value) || 0)}
+                                className="w-24"
+                            />
+                            <span className="text-sm font-medium">일 동안 새 수행평가 등록이 없으면 팝업 다시 표시</span>
+                        </div>
+                    </div>
 
-                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-                    <Button
-                        variant="outline"
-                        onClick={() => setResetDays(originalDays)}
-                        disabled={!isDirty || saveSettingMutation.isPending}
-                    >
-                        변경 취소
-                    </Button>
-                    <Button
-                        onClick={() => saveSettingMutation.mutate({ promotion_reset_days: resetDays.toString() })}
-                        disabled={!isDirty || saveSettingMutation.isPending}
-                    >
-                        {saveSettingMutation.isPending ? "저장 중..." : "설정 저장"}
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>
+                    <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
+                        <p>💡 <strong>0일</strong>로 설정 시 재구동 기능이 <strong>비활성화</strong>되며, 사용자가 한 번 '이해함'을 눌러 팝업을 닫으면 다시는 표시되지 않습니다.</p>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                        <Button
+                            variant="outline"
+                            onClick={() => setResetDays(originalDays)}
+                            disabled={!isDirty || saveSettingMutation.isPending}
+                        >
+                            변경 취소
+                        </Button>
+                        <Button
+                            onClick={() => saveSettingMutation.mutate({ promotion_reset_days: resetDays.toString() })}
+                            disabled={!isDirty || saveSettingMutation.isPending}
+                        >
+                            {saveSettingMutation.isPending ? "저장 중..." : "기준일 저장"}
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
     );
 }
 
