@@ -1,5 +1,5 @@
 import { adminPassword } from "../../../server/adminPW";
-import { ensureAllTables } from "../../../db_schema";
+import { ensureAllTables } from "../../db_schema";
 
 export const onRequest = async (context: any) => {
     const { request, env } = context;
