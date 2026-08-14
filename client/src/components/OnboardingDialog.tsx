@@ -20,7 +20,7 @@ export default function OnboardingDialog() {
     const isIdValid = studentId.length === 4;
     const canSubmit = isNameValid && isIdValid;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         const trimmedName = studentName.trim();
@@ -36,12 +36,23 @@ export default function OnboardingDialog() {
             const studentNumber = parseInt(studentId.substring(2)).toString();
 
             if (parseInt(grade) >= 1 && parseInt(grade) <= 3 && parseInt(classNum) >= 1) {
+                // 서버의 현재 semester_key를 함께 저장
+                let semesterKey = '1';
+                try {
+                    const res = await fetch('/api/settings/public');
+                    if (res.ok) {
+                        const s = await res.json();
+                        semesterKey = s?.semester_key ?? '1';
+                    }
+                } catch { }
+
                 setConfig({
                     schoolName: "부산성지고등학교",
                     grade,
                     classNum,
                     studentNumber,
                     studentName: trimmedName,
+                    semesterKey,
                 });
             } else {
                 alert("올바른 학번 형식이 아닙니다. (예: 1102)");

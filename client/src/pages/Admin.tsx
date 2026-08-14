@@ -4050,6 +4050,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <Ban className="w-4 h-4 mr-2" />
                     교사명 무시 키워드
                 </Button>
+                <Button
+                    variant={selectedMenu === "semester-key" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-medium"
+                    onClick={() => setSelectedMenu("semester-key")}
+                >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    학기 키 관리
+                </Button>
                 {/* Additional list items can go here later */}
             </div>
 
@@ -4306,6 +4314,9 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                     </div>
                 )}
+                {selectedMenu === "semester-key" && (
+                    <SemesterKeySettings adminPassword={adminPassword} />
+                )}
             </div>
         </div>
     );
@@ -4446,6 +4457,182 @@ function TeacherIgnoreKeywordsSettings({ adminPassword }: { adminPassword: strin
                 </div>
             </CardContent>
         </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
+// SemesterKeySettings - 학기 키 관리 (전체 사용자 재등록 강제)
+// ----------------------------------------------------------------------
+function SemesterKeySettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const semester = month >= 3 && month <= 8 ? 1 : 2;
+    const suggestedKey = `${year}-${semester}`;
+
+    const [semesterKeyInput, setSemesterKeyInput] = useState("");
+    const [currentKey, setCurrentKey] = useState<string | null>(null);
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [pendingKey, setPendingKey] = useState("");
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            const key = settingsQuery.data.semester_key || null;
+            setCurrentKey(key);
+            if (!semesterKeyInput) setSemesterKeyInput(key || suggestedKey);
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (key: string) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ semester_key: key })
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: (_, key) => {
+            toast.success(`학기 키가 "${key}"로 저장되었습니다.`);
+            setCurrentKey(key);
+            setConfirmOpen(false);
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err: any) => toast.error(err.message)
+    });
+
+    // 1단계: 유효성 검사 후 확인 다이얼로그 열기
+    const handleRequestSave = () => {
+        const trimmed = semesterKeyInput.trim();
+        if (!trimmed) { toast.error("학기 키를 입력하세요."); return; }
+        if (!/^\d{4}-\d+$/.test(trimmed)) { toast.error("형식이 올바르지 않습니다. 예: 2025-1"); return; }
+        if (trimmed === currentKey) { toast.info("현재와 동일한 키입니다."); return; }
+        setPendingKey(trimmed);
+        setConfirmOpen(true);
+    };
+
+    // 2단계: 다이얼로그에서 최종 확인
+    const handleConfirmSave = () => {
+        saveMutation.mutate(pendingKey);
+    };
+
+    return (
+        <>
+            {/* ── 확인 다이얼로그 ──────────────────────────────────────── */}
+            <Dialog open={confirmOpen} onOpenChange={(open) => { if (!saveMutation.isPending) setConfirmOpen(open); }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-rose-600">
+                            <TriangleAlert className="w-5 h-5" />
+                            학기 키 변경 확인
+                        </DialogTitle>
+                        <DialogDescription asChild>
+                            <div className="space-y-3 pt-2">
+                                <p className="text-sm text-gray-600">
+                                    학기 키를 변경하면 <strong>모든 사용자가 다음 방문 시 이름과 학번을 다시 입력</strong>해야 합니다.
+                                </p>
+                                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border text-sm">
+                                    <span className="text-gray-500">변경 전:</span>
+                                    <Badge className="bg-gray-100 text-gray-600 font-mono">{currentKey || "미설정"}</Badge>
+                                    <ArrowRight className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-500">변경 후:</span>
+                                    <Badge className="bg-rose-100 text-rose-700 border-rose-200 font-mono">{pendingKey}</Badge>
+                                </div>
+                                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-100">
+                                    ⚠ 저장 즉시 전체 사용자에게 적용됩니다. 기존 선택과목 데이터는 보존됩니다.
+                                </p>
+                            </div>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="mt-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => setConfirmOpen(false)}
+                            disabled={saveMutation.isPending}
+                        >
+                            취소
+                        </Button>
+                        <Button
+                            className="bg-rose-600 hover:bg-rose-700 text-white"
+                            onClick={handleConfirmSave}
+                            disabled={saveMutation.isPending}
+                        >
+                            {saveMutation.isPending ? "저장 중..." : "확인, 변경합니다"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── 메인 패널 ─────────────────────────────────────────────── */}
+            <div className="flex flex-col h-full gap-4">
+                <div className="flex gap-2 items-center pb-4 border-b">
+                    <h3 className="text-lg font-bold flex-1 text-rose-600 flex items-center gap-2">
+                        <RefreshCw className="w-5 h-5" />
+                        학기 키 관리
+                    </h3>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-4">
+                    <Card className="border-rose-100 shadow-sm">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base font-bold text-gray-700">학기 키 설정</CardTitle>
+                            <CardDescription className="text-xs text-gray-500">
+                                학기 키가 변경되면 모든 사용자 쿠키가 무효화되어 이름+학번을 다시 입력해야 합니다.<br />
+                                형식: <code className="bg-gray-100 px-1 rounded font-mono">YYYY-학기</code> &nbsp;예) <code className="bg-gray-100 px-1 rounded font-mono">2025-1</code>, <code className="bg-gray-100 px-1 rounded font-mono">2025-2</code>
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border">
+                                <span className="text-sm text-gray-500">현재 적용 중:</span>
+                                {currentKey
+                                    ? <Badge className="bg-rose-100 text-rose-700 border-rose-200 font-mono text-sm px-3 py-1">{currentKey}</Badge>
+                                    : <span className="text-gray-400 text-sm">미설정 (기본값 "1")</span>
+                                }
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                <Info className="w-4 h-4 flex-shrink-0" />
+                                <span>현재 날짜 기준 추천: <strong className="font-mono">{suggestedKey}</strong> ({year}학년도 {semester}학기)</span>
+                                <Button
+                                    variant="outline" size="sm"
+                                    className="ml-auto text-xs border-blue-200 text-blue-600 hover:bg-blue-100"
+                                    onClick={() => setSemesterKeyInput(suggestedKey)}
+                                >적용</Button>
+                            </div>
+                            <div className="flex gap-2 items-center">
+                                <Input
+                                    id="semester-key-input"
+                                    value={semesterKeyInput}
+                                    onChange={(e) => setSemesterKeyInput(e.target.value)}
+                                    placeholder="예: 2025-1"
+                                    className="font-mono max-w-xs"
+                                    onKeyDown={(e) => { if (e.key === 'Enter') handleRequestSave(); }}
+                                />
+                                <Button
+                                    onClick={handleRequestSave}
+                                    className="bg-rose-600 hover:bg-rose-700 text-white"
+                                >
+                                    저장 및 적용
+                                </Button>
+                            </div>
+                            <p className="text-xs text-gray-400">
+                                변경 시 확인 창이 표시됩니다. 기존 선택과목 데이터는 보존됩니다.
+                            </p>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </>
     );
 }
 
