@@ -6445,20 +6445,23 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         const gradeClassNumHyphen = `${u.grade || ''}-${u.classNum || ''}-${u.studentNumber || ''}`;
                                         const ip = u.ip || '';
                                         const kakaoNames = (u.kakaoAccounts || []).map((k: any) => k.kakaoNickname).join(' ');
+                                        const name = (u.studentName || '').toLowerCase();
                                         
                                         return ip.includes(query) || 
                                                gradeClassNum.includes(query) || 
                                                gradeClassNum2.includes(query) ||
                                                gradeClassNumHyphen.includes(query) ||
-                                               kakaoNames.toLowerCase().includes(query);
+                                               kakaoNames.toLowerCase().includes(query) ||
+                                               name.includes(query);
                                     });
 
                                     const knownUsers = filteredActiveUsers.filter(isKnownUser);
                                     const unknownUsers = filteredActiveUsers.filter((u: any) => !isKnownUser(u));
 
-                                    // --- Group known users by student ID ---
+                                    // --- Group known users by (name + student ID) = composite identity ---
                                     type UserGroup = {
                                         key: string;
+                                        studentName: string | null;   // 복합 식별자의 이름 부분
                                         grade: number | null;
                                         classNum: number | null;
                                         studentNumber: number | null;
@@ -6477,8 +6480,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
 
                                     const groupMap = new Map<string, UserGroup>();
                                     for (const user of knownUsers) {
+                                        // 이름+학번 복합 식별자 기준 그룹 key
+                                        const nameStr = user.studentName || '';
                                         const key = (user.grade && user.classNum && user.studentNumber)
-                                            ? `${user.grade}-${user.classNum}-${user.studentNumber}`
+                                            ? `${nameStr}|${user.grade}-${user.classNum}-${user.studentNumber}`
                                             : user.ip;
                                         const existing = groupMap.get(key);
                                         if (existing) {
@@ -6502,6 +6507,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         } else {
                                             groupMap.set(key, {
                                                 key,
+                                                studentName: user.studentName ?? null,
                                                 grade: user.grade ?? null,
                                                 classNum: user.classNum ?? null,
                                                 studentNumber: user.studentNumber ?? null,
@@ -6535,7 +6541,9 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     groups = groups.sort((a, b) => {
                                         let cmp = 0;
                                         if (sortColumn === 'id') {
-                                            cmp = (a.grade ?? 99) - (b.grade ?? 99)
+                                            // 이름 → 학년 → 반 → 번호 순 정렬
+                                            cmp = (a.studentName || '').localeCompare(b.studentName || '', 'ko')
+                                                || (a.grade ?? 99) - (b.grade ?? 99)
                                                 || (a.classNum ?? 99) - (b.classNum ?? 99)
                                                 || (a.studentNumber ?? 99) - (b.studentNumber ?? 99);
                                         } else if (sortColumn === 'modCount') {
@@ -6684,15 +6692,20 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     </TableCell>
                                                     <TableCell>
                                                         {group.grade && group.classNum ? (
-                                                            <div className="flex items-center gap-2">
-                                                                <Badge variant="outline" className="font-mono text-green-600 border-green-200 bg-green-50">
-                                                                    {group.grade}-{group.classNum}{group.studentNumber ? `-${group.studentNumber}` : ''}
-                                                                </Badge>
-                                                                {group.hasElectives && (
-                                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-600 border-blue-200 px-1 py-0 h-4">
-                                                                        선택과목
+                                                            <div className="flex flex-col gap-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    {group.studentName && (
+                                                                        <span className="font-semibold text-sm text-slate-800">{group.studentName}</span>
+                                                                    )}
+                                                                    <Badge variant="outline" className="font-mono text-green-600 border-green-200 bg-green-50">
+                                                                        {group.grade}-{group.classNum}{group.studentNumber ? `-${group.studentNumber}` : ''}
                                                                     </Badge>
-                                                                )}
+                                                                    {group.hasElectives && (
+                                                                        <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-600 border-blue-200 px-1 py-0 h-4">
+                                                                            선택과목
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         ) : <span className="text-gray-300 text-xs">-</span>}
                                                     </TableCell>

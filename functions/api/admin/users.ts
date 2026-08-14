@@ -1,4 +1,5 @@
 import { adminPassword } from "../../../server/adminPW";
+import { ensureAllTables } from "../../../db_schema";
 
 export const onRequest = async (context: any) => {
     const { request, env } = context;
@@ -18,6 +19,8 @@ export const onRequest = async (context: any) => {
             const url = new URL(request.url);
             const range = url.searchParams.get('range') || '24h'; // '24h' | '7d' | 'all'
 
+            // 어드민 경로는 _middleware에서 SKIP되므로 직접 테이블 자동 생성
+            await ensureAllTables(env.DB);
             // 1. Fetch Profiles
             // 1. Fetch Profiles with Student Info and Dynamic Modification Count
             // 1. Fetch Profiles with Student Info and Dynamic Modification Count
@@ -37,6 +40,7 @@ export const onRequest = async (context: any) => {
                     ip_profiles.modificationCount,
                     ip_profiles.addCount,
                     ip_profiles.deleteCount,
+                    student_profiles.name as profileName,
                     student_profiles.grade as profileGrade,
                     student_profiles.classNum as profileClassNum,
                     student_profiles.studentNumber as profileStudentNumber,
@@ -80,20 +84,18 @@ export const onRequest = async (context: any) => {
                     const { results } = await env.DB.prepare(query).all();
                     profiles = results;
                 } else if (e.message && (e.message.includes("no such column") || e.message.includes("has no column named") || e.message.includes("no column named"))) {
-                    console.log("[Admin API] Schema mismatch for printCount/downloadCount/addCount. Running safe ALTER TABLE...");
-                    try {
-                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN printCount INTEGER DEFAULT 0").run();
-                    } catch (_) { }
-                    try {
-                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN downloadCount INTEGER DEFAULT 0").run();
-                    } catch (_) { }
-                    try {
-                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN addCount INTEGER DEFAULT 0").run();
-                    } catch (_) { }
-                    try {
-                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN deleteCount INTEGER DEFAULT 0").run();
-                    } catch (_) { }
-
+                    console.log("[Admin API] Schema mismatch. Running safe ALTER TABLE...");
+                    const alters = [
+                        "ALTER TABLE ip_profiles ADD COLUMN printCount INTEGER DEFAULT 0",
+                        "ALTER TABLE ip_profiles ADD COLUMN downloadCount INTEGER DEFAULT 0",
+                        "ALTER TABLE ip_profiles ADD COLUMN addCount INTEGER DEFAULT 0",
+                        "ALTER TABLE ip_profiles ADD COLUMN deleteCount INTEGER DEFAULT 0",
+                        "ALTER TABLE ip_profiles ADD COLUMN isStandalone INTEGER DEFAULT 0",
+                        "ALTER TABLE student_profiles ADD COLUMN name TEXT NOT NULL DEFAULT ''",
+                    ];
+                    for (const sql of alters) {
+                        try { await env.DB.prepare(sql).run(); } catch (_) {}
+                    }
                     // Retry
                     const { results } = await env.DB.prepare(query).all();
                     profiles = results;
@@ -131,7 +133,7 @@ export const onRequest = async (context: any) => {
             // 3. Transform to Profile format
             const activeUsers = profiles.map((p: any) => {
                 const profile = {
-                    clientId: p.ip, // Use IP as Client ID
+                    clientId: p.ip,
                     ip: p.ip,
                     kakaoAccounts: p.kakaoId ? [{ kakaoId: p.kakaoId, kakaoNickname: p.kakaoNickname || '(알 수 없음)' }] : [],
                     isBlocked: false,
@@ -144,6 +146,7 @@ export const onRequest = async (context: any) => {
                     isStandalone: p.isStandalone === 1,
                     lastAccess: p.lastAccess,
                     recentUserAgents: p.userAgent ? [p.userAgent] : [],
+                    studentName: p.profileName || null,
                     grade: p.profileGrade || null,
                     classNum: p.profileClassNum || null,
                     studentNumber: p.profileStudentNumber || null,

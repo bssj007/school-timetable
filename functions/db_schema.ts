@@ -144,17 +144,60 @@ CREATE TABLE IF NOT EXISTS meal_ratings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date TEXT NOT NULL,
     type TEXT NOT NULL,
+    studentName TEXT NOT NULL DEFAULT '',
     grade INTEGER,
     classNum INTEGER,
     studentNumber INTEGER,
     rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
     createdAt TEXT,
-    UNIQUE(date, type, grade, classNum, studentNumber)
+    UNIQUE(date, type, studentName, grade, classNum, studentNumber)
 );
 `;
 
 export async function ensureAllTables(db: any) {
     try {
+        // ── student_profiles: UNIQUE 제약 자동 마이그레이션 ──────────────────
+        // 구 제약 UNIQUE(grade, classNum, studentNumber)가 남아있으면 DROP+재생성
+        try {
+            const schemaRow = await db.prepare(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='student_profiles'"
+            ).first();
+            if (schemaRow) {
+                const sql: string = schemaRow.sql || '';
+                const hasOldUniqueConstraint =
+                    sql.includes('UNIQUE(grade, classNum, studentNumber)') ||
+                    sql.includes('UNIQUE(grade,classNum,studentNumber)') ||
+                    (!sql.includes('name') && sql.includes('UNIQUE'));
+                if (hasOldUniqueConstraint) {
+                    console.log('[Migration] Detected old UNIQUE constraint on student_profiles. Rebuilding table...');
+                    await db.prepare("UPDATE ip_profiles SET student_profile_id = NULL").run().catch(() => {});
+                    await db.prepare("DROP TABLE IF EXISTS student_profiles").run();
+                    console.log('[Migration] student_profiles dropped. Will be recreated with new schema.');
+                }
+            }
+        } catch (e: any) {
+            // ip_profiles 등이 아직 없으면 실패해도 엄수롭지
+            console.log('[Migration] Pre-check skipped:', e.message);
+        }
+
+        // ── meal_ratings: UNIQUE 제약 자동 마이그레이션 ─────────────────────
+        try {
+            const mealSchemaRow = await db.prepare(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='meal_ratings'"
+            ).first();
+            if (mealSchemaRow) {
+                const mealSql: string = mealSchemaRow.sql || '';
+                const hasOldMealConstraint =
+                    mealSql.includes('UNIQUE(date, type, grade, classNum, studentNumber)') ||
+                    !mealSql.includes('studentName');
+                if (hasOldMealConstraint) {
+                    console.log('[Migration] Detected old meal_ratings schema. Rebuilding...');
+                    await db.prepare("DROP TABLE IF EXISTS meal_ratings").run();
+                }
+            }
+        } catch (_) {}
+
+        // ── 테이블 생성 (없으면 생성, 있으면 무시) ──────────────────────────────
         await db.prepare(createStudentProfilesTable).run();
         await db.prepare(createIpProfilesTable).run();
         await db.prepare(createCookieProfilesTable).run();
@@ -165,18 +208,15 @@ export async function ensureAllTables(db: any) {
         await db.prepare(createMealCacheTable).run();
         await db.prepare(createMealSuggestionsTable).run();
         await db.prepare(createMealRatingsTable).run();
-        // 마이그레이션: student_profiles에 name 컬럼이 없으면 추가
-        try {
-            await db.prepare("ALTER TABLE student_profiles ADD COLUMN name TEXT NOT NULL DEFAULT ''").run();
-            console.log("[Migration] student_profiles.name column added.");
-        } catch (_) { /* 이미 존재하면 무시 */ }
-        // 마이그레이션: bug_reports에 studentName 컬럼이 없으면 추가
+
+        // ── 쿨럼 마이그레이션 (쿨럼만 추가, 제약 변경은 위의 DROP+재생성으로 처리) ──────
         try {
             await db.prepare("ALTER TABLE bug_reports ADD COLUMN studentName TEXT").run();
         } catch (_) {}
-        console.log("All tables ensured.");
+
+        console.log('[DB] All tables ensured.');
     } catch (e) {
-        console.error("Error ensuring tables:", e);
+        console.error('Error ensuring tables:', e);
         throw e;
     }
 }
