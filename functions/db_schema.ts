@@ -164,28 +164,31 @@ export async function ensureAllTables(db: any) {
             )
         `).run();
 
-        // ── student_profiles: UNIQUE 제약 자동 마이그레이션 (데이터 보존) ────────
-        // 구 제약 UNIQUE(grade, classNum, studentNumber)가 남아있으면
-        // 임시 테이블 생성 → 데이터 복사 → 원본 DROP → 이름 변경
+        // ── student_profiles 스키마 마이그레이션 (데이터 보존, 1회만 실행) ────────
+        // system_settings.db_migration_v2 = 'done' 이면 절대 재실행하지 않음
+        // sqlite_master 파싱에 의존하지 않아 오판 위험 없음
         try {
-            const migVersionRow = await db.prepare(
+            const migRow = await db.prepare(
                 "SELECT value FROM system_settings WHERE key='db_migration_v2'"
             ).first();
-            const alreadyMigrated = migVersionRow?.value === 'done';
 
-            if (!alreadyMigrated) {
-                const schemaRow = await db.prepare(
-                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='student_profiles'"
+            if (migRow?.value !== 'done') {
+                // student_profiles가 존재하는지 확인
+                const tableExists = await db.prepare(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='student_profiles'"
                 ).first();
-                if (schemaRow) {
-                    const sql: string = schemaRow.sql || '';
-                    const hasOldUniqueConstraint =
-                        sql.includes('UNIQUE(grade, classNum, studentNumber)') ||
-                        sql.includes('UNIQUE(grade,classNum,studentNumber)') ||
-                        (!sql.includes('name') && sql.includes('UNIQUE'));
-                    if (hasOldUniqueConstraint) {
-                        console.log('[Migration v2] Detected old UNIQUE constraint. Migrating with data preservation...');
-                        // 1. 임시 테이블 생성
+
+                if (tableExists) {
+                    // name 컬럼이 있는지 확인 (PRAGMA 방식 — sqlite_master SQL 파싱 불필요)
+                    const columns = await db.prepare(
+                        "PRAGMA table_info(student_profiles)"
+                    ).all();
+                    const colNames: string[] = (columns?.results || []).map((c: any) => c.name);
+                    const hasNameCol = colNames.includes('name');
+
+                    if (!hasNameCol) {
+                        // 구 스키마 → 데이터 보존 마이그레이션
+                        console.log('[Migration v2] No name column. Migrating student_profiles with data preservation...');
                         await db.prepare(`
                             CREATE TABLE IF NOT EXISTS student_profiles_new (
                                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -200,34 +203,28 @@ export async function ensureAllTables(db: any) {
                                 UNIQUE(name, grade, classNum, studentNumber)
                             )
                         `).run();
-                        // 2. 기존 데이터 복사 (name 없으면 '' 기본값)
                         await db.prepare(`
                             INSERT OR IGNORE INTO student_profiles_new
                                 (id, name, grade, classNum, studentNumber, electives, dataset, instructionDismissed, updatedAt)
-                            SELECT
-                                id,
-                                COALESCE(name, '') as name,
-                                grade,
-                                classNum,
-                                studentNumber,
-                                electives,
-                                COALESCE(dataset, '') as dataset,
-                                COALESCE(instructionDismissed, 0),
-                                COALESCE(updatedAt, datetime('now'))
+                            SELECT id, '', grade, classNum, studentNumber, electives,
+                                COALESCE(dataset, ''), COALESCE(instructionDismissed, 0), COALESCE(updatedAt, datetime('now'))
                             FROM student_profiles
                         `).run().catch((e: any) => console.log('[Migration v2] Copy skipped:', e.message));
-                        // 3. 원본 DROP
                         await db.prepare("DROP TABLE IF EXISTS student_profiles").run();
-                        // 4. 이름 변경
                         await db.prepare("ALTER TABLE student_profiles_new RENAME TO student_profiles").run();
-                        console.log('[Migration v2] student_profiles migrated with data preserved.');
+                        console.log('[Migration v2] Migration complete. Data preserved.');
+                    } else {
+                        console.log('[Migration v2] name column already exists. No migration needed.');
                     }
                 }
-                // 마이그레이션 완료 기록
-                await db.prepare("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('db_migration_v2', 'done')").run();
+                // 완료 기록 — 이후 이 블록은 절대 재실행 안 됨
+                await db.prepare(
+                    "INSERT OR REPLACE INTO system_settings (key, value) VALUES ('db_migration_v2', 'done')"
+                ).run();
+                console.log('[Migration v2] Marked as done in system_settings.');
             }
         } catch (e: any) {
-            console.log('[Migration v2] Pre-check skipped:', e.message);
+            console.log('[Migration v2] Skipped (non-fatal):', e.message);
         }
 
         // ── meal_ratings: UNIQUE 제약 자동 마이그레이션 ─────────────────────
@@ -259,7 +256,7 @@ export async function ensureAllTables(db: any) {
         await db.prepare(createMealSuggestionsTable).run();
         await db.prepare(createMealRatingsTable).run();
 
-        // ── 컬럼 마이그레이션 (컬럼만 추가, 제약 변경은 위의 테이블 재생성으로 처리) ───
+        // ── 컬럼 마이그레이션 ──────────────────────────────────────────────────
         try {
             await db.prepare("ALTER TABLE bug_reports ADD COLUMN studentName TEXT").run();
         } catch (_) {}
@@ -270,6 +267,7 @@ export async function ensureAllTables(db: any) {
         throw e;
     }
 }
+
 
 
 export async function dropAllTables(db: any) {

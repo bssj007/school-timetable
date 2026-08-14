@@ -6879,19 +6879,23 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     </TableCell>
                                                     <TableCell>
                                                         {group.grade && group.classNum ? (
-                                                            <div className="flex flex-col gap-1">
-                                                                <div className="flex items-center gap-2">
-                                                                    {group.studentName && (
-                                                                        <span className="font-semibold text-sm text-slate-800">{group.studentName}</span>
-                                                                    )}
-                                                                    <Badge variant="outline" className="font-mono text-green-600 border-green-200 bg-green-50">
-                                                                        {group.grade}-{group.classNum}{group.studentNumber ? `-${group.studentNumber}` : ''}
-                                                                    </Badge>
+                                                            <div className="flex flex-col gap-0.5">
+                                                                {/* 이름 */}
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="font-bold text-sm text-slate-800">
+                                                                        {group.studentName || <span className="text-gray-300 font-normal text-xs">이름 없음</span>}
+                                                                    </span>
                                                                     {group.hasElectives && (
                                                                         <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-600 border-blue-200 px-1 py-0 h-4">
                                                                             선택과목
                                                                         </Badge>
                                                                     )}
+                                                                </div>
+                                                                {/* 학번 */}
+                                                                <div>
+                                                                    <Badge variant="outline" className="font-mono text-green-700 border-green-200 bg-green-50 text-xs">
+                                                                        {group.grade}학년 {group.classNum}반{group.studentNumber ? ` ${group.studentNumber}번` : ''}
+                                                                    </Badge>
                                                                 </div>
                                                             </div>
                                                         ) : <span className="text-gray-300 text-xs">-</span>}
@@ -7069,9 +7073,14 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                             </TableCell>
                                                                             <TableCell>
                                                                                 {user.grade && user.classNum ? (
-                                                                                    <Badge variant="outline" className="font-mono text-green-600 border-green-200 bg-green-50">
-                                                                                        {user.grade}-{user.classNum}{user.studentNumber ? `-${user.studentNumber}` : ''}
-                                                                                    </Badge>
+                                                                                    <div className="flex flex-col gap-0.5">
+                                                                                        <span className="font-bold text-sm text-slate-800">
+                                                                                            {user.studentName || <span className="text-gray-300 font-normal text-xs">이름 없음</span>}
+                                                                                        </span>
+                                                                                        <Badge variant="outline" className="font-mono text-green-700 border-green-200 bg-green-50 text-xs w-fit">
+                                                                                            {user.grade}학년 {user.classNum}반{user.studentNumber ? ` ${user.studentNumber}번` : ''}
+                                                                                        </Badge>
+                                                                                    </div>
                                                                                 ) : <span className="text-gray-300 text-xs">-</span>}
                                                                             </TableCell>
                                                                             <TableCell>
