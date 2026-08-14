@@ -229,9 +229,10 @@ export const onRequest = async (context: any) => {
                 }
             };
 
-            // ── Read ALL student profiles for this grade ──
+            // ── 새 아키텍처: (name, grade, classNum, studentNumber) 4개가 식별자 ──
+            // name이 비어있는 레거시 잔재 행은 마이그레이션 대상에서 제외.
             const { results: allProfiles } = await env.DB.prepare(
-                "SELECT * FROM student_profiles WHERE grade = ?"
+                "SELECT * FROM student_profiles WHERE grade = ? AND name IS NOT NULL AND name != ''"
             ).bind(targetGrade).all();
 
             let updatedCount = 0;
@@ -325,7 +326,7 @@ export const onRequest = async (context: any) => {
                             mappedElectives = changed ? cloned : electivesObj;
                         }
                     } catch (e) {
-                        console.error("Failed to parse/map electives for profile", profile.id, e);
+                        console.error(`[Bridge] Failed to map electives for profile id=${profile.id} name="${profile.name}" ${targetGrade}-${profile.classNum}-${profile.studentNumber}:`, e);
                     }
                 }
 
@@ -349,10 +350,12 @@ export const onRequest = async (context: any) => {
                     finalDataset = JSON.stringify(datasets);
                 }
 
+                // 새 아키텍처: id로 업데이트 (name+grade+classNum+studentNumber 조합으로 행을 특정했으므로 안전)
                 await env.DB.prepare(
                     "UPDATE student_profiles SET electives = ?, dataset = ?, updatedAt = ? WHERE id = ?"
                 ).bind(finalElectives, finalDataset, new Date().toISOString(), profile.id).run();
 
+                console.log(`[Bridge] Updated profile id=${profile.id} name="${profile.name}" ${targetGrade}-${profile.classNum}-${profile.studentNumber}: ${fromDataset} → ${toDataset}`);
                 updatedCount++;
             }
 
