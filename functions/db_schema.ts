@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS dataset_bridges (
 export const createBugReportsTable = `
 CREATE TABLE IF NOT EXISTS bug_reports (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    studentName TEXT NOT NULL DEFAULT '',
     grade INTEGER,
     classNum INTEGER,
     studentNumber INTEGER,

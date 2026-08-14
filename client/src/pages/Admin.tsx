@@ -1902,29 +1902,35 @@ function BugReportManager({ adminPassword }: { adminPassword: string }) {
                     <p className="text-sm text-gray-400">접수된 오류신고가 없습니다.</p>
                 ) : (
                     <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                        {reports.map((report: any) => (
-                            <div key={report.id} className="p-3 border rounded-lg bg-white flex flex-col gap-1">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className="text-xs">
-                                            {report.grade ? `${report.grade}학년 ${report.classNum}반 ${report.studentNumber}번` : '미입력'}
-                                        </Badge>
-                                        <span className="text-xs text-gray-400">
-                                            {report.createdAt ? new Date(report.createdAt + 'Z').toLocaleString() : ''}
-                                        </span>
+                        {reports.map((report: any) => {
+                            const nameText = (report.studentName || report.name || '').trim();
+                            const studentInfo = report.grade
+                                ? `${nameText ? nameText + ' ' : ''}${report.grade}학년 ${report.classNum}반 ${report.studentNumber}번`
+                                : (nameText || '미입력');
+                            return (
+                                <div key={report.id} className="p-3 border rounded-lg bg-white flex flex-col gap-1">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant="outline" className="text-xs font-semibold">
+                                                {studentInfo}
+                                            </Badge>
+                                            <span className="text-xs text-gray-400">
+                                                {report.createdAt ? new Date(report.createdAt + 'Z').toLocaleString() : ''}
+                                            </span>
+                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 text-gray-400 hover:text-red-500"
+                                            onClick={() => deleteMutation.mutate(report.id)}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
                                     </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7 text-gray-400 hover:text-red-500"
-                                        onClick={() => deleteMutation.mutate(report.id)}
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                    <p className="text-sm text-gray-800 whitespace-pre-wrap">{report.message}</p>
                                 </div>
-                                <p className="text-sm text-gray-800 whitespace-pre-wrap">{report.message}</p>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

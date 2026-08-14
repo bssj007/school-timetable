@@ -1414,7 +1414,7 @@ export default function Dashboard() {
       const res = await fetch('/api/bug-reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grade, classNum, studentNumber, message: bugReportMessage })
+        body: JSON.stringify({ grade, classNum, studentNumber, studentName, message: bugReportMessage })
       });
       if (!res.ok) throw new Error();
       toast.success('오류신고가 전송되었습니다.');
