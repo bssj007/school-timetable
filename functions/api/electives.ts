@@ -300,9 +300,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
                 "UPDATE student_profiles SET electives = ?, dataset = ?, updatedAt = datetime('now') WHERE id = ?"
             ).bind(mergedElectives, datasetCol, existing.id).run();
         } else {
-            await env.DB.prepare(
-                "INSERT INTO student_profiles (name, grade, classNum, studentNumber, electives, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))"
-            ).bind(name, grade, classNum, studentNumber, JSON.stringify(electivesObj), dataset).run();
+            await env.DB.prepare(`
+                INSERT INTO student_profiles (name, grade, classNum, studentNumber, electives, dataset, updatedAt)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(name, grade, classNum, studentNumber) DO UPDATE SET
+                    electives = excluded.electives,
+                    dataset = excluded.dataset,
+                    updatedAt = datetime('now')
+            `).bind(name, grade, classNum, studentNumber, JSON.stringify(electivesObj), dataset).run();
         }
 
         return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
