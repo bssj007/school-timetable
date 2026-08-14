@@ -115,7 +115,7 @@ const DEFAULT_PRINT_HEIGHT = "11";
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
-  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, refreshKakaoUser } = useUserConfig();
+  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, studentName, refreshKakaoUser } = useUserConfig();
 
   const handleLogout = async () => {
     try {
@@ -498,10 +498,10 @@ export default function Dashboard() {
   });
 
   const { data: studentProfile } = useQuery({
-    queryKey: ['studentProfile', grade, classNum, studentNumber, datasetType],
+    queryKey: ['studentProfile', grade, classNum, studentNumber, studentName, datasetType],
     queryFn: async () => {
-      if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber) return null;
-      const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&dataset=${datasetType}`);
+      if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber || !studentName) return null;
+      const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&studentName=${encodeURIComponent(studentName)}&dataset=${datasetType}`);
       if (!res.ok) {
         if (res.status === 404) return null;
         throw new Error(`Failed to fetch student profile: ${res.status}`);
@@ -3125,6 +3125,7 @@ export default function Dashboard() {
         grade={grade}
         classNum={classNum}
         studentNumber={studentNumber}
+        studentName={studentName}
         datasetId={(rawTimetableData as any)?.datasetId || ''}
         forceManualMode={
           grade === '2'

@@ -25,7 +25,7 @@ function downloadDesktopShortcut(title: string = "성지수행_시간표_수행�
 }
 
 export default function Navigation() {
-  const { grade, classNum, studentNumber } = useUserConfig();
+  const { grade, classNum, studentNumber, studentName } = useUserConfig();
   const [showBugReportDialog, setShowBugReportDialog] = useState(false);
   const [bugReportMessage, setBugReportMessage] = useState('');
   const [isBugReportSending, setIsBugReportSending] = useState(false);
@@ -80,6 +80,7 @@ export default function Navigation() {
           grade: grade,
           classNum: classNum,
           studentNumber: studentNumber,
+          studentName: studentName,
         }),
       });
       if (!res.ok) throw new Error('Failed');

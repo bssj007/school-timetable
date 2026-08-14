@@ -5,6 +5,7 @@ export interface UserConfig {
     grade: string;
     classNum: string;
     studentNumber: string;
+    studentName: string;          // 복합 식별자 구성 (이름 + 학번)
     instructionDismissedV2?: boolean;
 }
 
@@ -23,6 +24,7 @@ interface UserConfigContextType {
     grade: string;
     classNum: string;
     studentNumber: string;
+    studentName: string;
     instructionDismissedV2: boolean;
     setConfig: (config: Partial<UserConfig>) => void;
     isConfigured: boolean;
@@ -35,16 +37,17 @@ const UserConfigContext = createContext<UserConfigContextType | undefined>(undef
 export function UserConfigProvider({ children }: { children: ReactNode }) {
     const [config, setConfigState] = useState<UserConfig>(() => {
         // 초기 로드 시 쿠키 확인
-        if (typeof document === "undefined") return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissedV2: false };
+        if (typeof document === "undefined") return { schoolName: "", grade: "", classNum: "", studentNumber: "", studentName: "", instructionDismissedV2: false };
         const match = document.cookie.match(new RegExp('(^| )' + COOKIE_NAME + '=([^;]+)'));
         if (match) {
             try {
                 const data = JSON.parse(decodeURIComponent(match[2]));
                 data.instructionDismissedV2 = false; // Never rely on cookie for this
+                if (!data.studentName) data.studentName = ''; // 기존 쿠키 호환
                 return data;
             } catch { }
         }
-        return { schoolName: "", grade: "", classNum: "", studentNumber: "", instructionDismissedV2: false };
+        return { schoolName: "", grade: "", classNum: "", studentNumber: "", studentName: "", instructionDismissedV2: false };
     });
 
     const [kakaoUser, setKakaoUser] = useState<KakaoUser | null>(null);
@@ -68,11 +71,12 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         refreshKakaoUser();
 
-        // Prepare params to check if THIS specific user profile has dismissed the instruction
+        // dismiss-instruction 상태 확인: 이름 + 학번 모두 있어야 조회
         const params = new URLSearchParams();
         if (config.grade) params.append('grade', config.grade);
         if (config.classNum) params.append('classNum', config.classNum);
         if (config.studentNumber) params.append('studentNumber', config.studentNumber);
+        if (config.studentName) params.append('studentName', config.studentName);
 
         // Check server-side dismissal status
         fetch(`/api/dismiss-instruction?${params.toString()}`)
@@ -80,7 +84,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
             .then(data => {
                 if (data.dismissed) {
                     setConfigState(prev => {
-                        if (prev.instructionDismissedV2) return prev; // Already true
+                        if (prev.instructionDismissedV2) return prev;
                         return { ...prev, instructionDismissedV2: true };
                     });
                 } else {
@@ -105,12 +109,13 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
         expires.setFullYear(expires.getFullYear() + 10);
         document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(cookieData))}; expires=${expires.toUTCString()}; path=/`;
 
-        // If dismissing instruction, sync to server with profile
+        // 이름이 포함된 dismiss 요청
         if (newConfig.instructionDismissedV2) {
             fetch('/api/dismiss-instruction', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    studentName: updated.studentName,
                     grade: updated.grade,
                     classNum: updated.classNum,
                     studentNumber: updated.studentNumber
@@ -123,7 +128,8 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
         config.schoolName &&
         config.grade &&
         config.classNum &&
-        config.studentNumber
+        config.studentNumber &&
+        config.studentName    // 이름도 있어야 완전 설정
     );
 
     return (
@@ -132,6 +138,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
             grade: config.grade,
             classNum: config.classNum,
             studentNumber: config.studentNumber || "",
+            studentName: config.studentName || "",
             instructionDismissedV2: !!config.instructionDismissedV2,
             setConfig,
             isConfigured,

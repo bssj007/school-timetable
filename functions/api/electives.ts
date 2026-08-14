@@ -1,4 +1,6 @@
-import { ensureAllTables, dropAllTables } from "../db_schema";
+/// <reference types="@cloudflare/workers-types" />
+import { ensureAllTables } from "../db_schema";
+
 
 interface Env {
     DB: D1Database;
@@ -146,53 +148,37 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         // Proactively ensure all tables exist (optimistic check)
         await ensureAllTables(env.DB);
 
-        // 1. Fetch Student Profile (dataset-aware via array extraction)
+        // 1. Fetch Student Profile — 식별자: name + grade + classNum + studentNumber (4개 전부 필수)
         if (type === "student") {
             const gradeStr = url.searchParams.get("grade");
             const classNumStr = url.searchParams.get("classNum");
             const studentNumberStr = url.searchParams.get("studentNumber");
+            const studentName = url.searchParams.get("studentName")?.trim() ?? '';
             const originalDataset = url.searchParams.get("dataset") ?? '';
             const dataset = (originalDataset === 'MANUAL_PLAN' || originalDataset === 'SEMESTER_PLAN') ? originalDataset : 'COMCIGAN';
 
-            if (!gradeStr || !classNumStr || !studentNumberStr) {
-                return new Response(JSON.stringify({ error: "Missing parameters" }), { status: 400 });
+            if (!gradeStr || !classNumStr || !studentNumberStr || !studentName) {
+                return new Response(JSON.stringify({ error: "Missing parameters: grade, classNum, studentNumber, studentName are all required" }), { status: 400 });
             }
 
             const grade = parseInt(gradeStr);
             const classNum = parseInt(classNumStr);
             const studentNumber = parseInt(studentNumberStr);
 
-            try {
-                const profile = await env.DB.prepare(
-                    "SELECT * FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?"
-                ).bind(grade, classNum, studentNumber).first();
+            const profile = await env.DB.prepare(
+                "SELECT * FROM student_profiles WHERE name = ? AND grade = ? AND classNum = ? AND studentNumber = ?"
+            ).bind(studentName, grade, classNum, studentNumber).first();
 
-                if (!profile) {
-                    return new Response(JSON.stringify(null), { headers: { "Content-Type": "application/json" } });
-                }
-
-                // Extract electives for the requested dataset
-                const electives = getElectivesForDataset(profile, dataset);
-                const result = { ...profile, electives: electives ? JSON.stringify(electives) : null, dataset };
-                return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
-            } catch (e: any) {
-                if (e.message && e.message.includes("no column named")) {
-                    try { await env.DB.prepare("ALTER TABLE student_profiles ADD COLUMN dataset TEXT DEFAULT ''").run(); } catch (_) {}
-                    const profile = await env.DB.prepare(
-                        "SELECT * FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?"
-                    ).bind(grade, classNum, studentNumber).first();
-                    if (!profile) {
-                        return new Response(JSON.stringify(null), { headers: { "Content-Type": "application/json" } });
-                    }
-                    const electives = getElectivesForDataset(profile, dataset);
-                    const result = { ...profile, electives: electives ? JSON.stringify(electives) : null, dataset };
-                    return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
-                }
-                throw e;
+            if (!profile) {
+                return new Response(JSON.stringify(null), { headers: { "Content-Type": "application/json" } });
             }
+
+            const electives = getElectivesForDataset(profile, dataset);
+            const result = { ...profile, electives: electives ? JSON.stringify(electives) : null, dataset };
+            return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
         }
 
-        // 2. Fetch ALL student profiles for a grade (admin pre-entry, dataset-aware)
+        // 2. Fetch ALL student profiles for a grade (admin pre-entry — 어드민 그리드는 현행 유지)
         if (type === "all-students") {
             const gradeStr = url.searchParams.get("grade");
             const originalDataset = url.searchParams.get("dataset") ?? '';
@@ -205,11 +191,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
                 "SELECT * FROM student_profiles WHERE grade = ? ORDER BY classNum, studentNumber"
             ).bind(grade).all();
 
-            // Extract only the electives for the requested dataset from each profile
             const mapped = (profiles || []).map((p: any) => {
                 const electives = getElectivesForDataset(p, dataset);
                 return { ...p, electives: electives ? JSON.stringify(electives) : null, dataset };
-            }).filter((p: any) => p.electives !== null); // Only return profiles that have data for this dataset
+            }).filter((p: any) => p.electives !== null);
 
             return new Response(JSON.stringify(mapped), { headers: { "Content-Type": "application/json" } });
         }
@@ -243,12 +228,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         await ensureAllTables(env.DB);
 
         const body = await request.json() as any;
-        console.log("Received save request:", body);
-        const { grade, classNum, studentNumber, electives, dataset: reqDataset = '' } = body;
+        const { grade, classNum, studentNumber, studentName, electives, dataset: reqDataset = '' } = body;
         const dataset = (reqDataset === 'MANUAL_PLAN' || reqDataset === 'SEMESTER_PLAN') ? reqDataset : 'COMCIGAN';
 
-        if (!grade || !classNum || !studentNumber || !electives) {
-            return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400 });
+        const name = typeof studentName === 'string' ? studentName.trim() : '';
+
+        // 이름 + 학번 모두 필수
+        if (!grade || !classNum || !studentNumber || !name) {
+            return new Response(JSON.stringify({ error: "Missing required fields: grade, classNum, studentNumber, studentName are all required" }), { status: 400 });
+        }
+        if (!electives) {
+            return new Response(JSON.stringify({ error: "Missing required fields: electives" }), { status: 400 });
         }
 
         // 빈 선택과목 저장 방지
@@ -257,22 +247,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             return new Response(JSON.stringify({ error: "electives must be a non-empty object" }), { status: 400 });
         }
 
-        // Read existing profile
+        // 복합 식별자 (name, grade, classNum, studentNumber) 기준으로 조회
         const existing = await env.DB.prepare(
-            "SELECT * FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?"
-        ).bind(grade, classNum, studentNumber).first();
+            "SELECT * FROM student_profiles WHERE name = ? AND grade = ? AND classNum = ? AND studentNumber = ?"
+        ).bind(name, grade, classNum, studentNumber).first();
 
         if (existing) {
-            // Merge into existing row's arrays
             const { electives: mergedElectives, datasetCol } = setElectivesForDataset(existing, dataset, electivesObj);
             await env.DB.prepare(
                 "UPDATE student_profiles SET electives = ?, dataset = ?, updatedAt = datetime('now') WHERE id = ?"
             ).bind(mergedElectives, datasetCol, existing.id).run();
         } else {
-            // New row — store as plain (backwards compatible)
             await env.DB.prepare(
-                "INSERT INTO student_profiles (grade, classNum, studentNumber, electives, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, datetime('now'))"
-            ).bind(grade, classNum, studentNumber, JSON.stringify(electivesObj), dataset).run();
+                "INSERT INTO student_profiles (name, grade, classNum, studentNumber, electives, dataset, updatedAt) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))"
+            ).bind(name, grade, classNum, studentNumber, JSON.stringify(electivesObj), dataset).run();
         }
 
         return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
@@ -291,27 +279,26 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
         const grade = url.searchParams.get("grade");
         const classNum = url.searchParams.get("classNum");
         const studentNumber = url.searchParams.get("studentNumber");
+        const studentName = url.searchParams.get("studentName")?.trim() ?? '';
         const originalDataset = url.searchParams.get("dataset") ?? '';
         const dataset = (originalDataset === 'MANUAL_PLAN' || originalDataset === 'SEMESTER_PLAN') ? originalDataset : 'COMCIGAN';
 
-        if (!grade || !classNum || !studentNumber) {
-            return new Response(JSON.stringify({ error: "Missing parameters for deletion" }), { status: 400 });
+        // 이름 + 학번 모두 필수
+        if (!grade || !classNum || !studentNumber || !studentName) {
+            return new Response(JSON.stringify({ error: "Missing parameters: grade, classNum, studentNumber, studentName are all required" }), { status: 400 });
         }
 
-        // Read existing profile
         const existing = await env.DB.prepare(
-            "SELECT * FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?"
-        ).bind(grade, classNum, studentNumber).first();
+            "SELECT * FROM student_profiles WHERE name = ? AND grade = ? AND classNum = ? AND studentNumber = ?"
+        ).bind(studentName, parseInt(grade), parseInt(classNum), parseInt(studentNumber)).first();
 
         if (existing) {
             const result = removeElectivesForDataset(existing, dataset);
             if (result === null) {
-                // No more datasets → delete the entire row
                 await env.DB.prepare(
                     "DELETE FROM student_profiles WHERE id = ?"
                 ).bind(existing.id).run();
             } else {
-                // Update with remaining datasets
                 await env.DB.prepare(
                     "UPDATE student_profiles SET electives = ?, dataset = ?, updatedAt = datetime('now') WHERE id = ?"
                 ).bind(result.electives, result.datasetCol, existing.id).run();

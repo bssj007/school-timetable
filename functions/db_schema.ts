@@ -15,6 +15,7 @@ export const ALL_TABLES = [
 export const createStudentProfilesTable = `
 CREATE TABLE IF NOT EXISTS student_profiles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL DEFAULT '',
     grade INTEGER NOT NULL,
     classNum INTEGER NOT NULL,
     studentNumber INTEGER,
@@ -22,7 +23,7 @@ CREATE TABLE IF NOT EXISTS student_profiles (
     dataset TEXT DEFAULT '',
     instructionDismissed INTEGER DEFAULT 0,
     updatedAt TEXT DEFAULT (datetime('now')),
-    UNIQUE(grade, classNum, studentNumber)
+    UNIQUE(name, grade, classNum, studentNumber)
 );
 `;
 
@@ -164,6 +165,15 @@ export async function ensureAllTables(db: any) {
         await db.prepare(createMealCacheTable).run();
         await db.prepare(createMealSuggestionsTable).run();
         await db.prepare(createMealRatingsTable).run();
+        // 마이그레이션: student_profiles에 name 컬럼이 없으면 추가
+        try {
+            await db.prepare("ALTER TABLE student_profiles ADD COLUMN name TEXT NOT NULL DEFAULT ''").run();
+            console.log("[Migration] student_profiles.name column added.");
+        } catch (_) { /* 이미 존재하면 무시 */ }
+        // 마이그레이션: bug_reports에 studentName 컬럼이 없으면 추가
+        try {
+            await db.prepare("ALTER TABLE bug_reports ADD COLUMN studentName TEXT").run();
+        } catch (_) {}
         console.log("All tables ensured.");
     } catch (e) {
         console.error("Error ensuring tables:", e);

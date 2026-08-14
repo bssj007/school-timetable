@@ -34,7 +34,7 @@ export const onRequest = async (context: any) => {
             const userAgent = request.headers.get('User-Agent') || '';
 
             // Parse Other Cookies
-            let grade = null, classNum = null, studentNumber = null;
+            let grade = null, classNum = null, studentNumber = null, studentName: string | null = null;
             let kakaoId = null, kakaoNickname = null;
             let isStandalone = 0;
 
@@ -46,6 +46,7 @@ export const onRequest = async (context: any) => {
                         grade = config.grade;
                         classNum = config.classNum;
                         studentNumber = config.studentNumber;
+                        studentName = config.studentName?.trim() ?? null;
                     } catch (e) { }
                 }
 
@@ -108,50 +109,47 @@ export const onRequest = async (context: any) => {
             }
 
 
-            // 2. Dynamic Profile Creation Helper (Using Correct DB Schema)
-            const ensureStudentProfileAndGetId = async (g: number, c: number, s: number) => {
+            // 2. Dynamic Profile Creation Helper
+            // 복합 식별자: (name, grade, classNum, studentNumber) — name이 없으면 SKIP
+            const ensureStudentProfileAndGetId = async (name: string, g: number, c: number, s: number) => {
                 try {
                     const res = await env.DB.prepare(`
-                        INSERT INTO student_profiles (grade, classNum, studentNumber, updatedAt) 
-                        VALUES (?, ?, ?, datetime('now'))
-                        ON CONFLICT(grade, classNum, studentNumber) 
+                        INSERT INTO student_profiles (name, grade, classNum, studentNumber, updatedAt) 
+                        VALUES (?, ?, ?, ?, datetime('now'))
+                        ON CONFLICT(name, grade, classNum, studentNumber) 
                         DO UPDATE SET updatedAt = datetime('now')
                         RETURNING id
-                    `).bind(g, c, s).first();
+                    `).bind(name, g, c, s).first();
                     return res?.id as number | null;
                 } catch (e: any) {
                     console.error("[Middleware] Student Profile Upsert Failed:", e);
                     if (e.message && e.message.includes("no such table")) {
-                        console.log("[Middleware] Creating student_profiles table (New Schema from db_schema.ts)");
                         try {
                             await env.DB.prepare(createStudentProfilesTable).run();
-                            // Retry Insert
                             const res = await env.DB.prepare(`
-                                INSERT INTO student_profiles (grade, classNum, studentNumber, updatedAt) 
-                                VALUES (?, ?, ?, datetime('now'))
-                                ON CONFLICT(grade, classNum, studentNumber) 
+                                INSERT INTO student_profiles (name, grade, classNum, studentNumber, updatedAt) 
+                                VALUES (?, ?, ?, ?, datetime('now'))
+                                ON CONFLICT(name, grade, classNum, studentNumber) 
                                 DO UPDATE SET updatedAt = datetime('now')
                                 RETURNING id
-                            `).bind(g, c, s).first();
+                            `).bind(name, g, c, s).first();
                             return res?.id as number | null;
                         } catch (createError) {
                             console.error("[Middleware] Create student_profiles Failed:", createError);
                         }
-                    } else if (e.message && e.message.includes("has no column named")) {
-                        console.warn("[Middleware] student_profiles schema mismatch:", e.message);
                     }
                     return null;
                 }
             };
 
-            // Calculate Target ID
+            // name이 없으면 프로필 생성 SKIP → ip_profiles.student_profile_id = NULL
             let resolvedStudentProfileId: number | null = null;
-            if (grade && classNum && studentNumber) {
+            if (studentName && grade && classNum && studentNumber) {
                 const g = parseInt(grade);
                 const c = parseInt(classNum);
                 const n = parseInt(studentNumber);
                 if (!isNaN(g) && !isNaN(c) && !isNaN(n)) {
-                    resolvedStudentProfileId = await ensureStudentProfileAndGetId(g, c, n);
+                    resolvedStudentProfileId = await ensureStudentProfileAndGetId(studentName, g, c, n);
                 }
             }
 
