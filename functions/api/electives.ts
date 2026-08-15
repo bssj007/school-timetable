@@ -167,7 +167,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
             const profile = await env.DB.prepare(
                 "SELECT * FROM student_profiles WHERE name = ? AND grade = ? AND classNum = ? AND studentNumber = ?"
-            ).bind(studentName, grade, classNum, studentNumber).first();
+            ).bind(studentName, grade, classNum, studentNumber).first<any>();
 
             // ── 프리셋 자동 적용 (신규 사용자 / 선택과목 미설정) ─────────────────
             // 프로필 없거나 현재 dataset의 electives가 비어있는 경우에만 적용
@@ -177,7 +177,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
                 // elective_presets에서 (grade, classNum, studentNumber) 조회
                 const preset = await env.DB.prepare(
                     "SELECT * FROM elective_presets WHERE grade = ? AND classNum = ? AND studentNumber = ?"
-                ).bind(grade, classNum, studentNumber).first().catch(() => null);
+                ).bind(grade, classNum, studentNumber).first<any>().catch(() => null);
 
                 if (preset && preset.electives) {
                     // 사전지정 존재 → student_profiles에 저장 (이후 사용자 데이터로 취급)
@@ -192,7 +192,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
                           .catch((e: any) => console.error("[Preset] Insert failed:", e.message));
                     } else {
                         // 프로필은 있지만 electives 비어있음 → preset으로 채우기
-                        const updated = setElectivesForDataset(profile, dataset, JSON.parse(preset.electives));
+                        const updated = setElectivesForDataset(profile, dataset, JSON.parse(preset.electives as string));
                         await env.DB.prepare(
                             "UPDATE student_profiles SET electives = ?, dataset = ?, updatedAt = datetime('now') WHERE name = ? AND grade = ? AND classNum = ? AND studentNumber = ?"
                         ).bind(updated.electives, updated.datasetCol, studentName, grade, classNum, studentNumber).run()
@@ -200,7 +200,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
                     }
 
                     // 적용된 프리셋 데이터 반환
-                    const presetElectives = JSON.parse(preset.electives);
+                    const presetElectives = JSON.parse(preset.electives as string);
                     console.log(`[Preset] Applied preset for ${grade}-${classNum}-${studentNumber} (student: ${studentName})`);
                     return new Response(JSON.stringify({
                         grade, classNum, studentNumber, name: studentName,
@@ -292,7 +292,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         // 복합 식별자 (name, grade, classNum, studentNumber) 기준으로 조회
         const existing = await env.DB.prepare(
             "SELECT * FROM student_profiles WHERE name = ? AND grade = ? AND classNum = ? AND studentNumber = ?"
-        ).bind(name, grade, classNum, studentNumber).first();
+        ).bind(name, grade, classNum, studentNumber).first<any>();
 
         if (existing) {
             const { electives: mergedElectives, datasetCol } = setElectivesForDataset(existing, dataset, electivesObj);
@@ -337,7 +337,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
         const existing = await env.DB.prepare(
             "SELECT * FROM student_profiles WHERE name = ? AND grade = ? AND classNum = ? AND studentNumber = ?"
-        ).bind(studentName, parseInt(grade), parseInt(classNum), parseInt(studentNumber)).first();
+        ).bind(studentName, parseInt(grade), parseInt(classNum), parseInt(studentNumber)).first<any>();
 
         if (existing) {
             const result = removeElectivesForDataset(existing, dataset);
