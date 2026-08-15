@@ -1017,6 +1017,51 @@ export default function TeacherPage() {
     return map;
   }, [electiveConfigsG2, electiveConfigsG3]);
 
+  // 이동수업 여부 + 대표 강의실 이름을 subject+teacher 기반으로 조회하는 맵
+  // key: `${grade}-${subject}-${teacherRaw}` or `${grade}-${subject}` → { isMoving, className, groupCode }
+  const movingClassMap = useMemo(() => {
+    const map = new Map<string, { isMoving: boolean; className: string; groupCode: string }>();
+    const allConfigs = [
+      ...(electiveConfigsG2 || []).map((c: any) => ({ ...c, _grade: 2 })),
+      ...(electiveConfigsG3 || []).map((c: any) => ({ ...c, _grade: 3 })),
+    ];
+    allConfigs.forEach((c: any) => {
+      if (!c.subject) return;
+      const isMoving = c.isMovingClass !== 0;
+      if (!isMoving) return;
+
+      const subj = (c.subject || '').trim();
+      const firstCode = (c.classCode || '').split(',')[0].trim();
+
+      // 강의실 이름 결정
+      let resolvedName = '';
+      if (c.className) {
+        const trimmedCN = (c.className as string).trim();
+        if (trimmedCN.startsWith('{')) {
+          try {
+            const obj = JSON.parse(trimmedCN) as Record<string, string>;
+            resolvedName = (firstCode && obj[firstCode]) || obj['_global'] || '';
+          } catch { resolvedName = trimmedCN; }
+        } else {
+          resolvedName = trimmedCN;
+        }
+      }
+
+      // 선생님 이름 기반 키 (originalTeacher, fullTeacherName 모두)
+      const teacherNames: string[] = [];
+      if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
+      if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
+      Array.from(new Set(teacherNames)).forEach((tName: string) => {
+        const key = `${c._grade}-${subj}-${tName}`;
+        if (!map.has(key)) map.set(key, { isMoving: true, className: resolvedName, groupCode: firstCode });
+      });
+      // Subject-only fallback key (선생님 정보 없을 때)
+      const subjKey = `${c._grade}-${subj}`;
+      if (!map.has(subjKey)) map.set(subjKey, { isMoving: true, className: resolvedName, groupCode: firstCode });
+    });
+    return map;
+  }, [electiveConfigsG2, electiveConfigsG3]);
+
   // Mutate: Create Assessment
   const createMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -1509,11 +1554,22 @@ export default function TeacherPage() {
                                       width: 'fit-content',
                                     }}>
                                       {(() => {
-                                        if (!cellGroup) return `${cellData.grade}-${cellData.classNum}`;
-                                        // 이동수업: 관리페이지 강의실 이름 조회
-                                        const configName = lectureClassNameMap.get(`${cellData.grade}-${(cellData.subjectName || '').trim()}-${cellGroup}`);
-                                        // 강의실 이름이 없으면 그룹 기호만 표시 (원본 반 번호 fallback 없음)
-                                        return configName ? `${configName}(${cellGroup})` : `(${cellGroup})`;
+                                        const subj = (cellData.subjectName || '').trim();
+                                        if (cellGroup) {
+                                          // 이동수업: 관리페이지 강의실 이름 조회 (group 코드 기반)
+                                          const configName = lectureClassNameMap.get(`${cellData.grade}-${subj}-${cellGroup}`);
+                                          return configName ? `${configName}(${cellGroup})` : `(${cellGroup})`;
+                                        }
+                                        // cellGroup이 없을 때: 이동수업인지 subject+teacher로 판별
+                                        const movingKey = `${cellData.grade}-${subj}-${rawTeacherName.trim()}`;
+                                        const movingKeyFull = `${cellData.grade}-${subj}-${teacherName.trim()}`;
+                                        const movingInfo = movingClassMap.get(movingKey) || movingClassMap.get(movingKeyFull) || movingClassMap.get(`${cellData.grade}-${subj}`);
+                                        if (movingInfo?.isMoving) {
+                                          // 이동수업이지만 그룹 계산 실패 → className만 표시
+                                          return movingInfo.className || `(${movingInfo.groupCode || '이동'})`;
+                                        }
+                                        // 일반 수업: 반 번호 표시
+                                        return `${cellData.grade}-${cellData.classNum}`;
                                       })()}
                                     </span>
                                     <span style={{
