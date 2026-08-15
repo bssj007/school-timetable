@@ -2301,7 +2301,7 @@ export default function Dashboard() {
                                       </div>
                                     ) : null;
                                   })()}
-                                  <div className="flex flex-col items-center justify-center h-full min-h-0 print:overflow-hidden print:max-h-full">
+                                  <div className={`flex flex-col items-center justify-center h-full min-h-0 print:overflow-hidden print:max-h-full${includeAssessments && cellAssessments.some(a => !!a.isTeacherCreated) ? ' pb-3' : ''}`}>
                                     {item || isElectiveActive ? (
                                       <>
                                         <div
@@ -2336,8 +2336,10 @@ export default function Dashboard() {
                                           ) : null}
                                         </div>
                                         {includeAssessments && cellAssessments.some(a => !!a.isTeacherCreated) && (
-                                          <div className="absolute bottom-0 left-0 right-0 print:hidden flex items-center justify-center bg-emerald-500 text-white font-bold text-[8px] md:text-[9px] leading-none py-0.5">
-                                            선생님 등록
+                                          <div className="absolute bottom-0 right-0 print:hidden">
+                                            <span className="text-[8px] md:text-[9px] px-1 py-0.5 rounded-tl-md leading-none whitespace-nowrap bg-emerald-500 text-white font-bold">
+                                              선생님 등록
+                                            </span>
                                           </div>
                                         )}
                                       </>
