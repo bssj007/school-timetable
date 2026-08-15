@@ -2325,7 +2325,7 @@ export default function Dashboard() {
                                             )}
                                           </span>
                                         </div>
-                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-col md:flex-row print:flex-row print:flex-nowrap items-center md:justify-center print:justify-center overflow-hidden leading-tight md:leading-normal print:leading-tight">
+                                        <div className={`text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-col md:flex-row print:flex-row print:flex-nowrap items-center overflow-hidden leading-tight md:leading-normal print:leading-tight ${includeAssessments && cellAssessments.some(a => !!a.isTeacherCreated) ? 'justify-start md:justify-start print:justify-center' : 'md:justify-center print:justify-center'}`}>
                                           {!isCancelledByFreePeriod && displayTeacher ? (
                                             <span className="truncate shrink min-w-0 max-w-full print:text-[1.8cqh]">{displayTeacher}</span>
                                           ) : null}
@@ -2337,7 +2337,7 @@ export default function Dashboard() {
                                         </div>
                                         {includeAssessments && cellAssessments.some(a => !!a.isTeacherCreated) && (
                                           <div className="absolute bottom-0 right-0 print:hidden">
-                                            <span className="text-[8px] md:text-[9px] px-1 py-0.5 rounded-tl-md leading-none whitespace-nowrap bg-emerald-500 text-white font-bold">
+                                            <span className="text-[8px] md:text-[9px] px-0.5 py-px rounded-tl-md leading-none whitespace-nowrap bg-emerald-500 text-white font-bold">
                                               선생님 등록
                                             </span>
                                           </div>
