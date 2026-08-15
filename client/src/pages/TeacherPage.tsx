@@ -1009,8 +1009,8 @@ export default function TeacherPage() {
 
       codes.forEach((code: string) => {
         const key = `${c.grade}-${(c.subject || '').trim()}-${code}`;
-        // JSON 형식이면 해당 코드의 값, 아니면 일반 문자열
-        const resolvedName = classNameObj[code] || plainClassName;
+        // JSON 형식이면 해당 코드의 값, _global fallback, 아니면 일반 문자열 (Dashboard.tsx와 동일한 로직)
+        const resolvedName = classNameObj[code] || classNameObj['_global'] || plainClassName;
         if (resolvedName) map.set(key, resolvedName);
       });
     });
@@ -1508,7 +1508,13 @@ export default function TeacherPage() {
                                       lineHeight: 1.4,
                                       width: 'fit-content',
                                     }}>
-                                      {cellData.grade}-{cellData.classNum}{cellGroup ? `(${cellGroup})` : ''}
+                                      {(() => {
+                                        if (!cellGroup) return `${cellData.grade}-${cellData.classNum}`;
+                                        // 이동수업: 관리페이지 강의실 이름 조회
+                                        const configName = lectureClassNameMap.get(`${cellData.grade}-${(cellData.subjectName || '').trim()}-${cellGroup}`);
+                                        // 강의실 이름이 없으면 그룹 기호만 표시 (원본 반 번호 fallback 없음)
+                                        return configName ? `${configName}(${cellGroup})` : `(${cellGroup})`;
+                                      })()}
                                     </span>
                                     <span style={{
                                       fontWeight: 700,
