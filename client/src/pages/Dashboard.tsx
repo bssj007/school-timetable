@@ -2287,14 +2287,13 @@ export default function Dashboard() {
                                       .filter((v): v is string => v !== null);
                                     const uniqueRounds = Array.from(new Set(roundTexts));
                                     return uniqueRounds.length > 0 ? (
-                                      <div className="absolute top-0 left-0 flex flex-col gap-px print:hidden">
+                                      <div className="absolute top-0 left-0 flex flex-col print:hidden" style={{ gap: 1 }}>
                                         {uniqueRounds.map((r, idx) => (
                                           <div
                                             key={idx}
-                                            className={`text-[8px] md:text-[9px] font-bold leading-none px-1.5 py-0.5 rounded-r-full ${
+                                            className={`text-[8px] md:text-[9px] font-bold leading-none px-1 py-0.5 rounded-r-full ${
                                               isPast ? 'bg-gray-400 text-white' : 'bg-blue-600 text-white'
                                             }`}
-                                            style={{ marginTop: idx === 0 ? 2 : 0 }}
                                           >
                                             {r}
                                           </div>
@@ -2336,22 +2335,11 @@ export default function Dashboard() {
                                             </span>
                                           ) : null}
                                         </div>
-                                        {includeAssessments && cellAssessments.length > 0 && (
-                                          <div className="mt-0.5 flex-shrink-0">
-                                            <div className="flex flex-wrap gap-0.5 justify-center">
-                                              {cellAssessments.map(a => (
-                                                <span key={a.id} className="inline-flex items-center gap-0.5">
-                                                  <span className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : a.isPostponed ? "bg-white text-red-500 border border-red-500" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
-                                                    평가
-                                                  </span>
-                                                  {!!a.isTeacherCreated && (
-                                                    <span className="print:hidden text-[8px] md:text-[9px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap bg-emerald-500 text-white">
-                                                      선생님 등록
-                                                    </span>
-                                                  )}
-                                                </span>
-                                              ))}
-                                            </div>
+                                        {includeAssessments && cellAssessments.some(a => !!a.isTeacherCreated) && (
+                                          <div className="absolute bottom-0 right-0 print:hidden">
+                                            <span className="text-[8px] md:text-[9px] px-1 py-0.5 rounded-tl-md leading-none whitespace-nowrap bg-emerald-500 text-white font-bold">
+                                              선생님 등록
+                                            </span>
                                           </div>
                                         )}
                                       </>
