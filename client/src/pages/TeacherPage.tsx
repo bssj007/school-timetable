@@ -846,11 +846,39 @@ export default function TeacherPage() {
     tabContainerRef.current.scrollLeft = scrollLeftRef.current - walk;
   };
 
-  // Subject tabs derived from taughtSubjects (visible even when no assessments)
+  // Subject tabs derived from taughtSubjects, sorted by period count (시수) desc
   const subjectTabs = useMemo(() => {
     if (!taughtSubjects || taughtSubjects.length === 0) return [];
-    return [...taughtSubjects].sort();
-  }, [taughtSubjects]);
+
+    // selectedSchedule에서 과목별 시수(등장 횟수) 계산
+    const periodCounts = new Map<string, number>();
+    if (selectedSchedule) {
+      for (let d = 1; d <= 5; d++) {
+        const daySchedule = selectedSchedule[d];
+        if (!daySchedule) continue;
+        for (let p = 1; p < daySchedule.length; p++) {
+          const val = daySchedule[p];
+          if (!val) continue;
+          let numVal = typeof val === 'number' ? val : parseInt(String(val).replace(/>/g, ''), 10);
+          if (!numVal || isNaN(numVal) || numVal === 0) continue;
+          const subjectId = Math.floor(numVal / 1000);
+          const subjectName = timetableData?.subjects?.[subjectId];
+          if (subjectName) {
+            periodCounts.set(subjectName, (periodCounts.get(subjectName) || 0) + 1);
+          }
+        }
+      }
+    }
+
+    // 시수 많은 순 → 동률이면 가나다 순
+    return [...taughtSubjects].sort((a, b) => {
+      const ca = periodCounts.get(a) ?? 0;
+      const cb = periodCounts.get(b) ?? 0;
+      if (cb !== ca) return cb - ca;
+      return a.localeCompare(b, 'ko');
+    });
+  }, [taughtSubjects, selectedSchedule, timetableData]);
+
 
   // Effective subject filter: use manual selection if valid, else auto-pick first subject
   // Declared BEFORE classTabs and filteredClassTabs to avoid Temporal Dead Zone
