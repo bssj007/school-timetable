@@ -2325,14 +2325,14 @@ export default function Dashboard() {
                                             )}
                                           </span>
                                         </div>
-                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-row flex-nowrap items-center justify-center overflow-hidden leading-tight">
+                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-row flex-nowrap items-center justify-center gap-1 overflow-hidden leading-tight">
                                           {!isCancelledByFreePeriod && displayTeacher ? (
                                             <span className="shrink min-w-0 whitespace-nowrap print:text-[1.8cqh]">{displayTeacher}</span>
                                           ) : null}
                                            {(settings?.show_target_class_main_menu !== false && displayClassName) ? (
                                              <>
                                                {!isCancelledByFreePeriod && displayTeacher && (
-                                                 <span className="shrink-0 mx-0.5 text-gray-400">&middot;</span>
+                                                 
                                                )}
                                                <span className="shrink-0 font-medium text-gray-600 print:text-[1.8cqh] print:!text-gray-500">
                                                  {displayClassName}
