@@ -2985,6 +2985,11 @@ export default function Dashboard() {
                             <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                               {assessment.description}
                             </span>
+                            {assessment.isTeacherCreated === 1 && (
+                              <span className="text-xs px-2 py-0.5 bg-emerald-500 text-white rounded-full font-bold whitespace-nowrap">
+                                선생님 등록
+                              </span>
+                            )}
                             {!assessment.isPostponed && (
                               <span className={`text-base font-bold ${isToday ? 'text-red-600' : 'text-gray-500'} ml-1`}>
                                 {dDay}

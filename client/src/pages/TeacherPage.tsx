@@ -271,7 +271,11 @@ export default function TeacherPage() {
     return localStorage.getItem("teacher-page-selected-teacher") || "1";
   });
   const [openCombobox, setOpenCombobox] = useState(false);
-  const [weekOffset, setWeekOffset] = useState<number>(0);
+  const [weekOffset, setWeekOffset] = useState<number>(() => {
+    const today = new Date();
+    const day = today.getDay();
+    return (day === 0 || day === 6) ? 1 : 0;
+  });
   
   const [selectedCell, setSelectedCell] = useState<{
     weekdayIndex: number;
