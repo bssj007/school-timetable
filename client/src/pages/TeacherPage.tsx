@@ -1840,9 +1840,25 @@ export default function TeacherPage() {
               </div>
               
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">반/그룹 (이동수업)</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">대상 반</label>
                 <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
-                  {formData.classCode || "공통"}
+                  {(() => {
+                    const grade = selectedCell?.grade;
+                    const classNum = selectedCell?.classNum;
+                    const subject = formData.subject;
+                    const classCode = formData.classCode;
+                    if (!classCode) return grade && classNum ? `${grade}-${classNum}반` : '공통';
+                    const codes = parseClassCode(classCode);
+                    if (codes.length === 0) return grade && classNum ? `${grade}-${classNum}반` : '공통';
+                    const classNames = codes
+                      .map((code: string) => lectureClassNameMap.get(`${grade}-${(subject || '').trim()}-${code}`))
+                      .filter(Boolean) as string[];
+                    const uniqueNames = classNames.filter((v, i, arr) => arr.indexOf(v) === i);
+                    if (uniqueNames.length > 0) {
+                      return codes.length === 1 ? `${uniqueNames[0]}(${codes[0]})` : `강의반(${codes.join(', ')})`;
+                    }
+                    return codes.length === 1 ? `강의반(${codes[0]})` : `강의반(${codes.join(', ')})`;
+                  })()}
                 </div>
               </div>
             </div>
@@ -1932,9 +1948,25 @@ export default function TeacherPage() {
               </div>
               
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">반/그룹 (이동수업)</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">대상 반</label>
                 <div className="h-10 px-3.5 bg-slate-100/70 border border-slate-200/80 rounded-lg text-sm font-bold text-slate-800 flex items-center select-none">
-                  {formData.classCode || "공통"}
+                  {(() => {
+                    const grade = selectedAssessment?.grade;
+                    const classNum = selectedAssessment?.classNum;
+                    const subject = formData.subject;
+                    const classCode = formData.classCode;
+                    if (!classCode) return grade && classNum ? `${grade}-${classNum}반` : '공통';
+                    const codes = parseClassCode(classCode);
+                    if (codes.length === 0) return grade && classNum ? `${grade}-${classNum}반` : '공통';
+                    const classNames = codes
+                      .map((code: string) => lectureClassNameMap.get(`${grade}-${(subject || '').trim()}-${code}`))
+                      .filter(Boolean) as string[];
+                    const uniqueNames = classNames.filter((v, i, arr) => arr.indexOf(v) === i);
+                    if (uniqueNames.length > 0) {
+                      return codes.length === 1 ? `${uniqueNames[0]}(${codes[0]})` : `강의반(${codes.join(', ')})`;
+                    }
+                    return codes.length === 1 ? `강의반(${codes[0]})` : `강의반(${codes.join(', ')})`;
+                  })()}
                 </div>
               </div>
             </div>
