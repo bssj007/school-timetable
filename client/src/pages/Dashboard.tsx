@@ -2319,8 +2319,15 @@ export default function Dashboard() {
                                           <div className="mt-0.5 flex-shrink-0">
                                             <div className="flex flex-wrap gap-0.5 justify-center">
                                               {cellAssessments.map(a => (
-                                                <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : a.isPostponed ? "bg-white text-red-500 border border-red-500" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
-                                                  {a.description && a.description.includes("차") ? a.description : '평가'}
+                                                <span key={a.id} className="inline-flex items-center gap-0.5">
+                                                  <span className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : a.isPostponed ? "bg-white text-red-500 border border-red-500" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
+                                                    {a.description && a.description.includes("차") ? a.description : '평가'}
+                                                  </span>
+                                                  {!!a.isTeacherCreated && (
+                                                    <span className="print:hidden text-[8px] md:text-[9px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap bg-emerald-500 text-white">
+                                                      선생님 등록
+                                                    </span>
+                                                  )}
                                                 </span>
                                               ))}
                                             </div>
@@ -2985,11 +2992,6 @@ export default function Dashboard() {
                             <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                               {assessment.description}
                             </span>
-                            {assessment.isTeacherCreated === 1 && (
-                              <span className="text-xs px-2 py-0.5 bg-emerald-500 text-white rounded-full font-bold whitespace-nowrap">
-                                선생님 등록
-                              </span>
-                            )}
                             {!assessment.isPostponed && (
                               <span className={`text-base font-bold ${isToday ? 'text-red-600' : 'text-gray-500'} ml-1`}>
                                 {dDay}
