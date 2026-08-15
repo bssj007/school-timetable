@@ -2325,7 +2325,7 @@ export default function Dashboard() {
                                             )}
                                           </span>
                                         </div>
-                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex justify-center overflow-hidden leading-tight">
+                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex justify-center leading-tight">
                                            <span className="whitespace-nowrap print:text-[1.8cqh]">
                                              {[
                                                (!isCancelledByFreePeriod && displayTeacher) ? displayTeacher : null,
