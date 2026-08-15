@@ -24,11 +24,15 @@ export const onRequest = async (context: any) => {
             let query = "SELECT * FROM performance_assessments WHERE grade = ? AND (classNum = ? OR classNum = 0) AND isDeleted = 0";
             const params: any[] = [grade, classNum];
 
-            // Filter by dataset if provided, else filter by empty string (default manual)
+            // Filter by dataset if provided, else filter by default COMCIGAN (matching COMCIGAN, '', or NULL)
             const rawDataset = url.searchParams.get('dataset') || '';
             const dataset = (rawDataset === 'MANUAL_PLAN' || rawDataset === 'SEMESTER_PLAN') ? rawDataset : 'COMCIGAN';
-            query += " AND dataset = ?";
-            params.push(dataset);
+            if (dataset === 'COMCIGAN') {
+                query += " AND (dataset = 'COMCIGAN' OR dataset = '' OR dataset IS NULL)";
+            } else {
+                query += " AND dataset = ?";
+                params.push(dataset);
+            }
 
             query += " ORDER BY dueDate ASC";
 
@@ -251,23 +255,76 @@ export const onRequest = async (context: any) => {
                 return new Response("Missing required fields", { status: 400 });
             }
 
+            // 학년별 등록 주체(학생/선생님) 권한 검증
+            const targetGrade = parseInt(grade, 10);
+            const isTeacher = isTeacherCreated === 1 || body.role === 'teacher';
+
+            try {
+                const permKey = isTeacher
+                    ? `assessment_allow_teacher_grade${targetGrade}`
+                    : `assessment_allow_student_grade${targetGrade}`;
+                const msgKey = isTeacher
+                    ? 'assessment_disallow_msg_teacher'
+                    : 'assessment_disallow_msg_student';
+
+                const permRows = await env.DB.prepare(
+                    "SELECT key, value FROM system_settings WHERE key IN (?, ?)"
+                ).bind(permKey, msgKey).all();
+
+                const permMap: Record<string, string> = {};
+                (permRows?.results || []).forEach((r: any) => { permMap[r.key] = r.value; });
+
+                const isAllowed = permMap[permKey] !== 'false';
+                if (!isAllowed) {
+                    const defaultMsg = isTeacher
+                        ? '현재 해당 학년의 선생님 수행평가 등록이 제한되어 있습니다.'
+                        : '현재 해당 학년의 학생 수행평가 등록이 제한되어 있습니다.';
+                    const errorMsg = permMap[msgKey] || defaultMsg;
+                    return new Response(JSON.stringify({ error: errorMsg }), {
+                        status: 403,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+            } catch (permErr) {
+                console.error("[Assessment API] Permission check failed (proceeding):", permErr);
+            }
+
             console.log('[Assessment API] Creating:', { subject, title, dueDate, grade, classNum, classTime, teacher, classCode });
 
-            // Check if the subject is an elective (isMovingClass = 1)
-            let actualClassNum = classNum;
-            const baseSubject = subject.replace(/\s*\(.*$/, '').trim();
-            try {
-                const electiveConfig = await env.DB.prepare(
-                    "SELECT isMovingClass FROM elective_config WHERE grade = ? AND (subject = ? OR fullSubjectName = ?)"
-                ).bind(grade, baseSubject, baseSubject).first();
+            // Check if the subject is an elective (isMovingClass = 1) or has classCode
+            let actualClassNum = parseInt(classNum, 10);
+            if (isNaN(actualClassNum)) actualClassNum = 0;
 
-                if (electiveConfig && electiveConfig.isMovingClass === 1) {
-                    actualClassNum = 0; // 0 indicates it applies to all classes in the grade
-                    console.log(`[Assessment API] Subject ${baseSubject} is a moving class. Setting classNum to 0.`);
+            const baseSubject = subject.replace(/\s*\(.*$/, '').trim();
+            const norm1 = baseSubject.replace(/1/g, 'Ⅰ').replace(/2/g, 'Ⅱ').replace(/3/g, 'Ⅲ');
+            const norm2 = baseSubject.replace(/Ⅰ/g, '1').replace(/Ⅱ/g, '2').replace(/Ⅲ/g, '3');
+
+            // 1. If classCode is given (elective group like "A", "B", etc.), it applies to all classes in grade -> classNum = 0
+            if (classCode && String(classCode).trim()) {
+                actualClassNum = 0;
+                console.log(`[Assessment API] classCode "${classCode}" present. Setting classNum to 0 for moving class.`);
+            } else {
+                try {
+                    const electiveConfig: any = await env.DB.prepare(`
+                        SELECT isMovingClass FROM elective_config 
+                        WHERE grade = ? AND (
+                            subject = ? OR fullSubjectName = ? OR
+                            subject = ? OR fullSubjectName = ? OR
+                            subject = ? OR fullSubjectName = ?
+                        )
+                    `).bind(
+                        grade, baseSubject, baseSubject,
+                        norm1, norm1,
+                        norm2, norm2
+                    ).first().catch(() => null);
+
+                    if (electiveConfig && electiveConfig.isMovingClass === 1) {
+                        actualClassNum = 0; // 0 indicates it applies to all classes in the grade
+                        console.log(`[Assessment API] Subject ${baseSubject} is a moving class in elective_config. Setting classNum to 0.`);
+                    }
+                } catch (e) {
+                    console.error("[Assessment API] Error checking elective config:", e);
                 }
-            } catch (e) {
-                console.error("[Assessment API] Error checking elective config:", e);
-                // Fail gracefully, keep actualClassNum as the specific class
             }
 
             // 중복 체크: 같은 날짜, 같은 교시에 이미 수행평가가 있는지 확인
@@ -430,21 +487,44 @@ export const onRequest = async (context: any) => {
 
             try {
                 let isTeacherCreated = 0;
+                let assessmentGrade: any = null;
                 try {
-                    const existing = await env.DB.prepare(
-                        "SELECT isTeacherCreated FROM performance_assessments WHERE id = ?"
+                    const existing: any = await env.DB.prepare(
+                        "SELECT isTeacherCreated, grade FROM performance_assessments WHERE id = ?"
                     ).bind(id).first();
-                    if (existing && existing.isTeacherCreated) {
-                        isTeacherCreated = existing.isTeacherCreated;
+                    if (existing) {
+                        isTeacherCreated = existing.isTeacherCreated || 0;
+                        assessmentGrade = existing.grade;
                     }
                 } catch (dbErr: any) {
                     console.log("[Assessment API] isTeacherCreated check failed, assuming 0:", dbErr.message);
                 }
 
-                if (isTeacherCreated === 1) {
-                    const role = url.searchParams.get('role');
-                    if (role !== 'teacher') {
-                        return new Response(JSON.stringify({ error: '선생님이 직접 등록한 수행평가는 삭제할 수 없습니다.' }), {
+                const role = url.searchParams.get('role');
+                const isTeacher = role === 'teacher';
+
+                if (isTeacherCreated === 1 && !isTeacher) {
+                    return new Response(JSON.stringify({ error: '선생님이 직접 등록한 수행평가는 삭제할 수 없습니다.' }), {
+                        status: 403,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
+                // 학생 권한 비활성화 시 삭제 차단
+                if (!isTeacher && assessmentGrade) {
+                    const targetGrade = parseInt(assessmentGrade, 10);
+                    const permKey = `assessment_allow_student_grade${targetGrade}`;
+                    const msgKey = 'assessment_disallow_msg_student';
+                    const permRows = await env.DB.prepare(
+                        "SELECT key, value FROM system_settings WHERE key IN (?, ?)"
+                    ).bind(permKey, msgKey).all().catch(() => null);
+
+                    const permMap: Record<string, string> = {};
+                    (permRows?.results || []).forEach((r: any) => { permMap[r.key] = r.value; });
+
+                    if (permMap[permKey] === 'false') {
+                        const defaultMsg = '현재 학생의 수행평가 등록이 제한되어 있습니다.';
+                        return new Response(JSON.stringify({ error: permMap[msgKey] || defaultMsg }), {
                             status: 403,
                             headers: { 'Content-Type': 'application/json' }
                         });
@@ -474,12 +554,43 @@ export const onRequest = async (context: any) => {
             });
         }
 
-        // PATCH: 수정
+        // PATCH: 수정 및 연기
         if (request.method === 'PATCH') {
             const body = await request.json();
             const { id, subject, title, description, dueDate, round, classTime, tempDueDate, tempClassTime, teacher, classCode, isAutoPredicted } = body;
 
             if (!id) return new Response('Missing ID', { status: 400 });
+
+            const isTeacher = body.role === 'teacher' || body.isTeacherCreated === 1;
+            // 학생 권한 비활성화 시 수정 및 연기 차단
+            if (!isTeacher) {
+                let targetGrade = body.grade ? parseInt(body.grade, 10) : null;
+                if (!targetGrade) {
+                    try {
+                        const row: any = await env.DB.prepare("SELECT grade FROM performance_assessments WHERE id = ?").bind(id).first();
+                        if (row) targetGrade = parseInt(row.grade, 10);
+                    } catch (_) {}
+                }
+
+                if (targetGrade) {
+                    const permKey = `assessment_allow_student_grade${targetGrade}`;
+                    const msgKey = 'assessment_disallow_msg_student';
+                    const permRows = await env.DB.prepare(
+                        "SELECT key, value FROM system_settings WHERE key IN (?, ?)"
+                    ).bind(permKey, msgKey).all().catch(() => null);
+
+                    const permMap: Record<string, string> = {};
+                    (permRows?.results || []).forEach((r: any) => { permMap[r.key] = r.value; });
+
+                    if (permMap[permKey] === 'false') {
+                        const defaultMsg = '현재 학생의 수행평가 등록이 제한되어 있습니다.';
+                        return new Response(JSON.stringify({ error: permMap[msgKey] || defaultMsg }), {
+                            status: 403,
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    }
+                }
+            }
 
             // 동적 쿼리 생성
             const updates: string[] = [];

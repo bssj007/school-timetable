@@ -38,6 +38,8 @@ interface AssessmentItem {
   subject: string;
   description: string;
   dueDate: string;
+  grade?: number;
+  classNum?: number;
   isDone: number;
   classTime?: number;
   weekday?: number;
@@ -68,13 +70,24 @@ function formatDate(date: Date): string {
 }
 
 // YYYY-MM-DD ➔ M/D 단축 포맷팅 (대시보드 카드 레이아웃 보호용)
-function formatShortDateText(dateString?: string): string {
-  if (!dateString) return '';
-  const parts = dateString.split('-');
+function formatShortDateText(dateStr: string): string {
+  if (!dateStr) return "";
+  const parts = dateStr.split('-');
   if (parts.length === 3) {
     return `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
   }
-  return dateString;
+  return dateStr;
+}
+
+// 과목명 정규화 (로마자 Ⅰ/Ⅱ/Ⅲ 및 아라비아 숫자 1/2/3 호환, 괄호 꼬리표 제거)
+function normalizeSubjectName(name: string): string {
+  if (!name) return "";
+  return name
+    .replace(/\s*\(.*$/, "")
+    .replace(/1/g, "Ⅰ")
+    .replace(/2/g, "Ⅱ")
+    .replace(/3/g, "Ⅲ")
+    .trim();
 }
 
 // 주간 날짜 배열 생성
@@ -411,6 +424,12 @@ export default function Dashboard() {
         setViewingAssessments(cellAssessments);
         setShowViewDialog(true);
       } else {
+        // 학년별 학생 등록 권한 체크
+        if (!checkStudentPermission()) {
+          setSelectedCell(null);
+          return;
+        }
+
         // 과거 날짜는 추가 불가
         if (isPast) {
           toast.error("지나간 날짜에는 수행평가를 추가할 수 없습니다.");
@@ -590,6 +609,24 @@ export default function Dashboard() {
     },
     staleTime: 0, // 항상 최신 설정을 가져오도록 (그룹 override 등 즉시 반영)
   });
+
+  // 학년별 학생 등록/수정/연기/삭제 권한 검증 헬퍼
+  const checkStudentPermission = (targetGrade?: number) => {
+    const g = targetGrade || parseInt(grade || "1", 10);
+    const isAllowed = g === 1
+      ? settings?.assessment_allow_student_grade1 !== false
+      : g === 2
+      ? settings?.assessment_allow_student_grade2 !== false
+      : g === 3
+      ? settings?.assessment_allow_student_grade3 !== false
+      : true;
+
+    if (!isAllowed) {
+      toast.error(settings?.assessment_disallow_msg_student || "현재 학생의 수행평가 등록이 제한되어 있습니다.");
+      return false;
+    }
+    return true;
+  };
 
   // 각 시간(교시)별 다수결 그룹 계산
   // 각 시간(교시)별 다수결 그룹 계산
@@ -831,26 +868,42 @@ export default function Dashboard() {
   // 학생이 실제로 수강하는 과목 목록 계산 (수행평가 고아상태 필터링용)
   const myActualSubjects = useMemo(() => {
     const subjects = new Set<string>();
-    
+
+    const addSubjectVariants = (s?: string | null) => {
+      if (!s) return;
+      const trimmed = s.trim();
+      if (!trimmed) return;
+      subjects.add(trimmed);
+      const norm = normalizeSubjectName(trimmed);
+      if (norm) subjects.add(norm);
+      const base = trimmed.replace(/\s*\(.*$/, "").trim();
+      if (base) subjects.add(base);
+    };
+
     // 1. 시간표 기반 수강 과목 수집
     for (let w = 0; w < 5; w++) {
       for (let c = 1; c <= 7; c++) {
         const item = (timetableData || []).find(t => t.weekday === w && t.classTime === c);
         const group = computedGroups[`${w}-${c}`];
         const electiveSelection = currentProfile?.electives?.[group];
-        
+
         let displaySubject = item ? item.subject : null;
-        
+
         if (group && electiveSelection) {
            const configEntry = (electiveConfigs || []).find((cfg: any) =>
              cfg.subject === electiveSelection.subject &&
              cfg.classCode?.split(",").map((s: string) => s.trim()).includes(group)
            );
            displaySubject = configEntry?.fullSubjectName || electiveSelection.subject || displaySubject;
+           addSubjectVariants(electiveSelection.subject);
+           addSubjectVariants(electiveSelection.fullSubjectName);
         }
 
         if (displaySubject) {
-           subjects.add(displaySubject.trim());
+           addSubjectVariants(displaySubject);
+        }
+        if (item?.subject) {
+           addSubjectVariants(item.subject);
         }
       }
     }
@@ -860,11 +913,11 @@ export default function Dashboard() {
       if (currentProfile?.electives) {
         Object.values(currentProfile.electives).forEach((sel: any) => {
           if (sel && sel.subject) {
-            subjects.add(sel.subject.trim());
-            if (sel.fullSubjectName) subjects.add(sel.fullSubjectName.trim());
-            
+            addSubjectVariants(sel.subject);
+            addSubjectVariants(sel.fullSubjectName);
+
             const configEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === sel.subject);
-            if (configEntry?.fullSubjectName) subjects.add(configEntry.fullSubjectName.trim());
+            if (configEntry?.fullSubjectName) addSubjectVariants(configEntry.fullSubjectName);
           }
         });
       }
@@ -885,32 +938,40 @@ export default function Dashboard() {
 
     // 2. 학생이 듣지 않는 과목의 고아상태 등 수행평가 필터링 (2, 3학년)
     if (grade === "2" || grade === "3") {
+      const hasElectiveSelections = currentProfile?.electives && Object.keys(currentProfile.electives).length > 0;
+
       filtered = filtered.filter(a => {
-        // 1차 필터: 아예 듣지 않는 과목(이름)이면 100% 탈락
+        // 1차 필터: 학생이 선택과목을 입력했을 경우, 수강 과목과 일치하는지 검증
         const baseSubject = a.subject.replace(/\s*\(.*$/, '').trim();
-        if (!myActualSubjects.has(baseSubject)) return false;
+        const normSubject = normalizeSubjectName(a.subject);
+
+        if (hasElectiveSelections && !myActualSubjects.has(baseSubject) && !myActualSubjects.has(normSubject) && !myActualSubjects.has(a.subject.trim())) {
+          return false;
+        }
 
         // 2차 필터: a.classCode가 명시된 경우, 이 학생의 elective 그룹이 포함되는지 직접 검증
-        // 이동수업 수행평가는 subject 이름에 그룹이 없어도 classCode로만 구분됨
         if (a.classCode && a.classCode.trim()) {
           const allowedGroups = a.classCode.split(",").map((s: string) => s.trim()).filter(Boolean);
           if (allowedGroups.length > 0) {
-            // 학생이 보유한 elective 그룹 목록 (currentProfile.electives의 키: "A", "B", ...)
             const myGroups = new Set<string>(Object.keys(currentProfile?.electives || {}));
-            // 내 그룹 중 하나라도 allowedGroups에 포함되어야 함
-            const hasMatch = allowedGroups.some(g => myGroups.has(g));
-            if (!hasMatch) {
-              return false; // 이 학생의 그룹이 대상 그룹에 없음 → 표시 안 함
-            }
-            // 그룹은 맞지만, 해당 그룹에서 선택한 과목이 수행평가 과목과 다른지 추가 검증
-            const matchedGroup = allowedGroups.find(g => myGroups.has(g));
-            if (matchedGroup) {
-              const mySubjectInGroup = currentProfile?.electives?.[matchedGroup]?.subject;
-              if (mySubjectInGroup) {
-                const cfgEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySubjectInGroup);
-                const fullSubj = cfgEntry?.fullSubjectName || mySubjectInGroup;
-                if (baseSubject !== mySubjectInGroup.trim() && baseSubject !== fullSubj.trim()) {
-                  return false; // 그룹은 같지만 그 그룹에서 내가 선택한 과목과 다름
+            // 학생이 그룹 정보를 등록한 경우 그룹 일치 여부 확인
+            if (myGroups.size > 0) {
+              const hasMatch = allowedGroups.some(g => myGroups.has(g));
+              if (!hasMatch) {
+                return false; // 이 학생의 그룹이 대상 그룹에 없음 → 표시 안 함
+              }
+              const matchedGroup = allowedGroups.find(g => myGroups.has(g));
+              if (matchedGroup) {
+                const mySubjectInGroup = currentProfile?.electives?.[matchedGroup]?.subject;
+                if (mySubjectInGroup) {
+                  const cfgEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySubjectInGroup);
+                  const fullSubj = cfgEntry?.fullSubjectName || mySubjectInGroup;
+                  const normMySubj = normalizeSubjectName(mySubjectInGroup);
+                  const normFullSubj = normalizeSubjectName(fullSubj);
+
+                  if (baseSubject !== mySubjectInGroup.trim() && baseSubject !== fullSubj.trim() && normSubject !== normMySubj && normSubject !== normFullSubj) {
+                    return false; // 그룹은 같지만 그 그룹에서 내가 선택한 과목과 다름
+                  }
                 }
               }
             }
@@ -918,19 +979,19 @@ export default function Dashboard() {
         } else {
           // classCode가 없는 경우: 과목명의 "(C그룹)" 텍스트로 폴백 검증
           const groupMatch = a.subject.match(/\(([A-Z]그룹)/);
-          if (groupMatch && groupMatch[1]) {
+          if (groupMatch && groupMatch[1] && currentProfile?.electives) {
              const targetGroup = groupMatch[1];
              const mySelectedSubjectForGroup = currentProfile?.electives?.[targetGroup]?.subject;
-             
-             if (!mySelectedSubjectForGroup) {
-                return false; // 해당 그룹에 아무 과목도 선택하지 않았다면 내 것이 아님
-             }
 
-             const configEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySelectedSubjectForGroup);
-             const fullSubj = configEntry?.fullSubjectName || mySelectedSubjectForGroup;
+             if (mySelectedSubjectForGroup) {
+               const configEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySelectedSubjectForGroup);
+               const fullSubj = configEntry?.fullSubjectName || mySelectedSubjectForGroup;
+               const normMySubj = normalizeSubjectName(mySelectedSubjectForGroup);
+               const normFullSubj = normalizeSubjectName(fullSubj);
 
-             if (baseSubject !== mySelectedSubjectForGroup.trim() && baseSubject !== fullSubj.trim()) {
-                return false; // 내 프로필의 그룹 배정 과목과, 수행평가의 실제 과목이 일치하지 않음
+               if (baseSubject !== mySelectedSubjectForGroup.trim() && baseSubject !== fullSubj.trim() && normSubject !== normMySubj && normSubject !== normFullSubj) {
+                  return false;
+               }
              }
           }
         }
@@ -1063,14 +1124,18 @@ export default function Dashboard() {
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await fetch(`/api/assessment?id=${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to delete');
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assessments'] });
       toast.success("삭제되었습니다");
       setSelectedCell(null);
-    }
+    },
+    onError: (error: any) => toast.error(error.message || "삭제 실패")
   });
 
   // 6. 수행평가 수정
@@ -1136,6 +1201,8 @@ export default function Dashboard() {
   };
 
   const handleDelete = async (id: number) => {
+    const targetAssessment = allAssessments?.find(a => a.id === id);
+    if (!checkStudentPermission(targetAssessment?.grade)) return;
     if (!confirm("정말 삭제하시겠습니까?")) return;
     try {
       await deleteMutation.mutateAsync(id);
@@ -1145,6 +1212,7 @@ export default function Dashboard() {
   };
 
   const handleEditClick = (assessment: AssessmentItem) => {
+    if (!checkStudentPermission(assessment.grade)) return;
     setEditingAssessment(assessment);
 
     // Parse the stored sequence/round number back from the description ("1차" -> "1")
@@ -1169,6 +1237,7 @@ export default function Dashboard() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingAssessment) return;
+    if (!checkStudentPermission(editingAssessment.grade)) return;
 
     try {
       await updateMutation.mutateAsync({
@@ -1226,6 +1295,11 @@ export default function Dashboard() {
 
   const handleRelocationSubmit = async () => {
     if (!pendingRelocation || !relocatingAssessment) return;
+    if (!checkStudentPermission(relocatingAssessment.grade)) {
+      setRelocatingAssessment(null);
+      setPendingRelocation(null);
+      return;
+    }
     setIsRelocatingUpdating(true);
     try {
         const updatesToMake: any[] = [];
@@ -2025,9 +2099,25 @@ export default function Dashboard() {
                                 const matchSubject = group && electiveSelection ? (electiveSelection.fullSubjectName || electiveSelection.subject) : (item ? item.subject : null);
 
                                 if (!matchSubject) return false;
-                                if (a.subject.trim() !== matchSubject.trim()) return false;
-                                if (a.dueDate !== currentDate) return false;
-                                if (a.classTime !== classTime) return false;
+
+                                const aSubjNorm = normalizeSubjectName(a.subject);
+                                const matchSubjNorm = normalizeSubjectName(matchSubject);
+                                const aSubjClean = a.subject ? a.subject.replace(/\s*\(.*$/, '').trim() : '';
+                                const matchSubjClean = matchSubject.replace(/\s*\(.*$/, '').trim();
+
+                                const isSubjectMatch = 
+                                  aSubjNorm === matchSubjNorm || 
+                                  aSubjClean === matchSubjClean || 
+                                  a.subject.trim() === matchSubject.trim() ||
+                                  (group && (matchSubject.includes(group) || matchSubject === `${group}그룹`));
+
+                                if (!isSubjectMatch) return false;
+
+                                const effDueDate = a.tempDueDate || a.dueDate;
+                                const effClassTime = a.tempClassTime || a.classTime;
+
+                                if (effDueDate !== currentDate) return false;
+                                if (effClassTime !== classTime) return false;
                                 if (a.isDone) return false;
 
                                 // classCode 검증: 수행평가에 classCode(그룹)가 지정된 경우,
@@ -2773,6 +2863,7 @@ export default function Dashboard() {
                       className="text-xs h-7 px-3 border-orange-200 text-orange-600 hover:bg-orange-50 hover:text-orange-700 transition-colors font-semibold"
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (!checkStudentPermission(assessment.grade)) return;
                         setRelocatingAssessment(assessment);
                         setShowViewDialog(false);
                       }}
@@ -3019,6 +3110,7 @@ export default function Dashboard() {
                             className="text-red-600 border-red-200 hover:bg-red-50 h-7 text-xs px-2 shadow-sm ml-2 shrink-0 pointer-events-auto"
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (!checkStudentPermission(assessment.grade)) return;
                               setRelocatingAssessment(assessment);
                               setPendingRelocation(null);
                               window.scrollTo({ top: 0, behavior: "smooth" });

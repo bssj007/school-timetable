@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -4225,6 +4225,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     교사명 무시 키워드
                 </Button>
                 <Button
+                    variant={selectedMenu === "assessment-role-permissions" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-purple-600 hover:text-purple-700 hover:bg-purple-50 font-medium"
+                    onClick={() => setSelectedMenu("assessment-role-permissions")}
+                >
+                    <UserCheck className="w-4 h-4 mr-2" />
+                    수행평가 등록주체
+                </Button>
+                <Button
                     variant={selectedMenu === "semester-key" ? "default" : "ghost"}
                     className="justify-start whitespace-nowrap text-left text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-medium"
                     onClick={() => setSelectedMenu("semester-key")}
@@ -4489,6 +4497,16 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <TeacherIgnoreKeywordsSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+                {selectedMenu === "assessment-role-permissions" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-purple-600">수행평가 등록주체 관리</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <AssessmentRolePermissionsSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -9863,6 +9881,304 @@ function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
         </Card>
     );
 }
+
+// ----------------------------------------------------------------------
+// AssessmentRolePermissionsSettings - 수행평가 등록주체 관리 (학년별 학생/선생님 권한 및 제한 메시지)
+// Located under: 기타 > 수행평가 등록주체
+// ----------------------------------------------------------------------
+function AssessmentRolePermissionsSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    const { data: settingsData, isLoading } = useQuery({
+        queryKey: ["admin", "assessmentRolePermissionsSettings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 불러오기 실패");
+            return res.json();
+        }
+    });
+
+    const [studentDisallowMsg, setStudentDisallowMsg] = useState("");
+    const [teacherDisallowMsg, setTeacherDisallowMsg] = useState("");
+    const [isInitialized, setIsInitialized] = useState(false);
+
+    useEffect(() => {
+        if (settingsData && !isInitialized) {
+            setStudentDisallowMsg(settingsData.assessment_disallow_msg_student || "현재 학생의 수행평가 등록이 제한되어 있습니다.");
+            setTeacherDisallowMsg(settingsData.assessment_disallow_msg_teacher || "현재 선생님의 수행평가 등록이 제한되어 있습니다.");
+            setIsInitialized(true);
+        }
+    }, [settingsData, isInitialized]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (payload: Record<string, string>) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "assessmentRolePermissionsSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings-teacher"] });
+            toast.success("수행평가 등록주체 설정이 저장되었습니다.");
+        },
+        onError: (err: any) => {
+            toast.error(err.message || "설정 저장에 실패했습니다.");
+        }
+    });
+
+    if (isLoading || !settingsData) {
+        return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
+    }
+
+    const allowStudentG1 = settingsData.assessment_allow_student_grade1 !== "false";
+    const allowStudentG2 = settingsData.assessment_allow_student_grade2 !== "false";
+    const allowStudentG3 = settingsData.assessment_allow_student_grade3 !== "false";
+
+    const allowTeacherG1 = settingsData.assessment_allow_teacher_grade1 !== "false";
+    const allowTeacherG2 = settingsData.assessment_allow_teacher_grade2 !== "false";
+    const allowTeacherG3 = settingsData.assessment_allow_teacher_grade3 !== "false";
+
+    const handleToggle = (grade: number, role: 'student' | 'teacher', currentVal: boolean) => {
+        const nextVal = !currentVal;
+        const roleName = role === 'student' ? '학생' : '선생님';
+        const actionName = nextVal ? '등록 허용(가능)' : '등록 차단(불가)';
+        const confirmText = `[${grade}학년 ${roleName}]의 수행평가 등록 권한을 [${actionName}]으로 변경하시겠습니까?`;
+
+        if (window.confirm(confirmText)) {
+            const key = `assessment_allow_${role}_grade${grade}`;
+            saveMutation.mutate({ [key]: nextVal ? "true" : "false" });
+        }
+    };
+
+    const handleSaveMessages = (e: React.FormEvent) => {
+        e.preventDefault();
+        const confirmText = "수행평가 등록 제한 안내 메시지를 저장하시겠습니까?";
+        if (window.confirm(confirmText)) {
+            saveMutation.mutate({
+                assessment_disallow_msg_student: studentDisallowMsg.trim() || "현재 학생의 수행평가 등록이 제한되어 있습니다.",
+                assessment_disallow_msg_teacher: teacherDisallowMsg.trim() || "현재 선생님의 수행평가 등록이 제한되어 있습니다.",
+            });
+        }
+    };
+
+    const handleResetDefaultMessages = () => {
+        if (window.confirm("안내 메시지를 시스템 기본값으로 초기화하시겠습니까?")) {
+            const defaultStudent = "현재 학생의 수행평가 등록이 제한되어 있습니다.";
+            const defaultTeacher = "현재 선생님의 수행평가 등록이 제한되어 있습니다.";
+            setStudentDisallowMsg(defaultStudent);
+            setTeacherDisallowMsg(defaultTeacher);
+            saveMutation.mutate({
+                assessment_disallow_msg_student: defaultStudent,
+                assessment_disallow_msg_teacher: defaultTeacher,
+            });
+        }
+    };
+
+    const grades = [
+        { grade: 1, studentAllowed: allowStudentG1, teacherAllowed: allowTeacherG1 },
+        { grade: 2, studentAllowed: allowStudentG2, teacherAllowed: allowTeacherG2 },
+        { grade: 3, studentAllowed: allowStudentG3, teacherAllowed: allowTeacherG3 },
+    ];
+
+    return (
+        <div className="space-y-6 max-w-4xl mt-4 pb-12">
+            {/* 1. 학년별 수행평가 등록 권한 카드 */}
+            <Card className="border-slate-200 shadow-sm">
+                <CardHeader>
+                    <div className="flex items-center gap-2">
+                        <UserCheck className="w-5 h-5 text-purple-600" />
+                        <CardTitle className="text-base font-bold">학년별 수행평가 등록 권한 설정</CardTitle>
+                    </div>
+                    <CardDescription>
+                        각 학년별로 학생과 선생님의 수행평가 추가/등록 권한을 개별 제어합니다.
+                        등록이 차단된 주체는 시간표 클릭 시 아래에 설정된 안내 메시지가 표시되며 등록이 제한됩니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="overflow-hidden border border-slate-200 rounded-lg">
+                        <Table>
+                            <TableHeader className="bg-slate-50">
+                                <TableRow>
+                                    <TableHead className="font-bold text-center w-24">대상 학년</TableHead>
+                                    <TableHead className="font-bold text-center">학생 등록 권한</TableHead>
+                                    <TableHead className="font-bold text-center">선생님 등록 권한</TableHead>
+                                    <TableHead className="font-bold text-center w-36">현재 상태 요약</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {grades.map(({ grade, studentAllowed, teacherAllowed }) => (
+                                    <TableRow key={grade} className="hover:bg-slate-50/50">
+                                        <TableCell className="font-bold text-center bg-slate-50/30 text-slate-700">
+                                            {grade}학년
+                                        </TableCell>
+                                        <TableCell className="text-center py-4">
+                                            <div className="flex items-center justify-center gap-3">
+                                                <Switch
+                                                    id={`student-toggle-${grade}`}
+                                                    checked={studentAllowed}
+                                                    onCheckedChange={() => handleToggle(grade, 'student', studentAllowed)}
+                                                    disabled={saveMutation.isPending}
+                                                />
+                                                <Label
+                                                    htmlFor={`student-toggle-${grade}`}
+                                                    className="cursor-pointer text-xs font-semibold"
+                                                >
+                                                    {studentAllowed ? (
+                                                        <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                                            등록 가능
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                                            등록 제한 (차단)
+                                                        </span>
+                                                    )}
+                                                </Label>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-center py-4">
+                                            <div className="flex items-center justify-center gap-3">
+                                                <Switch
+                                                    id={`teacher-toggle-${grade}`}
+                                                    checked={teacherAllowed}
+                                                    onCheckedChange={() => handleToggle(grade, 'teacher', teacherAllowed)}
+                                                    disabled={saveMutation.isPending}
+                                                />
+                                                <Label
+                                                    htmlFor={`teacher-toggle-${grade}`}
+                                                    className="cursor-pointer text-xs font-semibold"
+                                                >
+                                                    {teacherAllowed ? (
+                                                        <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                                            등록 가능
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                                            등록 제한 (차단)
+                                                        </span>
+                                                    )}
+                                                </Label>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            {studentAllowed && teacherAllowed ? (
+                                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px]">
+                                                    모두 허용
+                                                </Badge>
+                                            ) : !studentAllowed && !teacherAllowed ? (
+                                                <Badge variant="destructive" className="text-[11px]">
+                                                    모두 차단
+                                                </Badge>
+                                            ) : studentAllowed ? (
+                                                <Badge variant="secondary" className="bg-amber-50 text-amber-700 border border-amber-200 text-[11px]">
+                                                    학생만 가능
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 border border-blue-200 text-[11px]">
+                                                    선생님만 가능
+                                                </Badge>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                    <div className="p-3 bg-purple-50/70 border border-purple-100 rounded-lg text-xs text-purple-800 flex items-start gap-2">
+                        <Info className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                            <strong>확인 알림 안내:</strong> 옵션 변경 시 관리자의 오작동 방지를 위해 브라우저 재확인 대화상자가 표시된 후 즉시 저장 및 실시간 적용됩니다.
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* 2. 등록 차단 안내 메시지 설정 카드 */}
+            <Card className="border-slate-200 shadow-sm">
+                <CardHeader>
+                    <div className="flex items-center gap-2">
+                        <AlertCircle className="w-5 h-5 text-indigo-600" />
+                        <CardTitle className="text-base font-bold">등록 차단 시 안내 메시지 커스텀 설정</CardTitle>
+                    </div>
+                    <CardDescription>
+                        수행평가 등록이 제한된 학년에서 시간표를 클릭했을 때 사용자(학생/선생님)에게 노출될 안내 문구를 주체별로 직접 입력합니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleSaveMessages} className="space-y-5">
+                        {/* 학생 안내 문구 */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="student-disallow-msg" className="font-semibold text-sm text-slate-800">
+                                    학생 등록 제한 안내 메시지
+                                </Label>
+                                <span className="text-xs text-slate-400">메인페이지 학생 시간표 클릭 시 노출</span>
+                            </div>
+                            <Input
+                                id="student-disallow-msg"
+                                value={studentDisallowMsg}
+                                onChange={(e) => setStudentDisallowMsg(e.target.value)}
+                                placeholder="예: 현재 학생의 수행평가 등록이 제한되어 있습니다."
+                                className="text-sm h-10"
+                            />
+                        </div>
+
+                        {/* 선생님 안내 문구 */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="teacher-disallow-msg" className="font-semibold text-sm text-slate-800">
+                                    선생님 등록 제한 안내 메시지
+                                </Label>
+                                <span className="text-xs text-slate-400">교사용 페이지 시간표 클릭 시 노출</span>
+                            </div>
+                            <Input
+                                id="teacher-disallow-msg"
+                                value={teacherDisallowMsg}
+                                onChange={(e) => setTeacherDisallowMsg(e.target.value)}
+                                placeholder="예: 현재 선생님의 수행평가 등록이 제한되어 있습니다."
+                                className="text-sm h-10"
+                            />
+                        </div>
+
+                        <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleResetDefaultMessages}
+                                disabled={saveMutation.isPending}
+                                className="text-xs text-slate-600"
+                            >
+                                <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                                기본값으로 복원
+                            </Button>
+                            <Button
+                                type="submit"
+                                size="sm"
+                                disabled={saveMutation.isPending}
+                                className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-4"
+                            >
+                                <Save className="w-3.5 h-3.5 mr-1.5" />
+                                {saveMutation.isPending ? "저장 중..." : "안내 메시지 저장"}
+                            </Button>
+                        </div>
+                    </form>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
 
 
 

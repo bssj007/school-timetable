@@ -1134,6 +1134,20 @@ export default function TeacherPage() {
       });
       setShowEditDialog(true);
     } else {
+      // 학년별 선생님 등록 권한 체크
+      const isTeacherAllowed = decoded.grade === 1
+        ? settings?.assessment_allow_teacher_grade1 !== false
+        : decoded.grade === 2
+        ? settings?.assessment_allow_teacher_grade2 !== false
+        : decoded.grade === 3
+        ? settings?.assessment_allow_teacher_grade3 !== false
+        : true;
+
+      if (!isTeacherAllowed) {
+        toast.error(settings?.assessment_disallow_msg_teacher || "현재 선생님의 수행평가 등록이 제한되어 있습니다.");
+        return;
+      }
+
       // Add new
       setSelectedCell({
         weekdayIndex: dayIndex,
