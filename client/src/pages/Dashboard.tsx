@@ -2325,7 +2325,7 @@ export default function Dashboard() {
                                             )}
                                           </span>
                                         </div>
-                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-row flex-wrap items-center justify-center overflow-hidden leading-tight">
+                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-row flex-nowrap items-center justify-center overflow-hidden leading-tight">
                                           {!isCancelledByFreePeriod && displayTeacher ? (
                                             <span className="truncate shrink min-w-0 max-w-full print:text-[1.8cqh]">{displayTeacher}</span>
                                           ) : null}
