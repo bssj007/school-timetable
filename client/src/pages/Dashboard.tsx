@@ -2281,6 +2281,27 @@ export default function Dashboard() {
                                       <span>{group}</span><span className="hidden md:inline">그룹</span>
                                     </div>
                                   )}
+                                  {includeAssessments && cellAssessments.length > 0 && (() => {
+                                    const roundTexts = cellAssessments
+                                      .map(a => a.description && a.description.includes('차') ? a.description : null)
+                                      .filter((v): v is string => v !== null);
+                                    const uniqueRounds = Array.from(new Set(roundTexts));
+                                    return uniqueRounds.length > 0 ? (
+                                      <div className="absolute top-0 left-0 flex flex-col gap-px print:hidden">
+                                        {uniqueRounds.map((r, idx) => (
+                                          <div
+                                            key={idx}
+                                            className={`text-[8px] md:text-[9px] font-bold leading-none px-1.5 py-0.5 rounded-r-full ${
+                                              isPast ? 'bg-gray-400 text-white' : 'bg-blue-600 text-white'
+                                            }`}
+                                            style={{ marginTop: idx === 0 ? 2 : 0 }}
+                                          >
+                                            {r}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : null;
+                                  })()}
                                   <div className="flex flex-col items-center justify-center h-full min-h-0 print:overflow-hidden print:max-h-full">
                                     {item || isElectiveActive ? (
                                       <>
@@ -2321,7 +2342,7 @@ export default function Dashboard() {
                                               {cellAssessments.map(a => (
                                                 <span key={a.id} className="inline-flex items-center gap-0.5">
                                                   <span className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : a.isPostponed ? "bg-white text-red-500 border border-red-500" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
-                                                    {a.description && a.description.includes("차") ? a.description : '평가'}
+                                                    평가
                                                   </span>
                                                   {!!a.isTeacherCreated && (
                                                     <span className="print:hidden text-[8px] md:text-[9px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap bg-emerald-500 text-white">
