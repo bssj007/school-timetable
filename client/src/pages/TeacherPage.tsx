@@ -1621,19 +1621,13 @@ export default function TeacherPage() {
                                 // classCode를 JSON/CSV 양쪽 형식으로 파싱해 그룹코드 추출
                                 const codes = parseClassCode(a.classCode);
                                 if (codes.length === 0) return `${a.grade}-전체반`;
-                                // 그룹코드로 관리페이지 강의반명 조회
-                                const classNames = codes
-                                  .map((code: string) => lectureClassNameMap.get(`${a.grade}-${(a.subject || '').trim()}-${code}`))
-                                  .filter(Boolean);
-                                // 고유 강의반명만 표시
-                                const uniqueNames = (classNames as string[]).filter((v, i, arr) => arr.indexOf(v) === i);
-                                if (uniqueNames.length > 0) {
-                                  return codes.length === 1
-                                    ? `${uniqueNames[0]}(${codes[0]})`
-                                    : `강의반(${codes.join(', ')})`;
-                                }
-                                // fallback: 그룹코드 그대로
-                                return codes.length === 1 ? `강의반(${codes[0]})` : `강의반(${codes.join(', ')})`;
+                                // 공유 훅으로 강의반명 조회 (grade 기반으로 resolve 선택)
+                                const resolve = a.grade === 2 ? resolveG2 : resolveG3;
+                                const labels = codes.map((code: string) =>
+                                  resolve.getCellLabel(a.grade, a.subject || '', code, 0)
+                                );
+                                const uniqueLabels = labels.filter((v: string, i: number, arr: string[]) => arr.indexOf(v) === i);
+                                return uniqueLabels.join(', ');
                               })()}
                             </span>
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">
