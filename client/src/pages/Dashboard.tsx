@@ -2301,7 +2301,7 @@ export default function Dashboard() {
                                       </div>
                                     ) : null;
                                   })()}
-                                  <div className={`flex flex-col items-center justify-center h-full min-h-0 print:overflow-hidden print:max-h-full${includeAssessments && cellAssessments.some(a => !!a.isTeacherCreated) ? ' pb-3' : ''}`}>
+                                  <div className={`flex flex-col items-center justify-center h-full min-h-0 print:overflow-hidden print:max-h-full`}>
                                     {item || isElectiveActive ? (
                                       <>
                                         <div
@@ -2336,8 +2336,8 @@ export default function Dashboard() {
                                           ) : null}
                                         </div>
                                         {includeAssessments && cellAssessments.some(a => !!a.isTeacherCreated) && (
-                                          <div className="absolute bottom-0 right-0 print:hidden">
-                                            <span className="text-[8px] md:text-[9px] px-1 py-0.5 rounded-tl-md leading-none whitespace-nowrap bg-emerald-500 text-white font-bold">
+                                          <div className="absolute left-0 top-0 bottom-0 flex items-center print:hidden" style={{ width: '10px' }}>
+                                            <span className="text-[7px] font-bold text-emerald-600 leading-none" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', whiteSpace: 'nowrap' }}>
                                               선생님 등록
                                             </span>
                                           </div>
