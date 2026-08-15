@@ -1684,7 +1684,12 @@ export default function TeacherPage() {
                           : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'
                       }`}
                   >
-                    {tab.label}
+                    {tab.group
+                      ? (() => {
+                          const configName = lectureClassNameMap.get(`${tab.grade}-${(effectiveSubjectFilter || '').trim()}-${tab.group}`);
+                          return configName ? `${configName}(${tab.group})` : `(${tab.group})`;
+                        })()
+                      : tab.label}
                   </button>
                 ))}
               </div>
@@ -1736,22 +1741,19 @@ export default function TeacherPage() {
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
                               {(() => {
                                 if (a.classNum !== 0) return `${a.grade}-${a.classNum}반`;
-                                // classCode를 JSON/CSV 양쪽 형식으로 파싱해 그룹코드 추출
                                 const codes = parseClassCode(a.classCode);
                                 if (codes.length === 0) return `${a.grade}-전체반`;
-                                // 그룹코드로 관리페이지 강의반명 조회
                                 const classNames = codes
                                   .map((code: string) => lectureClassNameMap.get(`${a.grade}-${(a.subject || '').trim()}-${code}`))
                                   .filter(Boolean);
-                                // 고유 강의반명만 표시
                                 const uniqueNames = (classNames as string[]).filter((v, i, arr) => arr.indexOf(v) === i);
                                 if (uniqueNames.length > 0) {
                                   return codes.length === 1
                                     ? `${uniqueNames[0]}(${codes[0]})`
-                                    : `강의반(${codes.join(', ')})`;
+                                    : uniqueNames.join(', ');
                                 }
-                                // fallback: 그룹코드 그대로
-                                return codes.length === 1 ? `강의반(${codes[0]})` : `강의반(${codes.join(', ')})`;
+                                // 강의실 이름 없을 경우 그룹코드만 표시 (raw data fallback 금지)
+                                return codes.length === 1 ? `(${codes[0]})` : `(${codes.join(', ')})`;
                               })()}
                             </span>
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">
@@ -1855,9 +1857,9 @@ export default function TeacherPage() {
                       .filter(Boolean) as string[];
                     const uniqueNames = classNames.filter((v, i, arr) => arr.indexOf(v) === i);
                     if (uniqueNames.length > 0) {
-                      return codes.length === 1 ? `${uniqueNames[0]}(${codes[0]})` : `강의반(${codes.join(', ')})`;
+                      return codes.length === 1 ? `${uniqueNames[0]}(${codes[0]})` : uniqueNames.length > 0 ? uniqueNames.join(', ') : `(${codes.join(', ')})`;
                     }
-                    return codes.length === 1 ? `강의반(${codes[0]})` : `강의반(${codes.join(', ')})`;
+                    return codes.length === 1 ? `(${codes[0]})` : uniqueNames.length > 0 ? uniqueNames.join(', ') : `(${codes.join(', ')})`;
                   })()}
                 </div>
               </div>
@@ -1963,9 +1965,9 @@ export default function TeacherPage() {
                       .filter(Boolean) as string[];
                     const uniqueNames = classNames.filter((v, i, arr) => arr.indexOf(v) === i);
                     if (uniqueNames.length > 0) {
-                      return codes.length === 1 ? `${uniqueNames[0]}(${codes[0]})` : `강의반(${codes.join(', ')})`;
+                      return codes.length === 1 ? `${uniqueNames[0]}(${codes[0]})` : uniqueNames.length > 0 ? uniqueNames.join(', ') : `(${codes.join(', ')})`;
                     }
-                    return codes.length === 1 ? `강의반(${codes[0]})` : `강의반(${codes.join(', ')})`;
+                    return codes.length === 1 ? `(${codes[0]})` : uniqueNames.length > 0 ? uniqueNames.join(', ') : `(${codes.join(', ')})`;
                   })()}
                 </div>
               </div>
