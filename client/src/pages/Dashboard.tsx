@@ -2336,10 +2336,15 @@ export default function Dashboard() {
                                           ) : null}
                                         </div>
                                         {includeAssessments && cellAssessments.some(a => !!a.isTeacherCreated) && (
-                                          <div className="absolute left-0 bottom-0 flex items-end print:hidden">
-                                            <span className="text-[7px] md:text-[8px] font-bold text-white bg-emerald-500 leading-none px-0.5 py-0.5 rounded-tr-md" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', whiteSpace: 'nowrap' }}>
-                                              선생님 등록
-                                            </span>
+                                          <div className="absolute left-0 bottom-0 z-10 print:hidden pointer-events-none">
+                                            <div className="flex flex-col items-center justify-center bg-emerald-600 text-white font-bold text-[9px] md:text-[10px] leading-tight px-1 py-1 rounded-tr-md shadow-sm select-none">
+                                              <span>선</span>
+                                              <span>생</span>
+                                              <span>님</span>
+                                              <span className="h-0.5" />
+                                              <span>등</span>
+                                              <span>록</span>
+                                            </div>
                                           </div>
                                         )}
                                       </>
