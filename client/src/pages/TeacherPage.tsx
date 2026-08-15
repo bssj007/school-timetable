@@ -272,13 +272,13 @@ export default function TeacherPage() {
   });
   const [openCombobox, setOpenCombobox] = useState(false);
 
-  // ── 교사 페이지 인증 (장난방지 수준 localStorage 기반) ──
-  const [isTeacherVerified, setIsTeacherVerified] = useState<boolean>(false);
+  // ── 교사 페이지 인증: 선생님별 localStorage 기반 ──
+  // isCurrentTeacherVerified: 현재 선택된 선생님에 대한 인증 여부
+  const [isCurrentTeacherVerified, setIsCurrentTeacherVerified] = useState<boolean>(false);
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [showAuthPassword, setShowAuthPassword] = useState(false);
-
-  // 마운트 시 localStorage 확인 (settings 로딩 후 useEffect에서 검증)
 
   const [weekOffset, setWeekOffset] = useState<number>(() => {
     const today = new Date();
@@ -331,46 +331,70 @@ export default function TeacherPage() {
     refetchOnWindowFocus: true,
   });
 
-  // settings 로딩 후 localStorage 인증 유효성 검사
+  // settings/selectedTeacherId 변경 시 현재 선생님 인증 상태 재확인
+  // rawTeacherName은 tId에 의존하므로 selectedTeacherId로 키 생성
+  const teacherAuthStorageKey = `teacher-auth-${selectedTeacherId}`;
+
   useEffect(() => {
-    if (!settings) return; // settings 로딩 전 대기
+    if (!settings) return;
     const expireDays = settings.teacher_auth_expire_days ?? 0;
-    const stored = localStorage.getItem("teacher-auth-verified");
-    if (!stored) {
-      setIsTeacherVerified(false);
-      return;
-    }
-    // 0 = 영구
-    if (expireDays === 0) {
-      setIsTeacherVerified(true);
-      return;
-    }
+    const stored = localStorage.getItem(teacherAuthStorageKey);
+    if (!stored) { setIsCurrentTeacherVerified(false); return; }
+    if (expireDays === 0) { setIsCurrentTeacherVerified(true); return; }
     const storedTime = parseInt(stored, 10);
     if (isNaN(storedTime)) {
-      localStorage.removeItem("teacher-auth-verified");
-      setIsTeacherVerified(false);
+      localStorage.removeItem(teacherAuthStorageKey);
+      setIsCurrentTeacherVerified(false);
       return;
     }
     const expireMs = expireDays * 24 * 60 * 60 * 1000;
     if (Date.now() - storedTime < expireMs) {
-      setIsTeacherVerified(true);
+      setIsCurrentTeacherVerified(true);
     } else {
-      localStorage.removeItem("teacher-auth-verified");
-      setIsTeacherVerified(false);
+      localStorage.removeItem(teacherAuthStorageKey);
+      setIsCurrentTeacherVerified(false);
     }
-  }, [settings]);
+  }, [settings, teacherAuthStorageKey]);
+
+  // 선생님별 올바른 비밀번호 조회 (개별 설정 우선, 없으면 디폴트)
+  const getCorrectPassword = (): string => {
+    const defaultPw = settings?.teacher_default_password || '관리';
+    if (settings?.teacher_passwords) {
+      try {
+        const pwMap: Record<string, string> =
+          typeof settings.teacher_passwords === 'string'
+            ? JSON.parse(settings.teacher_passwords)
+            : settings.teacher_passwords;
+        // rawTeacherName은 이 시점에서 아직 미정이므로 선생님 ID로 fallback
+        // 실제 매칭은 rawTeacherName 기준
+        const keyByRaw = Object.keys(pwMap).find(k => k === (timetableData?.teachers?.[parseInt(selectedTeacherId, 10)] || ''));
+        if (keyByRaw) return pwMap[keyByRaw];
+      } catch {}
+    }
+    return defaultPw;
+  };
 
   const handleTeacherAuth = (e: React.FormEvent) => {
     e.preventDefault();
-    const correctPw = settings?.teacher_default_password || '관리';
+    const correctPw = getCorrectPassword();
     if (authPassword === correctPw) {
-      localStorage.setItem("teacher-auth-verified", String(Date.now()));
-      setIsTeacherVerified(true);
+      localStorage.setItem(teacherAuthStorageKey, String(Date.now()));
+      setIsCurrentTeacherVerified(true);
+      setShowAuthDialog(false);
       setAuthError("");
       setAuthPassword("");
     } else {
       setAuthError("비밀번호가 올바르지 않습니다.");
     }
+  };
+
+  // 쓰기 액션 전 인증 체크 (미인증 시 다이얼로그 표시)
+  const requireAuth = (): boolean => {
+    if (!isCurrentTeacherVerified) {
+      setShowAuthDialog(true);
+      return false;
+    }
+    return true;
   };
 
 
@@ -1172,6 +1196,8 @@ export default function TeacherPage() {
 
   // Handlers
   const handleCellClick = (dayIndex: number, period: number, val: number) => {
+    if (!requireAuth()) return; // 미인증 시 인증 다이얼로그 표시
+
     const decoded = decodeCell(val);
     if (!decoded) return;
 
@@ -1313,73 +1339,68 @@ export default function TeacherPage() {
         backgroundAttachment: 'fixed',
       }}
     >
-      {/* ===== 교사 인증 오버레이 ===== */}
-      {settings !== undefined && !isTeacherVerified && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{
-          backgroundColor: 'rgba(246, 231, 201, 0.97)',
-          backgroundImage: `radial-gradient(ellipse at 50% 0%, rgba(255,254,248,0.8) 0%, rgba(232,212,178,0.95) 100%)`,
-          backdropFilter: 'blur(2px)',
-        }}>
-          <div className="w-full max-w-sm mx-4">
-            {/* 로고/타이틀 */}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg mb-4">
-                <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      {/* ===== 선생님별 인증 다이얼로그 ===== */}
+      <Dialog open={showAuthDialog} onOpenChange={(open) => { setShowAuthDialog(open); if (!open) { setAuthError(""); setAuthPassword(""); } }}>
+        <DialogContent className="sm:max-w-[360px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-4 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-base font-extrabold text-white flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
-              </div>
-              <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">교사용 성지수행</h1>
-              <p className="text-sm text-gray-500 mt-1">접근 비밀번호를 입력하세요</p>
-            </div>
-
-            {/* 비밀번호 폼 */}
-            <form onSubmit={handleTeacherAuth} className="space-y-4">
-              <div className="relative">
-                <input
-                  id="teacher-auth-pw"
-                  type={showAuthPassword ? "text" : "password"}
-                  value={authPassword}
-                  onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
-                  placeholder="비밀번호 입력"
-                  autoFocus
-                  autoComplete="current-password"
-                  className="w-full h-12 px-4 pr-12 rounded-xl border-2 border-amber-200 bg-white/80 text-gray-800 text-base font-medium placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200 transition-all shadow-sm"
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowAuthPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                >
-                  {showAuthPassword
-                    ? <EyeOff className="w-5 h-5" />
-                    : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-
-              {authError && (
-                <p className="text-red-500 text-sm text-center font-medium flex items-center justify-center gap-1">
-                  <AlertCircle className="w-4 h-4" />
-                  {authError}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                className="w-full h-12 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-base shadow-md hover:from-emerald-600 hover:to-teal-700 active:scale-[0.98] transition-all"
-              >
-                입장하기
-              </button>
-            </form>
-
-            <p className="text-center text-xs text-gray-400 mt-6">
-              초기 비밀번호는 관리페이지에서 확인하세요
-            </p>
+                {teacherName} 선생님 인증
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-emerald-100 text-xs mt-1">수행평가 등록·수정 권한이 필요합니다</p>
           </div>
+          <form onSubmit={handleTeacherAuth} className="p-5 space-y-4">
+            <div className="relative">
+              <input
+                type={showAuthPassword ? "text" : "password"}
+                value={authPassword}
+                onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
+                placeholder="비밀번호 입력"
+                autoFocus
+                autoComplete="current-password"
+                className="w-full h-11 px-4 pr-11 rounded-xl border-2 border-amber-200 bg-white text-gray-800 text-sm font-medium placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
+              />
+              <button type="button" tabIndex={-1} onClick={() => setShowAuthPassword(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1">
+                {showAuthPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            {authError && (
+              <p className="text-red-500 text-xs text-center flex items-center justify-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5" />{authError}
+              </p>
+            )}
+            <button type="submit"
+              className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm shadow hover:from-emerald-600 hover:to-teal-700 active:scale-[0.98] transition-all">
+              인증하기
+            </button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== 보기전용 배너 (미인증 시) ===== */}
+      {settings !== undefined && !isCurrentTeacherVerified && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-amber-900/90 text-white shadow-xl backdrop-blur-sm border border-amber-700/50">
+          <svg className="w-4 h-4 text-amber-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          <span className="text-sm font-semibold text-amber-100">보기 전용 — 등록·수정하려면 인증하세요</span>
+          <button
+            onClick={() => setShowAuthDialog(true)}
+            className="ml-1 px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold transition-colors"
+          >
+            인증하기
+          </button>
         </div>
       )}
 
       <div className="max-w-[1240px] mx-auto w-full flex-1 flex flex-col min-h-0">
+
 
         {/* ===== TOP SECTION: Title + Desktop Week Selector + Desktop Shortcut ===== */}
         <div className="flex items-center justify-between gap-2 mb-2 md:mb-3 flex-shrink-0">
@@ -1867,6 +1888,7 @@ export default function TeacherPage() {
                       key={a.id}
                       className="border-b border-slate-100/80 last:border-b-0 md:border md:border-slate-100 py-2.5 px-1 md:p-3 md:rounded-xl md:bg-slate-50 hover:bg-indigo-50/60 md:hover:border-indigo-200 transition-all duration-150 cursor-pointer"
                       onClick={() => {
+                        if (!requireAuth()) return; // 미인증 시 인증 다이얼로그
                         setSelectedAssessment(a);
                         const roundNum = a.description ? a.description.replace('차', '').trim() : '1';
                         setFormData({

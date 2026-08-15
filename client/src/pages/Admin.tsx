@@ -10219,6 +10219,14 @@ function TeacherMgmtManager({ adminPassword }: { adminPassword: string }) {
                     <Clock className="w-4 h-4 mr-2" />
                     세션 유지 기간
                 </Button>
+                <Button
+                    variant={selectedMenu === "teacher-per-pw" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-emerald-700 hover:bg-emerald-50"
+                    onClick={() => setSelectedMenu("teacher-per-pw")}
+                >
+                    <Users className="w-4 h-4 mr-2" />
+                    교사별 비밀번호
+                </Button>
             </div>
 
             {/* Main Content */}
@@ -10246,6 +10254,19 @@ function TeacherMgmtManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <TeacherAuthExpirySettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+                {selectedMenu === "teacher-per-pw" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-emerald-700 flex items-center gap-2">
+                                <Users className="w-5 h-5" />
+                                교사별 비밀번호
+                            </h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <TeacherPerPasswordManager adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -10538,6 +10559,184 @@ function TeacherAuthExpirySettings({ adminPassword }: { adminPassword: string })
                         <strong>영구(0일)</strong>: 선생님이 한 번 인증하면 브라우저 데이터를 직접 삭제하기 전까지 재인증 없이 접근 가능합니다.<br />
                         <strong>기간 설정 시</strong>: 마지막 인증일로부터 설정된 일수가 지나면 자동으로 재인증이 요구됩니다.
                     </span>
+                </p>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ======================================================================
+// TeacherPerPasswordManager - 교사별 개별 비밀번호 관리
+// ======================================================================
+function TeacherPerPasswordManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [pwMap, setPwMap] = useState<Record<string, string>>({});
+    const [editingTeacher, setEditingTeacher] = useState<string | null>(null);
+    const [editValue, setEditValue] = useState("");
+    const [newTeacherName, setNewTeacherName] = useState("");
+    const [newTeacherPw, setNewTeacherPw] = useState("");
+    const [showPw, setShowPw] = useState<Record<string, boolean>>({});
+    const [showNewPw, setShowNewPw] = useState(false);
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 조회 실패");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            try {
+                const raw = settingsQuery.data.teacher_passwords || "{}";
+                setPwMap(typeof raw === "string" ? JSON.parse(raw) : raw);
+            } catch { setPwMap({}); }
+        }
+    }, [settingsQuery.data]);
+
+    const save = useMutation({
+        mutationFn: async (map: Record<string, string>) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ teacher_passwords: JSON.stringify(map) })
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: (_, map) => {
+            setPwMap(map);
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            toast.success("저장되었습니다.");
+        },
+        onError: (err: any) => toast.error(err.message)
+    });
+
+    const handleAdd = (e: React.FormEvent) => {
+        e.preventDefault();
+        const name = newTeacherName.trim();
+        const pw = newTeacherPw.trim();
+        if (!name || !pw) { toast.error("이름과 비밀번호를 모두 입력하세요."); return; }
+        const next = { ...pwMap, [name]: pw };
+        save.mutate(next);
+        setNewTeacherName(""); setNewTeacherPw("");
+    };
+
+    const handleDelete = (name: string) => {
+        if (!confirm(`"${name}" 선생님의 개별 비밀번호를 삭제하시겠습니까?\n(삭제 시 초기 비밀번호가 적용됩니다)`)) return;
+        const next = { ...pwMap };
+        delete next[name];
+        save.mutate(next);
+    };
+
+    const handleEdit = (name: string) => {
+        const trimmed = editValue.trim();
+        if (!trimmed) { toast.error("비밀번호를 입력하세요."); return; }
+        save.mutate({ ...pwMap, [name]: trimmed });
+        setEditingTeacher(null);
+        setEditValue("");
+    };
+
+    const entries = Object.entries(pwMap);
+
+    if (settingsQuery.isLoading) return <div className="p-4 text-sm text-gray-500">설정을 불러오는 중...</div>;
+
+    return (
+        <Card className="w-full max-w-lg border-emerald-100 shadow-sm">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base font-bold text-gray-700">교사별 개별 비밀번호</CardTitle>
+                <CardDescription className="text-xs text-gray-500">
+                    선생님별로 개별 비밀번호를 설정합니다. 설정하지 않은 선생님은 <strong>초기 비밀번호</strong>가 적용됩니다.<br />
+                    이름은 <strong>시간표 원본 이름</strong>을 정확히 입력하세요.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {/* 기존 목록 */}
+                {entries.length > 0 ? (
+                    <div className="space-y-2">
+                        {entries.map(([name, pw]) => (
+                            <div key={name} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                                <span className="text-sm font-semibold text-gray-700 w-24 shrink-0 truncate">{name}</span>
+                                {editingTeacher === name ? (
+                                    <div className="flex gap-1.5 flex-1">
+                                        <div className="relative flex-1">
+                                            <Input
+                                                autoFocus
+                                                type={showPw[name] ? "text" : "password"}
+                                                value={editValue}
+                                                onChange={e => setEditValue(e.target.value)}
+                                                onKeyDown={e => { if (e.key === 'Enter') handleEdit(name); if (e.key === 'Escape') { setEditingTeacher(null); setEditValue(""); } }}
+                                                className="h-7 text-xs pr-8"
+                                            />
+                                            <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-2 hover:bg-transparent"
+                                                onClick={() => setShowPw(v => ({ ...v, [name]: !v[name] }))}>
+                                                {showPw[name] ? <EyeOff className="h-3 w-3 text-gray-400" /> : <Eye className="h-3 w-3 text-gray-400" />}
+                                            </Button>
+                                        </div>
+                                        <Button size="sm" className="h-7 px-2 bg-emerald-600 hover:bg-emerald-700 text-xs" onClick={() => handleEdit(name)}>저장</Button>
+                                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => { setEditingTeacher(null); setEditValue(""); }}>취소</Button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-1.5 flex-1">
+                                        <span className="font-mono text-xs text-emerald-700 flex-1">
+                                            {showPw[name] ? pw : "•".repeat(Math.min(pw.length, 8))}
+                                        </span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6"
+                                            onClick={() => setShowPw(v => ({ ...v, [name]: !v[name] }))}>
+                                            {showPw[name] ? <EyeOff className="h-3 w-3 text-gray-400" /> : <Eye className="h-3 w-3 text-gray-400" />}
+                                        </Button>
+                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs border-emerald-200 text-emerald-700"
+                                            onClick={() => { setEditingTeacher(name); setEditValue(pw); }}>수정</Button>
+                                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-red-500 hover:text-red-700 hover:bg-red-50"
+                                            onClick={() => handleDelete(name)}>삭제</Button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-xs text-gray-400 text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                        등록된 개별 비밀번호가 없습니다.<br />모든 선생님에게 초기 비밀번호가 적용됩니다.
+                    </p>
+                )}
+
+                {/* 새로 추가 */}
+                <form onSubmit={handleAdd} className="space-y-2 pt-3 border-t">
+                    <label className="text-xs font-semibold text-gray-600">새 교사별 비밀번호 추가</label>
+                    <div className="flex gap-2">
+                        <Input
+                            value={newTeacherName}
+                            onChange={e => setNewTeacherName(e.target.value)}
+                            placeholder="선생님 이름 (시간표 기준)"
+                            className="text-xs h-9 flex-1"
+                        />
+                        <div className="relative">
+                            <Input
+                                type={showNewPw ? "text" : "password"}
+                                value={newTeacherPw}
+                                onChange={e => setNewTeacherPw(e.target.value)}
+                                placeholder="비밀번호"
+                                className="text-xs h-9 pr-8 w-32"
+                            />
+                            <Button type="button" variant="ghost" size="icon"
+                                className="absolute right-0 top-0 h-full px-2 hover:bg-transparent"
+                                onClick={() => setShowNewPw(v => !v)}>
+                                {showNewPw ? <EyeOff className="h-3.5 w-3.5 text-gray-400" /> : <Eye className="h-3.5 w-3.5 text-gray-400" />}
+                            </Button>
+                        </div>
+                        <Button type="submit" disabled={save.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-xs h-9 px-3">
+                            <Plus className="h-3.5 w-3.5 mr-1" />추가
+                        </Button>
+                    </div>
+                </form>
+
+                <p className="text-xs text-amber-600 bg-amber-50 p-2.5 rounded-lg border border-amber-100 flex items-start gap-1.5">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    개별 비밀번호는 선생님의 기존 인증 세션에 영향을 주지 않습니다. 즉시 효과를 원하면 세션 유지 기간을 조정하세요.
                 </p>
             </CardContent>
         </Card>
