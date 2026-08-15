@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { useElectiveGroups } from '@/hooks/useElectiveGroups';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -173,8 +172,95 @@ function extractClassCode(subject: string): string {
   return "";
 }
 
-// getComputedGroupsForGrade 와 lectureClassNameMap 은 useElectiveGroups 훅으로 통합됨
-// (아래 컴포넌트 내부에서 useElectiveGroups 를 사용)
+// Helper: Compute dynamic group mapping per grade
+function getComputedGroupsForGrade(
+  grade: string,
+  allClassesTimetable: any[],
+  electiveConfigs: any[],
+  settings: any
+): Record<string, string> {
+  if (grade !== "2" && grade !== "3") {
+    return {};
+  }
+  if (!allClassesTimetable || allClassesTimetable.length === 0) {
+    return {};
+  }
+
+  const cellGroups: Record<string, string> = {};
+
+  if (electiveConfigs && electiveConfigs.length > 0) {
+    const subjectTeacherToGroups = new Map<string, string[]>();
+    const subjectToGroups = new Map<string, string[]>();
+
+    electiveConfigs.forEach((c: any) => {
+      const isFreePeriod = ["빈교실", "공강", "Empty", "Free"].some(k => (c.subject || "").includes(k));
+      if ((c.isMovingClass !== 0 || isFreePeriod) && c.classCode) {
+        const codes = c.classCode.split(',').map((code: string) => code.trim()).filter(Boolean);
+        const subj = c.subject.trim();
+
+        const existing = subjectToGroups.get(subj) || [];
+        subjectToGroups.set(subj, Array.from(new Set([...existing, ...codes])));
+
+        const teacherNames = [];
+        if (c.originalTeacher) teacherNames.push(...c.originalTeacher.split(',').map((t: string) => t.trim()).filter(Boolean));
+        if (c.fullTeacherName) teacherNames.push(...c.fullTeacherName.split(',').map((t: string) => t.trim()).filter(Boolean));
+
+        const uniqueTeachers = Array.from(new Set(teacherNames));
+
+        uniqueTeachers.forEach((tName: string) => {
+          const key = `${subj}|${tName}`;
+          const existingKey = subjectTeacherToGroups.get(key) || [];
+          subjectTeacherToGroups.set(key, Array.from(new Set([...existingKey, ...codes])));
+        });
+      }
+    });
+
+    for (let w = 0; w < 5; w++) {
+      for (let p = 1; p <= 7; p++) {
+        const slots = allClassesTimetable.filter(t => t.weekday === w && t.classTime === p);
+        if (slots.length === 0) continue;
+
+        const groupCounts: Record<string, number> = {};
+        slots.forEach(slot => {
+          const key = `${slot.subject.trim()}|${slot.teacher.trim()}`;
+          let groups = subjectTeacherToGroups.get(key);
+
+          if (!groups || groups.length === 0) {
+            groups = subjectToGroups.get(slot.subject.trim());
+          }
+
+          if (groups) {
+            groups.forEach(g => {
+              groupCounts[g] = (groupCounts[g] || 0) + 1;
+            });
+          }
+        });
+
+        const entries = Object.entries(groupCounts);
+        if (entries.length > 0) {
+          entries.sort((a, b) => b[1] - a[1]);
+          const maxGroup = entries[0][0];
+          const maxCount = entries[0][1];
+          if (maxCount >= 1) {
+            cellGroups[`${w}-${p}`] = maxGroup;
+          }
+        }
+      }
+    }
+  }
+
+  if (settings?.elective_group_overrides?.[grade]) {
+    const gradeOverrides = settings.elective_group_overrides[grade];
+    for (const [cellKey, overrideValue] of Object.entries(gradeOverrides)) {
+      if (overrideValue === "NONE") {
+        delete cellGroups[cellKey];
+      } else if (typeof overrideValue === "string") {
+        cellGroups[cellKey] = overrideValue;
+      }
+    }
+  }
+  return cellGroups;
+}
 
 
 export default function TeacherPage() {
@@ -354,19 +440,15 @@ export default function TeacherPage() {
     enabled: !!panelG3Dataset,
   });
 
-  // useElectiveGroups 공유 훅: computedGroups + 강의실 이름 해석 (Dashboard와 동일한 로직)
-  const { computedGroups: computedGroupsG2, resolveClassName: resolveG2 } = useElectiveGroups(
-    '2',
-    grade2TimetableNow?.data || [],
-    electiveConfigsG2 || [],
-    settings,
-  );
-  const { computedGroups: computedGroupsG3, resolveClassName: resolveG3 } = useElectiveGroups(
-    '3',
-    grade3TimetableNow?.data || [],
-    electiveConfigsG3 || [],
-    settings,
-  );
+  // Compute elective groups for Grade 2 and Grade 3
+  // grade2TimetableNow/grade3TimetableNow는 항상 현재 실제 주 데이터 — 주 탐색과 무관
+  const computedGroupsG2 = useMemo(() => {
+    return getComputedGroupsForGrade('2', grade2TimetableNow?.data || [], electiveConfigsG2 || [], settings);
+  }, [grade2TimetableNow?.data, electiveConfigsG2, settings]);
+
+  const computedGroupsG3 = useMemo(() => {
+    return getComputedGroupsForGrade('3', grade3TimetableNow?.data || [], electiveConfigsG3 || [], settings);
+  }, [grade3TimetableNow?.data, electiveConfigsG3, settings]);
 
   // 1. Fetch Teacher Timetable
   const { data: timetableData, isLoading: isTimetableLoading, isError: isTimetableError } = useQuery<TeacherTimetableResponse>({
@@ -898,7 +980,42 @@ export default function TeacherPage() {
     }).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   }, [selectedTab, allAssessments, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
 
-  // lectureClassNameMap / movingClassMap → useElectiveGroups 훅의 resolveG2 / resolveG3 로 대체됨
+  // 이동수업 수행평가의 강의반명(관리페이지 입력값) 조회 맵
+  const lectureClassNameMap = useMemo(() => {
+    const map = new Map<string, string>(); // key: `${grade}-${subject}-${classCode}` → className
+    const allConfigs = [
+      ...(electiveConfigsG2 || []).map((c: any) => ({ ...c, grade: 2 })),
+      ...(electiveConfigsG3 || []).map((c: any) => ({ ...c, grade: 3 })),
+    ];
+    allConfigs.forEach((c: any) => {
+      if (!c.classCode || !c.subject) return;
+      const codes = c.classCode.split(',').map((s: string) => s.trim()).filter(Boolean);
+
+      // className이 JSON 객체 형식일 수 있음: {"A":"2-3반","C":"2-3반"}
+      let classNameObj: Record<string, string> = {};
+      let plainClassName = '';
+      if (c.className) {
+        const trimmedCN = (c.className as string).trim();
+        if (trimmedCN.startsWith('{')) {
+          try {
+            classNameObj = JSON.parse(trimmedCN) as Record<string, string>;
+          } catch {
+            plainClassName = trimmedCN;
+          }
+        } else {
+          plainClassName = trimmedCN;
+        }
+      }
+
+      codes.forEach((code: string) => {
+        const key = `${c.grade}-${(c.subject || '').trim()}-${code}`;
+        // JSON 형식이면 해당 코드의 값, _global fallback, 아니면 일반 문자열 (Dashboard.tsx와 동일한 로직)
+        const resolvedName = classNameObj[code] || classNameObj['_global'] || plainClassName;
+        if (resolvedName) map.set(key, resolvedName);
+      });
+    });
+    return map;
+  }, [electiveConfigsG2, electiveConfigsG3]);
 
   // Mutate: Create Assessment
   const createMutation = useMutation({
@@ -1392,14 +1509,11 @@ export default function TeacherPage() {
                                       width: 'fit-content',
                                     }}>
                                       {(() => {
-                                        // useElectiveGroups 공유 훅 기반 셀 라벨 — Dashboard와 동일한 로직
-                                        const resolve = cellData.grade === 2 ? resolveG2 : resolveG3;
-                                        return resolve.getCellLabel(
-                                          cellData.grade,
-                                          cellData.subjectName,
-                                          cellGroup,
-                                          cellData.classNum,
-                                        );
+                                        if (!cellGroup) return `${cellData.grade}-${cellData.classNum}`;
+                                        // 이동수업: 관리페이지 강의실 이름 조회
+                                        const configName = lectureClassNameMap.get(`${cellData.grade}-${(cellData.subjectName || '').trim()}-${cellGroup}`);
+                                        // 강의실 이름이 없으면 그룹 기호만 표시 (원본 반 번호 fallback 없음)
+                                        return configName ? `${configName}(${cellGroup})` : `(${cellGroup})`;
                                       })()}
                                     </span>
                                     <span style={{
@@ -1621,13 +1735,19 @@ export default function TeacherPage() {
                                 // classCode를 JSON/CSV 양쪽 형식으로 파싱해 그룹코드 추출
                                 const codes = parseClassCode(a.classCode);
                                 if (codes.length === 0) return `${a.grade}-전체반`;
-                                // 공유 훅으로 강의반명 조회 (grade 기반으로 resolve 선택)
-                                const resolve = a.grade === 2 ? resolveG2 : resolveG3;
-                                const labels = codes.map((code: string) =>
-                                  resolve.getCellLabel(a.grade, a.subject || '', code, 0)
-                                );
-                                const uniqueLabels = labels.filter((v: string, i: number, arr: string[]) => arr.indexOf(v) === i);
-                                return uniqueLabels.join(', ');
+                                // 그룹코드로 관리페이지 강의반명 조회
+                                const classNames = codes
+                                  .map((code: string) => lectureClassNameMap.get(`${a.grade}-${(a.subject || '').trim()}-${code}`))
+                                  .filter(Boolean);
+                                // 고유 강의반명만 표시
+                                const uniqueNames = (classNames as string[]).filter((v, i, arr) => arr.indexOf(v) === i);
+                                if (uniqueNames.length > 0) {
+                                  return codes.length === 1
+                                    ? `${uniqueNames[0]}(${codes[0]})`
+                                    : `강의반(${codes.join(', ')})`;
+                                }
+                                // fallback: 그룹코드 그대로
+                                return codes.length === 1 ? `강의반(${codes[0]})` : `강의반(${codes.join(', ')})`;
                               })()}
                             </span>
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">
