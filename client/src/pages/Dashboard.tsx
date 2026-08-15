@@ -2295,7 +2295,7 @@ export default function Dashboard() {
                                               isPast ? 'bg-gray-400 text-white' : 'bg-blue-600 text-white'
                                             }`}
                                           >
-                                            {r}
+                                            {r} 평가
                                           </div>
                                         ))}
                                       </div>
@@ -2325,7 +2325,7 @@ export default function Dashboard() {
                                             )}
                                           </span>
                                         </div>
-                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-row flex-nowrap items-center justify-center gap-1 overflow-hidden leading-tight">
+                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-row flex-nowrap items-center justify-center gap-1.5 overflow-hidden leading-tight">
                                           {!isCancelledByFreePeriod && displayTeacher ? (
                                             <span className="shrink min-w-0 whitespace-nowrap print:text-[1.8cqh]">{displayTeacher}</span>
                                           ) : null}
