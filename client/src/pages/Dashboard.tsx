@@ -2329,11 +2329,16 @@ export default function Dashboard() {
                                           {!isCancelledByFreePeriod && displayTeacher ? (
                                             <span className="shrink min-w-0 whitespace-nowrap print:text-[1.8cqh]">{displayTeacher}</span>
                                           ) : null}
-                                          {(settings?.show_target_class_main_menu !== false && displayClassName) ? (
-                                            <span className={`shrink-0 font-medium text-gray-600 print:text-[1.8cqh] print:!text-gray-500 ${!isCancelledByFreePeriod && displayTeacher ? "ml-1" : ""}`}>
-                                              {displayClassName}
-                                            </span>
-                                          ) : null}
+                                           {(settings?.show_target_class_main_menu !== false && displayClassName) ? (
+                                             <>
+                                               {!isCancelledByFreePeriod && displayTeacher && (
+                                                 <span className="shrink-0 mx-0.5 text-gray-400">&middot;</span>
+                                               )}
+                                               <span className="shrink-0 font-medium text-gray-600 print:text-[1.8cqh] print:!text-gray-500">
+                                                 {displayClassName}
+                                               </span>
+                                             </>
+                                           ) : null}
                                         </div>
                                         {includeAssessments && cellAssessments.some(a => !!a.isTeacherCreated) && (
                                           <div className="absolute bottom-0 right-0 print:hidden">
