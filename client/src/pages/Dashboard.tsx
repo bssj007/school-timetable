@@ -2336,8 +2336,8 @@ export default function Dashboard() {
                                           ) : null}
                                         </div>
                                         {includeAssessments && cellAssessments.some(a => !!a.isTeacherCreated) && (
-                                          <div className="absolute left-0 top-0 bottom-0 flex items-center print:hidden" style={{ width: '10px' }}>
-                                            <span className="text-[7px] font-bold text-emerald-600 leading-none" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', whiteSpace: 'nowrap' }}>
+                                          <div className="absolute left-0 bottom-0 flex items-end print:hidden">
+                                            <span className="text-[7px] md:text-[8px] font-bold text-white bg-emerald-500 leading-none px-0.5 py-0.5 rounded-tr-md" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', whiteSpace: 'nowrap' }}>
                                               선생님 등록
                                             </span>
                                           </div>
