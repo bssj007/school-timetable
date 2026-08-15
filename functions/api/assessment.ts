@@ -24,15 +24,11 @@ export const onRequest = async (context: any) => {
             let query = "SELECT * FROM performance_assessments WHERE grade = ? AND (classNum = ? OR classNum = 0) AND isDeleted = 0";
             const params: any[] = [grade, classNum];
 
-            // Filter by dataset if provided, else filter by default COMCIGAN (matching COMCIGAN, '', or NULL)
+            // Filter by dataset if provided, else filter by empty string (default manual)
             const rawDataset = url.searchParams.get('dataset') || '';
             const dataset = (rawDataset === 'MANUAL_PLAN' || rawDataset === 'SEMESTER_PLAN') ? rawDataset : 'COMCIGAN';
-            if (dataset === 'COMCIGAN') {
-                query += " AND (dataset = 'COMCIGAN' OR dataset = '' OR dataset IS NULL)";
-            } else {
-                query += " AND dataset = ?";
-                params.push(dataset);
-            }
+            query += " AND dataset = ?";
+            params.push(dataset);
 
             query += " ORDER BY dueDate ASC";
 
@@ -291,40 +287,21 @@ export const onRequest = async (context: any) => {
 
             console.log('[Assessment API] Creating:', { subject, title, dueDate, grade, classNum, classTime, teacher, classCode });
 
-            // Check if the subject is an elective (isMovingClass = 1) or has classCode
-            let actualClassNum = parseInt(classNum, 10);
-            if (isNaN(actualClassNum)) actualClassNum = 0;
-
+            // Check if the subject is an elective (isMovingClass = 1)
+            let actualClassNum = classNum;
             const baseSubject = subject.replace(/\s*\(.*$/, '').trim();
-            const norm1 = baseSubject.replace(/1/g, 'Ⅰ').replace(/2/g, 'Ⅱ').replace(/3/g, 'Ⅲ');
-            const norm2 = baseSubject.replace(/Ⅰ/g, '1').replace(/Ⅱ/g, '2').replace(/Ⅲ/g, '3');
+            try {
+                const electiveConfig = await env.DB.prepare(
+                    "SELECT isMovingClass FROM elective_config WHERE grade = ? AND (subject = ? OR fullSubjectName = ?)"
+                ).bind(grade, baseSubject, baseSubject).first();
 
-            // 1. If classCode is given (elective group like "A", "B", etc.), it applies to all classes in grade -> classNum = 0
-            if (classCode && String(classCode).trim()) {
-                actualClassNum = 0;
-                console.log(`[Assessment API] classCode "${classCode}" present. Setting classNum to 0 for moving class.`);
-            } else {
-                try {
-                    const electiveConfig: any = await env.DB.prepare(`
-                        SELECT isMovingClass FROM elective_config 
-                        WHERE grade = ? AND (
-                            subject = ? OR fullSubjectName = ? OR
-                            subject = ? OR fullSubjectName = ? OR
-                            subject = ? OR fullSubjectName = ?
-                        )
-                    `).bind(
-                        grade, baseSubject, baseSubject,
-                        norm1, norm1,
-                        norm2, norm2
-                    ).first().catch(() => null);
-
-                    if (electiveConfig && electiveConfig.isMovingClass === 1) {
-                        actualClassNum = 0; // 0 indicates it applies to all classes in the grade
-                        console.log(`[Assessment API] Subject ${baseSubject} is a moving class in elective_config. Setting classNum to 0.`);
-                    }
-                } catch (e) {
-                    console.error("[Assessment API] Error checking elective config:", e);
+                if (electiveConfig && electiveConfig.isMovingClass === 1) {
+                    actualClassNum = 0; // 0 indicates it applies to all classes in the grade
+                    console.log(`[Assessment API] Subject ${baseSubject} is a moving class. Setting classNum to 0.`);
                 }
+            } catch (e) {
+                console.error("[Assessment API] Error checking elective config:", e);
+                // Fail gracefully, keep actualClassNum as the specific class
             }
 
             // 중복 체크: 같은 날짜, 같은 교시에 이미 수행평가가 있는지 확인
