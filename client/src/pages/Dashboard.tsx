@@ -2325,16 +2325,14 @@ export default function Dashboard() {
                                             )}
                                           </span>
                                         </div>
-                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-row flex-nowrap items-center justify-center gap-1.5 overflow-hidden leading-tight">
-                                          {!isCancelledByFreePeriod && displayTeacher ? (
-                                            <span className="shrink min-w-0 whitespace-nowrap print:text-[1.8cqh]">{displayTeacher}</span>
-                                          ) : null}
-                                           {(settings?.show_target_class_main_menu !== false && displayClassName) ? (
-                                               <span className="shrink-0 font-medium text-gray-600 print:text-[1.8cqh] print:!text-gray-500">
-                                                 {displayClassName}
-                                               </span>
-                                           ) : null}
-                                        </div>
+                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 text-center overflow-hidden leading-tight">
+                                           <span className="whitespace-nowrap print:text-[1.8cqh]">
+                                             {[
+                                               (!isCancelledByFreePeriod && displayTeacher) ? displayTeacher : null,
+                                               (settings?.show_target_class_main_menu !== false && displayClassName) ? displayClassName : null
+                                             ].filter(Boolean).join(' ')}
+                                           </span>
+                                         </div>
                                         {includeAssessments && cellAssessments.some(a => !!a.isTeacherCreated) && (
                                           <div className="absolute bottom-0 right-0 print:hidden flex">
                                             <span className="text-[8px] md:text-[9px] px-1 py-0.5 rounded-tl-md leading-none whitespace-nowrap bg-emerald-500 text-white font-bold">
