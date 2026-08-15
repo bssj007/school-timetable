@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -6490,7 +6490,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
             </div>
 
             <Tabs defaultValue="assessments" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 mb-8 h-auto">
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-7 mb-8 h-auto">
                     <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
                     <TabsTrigger value="users">사용자 관리</TabsTrigger>
                     <TabsTrigger value="electives">선택과목</TabsTrigger>
@@ -6534,6 +6534,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800"
                     >
                         🍱 식단페이지
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="teacher-mgmt"
+                        className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-800 font-medium"
+                    >
+                        📋 교사용 성지수행
                     </TabsTrigger>
                 </TabsList>
 
@@ -7427,6 +7433,11 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                 <TabsContent value="meal" className="space-y-6">
                     <MealManager adminPassword={password} />
                 </TabsContent>
+
+                <TabsContent value="teacher-mgmt" className="space-y-6">
+                    <TeacherMgmtManager adminPassword={password} />
+                </TabsContent>
+
             </Tabs >
 
             <IPProfileViewer
@@ -10182,3 +10193,353 @@ function AssessmentRolePermissionsSettings({ adminPassword }: { adminPassword: s
 
 
 
+// ======================================================================
+// TeacherMgmtManager - 교사용 성지수행 관리 (사이드바 레이아웃)
+// ======================================================================
+function TeacherMgmtManager({ adminPassword }: { adminPassword: string }) {
+    const [selectedMenu, setSelectedMenu] = useState("teacher-default-pw");
+
+    return (
+        <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
+            {/* Sidebar */}
+            <div className="w-full md:w-64 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
+                <Button
+                    variant={selectedMenu === "teacher-default-pw" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-emerald-700 data-[state=active]:text-white hover:bg-emerald-50 data-[variant=default]:bg-emerald-600"
+                    onClick={() => setSelectedMenu("teacher-default-pw")}
+                >
+                    <KeyRound className="w-4 h-4 mr-2" />
+                    초기 비밀번호 관리
+                </Button>
+                <Button
+                    variant={selectedMenu === "teacher-auth-expiry" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-emerald-700 hover:bg-emerald-50"
+                    onClick={() => setSelectedMenu("teacher-auth-expiry")}
+                >
+                    <Clock className="w-4 h-4 mr-2" />
+                    세션 유지 기간
+                </Button>
+            </div>
+
+            {/* Main Content */}
+            <div className="flex-1 flex flex-col gap-4 overflow-hidden border rounded-md bg-white p-4">
+                {selectedMenu === "teacher-default-pw" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-emerald-700 flex items-center gap-2">
+                                <KeyRound className="w-5 h-5" />
+                                초기 비밀번호 관리
+                            </h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <TeacherDefaultPasswordManager adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+                {selectedMenu === "teacher-auth-expiry" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-emerald-700 flex items-center gap-2">
+                                <Clock className="w-5 h-5" />
+                                세션 유지 기간 설정
+                            </h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <TeacherAuthExpirySettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ======================================================================
+// TeacherDefaultPasswordManager - 교사 페이지 초기(디폴트) 비밀번호 설정
+// ======================================================================
+function TeacherDefaultPasswordManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [newPw, setNewPw] = useState("");
+    const [showPw, setShowPw] = useState(false);
+    const [currentPw, setCurrentPw] = useState<string | null>(null);
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 조회 실패");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            setCurrentPw(settingsQuery.data.teacher_default_password ?? null);
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (value: string) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({ teacher_default_password: value })
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: (_, value) => {
+            toast.success(`비밀번호가 "${value}"로 저장되었습니다.`);
+            setCurrentPw(value);
+            setNewPw("");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err: any) => toast.error(err.message)
+    });
+
+    const handleSave = (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmed = newPw.trim();
+        if (!trimmed) { toast.error("비밀번호를 입력하세요."); return; }
+        saveMutation.mutate(trimmed);
+    };
+
+    const handleReset = () => {
+        if (confirm('초기 비밀번호를 "관리"로 초기화하시겠습니까?')) {
+            saveMutation.mutate("관리");
+        }
+    };
+
+    if (settingsQuery.isLoading) return <div className="p-4 text-sm text-gray-500">설정을 불러오는 중...</div>;
+
+    return (
+        <Card className="w-full max-w-lg border-emerald-100 shadow-sm">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base font-bold text-gray-700">교사 페이지 초기 비밀번호</CardTitle>
+                <CardDescription className="text-xs text-gray-500">
+                    <code className="bg-gray-100 px-1 rounded">/teacher</code> 접근 시 모든 선생님에게 공통 적용되는
+                    디폴트 비밀번호입니다.<br />
+                    한 번 인증한 선생님은 세션 유지 기간 동안 재입력이 필요 없습니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+                {/* 현재 비밀번호 */}
+                <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                    <span className="text-sm text-gray-500 shrink-0">현재 비밀번호:</span>
+                    <div className="flex items-center gap-2 flex-1">
+                        <span className="font-mono font-bold text-emerald-700 text-sm">
+                            {showPw
+                                ? (currentPw ?? "관리 (기본값)")
+                                : (currentPw ? "•".repeat(currentPw.length) : "(기본값: 관리)")}
+                        </span>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => setShowPw(v => !v)}
+                        >
+                            {showPw ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </Button>
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-7 rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 shrink-0"
+                        onClick={handleReset}
+                        disabled={saveMutation.isPending}
+                    >
+                        기본값으로 초기화
+                    </Button>
+                </div>
+
+                {/* 새 비밀번호 입력 */}
+                <form onSubmit={handleSave} className="space-y-3">
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-gray-600">새 비밀번호</label>
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <Input
+                                    type={showPw ? "text" : "password"}
+                                    value={newPw}
+                                    onChange={e => setNewPw(e.target.value)}
+                                    placeholder="새 비밀번호 입력"
+                                    className="pr-10 text-sm h-9"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                                    onClick={() => setShowPw(v => !v)}
+                                >
+                                    {showPw ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
+                                </Button>
+                            </div>
+                            <Button
+                                type="submit"
+                                disabled={!newPw.trim() || saveMutation.isPending}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-xs h-9 px-4"
+                            >
+                                {saveMutation.isPending ? "저장 중..." : "저장"}
+                            </Button>
+                        </div>
+                    </div>
+                </form>
+
+                <p className="text-xs text-amber-600 bg-amber-50 p-2.5 rounded-lg border border-amber-100 flex items-start gap-1.5">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    비밀번호 변경 시 이전에 인증한 선생님의 기존 세션은 유효 기간 내에는 계속 유지됩니다.
+                    즉시 재인증이 필요한 경우 세션 유지 기간을 0이 아닌 값으로 설정하고 기간을 줄이세요.
+                </p>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ======================================================================
+// TeacherAuthExpirySettings - 교사 페이지 세션 유지 기간 설정
+// ======================================================================
+function TeacherAuthExpirySettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [expireDays, setExpireDays] = useState<number>(0);
+    const [inputValue, setInputValue] = useState<string>("0");
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 조회 실패");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            const val = parseInt(settingsQuery.data.teacher_auth_expire_days || "0", 10);
+            setExpireDays(val);
+            setInputValue(String(val));
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (days: number) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({ teacher_auth_expire_days: String(days) })
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: (_, days) => {
+            toast.success(days === 0 ? "영구 유지로 설정되었습니다." : `${days}일 후 재인증으로 설정되었습니다.`);
+            setExpireDays(days);
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err: any) => toast.error(err.message)
+    });
+
+    const handleSave = (e: React.FormEvent) => {
+        e.preventDefault();
+        const val = parseInt(inputValue, 10);
+        if (isNaN(val) || val < 0) { toast.error("0 이상의 숫자를 입력하세요."); return; }
+        if (val > 3650) { toast.error("최대 3650일(10년)까지 설정 가능합니다."); return; }
+        saveMutation.mutate(val);
+    };
+
+    // 빠른 선택 프리셋
+    const presets = [
+        { label: "영구", days: 0 },
+        { label: "7일", days: 7 },
+        { label: "30일", days: 30 },
+        { label: "90일", days: 90 },
+        { label: "365일", days: 365 },
+    ];
+
+    if (settingsQuery.isLoading) return <div className="p-4 text-sm text-gray-500">설정을 불러오는 중...</div>;
+
+    return (
+        <Card className="w-full max-w-lg border-emerald-100 shadow-sm">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base font-bold text-gray-700">세션 유지 기간</CardTitle>
+                <CardDescription className="text-xs text-gray-500">
+                    선생님이 비밀번호 입력 후 재인증 없이 접근할 수 있는 기간을 설정합니다.<br />
+                    인증 정보는 선생님 브라우저의 로컬스토리지에 저장됩니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+                {/* 현재 설정 표시 */}
+                <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                    <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="text-sm text-gray-600">현재 설정:</span>
+                    <Badge className={`font-mono text-sm px-3 py-0.5 ${expireDays === 0 ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {expireDays === 0 ? "영구 유지" : `${expireDays}일`}
+                    </Badge>
+                </div>
+
+                {/* 빠른 선택 */}
+                <div className="space-y-2">
+                    <label className="text-xs font-semibold text-gray-600">빠른 선택</label>
+                    <div className="flex flex-wrap gap-2">
+                        {presets.map(preset => (
+                            <Button
+                                key={preset.days}
+                                variant={expireDays === preset.days ? "default" : "outline"}
+                                size="sm"
+                                className={`text-xs h-8 px-3 rounded-full ${expireDays === preset.days ? 'bg-emerald-600 hover:bg-emerald-700' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'}`}
+                                onClick={() => {
+                                    setInputValue(String(preset.days));
+                                    saveMutation.mutate(preset.days);
+                                }}
+                                disabled={saveMutation.isPending}
+                            >
+                                {preset.label}
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* 직접 입력 */}
+                <form onSubmit={handleSave} className="space-y-2">
+                    <label className="text-xs font-semibold text-gray-600">직접 입력 (일 단위, 0 = 영구)</label>
+                    <div className="flex gap-2 items-center">
+                        <Input
+                            type="number"
+                            min={0}
+                            max={3650}
+                            value={inputValue}
+                            onChange={e => setInputValue(e.target.value)}
+                            className="w-32 text-sm h-9"
+                        />
+                        <span className="text-sm text-gray-500">일</span>
+                        <Button
+                            type="submit"
+                            disabled={saveMutation.isPending}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-xs h-9 px-4"
+                        >
+                            {saveMutation.isPending ? "저장 중..." : "저장"}
+                        </Button>
+                    </div>
+                </form>
+
+                <p className="text-xs text-blue-600 bg-blue-50 p-2.5 rounded-lg border border-blue-100 flex items-start gap-1.5">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    <span>
+                        <strong>영구(0일)</strong>: 선생님이 한 번 인증하면 브라우저 데이터를 직접 삭제하기 전까지 재인증 없이 접근 가능합니다.<br />
+                        <strong>기간 설정 시</strong>: 마지막 인증일로부터 설정된 일수가 지나면 자동으로 재인증이 요구됩니다.
+                    </span>
+                </p>
+            </CardContent>
+        </Card>
+    );
+}

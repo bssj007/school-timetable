@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -271,6 +271,15 @@ export default function TeacherPage() {
     return localStorage.getItem("teacher-page-selected-teacher") || "1";
   });
   const [openCombobox, setOpenCombobox] = useState(false);
+
+  // ── 교사 페이지 인증 (장난방지 수준 localStorage 기반) ──
+  const [isTeacherVerified, setIsTeacherVerified] = useState<boolean>(false);
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [showAuthPassword, setShowAuthPassword] = useState(false);
+
+  // 마운트 시 localStorage 확인 (settings 로딩 후 useEffect에서 검증)
+
   const [weekOffset, setWeekOffset] = useState<number>(() => {
     const today = new Date();
     const day = today.getDay();
@@ -321,6 +330,49 @@ export default function TeacherPage() {
     staleTime: 5000,
     refetchOnWindowFocus: true,
   });
+
+  // settings 로딩 후 localStorage 인증 유효성 검사
+  useEffect(() => {
+    if (!settings) return; // settings 로딩 전 대기
+    const expireDays = settings.teacher_auth_expire_days ?? 0;
+    const stored = localStorage.getItem("teacher-auth-verified");
+    if (!stored) {
+      setIsTeacherVerified(false);
+      return;
+    }
+    // 0 = 영구
+    if (expireDays === 0) {
+      setIsTeacherVerified(true);
+      return;
+    }
+    const storedTime = parseInt(stored, 10);
+    if (isNaN(storedTime)) {
+      localStorage.removeItem("teacher-auth-verified");
+      setIsTeacherVerified(false);
+      return;
+    }
+    const expireMs = expireDays * 24 * 60 * 60 * 1000;
+    if (Date.now() - storedTime < expireMs) {
+      setIsTeacherVerified(true);
+    } else {
+      localStorage.removeItem("teacher-auth-verified");
+      setIsTeacherVerified(false);
+    }
+  }, [settings]);
+
+  const handleTeacherAuth = (e: React.FormEvent) => {
+    e.preventDefault();
+    const correctPw = settings?.teacher_default_password || '관리';
+    if (authPassword === correctPw) {
+      localStorage.setItem("teacher-auth-verified", String(Date.now()));
+      setIsTeacherVerified(true);
+      setAuthError("");
+      setAuthPassword("");
+    } else {
+      setAuthError("비밀번호가 올바르지 않습니다.");
+    }
+  };
+
 
   const targetDate = toDateString(weekDates[0]);
 
@@ -1233,6 +1285,72 @@ export default function TeacherPage() {
         backgroundAttachment: 'fixed',
       }}
     >
+      {/* ===== 교사 인증 오버레이 ===== */}
+      {settings !== undefined && !isTeacherVerified && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{
+          backgroundColor: 'rgba(246, 231, 201, 0.97)',
+          backgroundImage: `radial-gradient(ellipse at 50% 0%, rgba(255,254,248,0.8) 0%, rgba(232,212,178,0.95) 100%)`,
+          backdropFilter: 'blur(2px)',
+        }}>
+          <div className="w-full max-w-sm mx-4">
+            {/* 로고/타이틀 */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg mb-4">
+                <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">교사용 성지수행</h1>
+              <p className="text-sm text-gray-500 mt-1">접근 비밀번호를 입력하세요</p>
+            </div>
+
+            {/* 비밀번호 폼 */}
+            <form onSubmit={handleTeacherAuth} className="space-y-4">
+              <div className="relative">
+                <input
+                  id="teacher-auth-pw"
+                  type={showAuthPassword ? "text" : "password"}
+                  value={authPassword}
+                  onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
+                  placeholder="비밀번호 입력"
+                  autoFocus
+                  autoComplete="current-password"
+                  className="w-full h-12 px-4 pr-12 rounded-xl border-2 border-amber-200 bg-white/80 text-gray-800 text-base font-medium placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200 transition-all shadow-sm"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowAuthPassword(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                >
+                  {showAuthPassword
+                    ? <EyeOff className="w-5 h-5" />
+                    : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+
+              {authError && (
+                <p className="text-red-500 text-sm text-center font-medium flex items-center justify-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {authError}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                className="w-full h-12 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-base shadow-md hover:from-emerald-600 hover:to-teal-700 active:scale-[0.98] transition-all"
+              >
+                입장하기
+              </button>
+            </form>
+
+            <p className="text-center text-xs text-gray-400 mt-6">
+              초기 비밀번호는 관리페이지에서 확인하세요
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-[1240px] mx-auto w-full flex-1 flex flex-col min-h-0">
 
         {/* ===== TOP SECTION: Title + Desktop Week Selector + Desktop Shortcut ===== */}
