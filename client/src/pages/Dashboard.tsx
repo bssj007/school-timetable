@@ -2330,18 +2330,13 @@ export default function Dashboard() {
                                             <span className="shrink min-w-0 whitespace-nowrap print:text-[1.8cqh]">{displayTeacher}</span>
                                           ) : null}
                                            {(settings?.show_target_class_main_menu !== false && displayClassName) ? (
-                                             <>
-                                               {!isCancelledByFreePeriod && displayTeacher && (
-                                                 
-                                               )}
                                                <span className="shrink-0 font-medium text-gray-600 print:text-[1.8cqh] print:!text-gray-500">
                                                  {displayClassName}
                                                </span>
-                                             </>
                                            ) : null}
                                         </div>
                                         {includeAssessments && cellAssessments.some(a => !!a.isTeacherCreated) && (
-                                          <div className="absolute bottom-0 right-0 print:hidden">
+                                          <div className="absolute bottom-0 right-0 print:hidden flex">
                                             <span className="text-[8px] md:text-[9px] px-1 py-0.5 rounded-tl-md leading-none whitespace-nowrap bg-emerald-500 text-white font-bold">
                                               선생님 등록
                                             </span>
