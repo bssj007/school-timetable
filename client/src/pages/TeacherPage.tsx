@@ -1447,7 +1447,7 @@ export default function TeacherPage() {
 
 
         {/* ===== TOP SECTION: Title + Description + Desktop Week Selector + Shortcut ===== */}
-        <div className="relative flex items-center gap-2 mb-2 md:mb-0 flex-shrink-0">
+        <div className="relative flex items-center gap-2 mb-2 md:mb-3 flex-shrink-0">
           {/* Left: title + description — right-padded on desktop so text doesn't flow under week selector */}
           <div className="min-w-0 flex-1 overflow-hidden md:pr-[230px]">
             <div className="flex items-center gap-3">
@@ -1715,7 +1715,7 @@ export default function TeacherPage() {
                                   {/* Class label */}
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                     <span style={{
-                                      fontSize: 11,
+                                      fontSize: 10,
                                       fontWeight: 700,
                                       padding: '1px 4px',
                                       borderRadius: 2,
@@ -1775,7 +1775,7 @@ export default function TeacherPage() {
                                           title={`[${a.description || '수행'}] ${a.title}`}
                                         >
                                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.title}</span>
-                                          <span style={{ fontSize: 7, border: '1px solid #f472b6', color: '#be185d', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap', background: '#fdf2f8' }}>
+                                          <span className="hidden md:inline" style={{ fontSize: 7, border: '1px solid #f472b6', color: '#be185d', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap', background: '#fdf2f8' }}>
                                             {a.description && a.description.includes('차') ? a.description : '평가'}
                                           </span>
                                         </div>
