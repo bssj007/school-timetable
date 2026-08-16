@@ -1852,7 +1852,7 @@ export default function TeacherPage() {
                           setSelectedSubjectFilter(subject);
                         }
                       }}
-                      className="flex-1 py-2 px-1 text-[11px] font-bold leading-tight text-center"
+                      className="flex-1 py-2.5 px-1 text-[13px] font-bold leading-tight text-center"
                       style={{
                         color: isActive ? '#fff' : color.activeBg,
                         backgroundColor: isActive ? `${color.activeBg}BF` : `${color.bg}20`,
