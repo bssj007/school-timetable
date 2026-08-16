@@ -1415,7 +1415,7 @@ export default function TeacherPage() {
 
 
         {/* ===== TOP SECTION: Title + Desktop Week Selector + Desktop Shortcut ===== */}
-        <div className="flex items-center justify-between gap-2 mb-2 md:mb-3 flex-shrink-0">
+        <div className="flex items-center justify-between gap-2 mb-2 md:mb-0 flex-shrink-0">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-3">
               <h1 className="text-base sm:text-xl md:text-3xl font-extrabold text-gray-900 truncate leading-tight">
@@ -1502,7 +1502,7 @@ export default function TeacherPage() {
         <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-2 md:order-1 flex-1 min-h-0">
 
           {/* Desktop Week Selector — above the timetable card, right-aligned */}
-          <div className="hidden md:flex justify-end mb-2">
+          <div className="hidden md:flex justify-end mb-1">
             <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400 shadow-md">
               <Button
                 variant="ghost"
