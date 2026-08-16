@@ -1699,8 +1699,8 @@ export default function TeacherPage() {
                                         if (!cellGroup) return `${cellData.grade}-${cellData.classNum}`;
                                         // 이동수업: 관리페이지 강의실 이름 조회
                                         const configName = lectureClassNameMap.get(`${cellData.grade}-${(cellData.subjectName || '').trim()}-${cellGroup}`);
-                                        // 강의실 이름이 없으면 그룹 기호만 표시 (원본 반 번호 fallback 없음)
-                                        return configName ? `${configName}(${cellGroup})` : `(${cellGroup})`;
+                                        // 강의실 이름이 없으면 학년-반 표시, 있으면 강의실 이름만 표시 (그룹 기호는 과목명 뒤에 별도 표시)
+                                        return configName ? configName : `${cellData.grade}-${cellData.classNum}`;
                                       })()}
                                     </span>
                                     <span style={{
@@ -1715,7 +1715,7 @@ export default function TeacherPage() {
                                     }}
                                       title={cellData.subjectName}
                                     >
-                                      {cellData.subjectName}
+                                      {cellData.subjectName}{cellGroup && <span style={{ color: '#0ea5e9', fontWeight: 800, marginLeft: 3 }}>{cellGroup}</span>}
                                     </span>
                                   </div>
 
