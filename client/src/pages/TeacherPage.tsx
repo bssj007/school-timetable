@@ -1923,6 +1923,13 @@ export default function TeacherPage() {
                   const mmdd = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
                   const weekdayNames = ['일','월','화','수','목','금','토'];
                   const wd = weekdayNames[dateObj.getDay()];
+                  const panelCodes = parseClassCode(a.classCode);
+                  const panelClassLabel = (() => {
+                    if (a.classNum !== 0) return `${a.grade}-${String(a.classNum).replace(/반$/, '')}`;
+                    if (panelCodes.length === 0) return `${a.grade}-전체`;
+                    const cn = lectureClassNameMap.get(`${a.grade}-${(a.subject || '').trim()}-${panelCodes[0]}`);
+                    return cn || `${a.grade}-?`;
+                  })();
                   return (
                     <div
                       key={a.id}
@@ -1946,25 +1953,16 @@ export default function TeacherPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
-                              {(() => {
-                                if (a.classNum !== 0) return `${a.grade}-${a.classNum}반`;
-                                const codes = parseClassCode(a.classCode);
-                                if (codes.length === 0) return `${a.grade}-전체반`;
-                                const classNames = codes
-                                  .map((code: string) => lectureClassNameMap.get(`${a.grade}-${(a.subject || '').trim()}-${code}`))
-                                  .filter(Boolean);
-                                const uniqueNames = (classNames as string[]).filter((v, i, arr) => arr.indexOf(v) === i);
-                                if (uniqueNames.length > 0) {
-                                  return codes.length === 1
-                                    ? `${uniqueNames[0]}(${codes[0]})`
-                                    : uniqueNames.join(', ');
-                                }
-                                // 강의실 이름 없을 경우 그룹코드만 표시 (raw data fallback 금지)
-                                return codes.length === 1 ? `(${codes[0]})` : `(${codes.join(', ')})`;
-                              })()}
+                            {/* 반 배지 — 표와 동일한 초록 배지, "반" 글자 제거 */}
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 4px', borderRadius: 2, background: '#217346', color: '#ffffff', display: 'inline-block', lineHeight: 1.4 }}>
+                              {panelClassLabel}
                             </span>
-                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">
+                            {/* 과목명 — 그룹코드(무지개 워드아트) + 과목명, 표와 동일한 서식 */}
+                            <span style={{ fontWeight: 700, color: '#1a1a1a', lineHeight: 1.3, fontSize: (a.subject || '').length > 6 ? 11 : (a.subject || '').length > 4 ? 12 : 14 }}>
+                              {panelCodes.map((code: string, i: number) => {
+                                const gc = getGroupColor(code);
+                                return <span key={i} style={{ color: gc, fontWeight: 900, marginRight: i < panelCodes.length - 1 ? 2 : 3, WebkitTextStroke: '0.4px rgba(255,255,255,0.9)', textShadow: `0 1px 3px ${gc}70`, letterSpacing: '-0.01em' } as React.CSSProperties}>{code}</span>;
+                              })}
                               {a.subject}
                             </span>
                             {a.classTime && (
