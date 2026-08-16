@@ -1411,43 +1411,7 @@ export default function TeacherPage() {
                 <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent md:hidden"> </span>
               </h1>
 
-              {/* Desktop Week Selector — Placed directly to the right of Title above the timetable */}
-              <div className="hidden md:flex items-center bg-indigo-600 rounded-full p-0.5 border border-indigo-400 shrink-0 shadow-sm">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
-                  style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
-                  onClick={(e) => {
-                    setWeekOffset(prev => prev - 1);
-                    (e.currentTarget as HTMLElement).blur();
-                  }}
-                  disabled={weekOffset <= -2}
-                  title="이전 주"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </Button>
-                <span className="flex flex-col items-center min-w-[72px] px-0.5 select-none">
-                  <span className="text-xs font-bold text-white leading-tight whitespace-nowrap">
-                    {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
-                  </span>
-                  <span className="text-[9px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-6 h-6 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
-                  style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
-                  onClick={(e) => {
-                    setWeekOffset(prev => prev + 1);
-                    (e.currentTarget as HTMLElement).blur();
-                  }}
-                  disabled={weekOffset >= 8}
-                  title="다음 주"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+
             </div>
 
             <p className="hidden md:block text-gray-500 text-xs sm:text-sm mt-0.5">
@@ -1525,8 +1489,48 @@ export default function TeacherPage() {
         {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
         <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-2 md:order-1 flex-1 min-h-0">
 
+          {/* Desktop Week Selector — above the timetable card, right-aligned */}
+          <div className="hidden md:flex justify-end mb-2">
+            <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400 shadow-md">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-8 h-8 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
+                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                onClick={(e) => {
+                  setWeekOffset(prev => prev - 1);
+                  (e.currentTarget as HTMLElement).blur();
+                }}
+                disabled={weekOffset <= -2}
+                title="이전 주"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="flex flex-col items-center min-w-[90px] px-1 select-none">
+                <span className="text-sm font-bold text-white leading-tight whitespace-nowrap">
+                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
+                </span>
+                <span className="text-[10px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-8 h-8 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
+                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                onClick={(e) => {
+                  setWeekOffset(prev => prev + 1);
+                  (e.currentTarget as HTMLElement).blur();
+                }}
+                disabled={weekOffset >= 8}
+                title="다음 주"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
       {/* Main Timetable — Card wrapper */}
-      <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:h-[calc(100vh-115px)] md:min-h-[600px]">
+      <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:h-[calc(100vh-155px)] md:min-h-[600px]">
           {isTimetableLoading ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
