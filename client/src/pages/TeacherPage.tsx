@@ -280,6 +280,23 @@ function getGroupColor(group: string): string {
   return GROUP_COLOR_CYCLE[((idx % GROUP_COLOR_CYCLE.length) + GROUP_COLOR_CYCLE.length) % GROUP_COLOR_CYCLE.length];
 }
 
+/** 그룹코드(A, B, C ...) 스타일 span — 메인 표/패널 공용 */
+function renderGroupCode(code: string, marginRight: number = 3): React.ReactElement {
+  const gc = getGroupColor(code);
+  return (
+    <span style={{
+      color: gc,
+      fontWeight: 900,
+      marginRight,
+      WebkitTextStroke: '0.4px rgba(255,255,255,0.9)',
+      textShadow: `0 1px 3px ${gc}70`,
+      letterSpacing: '-0.01em',
+    } as React.CSSProperties}>
+      {code}
+    </span>
+  );
+}
+
 
 export default function TeacherPage() {
   const queryClient = useQueryClient();
@@ -1736,10 +1753,7 @@ export default function TeacherPage() {
                                     }}
                                       title={cellData.subjectName}
                                     >
-                                      {cellGroup && (() => {
-                                        const gc = getGroupColor(cellGroup);
-                                        return <span style={{ color: gc, fontWeight: 900, marginRight: 3, WebkitTextStroke: '0.4px rgba(255,255,255,0.9)', textShadow: `0 1px 3px ${gc}70`, letterSpacing: '-0.01em' }}>{cellGroup}</span>;
-                                      })()}{cellData.subjectName}
+                                      {cellGroup && renderGroupCode(cellGroup)}{cellData.subjectName}
                                     </span>
                                   </div>
 
@@ -1959,10 +1973,9 @@ export default function TeacherPage() {
                             </span>
                             {/* 과목명 — 그룹코드(무지개 워드아트) + 과목명, 표와 동일한 서식 */}
                             <span style={{ fontWeight: 700, color: '#1a1a1a', lineHeight: 1.3, fontSize: (a.subject || '').length > 6 ? 11 : (a.subject || '').length > 4 ? 12 : 14 }}>
-                              {panelCodes.map((code: string, i: number) => {
-                                const gc = getGroupColor(code);
-                                return <span key={i} style={{ color: gc, fontWeight: 900, marginRight: i < panelCodes.length - 1 ? 2 : 3, WebkitTextStroke: '0.4px rgba(255,255,255,0.9)', textShadow: `0 1px 3px ${gc}70`, letterSpacing: '-0.01em' } as React.CSSProperties}>{code}</span>;
-                              })}
+                              {panelCodes.map((code: string, i: number) =>
+                                renderGroupCode(code, i < panelCodes.length - 1 ? 2 : 3)
+                              )}
                               {a.subject}
                             </span>
                             {a.classTime && (
