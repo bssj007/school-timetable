@@ -1476,7 +1476,7 @@ export default function TeacherPage() {
               <ChevronLeft className="h-3.5 w-3.5" />
             </Button>
             <span className="flex flex-col items-center min-w-[72px] px-0.5 select-none">
-              <span className={`text-xs font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-red-300' : 'text-yellow-300'}`}>
+              <span className={`text-xs font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-white' : 'text-yellow-300'}`}>
                 {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
               </span>
               <span className="text-[9px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
@@ -1519,7 +1519,7 @@ export default function TeacherPage() {
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="flex flex-col items-center min-w-[90px] px-1 select-none">
-                <span className={`text-sm font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-red-300' : 'text-yellow-300'}`}>
+                <span className={`text-sm font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-white' : 'text-yellow-300'}`}>
                   {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
                 </span>
                 <span className="text-[10px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
@@ -1682,8 +1682,8 @@ export default function TeacherPage() {
                             >
                               {cellData ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>
-                                  {/* Class label */}
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                  {/* Class label row: badge left, group right */}
+                                  <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                                     <span style={{
                                       fontSize: 9,
                                       fontWeight: 700,
@@ -1693,31 +1693,37 @@ export default function TeacherPage() {
                                       color: '#ffffff',
                                       display: 'inline-block',
                                       lineHeight: 1.4,
-                                      width: 'fit-content',
+                                      flexShrink: 0,
                                     }}>
                                       {(() => {
                                         if (!cellGroup) return `${cellData.grade}-${cellData.classNum}`;
                                         // 이동수업: 관리페이지 강의실 이름 조회
                                         const configName = lectureClassNameMap.get(`${cellData.grade}-${(cellData.subjectName || '').trim()}-${cellGroup}`);
-                                        // 강의실 이름이 없으면 학년-반 표시, 있으면 강의실 이름만 표시 (그룹 기호는 과목명 뒤에 별도 표시)
+                                        // 강의실 이름이 없으면 학년-반 표시, 있으면 강의실 이름만 표시
                                         return configName ? configName : `${cellData.grade}-${cellData.classNum}`;
                                       })()}
                                     </span>
-                                    <span style={{
-                                      fontWeight: 700,
-                                      color: '#1a1a1a',
-                                      lineHeight: 1.3,
-                                      fontSize: (cellData.subjectName || '').length > 6 ? 9 : (cellData.subjectName || '').length > 4 ? 10 : 12,
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap',
-                                      maxWidth: '100%',
-                                    }}
-                                      title={cellData.subjectName}
-                                    >
-                                      {cellData.subjectName}{cellGroup && <span style={{ color: '#0ea5e9', fontWeight: 800, marginLeft: 3 }}>{cellGroup}</span>}
-                                    </span>
+                                    {cellGroup && (
+                                      <span style={{ fontSize: 9, fontWeight: 800, color: '#2563eb', lineHeight: 1.4, flexShrink: 0 }}>
+                                        {cellGroup}
+                                      </span>
+                                    )}
                                   </div>
+                                  {/* Subject name */}
+                                  <span style={{
+                                    fontWeight: 700,
+                                    color: '#1a1a1a',
+                                    lineHeight: 1.3,
+                                    fontSize: (cellData.subjectName || '').length > 6 ? 9 : (cellData.subjectName || '').length > 4 ? 10 : 12,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    maxWidth: '100%',
+                                  }}
+                                    title={cellData.subjectName}
+                                  >
+                                    {cellData.subjectName}
+                                  </span>
 
                                   {/* Assessment badges — uncolored (white/transparent background) with pink border, positioned directly below subject name */}
                                   {hasAssessment ? (
