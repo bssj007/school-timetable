@@ -1447,12 +1447,12 @@ export default function TeacherPage() {
           {/* Left: title + description — right-padded on desktop so text doesn't flow under week selector */}
           <div className="min-w-0 flex-1 overflow-hidden md:pr-[230px]">
             <div className="flex items-center gap-3">
-              <h1 className="text-base sm:text-xl md:text-3xl font-extrabold text-gray-900 truncate leading-tight shrink-0">
+              <h1 className="text-base sm:text-xl font-extrabold text-gray-900 truncate leading-tight shrink-0" style={{ fontSize: 'clamp(1.125rem, 2.5vw, 1.875rem)' }}>
                 <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent hidden md:inline">교사용 수행평가 등록 시스템</span>
                 <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent md:hidden"> </span>
               </h1>
             </div>
-            <p className="hidden md:block text-gray-500 text-xs sm:text-sm mt-0.5 truncate">
+            <p className="hidden lg:block text-gray-500 text-xs sm:text-sm mt-0.5 truncate">
               시간표에서 수업이 들어있는 칸을 클릭하여 수행평가를 간편하게 등록하고 관리할 수 있습니다.
             </p>
           </div>
