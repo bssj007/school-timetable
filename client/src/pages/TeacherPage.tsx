@@ -1384,7 +1384,7 @@ export default function TeacherPage() {
 
       {/* ===== 보기전용 배너 (미인증 시) ===== */}
       {settings !== undefined && !isCurrentTeacherVerified && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-amber-900/90 text-white shadow-xl backdrop-blur-sm border border-amber-700/50">
+        <div className="fixed bottom-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-auto z-40 flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-amber-900/90 text-white shadow-xl backdrop-blur-sm border border-amber-700/50">
           <svg className="w-4 h-4 text-amber-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
