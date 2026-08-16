@@ -1811,7 +1811,7 @@ export default function TeacherPage() {
 
       {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
       <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4 h-fit">
-        <div className="md:rounded-2xl md:border md:border-slate-200 md:bg-white md:shadow-md md:overflow-hidden flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
+        <div className="bg-white md:rounded-2xl md:border md:border-slate-200 md:shadow-md md:overflow-hidden flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
           {/* Teacher Picker — slim bar, no colored banner */}
           <div className="px-1 md:px-3 py-2 border-b border-slate-100 flex-shrink-0 flex items-center justify-between gap-2">
             {timetableData ? (
@@ -1865,7 +1865,7 @@ export default function TeacherPage() {
                       style={{
                         color: isActive ? '#fff' : color.activeBg,
                         backgroundColor: isActive ? `${color.activeBg}BF` : `${color.bg}20`,
-                        borderBottom: `3px solid ${isActive ? color.activeBg : `${color.activeBg}30`}`,
+                        borderBottom: `3px solid ${isActive ? color.activeBg : `${color.activeBg}70`}`,
                         WebkitTapHighlightColor: 'transparent',
                         touchAction: 'manipulation',
                         userSelect: 'none',
@@ -1881,7 +1881,17 @@ export default function TeacherPage() {
 
           {/* Class Navigation Tabs — hidden when no classes match selected subject */}
           {filteredClassTabs.length > 0 && (
-            <div className="flex-shrink-0 border-b border-slate-100 bg-slate-50">
+            <div
+              className="flex-shrink-0 border-b border-slate-100"
+              style={{
+                background: (() => {
+                  const activeIdx = subjectTabs.indexOf(effectiveSubjectFilter);
+                  if (activeIdx < 0) return '#f8fafc';
+                  const ac = BOOKMARK_COLORS[activeIdx % BOOKMARK_COLORS.length];
+                  return `${ac.bg}28`;
+                })(),
+              }}
+            >
               <div
                 ref={tabContainerRef}
                 onMouseDown={handleTabMouseDown}
