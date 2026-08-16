@@ -262,6 +262,24 @@ function getComputedGroupsForGrade(
   return cellGroups;
 }
 
+// 그룹 코드 무지개 색상 (A=빨, B=주, C=노, D=초, E=파, F=남, G=보, 이후 순환)
+const GROUP_COLORS: Record<string, string> = {
+  A: '#ef4444', // 빨강
+  B: '#f97316', // 주황
+  C: '#ca8a04', // 노랑 (amber — 흰 배경 가시성)
+  D: '#22c55e', // 초록
+  E: '#3b82f6', // 파랑
+  F: '#6366f1', // 남색 (indigo)
+  G: '#a855f7', // 보라
+};
+const GROUP_COLOR_CYCLE = ['#ef4444','#f97316','#ca8a04','#22c55e','#3b82f6','#6366f1','#a855f7'];
+function getGroupColor(group: string): string {
+  if (GROUP_COLORS[group]) return GROUP_COLORS[group];
+  // A=0, B=1 ... Z=25 기준으로 순환
+  const idx = group.charCodeAt(0) - 65;
+  return GROUP_COLOR_CYCLE[((idx % GROUP_COLOR_CYCLE.length) + GROUP_COLOR_CYCLE.length) % GROUP_COLOR_CYCLE.length];
+}
+
 
 export default function TeacherPage() {
   const queryClient = useQueryClient();
@@ -1718,7 +1736,10 @@ export default function TeacherPage() {
                                     }}
                                       title={cellData.subjectName}
                                     >
-                                      {cellGroup && <span style={{ color: '#0ea5e9', fontWeight: 900, marginRight: 3, WebkitTextStroke: '0.4px rgba(255,255,255,0.9)', textShadow: '0 1px 3px rgba(14,165,233,0.45)', letterSpacing: '-0.01em' }}>{cellGroup}</span>}{cellData.subjectName}
+                                      {cellGroup && (() => {
+                                        const gc = getGroupColor(cellGroup);
+                                        return <span style={{ color: gc, fontWeight: 900, marginRight: 3, WebkitTextStroke: '0.4px rgba(255,255,255,0.9)', textShadow: `0 1px 3px ${gc}70`, letterSpacing: '-0.01em' }}>{cellGroup}</span>;
+                                      })()}{cellData.subjectName}
                                     </span>
                                   </div>
 
