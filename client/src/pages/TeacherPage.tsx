@@ -1840,46 +1840,53 @@ export default function TeacherPage() {
           {/* ===== 모바일: 과목탭 + 반선택 + 평가목록 — 선생님선택과 분리된 별도 카드 ===== */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden md:bg-transparent md:rounded-none md:border-none md:shadow-none md:overflow-visible flex flex-col">
 
-          {subjectTabs.length > 1 && (
-            <div className="flex-shrink-0 bg-white border-b border-slate-200">
-              <div className="flex w-full">
-                {subjectTabs.map((subject, idx) => {
-                  const colorIdx = idx % BOOKMARK_COLORS.length;
-                  const color = BOOKMARK_COLORS[colorIdx];
-                  const isActive = effectiveSubjectFilter === subject;
-                  return (
-                    <button
-                      key={subject}
-                      onPointerDown={(e) => {
-                        // Record pointer position on down
-                        (e.currentTarget as any)._tapStartX = e.clientX;
-                        (e.currentTarget as any)._tapStartY = e.clientY;
-                      }}
-                      onPointerUp={(e) => {
-                        // Only count as tap if pointer didn't move much (not a scroll)
-                        const dx = e.clientX - ((e.currentTarget as any)._tapStartX ?? e.clientX);
-                        const dy = e.clientY - ((e.currentTarget as any)._tapStartY ?? e.clientY);
-                        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
-                          setSelectedSubjectFilter(subject);
-                        }
-                      }}
-                      className="flex-1 py-2.5 px-1 text-[13px] font-bold leading-tight text-center"
-                      style={{
-                        color: isActive ? '#fff' : color.activeBg,
-                        backgroundColor: isActive ? `${color.activeBg}BF` : `${color.bg}20`,
-                        borderBottom: `3px solid ${isActive ? color.activeBg : `${color.activeBg}70`}`,
-                        WebkitTapHighlightColor: 'transparent',
-                        touchAction: 'manipulation',
-                        userSelect: 'none',
-                      }}
-                    >
-                      {subject}
-                    </button>
-                  );
-                })}
+          {subjectTabs.length > 1 && (() => {
+            const activeIdx = subjectTabs.indexOf(effectiveSubjectFilter);
+            const activeColor = BOOKMARK_COLORS[activeIdx >= 0 ? activeIdx % BOOKMARK_COLORS.length : 0];
+            return (
+              <div
+                className="flex-shrink-0 bg-white"
+                style={{ borderBottom: `3px solid ${activeColor.activeBg}` }}
+              >
+                <div className="flex w-full">
+                  {subjectTabs.map((subject, idx) => {
+                    const colorIdx = idx % BOOKMARK_COLORS.length;
+                    const color = BOOKMARK_COLORS[colorIdx];
+                    const isActive = effectiveSubjectFilter === subject;
+                    return (
+                      <button
+                        key={subject}
+                        onPointerDown={(e) => {
+                          // Record pointer position on down
+                          (e.currentTarget as any)._tapStartX = e.clientX;
+                          (e.currentTarget as any)._tapStartY = e.clientY;
+                        }}
+                        onPointerUp={(e) => {
+                          // Only count as tap if pointer didn't move much (not a scroll)
+                          const dx = e.clientX - ((e.currentTarget as any)._tapStartX ?? e.clientX);
+                          const dy = e.clientY - ((e.currentTarget as any)._tapStartY ?? e.clientY);
+                          if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+                            setSelectedSubjectFilter(subject);
+                          }
+                        }}
+                        className="flex-1 py-2.5 px-1 text-[13px] font-bold leading-tight text-center"
+                        style={{
+                          color: isActive ? '#fff' : color.activeBg,
+                          backgroundColor: isActive ? `${color.activeBg}BF` : `${color.bg}20`,
+                          borderBottom: `3px solid ${isActive ? color.activeBg : `${activeColor.activeBg}80`}`,
+                          WebkitTapHighlightColor: 'transparent',
+                          touchAction: 'manipulation',
+                          userSelect: 'none',
+                        }}
+                      >
+                        {subject}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Class Navigation Tabs — hidden when no classes match selected subject */}
           {filteredClassTabs.length > 0 && (
