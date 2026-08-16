@@ -1711,7 +1711,7 @@ export default function TeacherPage() {
                                   {/* Class label */}
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                     <span style={{
-                                      fontSize: 9,
+                                      fontSize: 11,
                                       fontWeight: 700,
                                       padding: '1px 4px',
                                       borderRadius: 2,
