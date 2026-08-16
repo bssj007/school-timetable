@@ -137,6 +137,7 @@ export default function Dashboard() {
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
   const [selectedCell, setSelectedCell] = useState<{ weekday: number, classTime: number } | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showChangeDialog, setShowChangeDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [viewingAssessments, setViewingAssessments] = useState<AssessmentItem[]>([]);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -1702,42 +1703,74 @@ export default function Dashboard() {
           </h1>
         </div>
 
-        {/* Right column: selectors right-aligned */}
-        <div className="flex items-center gap-[3px] shrink-0 ml-auto">
-          <Select value={grade} onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}>
-            <SelectTrigger className="relative w-[80px] h-10 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-1.5 [&>svg]:z-0" style={selectorStyle}>
-              <SelectValue placeholder="학년" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">1학년</SelectItem>
-              <SelectItem value="2">2학년</SelectItem>
-              <SelectItem value="3">3학년</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={classNum} onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}>
-            <SelectTrigger className="relative w-[70px] h-10 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-1.5 [&>svg]:z-0" style={selectorStyle}>
-              <SelectValue placeholder="반" />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
-                <SelectItem key={num} value={num.toString()}>{num}반</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={studentNumber} onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}>
-            <SelectTrigger className="relative w-[70px] h-10 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-1.5 [&>svg]:z-0" style={selectorStyle}>
-              <SelectValue placeholder="번호" />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
-                <SelectItem key={num} value={num.toString()}>{num}번</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Right column: student info + change button */}
+        <div className="flex items-center gap-2 ml-auto shrink-0">
+            <div className="flex flex-col leading-tight">
+              <span className="text-xs font-extrabold text-slate-800">
+                {grade || '?'}학년 {classNum || '?'}반 {studentNumber || '?'}번
+              </span>
+              <span className="text-[11px] text-slate-500">
+                {studentName || '이름 미입력'}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-2.5 text-xs font-bold shrink-0 border-slate-300 text-slate-700 hover:bg-slate-50"
+              onClick={() => setShowChangeDialog(true)}
+            >
+              변경
+            </Button>
+          </div>
       </div>
 
-
+      <Dialog open={showChangeDialog} onOpenChange={setShowChangeDialog}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader><DialogTitle>학생 정보 변경</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-slate-600">학년</label>
+              <Select value={grade} onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}>
+                <SelectTrigger className="h-10 text-base font-medium">
+                  <SelectValue placeholder="학년 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1학년</SelectItem>
+                  <SelectItem value="2">2학년</SelectItem>
+                  <SelectItem value="3">3학년</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-slate-600">반</label>
+              <Select value={classNum} onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}>
+                <SelectTrigger className="h-10 text-base font-medium">
+                  <SelectValue placeholder="반 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
+                    <SelectItem key={num} value={num.toString()}>{num}반</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-slate-600">번호</label>
+              <Select value={studentNumber} onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}>
+                <SelectTrigger className="h-10 text-base font-medium">
+                  <SelectValue placeholder="번호 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
+                    <SelectItem key={num} value={num.toString()}>{num}번</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Button className="w-full" onClick={() => setShowChangeDialog(false)}>확인</Button>
+        </DialogContent>
+      </Dialog>
 
       {/* Desktop Header (Outside Card) */}
 
@@ -1888,54 +1921,24 @@ export default function Dashboard() {
                 {/* 모바일 카카오 뱃지 제거됨 — 알림 벨은 상단 헤더에 통합 */}
               </div>
 
-              {/* Desktop Selectors */}
-              <div className="hidden md:flex items-center gap-2 flex-1 justify-end min-w-0 md:ml-[3px]">
-
-                <Select
-                  value={grade}
-                  onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
+              {/* Desktop: 학번/이름 표시 + 변경 버튼 */}
+              <div className="hidden md:flex items-center gap-2 flex-1 justify-end min-w-0">
+                <div className="flex flex-col leading-tight text-right">
+                  <span className="text-sm font-extrabold text-slate-800">
+                    {grade || '?'}학년 {classNum || '?'}반 {studentNumber || '?'}번
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {studentName || '이름 미입력'}
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 px-3 text-sm font-bold shrink-0 border-slate-300 text-slate-700 hover:bg-slate-50"
+                  onClick={() => setShowChangeDialog(true)}
                 >
-                  <SelectTrigger className="w-[100px] md:w-[110px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                    <SelectValue placeholder="학년" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1"><span>1학년</span></SelectItem>
-                    <SelectItem value="2"><span>2학년</span></SelectItem>
-                    <SelectItem value="3"><span>3학년</span></SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={classNum}
-                  onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
-                >
-                  <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                    <SelectValue placeholder="반" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
-                      <SelectItem key={num} value={num.toString()}>
-                        <span>{num}반</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={studentNumber}
-                  onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
-                >
-                  <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                    <SelectValue placeholder="번호" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
-                      <SelectItem key={num} value={num.toString()}>
-                        <span>{num}번</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  변경
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="px-1 pb-1 md:px-2 md:pb-2">
