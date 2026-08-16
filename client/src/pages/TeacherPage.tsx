@@ -1443,7 +1443,7 @@ export default function TeacherPage() {
         </div>
       )}
 
-      <div className="max-w-[1240px] mx-auto w-full flex-1 flex flex-col min-h-0">
+      <div className="max-w-[1240px] mx-auto w-full md:flex-1 flex flex-col md:min-h-0">
 
 
         {/* ===== TOP SECTION: Title + Description + Desktop Week Selector + Shortcut ===== */}
@@ -1525,7 +1525,7 @@ export default function TeacherPage() {
 
 
         {/* ===== CONTENT AREA: flex-col on mobile (panel top, title+week, table bottom), flex-row on desktop ===== */}
-        <div className="flex flex-col md:flex-row gap-3 md:gap-4 xl:gap-6 items-start md:items-stretch flex-1 min-h-0">
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4 xl:gap-6 items-start md:items-stretch md:flex-1 md:min-h-0">
 
         {/* ===== MOBILE ONLY: Title + Week nav row — order-1 (above timetable) ===== */}
         <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 shrink-0">
@@ -1571,7 +1571,7 @@ export default function TeacherPage() {
         </div>
 
         {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
-        <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-2 md:order-1 flex-1 min-h-0">
+        <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-2 md:order-1 shrink-0 md:min-h-0">
 
 
       {/* Main Timetable — Card wrapper */}
@@ -1629,10 +1629,10 @@ export default function TeacherPage() {
                     const p = periodIndex + 1;
                     const isCurrentPeriod = currentPeriod === p && weekOffset === 0;
                     return (
-                      <tr key={p} className="h-[52px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px]">
+                      <tr key={p} className="h-[50px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px]">
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[52px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px] overflow-hidden"
+                          className="h-[50px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px] overflow-hidden"
                           style={{
                             width: 36,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
