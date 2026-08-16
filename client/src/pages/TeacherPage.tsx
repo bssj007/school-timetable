@@ -1392,19 +1392,19 @@ export default function TeacherPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ===== 보기전용 배너 (미인증 시) ===== */}
+      {/* ===== 보기전용 배너 (미인증 시) — 모바일 전용 fixed ===== */}
       {settings !== undefined && !isCurrentTeacherVerified && (
-        <div className="fixed bottom-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-auto z-40 flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-amber-900/90 text-white shadow-xl backdrop-blur-sm border border-amber-700/50">
+        <div className="md:hidden fixed bottom-4 left-4 right-4 z-40 flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-900/90 text-white shadow-xl backdrop-blur-sm border border-amber-700/50">
           <svg className="w-4 h-4 text-amber-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
           </svg>
-          <span className="text-sm font-semibold text-amber-100 leading-tight">
+          <span className="text-sm font-semibold text-amber-100 leading-relaxed flex-1">
             보기 전용<br />등록·수정하려면 인증하세요
           </span>
           <button
             onClick={() => setShowAuthDialog(true)}
-            className="ml-1 px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold transition-colors"
+            className="shrink-0 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-bold transition-colors"
           >
             인증하기
           </button>
@@ -1476,7 +1476,7 @@ export default function TeacherPage() {
               <ChevronLeft className="h-3.5 w-3.5" />
             </Button>
             <span className="flex flex-col items-center min-w-[72px] px-0.5 select-none">
-              <span className="text-xs font-bold text-white leading-tight whitespace-nowrap">
+              <span className={`text-xs font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-red-300' : 'text-yellow-300'}`}>
                 {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
               </span>
               <span className="text-[9px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
@@ -1519,7 +1519,7 @@ export default function TeacherPage() {
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="flex flex-col items-center min-w-[90px] px-1 select-none">
-                <span className="text-sm font-bold text-white leading-tight whitespace-nowrap">
+                <span className={`text-sm font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-red-300' : 'text-yellow-300'}`}>
                   {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
                 </span>
                 <span className="text-[10px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
@@ -1979,6 +1979,25 @@ export default function TeacherPage() {
           </div>
 
         </div>{/* end inner card */}
+
+        {/* ===== PC 전용: 보기전용 배너 (우측 패널 하단) ===== */}
+        {settings !== undefined && !isCurrentTeacherVerified && (
+          <div className="hidden md:flex items-center gap-3 mt-2 px-4 py-3 rounded-2xl bg-amber-900/90 text-white shadow-lg backdrop-blur-sm border border-amber-700/50">
+            <svg className="w-4 h-4 text-amber-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            <span className="text-sm font-semibold text-amber-100 leading-tight flex-1">
+              보기 전용<br />등록·수정하려면 인증하세요
+            </span>
+            <button
+              onClick={() => setShowAuthDialog(true)}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold transition-colors"
+            >
+              인증하기
+            </button>
+          </div>
+        )}
         </div>{/* end right panel */}
 
         </div>{/* end content area */}
