@@ -1682,8 +1682,8 @@ export default function TeacherPage() {
                             >
                               {cellData ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>
-                                  {/* Class label row: badge left, group right */}
-                                  <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                                  {/* Class label */}
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                     <span style={{
                                       fontSize: 9,
                                       fontWeight: 700,
@@ -1693,37 +1693,31 @@ export default function TeacherPage() {
                                       color: '#ffffff',
                                       display: 'inline-block',
                                       lineHeight: 1.4,
-                                      flexShrink: 0,
+                                      width: 'fit-content',
                                     }}>
                                       {(() => {
                                         if (!cellGroup) return `${cellData.grade}-${cellData.classNum}`;
                                         // 이동수업: 관리페이지 강의실 이름 조회
                                         const configName = lectureClassNameMap.get(`${cellData.grade}-${(cellData.subjectName || '').trim()}-${cellGroup}`);
-                                        // 강의실 이름이 없으면 학년-반 표시, 있으면 강의실 이름만 표시
+                                        // 강의실 이름이 없으면 학년-반 표시, 있으면 강의실 이름만 표시 (그룹 기호는 과목명 뒤에 별도 표시)
                                         return configName ? configName : `${cellData.grade}-${cellData.classNum}`;
                                       })()}
                                     </span>
-                                    {cellGroup && (
-                                      <span style={{ fontSize: 9, fontWeight: 800, color: '#2563eb', lineHeight: 1.4, flexShrink: 0 }}>
-                                        {cellGroup}
-                                      </span>
-                                    )}
+                                    <span style={{
+                                      fontWeight: 700,
+                                      color: '#1a1a1a',
+                                      lineHeight: 1.3,
+                                      fontSize: (cellData.subjectName || '').length > 6 ? 9 : (cellData.subjectName || '').length > 4 ? 10 : 12,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      maxWidth: '100%',
+                                    }}
+                                      title={cellData.subjectName}
+                                    >
+                                      {cellGroup && <span style={{ color: '#0ea5e9', fontWeight: 800, marginRight: 3 }}>{cellGroup}</span>}{cellData.subjectName}
+                                    </span>
                                   </div>
-                                  {/* Subject name */}
-                                  <span style={{
-                                    fontWeight: 700,
-                                    color: '#1a1a1a',
-                                    lineHeight: 1.3,
-                                    fontSize: (cellData.subjectName || '').length > 6 ? 9 : (cellData.subjectName || '').length > 4 ? 10 : 12,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    maxWidth: '100%',
-                                  }}
-                                    title={cellData.subjectName}
-                                  >
-                                    {cellData.subjectName}
-                                  </span>
 
                                   {/* Assessment badges — uncolored (white/transparent background) with pink border, positioned directly below subject name */}
                                   {hasAssessment ? (
