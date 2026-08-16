@@ -1954,8 +1954,8 @@ export default function TeacherPage() {
                 ))}
               </div>
             ) : panelAssessments.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-5 text-slate-400">
-                <span className="text-2xl mb-1">📭</span>
+              <div className="flex flex-col items-center justify-center h-16 text-slate-400">
+                <span className="text-lg mb-0.5">📭</span>
                 <p className="text-xs font-medium">등록된 수행평가가 없습니다.</p>
               </div>
             ) : (
