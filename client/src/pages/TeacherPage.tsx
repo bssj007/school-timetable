@@ -1587,24 +1587,24 @@ export default function TeacherPage() {
               <table className="w-full table-fixed min-w-[340px] flex-1 h-full" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
                 <thead>
                   <tr>
-                    {/* Corner cell */}
-                    <th style={{ width: 36, height: 26, background: '#f2f2f2', borderRight: '1px solid #d0d0d0', borderBottom: '1px solid #d0d0d0', position: 'sticky', top: 0, zIndex: 2 }} />
+                    {/* Corner cell — empty (no 교시 label) */}
+                    <th style={{ width: 36, height: 30, background: '#f2f2f2', borderRight: '1px solid #d0d0d0', borderBottom: '1px solid #d0d0d0', position: 'sticky', top: 0, zIndex: 2 }} />
                     {weekdays.map((day, idx) => {
                       const dDate = weekDates[idx];
                       const todayStr = toDateString(new Date());
                       const isToday = toDateString(dDate) === todayStr;
-                      const formattedD = `${dDate.getMonth() + 1}/${dDate.getDate()}`;
+                      const dayNum = dDate.getDate();
                       return (
                         <th
                           key={day}
                           style={{
-                            height: 26,
+                            height: 30,
                             background: isToday ? '#cee8d0' : '#f2f2f2',
                             borderRight: '1px solid #d0d0d0',
                             borderBottom: isToday ? '2px solid #217346' : '1px solid #d0d0d0',
                             color: isToday ? '#1a5c30' : '#595959',
                             fontWeight: 700,
-                            fontSize: 11,
+                            fontSize: 12,
                             textAlign: 'center',
                             userSelect: 'none',
                             position: 'sticky',
@@ -1612,10 +1612,7 @@ export default function TeacherPage() {
                             zIndex: 2,
                           }}
                         >
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
-                            <span>{day}요일</span>
-                            <span style={{ fontSize: 9, fontWeight: 500, opacity: 0.75 }}>{formattedD}</span>
-                          </div>
+                          {day}({dayNum})
                         </th>
                       );
                     })}
