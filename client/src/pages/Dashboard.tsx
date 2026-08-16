@@ -1,10 +1,10 @@
-﻿
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
 import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon, ThumbsUp, X, Bell } from "lucide-react";
@@ -137,7 +137,6 @@ export default function Dashboard() {
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
   const [selectedCell, setSelectedCell] = useState<{ weekday: number, classTime: number } | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showChangeDialog, setShowChangeDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [viewingAssessments, setViewingAssessments] = useState<AssessmentItem[]>([]);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -176,6 +175,35 @@ export default function Dashboard() {
   const [showBugReportDialog, setShowBugReportDialog] = useState(false);
   const [bugReportMessage, setBugReportMessage] = useState("");
   const [isBugReportSending, setIsBugReportSending] = useState(false);
+
+  // ── 학번/이름 변경 다이얼로그 ────────────────────────────────────────
+  const [showChangeDialog, setShowChangeDialog] = useState(false);
+  const [changeStudentName, setChangeStudentName] = useState("");
+  const [changeStudentId, setChangeStudentId] = useState("");
+  const changeIsNameValid = changeStudentName.trim().length > 0;
+  const changeIsIdValid = changeStudentId.length === 4;
+  const changeCanSubmit = changeIsNameValid && changeIsIdValid;
+  const handleChangeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedName = changeStudentName.trim();
+    if (!trimmedName) { alert("이름을 입력해주세요."); return; }
+    if (changeStudentId.length === 4) {
+      const g = changeStudentId[0];
+      const cn = changeStudentId[1];
+      const sn = parseInt(changeStudentId.substring(2)).toString();
+      if (parseInt(g) >= 1 && parseInt(g) <= 3 && parseInt(cn) >= 1) {
+        let semesterKey = '1';
+        try {
+          const res = await fetch('/api/settings/public');
+          if (res.ok) { const s = await res.json(); semesterKey = s?.semester_key ?? '1'; }
+        } catch { }
+        setConfig({ schoolName: "부산성지고등학교", grade: g, classNum: cn, studentNumber: sn, studentName: trimmedName, semesterKey } as any);
+        setShowChangeDialog(false);
+      } else {
+        alert("올바른 학번 형식이 아닙니다. (예: 1102)");
+      }
+    }
+  };
 
   // ── 알림 프레임워크 ─────────────────────────────────────────────────
   const [showNotifications, setShowNotifications] = useState(false);
@@ -1684,6 +1712,57 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
+      {/* 학번/이름 변경 Dialog */}
+      <Dialog open={showChangeDialog} onOpenChange={setShowChangeDialog}>
+        <DialogContent className="sm:max-w-[425px] md:max-w-xl md:min-h-[288px] flex flex-col justify-center">
+          <DialogHeader>
+            <DialogTitle>학번/이름 변경</DialogTitle>
+            <DialogDescription>
+              이름과 4자리 학번을 다시 입력하세요
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleChangeSubmit} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label htmlFor="changeName" className="text-sm font-medium leading-none">이름</label>
+              <input
+                id="changeName"
+                type="text"
+                placeholder="홍길동"
+                value={changeStudentName}
+                onChange={(e) => setChangeStudentName(e.target.value)}
+                className="w-full h-14 text-2xl font-semibold text-center rounded-md border border-input bg-background px-3 focus:outline-none focus:ring-2 focus:ring-ring"
+                required
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="changeId" className="text-sm font-medium leading-none">학번 (4자리)</label>
+              <input
+                id="changeId"
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="예) 1102 (1학년 1반 02번)"
+                value={changeStudentId}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, "");
+                  if (val.length <= 4) setChangeStudentId(val);
+                }}
+                className={`w-full text-center rounded-md border border-input bg-background px-3 focus:outline-none focus:ring-2 focus:ring-ring h-16 md:h-20 py-0 ${changeStudentId.length === 0 ? "text-base md:text-lg font-normal tracking-normal indent-0" : "text-5xl md:text-[64px] font-bold tracking-[0.3em] md:tracking-[0.4em] indent-[0.3em] md:indent-[0.4em]"}`}
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!changeCanSubmit}
+              className="w-full h-12 md:h-14 text-lg md:text-xl font-bold rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              변경 저장
+            </button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex items-stretch gap-2 md:hidden mb-1.5">
         {/* Left column: toggle (top) + title (bottom) */}
         <div className="flex flex-col justify-between gap-0.5 w-[136px] shrink-0">
@@ -1703,74 +1782,23 @@ export default function Dashboard() {
           </h1>
         </div>
 
-        {/* Right column: student info + change button */}
-        <div className="flex items-center gap-2 ml-auto shrink-0">
-            <div className="flex flex-col leading-tight">
-              <span className="text-xs font-extrabold text-slate-800">
-                {grade || '?'}학년 {classNum || '?'}반 {studentNumber || '?'}번
-              </span>
-              <span className="text-[11px] text-slate-500">
-                {studentName || '이름 미입력'}
-              </span>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 px-2.5 text-xs font-bold shrink-0 border-slate-300 text-slate-700 hover:bg-slate-50"
-              onClick={() => setShowChangeDialog(true)}
-            >
-              변경
-            </Button>
+        {/* Right column: student info + change button (mobile) */}
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
+          <div className="flex flex-col items-end leading-tight">
+            <span className="text-[11px] text-slate-400 font-medium">학번 <span className="text-slate-700 font-bold text-sm">{grade || "?"}{classNum || "?"}{studentNumber?.padStart(2,"0") || "??"}</span></span>
+            <span className="text-[11px] text-slate-400 font-medium">이름 <span className="text-slate-700 font-semibold text-sm">{studentName || "-"}</span></span>
           </div>
+          <button
+            type="button"
+            onClick={() => { setChangeStudentName(""); setChangeStudentId(""); setShowChangeDialog(true); }}
+            className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 active:bg-slate-100 transition-colors"
+          >
+            변경
+          </button>
+        </div>
       </div>
 
-      <Dialog open={showChangeDialog} onOpenChange={setShowChangeDialog}>
-        <DialogContent className="max-w-xs">
-          <DialogHeader><DialogTitle>학생 정보 변경</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-slate-600">학년</label>
-              <Select value={grade} onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}>
-                <SelectTrigger className="h-10 text-base font-medium">
-                  <SelectValue placeholder="학년 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">1학년</SelectItem>
-                  <SelectItem value="2">2학년</SelectItem>
-                  <SelectItem value="3">3학년</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-slate-600">반</label>
-              <Select value={classNum} onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}>
-                <SelectTrigger className="h-10 text-base font-medium">
-                  <SelectValue placeholder="반 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
-                    <SelectItem key={num} value={num.toString()}>{num}반</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-slate-600">번호</label>
-              <Select value={studentNumber} onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}>
-                <SelectTrigger className="h-10 text-base font-medium">
-                  <SelectValue placeholder="번호 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
-                    <SelectItem key={num} value={num.toString()}>{num}번</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <Button className="w-full" onClick={() => setShowChangeDialog(false)}>확인</Button>
-        </DialogContent>
-      </Dialog>
+
 
       {/* Desktop Header (Outside Card) */}
 
@@ -1779,38 +1807,19 @@ export default function Dashboard() {
         {/* Visit Restriction Overlay (Completely Replaces Timetable Card) */}
         {isRestricted ? (
           <div className="w-full flex flex-col pt-2 md:pt-4">
-            {/* Preserved Desktop Selectors during Restriction */}
-            <div className="hidden md:flex items-center gap-2 justify-center mb-6">
-              <Select value={grade} onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}>
-                <SelectTrigger className="w-[100px] md:w-[110px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                  <SelectValue placeholder="학년" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1"><span>1학년</span></SelectItem>
-                  <SelectItem value="2"><span>2학년</span></SelectItem>
-                  <SelectItem value="3"><span>3학년</span></SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={classNum} onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}>
-                <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                  <SelectValue placeholder="반" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
-                    <SelectItem key={num} value={num.toString()}><span>{num}반</span></SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={studentNumber} onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}>
-                <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                  <SelectValue placeholder="번호" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
-                    <SelectItem key={num} value={num.toString()}><span>{num}번</span></SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Student info + change button during restriction */}
+            <div className="hidden md:flex items-center gap-3 justify-center mb-6">
+              <div className="flex flex-col items-end leading-tight">
+                <span className="text-[12px] text-slate-400 font-medium">학번 <span className="text-slate-700 font-bold text-base">{grade || "?"}{classNum || "?"}{studentNumber?.padStart(2,"0") || "??"}</span></span>
+                <span className="text-[12px] text-slate-400 font-medium">이름 <span className="text-slate-700 font-semibold text-base">{studentName || "-"}</span></span>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setChangeStudentName(""); setChangeStudentId(""); setShowChangeDialog(true); }}
+                className="text-sm font-bold px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                변경
+              </button>
             </div>
 
             {/* Restricted Message Card */}
@@ -1921,24 +1930,19 @@ export default function Dashboard() {
                 {/* 모바일 카카오 뱃지 제거됨 — 알림 벨은 상단 헤더에 통합 */}
               </div>
 
-              {/* Desktop: 학번/이름 표시 + 변경 버튼 */}
-              <div className="hidden md:flex items-center gap-2 flex-1 justify-end min-w-0">
-                <div className="flex flex-col leading-tight text-right">
-                  <span className="text-sm font-extrabold text-slate-800">
-                    {grade || '?'}학년 {classNum || '?'}반 {studentNumber || '?'}번
-                  </span>
-                  <span className="text-xs text-slate-500">
-                    {studentName || '이름 미입력'}
-                  </span>
+              {/* Desktop: student info + change button */}
+              <div className="hidden md:flex items-center gap-3 flex-1 justify-end min-w-0 md:ml-[3px]">
+                <div className="flex flex-col items-end leading-tight">
+                  <span className="text-[11px] text-slate-400 font-medium">학번 <span className="text-slate-900 font-bold text-base">{grade || "?"}{classNum || "?"}{studentNumber?.padStart(2,"0") || "??"}</span></span>
+                  <span className="text-[11px] text-slate-400 font-medium">이름 <span className="text-slate-700 font-semibold text-sm">{studentName || "-"}</span></span>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-9 px-3 text-sm font-bold shrink-0 border-slate-300 text-slate-700 hover:bg-slate-50"
-                  onClick={() => setShowChangeDialog(true)}
+                <button
+                  type="button"
+                  onClick={() => { setChangeStudentName(""); setChangeStudentId(""); setShowChangeDialog(true); }}
+                  className="shrink-0 text-sm font-bold px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
                 >
                   변경
-                </Button>
+                </button>
               </div>
             </CardHeader>
             <CardContent className="px-1 pb-1 md:px-2 md:pb-2">
