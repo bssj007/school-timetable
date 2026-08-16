@@ -1415,12 +1415,19 @@ export default function TeacherPage() {
 
       {/* ===== 보기전용 배너 (미인증 시) — 모바일 전용 fixed ===== */}
       {settings !== undefined && !isCurrentTeacherVerified && (
-        <div className="md:hidden fixed bottom-4 left-4 right-4 z-40 flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-900/90 text-white shadow-xl backdrop-blur-sm border border-amber-700/50">
-          <svg className="w-4 h-4 text-amber-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div
+          className="md:hidden fixed bottom-4 left-4 right-4 z-40 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl backdrop-blur-sm"
+          style={{
+            background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
+            border: '1px solid rgba(255,255,255,0.6)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.7)',
+          }}
+        >
+          <svg className="w-4 h-4 shrink-0" style={{ color: '#4b5563' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
           </svg>
-          <span className="text-sm font-semibold text-amber-100 leading-relaxed flex-1">
+          <span className="text-sm font-semibold leading-relaxed flex-1" style={{ color: '#1f2937' }}>
             보기 전용<br />등록·수정하려면 인증하세요
           </span>
           <button
@@ -2006,12 +2013,19 @@ export default function TeacherPage() {
 
         {/* ===== PC 전용: 보기전용 배너 (우측 패널 하단) ===== */}
         {settings !== undefined && !isCurrentTeacherVerified && (
-          <div className="hidden md:flex items-center gap-3 mt-2 px-4 py-3 rounded-2xl bg-amber-900/90 text-white shadow-lg backdrop-blur-sm border border-amber-700/50">
-            <svg className="w-4 h-4 text-amber-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div
+            className="hidden md:flex items-center gap-3 mt-2 px-4 py-3 rounded-2xl backdrop-blur-sm"
+            style={{
+              background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
+              border: '1px solid rgba(255,255,255,0.6)',
+              boxShadow: '0 2px 12px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.7)',
+            }}
+          >
+            <svg className="w-4 h-4 shrink-0" style={{ color: '#4b5563' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
-            <span className="text-sm font-semibold text-amber-100 leading-tight flex-1">
+            <span className="text-sm font-semibold leading-tight flex-1" style={{ color: '#1f2937' }}>
               보기 전용<br />등록·수정하려면 인증하세요
             </span>
             <button
