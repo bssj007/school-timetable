@@ -1717,11 +1717,11 @@ export default function TeacherPage() {
                                       width: 'fit-content',
                                     }}>
                                       {(() => {
-                                        if (!cellGroup) return `${cellData.grade}-${cellData.classNum}`;
+                                        if (!cellGroup) return `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
                                         // 이동수업: 관리페이지 강의실 이름 조회
                                         const configName = lectureClassNameMap.get(`${cellData.grade}-${(cellData.subjectName || '').trim()}-${cellGroup}`);
                                         // 강의실 이름이 없으면 학년-반 표시, 있으면 강의실 이름만 표시 (그룹 기호는 과목명 뒤에 별도 표시)
-                                        return configName ? configName : `${cellData.grade}-${cellData.classNum}`;
+                                        return configName ? configName : `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
                                       })()}
                                     </span>
                                     <span style={{
