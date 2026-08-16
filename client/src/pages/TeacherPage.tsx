@@ -1456,9 +1456,6 @@ export default function TeacherPage() {
                 <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent md:hidden"> </span>
               </h1>
             </div>
-            <p className="hidden lg:block text-gray-500 text-xs sm:text-sm mt-0.5 truncate">
-              시간표에서 수업이 들어있는 칸을 클릭하여 수행평가를 간편하게 등록하고 관리할 수 있습니다.
-            </p>
           </div>
 
           {/* Desktop Week Selector — absolute, right-aligned above table right edge
@@ -2039,6 +2036,12 @@ export default function TeacherPage() {
           </div>
         )}
         </div>{/* end right panel */}
+
+        {/* ===== PC 전용: 설명 텍스트 (패널 하단) ===== */}
+        <p className="hidden md:block text-gray-400 text-xs mt-2 leading-relaxed">
+          시간표에서 수업이 들어있는 칸을 클릭하여<br />
+          수행평가를 간편하게 등록하고 관리할 수 있습니다.
+        </p>
 
         </div>{/* end content area */}
       </div>{/* end max-w wrapper */}
