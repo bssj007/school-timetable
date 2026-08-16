@@ -1443,9 +1443,9 @@ export default function TeacherPage() {
 
 
         {/* ===== TOP SECTION: Title + Description + Desktop Week Selector + Shortcut ===== */}
-        <div className="flex items-center gap-2 mb-2 md:mb-0 flex-shrink-0">
-          {/* Left: title + description — shrinks when space is tight */}
-          <div className="min-w-0 flex-1 overflow-hidden">
+        <div className="relative flex items-center gap-2 mb-2 md:mb-0 flex-shrink-0">
+          {/* Left: title + description — right-padded on desktop so text doesn't flow under week selector */}
+          <div className="min-w-0 flex-1 overflow-hidden md:pr-[230px]">
             <div className="flex items-center gap-3">
               <h1 className="text-base sm:text-xl md:text-3xl font-extrabold text-gray-900 truncate leading-tight shrink-0">
                 <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent hidden md:inline">교사용 수행평가 등록 시스템</span>
@@ -1457,46 +1457,48 @@ export default function TeacherPage() {
             </p>
           </div>
 
-          {/* Right: PC Week Selector + Shortcut button — shrink-0 so they always take priority */}
-          <div className="hidden md:flex items-center gap-2 shrink-0">
-            {/* Desktop Week Selector */}
-            <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400 shadow-md">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-8 h-8 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
-                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
-                onClick={(e) => {
-                  setWeekOffset(prev => prev - 1);
-                  (e.currentTarget as HTMLElement).blur();
-                }}
-                disabled={weekOffset <= -2}
-                title="이전 주"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="flex flex-col items-center min-w-[90px] px-1 select-none">
-                <span className={`text-sm font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-white' : 'text-yellow-300'}`}>
-                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
-                </span>
-                <span className="text-[10px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
+          {/* Desktop Week Selector — absolute, right-aligned above table right edge
+              md: panel(320px) + gap-4(16px) = 336px from right
+              xl: panel(360px) + gap-6(24px) = 384px from right */}
+          <div className="hidden md:flex absolute right-[336px] xl:right-[384px] top-1/2 -translate-y-1/2 items-center bg-indigo-600 rounded-full p-1 border border-indigo-400 shadow-md">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-8 h-8 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
+              style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+              onClick={(e) => {
+                setWeekOffset(prev => prev - 1);
+                (e.currentTarget as HTMLElement).blur();
+              }}
+              disabled={weekOffset <= -2}
+              title="이전 주"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="flex flex-col items-center min-w-[90px] px-1 select-none">
+              <span className={`text-sm font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-white' : 'text-yellow-300'}`}>
+                {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
               </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-8 h-8 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
-                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
-                onClick={(e) => {
-                  setWeekOffset(prev => prev + 1);
-                  (e.currentTarget as HTMLElement).blur();
-                }}
-                disabled={weekOffset >= 8}
-                title="다음 주"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-            {/* PC Only Desktop Shortcut Button */}
+              <span className="text-[10px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-8 h-8 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
+              style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+              onClick={(e) => {
+                setWeekOffset(prev => prev + 1);
+                (e.currentTarget as HTMLElement).blur();
+              }}
+              disabled={weekOffset >= 8}
+              title="다음 주"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* PC Shortcut button — far right, in normal flow */}
+          <div className="hidden md:flex shrink-0">
             <Button
               variant="outline"
               size="sm"
@@ -1512,7 +1514,7 @@ export default function TeacherPage() {
             </Button>
           </div>
 
-          {/* Mobile only: shortcut placeholder (empty — mobile has its own layout) */}
+          {/* Mobile only: empty placeholder */}
           <div className="md:hidden flex items-center gap-1.5 shrink-0" />
         </div>
 
@@ -1731,7 +1733,7 @@ export default function TeacherPage() {
                                       fontWeight: 700,
                                       color: '#1a1a1a',
                                       lineHeight: 1.3,
-                                      fontSize: (cellData.subjectName || '').length > 6 ? 9 : (cellData.subjectName || '').length > 4 ? 10 : 12,
+                                      fontSize: (cellData.subjectName || '').length > 6 ? 11 : (cellData.subjectName || '').length > 4 ? 12 : 14,
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
                                       whiteSpace: 'nowrap',
