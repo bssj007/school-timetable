@@ -1873,7 +1873,7 @@ export default function TeacherPage() {
                         style={{
                           color: isActive ? '#fff' : color.activeBg,
                           backgroundColor: isActive ? `${color.activeBg}BF` : `${color.bg}20`,
-                          borderBottom: `3px solid ${isActive ? color.activeBg : `${activeColor.activeBg}80`}`,
+                          borderBottom: 'none',
                           WebkitTapHighlightColor: 'transparent',
                           touchAction: 'manipulation',
                           userSelect: 'none',
@@ -1894,11 +1894,8 @@ export default function TeacherPage() {
             const ac = BOOKMARK_COLORS[activeIdx >= 0 ? activeIdx % BOOKMARK_COLORS.length : 0];
             return (
               <div
-                className="flex-shrink-0"
-                style={{
-                  background: `${ac.bg}28`,
-                  borderBottom: `3px solid ${ac.activeBg}`,
-                }}
+                className="flex-shrink-0 border-b border-slate-100"
+                style={{ background: `${ac.bg}28` }}
               >
                 <div
                   ref={tabContainerRef}
@@ -1909,32 +1906,32 @@ export default function TeacherPage() {
                   className="flex gap-1 overflow-x-auto px-1 md:px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
                   style={{ scrollbarWidth: 'none' }}
                 >
-                  {filteredClassTabs.map(tab => {
-                    const isSelected = selectedTabId === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => {
-                          if (isDraggingTabsRef.current) return;
-                          setSelectedTabId(tab.id);
-                        }}
-                        className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all duration-150"
-                        style={{
-                          backgroundColor: isSelected ? ac.activeBg : '#ffffff',
-                          color: isSelected ? '#ffffff' : ac.activeBg,
-                          borderColor: isSelected ? ac.activeBg : `${ac.activeBg}60`,
-                          boxShadow: isSelected ? `0 1px 4px ${ac.activeBg}50` : 'none',
-                        }}
-                      >
-                        {tab.group
-                          ? (() => {
-                              const configName = lectureClassNameMap.get(`${tab.grade}-${(effectiveSubjectFilter || '').trim()}-${tab.group}`);
-                              return configName ? `${configName}(${tab.group})` : `(${tab.group})`;
-                            })()
-                          : tab.label}
-                      </button>
-                    );
-                  })}
+                  {filteredClassTabs.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        if (isDraggingTabsRef.current) return;
+                        setSelectedTabId(tab.id);
+                      }}
+                      className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all duration-150 flex items-center gap-0.5
+                        ${selectedTabId === tab.id
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'
+                        }`}
+                    >
+                      {tab.group
+                        ? (() => {
+                            const configName = lectureClassNameMap.get(`${tab.grade}-${(effectiveSubjectFilter || '').trim()}-${tab.group}`);
+                            return (
+                              <>
+                                {renderGroupCode(tab.group, configName ? 3 : 0)}
+                                {configName && <span>{configName}</span>}
+                              </>
+                            );
+                          })()
+                        : String(tab.label).replace(/반$/, '')}
+                    </button>
+                  ))}
                 </div>
               </div>
             );
