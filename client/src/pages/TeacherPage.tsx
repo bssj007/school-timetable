@@ -1938,7 +1938,15 @@ export default function TeacherPage() {
           })()}
 
           {/* Assessment List */}
-          <div className="overflow-y-auto px-1 md:px-4 py-2.5 md:max-h-[calc(100vh-200px)]">
+          <div
+            className="overflow-y-auto px-1 md:px-4 py-2.5 md:max-h-[calc(100vh-200px)]"
+            style={(() => {
+              const activeIdx = subjectTabs.indexOf(effectiveSubjectFilter);
+              if (activeIdx < 0) return {};
+              const ac = BOOKMARK_COLORS[activeIdx % BOOKMARK_COLORS.length];
+              return { background: `${ac.bg}18` };
+            })()}
+          >
             {isAssessmentsLoading ? (
               <div className="space-y-2 mt-1">
                 {[1,2].map(i => (
