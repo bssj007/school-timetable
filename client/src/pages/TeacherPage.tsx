@@ -1889,52 +1889,56 @@ export default function TeacherPage() {
           })()}
 
           {/* Class Navigation Tabs — hidden when no classes match selected subject */}
-          {filteredClassTabs.length > 0 && (
-            <div
-              className="flex-shrink-0 border-b border-slate-100"
-              style={{
-                background: (() => {
-                  const activeIdx = subjectTabs.indexOf(effectiveSubjectFilter);
-                  if (activeIdx < 0) return '#f8fafc';
-                  const ac = BOOKMARK_COLORS[activeIdx % BOOKMARK_COLORS.length];
-                  return `${ac.bg}28`;
-                })(),
-              }}
-            >
+          {filteredClassTabs.length > 0 && (() => {
+            const activeIdx = subjectTabs.indexOf(effectiveSubjectFilter);
+            const ac = BOOKMARK_COLORS[activeIdx >= 0 ? activeIdx % BOOKMARK_COLORS.length : 0];
+            return (
               <div
-                ref={tabContainerRef}
-                onMouseDown={handleTabMouseDown}
-                onMouseLeave={handleTabMouseLeave}
-                onMouseUp={handleTabMouseUp}
-                onMouseMove={handleTabMouseMove}
-                className="flex gap-1 overflow-x-auto px-1 md:px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
-                style={{ scrollbarWidth: 'none' }}
+                className="flex-shrink-0"
+                style={{
+                  background: `${ac.bg}28`,
+                  borderBottom: `3px solid ${ac.activeBg}`,
+                }}
               >
-                {filteredClassTabs.map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => {
-                      if (isDraggingTabsRef.current) return;
-                      setSelectedTabId(tab.id);
-                    }}
-                    className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all duration-150
-                      ${
-                        selectedTabId === tab.id
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                          : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'
-                      }`}
-                  >
-                    {tab.group
-                      ? (() => {
-                          const configName = lectureClassNameMap.get(`${tab.grade}-${(effectiveSubjectFilter || '').trim()}-${tab.group}`);
-                          return configName ? `${configName}(${tab.group})` : `(${tab.group})`;
-                        })()
-                      : tab.label}
-                  </button>
-                ))}
+                <div
+                  ref={tabContainerRef}
+                  onMouseDown={handleTabMouseDown}
+                  onMouseLeave={handleTabMouseLeave}
+                  onMouseUp={handleTabMouseUp}
+                  onMouseMove={handleTabMouseMove}
+                  className="flex gap-1 overflow-x-auto px-1 md:px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
+                  style={{ scrollbarWidth: 'none' }}
+                >
+                  {filteredClassTabs.map(tab => {
+                    const isSelected = selectedTabId === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => {
+                          if (isDraggingTabsRef.current) return;
+                          setSelectedTabId(tab.id);
+                        }}
+                        className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all duration-150"
+                        style={{
+                          backgroundColor: isSelected ? ac.activeBg : '#ffffff',
+                          color: isSelected ? '#ffffff' : ac.activeBg,
+                          borderColor: isSelected ? ac.activeBg : `${ac.activeBg}60`,
+                          boxShadow: isSelected ? `0 1px 4px ${ac.activeBg}50` : 'none',
+                        }}
+                      >
+                        {tab.group
+                          ? (() => {
+                              const configName = lectureClassNameMap.get(`${tab.grade}-${(effectiveSubjectFilter || '').trim()}-${tab.group}`);
+                              return configName ? `${configName}(${tab.group})` : `(${tab.group})`;
+                            })()
+                          : tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Assessment List */}
           <div className="overflow-y-auto px-1 md:px-4 py-2.5 md:max-h-[calc(100vh-200px)]">
