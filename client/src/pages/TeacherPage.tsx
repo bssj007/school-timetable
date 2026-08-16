@@ -1718,7 +1718,7 @@ export default function TeacherPage() {
                                     }}
                                       title={cellData.subjectName}
                                     >
-                                      {cellGroup && <span style={{ color: '#0ea5e9', fontWeight: 800, marginRight: 3 }}>{cellGroup}</span>}{cellData.subjectName}
+                                      {cellGroup && <span style={{ color: '#0ea5e9', fontWeight: 900, marginRight: 3, WebkitTextStroke: '0.4px rgba(255,255,255,0.9)', textShadow: '0 1px 3px rgba(14,165,233,0.45)', letterSpacing: '-0.01em' }}>{cellGroup}</span>}{cellData.subjectName}
                                     </span>
                                   </div>
 
