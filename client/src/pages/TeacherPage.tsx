@@ -475,23 +475,23 @@ export default function TeacherPage() {
     },
     staleTime: 60000,
   });
-  const { data: grade2TimetableNow } = useQuery({
+  const { data: grade2TimetableNow, isLoading: isGrade2NowLoading } = useQuery({
     queryKey: ['timetable-all-now', '2', currentWeekDate],
     queryFn: async () => {
       const res = await fetch(`/api/comcigan?type=timetable&grade=2&classNum=all&targetDate=${encodeURIComponent(currentWeekDate)}`);
       if (!res.ok) return null;
       return res.json();
     },
-    staleTime: 60000,
+    staleTime: 5 * 60 * 1000,
   });
-  const { data: grade3TimetableNow } = useQuery({
+  const { data: grade3TimetableNow, isLoading: isGrade3NowLoading } = useQuery({
     queryKey: ['timetable-all-now', '3', currentWeekDate],
     queryFn: async () => {
       const res = await fetch(`/api/comcigan?type=timetable&grade=3&classNum=all&targetDate=${encodeURIComponent(currentWeekDate)}`);
       if (!res.ok) return null;
       return res.json();
     },
-    staleTime: 60000,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Fixed panel dataset types (always current week, not affected by week navigation)
@@ -510,7 +510,7 @@ export default function TeacherPage() {
 
   // Fetch Elective Configurations for Grade 2 and 3
   // panelG2Dataset/panelG3Dataset는 현재 실제 주(weekOffset=0) 기준 — 주 탐색과 무관
-  const { data: electiveConfigsG2 } = useQuery({
+  const { data: electiveConfigsG2, isLoading: isElectiveG2Loading } = useQuery({
     queryKey: ['electiveConfigs-teacher', '2', panelG2Dataset],
     queryFn: async () => {
       const res = await fetch(`/api/electives?grade=2&dataset=${panelG2Dataset}`);
@@ -520,7 +520,7 @@ export default function TeacherPage() {
     enabled: !!panelG2Dataset,
   });
 
-  const { data: electiveConfigsG3 } = useQuery({
+  const { data: electiveConfigsG3, isLoading: isElectiveG3Loading } = useQuery({
     queryKey: ['electiveConfigs-teacher', '3', panelG3Dataset],
     queryFn: async () => {
       const res = await fetch(`/api/electives?grade=3&dataset=${panelG3Dataset}`);
@@ -529,6 +529,9 @@ export default function TeacherPage() {
     },
     enabled: !!panelG3Dataset,
   });
+
+  // 그룹 데이터 로딩 완료 여부 — 모든 의존 쿼리가 완료된 후에만 표를 렌더링해 그룹 코드 지연 방지
+  const isGroupDataLoading = isGrade2NowLoading || isGrade3NowLoading || isElectiveG2Loading || isElectiveG3Loading;
 
   // Compute elective groups for Grade 2 and Grade 3
   // grade2TimetableNow/grade3TimetableNow는 항상 현재 실제 주 데이터 — 주 탐색과 무관
@@ -1543,7 +1546,7 @@ export default function TeacherPage() {
 
       {/* Main Timetable — Card wrapper */}
       <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:h-[calc(100vh-155px)] md:min-h-[600px]">
-          {isTimetableLoading ? (
+          {(isTimetableLoading || isGroupDataLoading) ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
               <Skeleton className="h-[400px] w-full" />
