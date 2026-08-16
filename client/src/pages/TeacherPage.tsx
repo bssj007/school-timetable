@@ -1811,9 +1811,9 @@ export default function TeacherPage() {
 
       {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
       <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4 h-fit">
-        <div className="bg-white md:rounded-2xl md:border md:border-slate-200 md:shadow-md md:overflow-hidden flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
-          {/* Teacher Picker — slim bar, no colored banner */}
-          <div className="px-1 md:px-3 py-2 border-b border-slate-100 flex-shrink-0 flex items-center justify-between gap-2">
+        <div className="md:bg-white md:rounded-2xl md:border md:border-slate-200 md:shadow-md md:overflow-hidden flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
+          {/* Teacher Picker — 모바일에서 독립 카드, PC에서 패널 내부 바 */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-2 px-2 py-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b md:border-slate-100 md:px-3 flex-shrink-0 flex items-center justify-between gap-2">
             {timetableData ? (
               <button
                 type="button"
@@ -1837,7 +1837,9 @@ export default function TeacherPage() {
             )}
           </div>
 
-          {/* Subject Bookmark Tabs */}
+          {/* ===== 모바일: 과목탭 + 반선택 + 평가목록 — 선생님선택과 분리된 별도 카드 ===== */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden md:bg-transparent md:rounded-none md:border-none md:shadow-none md:overflow-visible flex flex-col">
+
           {subjectTabs.length > 1 && (
             <div className="flex-shrink-0 bg-white border-b border-slate-200">
               <div className="flex w-full">
@@ -2022,6 +2024,8 @@ export default function TeacherPage() {
               </div>
             )}
           </div>
+
+          </div>{/* end mobile content card */}
 
         </div>{/* end inner card */}
 
