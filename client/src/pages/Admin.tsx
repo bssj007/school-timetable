@@ -6416,7 +6416,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     placeholder="암호"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    autoFocus
                                     className="pr-10"
                                 />
                                 <Button
@@ -10665,7 +10664,6 @@ function TeacherPerPasswordManager({ adminPassword }: { adminPassword: string })
                                     <div className="flex gap-1.5 flex-1">
                                         <div className="relative flex-1">
                                             <Input
-                                                autoFocus
                                                 type={showPw[name] ? "text" : "password"}
                                                 value={editValue}
                                                 onChange={e => setEditValue(e.target.value)}

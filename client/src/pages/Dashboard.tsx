@@ -1732,7 +1732,6 @@ export default function Dashboard() {
                 onChange={(e) => setChangeStudentName(e.target.value)}
                 className="w-full h-14 text-2xl font-semibold text-center rounded-md border border-input bg-background px-3 focus:outline-none focus:ring-2 focus:ring-ring"
                 required
-                autoFocus
               />
             </div>
             <div className="space-y-2">

@@ -1408,7 +1408,6 @@ export default function TeacherPage() {
                 value={authPassword}
                 onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
                 placeholder="비밀번호 입력"
-                autoFocus
                 autoComplete="current-password"
                 autoCorrect="off"
                 autoCapitalize="off"
@@ -2302,7 +2301,6 @@ export default function TeacherPage() {
                 value={teacherSearchQuery}
                 onChange={(e) => setTeacherSearchQuery(e.target.value)}
                 className="pl-9 pr-8 bg-white border-slate-200 text-sm h-9 sm:h-10 rounded-xl focus-visible:ring-indigo-500"
-                autoFocus
               />
               {teacherSearchQuery && (
                 <button

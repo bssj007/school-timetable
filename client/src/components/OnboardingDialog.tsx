@@ -87,7 +87,6 @@ export default function OnboardingDialog() {
                             }}
                             className="h-14 text-2xl font-semibold text-center"
                             required
-                            autoFocus
                         />
                     </div>
 
