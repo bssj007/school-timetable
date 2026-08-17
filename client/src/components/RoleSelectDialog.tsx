@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
+import { useUserConfig } from "@/contexts/UserConfigContext";
 
 // ── 쿠키 유틸 ──────────────────────────────────────────────
 export const ROLE_COOKIE = "sj_user_role";
@@ -32,10 +33,10 @@ function setTeacherNameCookie(name: string) {
 // ── 교사 옵션 타입 ───────────────────────────────────────────
 interface TeacherOption {
     idx: number;
-    rawName: string;     // comcigan 원본 이름 (보통 2글자)
-    displayName: string; // 풀네임 (가능하면)
+    rawName: string;
+    displayName: string;
     subjects: string[];
-    label: string;       // 드롭다운에 표시할 최종 텍스트
+    label: string;
 }
 
 // ── timetable 데이터에서 교사별 담당 과목 추출 ──────────────
@@ -45,7 +46,6 @@ function buildTeacherOptions(
     timetable: any[],
     ignoreKeywords: string[] = ['빈교', '공강', '학년', '채', '창']
 ): TeacherOption[] {
-    // 교사 인덱스 → 담당 과목 Set
     const subjectsMap = new Map<number, Set<string>>();
     timetable.forEach((schedule: any, tId: number) => {
         if (!schedule) return;
@@ -68,27 +68,18 @@ function buildTeacherOptions(
 
     const options: TeacherOption[] = [];
     teachers.forEach((name, idx) => {
-        if (idx === 0) return; // 첫 항목 '*' 스킵
+        if (idx === 0) return;
         if (!name || !name.trim() || name === "(none)") return;
         if (ignoreKeywords.some(kw => name.includes(kw))) return;
-
         const subjectArr = Array.from(subjectsMap.get(idx) || []);
-
-        options.push({
-            idx,
-            rawName: name,
-            displayName: name, // 풀네임 매핑 없이 원본 그대로 (comcigan 데이터)
-            subjects: subjectArr,
-            label: name,
-        });
+        options.push({ idx, rawName: name, displayName: name, subjects: subjectArr, label: name });
     });
 
-    // 동명이인 처리: 같은 이름이 여러 개면 과목 병기
+    // 동명이인: 과목 병기
     const nameCounts = new Map<string, number>();
     options.forEach(o => nameCounts.set(o.rawName, (nameCounts.get(o.rawName) || 0) + 1));
     options.forEach(o => {
-        const count = nameCounts.get(o.rawName) || 0;
-        if (count > 1 && o.subjects.length > 0) {
+        if ((nameCounts.get(o.rawName) || 0) > 1 && o.subjects.length > 0) {
             o.label = `${o.rawName} (${o.subjects.join(', ')})`;
         }
     });
@@ -97,7 +88,7 @@ function buildTeacherOptions(
 }
 
 // ── 메인 컴포넌트 ────────────────────────────────────────────
-type Step = "role" | "teacher-name";
+type Step = "role" | "student-info" | "teacher-name";
 
 interface RoleSelectDialogProps {
     onRoleSelected: (role: "student" | "teacher") => void;
@@ -105,86 +96,110 @@ interface RoleSelectDialogProps {
 
 export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogProps) {
     const [location, setLocation] = useLocation();
+    const { setConfig } = useUserConfig();
 
     const [isOpen, setIsOpen] = useState(false);
     const [step, setStep] = useState<Step>("role");
 
-    // 교사 인증 상태
-    const [query, setQuery] = useState("");              // 입력 쿼리
-    const [selectedOption, setSelectedOption] = useState<TeacherOption | null>(null); // 클릭 선택
+    // ── 학생 정보 ──
+    const [studentName, setStudentName] = useState("");
+    const [studentId, setStudentId] = useState("");
+    const [studentError, setStudentError] = useState("");
+    const studentNameRef = useRef<HTMLInputElement>(null);
+
+    // ── 교사 검색 ──
+    const [query, setQuery] = useState("");
+    const [selectedOption, setSelectedOption] = useState<TeacherOption | null>(null);
     const [teacherOptions, setTeacherOptions] = useState<TeacherOption[]>([]);
     const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
-    const [error, setError] = useState("");
-    const inputRef = useRef<HTMLInputElement>(null);
+    const [teacherError, setTeacherError] = useState("");
+    const teacherInputRef = useRef<HTMLInputElement>(null);
 
-    // 건너뛸 경로
     const skipPaths = ["/admin", "/admin/factory-reset", "/teacher"];
     const shouldSkip = skipPaths.some(p => location.startsWith(p));
 
     useEffect(() => {
         if (shouldSkip) return;
-        const role = getRoleCookie();
-        if (!role) setIsOpen(true);
+        if (!getRoleCookie()) setIsOpen(true);
     }, [shouldSkip]);
 
-    // 교사 목록 + 과목 데이터 fetch
+    // 교사 목록 fetch
     const fetchTeacherOptions = async () => {
         setIsLoadingTeachers(true);
         try {
             const res = await fetch("/api/comcigan?type=teacher_timetable");
             if (res.ok) {
                 const data = await res.json();
-                const opts = buildTeacherOptions(
-                    data.teachers || [],
-                    data.subjects || [],
-                    data.timetable || [],
-                );
-                setTeacherOptions(opts);
+                setTeacherOptions(buildTeacherOptions(data.teachers || [], data.subjects || [], data.timetable || []));
             }
-        } catch {
-            // 오프라인 fallback: 빈 목록
-        } finally {
-            setIsLoadingTeachers(false);
-        }
+        } catch { /* 오프라인 fallback */ }
+        finally { setIsLoadingTeachers(false); }
     };
 
-    // 입력 쿼리 기반 필터링 (입력 없으면 빈 배열 — 표시 안 함)
+    // 입력 기반 필터링 (입력 없으면 빈 배열)
     const filteredOptions = useMemo(() => {
         const q = query.trim();
         if (!q) return [];
         const lower = q.toLowerCase();
         return teacherOptions.filter(o =>
             o.rawName.toLowerCase().includes(lower) ||
-            o.displayName.toLowerCase().includes(lower) ||
             o.subjects.some(s => s.toLowerCase().includes(lower))
         );
     }, [teacherOptions, query]);
 
+    // ── 핸들러 ──
+
+    const handleBack = () => {
+        setStep("role");
+        setStudentName(""); setStudentId(""); setStudentError("");
+        setQuery(""); setSelectedOption(null); setTeacherError("");
+    };
+
     const handleSelectStudent = () => {
-        setRoleCookie("student");
-        setIsOpen(false);
-        onRoleSelected("student");
+        setStep("student-info");
+        setTimeout(() => studentNameRef.current?.focus(), 80);
     };
 
     const handleSelectTeacher = () => {
         setStep("teacher-name");
         fetchTeacherOptions();
-        setTimeout(() => inputRef.current?.focus(), 80);
+        setTimeout(() => teacherInputRef.current?.focus(), 80);
     };
 
-    // 후보 항목 클릭 → 선택 확정
-    const handlePickOption = (opt: TeacherOption) => {
-        setSelectedOption(opt);
-        setQuery(opt.rawName);
-        setError("");
-    };
+    // 학생 정보 제출 → 쿠키 + setConfig 저장
+    const handleStudentSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmedName = studentName.trim();
+        if (!trimmedName) { setStudentError("이름을 입력해주세요."); return; }
+        if (studentId.length !== 4) { setStudentError("4자리 학번을 입력해주세요."); return; }
 
-    // 최종 확인 버튼
-    const handleConfirm = () => {
-        if (!selectedOption) {
-            setError("목록에서 선생님을 선택해주세요.");
+        const grade = studentId[0];
+        const classNum = studentId[1];
+        const studentNumber = parseInt(studentId.substring(2)).toString();
+
+        if (!(parseInt(grade) >= 1 && parseInt(grade) <= 3 && parseInt(classNum) >= 1)) {
+            setStudentError("올바른 학번 형식이 아닙니다. (예: 1102)");
             return;
         }
+
+        // 서버 학기 키 조회
+        let semesterKey = '1';
+        try {
+            const res = await fetch('/api/settings/public');
+            if (res.ok) { const s = await res.json(); semesterKey = s?.semester_key ?? '1'; }
+        } catch { }
+
+        // 쿠키 + 컨텍스트 저장
+        setRoleCookie("student");
+        setConfig({ schoolName: "부산성지고등학교", grade, classNum, studentNumber, studentName: trimmedName, semesterKey });
+
+        setIsOpen(false);
+        onRoleSelected("student");
+    };
+
+    // 교사 확인 버튼
+    const handleTeacherConfirm = () => {
+        if (!selectedOption) { setTeacherError("목록에서 선생님을 선택해주세요."); return; }
         setRoleCookie("teacher");
         setTeacherNameCookie(selectedOption.rawName);
         setIsOpen(false);
@@ -192,14 +207,12 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
         setLocation("/teacher");
     };
 
-    const handleBack = () => {
-        setStep("role");
-        setQuery("");
-        setSelectedOption(null);
-        setError("");
-    };
-
     if (!isOpen) return null;
+
+    // ── 학번 입력 유효성 ──
+    const isNameValid = studentName.trim().length > 0;
+    const isIdValid = studentId.length === 4;
+    const canSubmitStudent = isNameValid && isIdValid;
 
     return (
         <Dialog open={isOpen}>
@@ -250,7 +263,82 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
                     </>
                 )}
 
-                {/* ── Step 2: 교사 이름 검색 + 선택 ── */}
+                {/* ── Step 2: 학생 정보 입력 ── */}
+                {step === "student-info" && (
+                    <>
+                        <DialogHeader>
+                            <button
+                                onClick={handleBack}
+                                className="absolute left-4 top-4 text-sm text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors"
+                            >
+                                ← 뒤로
+                            </button>
+                            <DialogTitle className="text-xl font-bold text-center pt-2">정보 입력</DialogTitle>
+                            <DialogDescription className="text-center">
+                                이름과 4자리 학번을 입력하세요
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <form onSubmit={handleStudentSubmit} className="space-y-4 pt-2">
+                            {/* 이름 */}
+                            <div className="space-y-2">
+                                <label htmlFor="student-name-input" className="text-sm font-medium leading-none">이름</label>
+                                <Input
+                                    id="student-name-input"
+                                    ref={studentNameRef}
+                                    type="text"
+                                    placeholder="홍길동"
+                                    value={studentName}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        setStudentName(e.target.value);
+                                        setStudentError("");
+                                    }}
+                                    className="h-14 text-2xl font-semibold text-center"
+                                    autoComplete="off"
+                                />
+                            </div>
+
+                            {/* 학번 */}
+                            <div className="space-y-2">
+                                <label htmlFor="student-id-input" className="text-sm font-medium leading-none">학번 (4자리)</label>
+                                <Input
+                                    id="student-id-input"
+                                    type="text"
+                                    inputMode="numeric"
+                                    maxLength={4}
+                                    pattern="\d{4}"
+                                    placeholder="예) 1102 (1학년 1반 02번)"
+                                    value={studentId}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        const val = e.target.value.replace(/[^0-9]/g, "");
+                                        if (val.length <= 4) { setStudentId(val); setStudentError(""); }
+                                    }}
+                                    className={`text-center h-16 py-0 ${
+                                        studentId.length === 0
+                                            ? "text-base font-normal tracking-normal"
+                                            : "text-5xl font-bold tracking-[0.3em] indent-[0.3em]"
+                                    }`}
+                                    autoComplete="off"
+                                />
+                            </div>
+
+                            {studentError && (
+                                <p className="text-sm text-red-500 text-center font-medium">{studentError}</p>
+                            )}
+
+                            <Button
+                                id="student-info-submit"
+                                type="submit"
+                                className="w-full h-12 md:h-14 text-lg font-bold"
+                                disabled={!canSubmitStudent}
+                            >
+                                설정 저장
+                            </Button>
+                        </form>
+                    </>
+                )}
+
+                {/* ── Step 3: 교사 이름 검색 + 선택 ── */}
                 {step === "teacher-name" && (
                     <>
                         <DialogHeader>
@@ -267,7 +355,6 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
                         </DialogHeader>
 
                         <div className="space-y-3 pt-1">
-                            {/* 검색 입력창 */}
                             <div className="space-y-1.5">
                                 <label htmlFor="teacher-name-input" className="text-sm font-medium">
                                     선생님 성함 검색
@@ -277,14 +364,14 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
                                 </label>
                                 <Input
                                     id="teacher-name-input"
-                                    ref={inputRef}
+                                    ref={teacherInputRef}
                                     type="text"
                                     placeholder="이름 또는 담당 과목 입력"
                                     value={query}
                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                         setQuery(e.target.value);
-                                        setSelectedOption(null); // 입력 변경 시 선택 초기화
-                                        setError("");
+                                        setSelectedOption(null);
+                                        setTeacherError("");
                                     }}
                                     className="h-12 text-lg font-semibold"
                                     autoComplete="off"
@@ -306,23 +393,17 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
                                                     <li key={opt.idx}>
                                                         <button
                                                             type="button"
-                                                            onClick={() => handlePickOption(opt)}
+                                                            onClick={() => { setSelectedOption(opt); setTeacherError(""); }}
                                                             className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
                                                                 isSelected
                                                                     ? "bg-emerald-50 border-l-4 border-emerald-500"
                                                                     : "hover:bg-gray-50 border-l-4 border-transparent"
                                                             }`}
                                                         >
-                                                            {/* 체크 표시 */}
-                                                            <span className={`text-lg flex-shrink-0 transition-opacity ${isSelected ? "opacity-100" : "opacity-0"}`}>
-                                                                ✓
-                                                            </span>
+                                                            <span className={`text-emerald-600 flex-shrink-0 transition-opacity text-lg font-bold ${isSelected ? "opacity-100" : "opacity-0"}`}>✓</span>
                                                             <div className="min-w-0">
                                                                 <div className={`font-semibold text-sm ${isSelected ? "text-emerald-800" : "text-gray-800"}`}>
                                                                     {opt.rawName}
-                                                                    {opt.rawName !== opt.displayName && (
-                                                                        <span className="ml-1 text-gray-500 font-normal">({opt.displayName})</span>
-                                                                    )}
                                                                 </div>
                                                                 {opt.subjects.length > 0 && (
                                                                     <div className="text-xs text-gray-500 mt-0.5 truncate">
@@ -340,16 +421,14 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
                                 </div>
                             )}
 
-                            {/* 에러 메시지 */}
-                            {error && (
-                                <p className="text-sm text-red-500 text-center font-medium">{error}</p>
+                            {teacherError && (
+                                <p className="text-sm text-red-500 text-center font-medium">{teacherError}</p>
                             )}
 
-                            {/* 확인 버튼 */}
                             <Button
                                 id="teacher-auth-submit"
                                 type="button"
-                                onClick={handleConfirm}
+                                onClick={handleTeacherConfirm}
                                 className="w-full h-12 text-base font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40"
                                 disabled={!selectedOption}
                             >
