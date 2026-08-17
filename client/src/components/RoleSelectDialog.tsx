@@ -206,6 +206,7 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
             <DialogContent
                 className="sm:max-w-[440px]"
                 onInteractOutside={(e: any) => e.preventDefault()}
+                onOpenAutoFocus={(e: any) => e.preventDefault()}
                 showCloseButton={false}
             >
                 {/* ── Step 1: 역할 선택 ── */}
