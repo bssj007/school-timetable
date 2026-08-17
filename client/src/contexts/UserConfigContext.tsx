@@ -1,4 +1,5 @@
 import { useState, createContext, useContext, ReactNode, useEffect } from "react";
+import { getRoleCookie, getTeacherNameCookie } from "@/components/RoleSelectDialog";
 
 export interface UserConfig {
     schoolName: string;
@@ -49,6 +50,12 @@ interface UserConfigContextType {
     isValidating: boolean;
     kakaoUser: KakaoUser | null;
     refreshKakaoUser: () => Promise<void>;
+    /** 현재 사용자 역할: 'student' | 'teacher' | null (미선택) */
+    userRole: "student" | "teacher" | null;
+    /** 교사 이름 (교사 역할인 경우) */
+    teacherName: string | null;
+    /** 역할 쿠키 갱신 (RoleSelectDialog에서 직접 쿠키 저장 후 상태 동기화용) */
+    refreshRole: () => void;
 }
 
 const UserConfigContext = createContext<UserConfigContextType | undefined>(undefined);
@@ -89,6 +96,19 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     const [config, setConfigState] = useState<UserConfig>(initial.config);
     const [isValidating, setIsValidating] = useState(initial.isValidating);
     const [kakaoUser, setKakaoUser] = useState<KakaoUser | null>(null);
+
+    // ── 역할 상태: 쿠키에서 즉시 읽기 ──
+    const [userRole, setUserRoleState] = useState<"student" | "teacher" | null>(() => {
+        const r = getRoleCookie();
+        return (r === "student" || r === "teacher") ? r : null;
+    });
+    const [teacherName, setTeacherNameState] = useState<string | null>(() => getTeacherNameCookie());
+
+    const refreshRole = () => {
+        const r = getRoleCookie();
+        setUserRoleState((r === "student" || r === "teacher") ? r : null);
+        setTeacherNameState(getTeacherNameCookie());
+    };
 
     const refreshKakaoUser = async () => {
         try {
@@ -208,6 +228,9 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
             isValidating,
             kakaoUser,
             refreshKakaoUser,
+            userRole,
+            teacherName,
+            refreshRole,
         }}>
             {children}
         </UserConfigContext.Provider>

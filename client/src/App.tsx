@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import Navigation from "./components/Navigation";
 import OnboardingDialog from "./components/OnboardingDialog";
+import RoleSelectDialog from "./components/RoleSelectDialog";
 import { UserConfigProvider, useUserConfig } from "@/contexts/UserConfigContext";
 import { useEffect } from "react";
 
@@ -29,11 +30,9 @@ function Router() {
   );
 }
 
-/** 학기 키 검증 완료 후에만 앱 콘텐츠를 렌더링
- *  isValidating 동안 구 쿠키 데이터가 컴포넌트에 노출되지 않도록 차단 */
 function AppContent() {
-  const { isValidating } = useUserConfig();
-  const [location] = useLocation();
+  const { isValidating, userRole, refreshRole } = useUserConfig();
+  const [location, setLocation] = useLocation();
 
   // 사이트 디자인설정 동적 적용 (제목 + 파비콘 + PWA 아이콘)
   useEffect(() => {
@@ -66,6 +65,13 @@ function AppContent() {
       .catch(() => {}); // 실패 시 기본값 유지
   }, []);
 
+  // 쿠키 역할이 teacher이면 자동으로 /teacher로 리다이렉트 (지연 없음)
+  useEffect(() => {
+    if (!isValidating && userRole === "teacher" && !location.startsWith("/teacher") && !location.startsWith("/admin")) {
+      setLocation("/teacher");
+    }
+  }, [isValidating, userRole, location]);
+
   // 학기 키 검증 완료 전 — 아무 데이터도 렌더링하지 않음
   if (isValidating) {
     return (
@@ -86,6 +92,8 @@ function AppContent() {
           <Navigation />
         </div>
       )}
+      {/* 역할 미선택 시 도엄말 먹이주는 역할 선택 다이얼로그 */}
+      <RoleSelectDialog onRoleSelected={() => refreshRole()} />
       <OnboardingDialog />
       <Router />
     </>

@@ -6,7 +6,7 @@ import { useUserConfig } from "@/contexts/UserConfigContext";
 import { useLocation } from "wouter";
 
 export default function OnboardingDialog() {
-    const { isConfigured, setConfig } = useUserConfig();
+    const { isConfigured, setConfig, userRole } = useUserConfig();
     const [studentName, setStudentName] = useState("");
     const [studentId, setStudentId] = useState("");
 
@@ -14,7 +14,9 @@ export default function OnboardingDialog() {
 
     const isSystemAdmin = location.startsWith("/admin");
     const isTeacherPage = location.startsWith("/teacher");
-    const isOpen = !isConfigured && !isSystemAdmin && !isTeacherPage;
+    // userRole이 null(미선택)이거나 teacher이면 열지 않음 — RoleSelectDialog가 우선
+    const isOpen = !isConfigured && !isSystemAdmin && !isTeacherPage && userRole === "student";
+
 
     const isNameValid = studentName.trim().length > 0;
     const isIdValid = studentId.length === 4;
