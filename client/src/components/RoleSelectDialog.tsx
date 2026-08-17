@@ -179,13 +179,11 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
 
     const handleSelectStudent = () => {
         setStep("student-info");
-        setTimeout(() => studentNameRef.current?.focus(), 80);
     };
 
     const handleSelectTeacher = () => {
         setStep("teacher-name");
         fetchTeacherOptions();
-        setTimeout(() => teacherInputRef.current?.focus(), 80);
     };
 
     // 학생 정보 제출 → 쿠키 + setConfig 저장
