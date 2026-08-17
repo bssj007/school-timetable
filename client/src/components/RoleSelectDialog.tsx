@@ -87,6 +87,32 @@ function buildTeacherOptions(
     return options;
 }
 
+// ── * 와일드카드 매칭 ──────────────────────────────────────
+// rawName에 '*'가 있는 경우 (예: 홍*동) 정규식으로 변환해 쿼리와 대조
+function matchesTeacher(rawName: string, subjects: string[], query: string): boolean {
+    const raw = rawName.toLowerCase();
+    const q = query.toLowerCase();
+
+    // 1. 직접 포함 (기본)
+    if (raw.includes(q)) return true;
+
+    // 2. 과목 매칭
+    if (subjects.some(s => s.toLowerCase().includes(q))) return true;
+
+    // 3. rawName에 '*'가 있으면 → 쿼리가 패턴에 매칭되는지 확인
+    //    예: rawName='홍*동', query='홍길동' → /홍.+동/.test('홍길동') = true
+    if (raw.includes('*')) {
+        const parts = raw.split('*').map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const pattern = parts.join('.+'); // '*' 자리에 1자 이상 허용
+        try {
+            const regex = new RegExp(pattern);
+            if (regex.test(q)) return true;
+        } catch { }
+    }
+
+    return false;
+}
+
 // ── 메인 컴포넌트 ────────────────────────────────────────────
 type Step = "role" | "student-info" | "teacher-name";
 
@@ -140,11 +166,7 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
     const filteredOptions = useMemo(() => {
         const q = query.trim();
         if (!q) return [];
-        const lower = q.toLowerCase();
-        return teacherOptions.filter(o =>
-            o.rawName.toLowerCase().includes(lower) ||
-            o.subjects.some(s => s.toLowerCase().includes(lower))
-        );
+        return teacherOptions.filter(o => matchesTeacher(o.rawName, o.subjects, q));
     }, [teacherOptions, query]);
 
     // ── 핸들러 ──
