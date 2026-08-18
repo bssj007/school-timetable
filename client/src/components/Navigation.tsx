@@ -111,37 +111,32 @@ export default function Navigation() {
       <nav className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center h-16">
-            <Link
-              href="/"
-              onClick={(e) => {
-                if (isTeacherPage) {
-                  handleReturnToStudent(e);
-                }
-              }}
-              className="text-xl md:text-2xl font-bold flex items-center gap-2"
-            >
-              <span
-                dangerouslySetInnerHTML={{
-                  __html: settings?.site_title_html || (typeof window !== 'undefined' && (window as any).__INITIAL_SITE_TITLE_HTML__) || '<span class="text-blue-600">수행 일정공유</span>'
-                }}
-              />
-              <span className="hidden xs:inline text-gray-900"> 수행평가 공유 플랫폼</span>
-            </Link>
-
-            <div className="flex items-center gap-2 sm:gap-3">
-              {/* Teacher Page: 학생용 페이지로 돌아가기 버튼 */}
-              {isTeacherPage && (
+            {isTeacherPage ? (
+              /* 교사용 페이지: 로고 제외, 좌측에 돌아가기 버튼 배치 */
+              <div className="flex items-center">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 rounded-full px-3 font-bold text-xs border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1 shadow-xs"
+                  className="h-9 rounded-full px-3.5 font-bold text-xs border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 shadow-xs cursor-pointer"
                   onClick={handleReturnToStudent}
                 >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  학생용
+                  <ArrowLeft className="h-4 w-4 text-emerald-600" />
+                  <span>학생용 페이지로 돌아가기</span>
                 </Button>
-              )}
+              </div>
+            ) : (
+              /* 메인(학생) 페이지: 로고 표시 */
+              <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
+                <span
+                  dangerouslySetInnerHTML={{
+                    __html: settings?.site_title_html || (typeof window !== 'undefined' && (window as any).__INITIAL_SITE_TITLE_HTML__) || '<span class="text-blue-600">수행 일정공유</span>'
+                  }}
+                />
+                <span className="hidden xs:inline text-gray-900"> 수행평가 공유 플랫폼</span>
+              </Link>
+            )}
 
+            <div className="flex items-center gap-2 sm:gap-3">
               {/* PC Only Desktop Shortcut Button */}
               <Button
                 variant="outline"
@@ -153,37 +148,49 @@ export default function Navigation() {
                 }}
                 title="PC 바탕화면에 바로가기 파일 다운로드"
               >
-                <Download className="h-3.5 w-3.5 mr-1.5 text-blue-600" />
+                <Download className={`h-3.5 w-3.5 mr-1.5 ${isTeacherPage ? "text-gray-600" : "text-blue-600"}`} />
                 바탕화면에 바로가기 추가
               </Button>
 
               {/* Mobile-only Bug Report Button */}
               {isBugReportEnabled && (
                 <Button
-                  variant="default"
+                  variant={isTeacherPage ? "outline" : "default"}
                   size="sm"
-                  className="md:hidden h-9 rounded-full px-3 font-bold text-xs bg-red-500 hover:bg-red-600 text-white"
+                  className={`md:hidden h-9 rounded-full px-3 font-bold text-xs ${
+                    isTeacherPage
+                      ? "border-gray-200 text-gray-700 bg-white hover:bg-gray-50 shadow-xs font-semibold"
+                      : "bg-red-500 hover:bg-red-600 text-white"
+                  }`}
                   onClick={() => setShowBugReportDialog(true)}
                 >
-                  <AlertTriangle className="h-4 w-4 mr-1" />
+                  <AlertTriangle className={`h-4 w-4 mr-1 ${isTeacherPage ? "text-gray-500" : ""}`} />
                   오류신고
                 </Button>
               )}
 
-              {/* 알림 벨 버튼 — 카카오톡 버튼과 동일한 yellow 색상 */}
+              {/* 알림 벨 버튼 — 메인 페이지는 yellow 색상, 교사 페이지는 무색 simplistic */}
               <div className="relative" ref={notificationRef}>
                 <Button
                   id="notification-bell-btn"
                   variant="default"
                   size="icon"
-                  className="relative h-9 w-9 rounded-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 shadow-sm transition-all duration-200"
+                  className={`relative h-9 w-9 rounded-full transition-all duration-200 ${
+                    isTeacherPage
+                      ? "bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 shadow-xs"
+                      : "bg-yellow-400 hover:bg-yellow-500 text-gray-900 shadow-sm"
+                  }`}
                   onClick={() => setShowNotifications(prev => !prev)}
                   aria-label="알림"
                 >
-                  <Bell className="h-4 w-4" />
+                  <Bell className={`h-4 w-4 ${isTeacherPage ? "text-gray-600" : ""}`} />
                   {/* 읽지 않은 알림 뱃지 */}
                   {unreadNotificationCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-[5px] text-[10px] font-bold leading-none text-white bg-red-500 rounded-full shadow ring-2 ring-white">
+                    <span
+                      className={`absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-[5px] text-[10px] font-bold leading-none text-white rounded-full shadow ring-2 ring-white ${
+                        isTeacherPage ? "bg-gray-600" : "bg-red-500"
+                      }`}
+                    >
                       {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
                     </span>
                   )}
