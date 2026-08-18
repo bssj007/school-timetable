@@ -125,12 +125,12 @@ export default function Navigation() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-9 px-1.5 sm:px-2.5 font-bold text-xs text-red-600 hover:bg-red-50 hover:text-red-700 flex items-center gap-1.5 rounded-lg border-none shadow-none cursor-pointer select-none"
+                  className="h-9 px-1.5 sm:px-2.5 font-bold text-xs text-red-600 hover:bg-red-50 hover:text-red-700 flex items-center gap-1 rounded-lg border-none shadow-none cursor-pointer select-none"
                   onClick={handleReturnToStudent}
                 >
-                  <ArrowLeft className="h-4 w-4 text-red-600 shrink-0" />
-                  <span className="xs:hidden">학생용</span>
-                  <span className="hidden xs:inline">학생용 페이지로 돌아가기</span>
+                  <ArrowLeft className="h-3.5 w-3.5 stroke-[2.2] text-red-600 shrink-0" />
+                  <span className="xs:hidden leading-none">학생용</span>
+                  <span className="hidden xs:inline leading-none">학생용 페이지로 돌아가기</span>
                 </Button>
               </div>
             ) : (
@@ -152,8 +152,8 @@ export default function Navigation() {
                   className="md:hidden h-8 px-1.5 font-bold text-xs text-emerald-700 hover:bg-emerald-50/80 hover:text-emerald-800 flex items-center gap-1 rounded-lg border-none shadow-none cursor-pointer select-none"
                   onClick={handleGoToTeacher}
                 >
-                  <span>교사용</span>
-                  <ArrowRight className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <span className="leading-none">교사용</span>
+                  <ArrowRight className="h-3.5 w-3.5 stroke-[2.2] text-emerald-600 shrink-0" />
                 </Button>
               </div>
             )}
