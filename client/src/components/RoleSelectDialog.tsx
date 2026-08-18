@@ -260,13 +260,11 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
                     <>
                         <DialogHeader>
                             <DialogTitle className="text-xl font-bold text-center">접속 유형 선택</DialogTitle>
-                            <DialogDescription className="text-center pt-1">
-                                성지고 수행 공유 사이트에 오신 것을 환영합니다.
-                                <br />
-                                어떤 방식으로 접속하시겠어요?
+                            <DialogDescription className="sr-only">
+                                접속 유형 선택
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="flex flex-col gap-3 pt-4">
+                        <div className="flex flex-col gap-3 pt-3">
                             <button
                                 id="role-select-student"
                                 onClick={handleSelectStudent}
