@@ -128,7 +128,7 @@ interface RoleSelectDialogProps {
 
 export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogProps) {
     const [location, setLocation] = useLocation();
-    const { setConfig, grade: savedGrade, classNum: savedClassNum, studentNumber: savedStudentNum, studentName: savedName } = useUserConfig();
+    const { setConfig, grade: savedGrade, classNum: savedClassNum, studentNumber: savedStudentNum, studentName: savedName, userRole } = useUserConfig();
 
     const [isOpen, setIsOpen] = useState(false);
     const [step, setStep] = useState<Step>("role");
@@ -152,8 +152,11 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
 
     useEffect(() => {
         if (shouldSkip) return;
-        if (!getRoleCookie()) setIsOpen(true);
-    }, [shouldSkip]);
+        if (!getRoleCookie() || !userRole) {
+            setIsOpen(true);
+            setStep("role");
+        }
+    }, [shouldSkip, userRole, location]);
 
     // 교사 목록 fetch
     const fetchTeacherOptions = async () => {

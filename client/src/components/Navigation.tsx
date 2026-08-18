@@ -46,8 +46,6 @@ export default function Navigation() {
     if (e) e.preventDefault();
     clearRoleCookie();
     refreshRole();
-    toast.success("교사용 페이지로 이동합니다.");
-    window.location.href = "/teacher";
   };
 
   // ── 알림 프레임워크 ──────────────────────────────────────────────────
@@ -135,7 +133,7 @@ export default function Navigation() {
               </div>
             ) : (
               /* 메인(학생) 페이지: 로고 및 오른쪽에 초록색 '교사용' 버튼 표시 */
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center">
                 <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
                   <span
                     dangerouslySetInnerHTML={{
@@ -145,11 +143,11 @@ export default function Navigation() {
                   <span className="hidden xs:inline text-gray-900"> 수행평가 공유 플랫폼</span>
                 </Link>
 
-                {/* 모바일용: 제목 오른쪽에 초록색 '교사용' 버튼 */}
+                {/* 모바일용: 제목 오른쪽에 초록색 '교사용' 버튼 (제목과 적당한 간격 확보) */}
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="md:hidden h-8 px-1.5 font-bold text-xs text-emerald-700 hover:bg-emerald-50/80 hover:text-emerald-800 flex items-center gap-1 rounded-lg border-none shadow-none cursor-pointer select-none"
+                  className="md:hidden h-8 px-2 font-bold text-xs text-emerald-700 hover:bg-emerald-50/80 hover:text-emerald-800 flex items-center gap-1 rounded-lg border-none shadow-none cursor-pointer select-none ml-2.5"
                   onClick={handleGoToTeacher}
                 >
                   <span className="leading-none">교사용</span>

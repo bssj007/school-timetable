@@ -124,8 +124,6 @@ export default function Dashboard() {
     if (e) e.preventDefault();
     clearRoleCookie();
     refreshRole();
-    toast.success("교사용 페이지로 이동합니다.");
-    window.location.href = "/teacher";
   };
 
   // 0. 설정 조회 (Public)
