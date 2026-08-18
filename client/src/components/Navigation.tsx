@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Download, Bell, X, ArrowLeft } from "lucide-react";
+import { AlertTriangle, Download, Bell, X, ArrowLeft, ArrowRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -40,6 +40,14 @@ export default function Navigation() {
     refreshRole();
     toast.success("학생용 페이지로 이동합니다.");
     window.location.href = "/";
+  };
+
+  const handleGoToTeacher = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    clearRoleCookie();
+    refreshRole();
+    toast.success("교사용 페이지로 이동합니다.");
+    window.location.href = "/teacher";
   };
 
   // ── 알림 프레임워크 ──────────────────────────────────────────────────
@@ -126,15 +134,28 @@ export default function Navigation() {
                 </Button>
               </div>
             ) : (
-              /* 메인(학생) 페이지: 로고 표시 */
-              <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
-                <span
-                  dangerouslySetInnerHTML={{
-                    __html: settings?.site_title_html || (typeof window !== 'undefined' && (window as any).__INITIAL_SITE_TITLE_HTML__) || '<span class="text-blue-600">수행 일정공유</span>'
-                  }}
-                />
-                <span className="hidden xs:inline text-gray-900"> 수행평가 공유 플랫폼</span>
-              </Link>
+              /* 메인(학생) 페이지: 로고 및 오른쪽에 초록색 '교사용' 버튼 표시 */
+              <div className="flex items-center gap-1.5">
+                <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
+                  <span
+                    dangerouslySetInnerHTML={{
+                      __html: settings?.site_title_html || (typeof window !== 'undefined' && (window as any).__INITIAL_SITE_TITLE_HTML__) || '<span class="text-blue-600">수행 일정공유</span>'
+                    }}
+                  />
+                  <span className="hidden xs:inline text-gray-900"> 수행평가 공유 플랫폼</span>
+                </Link>
+
+                {/* 모바일용: 제목 오른쪽에 초록색 '교사용' 버튼 */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="md:hidden h-8 px-1.5 font-bold text-xs text-emerald-700 hover:bg-emerald-50/80 hover:text-emerald-800 flex items-center gap-1 rounded-lg border-none shadow-none cursor-pointer select-none"
+                  onClick={handleGoToTeacher}
+                >
+                  <span>교사용</span>
+                  <ArrowRight className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                </Button>
+              </div>
             )}
 
             <div className="flex items-center gap-1.5 sm:gap-2">
