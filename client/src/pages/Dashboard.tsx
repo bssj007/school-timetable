@@ -117,7 +117,18 @@ const DEFAULT_PRINT_HEIGHT = "11";
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
-  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, studentName, refreshKakaoUser } = useUserConfig();
+  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, studentName, refreshKakaoUser, instructionDismissedV2 } = useUserConfig();
+
+  // 0. 설정 조회 (Public)
+  const { data: settings } = useQuery({
+    queryKey: ['publicSettings'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/public');
+      if (!res.ok) return { hide_past_assessments: false };
+      return res.json();
+    },
+    staleTime: 0, // 항상 최신 설정을 가져오도록 (그룹 override 등 즉시 반영)
+  });
 
   const handleLogout = async () => {
     try {
@@ -625,17 +636,6 @@ export default function Dashboard() {
     const current = all.filter(t => !t.class || t.class.toString() === classNum.toString());
     return { timetableData: current, allClassesTimetable: all };
   }, [rawTimetableData, classNum]);
-
-  // 5. 설정 조회 (Public)
-  const { data: settings } = useQuery({
-    queryKey: ['publicSettings'],
-    queryFn: async () => {
-      const res = await fetch('/api/settings/public');
-      if (!res.ok) return { hide_past_assessments: false };
-      return res.json();
-    },
-    staleTime: 0, // 항상 최신 설정을 가져오도록 (그룹 override 등 즉시 반영)
-  });
 
   // 학년별 학생 등록/수정/연기/삭제 권한 검증 헬퍼
   const checkStudentPermission = (targetGrade?: number) => {
