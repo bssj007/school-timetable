@@ -1472,19 +1472,6 @@ export default function TeacherPage() {
 
       <div className="max-w-[1240px] mx-auto w-full md:flex-1 flex flex-col md:min-h-0">
 
-        {/* ===== MOBILE ONLY: Top Return to Student Page Button ===== */}
-        <div className="md:hidden w-full mb-2 px-0.5 shrink-0">
-          <button
-            type="button"
-            onClick={handleReturnToStudentPage}
-            id="return-to-student-btn-mobile"
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 hover:text-slate-900 border border-amber-200/90 shadow-sm text-xs font-bold transition-all cursor-pointer select-none"
-          >
-            <ArrowLeft className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>학생용 페이지로 돌아가기</span>
-          </button>
-        </div>
-
         {/* ===== TOP SECTION (PC only) — mirrors CONTENT AREA column layout for pixel-perfect alignment ===== */}
         {/* [timetable-col: flex-1 max-w-[850px]] + [gap-4/xl:gap-6] + [panel-col: 320px/360px] */}
         <div className="hidden md:flex flex-row gap-4 xl:gap-6 items-center mb-3 flex-shrink-0">

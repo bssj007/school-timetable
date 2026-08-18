@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Download, Bell, X } from "lucide-react";
+import { AlertTriangle, Download, Bell, X, ArrowLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { clearRoleCookie } from "@/components/RoleSelectDialog";
 
 // Helper: Download PC Desktop .url Shortcut
 function downloadDesktopShortcut(title: string = "성지수행_시간표_수행평가") {
@@ -25,10 +26,21 @@ function downloadDesktopShortcut(title: string = "성지수행_시간표_수행�
 }
 
 export default function Navigation() {
-  const { grade, classNum, studentNumber, studentName } = useUserConfig();
+  const [location] = useLocation();
+  const { grade, classNum, studentNumber, studentName, refreshRole } = useUserConfig();
   const [showBugReportDialog, setShowBugReportDialog] = useState(false);
   const [bugReportMessage, setBugReportMessage] = useState('');
   const [isBugReportSending, setIsBugReportSending] = useState(false);
+
+  const isTeacherPage = location.startsWith("/teacher");
+
+  const handleReturnToStudent = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    clearRoleCookie();
+    refreshRole();
+    toast.success("학생용 페이지로 이동합니다.");
+    window.location.href = "/";
+  };
 
   // ── 알림 프레임워크 ──────────────────────────────────────────────────
   const [showNotifications, setShowNotifications] = useState(false);
@@ -99,7 +111,15 @@ export default function Navigation() {
       <nav className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center h-16">
-            <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
+            <Link
+              href="/"
+              onClick={(e) => {
+                if (isTeacherPage) {
+                  handleReturnToStudent(e);
+                }
+              }}
+              className="text-xl md:text-2xl font-bold flex items-center gap-2"
+            >
               <span
                 dangerouslySetInnerHTML={{
                   __html: settings?.site_title_html || (typeof window !== 'undefined' && (window as any).__INITIAL_SITE_TITLE_HTML__) || '<span class="text-blue-600">수행 일정공유</span>'
@@ -109,6 +129,19 @@ export default function Navigation() {
             </Link>
 
             <div className="flex items-center gap-2 sm:gap-3">
+              {/* Teacher Page: 학생용 페이지로 돌아가기 버튼 */}
+              {isTeacherPage && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-full px-3 font-bold text-xs border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1 shadow-xs"
+                  onClick={handleReturnToStudent}
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  학생용
+                </Button>
+              )}
+
               {/* PC Only Desktop Shortcut Button */}
               <Button
                 variant="outline"
