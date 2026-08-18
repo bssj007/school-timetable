@@ -1791,23 +1791,18 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-stretch gap-2 md:hidden mb-1.5">
-        {/* Left column: toggle (top) + title (bottom) */}
-        <div className="flex flex-col justify-between gap-0.5 w-[136px] shrink-0">
-          <div className="flex items-center gap-1">
-            <div className="flex-1 flex items-center justify-center gap-0.5 px-[9px] py-[5px] text-[12.5px] font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap">
-              시간표
-            </div>
-            <a
-              href="/meal"
-              className="flex-1 flex items-center justify-center gap-0.5 px-[9px] py-[5px] text-[12.5px] font-semibold rounded-full border border-orange-300 text-orange-500 hover:bg-orange-50 transition-colors whitespace-nowrap"
-            >
-              급식표
-            </a>
+      <div className="flex items-center justify-between gap-2 md:hidden mb-1.5">
+        {/* Left column: toggle */}
+        <div className="flex items-center gap-1 w-[136px] shrink-0">
+          <div className="flex-1 flex items-center justify-center gap-0.5 px-[9px] py-[5px] text-[12.5px] font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap">
+            시간표
           </div>
-          <h1 className="text-xl font-bold whitespace-nowrap">
-            {grade || '?'}-{classNum || '?'} 시간표
-          </h1>
+          <a
+            href="/meal"
+            className="flex-1 flex items-center justify-center gap-0.5 px-[9px] py-[5px] text-[12.5px] font-semibold rounded-full border border-orange-300 text-orange-500 hover:bg-orange-50 transition-colors whitespace-nowrap"
+          >
+            급식표
+          </a>
         </div>
 
         {/* Right column: student info + change button (mobile) */}
@@ -1864,16 +1859,13 @@ export default function Dashboard() {
         ) : (
           <Card className="py-1 gap-1 md:py-2 md:gap-2">
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
-              {/* Desktop Title */}
+              {/* Desktop Actions */}
               <div className="hidden md:flex items-center gap-2 flex-1 min-w-0">
-                <h1 className="text-2xl font-bold whitespace-nowrap overflow-hidden text-ellipsis">
-                  {grade || '?'}-{classNum || '?'} 시간표
-                </h1>
                 {(grade === "2" || grade === "3") && (
                   <div className="relative inline-block">
                     <Button
                       size="sm"
-                      className={`h-10 text-sm ml-2 shrink-0 transition-all duration-300 bg-[#fc6603] hover:bg-[#e05a00] text-white ${isElectiveMissing ? "animate-pulse" : ""}`}
+                      className={`h-10 text-sm shrink-0 transition-all duration-300 bg-[#fc6603] hover:bg-[#e05a00] text-white ${isElectiveMissing ? "animate-pulse" : ""}`}
                       style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
                       onClick={() => setShowElectiveDialog(true)}
                     >
