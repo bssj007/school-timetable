@@ -85,7 +85,7 @@ export default function OnboardingDialog() {
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                 setStudentName(e.target.value);
                             }}
-                            className="h-14 text-2xl font-semibold text-center"
+                            className="h-14 md:h-16 text-2xl md:text-3xl font-bold text-center placeholder:text-base md:placeholder:text-lg placeholder:font-normal"
                             required
                         />
                     </div>
@@ -106,9 +106,9 @@ export default function OnboardingDialog() {
                                 const val = e.target.value.replace(/[^0-9]/g, "");
                                 if (val.length <= 4) setStudentId(val);
                             }}
-                            className={`text-center h-16 md:h-20 py-0 ${studentId.length === 0
-                                ? "text-base md:text-lg font-normal tracking-normal indent-0"
-                                : "text-5xl md:text-[64px] font-bold tracking-[0.3em] md:tracking-[0.4em] indent-[0.3em] md:indent-[0.4em]"
+                            className={`text-center h-14 md:h-16 py-0 ${studentId.length === 0
+                                ? "text-sm md:text-base font-normal tracking-normal indent-0 placeholder:text-sm md:placeholder:text-base"
+                                : "text-3xl md:text-4xl font-bold tracking-[0.25em] md:tracking-[0.3em] indent-[0.25em] md:indent-[0.3em]"
                                 }`}
                             required
                         />

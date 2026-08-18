@@ -60,7 +60,7 @@ export const onRequest = async (context: any) => {
             samsung_install_button_visible: settings['samsung_install_button_visible'] !== 'false', // default true
             pwa_install_button_visible: settings['pwa_install_button_visible'] !== 'false', // default true
             show_target_class_main_menu: settings['show_target_class_main_menu'] !== 'false', // default true
-            promotion_popup_enabled: settings['promotion_popup_enabled'] !== 'false', // default true
+            promotion_popup_enabled: settings['promotion_popup_enabled'] === 'true' || settings['promotion_popup_enabled'] === true || settings['promotion_popup_enabled'] === '1' || settings['promotion_popup_enabled'] === 1 || settings['promotion_popup_enabled'] === 'on', // default false (꺼짐)
             promotion_reset_days: settings['promotion_reset_days'] || '0',
             assessment_distrust_threshold: settings['assessment_distrust_threshold'] || '3',
             assessment_positive_color: settings['assessment_positive_color'] || '#22c55e',
@@ -95,7 +95,12 @@ export const onRequest = async (context: any) => {
             // 선생님별 개별 비밀번호 (JSON: {"홍길동": "pw1", ...}, 미설정이면 디폴트 사용)
             teacher_passwords: settings['teacher_passwords'] || '{}',
         }), {
-            headers: { 'Content-Type': 'application/json' }
+            headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+            }
         });
 
     } catch (e: any) {

@@ -388,11 +388,20 @@ export default function Dashboard() {
 
 
 
+  // 수행평가 입력 독려(장려) 팝업 활성화 여부 (기본값: false 꺼짐)
+  const isPromotionPopupEnabled = Boolean(settings) && (
+    settings?.promotion_popup_enabled === true ||
+    settings?.promotion_popup_enabled === 'true' ||
+    settings?.promotion_popup_enabled === '1' ||
+    settings?.promotion_popup_enabled === 1 ||
+    settings?.promotion_popup_enabled === 'on'
+  );
+
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
     const isSetupComplete = isConfigured && (grade === "1" || isElectiveEntered);
 
-    if (isSetupComplete) {
+    if (isSetupComplete && isPromotionPopupEnabled && !instructionDismissedV2) {
       timeoutId = setTimeout(() => {
         setShowInstructionTooltip(true);
       }, 4000);
@@ -403,7 +412,7 @@ export default function Dashboard() {
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [isConfigured, grade, isElectiveEntered]);
+  }, [isConfigured, grade, isElectiveEntered, isPromotionPopupEnabled, instructionDismissedV2]);
 
   // Hide instruction tooltip while the elective dialog is open, restore on close
   useEffect(() => {
@@ -1730,7 +1739,7 @@ export default function Dashboard() {
                 placeholder="홍길동"
                 value={changeStudentName}
                 onChange={(e) => setChangeStudentName(e.target.value)}
-                className="w-full h-14 text-2xl font-semibold text-center rounded-md border border-input bg-background px-3 focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full h-14 md:h-16 text-2xl md:text-3xl font-bold text-center rounded-md border border-input bg-background px-3 focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-base md:placeholder:text-lg placeholder:font-normal"
                 required
               />
             </div>
@@ -1747,7 +1756,7 @@ export default function Dashboard() {
                   const val = e.target.value.replace(/[^0-9]/g, "");
                   if (val.length <= 4) setChangeStudentId(val);
                 }}
-                className={`w-full text-center rounded-md border border-input bg-background px-3 focus:outline-none focus:ring-2 focus:ring-ring h-16 md:h-20 py-0 ${changeStudentId.length === 0 ? "text-base md:text-lg font-normal tracking-normal indent-0" : "text-5xl md:text-[64px] font-bold tracking-[0.3em] md:tracking-[0.4em] indent-[0.3em] md:indent-[0.4em]"}`}
+                className={`w-full text-center rounded-md border border-input bg-background px-3 focus:outline-none focus:ring-2 focus:ring-ring h-14 md:h-16 py-0 ${changeStudentId.length === 0 ? "text-sm md:text-base font-normal tracking-normal indent-0 placeholder:text-sm md:placeholder:text-base" : "text-3xl md:text-4xl font-bold tracking-[0.25em] md:tracking-[0.3em] indent-[0.25em] md:indent-[0.3em]"}`}
                 required
               />
             </div>
@@ -3112,7 +3121,7 @@ export default function Dashboard() {
 
       {/* Instruction Notification */}
       {
-        showInstructionTooltip && (settings?.promotion_popup_enabled !== false) && !showElectiveDialog && !useUserConfig().instructionDismissedV2 && (
+        showInstructionTooltip && isPromotionPopupEnabled && !showElectiveDialog && !instructionDismissedV2 && (
           <div className="fixed bottom-4 right-4 z-[9999] bg-white dark:bg-gray-800 border border-orange-200 shadow-lg rounded-lg p-6 md:p-8 max-w-[90vw] md:max-w-xl animate-in slide-in-from-bottom-2 fade-in duration-300">
             <div className="flex flex-col gap-4 md:gap-6">
               <div className="flex flex-col gap-1 md:gap-2">

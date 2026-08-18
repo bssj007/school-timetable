@@ -9426,7 +9426,11 @@ function PromotionSettings({ adminPassword }: { adminPassword: string }) {
         }
     });
 
-    const isPromotionEnabled = settingsData?.promotion_popup_enabled !== false;
+    const isPromotionEnabled = settingsData?.promotion_popup_enabled === true ||
+        settingsData?.promotion_popup_enabled === 'true' ||
+        settingsData?.promotion_popup_enabled === '1' ||
+        settingsData?.promotion_popup_enabled === 1 ||
+        settingsData?.promotion_popup_enabled === 'on';
 
     useEffect(() => {
         if (settingsData && settingsData.promotion_reset_days !== undefined) {
