@@ -7,11 +7,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon, ThumbsUp, X, Bell } from "lucide-react";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon, ThumbsUp, X, Bell, ArrowRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
+import { clearRoleCookie } from "@/components/RoleSelectDialog";
 import {
   Select,
   SelectContent,
@@ -117,7 +118,15 @@ const DEFAULT_PRINT_HEIGHT = "11";
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
-  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, studentName, refreshKakaoUser, instructionDismissedV2 } = useUserConfig();
+  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, studentName, refreshKakaoUser, instructionDismissedV2, refreshRole } = useUserConfig();
+
+  const handleGoToTeacher = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    clearRoleCookie();
+    refreshRole();
+    toast.success("교사용 페이지로 이동합니다.");
+    window.location.href = "/teacher";
+  };
 
   // 0. 설정 조회 (Public)
   const { data: settings } = useQuery({
@@ -1562,6 +1571,17 @@ export default function Dashboard() {
               🍱 급식표
             </a>
           </div>
+
+          {/* 시간표/급식표 선택기 오른쪽에 동일 디자인의 '교사용' 버튼 */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 font-bold text-xs text-emerald-700 hover:bg-emerald-50/80 hover:text-emerald-800 flex items-center gap-1 rounded-lg border-none shadow-none cursor-pointer select-none"
+            onClick={handleGoToTeacher}
+          >
+            <span className="leading-none">교사용</span>
+            <ArrowRight className="h-3.5 w-3.5 stroke-[2.2] text-emerald-600 shrink-0" />
+          </Button>
         </div>
 
         <div className="flex items-center gap-2">
