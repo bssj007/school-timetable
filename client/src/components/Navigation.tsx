@@ -112,12 +112,12 @@ export default function Navigation() {
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center h-16">
             {isTeacherPage ? (
-              /* 교사용 페이지: 로고 제외, 좌측에 돌아가기 버튼 배치 */
+              /* 교사용 페이지: 로고 제외, 좌측에 테두리 없는 깔끔한 돌아가기 버튼 배치 */
               <div className="flex items-center">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  className="h-9 rounded-full px-3.5 font-bold text-xs border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  className="h-9 px-2 sm:px-2.5 font-bold text-xs text-emerald-700 hover:bg-emerald-50/70 hover:text-emerald-800 flex items-center gap-1.5 rounded-lg border-none shadow-none cursor-pointer"
                   onClick={handleReturnToStudent}
                 >
                   <ArrowLeft className="h-4 w-4 text-emerald-600" />
@@ -136,49 +136,65 @@ export default function Navigation() {
               </Link>
             )}
 
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               {/* PC Only Desktop Shortcut Button */}
               <Button
-                variant="outline"
+                variant={isTeacherPage ? "ghost" : "outline"}
                 size="sm"
-                className="hidden md:inline-flex h-9 rounded-full px-3 font-semibold text-xs border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm"
+                className={`hidden md:inline-flex h-9 rounded-full px-3 font-semibold text-xs ${
+                  isTeacherPage
+                    ? "border-none shadow-none rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100/70 font-medium"
+                    : "border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm"
+                }`}
                 onClick={() => {
                   downloadDesktopShortcut("성지수행_시간표_수행평가");
                   toast.success("바탕화면 바로가기(.url) 파일이 다운로드되었습니다. 다운로드된 파일을 바탕화면으로 옮겨서 사용하세요.");
                 }}
                 title="PC 바탕화면에 바로가기 파일 다운로드"
               >
-                <Download className={`h-3.5 w-3.5 mr-1.5 ${isTeacherPage ? "text-gray-600" : "text-blue-600"}`} />
+                <Download className={`h-3.5 w-3.5 mr-1.5 ${isTeacherPage ? "text-gray-500" : "text-blue-600"}`} />
                 바탕화면에 바로가기 추가
               </Button>
 
-              {/* Mobile-only Bug Report Button */}
-              {isBugReportEnabled && (
-                <Button
-                  variant={isTeacherPage ? "outline" : "default"}
-                  size="sm"
-                  className={`md:hidden h-9 rounded-full px-3 font-bold text-xs ${
-                    isTeacherPage
-                      ? "border-gray-200 text-gray-700 bg-white hover:bg-gray-50 shadow-xs font-semibold"
-                      : "bg-red-500 hover:bg-red-600 text-white"
-                  }`}
-                  onClick={() => setShowBugReportDialog(true)}
-                >
-                  <AlertTriangle className={`h-4 w-4 mr-1 ${isTeacherPage ? "text-gray-500" : ""}`} />
-                  오류신고
-                </Button>
+              {/* PC 전용 희미한 칸막이 */}
+              {isTeacherPage && (
+                <div className="hidden md:block h-3.5 w-[1px] bg-gray-200 mx-0.5" />
               )}
 
-              {/* 알림 벨 버튼 — 메인 페이지는 yellow 색상, 교사 페이지는 무색 simplistic */}
+              {/* Mobile-only Bug Report Button */}
+              {isBugReportEnabled && (
+                <>
+                  <Button
+                    variant={isTeacherPage ? "ghost" : "default"}
+                    size="sm"
+                    className={`md:hidden h-9 px-2.5 font-bold text-xs ${
+                      isTeacherPage
+                        ? "border-none shadow-none rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100/70 font-medium"
+                        : "rounded-full bg-red-500 hover:bg-red-600 text-white"
+                    }`}
+                    onClick={() => setShowBugReportDialog(true)}
+                  >
+                    <AlertTriangle className={`h-4 w-4 mr-1 ${isTeacherPage ? "text-gray-500" : ""}`} />
+                    오류신고
+                  </Button>
+
+                  {/* 모바일 전용 희미한 칸막이 */}
+                  {isTeacherPage && (
+                    <div className="md:hidden h-3.5 w-[1px] bg-gray-200 mx-0.5" />
+                  )}
+                </>
+              )}
+
+              {/* 알림 벨 버튼 — 메인 페이지는 yellow 색상, 교사 페이지는 무색 simplistic (테두리 제거) */}
               <div className="relative" ref={notificationRef}>
                 <Button
                   id="notification-bell-btn"
-                  variant="default"
+                  variant={isTeacherPage ? "ghost" : "default"}
                   size="icon"
-                  className={`relative h-9 w-9 rounded-full transition-all duration-200 ${
+                  className={`relative h-9 w-9 transition-all duration-200 ${
                     isTeacherPage
-                      ? "bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 shadow-xs"
-                      : "bg-yellow-400 hover:bg-yellow-500 text-gray-900 shadow-sm"
+                      ? "border-none shadow-none rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100/70"
+                      : "rounded-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 shadow-sm"
                   }`}
                   onClick={() => setShowNotifications(prev => !prev)}
                   aria-label="알림"
@@ -187,8 +203,8 @@ export default function Navigation() {
                   {/* 읽지 않은 알림 뱃지 */}
                   {unreadNotificationCount > 0 && (
                     <span
-                      className={`absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-[5px] text-[10px] font-bold leading-none text-white rounded-full shadow ring-2 ring-white ${
-                        isTeacherPage ? "bg-gray-600" : "bg-red-500"
+                      className={`absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[17px] h-[17px] px-[4px] text-[9px] font-bold leading-none text-white rounded-full shadow-xs ${
+                        isTeacherPage ? "bg-gray-600 ring-1 ring-white" : "bg-red-500 ring-2 ring-white"
                       }`}
                     >
                       {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
