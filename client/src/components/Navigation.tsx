@@ -112,15 +112,15 @@ export default function Navigation() {
         <div className="container mx-auto px-2 sm:px-4">
           <div className="flex justify-between items-center h-16">
             {isTeacherPage ? (
-              /* 교사용 페이지: 내비게이션 바 맨 왼쪽에 학생용 돌아가기 버튼 정렬 */
+              /* 교사용 페이지: 내비게이션 바 맨 왼쪽에 학생용 돌아가기 버튼 정렬 (빨간색) */
               <div className="flex items-center">
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-9 px-1.5 sm:px-2.5 font-bold text-xs text-emerald-700 hover:bg-emerald-50/80 hover:text-emerald-800 flex items-center gap-1.5 rounded-lg border-none shadow-none cursor-pointer select-none"
+                  className="h-9 px-1.5 sm:px-2.5 font-bold text-xs text-red-600 hover:bg-red-50 hover:text-red-700 flex items-center gap-1.5 rounded-lg border-none shadow-none cursor-pointer select-none"
                   onClick={handleReturnToStudent}
                 >
-                  <ArrowLeft className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <ArrowLeft className="h-4 w-4 text-red-600 shrink-0" />
                   <span className="xs:hidden">학생용</span>
                   <span className="hidden xs:inline">학생용 페이지로 돌아가기</span>
                 </Button>
