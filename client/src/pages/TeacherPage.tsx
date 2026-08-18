@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,8 @@ import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
+import { useUserConfig } from "@/contexts/UserConfigContext";
+import { clearRoleCookie } from "@/components/RoleSelectDialog";
 
 interface TeacherTimetableResponse {
   success: boolean;
@@ -300,6 +302,15 @@ function renderGroupCode(code: string, marginRight: number = 3): React.ReactElem
 
 export default function TeacherPage() {
   const queryClient = useQueryClient();
+  const { refreshRole } = useUserConfig();
+
+  const handleReturnToStudentPage = () => {
+    // 자동 리다이렉션 쿠키만 삭제 (sj_user_role, sj_teacher_name)
+    clearRoleCookie();
+    refreshRole();
+    toast.success("학생용 페이지로 이동합니다.");
+    window.location.href = "/";
+  };
   
   // States
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(() => {
@@ -1461,6 +1472,18 @@ export default function TeacherPage() {
 
       <div className="max-w-[1240px] mx-auto w-full md:flex-1 flex flex-col md:min-h-0">
 
+        {/* ===== MOBILE ONLY: Top Return to Student Page Button ===== */}
+        <div className="md:hidden w-full mb-2 px-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={handleReturnToStudentPage}
+            id="return-to-student-btn-mobile"
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 hover:text-slate-900 border border-amber-200/90 shadow-sm text-xs font-bold transition-all cursor-pointer select-none"
+          >
+            <ArrowLeft className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>학생용 페이지로 돌아가기</span>
+          </button>
+        </div>
 
         {/* ===== TOP SECTION (PC only) — mirrors CONTENT AREA column layout for pixel-perfect alignment ===== */}
         {/* [timetable-col: flex-1 max-w-[850px]] + [gap-4/xl:gap-6] + [panel-col: 320px/360px] */}
@@ -1512,7 +1535,17 @@ export default function TeacherPage() {
           </div>
 
           {/* ── Right: panel column header (same sizing as right panel) ── */}
-          <div className="md:w-[320px] xl:w-[360px] shrink-0 flex justify-end">
+          <div className="md:w-[320px] xl:w-[360px] shrink-0 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full shadow-sm gap-1.5 text-xs md:text-sm bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
+              onClick={handleReturnToStudentPage}
+              title="학생용 페이지로 이동"
+            >
+              <Home className="w-3.5 h-3.5 text-emerald-600" />
+              <span>학생용 페이지</span>
+            </Button>
             <Button
               variant="outline"
               size="sm"

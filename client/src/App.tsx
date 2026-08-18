@@ -34,6 +34,9 @@ function AppContent() {
   const { isValidating, userRole, refreshRole } = useUserConfig();
   const [location, setLocation] = useLocation();
 
+  const isTeacherRoute = location.startsWith("/teacher");
+  const isAdminRoute = location.startsWith("/admin");
+
   // 사이트 디자인설정 동적 적용 (제목 + 파비콘 + PWA 아이콘)
   useEffect(() => {
     fetch('/api/settings/public')
@@ -65,6 +68,18 @@ function AppContent() {
       .catch(() => {}); // 실패 시 기본값 유지
   }, []);
 
+  // ── 교사 리다이렉트 ──────────────────────────────────────────────────────────
+  // Rules of Hooks: useEffect는 반드시 conditional return 앞에 선언해야 함.
+  // 동작:
+  //   1) 아래 동기 블록에서 return null → Dashboard가 단 한 프레임도 렌더되지 않음
+  //   2) 이 useEffect가 실행 → setLocation("/teacher") → wouter 상태 업데이트
+  //   3) 다음 렌더에서 /teacher 경로로 TeacherPage 렌더
+  useEffect(() => {
+    if (!isValidating && userRole === "teacher" && !isTeacherRoute && !isAdminRoute) {
+      setLocation("/teacher");
+    }
+  }, [isValidating, userRole, isTeacherRoute, isAdminRoute]);
+
   // 학기 키 검증 완료 전 — 아무 데이터도 렌더링하지 않음
   if (isValidating) {
     return (
@@ -77,20 +92,11 @@ function AppContent() {
     );
   }
 
-  // ── 교사 쿠키 확인 후 리다이렉트 — 렌더링 전 동기 처리 ──────────────────
-  // isValidating 완료 시점에 렌더 트리에 Router(Dashboard)가 올라가기 전에 체크.
-  // useEffect는 렌더 후 실행이므로 Dashboard가 한 프레임 보이는 문제를 막기 위해
-  // 렌더 시점에 직접 분기한다.
-  const isTeacherRoute = location.startsWith("/teacher");
-  const isAdminRoute = location.startsWith("/admin");
-
+  // ── 교사 쿠키 확인 후 리다이렉트 — Dashboard 플래시 방지 ─────────────────
+  // useEffect(위)가 setLocation을 실행하기 전 1프레임 동안 null을 반환하여
+  // Dashboard가 절대 보이지 않도록 막는다.
   if (userRole === "teacher" && !isTeacherRoute && !isAdminRoute) {
-    // wouter의 Redirect 컴포넌트 대신 location을 직접 교체
-    // (렌더 중 setLocation 호출은 금지 → window.history로 즉시 교체)
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", "/teacher");
-    }
-    return null; // 이번 프레임은 아무것도 렌더하지 않음, 다음 렌더에서 /teacher로 표시
+    return null;
   }
 
   return (

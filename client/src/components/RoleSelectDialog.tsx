@@ -30,6 +30,12 @@ function setTeacherNameCookie(name: string) {
     document.cookie = `${TEACHER_COOKIE}=${encodeURIComponent(name)}; max-age=${COOKIE_MAX_AGE}; path=/`;
 }
 
+export function clearRoleCookie() {
+    if (typeof document === "undefined") return;
+    document.cookie = `${ROLE_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
+    document.cookie = `${TEACHER_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
+}
+
 // ── 교사 옵션 타입 ───────────────────────────────────────────
 interface TeacherOption {
     idx: number;
@@ -122,7 +128,7 @@ interface RoleSelectDialogProps {
 
 export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogProps) {
     const [location, setLocation] = useLocation();
-    const { setConfig } = useUserConfig();
+    const { setConfig, grade: savedGrade, classNum: savedClassNum, studentNumber: savedStudentNum, studentName: savedName } = useUserConfig();
 
     const [isOpen, setIsOpen] = useState(false);
     const [step, setStep] = useState<Step>("role");
@@ -178,6 +184,13 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
     };
 
     const handleSelectStudent = () => {
+        if (!studentName && savedName) {
+            setStudentName(savedName);
+        }
+        if (!studentId && savedGrade && savedClassNum && savedStudentNum) {
+            const padded = savedStudentNum.padStart(2, "0");
+            setStudentId(`${savedGrade}${savedClassNum}${padded}`);
+        }
         setStep("student-info");
     };
 

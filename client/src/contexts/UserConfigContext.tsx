@@ -1,5 +1,5 @@
 import { useState, createContext, useContext, ReactNode, useEffect } from "react";
-import { getRoleCookie, getTeacherNameCookie } from "@/components/RoleSelectDialog";
+import { getRoleCookie, getTeacherNameCookie, clearRoleCookie } from "@/components/RoleSelectDialog";
 
 export interface UserConfig {
     schoolName: string;
@@ -56,6 +56,8 @@ interface UserConfigContextType {
     teacherName: string | null;
     /** 역할 쿠키 갱신 (RoleSelectDialog에서 직접 쿠키 저장 후 상태 동기화용) */
     refreshRole: () => void;
+    /** 역할 쿠키 삭제 및 상태 초기화 (학생용 페이지로 돌아갈 때 사용) */
+    clearRole: () => void;
 }
 
 const UserConfigContext = createContext<UserConfigContextType | undefined>(undefined);
@@ -108,6 +110,12 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
         const r = getRoleCookie();
         setUserRoleState((r === "student" || r === "teacher") ? r : null);
         setTeacherNameState(getTeacherNameCookie());
+    };
+
+    const clearRole = () => {
+        clearRoleCookie();
+        setUserRoleState(null);
+        setTeacherNameState(null);
     };
 
     const refreshKakaoUser = async () => {
@@ -231,6 +239,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
             userRole,
             teacherName,
             refreshRole,
+            clearRole,
         }}>
             {children}
         </UserConfigContext.Provider>
