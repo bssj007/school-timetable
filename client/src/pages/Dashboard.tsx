@@ -550,6 +550,8 @@ export default function Dashboard() {
   const rawDatasetId = (rawTimetableData as any)?.originalDatasetId || (rawTimetableData as any)?.datasetId || '';
   // Optimization: Pre-calculate datasetType ("COMCIGAN" vs "MANUAL_PLAN") so dependent queries can start immediately.
   const datasetType = (rawDatasetId === 'MANUAL_PLAN' || rawDatasetId === 'SEMESTER_PLAN') ? rawDatasetId : 'COMCIGAN';
+  // 날짜 범위 밖 여부 — MANUAL_PLAN/SEMESTER_PLAN은 적용 안 함
+  const isOutOfDateRange = datasetType === 'COMCIGAN' && !!((rawTimetableData as any)?.isOutOfRange);
 
   // 1.5 선택과목 데이터 및 프로필 조회 (2, 3학년용)
   const { data: electiveConfigs, isFetching: isElectiveConfigsFetching } = useQuery({
@@ -1950,7 +1952,13 @@ export default function Dashboard() {
                 <span className={`text-lg md:text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
                   <span>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}</span>
                 </span>
+                {isOutOfDateRange && (
+                  <span className="text-xs font-bold text-red-500 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse">
+                    미확정 시간표
+                  </span>
+                )}
                 {/* 모바일 카카오 뱃지 제거됨 — 알림 벨은 상단 헤더에 통합 */}
+
               </div>
 
               {/* Desktop: student info + change button */}

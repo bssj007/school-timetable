@@ -950,6 +950,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         datasetId: timedataProp,
         originalDatasetId,
         ipOverrideApplied: typeof ipOverrideApplied !== 'undefined' ? ipOverrideApplied : false,
+        isOutOfRange,
         data: result,
         debugTokens: { 
             override1: datasetSelectedGrade1 || null, 

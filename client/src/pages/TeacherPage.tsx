@@ -530,6 +530,13 @@ export default function TeacherPage() {
     return (rawDatasetId === 'MANUAL_PLAN' || rawDatasetId === 'SEMESTER_PLAN') ? rawDatasetId : 'COMCIGAN';
   }, [grade3Timetable]);
 
+  // 날짜 범위 밖 여부 — 3개 학년 중 하나라도 COMCIGAN+isOutOfRange이면 미확정
+  const isOutOfDateRange = (
+    (g1DatasetType === 'COMCIGAN' && !!grade1Timetable?.isOutOfRange) ||
+    (g2DatasetType === 'COMCIGAN' && !!grade2Timetable?.isOutOfRange) ||
+    (g3DatasetType === 'COMCIGAN' && !!grade3Timetable?.isOutOfRange)
+  );
+
   // Fetch current-week timetables to resolve fixed panel datasets
   const { data: grade1TimetableNow } = useQuery({
     queryKey: ['timetable-all-now', '1', currentWeekDate],
@@ -1663,6 +1670,11 @@ export default function TeacherPage() {
                   {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
                 </span>
                 <span className="text-[10px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
+                {isOutOfDateRange && (
+                  <span className="text-[9px] font-bold text-red-300 leading-tight whitespace-nowrap animate-pulse">
+                    미확정 시간표
+                  </span>
+                )}
               </span>
               <Button
                 variant="ghost"
@@ -1736,6 +1748,11 @@ export default function TeacherPage() {
                 {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
               </span>
               <span className="text-[10px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
+              {isOutOfDateRange && (
+                <span className="text-[9px] font-bold text-red-300 leading-tight whitespace-nowrap animate-pulse">
+                  미확정 시간표
+                </span>
+              )}
             </span>
             <Button
               variant="ghost"
