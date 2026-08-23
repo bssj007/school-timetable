@@ -4466,7 +4466,7 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <TargetClassDisplaySettings adminPassword={adminPassword} />
-                            <SamsungInstallSettings adminPassword={adminPassword} />
+                            <InstallButtonSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -9539,14 +9539,14 @@ function PromotionSettings({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
-// SamsungInstallSettings - Controls Samsung Internet PWA button visibility
+// InstallButtonSettings - 앱 다운로드 버튼 브라우저별 표시 제어
 // Located under: 기타 > 미해결 문제
 // ----------------------------------------------------------------------
-function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
+function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
 
     const { data: settingsData, isLoading } = useQuery({
-        queryKey: ["admin", "samsungInstallSettings"],
+        queryKey: ["admin", "installButtonSettings"],
         queryFn: async () => {
             const res = await fetch("/api/settings/public");
             if (!res.ok) throw new Error("설정 불러오기 실패");
@@ -9554,8 +9554,23 @@ function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
         }
     });
 
-    const isSamsungButtonVisible = settingsData?.samsung_install_button_visible !== false;
-    const isPwaButtonVisible = settingsData?.pwa_install_button_visible !== false;
+    const isPwaButtonVisible      = settingsData?.pwa_install_button_visible     !== false;
+    const isChrome                = settingsData?.chrome_install_button_visible  !== false;
+    const isSamsung               = settingsData?.samsung_install_button_visible !== false;
+    const isSafari                = settingsData?.safari_install_button_visible  !== false;
+    const isOther                 = settingsData?.other_install_button_visible   !== false;
+
+    const [playStoreUrl, setPlayStoreUrl] = useState("");
+    const [appStoreUrl, setAppStoreUrl] = useState("");
+
+    useEffect(() => {
+        if (settingsData?.play_store_url !== undefined) {
+            setPlayStoreUrl(settingsData.play_store_url || "");
+        }
+        if (settingsData?.app_store_url !== undefined) {
+            setAppStoreUrl(settingsData.app_store_url || "");
+        }
+    }, [settingsData?.play_store_url, settingsData?.app_store_url]);
 
     const saveSettingMutation = useMutation({
         mutationFn: async (payload: Record<string, string>) => {
@@ -9570,7 +9585,7 @@ function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
             if (!res.ok) throw new Error("저장 실패");
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["admin", "samsungInstallSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "installButtonSettings"] });
             queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
             toast.success("설정이 저장되었습니다.");
         },
@@ -9579,29 +9594,71 @@ function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
         }
     });
 
+    const toggle = (key: string, checked: boolean) =>
+        saveSettingMutation.mutate({ [key]: checked ? "true" : "false" });
+
+    const savePlayStoreUrl = () =>
+        saveSettingMutation.mutate({ play_store_url: playStoreUrl.trim() });
+
+    const saveAppStoreUrl = () =>
+        saveSettingMutation.mutate({ app_store_url: appStoreUrl.trim() });
+
     if (isLoading) {
         return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
     }
 
-    return (
-        <div className="space-y-6 p-1">
-            <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
-                <p className="font-semibold mb-1">⚠️ 미해결 문제: 삼성 인터넷 홈 화면 추가</p>
-                <p className="text-orange-700">
-                    삼성 인터넷에서 <strong>beforeinstallprompt</strong> 이벤트가 일관성 없이 발생합니다.
-                    현재 <code className="bg-orange-100 px-1 rounded">display: minimal-ui + display_override</code> 방식으로
-                    "Add to apps" / "Add to Home screen" 두 옵션을 제공 중입니다.
-                    버튼이 작동하지 않는 경우 아래에서 버튼을 숨길 수 있습니다.
-                </p>
-            </div>
+    // 현재 접속 브라우저 감지
+    const currentBrowserKey = (() => {
+        const ua = navigator.userAgent;
+        if (/SamsungBrowser/i.test(ua)) return "samsung_install_button_visible";
+        if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) return "safari_install_button_visible";
+        if (/Chrome/i.test(ua)) return "chrome_install_button_visible";
+        return "other_install_button_visible";
+    })();
 
-            {/* Global toggle - hides button for ALL browsers */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base">앱 다운로드 버튼 전체 표시 (모든 브라우저)</CardTitle>
+    // 브라우저 행 정의
+    const browsers = [
+        {
+            key: "chrome_install_button_visible",
+            label: "Chrome",
+            icon: "🌐",
+            desc: "Android Chrome / 크로미움 계열",
+            value: isChrome,
+        },
+        {
+            key: "samsung_install_button_visible",
+            label: "Samsung",
+            icon: "📱",
+            desc: "삼성 인터넷 브라우저",
+            value: isSamsung,
+        },
+        {
+            key: "safari_install_button_visible",
+            label: "Safari",
+            icon: "🧭",
+            desc: "iOS Safari (Add to Home Screen)",
+            value: isSafari,
+        },
+        {
+            key: "other_install_button_visible",
+            label: "그외",
+            icon: "❓",
+            desc: "위 3가지에 해당하지 않는 브라우저",
+            value: isOther,
+        },
+    ] as const;
+
+    return (
+        <div className="space-y-5 p-1">
+            {/* 전체 서킷브레이커 */}
+            <Card className={`border-2 ${isPwaButtonVisible ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}`}>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <span className="text-lg">⚡</span>
+                        전체 서킷브레이커
+                    </CardTitle>
                     <CardDescription>
-                        모든 브라우저에서 홈 화면 추가 / 앱 다운로드 버튼 표시 여부를 전체적으로 제어합니다.
-                        OFF 시 삼성 인터넷 토글은 무의미합니다.
+                        OFF 시 아래 브라우저별 설정과 무관하게 모든 환경에서 앱 다운로드 버튼이 숨겨집니다.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -9609,56 +9666,168 @@ function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
                         <Switch
                             id="pwa-install-button-toggle"
                             checked={isPwaButtonVisible}
-                            onCheckedChange={(checked) => saveSettingMutation.mutate({ pwa_install_button_visible: checked ? "true" : "false" })}
+                            onCheckedChange={(checked) => toggle("pwa_install_button_visible", checked)}
                             disabled={saveSettingMutation.isPending}
                         />
-                        <Label htmlFor="pwa-install-button-toggle" className="cursor-pointer">
+                        <Label htmlFor="pwa-install-button-toggle" className="cursor-pointer text-sm font-semibold">
                             {isPwaButtonVisible
-                                ? <span className="text-green-700 font-medium">✅ 버튼 표시 중 (전체 브라우저)</span>
-                                : <span className="text-gray-500 font-medium">🔴 전체 숨김</span>
+                                ? <span className="text-green-700">✅ 전체 표시 중</span>
+                                : <span className="text-red-600">🔴 전체 숨김 (서킷브레이커 작동 중)</span>
                             }
                         </Label>
                     </div>
                 </CardContent>
             </Card>
 
-            {/* Samsung-specific toggle */}
-            <Card className={!isPwaButtonVisible ? "opacity-50 pointer-events-none" : ""}>
-                <CardHeader>
-                    <CardTitle className="text-base">삼성 인터넷 홈 화면 추가 버튼</CardTitle>
+            {/* 브라우저별 표 */}
+            <Card className={!isPwaButtonVisible ? "opacity-40 pointer-events-none" : ""}>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base">브라우저별 앱 다운로드 버튼 표시</CardTitle>
                     <CardDescription>
-                        삼성 인터넷 사용자에게만 "홈 화면에 성지수행 추가" 버튼 표시 여부를 설정합니다.
-                        위의 전체 토글이 OFF이면 이 설정은 무시됩니다.
+                        각 모바일 브라우저 환경별로 버튼 표시 여부를 개별 제어합니다.
+                        전체 서킷브레이커가 OFF이면 이 설정은 무시됩니다.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <div className="flex items-center gap-4">
-                        <Switch
-                            id="samsung-install-button-toggle"
-                            checked={isSamsungButtonVisible}
-                            onCheckedChange={(checked) => saveSettingMutation.mutate({ samsung_install_button_visible: checked ? "true" : "false" })}
-                            disabled={saveSettingMutation.isPending}
-                        />
-                        <Label htmlFor="samsung-install-button-toggle" className="cursor-pointer">
-                            {isSamsungButtonVisible
-                                ? <span className="text-green-700 font-medium">✅ 버튼 표시 중 (삼성 인터넷 사용자에게 보임)</span>
-                                : <span className="text-gray-500 font-medium">🔴 버튼 숨김</span>
-                            }
-                        </Label>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b bg-gray-50">
+                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">브라우저</th>
+                                    <th className="text-center px-4 py-2.5 font-semibold text-gray-600">표시</th>
+                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">상태</th>
+                                    <th className="text-center px-4 py-2.5 font-semibold text-gray-600">현재 환경</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {browsers.map((browser) => {
+                                    const isCurrent = browser.key === currentBrowserKey;
+                                    return (
+                                    <tr key={browser.key} className={`border-b last:border-b-0 transition-colors ${isCurrent ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}>
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-base">{browser.icon}</span>
+                                                <div>
+                                                    <p className="font-semibold text-gray-800">{browser.label}</p>
+                                                    <p className="text-xs text-gray-500">{browser.desc}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            <Switch
+                                                id={`install-toggle-${browser.key}`}
+                                                checked={browser.value}
+                                                onCheckedChange={(checked) => toggle(browser.key, checked)}
+                                                disabled={saveSettingMutation.isPending}
+                                            />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {browser.value
+                                                ? <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">✅ 표시</span>
+                                                : <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">숨김</span>
+                                            }
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {isCurrent && (
+                                                <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full">
+                                                    📍 현재
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
-                    {saveSettingMutation.isPending && <p className="text-sm text-gray-400 mt-2">저장 중...</p>}
                 </CardContent>
             </Card>
 
-            <Card className="border-dashed border-gray-300 bg-gray-50">
-                <CardContent className="pt-4">
-                    <p className="text-xs text-gray-500 font-semibold mb-2">📌 기술적 한계</p>
-                    <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
-                        <li><code>display: standalone</code> → "Add to apps" (WebAPK, Play Protect 경고 위험)</li>
-                        <li><code>display: minimal-ui</code>만 → 이벤트 발화 안 됨</li>
-                        <li><code>display_override: [standalone, minimal-ui]</code> → 두 옵션 표시 (현재)</li>
-                        <li>삼성 인터넷 버전/기기에 따라 결과가 다를 수 있음</li>
-                    </ul>
+            {saveSettingMutation.isPending && (
+                <p className="text-sm text-gray-400 text-center">저장 중...</p>
+            )}
+
+            {/* 앱스토어 링크 설정 */}
+            <Card>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base">앱스토어 링크 설정</CardTitle>
+                    <CardDescription>
+                        Samsung Internet·그외 브라우저에는 <strong>Play Store</strong> 버튼을,
+                        iOS Safari에는 <strong>App Store</strong> 버튼을 표시합니다.
+                        비워두면 해당 환경에서 기존 PWA 프롬프트 방식을 사용합니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                    {/* Play Store */}
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+                                <path d="M3.18 23.76c.33.18.7.2 1.04.08L14.76 12 4.22.16A1.25 1.25 0 0 0 3.18.4C2.6.74 2.25 1.35 2.25 2v20c0 .65.35 1.26.93 1.76Z" fill="#EA4335"/>
+                                <path d="M21.25 10.3 17.98 8.5l-3.69 3.5 3.69 3.5 3.27-1.8c.93-.51.93-1.89 0-2.4Z" fill="#FBBC04"/>
+                                <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
+                                <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
+                            </svg>
+                            Google Play Store <span className="text-xs font-normal text-gray-500">(Samsung / 그외 브라우저)</span>
+                        </div>
+                        <div className="flex gap-2">
+                            <Input
+                                id="play-store-url-input"
+                                value={playStoreUrl}
+                                onChange={(e) => setPlayStoreUrl(e.target.value)}
+                                placeholder="https://play.google.com/store/apps/details?id=..."
+                                className="font-mono text-sm flex-1"
+                            />
+                            <Button
+                                onClick={savePlayStoreUrl}
+                                disabled={saveSettingMutation.isPending}
+                                className="shrink-0"
+                            >
+                                저장
+                            </Button>
+                        </div>
+                        {playStoreUrl ? (
+                            <p className="text-xs text-blue-600 break-all">
+                                저장됨: <a href={playStoreUrl} target="_blank" rel="noreferrer" className="underline">{playStoreUrl}</a>
+                            </p>
+                        ) : (
+                            <p className="text-xs text-gray-400">미설정 — Samsung/그외에서 기존 PWA 프롬프트 사용</p>
+                        )}
+                    </div>
+
+                    <div className="border-t" />
+
+                    {/* App Store */}
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+                                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z" fill="#000"/>
+                            </svg>
+                            Apple App Store <span className="text-xs font-normal text-gray-500">(iOS Safari)</span>
+                        </div>
+                        <div className="flex gap-2">
+                            <Input
+                                id="app-store-url-input"
+                                value={appStoreUrl}
+                                onChange={(e) => setAppStoreUrl(e.target.value)}
+                                placeholder="https://apps.apple.com/app/id..."
+                                className="font-mono text-sm flex-1"
+                            />
+                            <Button
+                                onClick={saveAppStoreUrl}
+                                disabled={saveSettingMutation.isPending}
+                                className="shrink-0"
+                            >
+                                저장
+                            </Button>
+                        </div>
+                        {appStoreUrl ? (
+                            <p className="text-xs text-blue-600 break-all">
+                                저장됨: <a href={appStoreUrl} target="_blank" rel="noreferrer" className="underline">{appStoreUrl}</a>
+                            </p>
+                        ) : (
+                            <p className="text-xs text-gray-400">미설정 — iOS Safari에서 기존 PWA 프롬프트 사용</p>
+                        )}
+                    </div>
                 </CardContent>
             </Card>
         </div>
@@ -9666,6 +9835,7 @@ function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
+
 // AutoPredictSettings - Controls auto predict algorithm Pause and Manual Trigger
 // Located under: 기타 > 수행평가 예측 엔진
 // ----------------------------------------------------------------------
