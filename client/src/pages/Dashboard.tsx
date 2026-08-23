@@ -2884,44 +2884,23 @@ export default function Dashboard() {
         <div className="md:hidden mt-6 mb-2 space-y-2">
           {/* App Download for Normal Browsers (Chrome, etc.) vs Add to Home Screen for Samsung/In-App */}
           {isSamsungBrowser ? (
-            // For Samsung browsers: respect admin toggle from '미해결 문제' settings
-            !hasPwaCookie && settings?.samsung_install_button_visible !== false && (
-              <>
-                {settings?.play_store_url ? (
-                  // Play Store 링크 설정됨 → Play Store 로고 버튼
-                  <a
-                    href={settings.play_store_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-                  >
-                    {/* Play Store 로고 SVG */}
-                    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
-                      <path d="M3.18 23.76c.33.18.7.2 1.04.08L14.76 12 4.22.16A1.25 1.25 0 0 0 3.18.4C2.6.74 2.25 1.35 2.25 2v20c0 .65.35 1.26.93 1.76Z" fill="#EA4335"/>
-                      <path d="M21.25 10.3 17.98 8.5l-3.69 3.5 3.69 3.5 3.27-1.8c.93-.51.93-1.89 0-2.4Z" fill="#FBBC04"/>
-                      <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
-                      <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
-                    </svg>
-                    <span>Google Play에서 다운로드</span>
-                  </a>
-                ) : (
-                  // 기존 PWA 프롬프트
-                  <Button
-                    onClick={handleInstallClick}
-                    disabled={isInstalling}
-                    className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
-                  >
-                    {isInstalling ? (
-                      <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
-                    ) : (
-                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 outline-none">
-                        <path d="M11 17h2v-6h-2v6Zm1-8q.425 0 .713-.288T13 8q0-.425-.288-.713T12 7q-.425 0-.713.288T11 8q0 .425.288.713T12 9Zm0 13q-2.075 0-3.9-.788t-3.175-2.137q-1.35-1.35-2.137-3.175T2 12q0-2.075.788-3.9t2.137-3.175q1.35-1.35 3.175-2.137T12 2q2.075 0 3.9.788t3.175 2.137q1.35 1.35 2.137 3.175T22 12q0 2.075-.788 3.9t-2.137 3.175q-1.35 1.35-3.175 2.137T12 22Z" />
-                      </svg>
-                    )}
-                    <span>{isInstalling ? '설치 중...' : '홈 화면에 성지수행 추가'}</span>
-                  </Button>
-                )}
-              </>
+            // For Samsung browsers: play_store_url 있을 때만 Play Store 버튼 표시
+            !hasPwaCookie && settings?.samsung_install_button_visible !== false && settings?.play_store_url && (
+              <a
+                href={settings.play_store_url}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+              >
+                {/* Play Store 로고 SVG */}
+                <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
+                  <path d="M3.18 23.76c.33.18.7.2 1.04.08L14.76 12 4.22.16A1.25 1.25 0 0 0 3.18.4C2.6.74 2.25 1.35 2.25 2v20c0 .65.35 1.26.93 1.76Z" fill="#EA4335"/>
+                  <path d="M21.25 10.3 17.98 8.5l-3.69 3.5 3.69 3.5 3.27-1.8c.93-.51.93-1.89 0-2.4Z" fill="#FBBC04"/>
+                  <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
+                  <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
+                </svg>
+                <span>Google Play에서 다운로드</span>
+              </a>
             )
           ) : isOtherBrowser ? (
             // 그외 브라우저: play_store_url이 있으면 Play Store 버튼, 없으면 숙짔
