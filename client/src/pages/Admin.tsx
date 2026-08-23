@@ -4686,7 +4686,7 @@ function SemesterKeySettings({ adminPassword }: { adminPassword: string }) {
         if (settingsQuery.data) {
             const key = settingsQuery.data.semester_key || null;
             setCurrentKey(key);
-            if (!semesterKeyInput) setSemesterKeyInput(key || suggestedKey);
+            if (!semesterKeyInput) setSemesterKeyInput(key || "");
         }
     }, [settingsQuery.data]);
 
@@ -4796,15 +4796,7 @@ function SemesterKeySettings({ adminPassword }: { adminPassword: string }) {
                                     : <span className="text-gray-400 text-sm">미설정 (기본값 "1")</span>
                                 }
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                <Info className="w-4 h-4 flex-shrink-0" />
-                                <span>현재 날짜 기준 추천: <strong className="font-mono">{suggestedKey}</strong> ({year}학년도 {semester}학기)</span>
-                                <Button
-                                    variant="outline" size="sm"
-                                    className="ml-auto text-xs border-blue-200 text-blue-600 hover:bg-blue-100"
-                                    onClick={() => setSemesterKeyInput(suggestedKey)}
-                                >적용</Button>
-                            </div>
+
                             <div className="flex gap-2 items-center">
                                 <Input
                                     id="semester-key-input"

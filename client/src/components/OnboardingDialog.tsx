@@ -64,7 +64,7 @@ export default function OnboardingDialog() {
 
     return (
         <Dialog open={isOpen}>
-            <DialogContent className="sm:max-w-[425px] md:max-w-xl md:min-h-[288px] flex flex-col justify-center" onInteractOutside={(e: any) => e.preventDefault()} showCloseButton={false}>
+            <DialogContent className="sm:max-w-[425px] md:max-w-sm md:min-h-[288px] flex flex-col justify-center" onInteractOutside={(e: any) => e.preventDefault()} showCloseButton={false}>
                 <DialogHeader>
                     <DialogTitle>정보 입력</DialogTitle>
                     <DialogDescription>
