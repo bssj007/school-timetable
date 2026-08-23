@@ -4916,10 +4916,10 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
             return res.json();
         },
         onSuccess: () => {
-            toast.success("\uacfc\uac70 \uc2dc\uac04\ud45c\uac00 \uc0ad\uc81c\ub418\uc5c8\uc2b5\ub2c8\ub2e4.");
+            toast.success("과거 시간표가 삭제되었습니다.");
             queryClient.invalidateQueries({ queryKey: ["admin", "comciganCacheStatus"] });
         },
-        onError: () => toast.error("\uc0ad\uc81c \uc2e4\ud328\ud588\uc2b5\ub2c8\ub2e4.")
+        onError: () => toast.error("삭제 실패했습니다.")
     });
 
     const [testArchiveResult, setTestArchiveResult] = useState<any>(null);
@@ -4999,22 +4999,43 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
     });
 
     const formatAge = (sec: number) => {
-        if (sec < 60) return `\ucd08 \uc804`;
-        if (sec < 3600) return `\ubd84 \ucd08 \uc804`;
-        return `\uc2dc\uac04 \ubd84 \uc804`;
+        if (sec < 60) return `${sec}초 전`;
+        if (sec < 3600) return `${Math.floor(sec / 60)}분 ${sec % 60}초 전`;
+        return `${Math.floor(sec / 3600)}시간 ${Math.floor((sec % 3600) / 60)}분 전`;
     };
 
     const cacheEntries = cacheStatusQuery.data?.cacheEntries || [];
     const archiveEntries: { dateRange: string; savedAt: string; dataSize: number }[] = cacheStatusQuery.data?.archive || [];
+    const liveRanges: string[] = cacheStatusQuery.data?.liveRanges || [];
+
+    // UTC → KST (Asia/Seoul, UTC+9) 변환
+    const toKST = (utcStr: string | null | undefined): string => {
+        if (!utcStr) return '-';
+        try {
+            const d = new Date(utcStr.replace(' ', 'T') + 'Z');
+            return d.toLocaleString('ko-KR', {
+                timeZone: 'Asia/Seoul',
+                year: '2-digit',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+        } catch { return utcStr.substring(0, 16); }
+    };
+
+    // 삭제 확인 Dialog 상태
+    const [pendingDeleteEntry, setPendingDeleteEntry] = React.useState<string | null>(null);
 
     return (
         <div className="space-y-6">
-            {/* \uce90\uc2dc \uc0c1\ud0dc */}
+            {/* 캐시 상태 */}
             <div className="bg-slate-50 border rounded-lg p-4 space-y-3">
                 <div className="flex items-center justify-between">
                     <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
                         <Server className="w-4 h-4" />
-                        \uce90\uc2dc \uc0c1\ud0dc
+                        캐시 상태
                     </h4>
                     <Button
                         size="sm"
@@ -5022,8 +5043,8 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                         onClick={() => refreshMutation.mutate()}
                         disabled={refreshMutation.isPending}
                     >
-                        <RefreshCw className={`w-3 h-3 mr-1 `} />
-                        {refreshMutation.isPending ? "\uac31\uc2e0 \uc911..." : "\uc804\uccb4 \uac31\uc2e0"}
+                        <RefreshCw className={`w-3 h-3 mr-1 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
+                        {refreshMutation.isPending ? "갱신 중..." : "전체 갱신"}
                     </Button>
                 </div>
                 {cacheStatusQuery.isLoading ? (
@@ -5125,12 +5146,12 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
 
 
 
-            {/* \uacfc\uac70 \uc2dc\uac04\ud45c \uc800\uc7a5 */}
+            {/* 과거 시간표 저장 아카이브 */}
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                     <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2">
                         <span>📂</span>
-                        \uacfc\uac70 \uc2dc\uac04\ud45c \uc800\uc7a5
+                        과거 시간표 저장
                         <span className="text-xs font-normal text-amber-600">({archiveEntries.length}개)</span>
                     </h4>
                     <Button
@@ -5144,11 +5165,8 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                     </Button>
                 </div>
                 <p className="text-xs text-amber-700">
-                    콤시간 시간표 데이터가 삭제되기 전에 자동 저장됩니다. 저장된 범위의 과거 주차 요청 시 이 데이터를 사용하여 
-"
-미확정 시간표
-"
-를 표시하지 않습니다.
+                    컴시간 LIVE 데이터가 갱신될 때마다 해당 주차 스냅샷이 자동 저장됩니다.
+                    LIVE 데이터에서 해당 날짜 구간이 사라지면 저장된 스냅샷이 활성화되어 과거 날짜 조회에 사용됩니다.
                 </p>
 
                 {/* TEST 결과 패널 */}
@@ -5177,14 +5195,14 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                             </p>
                         </div>
                         <p className="text-slate-400 text-[10px]">
-                            ※ INSERT OR REPLACE로 강제 저장 후 첫 범위 날짜로 조회. 실서비스는 INSERT OR IGNORE 자동 저장.
+                            ※ INSERT OR REPLACE로 강제 저장 후 첫 범위 날짜로 조회. 실서비스는 LIVE 갱신 시 자동 저장.
                         </p>
                     </div>
                 )}
 
                 {/* 날짜 지정 조회 TEST */}
-                <div className="border border-orange-200 bg-orange-50 rounded-md p-3 space-y-2">
-                    <p className="text-xs font-bold text-orange-800">🗓 날짜 지정 조회 & E2E 테스트</p>
+                <div className="border border-orange-200 bg-orange-50/60 rounded-md p-3 space-y-2">
+                    <p className="text-xs font-bold text-orange-800">🗓 날짜 지정 조회 &amp; E2E 테스트</p>
                     <p className="text-[11px] text-orange-600">특정 날짜로 아카이브 DB 직접 조회 또는 실제 API 호출을 통해 과거 캐싱 정상작동을 검증합니다.</p>
                     <div className="flex flex-wrap gap-2 items-center">
                         <Input
@@ -5225,7 +5243,7 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                             </p>
                             {lookupArchiveResult.found && (
                                 <p className="text-slate-600">
-                                    저장일시: <span className="font-mono">{lookupArchiveResult.matchedSavedAt?.substring(0, 16) ?? '-'}</span>
+                                    저장일시 (KST): <span className="font-mono">{toKST(lookupArchiveResult.matchedSavedAt)}</span>
                                     {' · '}
                                     <span className="font-mono">{Math.round((lookupArchiveResult.matchedDataSize ?? 0) / 1024)}KB</span>
                                 </p>
@@ -5277,33 +5295,91 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                     )}
                 </div>
 
+                {/* 아카이브 항목 목록 */}
                 {archiveEntries.length === 0 ? (
                     <div className="text-xs text-amber-600 italic py-2">
                         저장된 과거 시간표 없음 &mdash; 캐시 갱신 시 자동 저장됩니다
                     </div>
-) : (
-                    <div className="space-y-1.5 max-h-60 overflow-y-auto">
-                        {archiveEntries.map((entry) => (
-                            <div key={entry.dateRange} className="flex items-center justify-between bg-white border border-amber-200 rounded-md px-3 py-2 gap-2">
-                                <div className="flex flex-col min-w-0">
-                                    <span className="text-xs font-bold text-slate-700 font-mono">{entry.dateRange}</span>
-                                    <span className="text-[10px] text-slate-400">
-                                        저장: {entry.savedAt?.replace('T', ' ')?.substring(0, 16) ?? '-'}
-                                        &nbsp;&middot;&nbsp;{Math.round(entry.dataSize / 1024)}KB
-                                    </span>
+                ) : (
+                    <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                        {archiveEntries.map((entry) => {
+                            const isLive = liveRanges.includes(entry.dateRange);
+                            return (
+                                <div key={entry.dateRange} className={`flex items-center justify-between rounded-md px-3 py-2.5 gap-3 border ${
+                                    isLive
+                                        ? 'bg-amber-50 border-amber-300'
+                                        : 'bg-white border-green-200'
+                                }`}>
+                                    <div className="flex flex-col min-w-0 gap-0.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-800 font-mono">{entry.dateRange}</span>
+                                            {isLive ? (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                                    대기중
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-300">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                                    활성화 상태
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span className="text-[10px] text-slate-400">
+                                            마지막 저장: {toKST(entry.savedAt)}
+                                            &nbsp;&middot;&nbsp;{Math.round(entry.dataSize / 1024)}KB
+                                        </span>
+                                    </div>
+                                    <button
+                                        className="text-xs text-red-400 hover:text-red-600 font-semibold shrink-0 px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                                        onClick={() => setPendingDeleteEntry(entry.dateRange)}
+                                        disabled={deleteArchiveMutation.isPending}
+                                    >
+                                        삭제
+                                    </button>
                                 </div>
-                                <button
-                                    className="text-xs text-red-500 hover:text-red-700 font-semibold shrink-0 px-2 py-1 rounded hover:bg-red-50 transition-colors"
-                                    onClick={() => { if (confirm(`'\' 과거 시간표를 삭제하시겠습니까?`)) deleteArchiveMutation.mutate(entry.dateRange); }}
-                                    disabled={deleteArchiveMutation.isPending}
-                                >
-                                    삭제
-                                </button>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
+
+            {/* 삭제 확인 Dialog */}
+            <Dialog open={!!pendingDeleteEntry} onOpenChange={(open) => { if (!open) setPendingDeleteEntry(null); }}>
+                <DialogContent className="sm:max-w-[380px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-red-700">과거 시간표 삭제</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                        <p className="text-sm text-slate-700">
+                            아래 날짜 범위의 저장된 시간표를 삭제합니다.
+                        </p>
+                        <div className="bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                            <span className="font-mono font-bold text-red-800 text-sm">{pendingDeleteEntry}</span>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                            삭제 후 해당 날짜 구간의 과거 조회 시 <b>미확정 시간표</b>가 표시됩니다.
+                            이 작업은 되돌릴 수 없습니다.
+                        </p>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                        <Button variant="outline" size="sm" onClick={() => setPendingDeleteEntry(null)}>취소</Button>
+                        <Button
+                            size="sm"
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                            disabled={deleteArchiveMutation.isPending}
+                            onClick={() => {
+                                if (pendingDeleteEntry) {
+                                    deleteArchiveMutation.mutate(pendingDeleteEntry);
+                                    setPendingDeleteEntry(null);
+                                }
+                            }}
+                        >
+                            {deleteArchiveMutation.isPending ? '삭제 중...' : '삭제 확인'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* 설명 */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-xs text-blue-700 space-y-1">

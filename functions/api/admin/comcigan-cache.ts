@@ -33,10 +33,11 @@ export const onRequest = async (context: any) => {
             // timetable_archive 테이블 보장
             try { await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_archive (date_range TEXT PRIMARY KEY, response_json TEXT NOT NULL, saved_at TEXT DEFAULT (datetime('now')))`).run(); } catch (_) {}
 
-            const [cacheRes, settingRes, archiveRes] = await db.batch([
+            const [cacheRes, settingRes, archiveRes, rawDataRes] = await db.batch([
                 db.prepare("SELECT cache_key, dataset_id, updated_at, LENGTH(response_json) as data_size, is_frozen FROM timetable_cache ORDER BY cache_key"),
                 db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_cache_max_age_minutes'"),
-                db.prepare("SELECT date_range, saved_at, LENGTH(response_json) as data_size FROM timetable_archive ORDER BY saved_at DESC")
+                db.prepare("SELECT date_range, saved_at, LENGTH(response_json) as data_size FROM timetable_archive ORDER BY saved_at DESC"),
+                db.prepare("SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'")
             ]);
 
             // 현재 캐시 최대 유효 시간 설정값 조회
@@ -59,6 +60,27 @@ export const onRequest = async (context: any) => {
                 };
             });
 
+            // 현재 LIVE raw_data에서 날짜 범위 파싱
+            const liveRanges: string[] = [];
+            try {
+                const rawRow = rawDataRes.results?.[0];
+                if (rawRow?.response_json) {
+                    const rd = JSON.parse(rawRow.response_json as string);
+                    const dateArr = rd['일자'];
+                    const dateArrNew = rd['일자자료'];
+                    if (dateArr && Array.isArray(dateArr)) {
+                        for (const r of dateArr) {
+                            if (typeof r === 'string' && r.includes('~')) liveRanges.push(r.trim());
+                        }
+                    } else if (dateArrNew && Array.isArray(dateArrNew)) {
+                        for (const item of dateArrNew) {
+                            const r = Array.isArray(item) ? item[1] : item;
+                            if (typeof r === 'string' && r.includes('~')) liveRanges.push(r.trim());
+                        }
+                    }
+                }
+            } catch (_) {}
+
             const archiveEntries = ((archiveRes.results) || []).map((row: any) => ({
                 dateRange: row.date_range,
                 savedAt: row.saved_at,
@@ -68,6 +90,7 @@ export const onRequest = async (context: any) => {
             return new Response(JSON.stringify({
                 cacheEntries,
                 archive: archiveEntries,
+                liveRanges,
                 settings: {
                     cacheMaxAgeMinutes
                 }
