@@ -2991,8 +2991,13 @@ export default function Dashboard() {
       {/* 수행평가 목록 */}
       <Card className="mt-8">
         <CardHeader>
-          <CardTitle>
+          <CardTitle className="flex items-center gap-2 flex-wrap">
             <span>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}</span> 수행평가 ({weekRangeText})
+            {isOutOfDateRange && (
+              <span className="text-xs font-bold text-red-500 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse">
+                미확정 시간표
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>

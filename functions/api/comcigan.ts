@@ -277,42 +277,60 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     let ipOverrideApplied: string | false = false;
     let jsonString = cachedRawDataString;
 
-    // --- FUTURE BOUNDARY STALE CHECK ---
-    // If the frontend legitimately requests a date that exceeds the maximum timeline of our currently
-    // cached Comcigan payload, mark it as out-of-range so we can fallback to the standard dataset.
-    // We do NOT discard the raw cache—doing so would also discard the standard baseline dataset
-    // (e.g. 자료481) that has no date bounds and is valid for any week.
+    // --- DATE BOUNDARY CHECK (PAST & FUTURE) ---
+    // Mark isOutOfRange=true when the target date falls outside the dataset's full date coverage:
+    //   - Future: target exceeds the last range's end date
+    //   - Past:   target is before the first range's start date
     let isOutOfRange = false;
     if (jsonString && targetDate) {
         try {
             const tempRaw = JSON.parse(jsonString);
             const dateArr = tempRaw['일자'];
             const dateArrNew = tempRaw['일자자료'];
-            let lastRange = null;
-            
+
+            let firstRange: string | null = null;
+            let lastRange: string | null = null;
+
             if (dateArr && Array.isArray(dateArr) && dateArr.length > 0) {
-                lastRange = dateArr[dateArr.length - 1]; // e.g. "26-03-23 ~ 26-03-28"
+                firstRange = dateArr[0];
+                lastRange = dateArr[dateArr.length - 1];
             } else if (dateArrNew && Array.isArray(dateArrNew) && dateArrNew.length > 0) {
-                const lastItem = dateArrNew[dateArrNew.length - 1]; // e.g. [2, "26-03-30 ~ 26-04-04"]
+                const firstItem = dateArrNew[0];
+                const lastItem = dateArrNew[dateArrNew.length - 1];
+                firstRange = Array.isArray(firstItem) ? firstItem[1] : firstItem;
                 lastRange = Array.isArray(lastItem) ? lastItem[1] : lastItem;
             }
-            
+
+            const targetShort = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
+            const targetDateObj = new Date(`20${targetShort}`);
+
+            // Future out-of-range: target exceeds last range end
             if (lastRange && typeof lastRange === 'string') {
                 const parts = lastRange.split('~').map(s => s.trim());
                 if (parts.length >= 2) {
                     const endDate = new Date(`20${parts[1]}`);
                     endDate.setHours(23, 59, 59, 999);
-                    const targetShort = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
-                    const targetDateObj = new Date(`20${targetShort}`);
-                    
                     if (targetDateObj > endDate) {
-                        console.log(`[Comcigan Debug] targetDate ${targetShort} exceeds cached raw_data max date ${parts[1]}. Will use standard (baseline) dataset instead.`);
+                        console.log(`[Comcigan Debug] targetDate ${targetShort} exceeds cached max date ${parts[1]}. isOutOfRange=true`);
+                        isOutOfRange = true;
+                    }
+                }
+            }
+
+            // Past out-of-range: target is before first range start
+            if (!isOutOfRange && firstRange && typeof firstRange === 'string') {
+                const parts = firstRange.split('~').map(s => s.trim());
+                if (parts.length >= 1) {
+                    const startDate = new Date(`20${parts[0]}`);
+                    startDate.setHours(0, 0, 0, 0);
+                    if (targetDateObj < startDate) {
+                        console.log(`[Comcigan Debug] targetDate ${targetShort} is before cached min date ${parts[0]}. isOutOfRange=true`);
                         isOutOfRange = true;
                     }
                 }
             }
         } catch (e) {
-            console.warn('[Comcigan Debug] Failed to evaluate raw_data date expiration boundary', e);
+            console.warn('[Comcigan Debug] Failed to evaluate raw_data date boundary', e);
         }
     }
 

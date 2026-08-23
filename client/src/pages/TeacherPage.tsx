@@ -1670,11 +1670,6 @@ export default function TeacherPage() {
                   {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
                 </span>
                 <span className="text-[10px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
-                {isOutOfDateRange && (
-                  <span className="text-[9px] font-bold text-red-300 leading-tight whitespace-nowrap animate-pulse">
-                    미확정 시간표
-                  </span>
-                )}
               </span>
               <Button
                 variant="ghost"
@@ -1688,6 +1683,11 @@ export default function TeacherPage() {
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
+            {isOutOfDateRange && (
+              <span className="text-xs font-bold text-red-500 bg-red-50/80 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse whitespace-nowrap">
+                미확정 시간표
+              </span>
+            )}
           </div>
 
           {/* ── Right: panel column header (same sizing as right panel) ── */}
@@ -1748,11 +1748,6 @@ export default function TeacherPage() {
                 {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
               </span>
               <span className="text-[10px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
-              {isOutOfDateRange && (
-                <span className="text-[9px] font-bold text-red-300 leading-tight whitespace-nowrap animate-pulse">
-                  미확정 시간표
-                </span>
-              )}
             </span>
             <Button
               variant="ghost"
@@ -1769,6 +1764,11 @@ export default function TeacherPage() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
+          {isOutOfDateRange && (
+            <span className="text-xs font-bold text-red-500 bg-red-50/80 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse whitespace-nowrap">
+              미확정 시간표
+            </span>
+          )}
         </div>
 
         {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
