@@ -10721,24 +10721,36 @@ function TeacherMgmtManager({ adminPassword }: { adminPassword: string }) {
             {/* Sidebar */}
             <div className="w-full md:w-64 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
                 <Button
-                    variant={selectedMenu === "teacher-default-pw" ? "default" : "ghost"}
-                    className="justify-start whitespace-nowrap text-left text-emerald-700 data-[state=active]:text-white hover:bg-emerald-50 data-[variant=default]:bg-emerald-600"
+                    variant="ghost"
+                    className={`justify-start whitespace-nowrap text-left transition-colors ${
+                        selectedMenu === "teacher-default-pw"
+                            ? "bg-emerald-100 text-emerald-900 font-bold hover:bg-emerald-200/80 border border-emerald-300 shadow-xs"
+                            : "text-slate-600 hover:text-emerald-800 hover:bg-emerald-50/70 font-medium"
+                    }`}
                     onClick={() => setSelectedMenu("teacher-default-pw")}
                 >
                     <KeyRound className="w-4 h-4 mr-2" />
                     초기 비밀번호 관리
                 </Button>
                 <Button
-                    variant={selectedMenu === "teacher-auth-expiry" ? "default" : "ghost"}
-                    className="justify-start whitespace-nowrap text-left text-emerald-700 hover:bg-emerald-50"
+                    variant="ghost"
+                    className={`justify-start whitespace-nowrap text-left transition-colors ${
+                        selectedMenu === "teacher-auth-expiry"
+                            ? "bg-emerald-100 text-emerald-900 font-bold hover:bg-emerald-200/80 border border-emerald-300 shadow-xs"
+                            : "text-slate-600 hover:text-emerald-800 hover:bg-emerald-50/70 font-medium"
+                    }`}
                     onClick={() => setSelectedMenu("teacher-auth-expiry")}
                 >
                     <Clock className="w-4 h-4 mr-2" />
                     세션 유지 기간
                 </Button>
                 <Button
-                    variant={selectedMenu === "teacher-per-pw" ? "default" : "ghost"}
-                    className="justify-start whitespace-nowrap text-left text-emerald-700 hover:bg-emerald-50"
+                    variant="ghost"
+                    className={`justify-start whitespace-nowrap text-left transition-colors ${
+                        selectedMenu === "teacher-per-pw"
+                            ? "bg-emerald-100 text-emerald-900 font-bold hover:bg-emerald-200/80 border border-emerald-300 shadow-xs"
+                            : "text-slate-600 hover:text-emerald-800 hover:bg-emerald-50/70 font-medium"
+                    }`}
                     onClick={() => setSelectedMenu("teacher-per-pw")}
                 >
                     <Users className="w-4 h-4 mr-2" />

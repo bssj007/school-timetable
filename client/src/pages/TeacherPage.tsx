@@ -2012,32 +2012,30 @@ export default function TeacherPage() {
       <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4 h-fit">
         <div className="md:bg-white md:rounded-2xl md:border md:border-slate-200 md:shadow-md md:overflow-hidden flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
           {/* Teacher Picker — 모바일에서 독립 카드, PC에서 패널 내부 바 */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-2 px-2 py-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b md:border-slate-100 md:px-3 flex-shrink-0 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              {timetableData ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTeacherSearchQuery("");
-                    setShowTeacherSelectModal(true);
-                  }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors border border-indigo-200 focus:outline-none cursor-pointer group max-w-full"
-                >
-                  <span className="truncate">
-                    {selectedTeacherId
-                      ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
-                      : "교사 선택"}
-                  </span>
-                  <ChevronsUpDown className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0 ml-0.5" />
-                </button>
-              ) : (
-                <span className="text-sm font-extrabold text-slate-700">
-                  {teacherName ? `${teacherName} 선생님` : '선생님'}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-2 px-2 py-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b md:border-slate-100 md:px-3 flex-shrink-0 flex items-center justify-start gap-2">
+            {timetableData ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setTeacherSearchQuery("");
+                  setShowTeacherSelectModal(true);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors border border-indigo-200 focus:outline-none cursor-pointer group max-w-full"
+              >
+                <span className="truncate">
+                  {selectedTeacherId
+                    ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
+                    : "교사 선택"}
                 </span>
-              )}
-            </div>
+                <ChevronsUpDown className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0 ml-0.5" />
+              </button>
+            ) : (
+              <span className="text-sm font-extrabold text-slate-700">
+                {teacherName ? `${teacherName} 선생님` : '선생님'}
+              </span>
+            )}
 
-            {/* 계정 관리 버튼 */}
+            {/* 계정 관리 버튼 (선생님 선택기 바로 오른쪽) */}
             <button
               type="button"
               onClick={() => setLocation("/teacher/account")}
