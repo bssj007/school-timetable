@@ -334,6 +334,52 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         }
     }
 
+    // --- PAST OUT-OF-RANGE: timetable_archive 조회 ---
+    // 과거 날짜가 캐시된 raw_data의 철달 범위보다 이전인 경우,
+    // timetable_archive에서 해당 날짜를 포함하는 스냅샵을 조회하여 사용한다.
+    let isArchivedData = false;
+    if (isOutOfRange && targetDate && db) {
+        // 과거 out-of-range인 경우에만 시도 (매우 오래된 과거 날짜 쪽)
+        const targetShortForArchive = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
+        const targetDateObjForArchive = new Date(`20${targetShortForArchive}`);
+        try {
+            await db.prepare(`
+                CREATE TABLE IF NOT EXISTS timetable_archive (
+                    date_range TEXT PRIMARY KEY,
+                    response_json TEXT NOT NULL,
+                    saved_at TEXT DEFAULT (datetime('now'))
+                )
+            `).run();
+
+            const archiveRows = await db.prepare("SELECT date_range, response_json FROM timetable_archive").all();
+            let matchedArchive: string | null = null;
+            for (const row of (archiveRows.results || [])) {
+                const rangeStr = row.date_range as string;
+                const parts = rangeStr.split('~').map((s: string) => s.trim());
+                if (parts.length < 2) continue;
+                const start = new Date(`20${parts[0]}`);
+                const end = new Date(`20${parts[1]}`);
+                end.setHours(23, 59, 59, 999);
+                if (targetDateObjForArchive >= start && targetDateObjForArchive <= end) {
+                    matchedArchive = row.response_json as string;
+                    break;
+                }
+            }
+
+            if (matchedArchive) {
+                console.log(`[Archive] Found archived timetable for ${targetShortForArchive}. Serving from archive.`);
+                // 아카이브 JSON으로 jsonString 대체 → 이후 데이터셋 선택/파싱 로직이 이 데이터로 실행됨
+                jsonString = matchedArchive;
+                isOutOfRange = false;
+                isArchivedData = true;
+            } else {
+                console.log(`[Archive] No archive found for ${targetShortForArchive}. Using fallback.`);
+            }
+        } catch (e) {
+            console.warn('[Archive] Failed to query timetable_archive:', e);
+        }
+    }
+
     if (!jsonString) {
         if (!allowLiveFetch) {
             console.warn(`[getTimetable] Cache MISS & live fetch disabled for targetDate=${targetDate}. Returning 503.`);
@@ -950,6 +996,11 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
     if (db && !isEmptyDataset && !isFallbackApplied) {
         try {
+            await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_archive (
+                date_range TEXT PRIMARY KEY,
+                response_json TEXT NOT NULL,
+                saved_at TEXT DEFAULT (datetime('now'))
+            )`).run();
             await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_cache (cache_key TEXT PRIMARY KEY, response_json TEXT NOT NULL, dataset_id TEXT, updated_at TEXT DEFAULT (datetime('now')))`).run();
             await db.prepare(`
                 INSERT INTO timetable_cache (cache_key, response_json, updated_at) 
@@ -958,6 +1009,38 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                     response_json = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.response_json ELSE excluded.response_json END,
                     updated_at = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.updated_at ELSE datetime('now') END
             `).bind(jsonString).run();
+
+            // --- 아카이브: 현재 raw_data의 모든 날짜 범위 스냅샵을 timetable_archive에 저장 ---
+            // 이미 저장된 스냅샵은 덮어쓰지 않음 (INSERT OR IGNORE)
+            try {
+                const archiveRaw = JSON.parse(jsonString);
+                const archiveDateArr = archiveRaw['일자'];
+                const archiveDateArrNew = archiveRaw['일자자료'];
+                const archiveRanges: string[] = [];
+
+                if (archiveDateArr && Array.isArray(archiveDateArr)) {
+                    for (const r of archiveDateArr) {
+                        if (typeof r === 'string' && r.includes('~')) archiveRanges.push(r);
+                    }
+                } else if (archiveDateArrNew && Array.isArray(archiveDateArrNew)) {
+                    for (const item of archiveDateArrNew) {
+                        const r = Array.isArray(item) ? item[1] : item;
+                        if (typeof r === 'string' && r.includes('~')) archiveRanges.push(r);
+                    }
+                }
+
+                // 각 날짜 범위를 키로 저장 (INSERT OR IGNORE → 중복 시 스�)
+                for (const range of archiveRanges) {
+                    try {
+                        await db.prepare(
+                            "INSERT OR IGNORE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))"
+                        ).bind(range.trim(), jsonString).run();
+                        console.log(`[Archive] Saved snapshot for range: ${range.trim()}`);
+                    } catch (_) {}
+                }
+            } catch (archiveErr) {
+                console.warn('[Archive] Failed to save archive snapshots:', archiveErr);
+            }
         } catch (e) {
             console.error('[Comcigan Debug] Failed to cache raw_data (deferred):', e);
         }
@@ -969,6 +1052,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         originalDatasetId,
         ipOverrideApplied: typeof ipOverrideApplied !== 'undefined' ? ipOverrideApplied : false,
         isOutOfRange,
+        isArchivedData,
         data: result,
         debugTokens: { 
             override1: datasetSelectedGrade1 || null, 

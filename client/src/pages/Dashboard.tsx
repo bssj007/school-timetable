@@ -528,6 +528,7 @@ export default function Dashboard() {
           (mappedData as any).ipOverrideApplied = result.ipOverrideApplied;
           (mappedData as any).debugTokens = result.debugTokens || null;
           (mappedData as any).isOutOfRange = result.isOutOfRange ?? false;
+          (mappedData as any).isArchivedData = result.isArchivedData ?? false;
           return mappedData;
         }
         const emptyArray = [] as TimetableItem[];
@@ -536,6 +537,7 @@ export default function Dashboard() {
         (emptyArray as any).ipOverrideApplied = result.ipOverrideApplied;
         (emptyArray as any).debugTokens = result.debugTokens || null;
         (emptyArray as any).isOutOfRange = result.isOutOfRange ?? false;
+        (emptyArray as any).isArchivedData = result.isArchivedData ?? false;
         return emptyArray;
       } catch (e) {
         console.error('Failed to fetch timetable', e);
@@ -553,7 +555,10 @@ export default function Dashboard() {
   // Optimization: Pre-calculate datasetType ("COMCIGAN" vs "MANUAL_PLAN") so dependent queries can start immediately.
   const datasetType = (rawDatasetId === 'MANUAL_PLAN' || rawDatasetId === 'SEMESTER_PLAN') ? rawDatasetId : 'COMCIGAN';
   // 날짜 범위 밖 여부 — MANUAL_PLAN/SEMESTER_PLAN은 적용 안 함
-  const isOutOfDateRange = datasetType === 'COMCIGAN' && !!((rawTimetableData as any)?.isOutOfRange);
+  // 아카이브 데이터가 있는 경우 미확정 표시 안 함
+  const isOutOfDateRange = datasetType === 'COMCIGAN'
+    && !!((rawTimetableData as any)?.isOutOfRange)
+    && !((rawTimetableData as any)?.isArchivedData);
 
   // 1.5 선택과목 데이터 및 프로필 조회 (2, 3학년용)
   const { data: electiveConfigs, isFetching: isElectiveConfigsFetching } = useQuery({

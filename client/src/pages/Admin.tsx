@@ -4905,6 +4905,23 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
         onError: () => toast.error("동결 상태 변경에 실패했습니다.")
     });
 
+    const deleteArchiveMutation = useMutation({
+        mutationFn: async (dateRange: string) => {
+            const res = await fetch("/api/admin/comcigan-cache", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ action: "delete_archive", dateRange })
+            });
+            if (!res.ok) throw new Error("Delete archive failed");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("과거 시간표가 삭제되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "comciganCacheStatus"] });
+        },
+        onError: () => toast.error("승제 실패했습니다.")
+    });
+
     const formatAge = (sec: number) => {
         if (sec < 60) return `${sec}초 전`;
         if (sec < 3600) return `${Math.floor(sec / 60)}분 ${sec % 60}초 전`;
@@ -4912,6 +4929,7 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
     };
 
     const cacheEntries = cacheStatusQuery.data?.cacheEntries || [];
+    const archiveEntries: { dateRange: string; savedAt: string; dataSize: number }[] = cacheStatusQuery.data?.archive || [];
 
     return (
         <div className="space-y-6">
@@ -5030,6 +5048,44 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                 </p>
             </div>
 
+            {/* 과거 시간표 저장 */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
+                <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2">
+                    <span>📂</span>
+                    과거 시간표 저장
+                    <span className="text-xs font-normal text-amber-600">({archiveEntries.length}개)</span>
+                </h4>
+                <p className="text-xs text-amber-700">
+                    콤시간 시간표 데이터가 삭제되기 전에 자동 저장됩니다. 저장된 범위의 과거 주차 요청 시 이 데이터를 사용하여 “미확정 시간표”를 표시하지 않습니다.
+                </p>
+                {archiveEntries.length === 0 ? (
+                    <div className="text-xs text-amber-600 italic py-2">
+                        저장된 과거 시간표 없음 &mdash; 캐시 갱신 시 자동 저장됩니다
+                    </div>
+                ) : (
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                        {archiveEntries.map((entry) => (
+                            <div key={entry.dateRange} className="flex items-center justify-between bg-white border border-amber-200 rounded-md px-3 py-2 gap-2">
+                                <div className="flex flex-col min-w-0">
+                                    <span className="text-xs font-bold text-slate-700 font-mono">{entry.dateRange}</span>
+                                    <span className="text-[10px] text-slate-400">
+                                        저장: {entry.savedAt?.replace('T', ' ')?.substring(0, 16) ?? '-'}
+                                        &nbsp;&middot;&nbsp;{Math.round(entry.dataSize / 1024)}KB
+                                    </span>
+                                </div>
+                                <button
+                                    className="text-xs text-red-500 hover:text-red-700 font-semibold shrink-0 px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                                    onClick={() => { if (confirm(`'${entry.dateRange}' 과거 시간표를 삭제하시겠습니까?`)) deleteArchiveMutation.mutate(entry.dateRange); }}
+                                    disabled={deleteArchiveMutation.isPending}
+                                >
+                                    삭제
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             {/* 설명 */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-xs text-blue-700 space-y-1">
                 <p className="font-bold">💡 작동 방식</p>
@@ -5037,6 +5093,7 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                 <p>• 클라이언트 요청 시 D1 캐시에서 즉시 응답 (~50ms)</p>
                 <p>• 캐시가 만료되면 기존 캐시를 반환하면서 백그라운드 갱신 실행</p>
                 <p>• Comcigan 서버 장애 시에도 마지막 캐시 데이터로 정상 서비스</p>
+                <p>• <b>과거 시간표 저장</b>: 과거 날짜 요청 시 저장된 스냅샵을 반환하여 미확정 표시 없이 적절한 시간표를 보여줍니다</p>
             </div>
         </div>
     );

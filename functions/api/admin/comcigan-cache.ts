@@ -30,17 +30,22 @@ export const onRequest = async (context: any) => {
     // GET: 캐시 상태 조회
     if (method === 'GET') {
         try {
-            const { results } = await db.prepare("SELECT cache_key, dataset_id, updated_at, LENGTH(response_json) as data_size, is_frozen FROM timetable_cache ORDER BY cache_key").all();
+            // timetable_archive 테이블 보장
+            try { await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_archive (date_range TEXT PRIMARY KEY, response_json TEXT NOT NULL, saved_at TEXT DEFAULT (datetime('now')))`).run(); } catch (_) {}
+
+            const [cacheRes, settingRes, archiveRes] = await db.batch([
+                db.prepare("SELECT cache_key, dataset_id, updated_at, LENGTH(response_json) as data_size, is_frozen FROM timetable_cache ORDER BY cache_key"),
+                db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_cache_max_age_minutes'"),
+                db.prepare("SELECT date_range, saved_at, LENGTH(response_json) as data_size FROM timetable_archive ORDER BY saved_at DESC")
+            ]);
 
             // 현재 캐시 최대 유효 시간 설정값 조회
             let cacheMaxAgeMinutes = 5;
-            try {
-                const row = await db.prepare("SELECT value FROM system_settings WHERE key = 'comcigan_cache_max_age_minutes'").first();
-                if (row && row.value) cacheMaxAgeMinutes = parseInt(row.value as string);
-            } catch (_) {}
+            const maxAgeRow = settingRes.results?.[0];
+            if (maxAgeRow && maxAgeRow.value) cacheMaxAgeMinutes = parseInt(maxAgeRow.value as string);
 
             const now = Date.now();
-            const cacheEntries = (results || []).map((row: any) => {
+            const cacheEntries = ((cacheRes.results) || []).map((row: any) => {
                 const updatedAt = new Date((row.updated_at || "").replace(' ', 'T') + 'Z').getTime();
                 const ageMs = now - updatedAt;
                 return {
@@ -54,8 +59,15 @@ export const onRequest = async (context: any) => {
                 };
             });
 
+            const archiveEntries = ((archiveRes.results) || []).map((row: any) => ({
+                dateRange: row.date_range,
+                savedAt: row.saved_at,
+                dataSize: row.data_size
+            }));
+
             return new Response(JSON.stringify({
                 cacheEntries,
+                archive: archiveEntries,
                 settings: {
                     cacheMaxAgeMinutes
                 }
@@ -118,6 +130,14 @@ export const onRequest = async (context: any) => {
                 return new Response(JSON.stringify({ success: true, isFrozen: freeze }), {
                     headers: { 'Content-Type': 'application/json' }
                 });
+            }
+
+            if (action === 'delete_archive') {
+                const { dateRange } = body;
+                if (!dateRange) return new Response(JSON.stringify({ error: 'dateRange required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+                try { await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_archive (date_range TEXT PRIMARY KEY, response_json TEXT NOT NULL, saved_at TEXT DEFAULT (datetime('now')))`).run(); } catch (_) {}
+                await db.prepare("DELETE FROM timetable_archive WHERE date_range = ?").bind(dateRange).run();
+                return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
             }
 
             if (cacheMaxAgeMinutes !== undefined) {

@@ -531,10 +531,11 @@ export default function TeacherPage() {
   }, [grade3Timetable]);
 
   // 날짜 범위 밖 여부 — 3개 학년 중 하나라도 COMCIGAN+isOutOfRange이면 미확정
+  // 아카이브 데이터가 있는 경우 미확정 표시 안 함
   const isOutOfDateRange = (
-    (g1DatasetType === 'COMCIGAN' && !!grade1Timetable?.isOutOfRange) ||
-    (g2DatasetType === 'COMCIGAN' && !!grade2Timetable?.isOutOfRange) ||
-    (g3DatasetType === 'COMCIGAN' && !!grade3Timetable?.isOutOfRange)
+    (g1DatasetType === 'COMCIGAN' && !!grade1Timetable?.isOutOfRange && !grade1Timetable?.isArchivedData) ||
+    (g2DatasetType === 'COMCIGAN' && !!grade2Timetable?.isOutOfRange && !grade2Timetable?.isArchivedData) ||
+    (g3DatasetType === 'COMCIGAN' && !!grade3Timetable?.isOutOfRange && !grade3Timetable?.isArchivedData)
   );
 
   // Fetch current-week timetables to resolve fixed panel datasets
