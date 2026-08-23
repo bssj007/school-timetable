@@ -527,6 +527,7 @@ export default function Dashboard() {
           (mappedData as any).originalDatasetId = result.originalDatasetId || result.datasetId;
           (mappedData as any).ipOverrideApplied = result.ipOverrideApplied;
           (mappedData as any).debugTokens = result.debugTokens || null;
+          (mappedData as any).isOutOfRange = result.isOutOfRange ?? false;
           return mappedData;
         }
         const emptyArray = [] as TimetableItem[];
@@ -534,6 +535,7 @@ export default function Dashboard() {
         (emptyArray as any).originalDatasetId = result.originalDatasetId || result.datasetId;
         (emptyArray as any).ipOverrideApplied = result.ipOverrideApplied;
         (emptyArray as any).debugTokens = result.debugTokens || null;
+        (emptyArray as any).isOutOfRange = result.isOutOfRange ?? false;
         return emptyArray;
       } catch (e) {
         console.error('Failed to fetch timetable', e);
