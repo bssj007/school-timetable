@@ -11,6 +11,7 @@ export default function TeacherAccount() {
     return ctxTeacherName || getTeacherNameCookie() || "";
   });
 
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -104,6 +105,7 @@ export default function TeacherAccount() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      setShowPasswordForm(false);
       alert("비밀번호가 성공적으로 변경되었습니다.");
     } catch (err: any) {
       setErrorMessage(err.message || "오류가 발생했습니다.");
@@ -132,44 +134,75 @@ export default function TeacherAccount() {
 
       <hr style={{ margin: "16px 0" }} />
 
-      <form onSubmit={handleChangePassword}>
+      {!showPasswordForm ? (
         <div>
-          <label htmlFor="current-password">현재 비밀번호: </label>
-          <input
-            id="current-password"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            placeholder="현재 비밀번호 (기본: 관리)"
-          />
+          <button
+            type="button"
+            onClick={() => {
+              setShowPasswordForm(true);
+              setMessage("");
+              setErrorMessage("");
+            }}
+          >
+            비밀번호 변경
+          </button>
         </div>
-        <br />
+      ) : (
         <div>
-          <label htmlFor="new-password">새 비밀번호: </label>
-          <input
-            id="new-password"
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="새 비밀번호"
-          />
+          <form onSubmit={handleChangePassword}>
+            <div>
+              <label htmlFor="current-password">현재 비밀번호: </label>
+              <input
+                id="current-password"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="현재 비밀번호 (기본: 관리)"
+              />
+            </div>
+            <br />
+            <div>
+              <label htmlFor="new-password">새 비밀번호: </label>
+              <input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="새 비밀번호"
+              />
+            </div>
+            <br />
+            <div>
+              <label htmlFor="confirm-password">새 비밀번호 확인: </label>
+              <input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="새 비밀번호 확인"
+              />
+            </div>
+            <br />
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button type="submit" disabled={isChanging}>
+                {isChanging ? "변경 중..." : "확인 (변경 완료)"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPasswordForm(false);
+                  setCurrentPassword("");
+                  setNewPassword("");
+                  setConfirmPassword("");
+                  setErrorMessage("");
+                }}
+              >
+                취소
+              </button>
+            </div>
+          </form>
         </div>
-        <br />
-        <div>
-          <label htmlFor="confirm-password">새 비밀번호 확인: </label>
-          <input
-            id="confirm-password"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="새 비밀번호 확인"
-          />
-        </div>
-        <br />
-        <button type="submit" disabled={isChanging}>
-          {isChanging ? "변경 중..." : "비밀번호 변경"}
-        </button>
-      </form>
+      )}
 
       {message && (
         <div>
