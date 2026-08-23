@@ -4916,16 +4916,92 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
             return res.json();
         },
         onSuccess: () => {
-            toast.success("과거 시간표가 삭제되었습니다.");
+            toast.success("\uacfc\uac70 \uc2dc\uac04\ud45c\uac00 \uc0ad\uc81c\ub418\uc5c8\uc2b5\ub2c8\ub2e4.");
             queryClient.invalidateQueries({ queryKey: ["admin", "comciganCacheStatus"] });
         },
-        onError: () => toast.error("승제 실패했습니다.")
+        onError: () => toast.error("\uc0ad\uc81c \uc2e4\ud328\ud588\uc2b5\ub2c8\ub2e4.")
+    });
+
+    const [testArchiveResult, setTestArchiveResult] = useState<any>(null);
+
+    const testArchiveMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch("/api/admin/comcigan-cache", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ action: "test_archive" })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Test failed");
+            return data;
+        },
+        onSuccess: (data) => {
+            setTestArchiveResult(data);
+            queryClient.invalidateQueries({ queryKey: ["admin", "comciganCacheStatus"] });
+            if (data.lookupTest?.found) {
+                toast.success(`✅ 테스트 성공: ${data.lookupTest.matchedRange}`);
+            } else {
+                toast.error(`⚠️ 저장은 됐지만 조회 실패`);
+            }
+        },
+        onError: (e: any) => toast.error(`테스트 실패: ${e.message}`)
+    });
+
+    // 날짜 지정 조회 테스트
+    const [lookupDateInput, setLookupDateInput] = useState('');
+    const [lookupArchiveResult, setLookupArchiveResult] = useState<any>(null);
+
+    const lookupArchiveMutation = useMutation({
+        mutationFn: async (targetDate: string) => {
+            const res = await fetch("/api/admin/comcigan-cache", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ action: "lookup_archive", targetDate })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "조회 실패");
+            return data;
+        },
+        onSuccess: (data) => {
+            setLookupArchiveResult(data);
+            if (data.found) {
+                toast.success(`✅ 아카이브 조회 성공: ${data.matchedRange}`);
+            } else {
+                toast.warning(`❌ 해당 날짜의 아카이브 없음`);
+            }
+        },
+        onError: (e: any) => toast.error(`조회 실패: ${e.message}`)
+    });
+
+    // E2E 실제 API 호출 테스트
+    const [e2eTestResult, setE2eTestResult] = useState<any>(null);
+
+    const e2eTestMutation = useMutation({
+        mutationFn: async (targetDate: string) => {
+            const short = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
+            const url = `/api/comcigan?type=timetable&grade=1&classNum=1&targetDate=${short}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            return { ...data, _url: url, _status: res.status };
+        },
+        onSuccess: (data) => {
+            setE2eTestResult(data);
+            if (data.success && data.data?.length > 0) {
+                const src = data.isArchivedData ? '아카이브' : '캐시/라이브';
+                toast.success(`✅ E2E 성공 (${src}, dataset: ${data.datasetId}, ${data.data.length}개 수업)`);
+            } else if (data.isPending) {
+                toast.warning('⏳ 캐시 생성 중 — 잠시 후 재시도');
+            } else {
+                toast.error(`❌ E2E 실패: ${data.error || '데이터 없음'}`);
+            }
+        },
+        onError: (e: any) => toast.error(`E2E 실패: ${e.message}`)
     });
 
     const formatAge = (sec: number) => {
-        if (sec < 60) return `${sec}초 전`;
-        if (sec < 3600) return `${Math.floor(sec / 60)}분 ${sec % 60}초 전`;
-        return `${Math.floor(sec / 3600)}시간 ${Math.floor((sec % 3600) / 60)}분 전`;
+        if (sec < 60) return `\ucd08 \uc804`;
+        if (sec < 3600) return `\ubd84 \ucd08 \uc804`;
+        return `\uc2dc\uac04 \ubd84 \uc804`;
     };
 
     const cacheEntries = cacheStatusQuery.data?.cacheEntries || [];
@@ -4933,12 +5009,12 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
 
     return (
         <div className="space-y-6">
-            {/* 캐시 상태 */}
+            {/* \uce90\uc2dc \uc0c1\ud0dc */}
             <div className="bg-slate-50 border rounded-lg p-4 space-y-3">
                 <div className="flex items-center justify-between">
                     <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
                         <Server className="w-4 h-4" />
-                        캐시 상태
+                        \uce90\uc2dc \uc0c1\ud0dc
                     </h4>
                     <Button
                         size="sm"
@@ -4946,11 +5022,10 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                         onClick={() => refreshMutation.mutate()}
                         disabled={refreshMutation.isPending}
                     >
-                        <RefreshCw className={`w-3 h-3 mr-1 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
-                        {refreshMutation.isPending ? "갱신 중..." : "전체 갱신"}
+                        <RefreshCw className={`w-3 h-3 mr-1 `} />
+                        {refreshMutation.isPending ? "\uac31\uc2e0 \uc911..." : "\uc804\uccb4 \uac31\uc2e0"}
                     </Button>
                 </div>
-
                 {cacheStatusQuery.isLoading ? (
                     <div className="text-sm text-slate-400 py-4 text-center">로딩 중...</div>
                 ) : cacheEntries.length === 0 ? (
@@ -5048,21 +5123,165 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                 </p>
             </div>
 
-            {/* 과거 시간표 저장 */}
+
+
+            {/* \uacfc\uac70 \uc2dc\uac04\ud45c \uc800\uc7a5 */}
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
-                <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2">
-                    <span>📂</span>
-                    과거 시간표 저장
-                    <span className="text-xs font-normal text-amber-600">({archiveEntries.length}개)</span>
-                </h4>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2">
+                        <span>📂</span>
+                        \uacfc\uac70 \uc2dc\uac04\ud45c \uc800\uc7a5
+                        <span className="text-xs font-normal text-amber-600">({archiveEntries.length}개)</span>
+                    </h4>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-orange-400 text-orange-700 hover:bg-orange-50 font-bold"
+                        onClick={() => { setTestArchiveResult(null); testArchiveMutation.mutate(); }}
+                        disabled={testArchiveMutation.isPending}
+                    >
+                        {testArchiveMutation.isPending ? '테스트 중...' : '🧪 과거 캐싱 TEST'}
+                    </Button>
+                </div>
                 <p className="text-xs text-amber-700">
-                    콤시간 시간표 데이터가 삭제되기 전에 자동 저장됩니다. 저장된 범위의 과거 주차 요청 시 이 데이터를 사용하여 “미확정 시간표”를 표시하지 않습니다.
+                    콤시간 시간표 데이터가 삭제되기 전에 자동 저장됩니다. 저장된 범위의 과거 주차 요청 시 이 데이터를 사용하여 
+"
+미확정 시간표
+"
+를 표시하지 않습니다.
                 </p>
+
+                {/* TEST 결과 패널 */}
+                {testArchiveResult && (
+                    <div className={`rounded-md border p-3 text-xs space-y-2 ${testArchiveResult.lookupTest?.found ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                        <p className={`font-bold text-sm ${testArchiveResult.lookupTest?.found ? 'text-green-800' : 'text-red-800'}`}>
+                            {testArchiveResult.summary}
+                        </p>
+                        <div className="space-y-1">
+                            <p className="font-semibold text-slate-600">저장된 범위 ({testArchiveResult.totalArchived}개):</p>
+                            <div className="flex flex-wrap gap-1">
+                                {(testArchiveResult.savedRanges || []).map((r: string) => (
+                                    <span key={r} className="font-mono bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700">{r}</span>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <p className="font-semibold text-slate-600">조회 테스트:</p>
+                            <p className="text-slate-700">
+                                날짜: <span className="font-mono font-bold">{testArchiveResult.lookupTest?.testedDate}</span>
+                                {' → '}
+                                {testArchiveResult.lookupTest?.found
+                                    ? <span className="text-green-700 font-bold">✅ {testArchiveResult.lookupTest.matchedRange} 매칭 성공 ({Math.round((testArchiveResult.lookupTest.dataSize ?? 0) / 1024)}KB)</span>
+                                    : <span className="text-red-700 font-bold">❌ 매칭 범위 없음</span>
+                                }
+                            </p>
+                        </div>
+                        <p className="text-slate-400 text-[10px]">
+                            ※ INSERT OR REPLACE로 강제 저장 후 첫 범위 날짜로 조회. 실서비스는 INSERT OR IGNORE 자동 저장.
+                        </p>
+                    </div>
+                )}
+
+                {/* 날짜 지정 조회 TEST */}
+                <div className="border border-orange-200 bg-orange-50 rounded-md p-3 space-y-2">
+                    <p className="text-xs font-bold text-orange-800">🗓 날짜 지정 조회 & E2E 테스트</p>
+                    <p className="text-[11px] text-orange-600">특정 날짜로 아카이브 DB 직접 조회 또는 실제 API 호출을 통해 과거 캐싱 정상작동을 검증합니다.</p>
+                    <div className="flex flex-wrap gap-2 items-center">
+                        <Input
+                            type="date"
+                            value={lookupDateInput}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                setLookupDateInput(e.target.value);
+                                setLookupArchiveResult(null);
+                                setE2eTestResult(null);
+                            }}
+                            className="h-8 text-xs w-40 bg-white"
+                        />
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs border-orange-400 text-orange-700 hover:bg-orange-100 font-semibold"
+                            onClick={() => { if (lookupDateInput) { setLookupArchiveResult(null); lookupArchiveMutation.mutate(lookupDateInput); } }}
+                            disabled={!lookupDateInput || lookupArchiveMutation.isPending}
+                        >
+                            {lookupArchiveMutation.isPending ? '조회 중...' : '📂 DB 조회'}
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs border-blue-400 text-blue-700 hover:bg-blue-100 font-semibold"
+                            onClick={() => { if (lookupDateInput) { setE2eTestResult(null); e2eTestMutation.mutate(lookupDateInput); } }}
+                            disabled={!lookupDateInput || e2eTestMutation.isPending}
+                        >
+                            {e2eTestMutation.isPending ? 'API 호출 중...' : '🌐 E2E API 테스트'}
+                        </Button>
+                    </div>
+
+                    {/* DB 조회 결과 */}
+                    {lookupArchiveResult && (
+                        <div className={`rounded border p-2.5 text-xs space-y-1 ${lookupArchiveResult.found ? 'border-green-300 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                            <p className={`font-bold ${lookupArchiveResult.found ? 'text-green-800' : 'text-red-700'}`}>
+                                {lookupArchiveResult.summary}
+                            </p>
+                            {lookupArchiveResult.found && (
+                                <p className="text-slate-600">
+                                    저장일시: <span className="font-mono">{lookupArchiveResult.matchedSavedAt?.substring(0, 16) ?? '-'}</span>
+                                    {' · '}
+                                    <span className="font-mono">{Math.round((lookupArchiveResult.matchedDataSize ?? 0) / 1024)}KB</span>
+                                </p>
+                            )}
+                            <p className="text-slate-400">
+                                전체 아카이브 {lookupArchiveResult.totalArchiveEntries}개 항목
+                                {lookupArchiveResult.allRanges?.length > 0 && (
+                                    <span> ({lookupArchiveResult.allRanges.map((r: any) => r.dateRange).join(', ')})</span>
+                                )}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* E2E API 결과 */}
+                    {e2eTestResult && (
+                        <div className={`rounded border p-2.5 text-xs space-y-1 ${
+                            e2eTestResult.success && e2eTestResult.data?.length > 0
+                                ? 'border-blue-300 bg-blue-50'
+                                : 'border-red-200 bg-red-50'
+                        }`}>
+                            <p className={`font-bold ${
+                                e2eTestResult.success && e2eTestResult.data?.length > 0 ? 'text-blue-800' : 'text-red-700'
+                            }`}>
+                                {e2eTestResult.success && e2eTestResult.data?.length > 0
+                                    ? `✅ E2E 성공 — ${e2eTestResult.data.length}개 수업, dataset: ${e2eTestResult.datasetId}`
+                                    : e2eTestResult.isPending
+                                        ? '⏳ 캐시 생성 중 — 잠시 후 재시도'
+                                        : `❌ E2E 실패 — ${e2eTestResult.error || '데이터 없음'}`
+                                }
+                            </p>
+                            <div className="flex flex-wrap gap-2 text-slate-600">
+                                {e2eTestResult.isArchivedData && (
+                                    <span className="bg-amber-100 text-amber-800 border border-amber-300 rounded px-1.5 py-0.5 font-bold">📂 아카이브에서 서빙됨</span>
+                                )}
+                                {!e2eTestResult.isArchivedData && e2eTestResult.success && (
+                                    <span className="bg-green-100 text-green-800 border border-green-300 rounded px-1.5 py-0.5">💾 캐시/라이브에서 서빙됨</span>
+                                )}
+                                {e2eTestResult.debugTokens?.isFallbackApplied && (
+                                    <span className="bg-slate-100 text-slate-600 border border-slate-200 rounded px-1.5 py-0.5">📌 폴백 적용됨</span>
+                                )}
+                                {e2eTestResult.datasetId && (
+                                    <span className="font-mono bg-white border border-slate-200 rounded px-1.5 py-0.5">dataset: {e2eTestResult.datasetId}</span>
+                                )}
+                            </div>
+                            <p className="text-slate-400 font-mono text-[10px]">
+                                GET {e2eTestResult._url}
+                            </p>
+                        </div>
+                    )}
+                </div>
+
                 {archiveEntries.length === 0 ? (
                     <div className="text-xs text-amber-600 italic py-2">
                         저장된 과거 시간표 없음 &mdash; 캐시 갱신 시 자동 저장됩니다
                     </div>
-                ) : (
+) : (
                     <div className="space-y-1.5 max-h-60 overflow-y-auto">
                         {archiveEntries.map((entry) => (
                             <div key={entry.dateRange} className="flex items-center justify-between bg-white border border-amber-200 rounded-md px-3 py-2 gap-2">
@@ -5075,7 +5294,7 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                                 </div>
                                 <button
                                     className="text-xs text-red-500 hover:text-red-700 font-semibold shrink-0 px-2 py-1 rounded hover:bg-red-50 transition-colors"
-                                    onClick={() => { if (confirm(`'${entry.dateRange}' 과거 시간표를 삭제하시겠습니까?`)) deleteArchiveMutation.mutate(entry.dateRange); }}
+                                    onClick={() => { if (confirm(`'\' 과거 시간표를 삭제하시겠습니까?`)) deleteArchiveMutation.mutate(entry.dateRange); }}
                                     disabled={deleteArchiveMutation.isPending}
                                 >
                                     삭제
