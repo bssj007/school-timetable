@@ -2,13 +2,13 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff, ArrowLeft, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
@@ -303,6 +303,7 @@ function renderGroupCode(code: string, marginRight: number = 3): React.ReactElem
 export default function TeacherPage() {
   const queryClient = useQueryClient();
   const { refreshRole } = useUserConfig();
+  const [, setLocation] = useLocation();
 
   const handleReturnToStudentPage = () => {
     // 자동 리다이렉션 쿠키만 삭제 (sj_user_role, sj_teacher_name)
@@ -2012,27 +2013,40 @@ export default function TeacherPage() {
         <div className="md:bg-white md:rounded-2xl md:border md:border-slate-200 md:shadow-md md:overflow-hidden flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
           {/* Teacher Picker — 모바일에서 독립 카드, PC에서 패널 내부 바 */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-2 px-2 py-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b md:border-slate-100 md:px-3 flex-shrink-0 flex items-center justify-between gap-2">
-            {timetableData ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setTeacherSearchQuery("");
-                  setShowTeacherSelectModal(true);
-                }}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors border border-indigo-200 focus:outline-none cursor-pointer group max-w-full"
-              >
-                <span className="truncate">
-                  {selectedTeacherId
-                    ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
-                    : "교사 선택"}
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              {timetableData ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTeacherSearchQuery("");
+                    setShowTeacherSelectModal(true);
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors border border-indigo-200 focus:outline-none cursor-pointer group max-w-full"
+                >
+                  <span className="truncate">
+                    {selectedTeacherId
+                      ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
+                      : "교사 선택"}
+                  </span>
+                  <ChevronsUpDown className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0 ml-0.5" />
+                </button>
+              ) : (
+                <span className="text-sm font-extrabold text-slate-700">
+                  {teacherName ? `${teacherName} 선생님` : '선생님'}
                 </span>
-                <ChevronsUpDown className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0 ml-0.5" />
-              </button>
-            ) : (
-              <span className="text-sm font-extrabold text-slate-700">
-                {teacherName ? `${teacherName} 선생님` : '선생님'}
-              </span>
-            )}
+              )}
+            </div>
+
+            {/* 계정 관리 버튼 */}
+            <button
+              type="button"
+              onClick={() => setLocation("/teacher/account")}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-bold text-xs shrink-0 transition-colors border border-slate-200 cursor-pointer"
+              title="계정 관리"
+            >
+              <User className="w-3.5 h-3.5 text-slate-500" />
+              <span>계정</span>
+            </button>
           </div>
 
           {/* ===== 모바일: 과목탭 + 반선택 + 평가목록 — 선생님선택과 분리된 별도 카드 ===== */}

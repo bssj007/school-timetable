@@ -15,6 +15,7 @@ import { useEffect } from "react";
 import FactoryReset from "./pages/FactoryReset";
 import Meal from "./pages/Meal";
 import TeacherPage from "./pages/TeacherPage";
+import TeacherAccount from "./pages/TeacherAccount";
 
 function Router() {
   return (
@@ -23,6 +24,7 @@ function Router() {
       <Route path={"/admin"} component={Admin} />
       <Route path={"/admin/factory-reset"} component={FactoryReset} />
       <Route path={"/meal"} component={Meal} />
+      <Route path={"/teacher/account"} component={TeacherAccount} />
       <Route path={"/teacher"} component={TeacherPage} />
       <Route path={"/teachers"} component={TeacherPage} />
       <Route path={"/404"} component={NotFound} />
@@ -103,7 +105,7 @@ function AppContent() {
   return (
     <>
       <Toaster />
-      {!isAdminRoute && location !== "/admin/factory-reset" && location !== "/meal" && (
+      {!isAdminRoute && location !== "/admin/factory-reset" && location !== "/meal" && location !== "/teacher/account" && (
         <div className={location === "/" || isTeacherRoute ? "md:hidden" : ""}>
           <Navigation />
         </div>
