@@ -361,6 +361,25 @@ export default function TeacherPage() {
     localStorage.setItem("teacher-page-selected-teacher", selectedTeacherId);
   }, [selectedTeacherId]);
 
+  // PC 하단 흰 공백 방지: body 배경을 TeacherPage 배경과 일치시킴
+  // TeacherPage 최상위 div가 h-screen으로 잘릴 때 그 아래 body 영역이 노출되기 때문
+  useEffect(() => {
+    const prevBg = document.body.style.backgroundColor;
+    const prevBgImage = document.body.style.backgroundImage;
+    const prevBgAttachment = document.body.style.backgroundAttachment;
+    document.body.style.backgroundColor = '#f6e7c9';
+    document.body.style.backgroundImage = [
+      "radial-gradient(ellipse at 50% 0%, rgba(255,254,248,0.7) 0%, rgba(232,212,178,0.88) 100%)",
+      "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 600 600' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='organicWood'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.005 0.07' numOctaves='4' result='noise'/%3E%3CfeColorMatrix type='matrix' values='0.7 0.35 0.12 0 0  0.55 0.3 0.1 0 0  0.35 0.2 0.05 0 0  0 0 0 0.17 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23organicWood)'/%3E%3C/svg%3E\")",
+    ].join(', ');
+    document.body.style.backgroundAttachment = 'fixed';
+    return () => {
+      document.body.style.backgroundColor = prevBg;
+      document.body.style.backgroundImage = prevBgImage;
+      document.body.style.backgroundAttachment = prevBgAttachment;
+    };
+  }, []);
+
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
   const weekdays = ['월', '화', '수', '목', '금'];
@@ -866,6 +885,9 @@ export default function TeacherPage() {
   });
 
   const [selectedTabId, setSelectedTabId] = useState<string>('');
+  // 탭별 확인한 수행평가 ID 스냅샷 (탭 클릭 시 저장 — 모두 확인 여부 판정용)
+  const [viewedTabSnapshots, setViewedTabSnapshots] = useState<Map<string, Set<number>>>(() => new Map());
+
   // null = no manual selection (auto-pick first subject)
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string | null>(null);
 
@@ -1175,6 +1197,51 @@ export default function TeacherPage() {
     return counts;
   }, [filteredClassTabs, allAssessments, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
 
+  // 탭별 "모두 확인" 여부: 현재 assessment ID 세트가 저장된 스냅샷에 모두 포함되면 true
+  const tabAllViewed = useMemo(() => {
+    const result = new Map<string, boolean>();
+    filteredClassTabs.forEach(tab => {
+      const count = tabAssessmentCounts.get(tab.id) ?? 0;
+      if (count === 0) { result.set(tab.id, false); return; }
+      const snapshot = viewedTabSnapshots.get(tab.id);
+      if (!snapshot || snapshot.size === 0) { result.set(tab.id, false); return; }
+      const { grade, classNum, group } = tab;
+      const currentIds = (allAssessments || []).filter(a => {
+        if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
+        if (a.grade !== grade) return false;
+        if (a.classNum === 0) {
+          const ag = parseClassCode(a.classCode);
+          if (ag.length === 0) return false;
+          if (!ag.includes(group || '')) return false;
+        } else {
+          if (a.classNum !== classNum) return false;
+          if (group && a.classCode && a.classCode.trim()) {
+            const ag2 = parseClassCode(a.classCode);
+            if (!ag2.includes(group)) return false;
+          }
+        }
+        if (effectiveSubjectFilter && a.subject !== effectiveSubjectFilter) return false;
+        return true;
+      }).map(a => a.id);
+      const allSeen = currentIds.length > 0 && currentIds.every(id => snapshot.has(id));
+      result.set(tab.id, allSeen);
+    });
+    return result;
+  }, [filteredClassTabs, tabAssessmentCounts, viewedTabSnapshots, allAssessments, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
+
+  // 과목별 총 수행평가 수 (반 필터 없이, 해당 교사의 전체)
+  const subjectAssessmentCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    subjectTabs.forEach(subject => {
+      const count = (allAssessments || []).filter(a => {
+        if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
+        if (a.subject !== subject) return false;
+        return true;
+      }).length;
+      counts.set(subject, count);
+    });
+    return counts;
+  }, [subjectTabs, allAssessments, teacherName, rawTeacherName, taughtSubjects]);
 
   // 이동수업 수행평가의 강의반명(관리페이지 입력값) 조회 맵
   const lectureClassNameMap = useMemo(() => {
@@ -1901,6 +1968,7 @@ export default function TeacherPage() {
                     const colorIdx = idx % BOOKMARK_COLORS.length;
                     const color = BOOKMARK_COLORS[colorIdx];
                     const isActive = effectiveSubjectFilter === subject;
+                    const subjectCount = subjectAssessmentCounts.get(subject) ?? 0;
                     return (
                       <button
                         key={subject}
@@ -1917,7 +1985,7 @@ export default function TeacherPage() {
                             setSelectedSubjectFilter(subject);
                           }
                         }}
-                        className="flex-1 py-2.5 px-1 text-[13px] font-bold leading-tight text-center"
+                        className="relative flex-1 py-2.5 px-1 text-[13px] font-bold leading-tight text-center overflow-hidden"
                         style={{
                           color: isActive ? '#fff' : color.activeBg,
                           backgroundColor: isActive ? `${color.activeBg}BF` : `${color.bg}20`,
@@ -1927,10 +1995,22 @@ export default function TeacherPage() {
                           userSelect: 'none',
                         }}
                       >
+                        {subjectCount > 0 && (
+                          <span
+                            className="absolute top-0.5 left-0.5 text-[9px] font-semibold leading-none px-1 py-0.5 rounded-sm"
+                            style={{
+                              color: isActive ? 'rgba(255,255,255,0.85)' : `${color.activeBg}CC`,
+                              backgroundColor: isActive ? 'rgba(0,0,0,0.18)' : `${color.bg}40`,
+                            }}
+                          >
+                            총 {subjectCount}개
+                          </span>
+                        )}
                         {subject}
                       </button>
                     );
                   })}
+
                 </div>
               </div>
             );
@@ -1956,12 +2036,39 @@ export default function TeacherPage() {
                 >
                   {filteredClassTabs.map(tab => {
                     const tabCount = tabAssessmentCounts.get(tab.id) ?? 0;
+                    const allViewed = tabAllViewed.get(tab.id) ?? false;
                     return (
                     <button
                       key={tab.id}
                       onClick={() => {
                         if (isDraggingTabsRef.current) return;
                         setSelectedTabId(tab.id);
+                        // 탭 클릭 시 현재 assessment ID 스냅샷 저장
+                        setViewedTabSnapshots(prev => {
+                          const next = new Map(prev);
+                          const { grade, classNum, group } = tab;
+                          const ids = new Set(
+                            (allAssessments || []).filter(a => {
+                              if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
+                              if (a.grade !== grade) return false;
+                              if (a.classNum === 0) {
+                                const ag = parseClassCode(a.classCode);
+                                if (ag.length === 0) return false;
+                                if (!ag.includes(group || '')) return false;
+                              } else {
+                                if (a.classNum !== classNum) return false;
+                                if (group && a.classCode && a.classCode.trim()) {
+                                  const ag2 = parseClassCode(a.classCode);
+                                  if (!ag2.includes(group)) return false;
+                                }
+                              }
+                              if (effectiveSubjectFilter && a.subject !== effectiveSubjectFilter) return false;
+                              return true;
+                            }).map(a => a.id)
+                          );
+                          next.set(tab.id, ids);
+                          return next;
+                        });
                       }}
                       className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all duration-150 flex items-center gap-0.5 relative
                         ${selectedTabId === tab.id
@@ -1982,8 +2089,12 @@ export default function TeacherPage() {
                         : String(tab.label).replace(/반$/, '')}
                       {tabCount > 0 && (
                         <span
-                          className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center leading-none shadow-sm"
-                          style={{ boxShadow: '0 1px 3px rgba(239,68,68,0.5)' }}
+                          className={`absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 rounded-full text-[9px] font-bold flex items-center justify-center leading-none shadow-sm transition-all duration-300 ${
+                            allViewed
+                              ? 'bg-slate-300 text-slate-500'
+                              : 'bg-red-500 text-white'
+                          }`}
+                          style={allViewed ? {} : { boxShadow: '0 1px 3px rgba(239,68,68,0.5)' }}
                         >
                           {tabCount > 99 ? '99+' : tabCount}
                         </span>
