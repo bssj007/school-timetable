@@ -1147,6 +1147,35 @@ export default function TeacherPage() {
     }).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   }, [selectedTab, allAssessments, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
 
+  // 탭별 수행평가 수 계산 (반 선택 버튼 배지용)
+  const tabAssessmentCounts = useMemo(() => {
+    if (!allAssessments) return new Map<string, number>();
+    const counts = new Map<string, number>();
+    filteredClassTabs.forEach(tab => {
+      const { grade, classNum, group } = tab;
+      const count = allAssessments.filter(a => {
+        if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
+        if (a.grade !== grade) return false;
+        if (a.classNum === 0) {
+          const aGroups = parseClassCode(a.classCode);
+          if (aGroups.length === 0) return false;
+          if (!aGroups.includes(group || '')) return false;
+        } else {
+          if (a.classNum !== classNum) return false;
+          if (group && a.classCode && a.classCode.trim()) {
+            const allowedGroups = parseClassCode(a.classCode);
+            if (!allowedGroups.includes(group)) return false;
+          }
+        }
+        if (effectiveSubjectFilter && a.subject !== effectiveSubjectFilter) return false;
+        return true;
+      }).length;
+      counts.set(tab.id, count);
+    });
+    return counts;
+  }, [filteredClassTabs, allAssessments, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
+
+
   // 이동수업 수행평가의 강의반명(관리페이지 입력값) 조회 맵
   const lectureClassNameMap = useMemo(() => {
     const map = new Map<string, string>(); // key: `${grade}-${subject}-${classCode}` → className
@@ -1388,7 +1417,7 @@ export default function TeacherPage() {
 
   return (
     <div 
-      className="w-full min-h-screen px-2 md:px-4 py-2 md:py-4 flex flex-col"
+      className="w-full min-h-screen md:h-screen md:overflow-hidden px-2 md:px-4 py-2 md:py-4 flex flex-col"
       style={{
         backgroundColor: '#f6e7c9',
         backgroundImage: `
@@ -1925,14 +1954,16 @@ export default function TeacherPage() {
                   className="flex gap-1 overflow-x-auto px-1 md:px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
                   style={{ scrollbarWidth: 'none' }}
                 >
-                  {filteredClassTabs.map(tab => (
+                  {filteredClassTabs.map(tab => {
+                    const tabCount = tabAssessmentCounts.get(tab.id) ?? 0;
+                    return (
                     <button
                       key={tab.id}
                       onClick={() => {
                         if (isDraggingTabsRef.current) return;
                         setSelectedTabId(tab.id);
                       }}
-                      className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all duration-150 flex items-center gap-0.5
+                      className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all duration-150 flex items-center gap-0.5 relative
                         ${selectedTabId === tab.id
                           ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                           : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'
@@ -1949,8 +1980,18 @@ export default function TeacherPage() {
                             );
                           })()
                         : String(tab.label).replace(/반$/, '')}
+                      {tabCount > 0 && (
+                        <span
+                          className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center leading-none shadow-sm"
+                          style={{ boxShadow: '0 1px 3px rgba(239,68,68,0.5)' }}
+                        >
+                          {tabCount > 99 ? '99+' : tabCount}
+                        </span>
+                      )}
                     </button>
-                  ))}
+                    );
+                  })}
+
                 </div>
               </div>
             );
