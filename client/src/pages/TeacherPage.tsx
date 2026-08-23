@@ -1983,7 +1983,7 @@ export default function TeacherPage() {
                             setSelectedSubjectFilter(subject);
                           }
                         }}
-                        className={`relative flex-1 text-[13px] font-bold leading-tight text-center overflow-hidden py-2.5 ${subjectCount > 0 ? 'pl-7 pr-1' : 'px-1'}`}
+                        className="relative flex-1 py-2.5 px-1 text-[13px] font-bold leading-tight text-center overflow-hidden"
                         style={{
                           color: isActive ? '#fff' : color.activeBg,
                           backgroundColor: isActive ? `${color.activeBg}BF` : `${color.bg}20`,
