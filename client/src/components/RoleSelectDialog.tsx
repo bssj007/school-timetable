@@ -347,11 +347,10 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
                                         const val = e.target.value.replace(/[^0-9]/g, "");
                                         if (val.length <= 4) { setStudentId(val); setStudentError(""); }
                                     }}
-                                    className={`text-center h-14 md:h-16 py-0 ${
-                                        studentId.length === 0
+                                    className={`text-center h-14 md:h-16 py-0 ${studentId.length === 0
                                             ? "text-sm md:text-base font-normal tracking-normal indent-0 placeholder:text-sm md:placeholder:text-base"
                                             : "text-3xl md:text-4xl font-bold tracking-[0.25em] md:tracking-[0.3em] indent-[0.25em] md:indent-[0.3em]"
-                                    }`}
+                                        }`}
                                     autoComplete="off"
                                 />
                             </div>
@@ -428,11 +427,10 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
                                                         <button
                                                             type="button"
                                                             onClick={() => { setSelectedOption(opt); setTeacherError(""); }}
-                                                            className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                                                                isSelected
+                                                            className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${isSelected
                                                                     ? "bg-emerald-50 border-l-4 border-emerald-500"
                                                                     : "hover:bg-gray-50 border-l-4 border-transparent"
-                                                            }`}
+                                                                }`}
                                                         >
                                                             <span className={`text-emerald-600 flex-shrink-0 transition-opacity text-lg font-bold ${isSelected ? "opacity-100" : "opacity-0"}`}>✓</span>
                                                             <div className="min-w-0">

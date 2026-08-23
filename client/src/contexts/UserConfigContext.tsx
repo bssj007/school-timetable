@@ -58,6 +58,8 @@ interface UserConfigContextType {
     refreshRole: () => void;
     /** 역할 쿠키 삭제 및 상태 초기화 (학생용 페이지로 돌아갈 때 사용) */
     clearRole: () => void;
+    /** 서버 점검 중 여부 — true이면 역할 선택/온보딩 다이얼로그를 숨긴다 */
+    isMaintenanceMode: boolean;
 }
 
 const UserConfigContext = createContext<UserConfigContextType | undefined>(undefined);
@@ -98,6 +100,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     const [config, setConfigState] = useState<UserConfig>(initial.config);
     const [isValidating, setIsValidating] = useState(initial.isValidating);
     const [kakaoUser, setKakaoUser] = useState<KakaoUser | null>(null);
+    const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
 
     // ── 역할 상태: 쿠키에서 즉시 읽기 ──
     const [userRole, setUserRoleState] = useState<"student" | "teacher" | null>(() => {
@@ -136,6 +139,12 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
             .then(res => res.ok ? res.json() : null)
             .then((settings: any) => {
                 const serverKey: string = settings?.semester_key ?? '1';
+
+                // 서버 점검 중 감지 (화이트리스트 아닌 경우)
+                const maintenanceActive = Boolean(
+                    settings?.maintenance_mode?.active && !settings?.is_whitelisted
+                );
+                setIsMaintenanceMode(maintenanceActive);
 
                 // localStorage 캐시 갱신
                 localStorage.setItem(LS_SEMESTER_KEY, serverKey);
@@ -240,6 +249,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
             teacherName,
             refreshRole,
             clearRole,
+            isMaintenanceMode,
         }}>
             {children}
         </UserConfigContext.Provider>

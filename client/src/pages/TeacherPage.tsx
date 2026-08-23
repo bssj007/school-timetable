@@ -1999,7 +1999,7 @@ export default function TeacherPage() {
                           <span
                             className="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-start pl-1 text-[11px] font-extrabold pointer-events-none"
                             style={{
-                              clipPath: 'polygon(0 0, 55% 0, 100% 100%, 0 100%)',
+                              clipPath: 'polygon(0 0, 100% 0, 55% 100%, 0 100%)',
                               backgroundColor: isActive
                                 ? 'rgba(0,0,0,0.22)'
                                 : `${color.activeBg}28`,
