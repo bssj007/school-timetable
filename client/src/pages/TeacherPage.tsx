@@ -918,6 +918,10 @@ export default function TeacherPage() {
     9: '17:00',
   };
 
+  // 접속 시 수행평가 있는 첫 (과목, 반) 자동선택용 ref
+  // 교사 변경 시 false로 리셋하여 재탐색
+  const hasAutoSelectedRef = useRef(false);
+
   // Drag-to-scroll state & handlers for class navigation tabs
   const tabContainerRef = useRef<HTMLDivElement>(null);
   const isMouseDownRef = useRef(false);
@@ -994,8 +998,9 @@ export default function TeacherPage() {
     return subjectTabs[0] ?? '';
   }, [selectedSubjectFilter, subjectTabs]);
 
-  // Reset manual selection when teacher changes — useEffect is safe, avoids setState-during-render
+  // 교사 변경 시 자동선택 ref 초기화 (새 교사의 데이터로 재탐색)
   useEffect(() => {
+    hasAutoSelectedRef.current = false;
     setSelectedSubjectFilter(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTeacherId]);
@@ -1136,6 +1141,62 @@ export default function TeacherPage() {
       setSelectedTabId(filteredClassTabs[0].id);
     }
   }, [filteredClassTabs]);
+
+  // ── 스마트 자동선택: 접속 시 수행평가가 있는 첫 (과목, 반) 자동 선택 ──
+  // allAssessments 로딩 완료 후 딱 한 번만 실행 (hasAutoSelectedRef)
+  // 과목 좌→우, 각 과목 내 반 좌→우 순서로 탐색
+  useEffect(() => {
+    // 아직 로딩 중이거나 이미 자동선택 완료 시 skip
+    if (isAssessmentsLoading) return;
+    if (!allAssessments) return;
+    if (hasAutoSelectedRef.current) return;
+    if (subjectTabs.length === 0) return;
+
+    // 과목별로 좌→우 탐색
+    for (const subject of subjectTabs) {
+      // 해당 과목의 classTabs 구성 (effectiveSubjectFilter 적용 전 classTabs 전체 기준)
+      // classTabs는 이미 현재 선생님의 수업만 포함하므로 subject 필터만 추가 적용
+      const subjectTabs_classTabs = classTabs.filter(tab => {
+        // classTabs는 effectiveSubjectFilter 기준으로 만들어져 있으므로,
+        // 과목이 다르면 해당 과목용 classTabs를 직접 조회할 수 없음.
+        // 대신 allAssessments에서 해당 과목+탭 조합을 확인한다.
+        return true; // 일단 전체 탭 대상 — 아래에서 subject 필터로 assessments 카운트
+      });
+
+      // 해당 과목에서 각 반 탭을 좌→우 탐색
+      for (const tab of classTabs) {
+        const { grade, classNum, group } = tab;
+        const count = allAssessments.filter(a => {
+          if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
+          if (a.subject !== subject) return false;
+          if (a.grade !== grade) return false;
+          if (a.classNum === 0) {
+            const ag = parseClassCode(a.classCode);
+            if (ag.length === 0) return false;
+            if (!ag.includes(group || '')) return false;
+          } else {
+            if (a.classNum !== classNum) return false;
+            if (group && a.classCode && a.classCode.trim()) {
+              const ag2 = parseClassCode(a.classCode);
+              if (!ag2.includes(group)) return false;
+            }
+          }
+          return true;
+        }).length;
+
+        if (count > 0) {
+          // 수행평가 있는 첫 (과목, 반) 발견 → 선택 후 종료
+          hasAutoSelectedRef.current = true;
+          setSelectedSubjectFilter(subject);
+          setSelectedTabId(tab.id);
+          return;
+        }
+      }
+    }
+
+    // 수행평가가 하나도 없음 → 기본값(첫 과목, 첫 탭) 유지, 재탐색 방지
+    hasAutoSelectedRef.current = true;
+  }, [isAssessmentsLoading, allAssessments, subjectTabs, classTabs, teacherName, rawTeacherName, taughtSubjects]);
 
   const selectedTab = filteredClassTabs.find(t => t.id === selectedTabId) || filteredClassTabs[0] || null;
 
