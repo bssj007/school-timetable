@@ -1994,21 +1994,31 @@ export default function TeacherPage() {
                         }}
                       >
                         {subjectCount > 0 && (
-                          // 좌측 사선 컷 배지: 왼쪽은 세로, 오른쪽만 대각선
-                          // polygon(좌상, 우상-사선시작, 우하-사선끝, 좌하)
+                          // 사선 컷 배지: polygon(0 0, 100% 0, 55% 100%, 0 100%)
+                          // 해당 사다리꼴의 x 무게중심 ≈ 39%, y = 50%
                           <span
-                            className="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-start pl-1 text-[11px] font-extrabold pointer-events-none"
+                            className="absolute left-0 top-0 bottom-0 w-8 pointer-events-none"
                             style={{
                               clipPath: 'polygon(0 0, 100% 0, 55% 100%, 0 100%)',
                               backgroundColor: isActive
                                 ? 'rgba(0,0,0,0.22)'
                                 : `${color.activeBg}28`,
-                              color: isActive
-                                ? 'rgba(255,255,255,0.95)'
-                                : color.activeBg,
                             }}
                           >
-                            {subjectCount}
+                            <span
+                              className="absolute font-extrabold leading-none"
+                              style={{
+                                top: '50%',
+                                left: '39%',
+                                transform: 'translate(-50%, -50%)',
+                                fontSize: subjectCount >= 10 ? '9px' : '11px',
+                                color: isActive
+                                  ? 'rgba(255,255,255,0.95)'
+                                  : color.activeBg,
+                              }}
+                            >
+                              {subjectCount}
+                            </span>
                           </span>
                         )}
                         {subject}
