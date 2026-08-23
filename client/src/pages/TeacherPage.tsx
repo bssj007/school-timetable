@@ -1964,7 +1964,7 @@ export default function TeacherPage() {
                 style={{ borderBottom: `3px solid ${activeColor.activeBg}` }}
               >
                 <div className="flex w-full">
-                  {subjectTabs.map((subject, idx) => {
+                {subjectTabs.map((subject, idx) => {
                     const colorIdx = idx % BOOKMARK_COLORS.length;
                     const color = BOOKMARK_COLORS[colorIdx];
                     const isActive = effectiveSubjectFilter === subject;
@@ -1973,19 +1973,17 @@ export default function TeacherPage() {
                       <button
                         key={subject}
                         onPointerDown={(e) => {
-                          // Record pointer position on down
                           (e.currentTarget as any)._tapStartX = e.clientX;
                           (e.currentTarget as any)._tapStartY = e.clientY;
                         }}
                         onPointerUp={(e) => {
-                          // Only count as tap if pointer didn't move much (not a scroll)
                           const dx = e.clientX - ((e.currentTarget as any)._tapStartX ?? e.clientX);
                           const dy = e.clientY - ((e.currentTarget as any)._tapStartY ?? e.clientY);
                           if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
                             setSelectedSubjectFilter(subject);
                           }
                         }}
-                        className="relative flex-1 py-2.5 px-1 text-[13px] font-bold leading-tight text-center overflow-hidden"
+                        className={`relative flex-1 text-[13px] font-bold leading-tight text-center overflow-hidden py-2.5 ${subjectCount > 0 ? 'pl-7 pr-1' : 'px-1'}`}
                         style={{
                           color: isActive ? '#fff' : color.activeBg,
                           backgroundColor: isActive ? `${color.activeBg}BF` : `${color.bg}20`,
@@ -1996,20 +1994,28 @@ export default function TeacherPage() {
                         }}
                       >
                         {subjectCount > 0 && (
+                          // 좌측 사선 컷 배지: 왼쪽은 세로, 오른쪽만 대각선
+                          // polygon(좌상, 우상-사선시작, 우하-사선끝, 좌하)
                           <span
-                            className="absolute top-0.5 left-0.5 text-[9px] font-semibold leading-none px-1 py-0.5 rounded-sm"
+                            className="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-start pl-1 text-[11px] font-extrabold pointer-events-none"
                             style={{
-                              color: isActive ? 'rgba(255,255,255,0.85)' : `${color.activeBg}CC`,
-                              backgroundColor: isActive ? 'rgba(0,0,0,0.18)' : `${color.bg}40`,
+                              clipPath: 'polygon(0 0, 55% 0, 100% 100%, 0 100%)',
+                              backgroundColor: isActive
+                                ? 'rgba(0,0,0,0.22)'
+                                : `${color.activeBg}28`,
+                              color: isActive
+                                ? 'rgba(255,255,255,0.95)'
+                                : color.activeBg,
                             }}
                           >
-                            총 {subjectCount}개
+                            {subjectCount}
                           </span>
                         )}
                         {subject}
                       </button>
                     );
                   })}
+
 
                 </div>
               </div>
