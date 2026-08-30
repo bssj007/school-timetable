@@ -51,21 +51,50 @@ export const getDatasetMode = (overrideVal?: string) => {
 };
 
 // Real-time ticking cache age component
-const LiveAgeText = React.memo(({ initialAgeSec, dataUpdatedAt }: { initialAgeSec: number, dataUpdatedAt: number }) => {
-    const [elapsed, setElapsed] = useState(0);
+/** updatedAt(DB UTC 문자열)을 받아 KST 일시와 경과 시간을 표시 */
+const CacheTimestamp = React.memo(({ updatedAt }: { updatedAt: string | null | undefined }) => {
+    const [now, setNow] = useState(() => Date.now());
     useEffect(() => {
-        setElapsed(0);
-        const timer = setInterval(() => {
-            setElapsed(Math.floor((Date.now() - dataUpdatedAt) / 1000));
-        }, 1000);
+        const timer = setInterval(() => setNow(Date.now()), 10000); // 10초마다 경과 시간 갱신
         return () => clearInterval(timer);
-    }, [dataUpdatedAt]);
-    
-    const sec = initialAgeSec + Math.max(0, elapsed);
-    if (sec < 60) return <>{sec}초 전</>;
-    if (sec < 3600) return <>{Math.floor(sec / 60)}분 {sec % 60}초 전</>;
-    return <>{Math.floor(sec / 3600)}시간 {Math.floor((sec % 3600) / 60)}분 전</>;
+    }, []);
+
+    if (!updatedAt) return <>-</>;
+    try {
+        const d = new Date(updatedAt.replace(' ', 'T') + 'Z');
+        // KST 포맷
+        const kst = d.toLocaleString('ko-KR', {
+            timeZone: 'Asia/Seoul',
+            year: '2-digit',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+        });
+        // 경과 시간
+        const sec = Math.max(0, Math.round((now - d.getTime()) / 1000));
+        const elapsed = sec < 60
+            ? `${sec}초 경과`
+            : sec < 3600
+            ? `${Math.floor(sec / 60)}분 ${sec % 60}초 경과`
+            : `${Math.floor(sec / 3600)}시간 ${Math.floor((sec % 3600) / 60)}분 경과`;
+        return <>{kst} <span className="text-blue-400 font-normal">({elapsed})</span></>;
+    } catch {
+        return <>{updatedAt}</>;
+    }
 });
+
+/** updatedAt과 cacheMaxAgeMinutes를 받아 신선 여부를 클라이언트에서 직접 판정 */
+function computeIsFresh(updatedAt: string | null | undefined, isFrozen: boolean, cacheMaxAgeMinutes: number): boolean {
+    if (isFrozen) return true;
+    if (!updatedAt) return false;
+    try {
+        const d = new Date(updatedAt.replace(' ', 'T') + 'Z');
+        return Date.now() - d.getTime() < cacheMaxAgeMinutes * 60 * 1000;
+    } catch { return false; }
+}
 
 function ElectiveManager({ password }: { password: string }) {
     const [selectedGrade, setSelectedGrade] = useState<number>(2);
@@ -5061,14 +5090,20 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2">
                                             <span className="text-sm font-bold text-blue-900">원본 통합 데이터셋 (raw_data)</span>
-                                            {rawEntry ? (
-                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${rawEntry.isFresh
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : 'bg-amber-100 text-amber-700'
-                                                }`}>
-                                                    {rawEntry.isFresh ? '신선' : '만료'}
-                                                </span>
-                                            ) : (
+                                            {rawEntry ? (() => {
+                                                const fresh = computeIsFresh(
+                                                    rawEntry.updatedAt,
+                                                    rawEntry.isFrozen,
+                                                    cacheStatusQuery.data?.settings?.cacheMaxAgeMinutes ?? 5
+                                                );
+                                                return (
+                                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                                        fresh ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                                                    }`}>
+                                                        {fresh ? '신선' : '만료'}
+                                                    </span>
+                                                );
+                                            })() : (
                                                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">미생성</span>
                                             )}
                                             {rawEntry?.isFrozen && (
@@ -5080,12 +5115,12 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                                         </div>
                                         {rawEntry && (
                                             <div className="flex items-center gap-3 mt-1 text-xs text-blue-700">
-                                                <span className="flex items-center gap-1">
-                                                    <Clock className="w-3 h-3" />
-                                                    <LiveAgeText initialAgeSec={rawEntry.ageSec} dataUpdatedAt={cacheStatusQuery.dataUpdatedAt || Date.now()} />
+                                                <span className="flex items-center gap-1 font-mono">
+                                                    <Clock className="w-3 h-3 shrink-0" />
+                                                    <CacheTimestamp updatedAt={rawEntry.updatedAt} />
                                                 </span>
-                                                <span>가용 데이터셋: COMCIGAN 통합본 전체</span>
-                                                <span className="font-mono bg-blue-100 px-1 rounded">{Math.round((rawEntry.dataSize || 0) / 1024)}KB</span>
+                                                <span className="shrink-0">가용 데이터셋: COMCIGAN 통합본 전체</span>
+                                                <span className="font-mono bg-blue-100 px-1 rounded shrink-0">{Math.round((rawEntry.dataSize || 0) / 1024)}KB</span>
                                             </div>
                                         )}
                                     </div>
