@@ -359,6 +359,17 @@ export default function TeacherPage() {
     return { year: now.getFullYear(), month: now.getMonth() }; // month: 0-indexed
   });
 
+  // ── 숙제형 폼 상태 ──
+  const [hwForm, setHwForm] = useState({
+    subject: '',
+    classNum: '',
+    startDate: '',
+    dueDate: '',
+    title: '',
+    content: '',
+    link: '',
+  });
+
 
   const [formData, setFormData] = useState({
     assessmentDate: "",
@@ -1848,29 +1859,41 @@ export default function TeacherPage() {
           </div>
         </div>
 
-        {/* ===== 모바일: 숙제형 패널 (껍데기) ===== */}
+        {/* ===== 모바일: 숙제형 패널 ===== */}
         {mobileViewMode === 'homework' && (
           <div className="md:hidden flex flex-col gap-3">
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
               <div className="flex items-center gap-2 mb-4">
                 <BookOpen className="w-5 h-5 text-indigo-500" />
                 <h3 className="text-base font-extrabold text-slate-800">숙제형 수행평가 등록</h3>
-                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold border border-amber-200">준비 중</span>
               </div>
 
               {/* 과목 / 반 */}
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-600 mb-1">과목</label>
-                  <div className="w-full h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 flex items-center text-sm text-slate-400 cursor-not-allowed">
-                    과목 선택
-                  </div>
+                  <select
+                    value={hwForm.subject}
+                    onChange={e => setHwForm(f => ({ ...f, subject: e.target.value }))}
+                    className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  >
+                    <option value="">과목 선택</option>
+                    {(taughtSubjects || []).map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 mb-1">반</label>
-                  <div className="w-full h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 flex items-center text-sm text-slate-400 cursor-not-allowed">
-                    반 선택
-                  </div>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={20}
+                    placeholder="반 번호"
+                    value={hwForm.classNum}
+                    onChange={e => setHwForm(f => ({ ...f, classNum: e.target.value }))}
+                    className="h-10 text-sm"
+                  />
                 </div>
               </div>
 
@@ -1878,34 +1901,44 @@ export default function TeacherPage() {
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-600 mb-1">시작일</label>
-                  <div className="w-full h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 flex items-center gap-2 text-sm text-slate-400 cursor-not-allowed">
-                    <Calendar className="w-3.5 h-3.5" />
-                    날짜 선택
-                  </div>
+                  <Input
+                    type="date"
+                    value={hwForm.startDate}
+                    onChange={e => setHwForm(f => ({ ...f, startDate: e.target.value }))}
+                    className="h-10 text-sm px-2"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 mb-1">마감일</label>
-                  <div className="w-full h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 flex items-center gap-2 text-sm text-slate-400 cursor-not-allowed">
-                    <Calendar className="w-3.5 h-3.5" />
-                    날짜 선택
-                  </div>
+                  <Input
+                    type="date"
+                    value={hwForm.dueDate}
+                    onChange={e => setHwForm(f => ({ ...f, dueDate: e.target.value }))}
+                    className="h-10 text-sm px-2"
+                  />
                 </div>
               </div>
 
               {/* 평가 제목 */}
               <div className="mb-3">
                 <label className="block text-xs font-bold text-slate-600 mb-1">평가 제목</label>
-                <div className="w-full h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 flex items-center text-sm text-slate-400 cursor-not-allowed">
-                  예: 독서록 작성, 탐구 보고서 제출
-                </div>
+                <Input
+                  placeholder="예: 독서록 작성, 탐구 보고서 제출"
+                  value={hwForm.title}
+                  onChange={e => setHwForm(f => ({ ...f, title: e.target.value }))}
+                  className="h-10 text-sm"
+                />
               </div>
 
               {/* 활동 내용 */}
               <div className="mb-3">
                 <label className="block text-xs font-bold text-slate-600 mb-1">활동 내용</label>
-                <div className="w-full h-20 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-400 cursor-not-allowed">
-                  예: 준비물, 실습, 생기부 활동 등등
-                </div>
+                <Textarea
+                  placeholder="예: 준비물, 실습, 생기부 활동 등등"
+                  value={hwForm.content}
+                  onChange={e => setHwForm(f => ({ ...f, content: e.target.value }))}
+                  className="h-20 text-sm resize-none"
+                />
               </div>
 
               {/* 제출 링크 */}
@@ -1913,19 +1946,23 @@ export default function TeacherPage() {
                 <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
                   <Link2 className="w-3 h-3" /> 제출 사이트 / 링크
                 </label>
-                <div className="w-full h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 flex items-center text-sm text-slate-400 cursor-not-allowed">
-                  예: https://school.go.kr/...
-                </div>
+                <Input
+                  type="url"
+                  placeholder="예: https://school.go.kr/..."
+                  value={hwForm.link}
+                  onChange={e => setHwForm(f => ({ ...f, link: e.target.value }))}
+                  className="h-10 text-sm"
+                />
               </div>
 
-              {/* 등록 버튼 (비활성) */}
+              {/* 등록 버튼 (비활성 — DB 미연동) */}
               <button
                 type="button"
                 disabled
                 className="w-full h-11 rounded-xl bg-indigo-200 text-white font-extrabold text-sm cursor-not-allowed flex items-center justify-center gap-2"
               >
                 <Plus className="w-4 h-4" />
-                숙제형 수행평가 등록 (DB 연동 후 활성화)
+                등록
               </button>
             </div>
           </div>
