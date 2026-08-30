@@ -396,8 +396,16 @@ export default function TeacherPage() {
       return res.json();
     },
     staleTime: 5000,
+    refetchInterval: 30000,
     refetchOnWindowFocus: true,
   });
+
+  // 점검 모드 감지 시 강제 새로고침 (Edge 차단 페이지로 전환 및 로드된 데이터 클리어)
+  useEffect(() => {
+    if (settings?.maintenance_mode?.active && !settings?.is_whitelisted) {
+      window.location.reload();
+    }
+  }, [settings?.maintenance_mode?.active, settings?.is_whitelisted]);
 
   // settings/selectedTeacherId 변경 시 현재 선생님 인증 상태 재확인
   // rawTeacherName은 tId에 의존하므로 selectedTeacherId로 키 생성

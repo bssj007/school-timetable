@@ -72,6 +72,14 @@ function AppContent() {
       .catch(() => {}); // 실패 시 기본값 유지
   }, []);
 
+  // ── 점검 모드 감지 시 강제 새로고침 (Edge 차단 페이지로 전환 및 메모리 클리어) ──────
+  useEffect(() => {
+    if (isAdminRoute) return;
+    if (publicSettings?.maintenance_mode?.active && !publicSettings?.is_whitelisted) {
+      window.location.reload();
+    }
+  }, [publicSettings, isAdminRoute]);
+
   // ── 교사 리다이렉트 ──────────────────────────────────────────────────────────
   // Rules of Hooks: useEffect는 반드시 conditional return 앞에 선언해야 함.
   // 동작:

@@ -136,6 +136,8 @@ export default function Dashboard() {
       return res.json();
     },
     staleTime: 0, // 항상 최신 설정을 가져오도록 (그룹 override 등 즉시 반영)
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   const handleLogout = async () => {
@@ -1475,6 +1477,12 @@ export default function Dashboard() {
     }
   }, [isLoading, grade, classNum, studentNumber, timetableLoading, assessmentLoading]);
 
+  // 점검 모드 감지 시 강제 새로고침 (Edge 차단 페이지로 전환 및 로드된 데이터 클리어)
+  useEffect(() => {
+    if (settings?.maintenance_mode?.active && !settings?.is_whitelisted) {
+      window.location.reload();
+    }
+  }, [settings?.maintenance_mode?.active, settings?.is_whitelisted]);
 
   if (isLoading) {
     return (

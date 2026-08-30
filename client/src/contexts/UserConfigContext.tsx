@@ -149,6 +149,11 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
                 );
                 setIsMaintenanceMode(maintenanceActive);
                 
+                if (maintenanceActive && !window.location.pathname.startsWith('/admin')) {
+                    window.location.reload();
+                    return;
+                }
+                
                 // 설정 상태 저장 (방문제한 등은 캐싱하지 않음)
                 setPublicSettings(settings);
 
