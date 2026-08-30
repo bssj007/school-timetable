@@ -2326,10 +2326,10 @@ export default function TeacherPage() {
                     const p = periodIndex + 1;
                     const isCurrentPeriod = currentPeriod === p && weekOffset === 0;
                     return (
-                      <tr key={p} className="h-[50px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px]">
+                      <tr key={p} className="h-[50px] md:h-[calc((100vh-180px)/7)] md:min-h-[84px]">
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[50px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px] overflow-hidden"
+                          className="h-[50px] md:h-[calc((100vh-180px)/7)] md:min-h-[84px] overflow-hidden"
                           style={{
                             width: 36,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
@@ -2382,7 +2382,7 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[52px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px] overflow-hidden"
+                              className="group h-[52px] md:h-[calc((100vh-180px)/7)] md:min-h-[84px] overflow-hidden"
                               style={{
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
