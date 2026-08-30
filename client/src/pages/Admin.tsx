@@ -51,12 +51,27 @@ export const getDatasetMode = (overrideVal?: string) => {
 };
 
 // Real-time ticking cache age component
-/** updatedAt(DB UTC 문자열)을 받아 KST 일시와 경과 시간을 표시 */
+/** updatedAt(DB UTC 문자열)을 받아 KST 일시와 경과 시간을 표시 — 1초마다 실시간 갱신, 페이지 숨김 시 타이머 정지 */
 const CacheTimestamp = React.memo(({ updatedAt }: { updatedAt: string | null | undefined }) => {
     const [now, setNow] = useState(() => Date.now());
     useEffect(() => {
-        const timer = setInterval(() => setNow(Date.now()), 10000); // 10초마다 경과 시간 갱신
-        return () => clearInterval(timer);
+        let timer: ReturnType<typeof setInterval> | null = null;
+
+        const start = () => {
+            if (timer !== null) return;
+            timer = setInterval(() => setNow(Date.now()), 1000); // 1초마다 실시간 갱신
+        };
+        const stop = () => {
+            if (timer !== null) { clearInterval(timer); timer = null; }
+        };
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') { setNow(Date.now()); start(); }
+            else stop();
+        };
+
+        if (document.visibilityState === 'visible') start();
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        return () => { stop(); document.removeEventListener('visibilitychange', onVisibilityChange); };
     }, []);
 
     if (!updatedAt) return <>-</>;
@@ -95,6 +110,53 @@ function computeIsFresh(updatedAt: string | null | undefined, isFrozen: boolean,
         return Date.now() - d.getTime() < cacheMaxAgeMinutes * 60 * 1000;
     } catch { return false; }
 }
+
+/** updatedAt과 cacheMaxAgeMinutes를 받아 신선/만료 배지를 실시간으로 표시 — 1초마다 자체 갱신, 페이지 숨김 시 타이머 정지 */
+const CacheFreshBadge = React.memo(({ updatedAt, isFrozen, cacheMaxAgeMinutes }: {
+    updatedAt: string | null | undefined;
+    isFrozen: boolean;
+    cacheMaxAgeMinutes: number;
+}) => {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        let timer: ReturnType<typeof setInterval> | null = null;
+
+        const start = () => {
+            if (timer !== null) return;
+            timer = setInterval(() => setNow(Date.now()), 1000);
+        };
+        const stop = () => {
+            if (timer !== null) { clearInterval(timer); timer = null; }
+        };
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') { setNow(Date.now()); start(); }
+            else stop();
+        };
+
+        if (document.visibilityState === 'visible') start();
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        return () => { stop(); document.removeEventListener('visibilitychange', onVisibilityChange); };
+    }, []);
+
+    const fresh = isFrozen
+        ? true
+        : !updatedAt
+        ? false
+        : (() => {
+            try {
+                const d = new Date(updatedAt.replace(' ', 'T') + 'Z');
+                return now - d.getTime() < cacheMaxAgeMinutes * 60 * 1000;
+            } catch { return false; }
+        })();
+
+    return (
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+            fresh ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+        }`}>
+            {fresh ? '신선' : '만료'}
+        </span>
+    );
+});
 
 function ElectiveManager({ password }: { password: string }) {
     const [selectedGrade, setSelectedGrade] = useState<number>(2);
@@ -4469,16 +4531,15 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     </div>
                 )}
 
-                {selectedMenu === "comcigan-cache" && (
-                    <div className="flex flex-col h-full gap-4">
-                        <div className="flex gap-2 items-center pb-4 border-b">
-                            <h3 className="text-lg font-bold flex-1">컴시간 캐시 시스템</h3>
-                        </div>
-                        <div className="flex-1 overflow-y-auto">
-                            <ComciganCacheManager adminPassword={adminPassword} />
-                        </div>
+                <div className={`flex flex-col h-full gap-4 ${selectedMenu === 'comcigan-cache' ? '' : 'hidden'}`}>
+                    <div className="flex gap-2 items-center pb-4 border-b">
+                        <h3 className="text-lg font-bold flex-1">컴시간 캐시 시스템</h3>
                     </div>
-                )}
+                    <div className="flex-1 overflow-y-auto">
+                        <ComciganCacheManager adminPassword={adminPassword} />
+                    </div>
+                </div>
+
 
                 {selectedMenu === "teacher-timetable" && (
                     <div className="flex flex-col h-full gap-4">
@@ -5090,20 +5151,13 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2">
                                             <span className="text-sm font-bold text-blue-900">원본 통합 데이터셋 (raw_data)</span>
-                                            {rawEntry ? (() => {
-                                                const fresh = computeIsFresh(
-                                                    rawEntry.updatedAt,
-                                                    rawEntry.isFrozen,
-                                                    cacheStatusQuery.data?.settings?.cacheMaxAgeMinutes ?? 5
-                                                );
-                                                return (
-                                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                                        fresh ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                                                    }`}>
-                                                        {fresh ? '신선' : '만료'}
-                                                    </span>
-                                                );
-                                            })() : (
+                                            {rawEntry ? (
+                                                <CacheFreshBadge
+                                                    updatedAt={rawEntry.updatedAt}
+                                                    isFrozen={rawEntry.isFrozen}
+                                                    cacheMaxAgeMinutes={cacheStatusQuery.data?.settings?.cacheMaxAgeMinutes ?? 5}
+                                                />
+                                            ) : (
                                                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">미생성</span>
                                             )}
                                             {rawEntry?.isFrozen && (
