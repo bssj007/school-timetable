@@ -1,14 +1,10 @@
 import { createBugReportsTable } from "../db_schema";
 
-interface Env {
-    DB: any;
-}
-
 // GET: Fetch all bug reports (admin)
 // POST: Submit a new bug report (student)
 // DELETE: Delete a bug report (admin)
 
-export const onRequestGet: PagesFunction<Env> = async (context) => {
+export const onRequestGet = async (context: any) => {
     const { env } = context;
 
     try {
@@ -27,7 +23,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }
 };
 
-export const onRequestPost: PagesFunction<Env> = async (context) => {
+export const onRequestPost = async (context: any) => {
     const { request, env } = context;
 
     try {
@@ -35,15 +31,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         try { await env.DB.prepare(createBugReportsTable).run(); } catch (_) { }
 
         const body = await request.json() as any;
-        const { grade, classNum, studentNumber, message } = body;
+        const { grade, classNum, studentNumber, studentName, name, message } = body;
 
         if (!message || !message.trim()) {
             return new Response(JSON.stringify({ error: "메시지를 입력해주세요." }), { status: 400 });
         }
 
+        const resolvedName = (studentName || name || '').toString().trim();
+
         const result = await env.DB.prepare(
-            "INSERT INTO bug_reports (grade, classNum, studentNumber, message) VALUES (?, ?, ?, ?)"
+            "INSERT INTO bug_reports (studentName, grade, classNum, studentNumber, message) VALUES (?, ?, ?, ?, ?)"
         ).bind(
+            resolvedName,
             grade ? parseInt(grade) : null,
             classNum ? parseInt(classNum) : null,
             studentNumber ? parseInt(studentNumber) : null,
@@ -58,7 +57,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 };
 
-export const onRequestPatch: PagesFunction<Env> = async (context) => {
+export const onRequestPatch = async (context: any) => {
     const { request, env } = context;
 
     try {
@@ -81,7 +80,7 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     }
 };
 
-export const onRequestDelete: PagesFunction<Env> = async (context) => {
+export const onRequestDelete = async (context: any) => {
     const { request, env } = context;
 
     try {

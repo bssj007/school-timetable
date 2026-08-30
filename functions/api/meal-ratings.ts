@@ -12,6 +12,13 @@ interface Env {
 // Helper: Run D1 Schema Migration if needed
 const ensureMealRatingsSchema = async (db: any) => {
     try { await db.prepare(createMealRatingsTable).run(); } catch (_) {}
+    // studentName 컬럼 추가 마이그레이션
+    try {
+        await db.prepare("ALTER TABLE meal_ratings ADD COLUMN studentName TEXT NOT NULL DEFAULT ''").run();
+    } catch (_) {} // 이미 존재하면 무시
+    // UNIQUE 제약 변경: (date, type, grade, classNum, studentNumber) → (date, type, studentName, grade, classNum, studentNumber)
+    // SQLite 특성상 컬럼 추가 후 기존 UNIQUE 제약 변경 불가 — 신규 레코드부터 새 기준 적용
+    // type 컬럼 추가 마이그레이션 (기존 호환)
     try {
         await db.prepare("SELECT type FROM meal_ratings LIMIT 1").run();
     } catch (e: any) {
@@ -22,14 +29,15 @@ const ensureMealRatingsSchema = async (db: any) => {
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     date TEXT NOT NULL,
                     type TEXT NOT NULL,
+                    studentName TEXT NOT NULL DEFAULT '',
                     grade INTEGER,
                     classNum INTEGER,
                     studentNumber INTEGER,
                     rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
                     createdAt TEXT,
-                    UNIQUE(date, type, grade, classNum, studentNumber)
+                    UNIQUE(date, type, studentName, grade, classNum, studentNumber)
                 )`),
-                db.prepare(`INSERT INTO meal_ratings_new (id, date, type, grade, classNum, studentNumber, rating, createdAt) SELECT id, date, 'lunch', grade, classNum, studentNumber, rating, createdAt FROM meal_ratings`),
+                db.prepare(`INSERT INTO meal_ratings_new (id, date, type, studentName, grade, classNum, studentNumber, rating, createdAt) SELECT id, date, 'lunch', '', grade, classNum, studentNumber, rating, createdAt FROM meal_ratings`),
                 db.prepare(`DROP TABLE meal_ratings`),
                 db.prepare(`ALTER TABLE meal_ratings_new RENAME TO meal_ratings`)
             ]);
@@ -58,7 +66,6 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
                 ).bind(date, type).first();
             } catch (e: any) {
                 if (e.message && (e.message.includes("no such table") || e.message.includes("no such column"))) {
-                    console.log("[Meal Ratings API] Schema missing, running auto-heal.");
                     await ensureMealRatingsSchema(env.DB);
                     avgRow = await env.DB.prepare(
                         "SELECT AVG(rating) as avg, COUNT(*) as count FROM meal_ratings WHERE date = ? AND type = ?"
@@ -68,11 +75,13 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
                 }
             }
 
+            // 내 평점: studentName + 학번 모두 있어야 조회 (없으면 null 반환)
+            const studentName = url.searchParams.get("studentName")?.trim() ?? '';
             let myRating: number | null = null;
-            if (grade && classNum && studentNumber) {
+            if (studentName && grade && classNum && studentNumber) {
                 const myRow = await env.DB.prepare(
-                    "SELECT rating FROM meal_ratings WHERE date = ? AND type = ? AND grade = ? AND classNum = ? AND studentNumber = ?"
-                ).bind(date, type, parseInt(grade), parseInt(classNum), parseInt(studentNumber)).first();
+                    "SELECT rating FROM meal_ratings WHERE date = ? AND type = ? AND studentName = ? AND grade = ? AND classNum = ? AND studentNumber = ?"
+                ).bind(date, type, studentName, parseInt(grade), parseInt(classNum), parseInt(studentNumber)).first();
                 myRating = myRow?.rating ?? null;
             }
 
@@ -118,22 +127,28 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
         await ensureMealRatingsSchema(env.DB);
 
         const body = await request.json() as any;
-        const { date, type, grade, classNum, studentNumber, rating } = body;
+        const { date, type, grade, classNum, studentNumber, studentName, rating } = body;
 
-        if (!date || !type || !rating || rating < 1 || rating > 5) {
-            return new Response(JSON.stringify({ error: "date, type과 rating(1-5)이 필요합니다." }), { status: 400 });
+        // studentName 필수
+        const name = typeof studentName === 'string' ? studentName.trim() : '';
+        if (!date || !type || !name) {
+            return new Response(JSON.stringify({ error: "date, type, studentName이 필요합니다." }), { status: 400 });
+        }
+        if (!rating || rating < 1 || rating > 5) {
+            return new Response(JSON.stringify({ error: "rating(1-5)이 필요합니다." }), { status: 400 });
         }
 
         const createdAt = new Date().toISOString();
 
-        // UPSERT: 이미 있으면 rating만 업데이트
+        // UPSERT: studentName + 학번 기준
         await env.DB.prepare(`
-            INSERT INTO meal_ratings (date, type, grade, classNum, studentNumber, rating, createdAt)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(date, type, grade, classNum, studentNumber) DO UPDATE SET rating = excluded.rating, createdAt = excluded.createdAt
+            INSERT INTO meal_ratings (date, type, studentName, grade, classNum, studentNumber, rating, createdAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(date, type, studentName, grade, classNum, studentNumber) DO UPDATE SET rating = excluded.rating, createdAt = excluded.createdAt
         `).bind(
             date,
             type,
+            name,
             grade ? parseInt(grade) : null,
             classNum ? parseInt(classNum) : null,
             studentNumber ? parseInt(studentNumber) : null,

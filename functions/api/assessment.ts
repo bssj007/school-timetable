@@ -61,7 +61,9 @@ export const onRequest = async (context: any) => {
                           tempDueDate TEXT,
                           tempClassTime INTEGER,
                           teacher TEXT,
-                          classCode TEXT
+                          classCode TEXT,
+                          isTeacherCreated INTEGER DEFAULT 0,
+                          activityType TEXT DEFAULT '수행평가'
                         )
                     `).run();
                     // Add isDeleted column if missing (migration for older tables)
@@ -76,6 +78,9 @@ export const onRequest = async (context: any) => {
                     // Add new columns for identification
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN teacher TEXT").run(); } catch (_) {}
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN classCode TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isTeacherCreated INTEGER DEFAULT 0").run(); } catch (_) {}
+                    // Add activityType column if missing
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN activityType TEXT DEFAULT '수행평가'").run(); } catch (_) {}
                     return new Response(JSON.stringify([]), {
                         headers: { 'Content-Type': 'application/json' }
                     });
@@ -243,10 +248,46 @@ export const onRequest = async (context: any) => {
             }
 
             const body = await request.json();
-            const { subject, title, dueDate, description, grade, classNum, classTime, teacher, classCode } = body;
+            const { subject, title, dueDate, description, grade, classNum, classTime, teacher, classCode, isTeacherCreated, activityType } = body;
 
             if (!subject || !title || !dueDate || !grade || !classNum) {
                 return new Response("Missing required fields", { status: 400 });
+            }
+            // activityType 정규화: NULL이나 미입력 시 '수행평가'로 취급
+            const resolvedActivityType = (activityType && activityType.trim()) ? activityType.trim() : '수행평가';
+
+            // 학년별 등록 주체(학생/선생님) 권한 검증
+            const targetGrade = parseInt(grade, 10);
+            const isTeacher = isTeacherCreated === 1 || body.role === 'teacher';
+
+            try {
+                const permKey = isTeacher
+                    ? `assessment_allow_teacher_grade${targetGrade}`
+                    : `assessment_allow_student_grade${targetGrade}`;
+                const msgKey = isTeacher
+                    ? 'assessment_disallow_msg_teacher'
+                    : 'assessment_disallow_msg_student';
+
+                const permRows = await env.DB.prepare(
+                    "SELECT key, value FROM system_settings WHERE key IN (?, ?)"
+                ).bind(permKey, msgKey).all();
+
+                const permMap: Record<string, string> = {};
+                (permRows?.results || []).forEach((r: any) => { permMap[r.key] = r.value; });
+
+                const isAllowed = permMap[permKey] !== 'false';
+                if (!isAllowed) {
+                    const defaultMsg = isTeacher
+                        ? '현재 해당 학년의 선생님 수행평가 등록이 제한되어 있습니다.'
+                        : '현재 해당 학년의 학생 수행평가 등록이 제한되어 있습니다.';
+                    const errorMsg = permMap[msgKey] || defaultMsg;
+                    return new Response(JSON.stringify({ error: errorMsg }), {
+                        status: 403,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+            } catch (permErr) {
+                console.error("[Assessment API] Permission check failed (proceeding):", permErr);
             }
 
             console.log('[Assessment API] Creating:', { subject, title, dueDate, grade, classNum, classTime, teacher, classCode });
@@ -291,9 +332,9 @@ export const onRequest = async (context: any) => {
             try {
                 // Try inserting with lastModifiedIp and dataset (New Schema)
                 const result = await env.DB.prepare(
-                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
-                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null).run();
+                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode, isTeacherCreated, activityType)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`
+                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null, isTeacherCreated || 0, resolvedActivityType).run();
 
                 try { const { applyAutoPredictions } = await import('../server/autoPredict'); const { results } = await env.DB.prepare("SELECT * FROM performance_assessments WHERE isDeleted = 0").all(); await applyAutoPredictions(results, env.DB); } catch(e) { console.error("[Assessment API/POST] Predict error:", e); }
                 return new Response(JSON.stringify({ success: true, result }), {
@@ -322,7 +363,9 @@ export const onRequest = async (context: any) => {
                           tempDueDate TEXT,
                           tempClassTime INTEGER,
                           teacher TEXT,
-                          classCode TEXT
+                          classCode TEXT,
+                          isTeacherCreated INTEGER DEFAULT 0,
+                          activityType TEXT DEFAULT '수행평가'
                         )
                     `).run();
                     // Add isDeleted column if missing (migration for older tables)
@@ -335,12 +378,15 @@ export const onRequest = async (context: any) => {
                     // Add new columns for identification
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN teacher TEXT").run(); } catch (_) {}
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN classCode TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isTeacherCreated INTEGER DEFAULT 0").run(); } catch (_) {}
+                    // Add activityType column if missing
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN activityType TEXT DEFAULT '수행평가'").run(); } catch (_) {}
 
                     // Retry
                     const result = await env.DB.prepare(
-                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
-                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null).run();
+                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode, isTeacherCreated, activityType)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`
+                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null, isTeacherCreated || 0, resolvedActivityType).run();
 
                     try { const { applyAutoPredictions } = await import('../server/autoPredict'); const { results } = await env.DB.prepare("SELECT * FROM performance_assessments WHERE isDeleted = 0").all(); await applyAutoPredictions(results, env.DB); } catch(e) { console.error("[Assessment API/POST] Predict error:", e); }
                     return new Response(JSON.stringify({ success: true, result }), {
@@ -378,6 +424,20 @@ export const onRequest = async (context: any) => {
                     });
                 }
 
+                // Check if 'isTeacherCreated' column is missing
+                if ((errorMsg.includes("no such column") || errorMsg.includes("no column")) && errorMsg.includes("isTeacherCreated")) {
+                    console.log("[Assessment API] 'isTeacherCreated' column missing in POST. Attempting to add it.");
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isTeacherCreated INTEGER DEFAULT 0").run(); } catch (_) {}
+                    // Retry
+                    const result = await env.DB.prepare(
+                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode, isTeacherCreated)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`
+                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null, isTeacherCreated || 0).run();
+                    return new Response(JSON.stringify({ success: true, result, warning: "isTeacherCreated column added and retried" }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
                 // Check if 'teacher' or 'classCode' column is missing
                 if ((errorMsg.includes("no such column") || errorMsg.includes("no column")) && (errorMsg.includes("teacher") || errorMsg.includes("classCode"))) {
                     console.log("[Assessment API] 'teacher'/'classCode' column missing in POST. Attempting to add it.");
@@ -411,6 +471,51 @@ export const onRequest = async (context: any) => {
             if (!id) return new Response('Missing ID', { status: 400 });
 
             try {
+                let isTeacherCreated = 0;
+                let assessmentGrade: any = null;
+                try {
+                    const existing: any = await env.DB.prepare(
+                        "SELECT isTeacherCreated, grade FROM performance_assessments WHERE id = ?"
+                    ).bind(id).first();
+                    if (existing) {
+                        isTeacherCreated = existing.isTeacherCreated || 0;
+                        assessmentGrade = existing.grade;
+                    }
+                } catch (dbErr: any) {
+                    console.log("[Assessment API] isTeacherCreated check failed, assuming 0:", dbErr.message);
+                }
+
+                const role = url.searchParams.get('role');
+                const isTeacher = role === 'teacher';
+
+                if (isTeacherCreated === 1 && !isTeacher) {
+                    return new Response(JSON.stringify({ error: '선생님이 직접 등록한 수행평가는 삭제할 수 없습니다.' }), {
+                        status: 403,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
+                // 학생 권한 비활성화 시 삭제 차단
+                if (!isTeacher && assessmentGrade) {
+                    const targetGrade = parseInt(assessmentGrade, 10);
+                    const permKey = `assessment_allow_student_grade${targetGrade}`;
+                    const msgKey = 'assessment_disallow_msg_student';
+                    const permRows = await env.DB.prepare(
+                        "SELECT key, value FROM system_settings WHERE key IN (?, ?)"
+                    ).bind(permKey, msgKey).all().catch(() => null);
+
+                    const permMap: Record<string, string> = {};
+                    (permRows?.results || []).forEach((r: any) => { permMap[r.key] = r.value; });
+
+                    if (permMap[permKey] === 'false') {
+                        const defaultMsg = '현재 학생의 수행평가 등록이 제한되어 있습니다.';
+                        return new Response(JSON.stringify({ error: permMap[msgKey] || defaultMsg }), {
+                            status: 403,
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    }
+                }
+
                 await env.DB.prepare(
                     "UPDATE performance_assessments SET isDeleted = 1 WHERE id = ?"
                 ).bind(id).run();
@@ -434,12 +539,43 @@ export const onRequest = async (context: any) => {
             });
         }
 
-        // PATCH: 수정
+        // PATCH: 수정 및 연기
         if (request.method === 'PATCH') {
             const body = await request.json();
-            const { id, subject, title, description, dueDate, round, classTime, tempDueDate, tempClassTime, teacher, classCode, isAutoPredicted } = body;
+            const { id, subject, title, description, dueDate, round, classTime, tempDueDate, tempClassTime, teacher, classCode, isAutoPredicted, activityType: patchActivityType } = body;
 
             if (!id) return new Response('Missing ID', { status: 400 });
+
+            const isTeacher = body.role === 'teacher' || body.isTeacherCreated === 1;
+            // 학생 권한 비활성화 시 수정 및 연기 차단
+            if (!isTeacher) {
+                let targetGrade = body.grade ? parseInt(body.grade, 10) : null;
+                if (!targetGrade) {
+                    try {
+                        const row: any = await env.DB.prepare("SELECT grade FROM performance_assessments WHERE id = ?").bind(id).first();
+                        if (row) targetGrade = parseInt(row.grade, 10);
+                    } catch (_) {}
+                }
+
+                if (targetGrade) {
+                    const permKey = `assessment_allow_student_grade${targetGrade}`;
+                    const msgKey = 'assessment_disallow_msg_student';
+                    const permRows = await env.DB.prepare(
+                        "SELECT key, value FROM system_settings WHERE key IN (?, ?)"
+                    ).bind(permKey, msgKey).all().catch(() => null);
+
+                    const permMap: Record<string, string> = {};
+                    (permRows?.results || []).forEach((r: any) => { permMap[r.key] = r.value; });
+
+                    if (permMap[permKey] === 'false') {
+                        const defaultMsg = '현재 학생의 수행평가 등록이 제한되어 있습니다.';
+                        return new Response(JSON.stringify({ error: permMap[msgKey] || defaultMsg }), {
+                            status: 403,
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    }
+                }
+            }
 
             // 동적 쿼리 생성
             const updates: string[] = [];
@@ -452,6 +588,7 @@ export const onRequest = async (context: any) => {
             if (classTime !== undefined) { updates.push("classTime = ?"); values.push(classTime); }
             if (teacher !== undefined) { updates.push("teacher = ?"); values.push(teacher); }
             if (classCode !== undefined) { updates.push("classCode = ?"); values.push(classCode); }
+            if (patchActivityType !== undefined) { updates.push("activityType = ?"); values.push((patchActivityType && patchActivityType.trim()) ? patchActivityType.trim() : '수행평가'); }
             // tempDueDate 비교를 위해 현재 DB의 원본 dueDate를 조회
             let originalDueDate = dueDate;
             let originalClassTime = classTime;

@@ -41,7 +41,7 @@ function parseMenuItem(raw: string): { name: string; allergens: string | null } 
 }
 
 // 쿠키에서 학번 파싱 (공통 유틸)
-function readStudentFromCookie(): { grade: number | null; classNum: number | null; studentNumber: number | null } {
+function readStudentFromCookie(): { grade: number | null; classNum: number | null; studentNumber: number | null; studentName: string | null } {
     try {
         const match = document.cookie.match(/(^|;\s*)school_timetable_config=([^;]+)/);
         if (match) {
@@ -50,27 +50,30 @@ function readStudentFromCookie(): { grade: number | null; classNum: number | nul
                 grade: cfg.grade ? parseInt(cfg.grade) : null,
                 classNum: cfg.classNum ? parseInt(cfg.classNum) : null,
                 studentNumber: cfg.studentNumber ? parseInt(cfg.studentNumber) : null,
+                studentName: cfg.studentName?.trim() || null,
             };
         }
     } catch (_) {}
-    return { grade: null, classNum: null, studentNumber: null };
+    return { grade: null, classNum: null, studentNumber: null, studentName: null };
 }
 
 // ── 별점 컴포넌트 ─────────────────────────────────────────────────
 function StarRating({ date, type, readOnly = false }: { date: string; type: "lunch" | "dinner"; readOnly?: boolean }) {
     const qc = useQueryClient();
     const student = readStudentFromCookie();
-    const hasStudent = !!(student.grade && student.classNum && student.studentNumber);
+    // 이름 + 학번 모두 있어야 내 평점 조회
+    const hasStudent = !!(student.grade && student.classNum && student.studentNumber && student.studentName);
 
     const params = new URLSearchParams({ date, type });
     if (hasStudent) {
         params.set("grade", String(student.grade));
         params.set("classNum", String(student.classNum));
         params.set("studentNumber", String(student.studentNumber));
+        params.set("studentName", student.studentName!);
     }
 
     const ratingQuery = useQuery({
-        queryKey: ["meal-rating", date, type, student.grade, student.classNum, student.studentNumber],
+        queryKey: ["meal-rating", date, type, student.grade, student.classNum, student.studentNumber, student.studentName],
         queryFn: async () => {
             const res = await fetch(`/api/meal-ratings?${params}`);
             if (!res.ok) return { avg: null, count: 0, myRating: null };
@@ -95,7 +98,7 @@ function StarRating({ date, type, readOnly = false }: { date: string; type: "lun
         },
         onSuccess: (data) => {
             qc.setQueryData(
-                ["meal-rating", date, type, student.grade, student.classNum, student.studentNumber],
+                ["meal-rating", date, type, student.grade, student.classNum, student.studentNumber, student.studentName],
                 { avg: data.avg, count: data.count, myRating: data.myRating }
             );
             toast.success("별점이 저장되었습니다!");

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -51,20 +51,111 @@ export const getDatasetMode = (overrideVal?: string) => {
 };
 
 // Real-time ticking cache age component
-const LiveAgeText = React.memo(({ initialAgeSec, dataUpdatedAt }: { initialAgeSec: number, dataUpdatedAt: number }) => {
-    const [elapsed, setElapsed] = useState(0);
+/** updatedAt(DB UTC 문자열)을 받아 KST 일시와 경과 시간을 표시 — 1초마다 실시간 갱신, 페이지 숨김 시 타이머 정지 */
+const CacheTimestamp = React.memo(({ updatedAt }: { updatedAt: string | null | undefined }) => {
+    const [now, setNow] = useState(() => Date.now());
     useEffect(() => {
-        setElapsed(0);
-        const timer = setInterval(() => {
-            setElapsed(Math.floor((Date.now() - dataUpdatedAt) / 1000));
-        }, 1000);
-        return () => clearInterval(timer);
-    }, [dataUpdatedAt]);
-    
-    const sec = initialAgeSec + Math.max(0, elapsed);
-    if (sec < 60) return <>{sec}초 전</>;
-    if (sec < 3600) return <>{Math.floor(sec / 60)}분 {sec % 60}초 전</>;
-    return <>{Math.floor(sec / 3600)}시간 {Math.floor((sec % 3600) / 60)}분 전</>;
+        let timer: ReturnType<typeof setInterval> | null = null;
+
+        const start = () => {
+            if (timer !== null) return;
+            timer = setInterval(() => setNow(Date.now()), 1000); // 1초마다 실시간 갱신
+        };
+        const stop = () => {
+            if (timer !== null) { clearInterval(timer); timer = null; }
+        };
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') { setNow(Date.now()); start(); }
+            else stop();
+        };
+
+        if (document.visibilityState === 'visible') start();
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        return () => { stop(); document.removeEventListener('visibilitychange', onVisibilityChange); };
+    }, []);
+
+    if (!updatedAt) return <>-</>;
+    try {
+        const d = new Date(updatedAt.replace(' ', 'T') + 'Z');
+        // KST 포맷
+        const kst = d.toLocaleString('ko-KR', {
+            timeZone: 'Asia/Seoul',
+            year: '2-digit',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+        });
+        // 경과 시간
+        const sec = Math.max(0, Math.round((now - d.getTime()) / 1000));
+        const elapsed = sec < 60
+            ? `${sec}초 경과`
+            : sec < 3600
+            ? `${Math.floor(sec / 60)}분 ${sec % 60}초 경과`
+            : `${Math.floor(sec / 3600)}시간 ${Math.floor((sec % 3600) / 60)}분 경과`;
+        return <>{kst} <span className="text-blue-400 font-normal">({elapsed})</span></>;
+    } catch {
+        return <>{updatedAt}</>;
+    }
+});
+
+/** updatedAt과 cacheMaxAgeMinutes를 받아 신선 여부를 클라이언트에서 직접 판정 */
+function computeIsFresh(updatedAt: string | null | undefined, isFrozen: boolean, cacheMaxAgeMinutes: number): boolean {
+    if (isFrozen) return true;
+    if (!updatedAt) return false;
+    try {
+        const d = new Date(updatedAt.replace(' ', 'T') + 'Z');
+        return Date.now() - d.getTime() < cacheMaxAgeMinutes * 60 * 1000;
+    } catch { return false; }
+}
+
+/** updatedAt과 cacheMaxAgeMinutes를 받아 신선/만료 배지를 실시간으로 표시 — 1초마다 자체 갱신, 페이지 숨김 시 타이머 정지 */
+const CacheFreshBadge = React.memo(({ updatedAt, isFrozen, cacheMaxAgeMinutes }: {
+    updatedAt: string | null | undefined;
+    isFrozen: boolean;
+    cacheMaxAgeMinutes: number;
+}) => {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        let timer: ReturnType<typeof setInterval> | null = null;
+
+        const start = () => {
+            if (timer !== null) return;
+            timer = setInterval(() => setNow(Date.now()), 1000);
+        };
+        const stop = () => {
+            if (timer !== null) { clearInterval(timer); timer = null; }
+        };
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') { setNow(Date.now()); start(); }
+            else stop();
+        };
+
+        if (document.visibilityState === 'visible') start();
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        return () => { stop(); document.removeEventListener('visibilitychange', onVisibilityChange); };
+    }, []);
+
+    const fresh = isFrozen
+        ? true
+        : !updatedAt
+        ? false
+        : (() => {
+            try {
+                const d = new Date(updatedAt.replace(' ', 'T') + 'Z');
+                return now - d.getTime() < cacheMaxAgeMinutes * 60 * 1000;
+            } catch { return false; }
+        })();
+
+    return (
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+            fresh ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+        }`}>
+            {fresh ? '신선' : '만료'}
+        </span>
+    );
 });
 
 function ElectiveManager({ password }: { password: string }) {
@@ -1902,29 +1993,35 @@ function BugReportManager({ adminPassword }: { adminPassword: string }) {
                     <p className="text-sm text-gray-400">접수된 오류신고가 없습니다.</p>
                 ) : (
                     <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                        {reports.map((report: any) => (
-                            <div key={report.id} className="p-3 border rounded-lg bg-white flex flex-col gap-1">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className="text-xs">
-                                            {report.grade ? `${report.grade}학년 ${report.classNum}반 ${report.studentNumber}번` : '미입력'}
-                                        </Badge>
-                                        <span className="text-xs text-gray-400">
-                                            {report.createdAt ? new Date(report.createdAt + 'Z').toLocaleString() : ''}
-                                        </span>
+                        {reports.map((report: any) => {
+                            const nameText = (report.studentName || report.name || '').trim();
+                            const studentInfo = report.grade
+                                ? `${nameText ? nameText + ' ' : ''}${report.grade}학년 ${report.classNum}반 ${report.studentNumber}번`
+                                : (nameText || '미입력');
+                            return (
+                                <div key={report.id} className="p-3 border rounded-lg bg-white flex flex-col gap-1">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant="outline" className="text-xs font-semibold">
+                                                {studentInfo}
+                                            </Badge>
+                                            <span className="text-xs text-gray-400">
+                                                {report.createdAt ? new Date(report.createdAt + 'Z').toLocaleString() : ''}
+                                            </span>
+                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 text-gray-400 hover:text-red-500"
+                                            onClick={() => deleteMutation.mutate(report.id)}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
                                     </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7 text-gray-400 hover:text-red-500"
-                                        onClick={() => deleteMutation.mutate(report.id)}
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                    <p className="text-sm text-gray-800 whitespace-pre-wrap">{report.message}</p>
                                 </div>
-                                <p className="text-sm text-gray-800 whitespace-pre-wrap">{report.message}</p>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -1933,67 +2030,42 @@ function BugReportManager({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
-// 6.95 Student Elective Pre-Entry (학생 선택과목 사전입력)
+// 6.95 Elective Presets Manager (학번별 선택과목 사전지정)
+// 이름과 무관히 학번(학년+반+번호)별로 선택과목 기본값을 지정.
+// 신규 사용자 첫 접속 시 해당 학번의 사전지정이 자동 적용됨.
+// 사용자가 한 번이라도 변경하면 사전지정으로 절대 되돌리지 않음.
 // ----------------------------------------------------------------------
-function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
+function ElectivePresetsManager({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
     const [selectedGrade, setSelectedGrade] = useState("2");
+    const [selectedClass, setSelectedClass] = useState("1");
     const [selectedDataset, setSelectedDataset] = useState("_auto_");
     const [resolvedDataset, setResolvedDataset] = useState("");
-    const [selectedClass, setSelectedClass] = useState("");
-    // pendingChanges: key = "classNum-studentNumber", value = full electives object for that student
     const [pendingChanges, setPendingChanges] = useState<Record<string, Record<string, any>>>({});
     const [isSaving, setIsSaving] = useState(false);
 
     const hasPendingChanges = Object.keys(pendingChanges).length > 0;
 
-    // Fetch admin settings (for active_datasets)
     const settingsQuery = useQuery({
-        queryKey: ["admin", "settings", "electivePreEntry"],
+        queryKey: ["admin", "settings", "electivePresets"],
         queryFn: async () => {
-            const res = await fetch("/api/admin/settings", {
-                headers: { "X-Admin-Password": adminPassword }
-            });
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": adminPassword } });
             if (!res.ok) throw new Error("settings fetch failed");
             return res.json();
         }
     });
 
-    // Fetch raw comcigan data (for dataset list)
-    const adminRawQuery = useQuery({
-        queryKey: ["admin", "rawComcigan_ElectivePreEntry"],
-        queryFn: async () => {
-            const res = await fetch("/api/admin/raw_comcigan", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
-                body: JSON.stringify({ schoolName: "부산성지고" })
-            });
-            const json = await res.json();
-            if (!res.ok || json?.error) return null;
-            return json.data;
-        }
-    });
-
-    const timetableProps = useMemo(() => {
-        const raw = adminRawQuery.data;
-        if (!raw) return [];
-        return Object.keys(raw).filter(k => {
-            const val = raw[k];
-            return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
-        });
-    }, [adminRawQuery.data]);
-
-    // Resolve dataset: _auto_ → active from settings, else manual
     useEffect(() => {
         if (selectedDataset === "_auto_" && settingsQuery.data) {
-            const ds = selectedGrade === "1" ? settingsQuery.data.comcigan_dataset_selected_grade1 : settingsQuery.data.comcigan_dataset_selected;
+            const ds = selectedGrade === "1"
+                ? settingsQuery.data.comcigan_dataset_selected_grade1
+                : settingsQuery.data.comcigan_dataset_selected;
             setResolvedDataset(ds || "");
         } else if (selectedDataset !== "_auto_") {
             setResolvedDataset(selectedDataset);
         }
     }, [selectedDataset, settingsQuery.data, selectedGrade]);
 
-    // Fetch elective configs (groups + subjects) for the dataset
     const electiveConfigQuery = useQuery({
         queryKey: ["admin", "electiveConfig", selectedGrade, resolvedDataset],
         queryFn: async () => {
@@ -2003,39 +2075,32 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
         enabled: !!resolvedDataset
     });
 
-    // Fetch all student profiles for the grade — real-time refresh when no pending changes
-    const profilesQuery = useQuery({
-        queryKey: ["admin", "allStudentProfiles", selectedGrade, resolvedDataset],
+    const presetsQuery = useQuery({
+        queryKey: ["admin", "electivePresets", selectedGrade, selectedClass],
         queryFn: async () => {
-            const res = await fetch(`/api/electives?type=all-students&grade=${selectedGrade}&dataset=${encodeURIComponent(resolvedDataset)}`);
-            return res.json();
+            const res = await fetch(
+                `/api/admin/elective-presets?grade=${selectedGrade}&classNum=${selectedClass}`,
+                { headers: { "X-Admin-Password": adminPassword } }
+            );
+            if (!res.ok) throw new Error("presets fetch failed");
+            return res.json() as Promise<Array<{ studentNumber: number; electives: string; dataset: string }>>;
         },
-        enabled: !!selectedGrade && !!resolvedDataset,
-        refetchInterval: hasPendingChanges ? false : 5000, // 5s auto-refresh when no edits
+        enabled: !!selectedGrade && !!selectedClass
     });
 
-    // Build group → subjects mapping from elective config
-    // classCode can be compound like "A,B" or "A,B,C,D", split into individual groups.
-    // Filter out "?" entries (no valid classCode).
     const groupSubjects = useMemo(() => {
         if (!electiveConfigQuery.data || !Array.isArray(electiveConfigQuery.data)) return {};
-        const map: Record<string, { subject: string; teacher: string; }[]> = {};
-        const EXCLUDED_SUBJECTS = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "채플", "Empty", "Free"];
+        const map: Record<string, { subject: string; teacher: string }[]> = {};
+        const EXCLUDED = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "채플", "Empty", "Free"];
         for (const cfg of electiveConfigQuery.data) {
             const rawCode = cfg.classCode || "";
-            if (!rawCode || rawCode === "?") continue; // Skip invalid classCodes
-            // Skip excluded subjects (빈교실, 공강 etc.)
-            if (EXCLUDED_SUBJECTS.some(ex => (cfg.subject || "").trim().includes(ex))) continue;
+            if (!rawCode || rawCode === "?") continue;
+            if (EXCLUDED.some((ex: string) => (cfg.subject || "").trim().includes(ex))) continue;
             const codes = rawCode.split(",").map((c: string) => c.trim()).filter(Boolean);
-            const entry = {
-                subject: cfg.subject,
-                teacher: cfg.originalTeacher || cfg.fullTeacherName || "",
-            };
+            const entry = { subject: cfg.subject, teacher: cfg.originalTeacher || cfg.fullTeacherName || "" };
             for (const code of codes) {
                 if (!map[code]) map[code] = [];
-                if (!map[code].some((e: { subject: string }) => e.subject === entry.subject)) {
-                    map[code].push(entry);
-                }
+                if (!map[code].some((e) => e.subject === entry.subject)) map[code].push(entry);
             }
         }
         return map;
@@ -2043,265 +2108,170 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
 
     const groupCodes = useMemo(() => Object.keys(groupSubjects).sort(), [groupSubjects]);
 
-    // Build profiles lookup: key = "classNum-studentNumber" → electives object
-    const profilesMap = useMemo(() => {
-        if (!profilesQuery.data || !Array.isArray(profilesQuery.data)) return {};
-        const map: Record<string, any> = {};
-        for (const p of profilesQuery.data) {
-            map[`${p.classNum}-${p.studentNumber}`] = p;
+    const presetsMap = useMemo(() => {
+        const map: Record<number, Record<string, any>> = {};
+        for (const p of presetsQuery.data || []) {
+            try { map[p.studentNumber] = typeof p.electives === "string" ? JSON.parse(p.electives) : p.electives; }
+            catch { map[p.studentNumber] = {}; }
         }
         return map;
-    }, [profilesQuery.data]);
+    }, [presetsQuery.data]);
 
-    // Generate student rows
-    const studentRows = useMemo(() => {
-        const rows: { classNum: number; studentNumber: number; key: string }[] = [];
-        const maxClass = 9;
-        const maxNum = 30;
-        for (let c = 1; c <= maxClass; c++) {
-            if (selectedClass !== "all" && c !== parseInt(selectedClass)) continue;
-            for (let n = 1; n <= maxNum; n++) {
-                rows.push({ classNum: c, studentNumber: n, key: `${c}-${n}` });
-            }
-        }
-        return rows;
-    }, [selectedClass]);
-
-    // Get current elective for a student + group (server state)
-    const getServerElective = (key: string, groupCode: string): string => {
-        const profile = profilesMap[key];
-        if (!profile || !profile.electives) return "";
-        try {
-            const electives = typeof profile.electives === "string" ? JSON.parse(profile.electives) : profile.electives;
-            if (typeof electives === "object" && !Array.isArray(electives)) {
-                const entry = electives[groupCode];
-                if (!entry) return "";
-                if (typeof entry === "object" && entry.subject) return entry.subject;
-                if (typeof entry === "string") return entry;
-            }
-        } catch { }
+    const getServerElective = (num: number, group: string): string => {
+        const e = presetsMap[num];
+        if (!e) return "";
+        const entry = e[group];
+        if (!entry) return "";
+        if (typeof entry === "object" && entry.subject) return entry.subject;
+        if (typeof entry === "string") return entry;
         return "";
     };
 
-    // Get display value: pending change > server value
-    const getDisplayElective = (key: string, groupCode: string): string => {
-        if (pendingChanges[key] && groupCode in pendingChanges[key]) {
-            const entry = pendingChanges[key][groupCode];
+    const getDisplayElective = (num: number, group: string): string => {
+        const key = String(num);
+        if (pendingChanges[key] && group in pendingChanges[key]) {
+            const entry = pendingChanges[key][group];
             if (!entry) return "";
-            if (typeof entry === "object" && entry.subject) return entry.subject;
-            if (typeof entry === "string") return entry;
-            return "";
+            return typeof entry === "object" ? (entry.subject || "") : String(entry);
         }
-        return getServerElective(key, groupCode);
+        return getServerElective(num, group);
     };
 
-    // Handle local cell change (does NOT save to server)
-    const handleCellChange = (classNum: number, studentNumber: number, groupCode: string, subject: string) => {
-        const key = `${classNum}-${studentNumber}`;
-        const subjectConfig = groupSubjects[groupCode]?.find(s => s.subject === subject);
-
-        setPendingChanges(prev => {
-            const existing = prev[key] || {};
-            const newEntry = subject
-                ? { subject, teacher: subjectConfig?.teacher || "" }
-                : null; // null means "clear this group"
-            return { ...prev, [key]: { ...existing, [groupCode]: newEntry } };
-        });
+    const handleCellChange = (num: number, group: string, subject: string) => {
+        const key = String(num);
+        const subjectConfig = groupSubjects[group]?.find((s) => s.subject === subject);
+        setPendingChanges((prev) => ({
+            ...prev,
+            [key]: { ...(prev[key] || {}), [group]: subject ? { subject, teacher: subjectConfig?.teacher || "" } : null }
+        }));
     };
 
-    // Cancel all pending changes
-    const handleCancel = () => {
-        setPendingChanges({});
-    };
+    const handleCancel = () => setPendingChanges({});
 
-    // Save all pending changes to server
     const handleSaveAll = async () => {
         setIsSaving(true);
-        let successCount = 0;
-        let errorCount = 0;
-
-        for (const [key, groupChanges] of Object.entries(pendingChanges)) {
-            const [classNumStr, studentNumberStr] = key.split("-");
-            const classNum = parseInt(classNumStr);
-            const studentNumber = parseInt(studentNumberStr);
-
-            // Build the full electives object: merge server state + pending changes
-            const profile = profilesMap[key];
-            let electives: Record<string, any> = {};
-            if (profile?.electives) {
-                try {
-                    electives = typeof profile.electives === "string" ? JSON.parse(profile.electives) : { ...profile.electives };
-                } catch { electives = {}; }
+        let ok = 0, fail = 0;
+        for (const [numStr, groupChanges] of Object.entries(pendingChanges)) {
+            const studentNumber = parseInt(numStr);
+            const base: Record<string, any> = { ...(presetsMap[studentNumber] || {}) };
+            for (const [g, v] of Object.entries(groupChanges)) {
+                if (v) base[g] = v; else delete base[g];
             }
-
-            // Apply pending changes
-            for (const [groupCode, value] of Object.entries(groupChanges)) {
-                if (value) {
-                    electives[groupCode] = value;
-                } else {
-                    delete electives[groupCode];
-                }
-            }
-
-            // If all electives cleared, send with allowEmpty flag
-            const isEmpty = Object.keys(electives).length === 0;
-            if (isEmpty) {
-                electives = {}; // explicitly empty
-            }
-
             try {
-                await fetch("/api/electives", {
+                const res = await fetch("/api/admin/elective-presets", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
                     body: JSON.stringify({
-                        grade: parseInt(selectedGrade),
-                        classNum,
-                        studentNumber,
-                        electives: isEmpty ? {} : electives,
-                        dataset: resolvedDataset,
-                        allowEmpty: isEmpty,
-                    }),
+                        grade: parseInt(selectedGrade), classNum: parseInt(selectedClass),
+                        studentNumber, electives: JSON.stringify(base), dataset: resolvedDataset
+                    })
                 });
-                successCount++;
-            } catch {
-                errorCount++;
-            }
+                if (res.ok) ok++; else fail++;
+            } catch { fail++; }
         }
-
-        if (errorCount > 0) {
-            toast.error(`${errorCount}건 저장 실패, ${successCount}건 성공`);
-        } else if (successCount > 0) {
-            toast.success(`${successCount}건 저장 완료`);
-        }
-
+        if (fail > 0) toast.error(`${fail}건 실패, ${ok}건 저장`);
+        else if (ok > 0) toast.success(`${ok}건 저장 완료`);
         setPendingChanges({});
-        queryClient.invalidateQueries({ queryKey: ["admin", "allStudentProfiles", selectedGrade] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "electivePresets", selectedGrade, selectedClass] });
         setIsSaving(false);
     };
 
-    const isLoading = electiveConfigQuery.isLoading || profilesQuery.isLoading;
-    const changedStudentCount = Object.keys(pendingChanges).length;
-
-    // Calculate how many students have completely filled all groups
-    const completedCount = useMemo(() => {
-        if (groupCodes.length === 0) return 0;
-        return studentRows.filter(row => {
-            return groupCodes.every(code => {
-                const val = getDisplayElective(row.key, code);
-                return val && val !== "_empty_" && val.trim() !== "";
+    const handleClearPreset = async (num: number) => {
+        try {
+            await fetch("/api/admin/elective-presets", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ grade: parseInt(selectedGrade), classNum: parseInt(selectedClass), studentNumber: num })
             });
-        }).length;
-    }, [studentRows, groupCodes, profilesQuery.data, pendingChanges]);
+            queryClient.invalidateQueries({ queryKey: ["admin", "electivePresets", selectedGrade, selectedClass] });
+            toast.success(`${num}번 사전지정 삭제`);
+        } catch { toast.error("삭제 실패"); }
+    };
+
+    const MAX_STUDENTS = 30;
+    const studentNumbers = Array.from({ length: MAX_STUDENTS }, (_, i) => i + 1);
+    const configuredCount = studentNumbers.filter((n) =>
+        groupCodes.length > 0 && groupCodes.every((g) => getDisplayElective(n, g).trim() !== "")
+    ).length;
 
     return (
-        <div className="flex flex-col h-full gap-4">
-            {/* Header Controls */}
+        <div className="flex flex-col gap-4">
             <div className="flex flex-wrap gap-2 items-center pb-4 border-b">
-                <h3 className="text-lg font-bold flex-1">학생 선택과목 사전입력</h3>
-                <Select value={selectedGrade} onValueChange={(val) => { setSelectedGrade(val); setPendingChanges({}); }}>
-                    <SelectTrigger className="w-[100px]">
-                        <SelectValue placeholder="학년" />
-                    </SelectTrigger>
+                <div className="flex-1">
+                    <h3 className="text-lg font-bold">학번별 선택과목 사전지정</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        이름과 무관히 학번(학년-반-번호)에 사전지정. 신규 사용자 첫 접속 시 자동 적용 — 사용자 변경 후 절대 덮어쓰지 않음
+                    </p>
+                </div>
+                <Select value={selectedGrade} onValueChange={(v) => { setSelectedGrade(v); setPendingChanges({}); }}>
+                    <SelectTrigger className="w-[90px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="2">2학년</SelectItem>
                         <SelectItem value="3">3학년</SelectItem>
                     </SelectContent>
                 </Select>
-                <Select value={selectedDataset} onValueChange={(val) => { setSelectedDataset(val); setPendingChanges({}); }}>
-                    <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="데이터셋" />
-                    </SelectTrigger>
+                <Select value={selectedClass} onValueChange={(v) => { setSelectedClass(v); setPendingChanges({}); }}>
+                    <SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="_auto_">자동 ({getDatasetMode(settingsQuery.data?.comcigan_dataset_selected)})</SelectItem>
-                        <SelectItem value="COMCIGAN">컴시간 라이브 통합 데이터셋 (COMCIGAN)</SelectItem>
-                        <SelectItem value="MANUAL_PLAN">수동 시간표 (MANUAL_PLAN)</SelectItem>
+                        {Array.from({ length: 9 }, (_, i) => String(i + 1)).map((c) => (
+                            <SelectItem key={c} value={c}>{c}반</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={selectedDataset} onValueChange={(v) => { setSelectedDataset(v); setPendingChanges({}); }}>
+                    <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="_auto_">자동</SelectItem>
+                        <SelectItem value="COMCIGAN">COMCIGAN</SelectItem>
+                        <SelectItem value="MANUAL_PLAN">MANUAL_PLAN</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
 
-            {/* Class Filter Tabs */}
-            <div className="flex gap-1 overflow-x-auto pb-1">
-                <Button
-                    variant={selectedClass === "all" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setSelectedClass("all")}
-                >
-                    전체
-                </Button>
-                {Array.from({ length: 9 }, (_, i) => i + 1).map(c => (
-                    <Button
-                        key={c}
-                        variant={selectedClass === String(c) ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setSelectedClass(String(c))}
-                    >
-                        {c}반
-                    </Button>
-                ))}
-            </div>
-
-            {/* Grid Table */}
-            <div className="flex-1 overflow-y-auto overflow-x-auto border rounded-md">
-                {!selectedClass ? (
-                    <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center h-full">
-                        <p className="text-lg font-medium">선택된 반이 없습니다.</p>
-                        <p className="text-sm mt-1">위의 탭에서 열람할 반(또는 전체)을 선택해 주세요.</p>
-                    </div>
-                ) : isLoading ? (
-                    <div className="p-8 text-center text-gray-400">데이터를 불러오는 중...</div>
-                ) : groupCodes.length === 0 ? (
-                    <div className="p-8 text-center text-gray-400">
-                        선택과목 설정이 없습니다. 선택과목 관리에서 먼저 설정해주세요.
-                    </div>
-                ) : (
-                    <div className="min-w-max">
+            {electiveConfigQuery.isLoading || presetsQuery.isLoading ? (
+                <div className="text-center text-sm text-gray-400 py-8">불러오는 중...</div>
+            ) : groupCodes.length === 0 ? (
+                <div className="text-center text-sm text-gray-400 py-8">선택과목 그룹이 없습니다. 먼저 선택과목 설정을 구성하세요.</div>
+            ) : (
+                <div className="overflow-auto rounded-lg border">
                     <Table>
                         <TableHeader>
-                            <TableRow className="bg-gray-50">
-                                <TableHead className="sticky left-0 bg-gray-50 z-10 min-w-[80px] font-bold">학번</TableHead>
-                                {groupCodes.map(code => (
-                                    <TableHead key={code} className="text-center min-w-[90px] font-bold">
-                                        {code}그룹
-                                    </TableHead>
+                            <TableRow className="bg-slate-50">
+                                <TableHead className="w-16 text-center font-bold">번호</TableHead>
+                                {groupCodes.map((g) => (
+                                    <TableHead key={g} className="text-center font-bold min-w-[130px]">{g}그룹</TableHead>
                                 ))}
+                                <TableHead className="w-16 text-center">초기화</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {studentRows.map(row => {
-                                const hasAnyData = groupCodes.some(code => getDisplayElective(row.key, code));
-                                const hasChanges = !!pendingChanges[row.key];
+                            {studentNumbers.map((num) => {
+                                const hasPreset = groupCodes.some((g) => getDisplayElective(num, g).trim() !== "");
+                                const isPending = String(num) in pendingChanges;
                                 return (
-                                    <TableRow
-                                        key={row.key}
-                                        className={hasChanges ? "bg-yellow-50/60" : hasAnyData ? "bg-blue-50/30" : ""}
-                                    >
-                                        <TableCell className="sticky left-0 bg-white z-10 font-mono font-bold text-sm border-r">
-                                            {selectedGrade}{row.classNum}{String(row.studentNumber).padStart(2, "0")}
+                                    <TableRow key={num} className={`${isPending ? "bg-yellow-50" : ""} ${hasPreset ? "" : "opacity-40 hover:opacity-70"}`}>
+                                        <TableCell className="text-center font-mono font-bold text-sm">
+                                            {num}
+                                            {hasPreset && <div className="text-[9px] text-green-500 font-normal leading-none">지정됨</div>}
                                         </TableCell>
-                                        {groupCodes.map(code => {
-                                            const display = getDisplayElective(row.key, code);
-                                            const serverVal = getServerElective(row.key, code);
-                                            const isChanged = pendingChanges[row.key] && code in pendingChanges[row.key];
+                                        {groupCodes.map((g) => {
+                                            const current = getDisplayElective(num, g);
+                                            const subjects = groupSubjects[g] || [];
                                             return (
-                                                <TableCell key={code} className="p-1">
+                                                <TableCell key={g} className="p-1">
                                                     <Select
-                                                        value={display || "_empty_"}
-                                                        onValueChange={(val) => handleCellChange(
-                                                            row.classNum,
-                                                            row.studentNumber,
-                                                            code,
-                                                            val === "_empty_" ? "" : val
-                                                        )}
-                                                        disabled={isSaving}
+                                                        value={current || "_empty_"}
+                                                        onValueChange={(v) => handleCellChange(num, g, v === "_empty_" ? "" : v)}
                                                     >
-                                                        <SelectTrigger className={`h-8 text-xs ${isChanged ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-300" : display ? "border-blue-200 bg-blue-50" : "border-gray-200"}`}>
-                                                            <SelectValue placeholder="-" />
+                                                        <SelectTrigger className="h-7 text-xs border-0 bg-transparent hover:bg-white focus:ring-1">
+                                                            <SelectValue placeholder="미지정" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="_empty_">-</SelectItem>
-                                                            {(groupSubjects[code] || []).map(s => (
+                                                            <SelectItem value="_empty_"><span className="text-gray-400">미지정</span></SelectItem>
+                                                            {subjects.map((s) => (
                                                                 <SelectItem key={s.subject} value={s.subject}>
                                                                     {s.subject}
+                                                                    {s.teacher && <span className="text-gray-400 ml-1 text-xs">({s.teacher})</span>}
                                                                 </SelectItem>
                                                             ))}
                                                         </SelectContent>
@@ -2309,27 +2279,314 @@ function StudentElectivePreEntry({ adminPassword }: { adminPassword: string }) {
                                                 </TableCell>
                                             );
                                         })}
+                                        <TableCell className="text-center p-1">
+                                            {hasPreset && !isPending && (
+                                                <Button
+                                                    variant="ghost" size="sm"
+                                                    className="h-6 w-6 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                                                    onClick={() => handleClearPreset(num)}
+                                                    title="이 번호 사전지정 삭제"
+                                                >×</Button>
+                                            )}
+                                        </TableCell>
                                     </TableRow>
                                 );
                             })}
                         </TableBody>
                     </Table>
-                    </div>
-                )}
-            </div>
+                </div>
+            )}
 
             <div className="flex justify-between items-center text-xs pt-1 border-t">
-                <span className="text-gray-400 font-medium">
-                    총 {studentRows.length}명 중 {completedCount}명 완료 ({studentRows.length > 0 ? Math.round((completedCount / studentRows.length) * 100) : 0}%) · 
-                    저장된 프로필: {profilesQuery.data?.length || 0}개
-                    {!hasPendingChanges && <span className="ml-2 text-green-500">● 실시간 동기화 중</span>}
+                <span className="text-gray-400">
+                    {selectedGrade}학년 {selectedClass}반 · {MAX_STUDENTS}번 중 {configuredCount}번 사전지정 완료
                 </span>
                 {hasPendingChanges ? (
                     <div className="flex items-center gap-2">
-                        <span className="text-yellow-600 font-medium">{changedStudentCount}명 변경됨</span>
-                        <Button variant="outline" size="sm" onClick={handleCancel} disabled={isSaving}>
-                            취소
+                        <span className="text-yellow-600 font-medium">{Object.keys(pendingChanges).length}번 변경됨</span>
+                        <Button variant="outline" size="sm" onClick={handleCancel} disabled={isSaving}>취소</Button>
+                        <Button size="sm" onClick={handleSaveAll} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
+                            {isSaving ? "저장 중..." : "변경사항 저장"}
                         </Button>
+                    </div>
+                ) : (
+                    <span className="text-gray-400">변경사항 없음</span>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------
+// 6.955 Student Elective Editor (학생별 선택과목 수정)
+// 이름-학번 프로필마다 등록된 선택과목 데이터를 직접 수정.
+// 사전지정과 달리 현재 student_profiles 실제 데이터를 변경.
+// ----------------------------------------------------------------------
+function StudentElectiveEditor({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [selectedGrade, setSelectedGrade] = useState("2");
+    const [selectedClass, setSelectedClass] = useState("1");
+    const [selectedDataset, setSelectedDataset] = useState("_auto_");
+    const [resolvedDataset, setResolvedDataset] = useState("");
+    const [pendingChanges, setPendingChanges] = useState<Record<string, Record<string, any>>>({});
+    const [isSaving, setIsSaving] = useState(false);
+
+    const hasPendingChanges = Object.keys(pendingChanges).length > 0;
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "electiveEditor"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("settings fetch failed");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (selectedDataset === "_auto_" && settingsQuery.data) {
+            const ds = selectedGrade === "1"
+                ? settingsQuery.data.comcigan_dataset_selected_grade1
+                : settingsQuery.data.comcigan_dataset_selected;
+            setResolvedDataset(ds || "");
+        } else if (selectedDataset !== "_auto_") {
+            setResolvedDataset(selectedDataset);
+        }
+    }, [selectedDataset, settingsQuery.data, selectedGrade]);
+
+    // 선택과목 그룹/과목 목록
+    const electiveConfigQuery = useQuery({
+        queryKey: ["admin", "electiveConfig", selectedGrade, resolvedDataset],
+        queryFn: async () => {
+            const res = await fetch(`/api/electives?grade=${selectedGrade}&dataset=${encodeURIComponent(resolvedDataset)}`);
+            return res.json();
+        },
+        enabled: !!resolvedDataset
+    });
+
+    // 해당 학년+반의 실제 student_profiles 전체 조회
+    const profilesQuery = useQuery({
+        queryKey: ["admin", "studentProfiles", selectedGrade, selectedClass, resolvedDataset],
+        queryFn: async () => {
+            const res = await fetch(
+                `/api/electives?type=all-students&grade=${selectedGrade}&dataset=${encodeURIComponent(resolvedDataset)}`
+            );
+            const all = await res.json() as any[];
+            // 해당 반만 필터
+            return all.filter((p: any) => String(p.classNum) === String(selectedClass));
+        },
+        enabled: !!resolvedDataset && !!selectedGrade && !!selectedClass,
+        refetchInterval: hasPendingChanges ? false : 10000,
+    });
+
+    const groupSubjects = useMemo(() => {
+        if (!electiveConfigQuery.data || !Array.isArray(electiveConfigQuery.data)) return {};
+        const map: Record<string, { subject: string; teacher: string }[]> = {};
+        const EXCLUDED = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "채플", "Empty", "Free"];
+        for (const cfg of electiveConfigQuery.data) {
+            const rawCode = cfg.classCode || "";
+            if (!rawCode || rawCode === "?") continue;
+            if (EXCLUDED.some((ex: string) => (cfg.subject || "").trim().includes(ex))) continue;
+            const codes = rawCode.split(",").map((c: string) => c.trim()).filter(Boolean);
+            const entry = { subject: cfg.subject, teacher: cfg.originalTeacher || cfg.fullTeacherName || "" };
+            for (const code of codes) {
+                if (!map[code]) map[code] = [];
+                if (!map[code].some((e) => e.subject === entry.subject)) map[code].push(entry);
+            }
+        }
+        return map;
+    }, [electiveConfigQuery.data]);
+
+    const groupCodes = useMemo(() => Object.keys(groupSubjects).sort(), [groupSubjects]);
+
+    // key = "name__studentNumber"
+    const profileKey = (p: any) => `${p.name}__${p.studentNumber}`;
+
+    const getServerElective = (p: any, group: string): string => {
+        if (!p.electives) return "";
+        try {
+            const e = typeof p.electives === "string" ? JSON.parse(p.electives) : p.electives;
+            const entry = e[group];
+            if (!entry) return "";
+            if (typeof entry === "object" && entry.subject) return entry.subject;
+            if (typeof entry === "string") return entry;
+        } catch {}
+        return "";
+    };
+
+    const getDisplayElective = (p: any, group: string): string => {
+        const key = profileKey(p);
+        if (pendingChanges[key] && group in pendingChanges[key]) {
+            const entry = pendingChanges[key][group];
+            if (!entry) return "";
+            return typeof entry === "object" ? (entry.subject || "") : String(entry);
+        }
+        return getServerElective(p, group);
+    };
+
+    const handleCellChange = (p: any, group: string, subject: string) => {
+        const key = profileKey(p);
+        const subjectConfig = groupSubjects[group]?.find((s) => s.subject === subject);
+        setPendingChanges((prev) => ({
+            ...prev,
+            [key]: { ...(prev[key] || {}), [group]: subject ? { subject, teacher: subjectConfig?.teacher || "" } : null }
+        }));
+    };
+
+    const handleCancel = () => setPendingChanges({});
+
+    const handleSaveAll = async () => {
+        setIsSaving(true);
+        let ok = 0, fail = 0;
+        const profiles = profilesQuery.data || [];
+        for (const [key, groupChanges] of Object.entries(pendingChanges)) {
+            const [name, numStr] = key.split("__");
+            const studentNumber = parseInt(numStr);
+            const profile = profiles.find((p: any) => p.name === name && String(p.studentNumber) === numStr);
+            // 기존 electives 베이스
+            let base: Record<string, any> = {};
+            if (profile?.electives) {
+                try { base = typeof profile.electives === "string" ? JSON.parse(profile.electives) : { ...profile.electives }; } catch {}
+            }
+            for (const [g, v] of Object.entries(groupChanges)) {
+                if (v) base[g] = v; else delete base[g];
+            }
+            try {
+                const res = await fetch("/api/electives", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        grade: parseInt(selectedGrade),
+                        classNum: parseInt(selectedClass),
+                        studentNumber,
+                        studentName: name,
+                        electives: base,
+                        dataset: resolvedDataset,
+                        allowEmpty: Object.keys(base).length === 0,
+                    })
+                });
+                if (res.ok) ok++; else fail++;
+            } catch { fail++; }
+        }
+        if (fail > 0) toast.error(`${fail}건 실패, ${ok}건 저장`);
+        else if (ok > 0) toast.success(`${ok}건 저장 완료`);
+        setPendingChanges({});
+        queryClient.invalidateQueries({ queryKey: ["admin", "studentProfiles", selectedGrade, selectedClass] });
+        setIsSaving(false);
+    };
+
+    const profiles = profilesQuery.data || [];
+    const changedCount = Object.keys(pendingChanges).length;
+
+    return (
+        <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap gap-2 items-center pb-4 border-b">
+                <div className="flex-1">
+                    <h3 className="text-lg font-bold">학생별 선택과목 수정</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        이름-학번 프로필마다 등록된 실제 선택과목 데이터를 직접 수정. 저장 즉시 해당 학생에게 반영됨.
+                    </p>
+                </div>
+                <Select value={selectedGrade} onValueChange={(v) => { setSelectedGrade(v); setPendingChanges({}); }}>
+                    <SelectTrigger className="w-[90px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="2">2학년</SelectItem>
+                        <SelectItem value="3">3학년</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Select value={selectedClass} onValueChange={(v) => { setSelectedClass(v); setPendingChanges({}); }}>
+                    <SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        {Array.from({ length: 9 }, (_, i) => String(i + 1)).map((c) => (
+                            <SelectItem key={c} value={c}>{c}반</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={selectedDataset} onValueChange={(v) => { setSelectedDataset(v); setPendingChanges({}); }}>
+                    <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="_auto_">자동</SelectItem>
+                        <SelectItem value="COMCIGAN">COMCIGAN</SelectItem>
+                        <SelectItem value="MANUAL_PLAN">MANUAL_PLAN</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Button variant="outline" size="sm" onClick={() => {
+                    queryClient.invalidateQueries({ queryKey: ["admin", "studentProfiles", selectedGrade, selectedClass] });
+                }}>새로고침</Button>
+            </div>
+
+            {profilesQuery.isLoading || electiveConfigQuery.isLoading ? (
+                <div className="text-center text-sm text-gray-400 py-8">불러오는 중...</div>
+            ) : profiles.length === 0 ? (
+                <div className="text-center text-sm text-gray-400 py-8">
+                    {selectedGrade}학년 {selectedClass}반에 등록된 학생이 없습니다.
+                    <div className="text-xs mt-1">학생이 사이트에 접속하면 자동으로 프로필이 생성됩니다.</div>
+                </div>
+            ) : groupCodes.length === 0 ? (
+                <div className="text-center text-sm text-gray-400 py-8">선택과목 그룹이 없습니다.</div>
+            ) : (
+                <div className="overflow-auto rounded-lg border">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="bg-slate-50">
+                                <TableHead className="w-8 text-center font-bold">번</TableHead>
+                                <TableHead className="min-w-[90px] font-bold">이름</TableHead>
+                                {groupCodes.map((g) => (
+                                    <TableHead key={g} className="text-center font-bold min-w-[130px]">{g}그룹</TableHead>
+                                ))}
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {profiles
+                                .sort((a: any, b: any) => (a.studentNumber || 0) - (b.studentNumber || 0))
+                                .map((p: any) => {
+                                    const key = profileKey(p);
+                                    const isPending = key in pendingChanges;
+                                    return (
+                                        <TableRow key={key} className={isPending ? "bg-yellow-50" : ""}>
+                                            <TableCell className="text-center font-mono text-xs text-slate-500">{p.studentNumber}</TableCell>
+                                            <TableCell className="font-semibold text-sm">{p.name || <span className="text-gray-300">-</span>}</TableCell>
+                                            {groupCodes.map((g) => {
+                                                const current = getDisplayElective(p, g);
+                                                const subjects = groupSubjects[g] || [];
+                                                return (
+                                                    <TableCell key={g} className="p-1">
+                                                        <Select
+                                                            value={current || "_empty_"}
+                                                            onValueChange={(v) => handleCellChange(p, g, v === "_empty_" ? "" : v)}
+                                                        >
+                                                            <SelectTrigger className="h-7 text-xs border-0 bg-transparent hover:bg-white focus:ring-1">
+                                                                <SelectValue placeholder="미선택" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="_empty_"><span className="text-gray-400">미선택</span></SelectItem>
+                                                                {subjects.map((s) => (
+                                                                    <SelectItem key={s.subject} value={s.subject}>
+                                                                        {s.subject}
+                                                                        {s.teacher && <span className="text-gray-400 ml-1 text-xs">({s.teacher})</span>}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </TableCell>
+                                                );
+                                            })}
+                                        </TableRow>
+                                    );
+                                })}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
+
+            <div className="flex justify-between items-center text-xs pt-1 border-t">
+                <span className="text-gray-400">
+                    {selectedGrade}학년 {selectedClass}반 · 등록 학생 {profiles.length}명
+                    {!hasPendingChanges && <span className="ml-2 text-green-500">● 10초 자동 새로고침</span>}
+                </span>
+                {hasPendingChanges ? (
+                    <div className="flex items-center gap-2">
+                        <span className="text-yellow-600 font-medium">{changedCount}명 변경됨</span>
+                        <Button variant="outline" size="sm" onClick={handleCancel} disabled={isSaving}>취소</Button>
                         <Button size="sm" onClick={handleSaveAll} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
                             {isSaving ? "저장 중..." : "변경사항 저장"}
                         </Button>
@@ -2943,7 +3200,7 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                 <div className="space-y-8">
                     {/* Graph 1: Unique Students */}
                     <div>
-                        <h4 className="text-sm font-semibold text-gray-600 mb-3">고유 접속자 수 (학번 기준)</h4>
+                        <h4 className="text-sm font-semibold text-gray-600 mb-3">고유 접속자 수 (학번-이름 기준)</h4>
                         <div className="h-64 w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={buckets}>
@@ -2970,9 +3227,9 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                                     <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                                     <Tooltip
                                         labelFormatter={(v) => `구간: ${v}`}
-                                        formatter={(v: number) => [`${v}명`, '고유 접속자']}
+                                        formatter={(v: number) => [`${v}명`, '고유 접속자 (학번-이름)']}
                                     />
-                                    <Bar dataKey="uniqueStudents" name="고유 접속자" radius={[4, 4, 0, 0]}>
+                                    <Bar dataKey="uniqueStudents" name="고유 접속자 (학번-이름)" radius={[4, 4, 0, 0]}>
                                         {buckets.map((entry: any, index: number) => (
                                             <Cell key={`cell-${index}`} fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-blue)" : "#3b82f6"} />
                                         ))}
@@ -3060,7 +3317,7 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                     {/* Summary stats */}
                     <div className="flex gap-4 text-sm text-gray-500 border-t pt-3">
                         <span>구간 수: {buckets.length}</span>
-                        <span>총 고유 접속자(학번): {buckets.reduce((s: number, b: any) => s + b.uniqueStudents, 0)}명</span>
+                        <span>총 고유 접속자(학번-이름): {buckets.reduce((s: number, b: any) => s + b.uniqueStudents, 0)}명</span>
                         <span>총 고유 IP: {buckets.reduce((s: number, b: any) => s + (b.uniqueIPs || 0), 0)}개</span>
                         <span>총 접속: {buckets.reduce((s: number, b: any) => s + b.totalVisits, 0)}회</span>
                         {excludeApplied && <span className="text-orange-500">제외: {excludeApplied}</span>}
@@ -3971,6 +4228,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     학생 선택과목 사전입력
                 </Button>
                 <Button
+                    variant={selectedMenu === "student-elective-editor" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left"
+                    onClick={() => setSelectedMenu("student-elective-editor")}
+                >
+                    <Users className="w-4 h-4 mr-2" />
+                    학생별 선택과목 수정
+                </Button>
+                <Button
                     variant={selectedMenu === "site-design" ? "default" : "ghost"}
                     className="justify-start whitespace-nowrap text-left"
                     onClick={() => setSelectedMenu("site-design")}
@@ -4041,6 +4306,30 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 >
                     <Calendar className="w-4 h-4 mr-2" />
                     특수일정 관리
+                </Button>
+                <Button
+                    variant={selectedMenu === "teacher-ignore-keywords" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-teal-600 hover:text-teal-700 hover:bg-teal-50 font-medium"
+                    onClick={() => setSelectedMenu("teacher-ignore-keywords")}
+                >
+                    <Ban className="w-4 h-4 mr-2" />
+                    교사명 무시 키워드
+                </Button>
+                <Button
+                    variant={selectedMenu === "assessment-role-permissions" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-purple-600 hover:text-purple-700 hover:bg-purple-50 font-medium"
+                    onClick={() => setSelectedMenu("assessment-role-permissions")}
+                >
+                    <UserCheck className="w-4 h-4 mr-2" />
+                    수행평가 등록주체
+                </Button>
+                <Button
+                    variant={selectedMenu === "semester-key" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-medium"
+                    onClick={() => setSelectedMenu("semester-key")}
+                >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    학기 키 관리
                 </Button>
                 {/* Additional list items can go here later */}
             </div>
@@ -4191,7 +4480,11 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 )}
 
                 {selectedMenu === "student-elective-preentry" && (
-                    <StudentElectivePreEntry adminPassword={adminPassword} />
+                    <ElectivePresetsManager adminPassword={adminPassword} />
+                )}
+
+                {selectedMenu === "student-elective-editor" && (
+                    <StudentElectiveEditor adminPassword={adminPassword} />
                 )}
 
                 {selectedMenu === "site-design" && (
@@ -4238,16 +4531,15 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     </div>
                 )}
 
-                {selectedMenu === "comcigan-cache" && (
-                    <div className="flex flex-col h-full gap-4">
-                        <div className="flex gap-2 items-center pb-4 border-b">
-                            <h3 className="text-lg font-bold flex-1">컴시간 캐시 시스템</h3>
-                        </div>
-                        <div className="flex-1 overflow-y-auto">
-                            <ComciganCacheManager adminPassword={adminPassword} />
-                        </div>
+                <div className={`flex flex-col h-full gap-4 ${selectedMenu === 'comcigan-cache' ? '' : 'hidden'}`}>
+                    <div className="flex gap-2 items-center pb-4 border-b">
+                        <h3 className="text-lg font-bold flex-1">컴시간 캐시 시스템</h3>
                     </div>
-                )}
+                    <div className="flex-1 overflow-y-auto">
+                        <ComciganCacheManager adminPassword={adminPassword} />
+                    </div>
+                </div>
+
 
                 {selectedMenu === "teacher-timetable" && (
                     <div className="flex flex-col h-full gap-4">
@@ -4264,7 +4556,7 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <TargetClassDisplaySettings adminPassword={adminPassword} />
-                            <SamsungInstallSettings adminPassword={adminPassword} />
+                            <InstallButtonSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -4288,8 +4580,337 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                     </div>
                 )}
+                {selectedMenu === "teacher-ignore-keywords" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-teal-600">교사명 무시 키워드 설정</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <TeacherIgnoreKeywordsSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+                {selectedMenu === "assessment-role-permissions" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-purple-600">수행평가 등록주체 관리</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <AssessmentRolePermissionsSettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+                {selectedMenu === "semester-key" && (
+                    <SemesterKeySettings adminPassword={adminPassword} />
+                )}
             </div>
         </div>
+    );
+}
+
+// ----------------------------------------------------------------------
+// TeacherIgnoreKeywordsSettings - 교사명 무시 키워드 관리
+// ----------------------------------------------------------------------
+function TeacherIgnoreKeywordsSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [newKeyword, setNewKeyword] = useState("");
+    const [keywordsList, setKeywordsList] = useState<string[]>(['빈교', '공강', '학년', '채', '창']);
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data && settingsQuery.data.teacher_ignore_keywords !== undefined) {
+            const val = settingsQuery.data.teacher_ignore_keywords;
+            if (val) {
+                setKeywordsList(val.split(',').map((k: string) => k.trim()).filter(Boolean));
+            } else {
+                setKeywordsList([]);
+            }
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (newValue: string) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({ teacher_ignore_keywords: newValue })
+            });
+            if (!res.ok) throw new Error("Failed to save settings");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("설정이 저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err) => {
+            toast.error(`저장 실패: ${err.message}`);
+        }
+    });
+
+    const handleAddKeyword = () => {
+        const trimmed = newKeyword.trim();
+        if (!trimmed) return;
+        if (keywordsList.includes(trimmed)) {
+            toast.error("이미 존재하는 키워드입니다.");
+            return;
+        }
+        const next = [...keywordsList, trimmed];
+        setKeywordsList(next);
+        saveMutation.mutate(next.join(','));
+        setNewKeyword("");
+    };
+
+    const handleRemoveKeyword = (kw: string) => {
+        const next = keywordsList.filter(x => x !== kw);
+        setKeywordsList(next);
+        saveMutation.mutate(next.join(','));
+    };
+
+    const handleResetDefault = () => {
+        if (confirm("기본 무시 키워드로 초기화하시겠습니까? (빈교, 공강, 학년, 채, 창)")) {
+            const next = ['빈교', '공강', '학년', '채', '창'];
+            setKeywordsList(next);
+            saveMutation.mutate(next.join(','));
+        }
+    };
+
+    if (settingsQuery.isLoading) return <div className="p-4">설정을 불러오는 중...</div>;
+
+    return (
+        <Card className="w-full max-w-2xl border-slate-100 shadow-sm bg-white">
+            <CardHeader className="pb-4">
+                <CardTitle className="text-base font-bold text-gray-700">교사명 무시 키워드 설정</CardTitle>
+                <CardDescription className="text-xs text-gray-500">
+                    /teacher 페이지의 교사 선택 리스트에서 제외할 이름 키워드를 지정합니다.<br />
+                    키워드가 포함된 교사는 목록에서 표시되지 않습니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="space-y-4 border rounded-lg p-4 bg-slate-50 border-gray-100">
+                    <div className="flex items-center justify-between pb-2 border-b border-gray-200">
+                        <span className="text-xs font-semibold text-slate-700 font-bold">무시 키워드 목록</span>
+                        <Button size="sm" variant="outline" className="text-[10px] h-7 rounded-full" onClick={handleResetDefault}>기본값으로 재설정</Button>
+                    </div>
+                    {keywordsList.length === 0 ? (
+                        <div className="text-xs text-center py-4 text-gray-400 bg-white border rounded border-gray-100">지정된 무시 키워드가 없습니다.</div>
+                    ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                            {keywordsList.map(kw => (
+                                <Badge key={kw} variant="secondary" className="inline-flex items-center gap-1.5 text-xs bg-white border border-gray-200 px-2.5 py-1 text-slate-700 rounded-full font-medium">
+                                    {kw}
+                                    <button
+                                        type="button"
+                                        className="text-red-400 hover:text-red-600 font-bold text-xs"
+                                        onClick={() => handleRemoveKeyword(kw)}
+                                    >✕</button>
+                                </Badge>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="space-y-4 border rounded-lg p-4 bg-white border-gray-100">
+                    <span className="text-xs font-semibold text-slate-700 block mb-2 font-bold">새 키워드 추가</span>
+                    <div className="flex gap-2">
+                        <Input
+                            value={newKeyword}
+                            onChange={e => setNewKeyword(e.target.value)}
+                            placeholder="예: 빈교"
+                            className="text-xs h-9"
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                    handleAddKeyword();
+                                }
+                            }}
+                        />
+                        <Button onClick={handleAddKeyword} disabled={!newKeyword.trim() || saveMutation.isPending} className="bg-blue-600 hover:bg-blue-700 text-xs h-9 px-4 rounded-md">
+                            추가
+                        </Button>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
+// SemesterKeySettings - 학기 키 관리 (전체 사용자 재등록 강제)
+// ----------------------------------------------------------------------
+function SemesterKeySettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const semester = month >= 3 && month <= 8 ? 1 : 2;
+    const suggestedKey = `${year}-${semester}`;
+
+    const [semesterKeyInput, setSemesterKeyInput] = useState("");
+    const [currentKey, setCurrentKey] = useState<string | null>(null);
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [pendingKey, setPendingKey] = useState("");
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            const key = settingsQuery.data.semester_key || null;
+            setCurrentKey(key);
+            if (!semesterKeyInput) setSemesterKeyInput(key || "");
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (key: string) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ semester_key: key })
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: (_, key) => {
+            toast.success(`학기 키가 "${key}"로 저장되었습니다.`);
+            setCurrentKey(key);
+            setConfirmOpen(false);
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err: any) => toast.error(err.message)
+    });
+
+    // 1단계: 유효성 검사 후 확인 다이얼로그 열기
+    const handleRequestSave = () => {
+        const trimmed = semesterKeyInput.trim();
+        if (!trimmed) { toast.error("학기 키를 입력하세요."); return; }
+        if (!/^\d{4}-\d+$/.test(trimmed)) { toast.error("형식이 올바르지 않습니다. 예: 2025-1"); return; }
+        if (trimmed === currentKey) { toast.info("현재와 동일한 키입니다."); return; }
+        setPendingKey(trimmed);
+        setConfirmOpen(true);
+    };
+
+    // 2단계: 다이얼로그에서 최종 확인
+    const handleConfirmSave = () => {
+        saveMutation.mutate(pendingKey);
+    };
+
+    return (
+        <>
+            {/* ── 확인 다이얼로그 ──────────────────────────────────────── */}
+            <Dialog open={confirmOpen} onOpenChange={(open) => { if (!saveMutation.isPending) setConfirmOpen(open); }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-rose-600">
+                            <TriangleAlert className="w-5 h-5" />
+                            학기 키 변경 확인
+                        </DialogTitle>
+                        <DialogDescription asChild>
+                            <div className="space-y-3 pt-2">
+                                <p className="text-sm text-gray-600">
+                                    학기 키를 변경하면 <strong>모든 사용자가 다음 방문 시 이름과 학번을 다시 입력</strong>해야 합니다.
+                                </p>
+                                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border text-sm">
+                                    <span className="text-gray-500">변경 전:</span>
+                                    <Badge className="bg-gray-100 text-gray-600 font-mono">{currentKey || "미설정"}</Badge>
+                                    <ArrowRight className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-500">변경 후:</span>
+                                    <Badge className="bg-rose-100 text-rose-700 border-rose-200 font-mono">{pendingKey}</Badge>
+                                </div>
+                                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-100">
+                                    ⚠ 저장 즉시 전체 사용자에게 적용됩니다. 기존 선택과목 데이터는 보존됩니다.
+                                </p>
+                            </div>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="mt-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => setConfirmOpen(false)}
+                            disabled={saveMutation.isPending}
+                        >
+                            취소
+                        </Button>
+                        <Button
+                            className="bg-rose-600 hover:bg-rose-700 text-white"
+                            onClick={handleConfirmSave}
+                            disabled={saveMutation.isPending}
+                        >
+                            {saveMutation.isPending ? "저장 중..." : "확인, 변경합니다"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── 메인 패널 ─────────────────────────────────────────────── */}
+            <div className="flex flex-col h-full gap-4">
+                <div className="flex gap-2 items-center pb-4 border-b">
+                    <h3 className="text-lg font-bold flex-1 text-rose-600 flex items-center gap-2">
+                        <RefreshCw className="w-5 h-5" />
+                        학기 키 관리
+                    </h3>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-4">
+                    <Card className="border-rose-100 shadow-sm">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base font-bold text-gray-700">학기 키 설정</CardTitle>
+                            <CardDescription className="text-xs text-gray-500">
+                                학기 키가 변경되면 모든 사용자 쿠키가 무효화되어 이름+학번을 다시 입력해야 합니다.<br />
+                                형식: <code className="bg-gray-100 px-1 rounded font-mono">YYYY-학기</code> &nbsp;예) <code className="bg-gray-100 px-1 rounded font-mono">2025-1</code>, <code className="bg-gray-100 px-1 rounded font-mono">2025-2</code>
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border">
+                                <span className="text-sm text-gray-500">현재 적용 중:</span>
+                                {currentKey
+                                    ? <Badge className="bg-rose-100 text-rose-700 border-rose-200 font-mono text-sm px-3 py-1">{currentKey}</Badge>
+                                    : <span className="text-gray-400 text-sm">미설정 (기본값 "1")</span>
+                                }
+                            </div>
+
+                            <div className="flex gap-2 items-center">
+                                <Input
+                                    id="semester-key-input"
+                                    value={semesterKeyInput}
+                                    onChange={(e) => setSemesterKeyInput(e.target.value)}
+                                    placeholder="예: 2025-1"
+                                    className="font-mono max-w-xs"
+                                    onKeyDown={(e) => { if (e.key === 'Enter') handleRequestSave(); }}
+                                />
+                                <Button
+                                    onClick={handleRequestSave}
+                                    className="bg-rose-600 hover:bg-rose-700 text-white"
+                                >
+                                    저장 및 적용
+                                </Button>
+                            </div>
+                            <p className="text-xs text-gray-400">
+                                변경 시 확인 창이 표시됩니다. 기존 선택과목 데이터는 보존됩니다.
+                            </p>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </>
     );
 }
 
@@ -4374,6 +4995,99 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
         onError: () => toast.error("동결 상태 변경에 실패했습니다.")
     });
 
+    const deleteArchiveMutation = useMutation({
+        mutationFn: async (dateRange: string) => {
+            const res = await fetch("/api/admin/comcigan-cache", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ action: "delete_archive", dateRange })
+            });
+            if (!res.ok) throw new Error("Delete archive failed");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("과거 시간표가 삭제되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "comciganCacheStatus"] });
+        },
+        onError: () => toast.error("삭제 실패했습니다.")
+    });
+
+    const [testArchiveResult, setTestArchiveResult] = useState<any>(null);
+
+    const testArchiveMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch("/api/admin/comcigan-cache", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ action: "test_archive" })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Test failed");
+            return data;
+        },
+        onSuccess: (data) => {
+            setTestArchiveResult(data);
+            queryClient.invalidateQueries({ queryKey: ["admin", "comciganCacheStatus"] });
+            if (data.lookupTest?.found) {
+                toast.success(`✅ 테스트 성공: ${data.lookupTest.matchedRange}`);
+            } else {
+                toast.error(`⚠️ 저장은 됐지만 조회 실패`);
+            }
+        },
+        onError: (e: any) => toast.error(`테스트 실패: ${e.message}`)
+    });
+
+    // 날짜 지정 조회 테스트
+    const [lookupDateInput, setLookupDateInput] = useState('');
+    const [lookupArchiveResult, setLookupArchiveResult] = useState<any>(null);
+
+    const lookupArchiveMutation = useMutation({
+        mutationFn: async (targetDate: string) => {
+            const res = await fetch("/api/admin/comcigan-cache", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ action: "lookup_archive", targetDate })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "조회 실패");
+            return data;
+        },
+        onSuccess: (data) => {
+            setLookupArchiveResult(data);
+            if (data.found) {
+                toast.success(`✅ 아카이브 조회 성공: ${data.matchedRange}`);
+            } else {
+                toast.warning(`❌ 해당 날짜의 아카이브 없음`);
+            }
+        },
+        onError: (e: any) => toast.error(`조회 실패: ${e.message}`)
+    });
+
+    // E2E 실제 API 호출 테스트
+    const [e2eTestResult, setE2eTestResult] = useState<any>(null);
+
+    const e2eTestMutation = useMutation({
+        mutationFn: async (targetDate: string) => {
+            const short = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
+            const url = `/api/comcigan?type=timetable&grade=1&classNum=1&targetDate=${short}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            return { ...data, _url: url, _status: res.status };
+        },
+        onSuccess: (data) => {
+            setE2eTestResult(data);
+            if (data.success && data.data?.length > 0) {
+                const src = data.isArchivedData ? '아카이브' : '캐시/라이브';
+                toast.success(`✅ E2E 성공 (${src}, dataset: ${data.datasetId}, ${data.data.length}개 수업)`);
+            } else if (data.isPending) {
+                toast.warning('⏳ 캐시 생성 중 — 잠시 후 재시도');
+            } else {
+                toast.error(`❌ E2E 실패: ${data.error || '데이터 없음'}`);
+            }
+        },
+        onError: (e: any) => toast.error(`E2E 실패: ${e.message}`)
+    });
+
     const formatAge = (sec: number) => {
         if (sec < 60) return `${sec}초 전`;
         if (sec < 3600) return `${Math.floor(sec / 60)}분 ${sec % 60}초 전`;
@@ -4381,6 +5095,28 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
     };
 
     const cacheEntries = cacheStatusQuery.data?.cacheEntries || [];
+    const archiveEntries: { dateRange: string; savedAt: string; dataSize: number }[] = cacheStatusQuery.data?.archive || [];
+    const liveRanges: string[] = cacheStatusQuery.data?.liveRanges || [];
+
+    // UTC → KST (Asia/Seoul, UTC+9) 변환
+    const toKST = (utcStr: string | null | undefined): string => {
+        if (!utcStr) return '-';
+        try {
+            const d = new Date(utcStr.replace(' ', 'T') + 'Z');
+            return d.toLocaleString('ko-KR', {
+                timeZone: 'Asia/Seoul',
+                year: '2-digit',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+        } catch { return utcStr.substring(0, 16); }
+    };
+
+    // 삭제 확인 Dialog 상태
+    const [pendingDeleteEntry, setPendingDeleteEntry] = React.useState<string | null>(null);
 
     return (
         <div className="space-y-6">
@@ -4401,7 +5137,6 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                         {refreshMutation.isPending ? "갱신 중..." : "전체 갱신"}
                     </Button>
                 </div>
-
                 {cacheStatusQuery.isLoading ? (
                     <div className="text-sm text-slate-400 py-4 text-center">로딩 중...</div>
                 ) : cacheEntries.length === 0 ? (
@@ -4417,12 +5152,11 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                                         <div className="flex items-center gap-2">
                                             <span className="text-sm font-bold text-blue-900">원본 통합 데이터셋 (raw_data)</span>
                                             {rawEntry ? (
-                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${rawEntry.isFresh
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : 'bg-amber-100 text-amber-700'
-                                                }`}>
-                                                    {rawEntry.isFresh ? '신선' : '만료'}
-                                                </span>
+                                                <CacheFreshBadge
+                                                    updatedAt={rawEntry.updatedAt}
+                                                    isFrozen={rawEntry.isFrozen}
+                                                    cacheMaxAgeMinutes={cacheStatusQuery.data?.settings?.cacheMaxAgeMinutes ?? 5}
+                                                />
                                             ) : (
                                                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">미생성</span>
                                             )}
@@ -4435,12 +5169,12 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                                         </div>
                                         {rawEntry && (
                                             <div className="flex items-center gap-3 mt-1 text-xs text-blue-700">
-                                                <span className="flex items-center gap-1">
-                                                    <Clock className="w-3 h-3" />
-                                                    <LiveAgeText initialAgeSec={rawEntry.ageSec} dataUpdatedAt={cacheStatusQuery.dataUpdatedAt || Date.now()} />
+                                                <span className="flex items-center gap-1 font-mono">
+                                                    <Clock className="w-3 h-3 shrink-0" />
+                                                    <CacheTimestamp updatedAt={rawEntry.updatedAt} />
                                                 </span>
-                                                <span>가용 데이터셋: COMCIGAN 통합본 전체</span>
-                                                <span className="font-mono bg-blue-100 px-1 rounded">{Math.round((rawEntry.dataSize || 0) / 1024)}KB</span>
+                                                <span className="shrink-0">가용 데이터셋: COMCIGAN 통합본 전체</span>
+                                                <span className="font-mono bg-blue-100 px-1 rounded shrink-0">{Math.round((rawEntry.dataSize || 0) / 1024)}KB</span>
                                             </div>
                                         )}
                                     </div>
@@ -4499,6 +5233,243 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                 </p>
             </div>
 
+
+
+            {/* 과거 시간표 저장 아카이브 */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2">
+                        <span>📂</span>
+                        과거 시간표 저장
+                        <span className="text-xs font-normal text-amber-600">({archiveEntries.length}개)</span>
+                    </h4>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-orange-400 text-orange-700 hover:bg-orange-50 font-bold"
+                        onClick={() => { setTestArchiveResult(null); testArchiveMutation.mutate(); }}
+                        disabled={testArchiveMutation.isPending}
+                    >
+                        {testArchiveMutation.isPending ? '테스트 중...' : '🧪 과거 캐싱 TEST'}
+                    </Button>
+                </div>
+                <p className="text-xs text-amber-700">
+                    컴시간 LIVE 데이터가 갱신될 때마다 해당 주차 스냅샷이 자동 저장됩니다.
+                    LIVE 데이터에서 해당 날짜 구간이 사라지면 저장된 스냅샷이 활성화되어 과거 날짜 조회에 사용됩니다.
+                </p>
+
+                {/* TEST 결과 패널 */}
+                {testArchiveResult && (
+                    <div className={`rounded-md border p-3 text-xs space-y-2 ${testArchiveResult.lookupTest?.found ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                        <p className={`font-bold text-sm ${testArchiveResult.lookupTest?.found ? 'text-green-800' : 'text-red-800'}`}>
+                            {testArchiveResult.summary}
+                        </p>
+                        <div className="space-y-1">
+                            <p className="font-semibold text-slate-600">저장된 범위 ({testArchiveResult.totalArchived}개):</p>
+                            <div className="flex flex-wrap gap-1">
+                                {(testArchiveResult.savedRanges || []).map((r: string) => (
+                                    <span key={r} className="font-mono bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700">{r}</span>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <p className="font-semibold text-slate-600">조회 테스트:</p>
+                            <p className="text-slate-700">
+                                날짜: <span className="font-mono font-bold">{testArchiveResult.lookupTest?.testedDate}</span>
+                                {' → '}
+                                {testArchiveResult.lookupTest?.found
+                                    ? <span className="text-green-700 font-bold">✅ {testArchiveResult.lookupTest.matchedRange} 매칭 성공 ({Math.round((testArchiveResult.lookupTest.dataSize ?? 0) / 1024)}KB)</span>
+                                    : <span className="text-red-700 font-bold">❌ 매칭 범위 없음</span>
+                                }
+                            </p>
+                        </div>
+                        <p className="text-slate-400 text-[10px]">
+                            ※ INSERT OR REPLACE로 강제 저장 후 첫 범위 날짜로 조회. 실서비스는 LIVE 갱신 시 자동 저장.
+                        </p>
+                    </div>
+                )}
+
+                {/* 날짜 지정 조회 TEST */}
+                <div className="border border-orange-200 bg-orange-50/60 rounded-md p-3 space-y-2">
+                    <p className="text-xs font-bold text-orange-800">🗓 날짜 지정 조회 &amp; E2E 테스트</p>
+                    <p className="text-[11px] text-orange-600">특정 날짜로 아카이브 DB 직접 조회 또는 실제 API 호출을 통해 과거 캐싱 정상작동을 검증합니다.</p>
+                    <div className="flex flex-wrap gap-2 items-center">
+                        <Input
+                            type="date"
+                            value={lookupDateInput}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                setLookupDateInput(e.target.value);
+                                setLookupArchiveResult(null);
+                                setE2eTestResult(null);
+                            }}
+                            className="h-8 text-xs w-40 bg-white"
+                        />
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs border-orange-400 text-orange-700 hover:bg-orange-100 font-semibold"
+                            onClick={() => { if (lookupDateInput) { setLookupArchiveResult(null); lookupArchiveMutation.mutate(lookupDateInput); } }}
+                            disabled={!lookupDateInput || lookupArchiveMutation.isPending}
+                        >
+                            {lookupArchiveMutation.isPending ? '조회 중...' : '📂 DB 조회'}
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs border-blue-400 text-blue-700 hover:bg-blue-100 font-semibold"
+                            onClick={() => { if (lookupDateInput) { setE2eTestResult(null); e2eTestMutation.mutate(lookupDateInput); } }}
+                            disabled={!lookupDateInput || e2eTestMutation.isPending}
+                        >
+                            {e2eTestMutation.isPending ? 'API 호출 중...' : '🌐 E2E API 테스트'}
+                        </Button>
+                    </div>
+
+                    {/* DB 조회 결과 */}
+                    {lookupArchiveResult && (
+                        <div className={`rounded border p-2.5 text-xs space-y-1 ${lookupArchiveResult.found ? 'border-green-300 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                            <p className={`font-bold ${lookupArchiveResult.found ? 'text-green-800' : 'text-red-700'}`}>
+                                {lookupArchiveResult.summary}
+                            </p>
+                            {lookupArchiveResult.found && (
+                                <p className="text-slate-600 flex items-center gap-1 flex-wrap">
+                                    저장일시: <span className="font-mono"><CacheTimestamp updatedAt={lookupArchiveResult.matchedSavedAt} /></span>
+                                    {' · '}
+                                    <span className="font-mono">{Math.round((lookupArchiveResult.matchedDataSize ?? 0) / 1024)}KB</span>
+                                </p>
+                            )}
+                            <p className="text-slate-400">
+                                전체 아카이브 {lookupArchiveResult.totalArchiveEntries}개 항목
+                                {lookupArchiveResult.allRanges?.length > 0 && (
+                                    <span> ({lookupArchiveResult.allRanges.map((r: any) => r.dateRange).join(', ')})</span>
+                                )}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* E2E API 결과 */}
+                    {e2eTestResult && (
+                        <div className={`rounded border p-2.5 text-xs space-y-1 ${
+                            e2eTestResult.success && e2eTestResult.data?.length > 0
+                                ? 'border-blue-300 bg-blue-50'
+                                : 'border-red-200 bg-red-50'
+                        }`}>
+                            <p className={`font-bold ${
+                                e2eTestResult.success && e2eTestResult.data?.length > 0 ? 'text-blue-800' : 'text-red-700'
+                            }`}>
+                                {e2eTestResult.success && e2eTestResult.data?.length > 0
+                                    ? `✅ E2E 성공 — ${e2eTestResult.data.length}개 수업, dataset: ${e2eTestResult.datasetId}`
+                                    : e2eTestResult.isPending
+                                        ? '⏳ 캐시 생성 중 — 잠시 후 재시도'
+                                        : `❌ E2E 실패 — ${e2eTestResult.error || '데이터 없음'}`
+                                }
+                            </p>
+                            <div className="flex flex-wrap gap-2 text-slate-600">
+                                {e2eTestResult.isArchivedData && (
+                                    <span className="bg-amber-100 text-amber-800 border border-amber-300 rounded px-1.5 py-0.5 font-bold">📂 아카이브에서 서빙됨</span>
+                                )}
+                                {!e2eTestResult.isArchivedData && e2eTestResult.success && (
+                                    <span className="bg-green-100 text-green-800 border border-green-300 rounded px-1.5 py-0.5">💾 캐시/라이브에서 서빙됨</span>
+                                )}
+                                {e2eTestResult.debugTokens?.isFallbackApplied && (
+                                    <span className="bg-slate-100 text-slate-600 border border-slate-200 rounded px-1.5 py-0.5">📌 폴백 적용됨</span>
+                                )}
+                                {e2eTestResult.datasetId && (
+                                    <span className="font-mono bg-white border border-slate-200 rounded px-1.5 py-0.5">dataset: {e2eTestResult.datasetId}</span>
+                                )}
+                            </div>
+                            <p className="text-slate-400 font-mono text-[10px]">
+                                GET {e2eTestResult._url}
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {/* 아카이브 항목 목록 */}
+                {archiveEntries.length === 0 ? (
+                    <div className="text-xs text-amber-600 italic py-2">
+                        저장된 과거 시간표 없음 &mdash; 캐시 갱신 시 자동 저장됩니다
+                    </div>
+                ) : (
+                    <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                        {archiveEntries.map((entry) => {
+                            const isLive = liveRanges.includes(entry.dateRange);
+                            return (
+                                <div key={entry.dateRange} className={`flex items-center justify-between rounded-md px-3 py-2.5 gap-3 border ${
+                                    isLive
+                                        ? 'bg-amber-50 border-amber-300'
+                                        : 'bg-white border-green-200'
+                                }`}>
+                                    <div className="flex flex-col min-w-0 gap-0.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-800 font-mono">{entry.dateRange}</span>
+                                            {isLive ? (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                                    대기중
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-300">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                                    활성화 상태
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                            마지막 저장: <CacheTimestamp updatedAt={entry.savedAt} />
+                                            &nbsp;&middot;&nbsp;{Math.round(entry.dataSize / 1024)}KB
+                                        </span>
+                                    </div>
+                                    <button
+                                        className="text-xs text-red-400 hover:text-red-600 font-semibold shrink-0 px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                                        onClick={() => setPendingDeleteEntry(entry.dateRange)}
+                                        disabled={deleteArchiveMutation.isPending}
+                                    >
+                                        삭제
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* 삭제 확인 Dialog */}
+            <Dialog open={!!pendingDeleteEntry} onOpenChange={(open) => { if (!open) setPendingDeleteEntry(null); }}>
+                <DialogContent className="sm:max-w-[380px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-red-700">과거 시간표 삭제</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                        <p className="text-sm text-slate-700">
+                            아래 날짜 범위의 저장된 시간표를 삭제합니다.
+                        </p>
+                        <div className="bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                            <span className="font-mono font-bold text-red-800 text-sm">{pendingDeleteEntry}</span>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                            삭제 후 해당 날짜 구간의 과거 조회 시 <b>미확정 시간표</b>가 표시됩니다.
+                            이 작업은 되돌릴 수 없습니다.
+                        </p>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                        <Button variant="outline" size="sm" onClick={() => setPendingDeleteEntry(null)}>취소</Button>
+                        <Button
+                            size="sm"
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                            disabled={deleteArchiveMutation.isPending}
+                            onClick={() => {
+                                if (pendingDeleteEntry) {
+                                    deleteArchiveMutation.mutate(pendingDeleteEntry);
+                                    setPendingDeleteEntry(null);
+                                }
+                            }}
+                        >
+                            {deleteArchiveMutation.isPending ? '삭제 중...' : '삭제 확인'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             {/* 설명 */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-xs text-blue-700 space-y-1">
                 <p className="font-bold">💡 작동 방식</p>
@@ -4506,6 +5477,7 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                 <p>• 클라이언트 요청 시 D1 캐시에서 즉시 응답 (~50ms)</p>
                 <p>• 캐시가 만료되면 기존 캐시를 반환하면서 백그라운드 갱신 실행</p>
                 <p>• Comcigan 서버 장애 시에도 마지막 캐시 데이터로 정상 서비스</p>
+                <p>• <b>과거 시간표 저장</b>: 과거 날짜 요청 시 저장된 스냅샵을 반환하여 미확정 표시 없이 적절한 시간표를 보여줍니다</p>
             </div>
         </div>
     );
@@ -5877,7 +6849,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     placeholder="암호"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    autoFocus
                                     className="pr-10"
                                 />
                                 <Button
@@ -5951,7 +6922,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
             </div>
 
             <Tabs defaultValue="assessments" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 mb-8 h-auto">
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-7 mb-8 h-auto">
                     <TabsTrigger value="assessments">등록된 수행평가</TabsTrigger>
                     <TabsTrigger value="users">사용자 관리</TabsTrigger>
                     <TabsTrigger value="electives">선택과목</TabsTrigger>
@@ -5995,6 +6966,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800"
                     >
                         🍱 식단페이지
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="teacher-mgmt"
+                        className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-800 font-medium"
+                    >
+                        📋 교사용 성지수행
                     </TabsTrigger>
                 </TabsList>
 
@@ -6289,20 +7266,23 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         const gradeClassNumHyphen = `${u.grade || ''}-${u.classNum || ''}-${u.studentNumber || ''}`;
                                         const ip = u.ip || '';
                                         const kakaoNames = (u.kakaoAccounts || []).map((k: any) => k.kakaoNickname).join(' ');
+                                        const name = (u.studentName || '').toLowerCase();
                                         
                                         return ip.includes(query) || 
                                                gradeClassNum.includes(query) || 
                                                gradeClassNum2.includes(query) ||
                                                gradeClassNumHyphen.includes(query) ||
-                                               kakaoNames.toLowerCase().includes(query);
+                                               kakaoNames.toLowerCase().includes(query) ||
+                                               name.includes(query);
                                     });
 
                                     const knownUsers = filteredActiveUsers.filter(isKnownUser);
                                     const unknownUsers = filteredActiveUsers.filter((u: any) => !isKnownUser(u));
 
-                                    // --- Group known users by student ID ---
+                                    // --- Group known users by (name + student ID) = composite identity ---
                                     type UserGroup = {
                                         key: string;
+                                        studentName: string | null;   // 복합 식별자의 이름 부분
                                         grade: number | null;
                                         classNum: number | null;
                                         studentNumber: number | null;
@@ -6321,8 +7301,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
 
                                     const groupMap = new Map<string, UserGroup>();
                                     for (const user of knownUsers) {
+                                        // 이름+학번 복합 식별자 기준 그룹 key
+                                        const nameStr = user.studentName || '';
                                         const key = (user.grade && user.classNum && user.studentNumber)
-                                            ? `${user.grade}-${user.classNum}-${user.studentNumber}`
+                                            ? `${nameStr}|${user.grade}-${user.classNum}-${user.studentNumber}`
                                             : user.ip;
                                         const existing = groupMap.get(key);
                                         if (existing) {
@@ -6346,6 +7328,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         } else {
                                             groupMap.set(key, {
                                                 key,
+                                                studentName: user.studentName ?? null,
                                                 grade: user.grade ?? null,
                                                 classNum: user.classNum ?? null,
                                                 studentNumber: user.studentNumber ?? null,
@@ -6379,7 +7362,9 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     groups = groups.sort((a, b) => {
                                         let cmp = 0;
                                         if (sortColumn === 'id') {
-                                            cmp = (a.grade ?? 99) - (b.grade ?? 99)
+                                            // 이름 → 학년 → 반 → 번호 순 정렬
+                                            cmp = (a.studentName || '').localeCompare(b.studentName || '', 'ko')
+                                                || (a.grade ?? 99) - (b.grade ?? 99)
                                                 || (a.classNum ?? 99) - (b.classNum ?? 99)
                                                 || (a.studentNumber ?? 99) - (b.studentNumber ?? 99);
                                         } else if (sortColumn === 'modCount') {
@@ -6528,15 +7513,24 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     </TableCell>
                                                     <TableCell>
                                                         {group.grade && group.classNum ? (
-                                                            <div className="flex items-center gap-2">
-                                                                <Badge variant="outline" className="font-mono text-green-600 border-green-200 bg-green-50">
-                                                                    {group.grade}-{group.classNum}{group.studentNumber ? `-${group.studentNumber}` : ''}
-                                                                </Badge>
-                                                                {group.hasElectives && (
-                                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-600 border-blue-200 px-1 py-0 h-4">
-                                                                        선택과목
+                                                            <div className="flex flex-col gap-0.5">
+                                                                {/* 이름 */}
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="font-bold text-sm text-slate-800">
+                                                                        {group.studentName || <span className="text-gray-300 font-normal text-xs">이름 없음</span>}
+                                                                    </span>
+                                                                    {group.hasElectives && (
+                                                                        <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-600 border-blue-200 px-1 py-0 h-4">
+                                                                            선택과목
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                                {/* 학번 */}
+                                                                <div>
+                                                                    <Badge variant="outline" className="font-mono text-green-700 border-green-200 bg-green-50 text-xs">
+                                                                        {group.grade}학년 {group.classNum}반{group.studentNumber ? ` ${group.studentNumber}번` : ''}
                                                                     </Badge>
-                                                                )}
+                                                                </div>
                                                             </div>
                                                         ) : <span className="text-gray-300 text-xs">-</span>}
                                                     </TableCell>
@@ -6713,9 +7707,14 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                             </TableCell>
                                                                             <TableCell>
                                                                                 {user.grade && user.classNum ? (
-                                                                                    <Badge variant="outline" className="font-mono text-green-600 border-green-200 bg-green-50">
-                                                                                        {user.grade}-{user.classNum}{user.studentNumber ? `-${user.studentNumber}` : ''}
-                                                                                    </Badge>
+                                                                                    <div className="flex flex-col gap-0.5">
+                                                                                        <span className="font-bold text-sm text-slate-800">
+                                                                                            {user.studentName || <span className="text-gray-300 font-normal text-xs">이름 없음</span>}
+                                                                                        </span>
+                                                                                        <Badge variant="outline" className="font-mono text-green-700 border-green-200 bg-green-50 text-xs w-fit">
+                                                                                            {user.grade}학년 {user.classNum}반{user.studentNumber ? ` ${user.studentNumber}번` : ''}
+                                                                                        </Badge>
+                                                                                    </div>
                                                                                 ) : <span className="text-gray-300 text-xs">-</span>}
                                                                             </TableCell>
                                                                             <TableCell>
@@ -6866,6 +7865,11 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                 <TabsContent value="meal" className="space-y-6">
                     <MealManager adminPassword={password} />
                 </TabsContent>
+
+                <TabsContent value="teacher-mgmt" className="space-y-6">
+                    <TeacherMgmtManager adminPassword={password} />
+                </TabsContent>
+
             </Tabs >
 
             <IPProfileViewer
@@ -8840,7 +9844,7 @@ function AllowDownloadSettings({ adminPassword }: { adminPassword: string }) {
 
 // ----------------------------------------------------------------------
 // PromotionSettings - Controls when to reset the assessment instruction popup
-// Located under: 기타 > 홍보
+// Located under: 기타 > 수행평가 팝업 설정
 // ----------------------------------------------------------------------
 function PromotionSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
@@ -8854,6 +9858,12 @@ function PromotionSettings({ adminPassword }: { adminPassword: string }) {
             return res.json();
         }
     });
+
+    const isPromotionEnabled = settingsData?.promotion_popup_enabled === true ||
+        settingsData?.promotion_popup_enabled === 'true' ||
+        settingsData?.promotion_popup_enabled === '1' ||
+        settingsData?.promotion_popup_enabled === 1 ||
+        settingsData?.promotion_popup_enabled === 'on';
 
     useEffect(() => {
         if (settingsData && settingsData.promotion_reset_days !== undefined) {
@@ -8878,7 +9888,7 @@ function PromotionSettings({ adminPassword }: { adminPassword: string }) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin", "promotionSettings"] });
             queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
-            toast.success("홍보 설정이 저장되었습니다.");
+            toast.success("수행평가 팝업 설정이 저장되었습니다.");
         },
         onError: () => {
             toast.error("설정 저장에 실패했습니다.");
@@ -8893,62 +9903,91 @@ function PromotionSettings({ adminPassword }: { adminPassword: string }) {
     const isDirty = resetDays !== originalDays;
 
     return (
-        <Card className="w-full max-w-2xl mt-8">
-            <CardHeader>
-                <CardTitle>수행평가 입력 독려 (홍보) 팝업 설정</CardTitle>
-                <CardDescription>
-                    일반 사용자가 수행평가를 적극적으로 입력하도록 유도하는 "수행평가 추가" 도움말 팝업의 재구동 시점을 설정합니다.<br />
-                    설정한 기간(일) 동안 앱 전체에 새로운 수행평가가 올라오지 않으면, 이전에 팝업을 닫았던 사용자라도 다시 팝업이 노출됩니다.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="space-y-3 pt-4">
-                    <Label className="font-medium text-sm">팝업 초기화 기준일 (미등록 기간)</Label>
-                    <div className="flex items-center space-x-2">
-                        <Input
-                            type="number"
-                            min={0}
-                            value={resetDays}
-                            onChange={(e) => setResetDays(parseInt(e.target.value) || 0)}
-                            className="w-24"
+        <div className="space-y-6 max-w-2xl mt-4">
+            {/* 1. 장려 팝업 On/Off 스위치 */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">수행평가 입력 독려 (장려) 팝업 활성화</CardTitle>
+                    <CardDescription>
+                        일반 사용자에게 시간표의 칸을 클릭하여 수행평가를 추가하도록 유도하는 독려 팝업의 표시 여부를 설정합니다.
+                        스위치를 끄면 모든 사용자에게 장려 팝업이 일절 노출되지 않습니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center gap-4">
+                        <Switch
+                            id="promotion-popup-toggle"
+                            checked={isPromotionEnabled}
+                            onCheckedChange={(checked) => saveSettingMutation.mutate({ promotion_popup_enabled: checked ? "true" : "false" })}
+                            disabled={saveSettingMutation.isPending}
                         />
-                        <span className="text-sm font-medium">일 동안 새 수행평가 등록이 없으면 팝업 다시 표시</span>
+                        <Label htmlFor="promotion-popup-toggle" className="cursor-pointer">
+                            {isPromotionEnabled
+                                ? <span className="text-green-700 font-medium">✅ 장려 팝업 켜짐 (표시 중)</span>
+                                : <span className="text-gray-500 font-medium">🔴 장려 팝업 꺼짐 (비활성화)</span>
+                            }
+                        </Label>
                     </div>
-                </div>
+                </CardContent>
+            </Card>
 
-                <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
-                    <p>💡 <strong>0일</strong>로 설정 시 이 기능이 <strong>비활성화</strong>되며, 사용자가 한 번 팝업을 닫으면 다시는 표시되지 않습니다.</p>
-                </div>
+            {/* 2. 팝업 재구동 기준일 설정 */}
+            <Card className={!isPromotionEnabled ? "opacity-50 pointer-events-none" : ""}>
+                <CardHeader>
+                    <CardTitle className="text-base">팝업 재구동 기준일 (미등록 기간)</CardTitle>
+                    <CardDescription>
+                        설정한 기간(일) 동안 새로운 수행평가가 등록되지 않으면, 이전에 팝업을 닫았던 사용자에게도 다시 팝업이 노출됩니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                        <Label className="font-medium text-sm">초기화 기준일</Label>
+                        <div className="flex items-center space-x-2">
+                            <Input
+                                type="number"
+                                min={0}
+                                value={resetDays}
+                                onChange={(e) => setResetDays(parseInt(e.target.value) || 0)}
+                                className="w-24"
+                            />
+                            <span className="text-sm font-medium">일 동안 새 수행평가 등록이 없으면 팝업 다시 표시</span>
+                        </div>
+                    </div>
 
-                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-                    <Button
-                        variant="outline"
-                        onClick={() => setResetDays(originalDays)}
-                        disabled={!isDirty || saveSettingMutation.isPending}
-                    >
-                        변경 취소
-                    </Button>
-                    <Button
-                        onClick={() => saveSettingMutation.mutate({ promotion_reset_days: resetDays.toString() })}
-                        disabled={!isDirty || saveSettingMutation.isPending}
-                    >
-                        {saveSettingMutation.isPending ? "저장 중..." : "설정 저장"}
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>
+                    <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
+                        <p>💡 <strong>0일</strong>로 설정 시 재구동 기능이 <strong>비활성화</strong>되며, 사용자가 한 번 '이해함'을 눌러 팝업을 닫으면 다시는 표시되지 않습니다.</p>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                        <Button
+                            variant="outline"
+                            onClick={() => setResetDays(originalDays)}
+                            disabled={!isDirty || saveSettingMutation.isPending}
+                        >
+                            변경 취소
+                        </Button>
+                        <Button
+                            onClick={() => saveSettingMutation.mutate({ promotion_reset_days: resetDays.toString() })}
+                            disabled={!isDirty || saveSettingMutation.isPending}
+                        >
+                            {saveSettingMutation.isPending ? "저장 중..." : "기준일 저장"}
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
     );
 }
 
 // ----------------------------------------------------------------------
-// SamsungInstallSettings - Controls Samsung Internet PWA button visibility
+// InstallButtonSettings - 앱 다운로드 버튼 브라우저별 표시 제어
 // Located under: 기타 > 미해결 문제
 // ----------------------------------------------------------------------
-function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
+function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
 
     const { data: settingsData, isLoading } = useQuery({
-        queryKey: ["admin", "samsungInstallSettings"],
+        queryKey: ["admin", "installButtonSettings"],
         queryFn: async () => {
             const res = await fetch("/api/settings/public");
             if (!res.ok) throw new Error("설정 불러오기 실패");
@@ -8956,8 +9995,23 @@ function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
         }
     });
 
-    const isSamsungButtonVisible = settingsData?.samsung_install_button_visible !== false;
-    const isPwaButtonVisible = settingsData?.pwa_install_button_visible !== false;
+    const isPwaButtonVisible      = settingsData?.pwa_install_button_visible     !== false;
+    const isChrome                = settingsData?.chrome_install_button_visible  !== false;
+    const isSamsung               = settingsData?.samsung_install_button_visible !== false;
+    const isSafari                = settingsData?.safari_install_button_visible  !== false;
+    const isOther                 = settingsData?.other_install_button_visible   !== false;
+
+    const [playStoreUrl, setPlayStoreUrl] = useState("");
+    const [appStoreUrl, setAppStoreUrl] = useState("");
+
+    useEffect(() => {
+        if (settingsData?.play_store_url !== undefined) {
+            setPlayStoreUrl(settingsData.play_store_url || "");
+        }
+        if (settingsData?.app_store_url !== undefined) {
+            setAppStoreUrl(settingsData.app_store_url || "");
+        }
+    }, [settingsData?.play_store_url, settingsData?.app_store_url]);
 
     const saveSettingMutation = useMutation({
         mutationFn: async (payload: Record<string, string>) => {
@@ -8972,7 +10026,7 @@ function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
             if (!res.ok) throw new Error("저장 실패");
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["admin", "samsungInstallSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "installButtonSettings"] });
             queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
             toast.success("설정이 저장되었습니다.");
         },
@@ -8981,29 +10035,71 @@ function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
         }
     });
 
+    const toggle = (key: string, checked: boolean) =>
+        saveSettingMutation.mutate({ [key]: checked ? "true" : "false" });
+
+    const savePlayStoreUrl = () =>
+        saveSettingMutation.mutate({ play_store_url: playStoreUrl.trim() });
+
+    const saveAppStoreUrl = () =>
+        saveSettingMutation.mutate({ app_store_url: appStoreUrl.trim() });
+
     if (isLoading) {
         return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
     }
 
-    return (
-        <div className="space-y-6 p-1">
-            <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
-                <p className="font-semibold mb-1">⚠️ 미해결 문제: 삼성 인터넷 홈 화면 추가</p>
-                <p className="text-orange-700">
-                    삼성 인터넷에서 <strong>beforeinstallprompt</strong> 이벤트가 일관성 없이 발생합니다.
-                    현재 <code className="bg-orange-100 px-1 rounded">display: minimal-ui + display_override</code> 방식으로
-                    "Add to apps" / "Add to Home screen" 두 옵션을 제공 중입니다.
-                    버튼이 작동하지 않는 경우 아래에서 버튼을 숨길 수 있습니다.
-                </p>
-            </div>
+    // 현재 접속 브라우저 감지
+    const currentBrowserKey = (() => {
+        const ua = navigator.userAgent;
+        if (/SamsungBrowser/i.test(ua)) return "samsung_install_button_visible";
+        if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) return "safari_install_button_visible";
+        if (/Chrome/i.test(ua)) return "chrome_install_button_visible";
+        return "other_install_button_visible";
+    })();
 
-            {/* Global toggle - hides button for ALL browsers */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base">앱 다운로드 버튼 전체 표시 (모든 브라우저)</CardTitle>
+    // 브라우저 행 정의
+    const browsers = [
+        {
+            key: "chrome_install_button_visible",
+            label: "Chrome",
+            icon: "🌐",
+            desc: "Android Chrome / 크로미움 계열",
+            value: isChrome,
+        },
+        {
+            key: "samsung_install_button_visible",
+            label: "Samsung",
+            icon: "📱",
+            desc: "삼성 인터넷 브라우저",
+            value: isSamsung,
+        },
+        {
+            key: "safari_install_button_visible",
+            label: "Safari",
+            icon: "🧭",
+            desc: "iOS Safari (Add to Home Screen)",
+            value: isSafari,
+        },
+        {
+            key: "other_install_button_visible",
+            label: "그외",
+            icon: "❓",
+            desc: "위 3가지에 해당하지 않는 브라우저",
+            value: isOther,
+        },
+    ] as const;
+
+    return (
+        <div className="space-y-5 p-1">
+            {/* 전체 서킷브레이커 */}
+            <Card className={`border-2 ${isPwaButtonVisible ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}`}>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <span className="text-lg">⚡</span>
+                        전체 서킷브레이커
+                    </CardTitle>
                     <CardDescription>
-                        모든 브라우저에서 홈 화면 추가 / 앱 다운로드 버튼 표시 여부를 전체적으로 제어합니다.
-                        OFF 시 삼성 인터넷 토글은 무의미합니다.
+                        OFF 시 아래 브라우저별 설정과 무관하게 모든 환경에서 앱 다운로드 버튼이 숨겨집니다.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -9011,56 +10107,168 @@ function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
                         <Switch
                             id="pwa-install-button-toggle"
                             checked={isPwaButtonVisible}
-                            onCheckedChange={(checked) => saveSettingMutation.mutate({ pwa_install_button_visible: checked ? "true" : "false" })}
+                            onCheckedChange={(checked) => toggle("pwa_install_button_visible", checked)}
                             disabled={saveSettingMutation.isPending}
                         />
-                        <Label htmlFor="pwa-install-button-toggle" className="cursor-pointer">
+                        <Label htmlFor="pwa-install-button-toggle" className="cursor-pointer text-sm font-semibold">
                             {isPwaButtonVisible
-                                ? <span className="text-green-700 font-medium">✅ 버튼 표시 중 (전체 브라우저)</span>
-                                : <span className="text-gray-500 font-medium">🔴 전체 숨김</span>
+                                ? <span className="text-green-700">✅ 전체 표시 중</span>
+                                : <span className="text-red-600">🔴 전체 숨김 (서킷브레이커 작동 중)</span>
                             }
                         </Label>
                     </div>
                 </CardContent>
             </Card>
 
-            {/* Samsung-specific toggle */}
-            <Card className={!isPwaButtonVisible ? "opacity-50 pointer-events-none" : ""}>
-                <CardHeader>
-                    <CardTitle className="text-base">삼성 인터넷 홈 화면 추가 버튼</CardTitle>
+            {/* 브라우저별 표 */}
+            <Card className={!isPwaButtonVisible ? "opacity-40 pointer-events-none" : ""}>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base">브라우저별 앱 다운로드 버튼 표시</CardTitle>
                     <CardDescription>
-                        삼성 인터넷 사용자에게만 "홈 화면에 성지수행 추가" 버튼 표시 여부를 설정합니다.
-                        위의 전체 토글이 OFF이면 이 설정은 무시됩니다.
+                        각 모바일 브라우저 환경별로 버튼 표시 여부를 개별 제어합니다.
+                        전체 서킷브레이커가 OFF이면 이 설정은 무시됩니다.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <div className="flex items-center gap-4">
-                        <Switch
-                            id="samsung-install-button-toggle"
-                            checked={isSamsungButtonVisible}
-                            onCheckedChange={(checked) => saveSettingMutation.mutate({ samsung_install_button_visible: checked ? "true" : "false" })}
-                            disabled={saveSettingMutation.isPending}
-                        />
-                        <Label htmlFor="samsung-install-button-toggle" className="cursor-pointer">
-                            {isSamsungButtonVisible
-                                ? <span className="text-green-700 font-medium">✅ 버튼 표시 중 (삼성 인터넷 사용자에게 보임)</span>
-                                : <span className="text-gray-500 font-medium">🔴 버튼 숨김</span>
-                            }
-                        </Label>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b bg-gray-50">
+                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">브라우저</th>
+                                    <th className="text-center px-4 py-2.5 font-semibold text-gray-600">표시</th>
+                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">상태</th>
+                                    <th className="text-center px-4 py-2.5 font-semibold text-gray-600">현재 환경</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {browsers.map((browser) => {
+                                    const isCurrent = browser.key === currentBrowserKey;
+                                    return (
+                                    <tr key={browser.key} className={`border-b last:border-b-0 transition-colors ${isCurrent ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}>
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-base">{browser.icon}</span>
+                                                <div>
+                                                    <p className="font-semibold text-gray-800">{browser.label}</p>
+                                                    <p className="text-xs text-gray-500">{browser.desc}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            <Switch
+                                                id={`install-toggle-${browser.key}`}
+                                                checked={browser.value}
+                                                onCheckedChange={(checked) => toggle(browser.key, checked)}
+                                                disabled={saveSettingMutation.isPending}
+                                            />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {browser.value
+                                                ? <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">✅ 표시</span>
+                                                : <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">숨김</span>
+                                            }
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {isCurrent && (
+                                                <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full">
+                                                    📍 현재
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
-                    {saveSettingMutation.isPending && <p className="text-sm text-gray-400 mt-2">저장 중...</p>}
                 </CardContent>
             </Card>
 
-            <Card className="border-dashed border-gray-300 bg-gray-50">
-                <CardContent className="pt-4">
-                    <p className="text-xs text-gray-500 font-semibold mb-2">📌 기술적 한계</p>
-                    <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
-                        <li><code>display: standalone</code> → "Add to apps" (WebAPK, Play Protect 경고 위험)</li>
-                        <li><code>display: minimal-ui</code>만 → 이벤트 발화 안 됨</li>
-                        <li><code>display_override: [standalone, minimal-ui]</code> → 두 옵션 표시 (현재)</li>
-                        <li>삼성 인터넷 버전/기기에 따라 결과가 다를 수 있음</li>
-                    </ul>
+            {saveSettingMutation.isPending && (
+                <p className="text-sm text-gray-400 text-center">저장 중...</p>
+            )}
+
+            {/* 앱스토어 링크 설정 */}
+            <Card>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base">앱스토어 링크 설정</CardTitle>
+                    <CardDescription>
+                        Samsung Internet·그외 브라우저에는 <strong>Play Store</strong> 버튼을,
+                        iOS Safari에는 <strong>App Store</strong> 버튼을 표시합니다.
+                        비워두면 해당 환경에서 기존 PWA 프롬프트 방식을 사용합니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                    {/* Play Store */}
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+                                <path d="M3.18 23.76c.33.18.7.2 1.04.08L14.76 12 4.22.16A1.25 1.25 0 0 0 3.18.4C2.6.74 2.25 1.35 2.25 2v20c0 .65.35 1.26.93 1.76Z" fill="#EA4335"/>
+                                <path d="M21.25 10.3 17.98 8.5l-3.69 3.5 3.69 3.5 3.27-1.8c.93-.51.93-1.89 0-2.4Z" fill="#FBBC04"/>
+                                <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
+                                <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
+                            </svg>
+                            Google Play Store <span className="text-xs font-normal text-gray-500">(Samsung / 그외 브라우저)</span>
+                        </div>
+                        <div className="flex gap-2">
+                            <Input
+                                id="play-store-url-input"
+                                value={playStoreUrl}
+                                onChange={(e) => setPlayStoreUrl(e.target.value)}
+                                placeholder="https://play.google.com/store/apps/details?id=..."
+                                className="font-mono text-sm flex-1"
+                            />
+                            <Button
+                                onClick={savePlayStoreUrl}
+                                disabled={saveSettingMutation.isPending}
+                                className="shrink-0"
+                            >
+                                저장
+                            </Button>
+                        </div>
+                        {playStoreUrl ? (
+                            <p className="text-xs text-blue-600 break-all">
+                                저장됨: <a href={playStoreUrl} target="_blank" rel="noreferrer" className="underline">{playStoreUrl}</a>
+                            </p>
+                        ) : (
+                            <p className="text-xs text-gray-400">미설정 — Samsung/그외에서 기존 PWA 프롬프트 사용</p>
+                        )}
+                    </div>
+
+                    <div className="border-t" />
+
+                    {/* App Store */}
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+                                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z" fill="#000"/>
+                            </svg>
+                            Apple App Store <span className="text-xs font-normal text-gray-500">(iOS Safari)</span>
+                        </div>
+                        <div className="flex gap-2">
+                            <Input
+                                id="app-store-url-input"
+                                value={appStoreUrl}
+                                onChange={(e) => setAppStoreUrl(e.target.value)}
+                                placeholder="https://apps.apple.com/app/id..."
+                                className="font-mono text-sm flex-1"
+                            />
+                            <Button
+                                onClick={saveAppStoreUrl}
+                                disabled={saveSettingMutation.isPending}
+                                className="shrink-0"
+                            >
+                                저장
+                            </Button>
+                        </div>
+                        {appStoreUrl ? (
+                            <p className="text-xs text-blue-600 break-all">
+                                저장됨: <a href={appStoreUrl} target="_blank" rel="noreferrer" className="underline">{appStoreUrl}</a>
+                            </p>
+                        ) : (
+                            <p className="text-xs text-gray-400">미설정 — iOS Safari에서 기존 PWA 프롬프트 사용</p>
+                        )}
+                    </div>
                 </CardContent>
             </Card>
         </div>
@@ -9068,6 +10276,7 @@ function SamsungInstallSettings({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
+
 // AutoPredictSettings - Controls auto predict algorithm Pause and Manual Trigger
 // Located under: 기타 > 수행평가 예측 엔진
 // ----------------------------------------------------------------------
@@ -9286,6 +10495,867 @@ function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
                     )}
                 </div>
             )}
+        </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
+// AssessmentRolePermissionsSettings - 수행평가 등록주체 관리 (학년별 학생/선생님 권한 및 제한 메시지)
+// Located under: 기타 > 수행평가 등록주체
+// ----------------------------------------------------------------------
+function AssessmentRolePermissionsSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    const { data: settingsData, isLoading } = useQuery({
+        queryKey: ["admin", "assessmentRolePermissionsSettings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 불러오기 실패");
+            return res.json();
+        }
+    });
+
+    const [studentDisallowMsg, setStudentDisallowMsg] = useState("");
+    const [teacherDisallowMsg, setTeacherDisallowMsg] = useState("");
+    const [isInitialized, setIsInitialized] = useState(false);
+
+    useEffect(() => {
+        if (settingsData && !isInitialized) {
+            setStudentDisallowMsg(settingsData.assessment_disallow_msg_student || "현재 학생의 수행평가 등록이 제한되어 있습니다.");
+            setTeacherDisallowMsg(settingsData.assessment_disallow_msg_teacher || "현재 선생님의 수행평가 등록이 제한되어 있습니다.");
+            setIsInitialized(true);
+        }
+    }, [settingsData, isInitialized]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (payload: Record<string, string>) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "assessmentRolePermissionsSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings-teacher"] });
+            toast.success("수행평가 등록주체 설정이 저장되었습니다.");
+        },
+        onError: (err: any) => {
+            toast.error(err.message || "설정 저장에 실패했습니다.");
+        }
+    });
+
+    if (isLoading || !settingsData) {
+        return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
+    }
+
+    const allowStudentG1 = settingsData.assessment_allow_student_grade1 !== "false";
+    const allowStudentG2 = settingsData.assessment_allow_student_grade2 !== "false";
+    const allowStudentG3 = settingsData.assessment_allow_student_grade3 !== "false";
+
+    const allowTeacherG1 = settingsData.assessment_allow_teacher_grade1 !== "false";
+    const allowTeacherG2 = settingsData.assessment_allow_teacher_grade2 !== "false";
+    const allowTeacherG3 = settingsData.assessment_allow_teacher_grade3 !== "false";
+
+    const handleToggle = (grade: number, role: 'student' | 'teacher', currentVal: boolean) => {
+        const nextVal = !currentVal;
+        const roleName = role === 'student' ? '학생' : '선생님';
+        const actionName = nextVal ? '등록 허용(가능)' : '등록 차단(불가)';
+        const confirmText = `[${grade}학년 ${roleName}]의 수행평가 등록 권한을 [${actionName}]으로 변경하시겠습니까?`;
+
+        if (window.confirm(confirmText)) {
+            const key = `assessment_allow_${role}_grade${grade}`;
+            saveMutation.mutate({ [key]: nextVal ? "true" : "false" });
+        }
+    };
+
+    const handleSaveMessages = (e: React.FormEvent) => {
+        e.preventDefault();
+        const confirmText = "수행평가 등록 제한 안내 메시지를 저장하시겠습니까?";
+        if (window.confirm(confirmText)) {
+            saveMutation.mutate({
+                assessment_disallow_msg_student: studentDisallowMsg.trim() || "현재 학생의 수행평가 등록이 제한되어 있습니다.",
+                assessment_disallow_msg_teacher: teacherDisallowMsg.trim() || "현재 선생님의 수행평가 등록이 제한되어 있습니다.",
+            });
+        }
+    };
+
+    const handleResetDefaultMessages = () => {
+        if (window.confirm("안내 메시지를 시스템 기본값으로 초기화하시겠습니까?")) {
+            const defaultStudent = "현재 학생의 수행평가 등록이 제한되어 있습니다.";
+            const defaultTeacher = "현재 선생님의 수행평가 등록이 제한되어 있습니다.";
+            setStudentDisallowMsg(defaultStudent);
+            setTeacherDisallowMsg(defaultTeacher);
+            saveMutation.mutate({
+                assessment_disallow_msg_student: defaultStudent,
+                assessment_disallow_msg_teacher: defaultTeacher,
+            });
+        }
+    };
+
+    const grades = [
+        { grade: 1, studentAllowed: allowStudentG1, teacherAllowed: allowTeacherG1 },
+        { grade: 2, studentAllowed: allowStudentG2, teacherAllowed: allowTeacherG2 },
+        { grade: 3, studentAllowed: allowStudentG3, teacherAllowed: allowTeacherG3 },
+    ];
+
+    return (
+        <div className="space-y-6 max-w-4xl mt-4 pb-12">
+            {/* 1. 학년별 수행평가 등록 권한 카드 */}
+            <Card className="border-slate-200 shadow-sm">
+                <CardHeader>
+                    <div className="flex items-center gap-2">
+                        <UserCheck className="w-5 h-5 text-purple-600" />
+                        <CardTitle className="text-base font-bold">학년별 수행평가 등록 권한 설정</CardTitle>
+                    </div>
+                    <CardDescription>
+                        각 학년별로 학생과 선생님의 수행평가 추가/등록 권한을 개별 제어합니다.
+                        등록이 차단된 주체는 시간표 클릭 시 아래에 설정된 안내 메시지가 표시되며 등록이 제한됩니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="overflow-hidden border border-slate-200 rounded-lg">
+                        <Table>
+                            <TableHeader className="bg-slate-50">
+                                <TableRow>
+                                    <TableHead className="font-bold text-center w-24">대상 학년</TableHead>
+                                    <TableHead className="font-bold text-center">학생 등록 권한</TableHead>
+                                    <TableHead className="font-bold text-center">선생님 등록 권한</TableHead>
+                                    <TableHead className="font-bold text-center w-36">현재 상태 요약</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {grades.map(({ grade, studentAllowed, teacherAllowed }) => (
+                                    <TableRow key={grade} className="hover:bg-slate-50/50">
+                                        <TableCell className="font-bold text-center bg-slate-50/30 text-slate-700">
+                                            {grade}학년
+                                        </TableCell>
+                                        <TableCell className="text-center py-4">
+                                            <div className="flex items-center justify-center gap-3">
+                                                <Switch
+                                                    id={`student-toggle-${grade}`}
+                                                    checked={studentAllowed}
+                                                    onCheckedChange={() => handleToggle(grade, 'student', studentAllowed)}
+                                                    disabled={saveMutation.isPending}
+                                                />
+                                                <Label
+                                                    htmlFor={`student-toggle-${grade}`}
+                                                    className="cursor-pointer text-xs font-semibold"
+                                                >
+                                                    {studentAllowed ? (
+                                                        <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                                            등록 가능
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                                            등록 제한 (차단)
+                                                        </span>
+                                                    )}
+                                                </Label>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-center py-4">
+                                            <div className="flex items-center justify-center gap-3">
+                                                <Switch
+                                                    id={`teacher-toggle-${grade}`}
+                                                    checked={teacherAllowed}
+                                                    onCheckedChange={() => handleToggle(grade, 'teacher', teacherAllowed)}
+                                                    disabled={saveMutation.isPending}
+                                                />
+                                                <Label
+                                                    htmlFor={`teacher-toggle-${grade}`}
+                                                    className="cursor-pointer text-xs font-semibold"
+                                                >
+                                                    {teacherAllowed ? (
+                                                        <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                                            등록 가능
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                                            등록 제한 (차단)
+                                                        </span>
+                                                    )}
+                                                </Label>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            {studentAllowed && teacherAllowed ? (
+                                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px]">
+                                                    모두 허용
+                                                </Badge>
+                                            ) : !studentAllowed && !teacherAllowed ? (
+                                                <Badge variant="destructive" className="text-[11px]">
+                                                    모두 차단
+                                                </Badge>
+                                            ) : studentAllowed ? (
+                                                <Badge variant="secondary" className="bg-amber-50 text-amber-700 border border-amber-200 text-[11px]">
+                                                    학생만 가능
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 border border-blue-200 text-[11px]">
+                                                    선생님만 가능
+                                                </Badge>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                    <div className="p-3 bg-purple-50/70 border border-purple-100 rounded-lg text-xs text-purple-800 flex items-start gap-2">
+                        <Info className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                            <strong>확인 알림 안내:</strong> 옵션 변경 시 관리자의 오작동 방지를 위해 브라우저 재확인 대화상자가 표시된 후 즉시 저장 및 실시간 적용됩니다.
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* 2. 등록 차단 안내 메시지 설정 카드 */}
+            <Card className="border-slate-200 shadow-sm">
+                <CardHeader>
+                    <div className="flex items-center gap-2">
+                        <AlertCircle className="w-5 h-5 text-indigo-600" />
+                        <CardTitle className="text-base font-bold">등록 차단 시 안내 메시지 커스텀 설정</CardTitle>
+                    </div>
+                    <CardDescription>
+                        수행평가 등록이 제한된 학년에서 시간표를 클릭했을 때 사용자(학생/선생님)에게 노출될 안내 문구를 주체별로 직접 입력합니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleSaveMessages} className="space-y-5">
+                        {/* 학생 안내 문구 */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="student-disallow-msg" className="font-semibold text-sm text-slate-800">
+                                    학생 등록 제한 안내 메시지
+                                </Label>
+                                <span className="text-xs text-slate-400">메인페이지 학생 시간표 클릭 시 노출</span>
+                            </div>
+                            <Input
+                                id="student-disallow-msg"
+                                value={studentDisallowMsg}
+                                onChange={(e) => setStudentDisallowMsg(e.target.value)}
+                                placeholder="예: 현재 학생의 수행평가 등록이 제한되어 있습니다."
+                                className="text-sm h-10"
+                            />
+                        </div>
+
+                        {/* 선생님 안내 문구 */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="teacher-disallow-msg" className="font-semibold text-sm text-slate-800">
+                                    선생님 등록 제한 안내 메시지
+                                </Label>
+                                <span className="text-xs text-slate-400">교사용 페이지 시간표 클릭 시 노출</span>
+                            </div>
+                            <Input
+                                id="teacher-disallow-msg"
+                                value={teacherDisallowMsg}
+                                onChange={(e) => setTeacherDisallowMsg(e.target.value)}
+                                placeholder="예: 현재 선생님의 수행평가 등록이 제한되어 있습니다."
+                                className="text-sm h-10"
+                            />
+                        </div>
+
+                        <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleResetDefaultMessages}
+                                disabled={saveMutation.isPending}
+                                className="text-xs text-slate-600"
+                            >
+                                <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                                기본값으로 복원
+                            </Button>
+                            <Button
+                                type="submit"
+                                size="sm"
+                                disabled={saveMutation.isPending}
+                                className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-4"
+                            >
+                                <Save className="w-3.5 h-3.5 mr-1.5" />
+                                {saveMutation.isPending ? "저장 중..." : "안내 메시지 저장"}
+                            </Button>
+                        </div>
+                    </form>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+
+
+
+// ======================================================================
+// TeacherMgmtManager - 교사용 성지수행 관리 (사이드바 레이아웃)
+// ======================================================================
+function TeacherMgmtManager({ adminPassword }: { adminPassword: string }) {
+    const [selectedMenu, setSelectedMenu] = useState("teacher-default-pw");
+
+    return (
+        <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
+            {/* Sidebar */}
+            <div className="w-full md:w-64 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
+                <Button
+                    variant="ghost"
+                    className={`justify-start whitespace-nowrap text-left transition-colors ${
+                        selectedMenu === "teacher-default-pw"
+                            ? "bg-emerald-100 text-emerald-900 font-bold hover:bg-emerald-200/80 border border-emerald-300 shadow-xs"
+                            : "text-slate-600 hover:text-emerald-800 hover:bg-emerald-50/70 font-medium"
+                    }`}
+                    onClick={() => setSelectedMenu("teacher-default-pw")}
+                >
+                    <KeyRound className="w-4 h-4 mr-2" />
+                    초기 비밀번호 관리
+                </Button>
+                <Button
+                    variant="ghost"
+                    className={`justify-start whitespace-nowrap text-left transition-colors ${
+                        selectedMenu === "teacher-auth-expiry"
+                            ? "bg-emerald-100 text-emerald-900 font-bold hover:bg-emerald-200/80 border border-emerald-300 shadow-xs"
+                            : "text-slate-600 hover:text-emerald-800 hover:bg-emerald-50/70 font-medium"
+                    }`}
+                    onClick={() => setSelectedMenu("teacher-auth-expiry")}
+                >
+                    <Clock className="w-4 h-4 mr-2" />
+                    세션 유지 기간
+                </Button>
+                <Button
+                    variant="ghost"
+                    className={`justify-start whitespace-nowrap text-left transition-colors ${
+                        selectedMenu === "teacher-per-pw"
+                            ? "bg-emerald-100 text-emerald-900 font-bold hover:bg-emerald-200/80 border border-emerald-300 shadow-xs"
+                            : "text-slate-600 hover:text-emerald-800 hover:bg-emerald-50/70 font-medium"
+                    }`}
+                    onClick={() => setSelectedMenu("teacher-per-pw")}
+                >
+                    <Users className="w-4 h-4 mr-2" />
+                    교사별 비밀번호
+                </Button>
+            </div>
+
+            {/* Main Content */}
+            <div className="flex-1 flex flex-col gap-4 overflow-hidden border rounded-md bg-white p-4">
+                {selectedMenu === "teacher-default-pw" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-emerald-700 flex items-center gap-2">
+                                <KeyRound className="w-5 h-5" />
+                                초기 비밀번호 관리
+                            </h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <TeacherDefaultPasswordManager adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+                {selectedMenu === "teacher-auth-expiry" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-emerald-700 flex items-center gap-2">
+                                <Clock className="w-5 h-5" />
+                                세션 유지 기간 설정
+                            </h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <TeacherAuthExpirySettings adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+                {selectedMenu === "teacher-per-pw" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-emerald-700 flex items-center gap-2">
+                                <Users className="w-5 h-5" />
+                                교사별 비밀번호
+                            </h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <TeacherPerPasswordManager adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ======================================================================
+// TeacherDefaultPasswordManager - 교사 페이지 초기(디폴트) 비밀번호 설정
+// ======================================================================
+function TeacherDefaultPasswordManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [newPw, setNewPw] = useState("");
+    const [showPw, setShowPw] = useState(false);
+    const [currentPw, setCurrentPw] = useState<string | null>(null);
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 조회 실패");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            setCurrentPw(settingsQuery.data.teacher_default_password ?? null);
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (value: string) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({ teacher_default_password: value })
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: (_, value) => {
+            toast.success(`비밀번호가 "${value}"로 저장되었습니다.`);
+            setCurrentPw(value);
+            setNewPw("");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err: any) => toast.error(err.message)
+    });
+
+    const handleSave = (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmed = newPw.trim();
+        if (!trimmed) { toast.error("비밀번호를 입력하세요."); return; }
+        saveMutation.mutate(trimmed);
+    };
+
+    const handleReset = () => {
+        if (confirm('초기 비밀번호를 "관리"로 초기화하시겠습니까?')) {
+            saveMutation.mutate("관리");
+        }
+    };
+
+    if (settingsQuery.isLoading) return <div className="p-4 text-sm text-gray-500">설정을 불러오는 중...</div>;
+
+    return (
+        <Card className="w-full max-w-lg border-emerald-100 shadow-sm">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base font-bold text-gray-700">교사 페이지 초기 비밀번호</CardTitle>
+                <CardDescription className="text-xs text-gray-500">
+                    <code className="bg-gray-100 px-1 rounded">/teacher</code> 접근 시 모든 선생님에게 공통 적용되는
+                    디폴트 비밀번호입니다.<br />
+                    한 번 인증한 선생님은 세션 유지 기간 동안 재입력이 필요 없습니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+                {/* 현재 비밀번호 */}
+                <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                    <span className="text-sm text-gray-500 shrink-0">현재 비밀번호:</span>
+                    <div className="flex items-center gap-2 flex-1">
+                        <span className="font-mono font-bold text-emerald-700 text-sm">
+                            {showPw
+                                ? (currentPw ?? "관리 (기본값)")
+                                : (currentPw ? "•".repeat(currentPw.length) : "(기본값: 관리)")}
+                        </span>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => setShowPw(v => !v)}
+                        >
+                            {showPw ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </Button>
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-7 rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 shrink-0"
+                        onClick={handleReset}
+                        disabled={saveMutation.isPending}
+                    >
+                        기본값으로 초기화
+                    </Button>
+                </div>
+
+                {/* 새 비밀번호 입력 */}
+                <form onSubmit={handleSave} className="space-y-3">
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-gray-600">새 비밀번호</label>
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <Input
+                                    type={showPw ? "text" : "password"}
+                                    value={newPw}
+                                    onChange={e => setNewPw(e.target.value)}
+                                    placeholder="새 비밀번호 입력"
+                                    className="pr-10 text-sm h-9"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                                    onClick={() => setShowPw(v => !v)}
+                                >
+                                    {showPw ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
+                                </Button>
+                            </div>
+                            <Button
+                                type="submit"
+                                disabled={!newPw.trim() || saveMutation.isPending}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-xs h-9 px-4"
+                            >
+                                {saveMutation.isPending ? "저장 중..." : "저장"}
+                            </Button>
+                        </div>
+                    </div>
+                </form>
+
+                <p className="text-xs text-amber-600 bg-amber-50 p-2.5 rounded-lg border border-amber-100 flex items-start gap-1.5">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    비밀번호 변경 시 이전에 인증한 선생님의 기존 세션은 유효 기간 내에는 계속 유지됩니다.
+                    즉시 재인증이 필요한 경우 세션 유지 기간을 0이 아닌 값으로 설정하고 기간을 줄이세요.
+                </p>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ======================================================================
+// TeacherAuthExpirySettings - 교사 페이지 세션 유지 기간 설정
+// ======================================================================
+function TeacherAuthExpirySettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [expireDays, setExpireDays] = useState<number>(0);
+    const [inputValue, setInputValue] = useState<string>("0");
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 조회 실패");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            const val = parseInt(settingsQuery.data.teacher_auth_expire_days || "0", 10);
+            setExpireDays(val);
+            setInputValue(String(val));
+        }
+    }, [settingsQuery.data]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (days: number) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({ teacher_auth_expire_days: String(days) })
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: (_, days) => {
+            toast.success(days === 0 ? "영구 유지로 설정되었습니다." : `${days}일 후 재인증으로 설정되었습니다.`);
+            setExpireDays(days);
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err: any) => toast.error(err.message)
+    });
+
+    const handleSave = (e: React.FormEvent) => {
+        e.preventDefault();
+        const val = parseInt(inputValue, 10);
+        if (isNaN(val) || val < 0) { toast.error("0 이상의 숫자를 입력하세요."); return; }
+        if (val > 3650) { toast.error("최대 3650일(10년)까지 설정 가능합니다."); return; }
+        saveMutation.mutate(val);
+    };
+
+    // 빠른 선택 프리셋
+    const presets = [
+        { label: "영구", days: 0 },
+        { label: "7일", days: 7 },
+        { label: "30일", days: 30 },
+        { label: "90일", days: 90 },
+        { label: "365일", days: 365 },
+    ];
+
+    if (settingsQuery.isLoading) return <div className="p-4 text-sm text-gray-500">설정을 불러오는 중...</div>;
+
+    return (
+        <Card className="w-full max-w-lg border-emerald-100 shadow-sm">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base font-bold text-gray-700">세션 유지 기간</CardTitle>
+                <CardDescription className="text-xs text-gray-500">
+                    선생님이 비밀번호 입력 후 재인증 없이 접근할 수 있는 기간을 설정합니다.<br />
+                    인증 정보는 선생님 브라우저의 로컬스토리지에 저장됩니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+                {/* 현재 설정 표시 */}
+                <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                    <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="text-sm text-gray-600">현재 설정:</span>
+                    <Badge className={`font-mono text-sm px-3 py-0.5 ${expireDays === 0 ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {expireDays === 0 ? "영구 유지" : `${expireDays}일`}
+                    </Badge>
+                </div>
+
+                {/* 빠른 선택 */}
+                <div className="space-y-2">
+                    <label className="text-xs font-semibold text-gray-600">빠른 선택</label>
+                    <div className="flex flex-wrap gap-2">
+                        {presets.map(preset => (
+                            <Button
+                                key={preset.days}
+                                variant={expireDays === preset.days ? "default" : "outline"}
+                                size="sm"
+                                className={`text-xs h-8 px-3 rounded-full ${expireDays === preset.days ? 'bg-emerald-600 hover:bg-emerald-700' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'}`}
+                                onClick={() => {
+                                    setInputValue(String(preset.days));
+                                    saveMutation.mutate(preset.days);
+                                }}
+                                disabled={saveMutation.isPending}
+                            >
+                                {preset.label}
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* 직접 입력 */}
+                <form onSubmit={handleSave} className="space-y-2">
+                    <label className="text-xs font-semibold text-gray-600">직접 입력 (일 단위, 0 = 영구)</label>
+                    <div className="flex gap-2 items-center">
+                        <Input
+                            type="number"
+                            min={0}
+                            max={3650}
+                            value={inputValue}
+                            onChange={e => setInputValue(e.target.value)}
+                            className="w-32 text-sm h-9"
+                        />
+                        <span className="text-sm text-gray-500">일</span>
+                        <Button
+                            type="submit"
+                            disabled={saveMutation.isPending}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-xs h-9 px-4"
+                        >
+                            {saveMutation.isPending ? "저장 중..." : "저장"}
+                        </Button>
+                    </div>
+                </form>
+
+                <p className="text-xs text-blue-600 bg-blue-50 p-2.5 rounded-lg border border-blue-100 flex items-start gap-1.5">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    <span>
+                        <strong>영구(0일)</strong>: 선생님이 한 번 인증하면 브라우저 데이터를 직접 삭제하기 전까지 재인증 없이 접근 가능합니다.<br />
+                        <strong>기간 설정 시</strong>: 마지막 인증일로부터 설정된 일수가 지나면 자동으로 재인증이 요구됩니다.
+                    </span>
+                </p>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ======================================================================
+// TeacherPerPasswordManager - 교사별 개별 비밀번호 관리
+// ======================================================================
+function TeacherPerPasswordManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [pwMap, setPwMap] = useState<Record<string, string>>({});
+    const [editingTeacher, setEditingTeacher] = useState<string | null>(null);
+    const [editValue, setEditValue] = useState("");
+    const [newTeacherName, setNewTeacherName] = useState("");
+    const [newTeacherPw, setNewTeacherPw] = useState("");
+    const [showPw, setShowPw] = useState<Record<string, boolean>>({});
+    const [showNewPw, setShowNewPw] = useState(false);
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 조회 실패");
+            return res.json();
+        }
+    });
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            try {
+                const raw = settingsQuery.data.teacher_passwords || "{}";
+                setPwMap(typeof raw === "string" ? JSON.parse(raw) : raw);
+            } catch { setPwMap({}); }
+        }
+    }, [settingsQuery.data]);
+
+    const save = useMutation({
+        mutationFn: async (map: Record<string, string>) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ teacher_passwords: JSON.stringify(map) })
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: (_, map) => {
+            setPwMap(map);
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            toast.success("저장되었습니다.");
+        },
+        onError: (err: any) => toast.error(err.message)
+    });
+
+    const handleAdd = (e: React.FormEvent) => {
+        e.preventDefault();
+        const name = newTeacherName.trim();
+        const pw = newTeacherPw.trim();
+        if (!name || !pw) { toast.error("이름과 비밀번호를 모두 입력하세요."); return; }
+        const next = { ...pwMap, [name]: pw };
+        save.mutate(next);
+        setNewTeacherName(""); setNewTeacherPw("");
+    };
+
+    const handleDelete = (name: string) => {
+        if (!confirm(`"${name}" 선생님의 개별 비밀번호를 삭제하시겠습니까?\n(삭제 시 초기 비밀번호가 적용됩니다)`)) return;
+        const next = { ...pwMap };
+        delete next[name];
+        save.mutate(next);
+    };
+
+    const handleEdit = (name: string) => {
+        const trimmed = editValue.trim();
+        if (!trimmed) { toast.error("비밀번호를 입력하세요."); return; }
+        save.mutate({ ...pwMap, [name]: trimmed });
+        setEditingTeacher(null);
+        setEditValue("");
+    };
+
+    const entries = Object.entries(pwMap);
+
+    if (settingsQuery.isLoading) return <div className="p-4 text-sm text-gray-500">설정을 불러오는 중...</div>;
+
+    return (
+        <Card className="w-full max-w-lg border-emerald-100 shadow-sm">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base font-bold text-gray-700">교사별 개별 비밀번호</CardTitle>
+                <CardDescription className="text-xs text-gray-500">
+                    선생님별로 개별 비밀번호를 설정합니다. 설정하지 않은 선생님은 <strong>초기 비밀번호</strong>가 적용됩니다.<br />
+                    이름은 <strong>시간표 원본 이름</strong>을 정확히 입력하세요.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {/* 기존 목록 */}
+                {entries.length > 0 ? (
+                    <div className="space-y-2">
+                        {entries.map(([name, pw]) => (
+                            <div key={name} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                                <span className="text-sm font-semibold text-gray-700 w-24 shrink-0 truncate">{name}</span>
+                                {editingTeacher === name ? (
+                                    <div className="flex gap-1.5 flex-1">
+                                        <div className="relative flex-1">
+                                            <Input
+                                                type={showPw[name] ? "text" : "password"}
+                                                value={editValue}
+                                                onChange={e => setEditValue(e.target.value)}
+                                                onKeyDown={e => { if (e.key === 'Enter') handleEdit(name); if (e.key === 'Escape') { setEditingTeacher(null); setEditValue(""); } }}
+                                                className="h-7 text-xs pr-8"
+                                            />
+                                            <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-2 hover:bg-transparent"
+                                                onClick={() => setShowPw(v => ({ ...v, [name]: !v[name] }))}>
+                                                {showPw[name] ? <EyeOff className="h-3 w-3 text-gray-400" /> : <Eye className="h-3 w-3 text-gray-400" />}
+                                            </Button>
+                                        </div>
+                                        <Button size="sm" className="h-7 px-2 bg-emerald-600 hover:bg-emerald-700 text-xs" onClick={() => handleEdit(name)}>저장</Button>
+                                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => { setEditingTeacher(null); setEditValue(""); }}>취소</Button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-1.5 flex-1">
+                                        <span className="font-mono text-xs text-emerald-700 flex-1">
+                                            {showPw[name] ? pw : "•".repeat(Math.min(pw.length, 8))}
+                                        </span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6"
+                                            onClick={() => setShowPw(v => ({ ...v, [name]: !v[name] }))}>
+                                            {showPw[name] ? <EyeOff className="h-3 w-3 text-gray-400" /> : <Eye className="h-3 w-3 text-gray-400" />}
+                                        </Button>
+                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs border-emerald-200 text-emerald-700"
+                                            onClick={() => { setEditingTeacher(name); setEditValue(pw); }}>수정</Button>
+                                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-red-500 hover:text-red-700 hover:bg-red-50"
+                                            onClick={() => handleDelete(name)}>삭제</Button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-xs text-gray-400 text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                        등록된 개별 비밀번호가 없습니다.<br />모든 선생님에게 초기 비밀번호가 적용됩니다.
+                    </p>
+                )}
+
+                {/* 새로 추가 */}
+                <form onSubmit={handleAdd} className="space-y-2 pt-3 border-t">
+                    <label className="text-xs font-semibold text-gray-600">새 교사별 비밀번호 추가</label>
+                    <div className="flex gap-2">
+                        <Input
+                            value={newTeacherName}
+                            onChange={e => setNewTeacherName(e.target.value)}
+                            placeholder="선생님 이름 (시간표 기준)"
+                            className="text-xs h-9 flex-1"
+                        />
+                        <div className="relative">
+                            <Input
+                                type={showNewPw ? "text" : "password"}
+                                value={newTeacherPw}
+                                onChange={e => setNewTeacherPw(e.target.value)}
+                                placeholder="비밀번호"
+                                className="text-xs h-9 pr-8 w-32"
+                            />
+                            <Button type="button" variant="ghost" size="icon"
+                                className="absolute right-0 top-0 h-full px-2 hover:bg-transparent"
+                                onClick={() => setShowNewPw(v => !v)}>
+                                {showNewPw ? <EyeOff className="h-3.5 w-3.5 text-gray-400" /> : <Eye className="h-3.5 w-3.5 text-gray-400" />}
+                            </Button>
+                        </div>
+                        <Button type="submit" disabled={save.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-xs h-9 px-3">
+                            <Plus className="h-3.5 w-3.5 mr-1" />추가
+                        </Button>
+                    </div>
+                </form>
+
+                <p className="text-xs text-amber-600 bg-amber-50 p-2.5 rounded-lg border border-amber-100 flex items-start gap-1.5">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    개별 비밀번호는 선생님의 기존 인증 세션에 영향을 주지 않습니다. 즉시 효과를 원하면 세션 유지 기간을 조정하세요.
+                </p>
+            </CardContent>
         </Card>
     );
 }

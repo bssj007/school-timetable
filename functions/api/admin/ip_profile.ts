@@ -63,31 +63,56 @@ export const onRequest = async (context: any) => {
         ).bind(targetIp).all();
         const recentUserAgents = uas?.map((r: any) => r.userAgent) || [];
 
-        // H. Grade/Class Info (Best Guess from Access Logs)
-        const gradeClassResult = await env.DB.prepare(
-            "SELECT grade, classNum, studentNumber FROM access_logs WHERE ip = ? AND grade IS NOT NULL AND classNum IS NOT NULL ORDER BY accessedAt DESC LIMIT 1"
-        ).bind(targetIp).first();
-        const grade = gradeClassResult?.grade;
-        const classNum = gradeClassResult?.classNum;
-        const studentNumber = gradeClassResult?.studentNumber;
+        // H. Grade/Class/Name Info & Electives (via student_profile_id or access_logs fallback)
+        let studentName: string | null = null;
+        let grade: any = null;
+        let classNum: any = null;
+        let studentNumber: any = null;
+        let electives: any = null;
 
-        // I. Fetch Electives
-        let electives = null;
-        if (grade && classNum && studentNumber) {
-            const profileResult = await env.DB.prepare(
-                "SELECT electives FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ?"
-            ).bind(grade, classNum, studentNumber).first();
-            if (profileResult?.electives) {
+        const linkedProfile: any = await env.DB.prepare(`
+            SELECT sp.name as studentName, sp.grade, sp.classNum, sp.studentNumber, sp.electives
+            FROM ip_profiles ip
+            JOIN student_profiles sp ON ip.student_profile_id = sp.id
+            WHERE ip.ip = ?
+        `).bind(targetIp).first().catch(() => null);
+
+        if (linkedProfile) {
+            studentName = linkedProfile.studentName || null;
+            grade = linkedProfile.grade;
+            classNum = linkedProfile.classNum;
+            studentNumber = linkedProfile.studentNumber;
+            if (linkedProfile.electives) {
                 try {
-                    electives = JSON.parse(profileResult.electives);
-                } catch (e) {
-                    electives = profileResult.electives;
+                    electives = JSON.parse(linkedProfile.electives);
+                } catch {
+                    electives = linkedProfile.electives;
                 }
-
                 if (typeof electives === "string") {
-                    try {
-                        electives = JSON.parse(electives);
-                    } catch (e) { }
+                    try { electives = JSON.parse(electives); } catch {}
+                }
+            }
+        } else {
+            // Fallback to access_logs if not directly linked
+            const gradeClassResult: any = await env.DB.prepare(
+                "SELECT grade, classNum, studentNumber FROM access_logs WHERE ip = ? AND grade IS NOT NULL AND classNum IS NOT NULL ORDER BY accessedAt DESC LIMIT 1"
+            ).bind(targetIp).first().catch(() => null);
+            grade = gradeClassResult?.grade || null;
+            classNum = gradeClassResult?.classNum || null;
+            studentNumber = gradeClassResult?.studentNumber || null;
+
+            if (grade && classNum && studentNumber) {
+                const profileResult: any = await env.DB.prepare(
+                    "SELECT name as studentName, electives FROM student_profiles WHERE grade = ? AND classNum = ? AND studentNumber = ? ORDER BY updatedAt DESC LIMIT 1"
+                ).bind(grade, classNum, studentNumber).first().catch(() => null);
+                if (profileResult) {
+                    studentName = profileResult.studentName || null;
+                    if (profileResult.electives) {
+                        try { electives = JSON.parse(profileResult.electives); } catch { electives = profileResult.electives; }
+                        if (typeof electives === "string") {
+                            try { electives = JSON.parse(electives); } catch {}
+                        }
+                    }
                 }
             }
         }
@@ -97,7 +122,7 @@ export const onRequest = async (context: any) => {
         let downloadCount = 0;
         let isStandalone = 0;
         try {
-            const ipProfileRowResult = await env.DB.prepare(
+            const ipProfileRowResult: any = await env.DB.prepare(
                 "SELECT printCount, downloadCount, isStandalone FROM ip_profiles WHERE ip = ?"
             ).bind(targetIp).first();
             printCount = ipProfileRowResult?.printCount || 0;
@@ -126,6 +151,7 @@ export const onRequest = async (context: any) => {
             ip: targetIp,
             kakaoAccounts: kakaoAccounts || [],
 
+            studentName,
             grade,
             classNum,
             studentNumber,

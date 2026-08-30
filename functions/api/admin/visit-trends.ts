@@ -87,6 +87,7 @@ export const onRequest = async (context: any) => {
         // Uses a single optimized query with Conditional Aggregation instead of 4 separate queries
         // Uses CTE to ensure 1:1 join with ip_profiles (takes the most recently seen student per IP) to prevent JOIN explosion
         // Ranks IP profiles ONLY for IPs that appear in the time-filtered access logs (massive optimization for rows read)
+        // 새 아키텍처: 고유 접속자 = (grade, classNum, studentNumber, name) 4개 조합 기준
         const unifiedQuery = `
             WITH FilteredLogs AS (
                 SELECT 
@@ -120,6 +121,7 @@ export const onRequest = async (context: any) => {
                     COALESCE(fl.al_grade, sp.grade) as final_grade,
                     COALESCE(fl.al_classNum, sp.classNum) as final_classNum,
                     COALESCE(fl.al_studentNumber, sp.studentNumber) as final_studentNumber,
+                    COALESCE(sp.name, '') as final_name,
                     LOWER(fl.ip) as ip_lower,
                     strftime('%Y-%m-%d %H:', datetime(fl.accessedAt, '+9 hours')) || (CAST(strftime('%M', datetime(fl.accessedAt, '+9 hours')) AS INTEGER) / 10) as session10Min
                 FROM FilteredLogs fl
@@ -129,14 +131,14 @@ export const onRequest = async (context: any) => {
             SELECT 
                 bucket as label,
                 
-                -- Unique Students
-                COUNT(DISTINCT (final_grade || '-' || final_classNum || '-' || final_studentNumber)) as uniqueStudents,
+                -- 고유 접속자 (이름-학번 기준: 새 아키텍처)
+                COUNT(DISTINCT (final_grade || '-' || final_classNum || '-' || final_studentNumber || '-' || final_name)) as uniqueStudents,
                 
                 -- Unique IPs
                 COUNT(DISTINCT ip_lower) as uniqueIPs,
                 
-                -- Total Visits (Student Sessions)
-                COUNT(DISTINCT (final_grade || '-' || final_classNum || '-' || final_studentNumber || '-' || session10Min)) as totalVisitsStudent,
+                -- Total Visits (Student Sessions: 이름-학번 기준)
+                COUNT(DISTINCT (final_grade || '-' || final_classNum || '-' || final_studentNumber || '-' || final_name || '-' || session10Min)) as totalVisitsStudent,
                 
                 -- Total Visits (IP Sessions)
                 COUNT(DISTINCT (ip_lower || '-' || session10Min)) as totalVisitsIP
@@ -153,6 +155,7 @@ export const onRequest = async (context: any) => {
         const result = await env.DB.prepare(unifiedQuery).bind(...excludeBinds).all();
         
         const buckets = result.results || [];
+
 
         return new Response(JSON.stringify({ buckets, unit: labelFormat }), {
             headers: { "Content-Type": "application/json" },

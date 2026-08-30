@@ -4,14 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon, ThumbsUp, X } from "lucide-react";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon, ThumbsUp, X, Bell, ArrowRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
+import { clearRoleCookie } from "@/components/RoleSelectDialog";
 import {
   Select,
   SelectContent,
@@ -38,6 +39,8 @@ interface AssessmentItem {
   subject: string;
   description: string;
   dueDate: string;
+  grade?: number;
+  classNum?: number;
   isDone: number;
   classTime?: number;
   weekday?: number;
@@ -51,6 +54,8 @@ interface AssessmentItem {
   isAutoPredicted?: boolean | number;
   teacher?: string;
   classCode?: string;
+  isTeacherCreated?: number;
+  activityType?: string;
 }
 
 // 주의 시작일 계산 (월요일 기준)
@@ -114,7 +119,24 @@ const DEFAULT_PRINT_HEIGHT = "11";
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
-  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, refreshKakaoUser } = useUserConfig();
+  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, studentName, refreshKakaoUser, instructionDismissedV2, refreshRole } = useUserConfig();
+
+  const handleGoToTeacher = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    clearRoleCookie();
+    refreshRole();
+  };
+
+  // 0. 설정 조회 (Public)
+  const { data: settings } = useQuery({
+    queryKey: ['publicSettings'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/public');
+      if (!res.ok) return { hide_past_assessments: false };
+      return res.json();
+    },
+    staleTime: 0, // 항상 최신 설정을 가져오도록 (그룹 override 등 즉시 반영)
+  });
 
   const handleLogout = async () => {
     try {
@@ -158,6 +180,7 @@ export default function Dashboard() {
     round: "1",
     teacher: "",
     classCode: "",
+    activityType: "수행평가",
   });
 
   const [showElectiveDialog, setShowElectiveDialog] = useState(false);
@@ -173,6 +196,62 @@ export default function Dashboard() {
   const [bugReportMessage, setBugReportMessage] = useState("");
   const [isBugReportSending, setIsBugReportSending] = useState(false);
 
+  // ── 학번/이름 변경 다이얼로그 ────────────────────────────────────────
+  const [showChangeDialog, setShowChangeDialog] = useState(false);
+  const [changeStudentName, setChangeStudentName] = useState("");
+  const [changeStudentId, setChangeStudentId] = useState("");
+  const changeIsNameValid = changeStudentName.trim().length > 0;
+  const changeIsIdValid = changeStudentId.length === 4;
+  const changeCanSubmit = changeIsNameValid && changeIsIdValid;
+  const handleChangeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedName = changeStudentName.trim();
+    if (!trimmedName) { alert("이름을 입력해주세요."); return; }
+    if (changeStudentId.length === 4) {
+      const g = changeStudentId[0];
+      const cn = changeStudentId[1];
+      const sn = parseInt(changeStudentId.substring(2)).toString();
+      if (parseInt(g) >= 1 && parseInt(g) <= 3 && parseInt(cn) >= 1) {
+        let semesterKey = '1';
+        try {
+          const res = await fetch('/api/settings/public');
+          if (res.ok) { const s = await res.json(); semesterKey = s?.semester_key ?? '1'; }
+        } catch { }
+        setConfig({ schoolName: "부산성지고등학교", grade: g, classNum: cn, studentNumber: sn, studentName: trimmedName, semesterKey } as any);
+        setShowChangeDialog(false);
+      } else {
+        alert("올바른 학번 형식이 아닙니다. (예: 1102)");
+      }
+    }
+  };
+
+  // ── 알림 프레임워크 ─────────────────────────────────────────────────
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationRef = useRef<HTMLDivElement>(null);
+
+  // TODO: 실제 알림 API 연동 시 이 배열을 서버 데이터로 교체
+  const notificationItems: Array<{
+    id: number;
+    title: string;
+    message: string;
+    time: string;
+    read: boolean;
+    type: 'info' | 'assessment' | 'system';
+  }> = [];
+  const unreadNotificationCount = notificationItems.filter(n => !n.read).length;
+
+  useEffect(() => {
+    if (!showNotifications) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showNotifications]);
+  // ────────────────────────────────────────────────────────────────────
+
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -184,6 +263,11 @@ export default function Dashboard() {
     : false;
   const isInAppBrowser = typeof window !== 'undefined' ? /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent) : false;
   const isAndroid = typeof window !== 'undefined' ? /Android/i.test(navigator.userAgent) : false;
+  // 그외 브라우저: 삼성/iOS/Chrome 이외 환경
+  const isOtherBrowser = typeof window !== 'undefined' ? (
+    !isSamsungBrowser && !isIOS &&
+    !/Chrome/i.test(navigator.userAgent)
+  ) : false;
   const [hasPwaCookie, setHasPwaCookie] = useState(typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1'));
 
   useEffect(() => {
@@ -329,11 +413,20 @@ export default function Dashboard() {
 
 
 
+  // 수행평가 입력 독려(장려) 팝업 활성화 여부 (기본값: false 꺼짐)
+  const isPromotionPopupEnabled = Boolean(settings) && (
+    settings?.promotion_popup_enabled === true ||
+    settings?.promotion_popup_enabled === 'true' ||
+    settings?.promotion_popup_enabled === '1' ||
+    settings?.promotion_popup_enabled === 1 ||
+    settings?.promotion_popup_enabled === 'on'
+  );
+
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
     const isSetupComplete = isConfigured && (grade === "1" || isElectiveEntered);
 
-    if (isSetupComplete) {
+    if (isSetupComplete && isPromotionPopupEnabled && !instructionDismissedV2) {
       timeoutId = setTimeout(() => {
         setShowInstructionTooltip(true);
       }, 4000);
@@ -344,7 +437,7 @@ export default function Dashboard() {
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [isConfigured, grade, isElectiveEntered]);
+  }, [isConfigured, grade, isElectiveEntered, isPromotionPopupEnabled, instructionDismissedV2]);
 
   // Hide instruction tooltip while the elective dialog is open, restore on close
   useEffect(() => {
@@ -383,6 +476,12 @@ export default function Dashboard() {
         setViewingAssessments(cellAssessments);
         setShowViewDialog(true);
       } else {
+        // 학년별 학생 등록 권한 체크
+        if (!checkStudentPermission()) {
+          setSelectedCell(null);
+          return;
+        }
+
         // 과거 날짜는 추가 불가
         if (isPast) {
           toast.error("지나간 날짜에는 수행평가를 추가할 수 없습니다.");
@@ -399,6 +498,7 @@ export default function Dashboard() {
           round: "1",
           teacher: teacher,
           classCode: classCode,
+          activityType: "수행평가",
         });
         setShowAddDialog(true);
       }
@@ -430,6 +530,8 @@ export default function Dashboard() {
           (mappedData as any).originalDatasetId = result.originalDatasetId || result.datasetId;
           (mappedData as any).ipOverrideApplied = result.ipOverrideApplied;
           (mappedData as any).debugTokens = result.debugTokens || null;
+          (mappedData as any).isOutOfRange = result.isOutOfRange ?? false;
+          (mappedData as any).isArchivedData = result.isArchivedData ?? false;
           return mappedData;
         }
         const emptyArray = [] as TimetableItem[];
@@ -437,6 +539,8 @@ export default function Dashboard() {
         (emptyArray as any).originalDatasetId = result.originalDatasetId || result.datasetId;
         (emptyArray as any).ipOverrideApplied = result.ipOverrideApplied;
         (emptyArray as any).debugTokens = result.debugTokens || null;
+        (emptyArray as any).isOutOfRange = result.isOutOfRange ?? false;
+        (emptyArray as any).isArchivedData = result.isArchivedData ?? false;
         return emptyArray;
       } catch (e) {
         console.error('Failed to fetch timetable', e);
@@ -453,6 +557,11 @@ export default function Dashboard() {
   const rawDatasetId = (rawTimetableData as any)?.originalDatasetId || (rawTimetableData as any)?.datasetId || '';
   // Optimization: Pre-calculate datasetType ("COMCIGAN" vs "MANUAL_PLAN") so dependent queries can start immediately.
   const datasetType = (rawDatasetId === 'MANUAL_PLAN' || rawDatasetId === 'SEMESTER_PLAN') ? rawDatasetId : 'COMCIGAN';
+  // 날짜 범위 밖 여부 — MANUAL_PLAN/SEMESTER_PLAN은 적용 안 함
+  // 아카이브 데이터가 있는 경우 미확정 표시 안 함
+  const isOutOfDateRange = datasetType === 'COMCIGAN'
+    && !!((rawTimetableData as any)?.isOutOfRange)
+    && !((rawTimetableData as any)?.isArchivedData);
 
   // 1.5 선택과목 데이터 및 프로필 조회 (2, 3학년용)
   const { data: electiveConfigs, isFetching: isElectiveConfigsFetching } = useQuery({
@@ -470,10 +579,10 @@ export default function Dashboard() {
   });
 
   const { data: studentProfile } = useQuery({
-    queryKey: ['studentProfile', grade, classNum, studentNumber, datasetType],
+    queryKey: ['studentProfile', grade, classNum, studentNumber, studentName, datasetType],
     queryFn: async () => {
-      if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber) return null;
-      const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&dataset=${datasetType}`);
+      if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber || !studentName) return null;
+      const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&studentName=${encodeURIComponent(studentName)}&dataset=${datasetType}`);
       if (!res.ok) {
         if (res.status === 404) return null;
         throw new Error(`Failed to fetch student profile: ${res.status}`);
@@ -552,16 +661,23 @@ export default function Dashboard() {
     return { timetableData: current, allClassesTimetable: all };
   }, [rawTimetableData, classNum]);
 
-  // 5. 설정 조회 (Public)
-  const { data: settings } = useQuery({
-    queryKey: ['publicSettings'],
-    queryFn: async () => {
-      const res = await fetch('/api/settings/public');
-      if (!res.ok) return { hide_past_assessments: false };
-      return res.json();
-    },
-    staleTime: 0, // 항상 최신 설정을 가져오도록 (그룹 override 등 즉시 반영)
-  });
+  // 학년별 학생 등록/수정/연기/삭제 권한 검증 헬퍼
+  const checkStudentPermission = (targetGrade?: number) => {
+    const g = targetGrade || parseInt(grade || "1", 10);
+    const isAllowed = g === 1
+      ? settings?.assessment_allow_student_grade1 !== false
+      : g === 2
+      ? settings?.assessment_allow_student_grade2 !== false
+      : g === 3
+      ? settings?.assessment_allow_student_grade3 !== false
+      : true;
+
+    if (!isAllowed) {
+      toast.error(settings?.assessment_disallow_msg_student || "현재 학생의 수행평가 등록이 제한되어 있습니다.");
+      return false;
+    }
+    return true;
+  };
 
   // 각 시간(교시)별 다수결 그룹 계산
   // 각 시간(교시)별 다수결 그룹 계산
@@ -1015,6 +1131,7 @@ export default function Dashboard() {
           dataset: datasetType || '',
           teacher: data.teacher,
           classCode: data.classCode,
+          activityType: data.activityType || '수행평가',
         }),
       });
 
@@ -1035,14 +1152,18 @@ export default function Dashboard() {
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await fetch(`/api/assessment?id=${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to delete');
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assessments'] });
       toast.success("삭제되었습니다");
       setSelectedCell(null);
-    }
+    },
+    onError: (error: any) => toast.error(error.message || "삭제 실패")
   });
 
   // 6. 수행평가 수정
@@ -1099,6 +1220,7 @@ export default function Dashboard() {
         round: "1",
         teacher: "",
         classCode: "",
+        activityType: "수행평가",
       });
       setShowAddDialog(false); // 다이얼로그 닫기
       setSelectedCell(null); // 선택 셀 해제
@@ -1108,6 +1230,8 @@ export default function Dashboard() {
   };
 
   const handleDelete = async (id: number) => {
+    const targetAssessment = allAssessments?.find(a => a.id === id);
+    if (!checkStudentPermission(targetAssessment?.grade)) return;
     if (!confirm("정말 삭제하시겠습니까?")) return;
     try {
       await deleteMutation.mutateAsync(id);
@@ -1117,6 +1241,7 @@ export default function Dashboard() {
   };
 
   const handleEditClick = (assessment: AssessmentItem) => {
+    if (!checkStudentPermission(assessment.grade)) return;
     setEditingAssessment(assessment);
 
     // Parse the stored sequence/round number back from the description ("1차" -> "1")
@@ -1133,6 +1258,7 @@ export default function Dashboard() {
       round: parsedRound,
       teacher: assessment.teacher || "",
       classCode: assessment.classCode || "",
+      activityType: assessment.activityType || "수행평가",
     });
     setShowViewDialog(false);
     setShowEditDialog(true);
@@ -1141,6 +1267,7 @@ export default function Dashboard() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingAssessment) return;
+    if (!checkStudentPermission(editingAssessment.grade)) return;
 
     try {
       await updateMutation.mutateAsync({
@@ -1155,6 +1282,7 @@ export default function Dashboard() {
         description: formData.round ? `${formData.round}차` : "",
         teacher: formData.teacher,
         classCode: formData.classCode,
+        activityType: formData.activityType || '수행평가',
       });
     } catch (error) {
       console.error("수행평가 수정 실패:", error);
@@ -1198,6 +1326,11 @@ export default function Dashboard() {
 
   const handleRelocationSubmit = async () => {
     if (!pendingRelocation || !relocatingAssessment) return;
+    if (!checkStudentPermission(relocatingAssessment.grade)) {
+      setRelocatingAssessment(null);
+      setPendingRelocation(null);
+      return;
+    }
     setIsRelocatingUpdating(true);
     try {
         const updatesToMake: any[] = [];
@@ -1386,7 +1519,7 @@ export default function Dashboard() {
       const res = await fetch('/api/bug-reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grade, classNum, studentNumber, message: bugReportMessage })
+        body: JSON.stringify({ grade, classNum, studentNumber, studentName, message: bugReportMessage })
       });
       if (!res.ok) throw new Error();
       toast.success('오류신고가 전송되었습니다.');
@@ -1457,6 +1590,17 @@ export default function Dashboard() {
               🍱 급식표
             </a>
           </div>
+
+          {/* 시간표/급식표 선택기 오른쪽에 동일 디자인의 '교사용' 버튼 */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 font-bold text-xs text-emerald-700 hover:bg-emerald-50/80 hover:text-emerald-800 flex items-center gap-1 rounded-lg border-none shadow-none cursor-pointer select-none"
+            onClick={handleGoToTeacher}
+          >
+            <span className="leading-none">교사용</span>
+            <ArrowRight className="h-3.5 w-3.5 stroke-[2.2] text-emerald-600 shrink-0" />
+          </Button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -1482,50 +1626,105 @@ export default function Dashboard() {
               오류신고
             </Button>
           )}
-          {kakaoUser ? (
-            <div className="flex items-center gap-2 sm:gap-3 bg-gray-50 pr-1 pl-3 py-1 rounded-full border border-gray-100">
-              <div className="hidden sm:flex flex-col items-end">
-                <span className="text-[10px] text-gray-400 font-medium leading-none mb-1">카카오 연동됨</span>
-                <span className="text-sm font-bold text-gray-800 leading-none">{kakaoUser.nickname}</span>
-              </div>
-              <Avatar className="h-8 w-8 border-2 border-white shadow-sm">
-                <AvatarImage src={kakaoUser.thumbnailImage} alt={kakaoUser.nickname} />
-                <AvatarFallback className="bg-blue-100 text-blue-600 text-xs font-bold">
-                  {kakaoUser.nickname ? kakaoUser.nickname.substring(0, 1) : 'U'}
-                </AvatarFallback>
-              </Avatar>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full"
-                onClick={handleLogout}
-                title="로그아웃"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
+          {/* 알림 벨 버튼 — PC·모바일 공통 */}
+          <div className="relative" ref={notificationRef}>
             <Button
-              variant="default"
-              size="sm"
-              disabled={isKakaoRestricted}
-              className={`h-9 rounded-full px-4 font-bold text-xs ${isKakaoRestricted ? 'bg-gray-200 text-gray-500 opacity-70 cursor-not-allowed' : 'bg-yellow-400 hover:bg-yellow-500 text-gray-900'}`}
-              onClick={() => {
-                if (!isKakaoRestricted) {
-                  window.location.href = '/api/kakao/login';
-                }
-              }}
+              id="notification-bell-btn"
+              variant="ghost"
+              size="icon"
+              className="relative h-9 w-9 rounded-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 shadow-sm transition-all duration-200"
+              onClick={() => setShowNotifications(prev => !prev)}
+              aria-label="알림"
             >
-              {isKakaoRestricted ? (
-                "개발 중"
-              ) : (
-                <>
-                  <img src="https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png" alt="Kakao" className="h-4 w-4 mr-2" />
-                  카카오 연동
-                </>
+              <Bell className="h-4 w-4" />
+              {/* 읽지 않은 알림 뱃지 */}
+              {unreadNotificationCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-[5px] text-[10px] font-bold leading-none text-white bg-red-500 rounded-full shadow ring-2 ring-white">
+                  {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                </span>
               )}
             </Button>
-          )}
+
+            {/* 알림 드롭다운 패널 */}
+            {showNotifications && (
+              <div className="absolute right-0 top-11 z-50 w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+                {/* 패널 헤더 */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
+                  <div className="flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-gray-700" />
+                    <span className="font-bold text-sm text-gray-800">알림</span>
+                    {unreadNotificationCount > 0 && (
+                      <span className="flex items-center justify-center h-5 min-w-[20px] px-1.5 text-[10px] font-bold text-white bg-red-500 rounded-full">
+                        {unreadNotificationCount}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {unreadNotificationCount > 0 && (
+                      <button
+                        className="text-[11px] text-blue-500 hover:text-blue-700 font-semibold px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+                        onClick={() => { /* TODO: 모두 읽음 API */ }}
+                      >
+                        모두 읽음
+                      </button>
+                    )}
+                    <button
+                      className="h-7 w-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
+                      onClick={() => setShowNotifications(false)}
+                      aria-label="알림 닫기"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 알림 목록 */}
+                <div className="max-h-[340px] overflow-y-auto">
+                  {notificationItems.length === 0 ? (
+                    /* 빈 상태 */
+                    <div className="flex flex-col items-center justify-center py-12 px-4 gap-3">
+                      <div className="w-14 h-14 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100">
+                        <Bell className="h-6 w-6 text-gray-300" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-gray-400">아직 알림이 없어요</p>
+                        <p className="text-xs text-gray-300 mt-1">새로운 알림이 오면 여기에 표시됩니다</p>
+                      </div>
+                    </div>
+                  ) : (
+                    /* 알림 아이템 목록 */
+                    <div className="divide-y divide-gray-50">
+                      {notificationItems.map((notif) => (
+                        <div
+                          key={notif.id}
+                          className={`flex items-start gap-3 px-4 py-3.5 hover:bg-gray-50 cursor-pointer transition-colors ${
+                            !notif.read ? 'bg-blue-50/50' : ''
+                          }`}
+                        >
+                          {/* 읽음/안읽음 점 */}
+                          <div
+                            className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${
+                              !notif.read ? 'bg-blue-500' : 'bg-gray-200'
+                            }`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-800">{notif.title}</p>
+                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{notif.message}</p>
+                            <p className="text-[11px] text-gray-400 mt-1.5 font-medium">{notif.time}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 패널 푸터 */}
+                <div className="border-t border-gray-100 px-4 py-2.5 bg-gray-50/60">
+                  <p className="text-[11px] text-center text-gray-400">알림 기능은 준비 중입니다</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1561,57 +1760,83 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-stretch gap-2 md:hidden mb-1.5">
-        {/* Left column: toggle (top) + title (bottom) */}
-        <div className="flex flex-col justify-between gap-0.5 w-[136px] shrink-0">
-          <div className="flex items-center gap-1">
-            <div className="flex-1 flex items-center justify-center gap-0.5 px-[9px] py-[5px] text-[12.5px] font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap">
-              시간표
+      {/* 학번/이름 변경 Dialog */}
+      <Dialog open={showChangeDialog} onOpenChange={setShowChangeDialog}>
+        <DialogContent className="sm:max-w-[425px] md:max-w-xl md:min-h-[288px] flex flex-col justify-center">
+          <DialogHeader>
+            <DialogTitle>학번/이름 변경</DialogTitle>
+            <DialogDescription>
+              이름과 4자리 학번을 다시 입력하세요
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleChangeSubmit} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label htmlFor="changeName" className="text-sm font-medium leading-none">이름</label>
+              <input
+                id="changeName"
+                type="text"
+                placeholder="홍길동"
+                value={changeStudentName}
+                onChange={(e) => setChangeStudentName(e.target.value)}
+                className="w-full h-14 md:h-16 text-2xl md:text-3xl font-bold text-center rounded-md border border-input bg-background px-3 focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-base md:placeholder:text-lg placeholder:font-normal"
+                required
+              />
             </div>
-            <a
-              href="/meal"
-              className="flex-1 flex items-center justify-center gap-0.5 px-[9px] py-[5px] text-[12.5px] font-semibold rounded-full border border-orange-300 text-orange-500 hover:bg-orange-50 transition-colors whitespace-nowrap"
+            <div className="space-y-2">
+              <label htmlFor="changeId" className="text-sm font-medium leading-none">학번 (4자리)</label>
+              <input
+                id="changeId"
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="예) 1102 (1학년 1반 02번)"
+                value={changeStudentId}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, "");
+                  if (val.length <= 4) setChangeStudentId(val);
+                }}
+                className={`w-full text-center rounded-md border border-input bg-background px-3 focus:outline-none focus:ring-2 focus:ring-ring h-14 md:h-16 py-0 ${changeStudentId.length === 0 ? "text-sm md:text-base font-normal tracking-normal indent-0 placeholder:text-sm md:placeholder:text-base" : "text-3xl md:text-4xl font-bold tracking-[0.25em] md:tracking-[0.3em] indent-[0.25em] md:indent-[0.3em]"}`}
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!changeCanSubmit}
+              className="w-full h-12 md:h-14 text-lg md:text-xl font-bold rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              급식표
-            </a>
+              변경 저장
+            </button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <div className="flex items-center justify-between gap-2 md:hidden mb-1.5">
+        {/* Left column: toggle */}
+        <div className="flex items-center gap-1 w-[136px] shrink-0">
+          <div className="flex-1 flex items-center justify-center gap-0.5 px-[9px] py-[5px] text-[12.5px] font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap">
+            시간표
           </div>
-          <h1 className="text-xl font-bold whitespace-nowrap">
-            {grade || '?'}-{classNum || '?'} 시간표
-          </h1>
+          <a
+            href="/meal"
+            className="flex-1 flex items-center justify-center gap-0.5 px-[9px] py-[5px] text-[12.5px] font-semibold rounded-full border border-orange-300 text-orange-500 hover:bg-orange-50 transition-colors whitespace-nowrap"
+          >
+            급식표
+          </a>
         </div>
 
-        {/* Right column: selectors right-aligned */}
-        <div className="flex items-center gap-[3px] shrink-0 ml-auto">
-          <Select value={grade} onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}>
-            <SelectTrigger className="relative w-[80px] h-10 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-1.5 [&>svg]:z-0" style={selectorStyle}>
-              <SelectValue placeholder="학년" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">1학년</SelectItem>
-              <SelectItem value="2">2학년</SelectItem>
-              <SelectItem value="3">3학년</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={classNum} onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}>
-            <SelectTrigger className="relative w-[70px] h-10 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-1.5 [&>svg]:z-0" style={selectorStyle}>
-              <SelectValue placeholder="반" />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
-                <SelectItem key={num} value={num.toString()}>{num}반</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={studentNumber} onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}>
-            <SelectTrigger className="relative w-[70px] h-10 bg-white px-2 text-lg font-bold [&>span]:relative [&>span]:z-10 [&>span]:!line-clamp-none [&>svg]:absolute [&>svg]:right-1.5 [&>svg]:z-0" style={selectorStyle}>
-              <SelectValue placeholder="번호" />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
-                <SelectItem key={num} value={num.toString()}>{num}번</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* Right column: student info + change button (mobile) */}
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
+          <div className="flex flex-col items-end leading-tight">
+            <span className="text-[11px] text-slate-400 font-medium">학번 <span className="text-slate-700 font-bold text-sm">{grade || "?"}{classNum || "?"}{studentNumber?.padStart(2,"0") || "??"}</span></span>
+            <span className="text-[11px] text-slate-400 font-medium">이름 <span className="text-slate-700 font-semibold text-sm">{studentName || "-"}</span></span>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setChangeStudentName(""); setChangeStudentId(""); setShowChangeDialog(true); }}
+            className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 active:bg-slate-100 transition-colors"
+          >
+            변경
+          </button>
         </div>
       </div>
 
@@ -1624,38 +1849,19 @@ export default function Dashboard() {
         {/* Visit Restriction Overlay (Completely Replaces Timetable Card) */}
         {isRestricted ? (
           <div className="w-full flex flex-col pt-2 md:pt-4">
-            {/* Preserved Desktop Selectors during Restriction */}
-            <div className="hidden md:flex items-center gap-2 justify-center mb-6">
-              <Select value={grade} onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}>
-                <SelectTrigger className="w-[100px] md:w-[110px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                  <SelectValue placeholder="학년" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1"><span>1학년</span></SelectItem>
-                  <SelectItem value="2"><span>2학년</span></SelectItem>
-                  <SelectItem value="3"><span>3학년</span></SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={classNum} onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}>
-                <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                  <SelectValue placeholder="반" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
-                    <SelectItem key={num} value={num.toString()}><span>{num}반</span></SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={studentNumber} onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}>
-                <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                  <SelectValue placeholder="번호" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
-                    <SelectItem key={num} value={num.toString()}><span>{num}번</span></SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Student info + change button during restriction */}
+            <div className="hidden md:flex items-center gap-3 justify-center mb-6">
+              <div className="flex flex-col items-end leading-tight">
+                <span className="text-[12px] text-slate-400 font-medium">학번 <span className="text-slate-700 font-bold text-base">{grade || "?"}{classNum || "?"}{studentNumber?.padStart(2,"0") || "??"}</span></span>
+                <span className="text-[12px] text-slate-400 font-medium">이름 <span className="text-slate-700 font-semibold text-base">{studentName || "-"}</span></span>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setChangeStudentName(""); setChangeStudentId(""); setShowChangeDialog(true); }}
+                className="text-sm font-bold px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                변경
+              </button>
             </div>
 
             {/* Restricted Message Card */}
@@ -1672,16 +1878,13 @@ export default function Dashboard() {
         ) : (
           <Card className="py-1 gap-1 md:py-2 md:gap-2">
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
-              {/* Desktop Title */}
+              {/* Desktop Actions */}
               <div className="hidden md:flex items-center gap-2 flex-1 min-w-0">
-                <h1 className="text-2xl font-bold whitespace-nowrap overflow-hidden text-ellipsis">
-                  {grade || '?'}-{classNum || '?'} 시간표
-                </h1>
                 {(grade === "2" || grade === "3") && (
                   <div className="relative inline-block">
                     <Button
                       size="sm"
-                      className={`h-10 text-sm ml-2 shrink-0 transition-all duration-300 bg-[#fc6603] hover:bg-[#e05a00] text-white ${isElectiveMissing ? "animate-pulse" : ""}`}
+                      className={`h-10 text-sm shrink-0 transition-all duration-300 bg-[#fc6603] hover:bg-[#e05a00] text-white ${isElectiveMissing ? "animate-pulse" : ""}`}
                       style={isElectiveMissing && currentGradeColor ? { border: `2px solid ${currentGradeColor}` } : {}}
                       onClick={() => setShowElectiveDialog(true)}
                     >
@@ -1763,62 +1966,28 @@ export default function Dashboard() {
                 <span className={`text-lg md:text-lg ${weekOffset === 0 ? "text-red-500 font-bold" : weekOffset >= 1 ? "text-blue-500 font-bold" : "text-black"}`}>
                   <span>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}</span>
                 </span>
-                {kakaoUser && (
-                  <div className="md:hidden flex items-center justify-center gap-2 bg-green-50 text-green-700 px-3 py-1 mt-2 rounded-md border border-green-100 text-sm">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    <span className="font-semibold"><span>{kakaoUser.nickname}</span></span>
-                  </div>
+                {isOutOfDateRange && (
+                  <span className="text-xs font-bold text-red-500 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse">
+                    미확정 시간표
+                  </span>
                 )}
+                {/* 모바일 카카오 뱃지 제거됨 — 알림 벨은 상단 헤더에 통합 */}
+
               </div>
 
-              {/* Desktop Selectors */}
-              <div className="hidden md:flex items-center gap-2 flex-1 justify-end min-w-0 md:ml-[3px]">
-
-                <Select
-                  value={grade}
-                  onValueChange={(val) => setConfig({ grade: val, classNum, studentNumber })}
+              {/* Desktop: student info + change button */}
+              <div className="hidden md:flex items-center gap-3 flex-1 justify-end min-w-0 md:ml-[3px]">
+                <div className="flex flex-col items-end leading-tight">
+                  <span className="text-[11px] text-slate-400 font-medium">학번 <span className="text-slate-900 font-bold text-base">{grade || "?"}{classNum || "?"}{studentNumber?.padStart(2,"0") || "??"}</span></span>
+                  <span className="text-[11px] text-slate-400 font-medium">이름 <span className="text-slate-700 font-semibold text-sm">{studentName || "-"}</span></span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setChangeStudentName(""); setChangeStudentId(""); setShowChangeDialog(true); }}
+                  className="shrink-0 text-sm font-bold px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
                 >
-                  <SelectTrigger className="w-[100px] md:w-[110px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                    <SelectValue placeholder="학년" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1"><span>1학년</span></SelectItem>
-                    <SelectItem value="2"><span>2학년</span></SelectItem>
-                    <SelectItem value="3"><span>3학년</span></SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={classNum}
-                  onValueChange={(val) => setConfig({ grade, classNum: val, studentNumber })}
-                >
-                  <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                    <SelectValue placeholder="반" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 15 }, (_, i) => i + 1).map((num) => (
-                      <SelectItem key={num} value={num.toString()}>
-                        <span>{num}반</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={studentNumber}
-                  onValueChange={(val) => setConfig({ grade, classNum, studentNumber: val })}
-                >
-                  <SelectTrigger className="w-[90px] md:w-[100px] shrink min-w-[50px] h-10 bg-white px-2 md:px-3 text-base md:text-lg font-medium" style={selectorStyle}>
-                    <SelectValue placeholder="번호" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 35 }, (_, i) => i + 1).map((num) => (
-                      <SelectItem key={num} value={num.toString()}>
-                        <span>{num}번</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  변경
+                </button>
               </div>
             </CardHeader>
             <CardContent className="px-1 pb-1 md:px-2 md:pb-2">
@@ -1836,17 +2005,67 @@ export default function Dashboard() {
                 </style>
                 <div ref={timetableRef} id="timetable-container" className="group" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
                   {/* System Dataset Config UI (Debug) */}
-                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled && (settings?.comcigan_debug_whitelist_hit !== false) && (
-                    <div className="print:hidden capturing:hidden text-[10px] md:text-xs text-gray-400 text-right mb-1 tracking-tight flex flex-wrap items-center justify-end gap-1 md:gap-2 pr-1">
-                      <span className="text-blue-500 font-semibold text-xs border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">사용중: {(rawTimetableData as any)?.datasetId}{((rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.originalDatasetId !== (rawTimetableData as any)?.datasetId) ? ` (설정: ${(rawTimetableData as any)?.originalDatasetId})` : ''}</span>
-                      <span className="hidden md:inline">|</span>
-                      <span>1학년: {(rawTimetableData as any).debugTokens.override1 && (rawTimetableData as any).debugTokens.override1 !== '_auto_' ? `고정(${(rawTimetableData as any).debugTokens.override1})` : '자동'}</span>
-                      <span className="hidden md:inline">|</span>
-                      <span>2,3학년: {(rawTimetableData as any).debugTokens.override23 && (rawTimetableData as any).debugTokens.override23 !== '_auto_' ? `고정(${(rawTimetableData as any).debugTokens.override23})` : '자동'}</span>
-                      {(rawTimetableData as any).debugTokens.isFallbackApplied && <span className="text-red-400 font-bold ml-1">(! Fallback 가동중)</span>}
-                      {(rawTimetableData as any)?.ipOverrideApplied && <span className="text-orange-500 font-bold ml-1">(IP 오버라이드: {(rawTimetableData as any)?.ipOverrideApplied})</span>}
-                    </div>
-                  )}
+                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled && (settings?.comcigan_debug_whitelist_hit !== false) && (() => {
+                    const dt = (rawTimetableData as any).debugTokens;
+                    const usedDatasetId  = (rawTimetableData as any)?.datasetId;
+                    const configDatasetId = (rawTimetableData as any)?.originalDatasetId;
+                    const isArchived      = (rawTimetableData as any)?.isArchivedData;
+                    const matchedArchiveRange = (rawTimetableData as any)?.matchedArchiveRange;
+                    const isFuture   = dt?.isFutureOutOfRange;
+                    const isPast     = dt?.isPastOutOfRange;
+                    const isFallback = dt?.isFallbackApplied;
+                    const ipOverride = (rawTimetableData as any)?.ipOverrideApplied;
+                    const dateRanges: Record<string, string> = dt?.datasetDateRanges || {};
+                    const usedRange = usedDatasetId ? dateRanges[usedDatasetId] : null;
+
+                    // ── '소스' 배지: 현재 표시되는 데이터의 출처를 하나만 표시 ──────────
+                    let sourceBadge: React.ReactNode;
+                    if (isArchived) {
+                      // 아카이브 서빙: 날짜구간만 표시
+                      sourceBadge = (
+                        <span className="bg-amber-100 text-amber-700 border border-amber-300 rounded px-1.5 py-0.5 font-bold font-mono">
+                          📂 {matchedArchiveRange || '아카이브'}
+                        </span>
+                      );
+                    } else if (isFuture) {
+                      // 미래초과: 데이터셋 + 상태
+                      sourceBadge = (
+                        <span className="bg-red-50 text-red-600 border border-red-300 rounded px-1.5 py-0.5 font-mono">
+                          🔮 {usedDatasetId || '?'} · 미래초과
+                        </span>
+                      );
+                    } else if (isPast) {
+                      // 과거초과 (아카이브 없음): 데이터셋 + 상태
+                      sourceBadge = (
+                        <span className="bg-purple-50 text-purple-600 border border-purple-300 rounded px-1.5 py-0.5 font-mono">
+                          🕰 {usedDatasetId || '?'} · 과거초과
+                        </span>
+                      );
+                    } else {
+                      // 정상: 데이터셋 + 날짜구간을 하나의 파란 배지로
+                      sourceBadge = (
+                        <span className="text-blue-600 font-bold border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded font-mono">
+                          {usedDatasetId || '?'}{usedRange ? ` · ${usedRange}` : ''}
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <div className="print:hidden capturing:hidden text-[10px] md:text-xs text-gray-500 mb-1 tracking-tight flex flex-wrap items-center justify-end gap-1 md:gap-1.5 pr-1">
+                        {/* 소스: 하나만 표시 */}
+                        {sourceBadge}
+                        {/* 관리자 설정 */}
+                        <span className="hidden md:inline text-slate-300">|</span>
+                        <span>1학년: {dt?.override1 && dt.override1 !== '_auto_' ? <span className="text-orange-500 font-bold font-mono">{dt.override1}</span> : <span className="text-slate-400">auto</span>}</span>
+                        <span>2,3학년: {dt?.override23 && dt.override23 !== '_auto_' ? <span className="text-orange-500 font-bold font-mono">{dt.override23}</span> : <span className="text-slate-400">auto</span>}</span>
+                        {/* 폴백 / IP 오버라이드 */}
+                        {isFallback && <span className="text-red-400 font-bold">⚠ Fallback</span>}
+                        {ipOverride && <span className="text-orange-500 font-bold">🔀 IP:{ipOverride}</span>}
+                      </div>
+                    );
+                  })()}
+
+
 
                   {/* Print Capture Header */}
                   <div className="capture-only mb-1.5 p-1.5 border rounded-md text-black flex flex-col gap-0.5">
@@ -2164,7 +2383,27 @@ export default function Dashboard() {
                                       <span>{group}</span><span className="hidden md:inline">그룹</span>
                                     </div>
                                   )}
-                                  <div className="flex flex-col items-center justify-center h-full min-h-0 print:overflow-hidden print:max-h-full">
+                                  {includeAssessments && cellAssessments.length > 0 && (() => {
+                                    const roundTexts = cellAssessments
+                                      .map(a => a.description && a.description.includes('차') ? a.description : null)
+                                      .filter((v): v is string => v !== null);
+                                    const uniqueRounds = Array.from(new Set(roundTexts));
+                                    return uniqueRounds.length > 0 ? (
+                                      <div className="absolute top-0 left-0 flex flex-col print:hidden" style={{ gap: 1 }}>
+                                        {uniqueRounds.map((r, idx) => (
+                                          <div
+                                            key={idx}
+                                            className={`text-[8px] md:text-[9px] font-bold leading-none px-1 py-0.5 rounded-r-full ${
+                                              isPast ? 'bg-gray-400 text-white' : 'bg-blue-600 text-white'
+                                            }`}
+                                          >
+                                            {r} 평가
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : null;
+                                  })()}
+                                  <div className={`flex flex-col items-center justify-center h-full min-h-0 print:overflow-hidden print:max-h-full`}>
                                     {item || isElectiveActive ? (
                                       <>
                                         <div
@@ -2188,25 +2427,19 @@ export default function Dashboard() {
                                             )}
                                           </span>
                                         </div>
-                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex flex-col md:flex-row print:flex-row print:flex-nowrap items-center md:justify-center print:justify-center overflow-hidden leading-tight md:leading-normal print:leading-tight">
-                                          {!isCancelledByFreePeriod && displayTeacher ? (
-                                            <span className="truncate shrink min-w-0 max-w-full print:text-[1.8cqh]">{displayTeacher}</span>
-                                          ) : null}
-                                          {(settings?.show_target_class_main_menu !== false && displayClassName) ? (
-                                            <span className={`truncate shrink min-w-0 max-w-full font-medium text-gray-600 print:text-[1.8cqh] print:!text-gray-500 ${!isCancelledByFreePeriod && displayTeacher ? "md:ml-1.5 print:ml-1" : ""}`}>
-                                              {displayClassName}
+                                        <div className="text-[10px] md:text-xs text-gray-500 mt-0.5 w-full px-1 flex justify-center leading-tight">
+                                           <span className="whitespace-nowrap print:text-[1.8cqh]">
+                                             {[
+                                               (!isCancelledByFreePeriod && displayTeacher) ? displayTeacher : null,
+                                               (settings?.show_target_class_main_menu !== false && displayClassName) ? displayClassName : null
+                                             ].filter(Boolean).join(' ')}
+                                           </span>
+                                         </div>
+                                        {includeAssessments && cellAssessments.some(a => !!a.isTeacherCreated) && (
+                                          <div className="absolute bottom-0 right-0 print:hidden flex">
+                                            <span className="text-[8px] md:text-[9px] px-1 py-0.5 rounded-tl-md leading-none whitespace-nowrap bg-emerald-500 text-white font-bold">
+                                              선생님 등록
                                             </span>
-                                          ) : null}
-                                        </div>
-                                        {includeAssessments && cellAssessments.length > 0 && (
-                                          <div className="mt-0.5 flex-shrink-0">
-                                            <div className="flex flex-wrap gap-0.5 justify-center">
-                                              {cellAssessments.map(a => (
-                                                <span key={a.id} className={`text-[9px] md:text-[10px] px-1 py-0.5 rounded-full leading-none whitespace-nowrap ${isPast ? "bg-gray-400 text-white" : a.isPostponed ? "bg-white text-red-500 border border-red-500" : "bg-blue-600 text-white"} print:bg-gray-200 print:text-gray-700 print:text-[1cqh] print:px-0.5 print:py-0 print:border print:border-gray-400`}>
-                                                  {a.description && a.description.includes("차") ? a.description : '평가'}
-                                                </span>
-                                              ))}
-                                            </div>
                                           </div>
                                         )}
                                       </>
@@ -2443,6 +2676,42 @@ export default function Dashboard() {
             </p>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* 활동 유형 선택 메뉴 */}
+            <div
+              style={{
+                display: 'flex',
+                background: '#f1f5f9',
+                borderRadius: 12,
+                padding: 4,
+                gap: 4,
+              }}
+            >
+              {(['수행평가', '기타 활동'] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, activityType: type })}
+                  style={{
+                    flex: 1,
+                    padding: '8px 0',
+                    borderRadius: 8,
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                    transition: 'all 0.18s',
+                    background: formData.activityType === type
+                      ? (type === '수행평가' ? '#3b82f6' : '#7c3aed')
+                      : 'transparent',
+                    color: formData.activityType === type ? '#fff' : '#64748b',
+                    boxShadow: formData.activityType === type ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
+                  }}
+                >
+                  {type === '수행평가' ? '📝 수행평가' : '✨ 기타 활동'}
+                </button>
+              ))}
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">날짜</label>
@@ -2492,11 +2761,11 @@ export default function Dashboard() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">내용</label>
+              <label className="block text-sm font-medium mb-1">{formData.activityType === '기타 활동' ? '활동 내용' : '수행평가 내용'}</label>
               <Textarea
                 value={formData.content}
                 onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                placeholder="수행평가 내용 입력"
+                placeholder={formData.activityType === '기타 활동' ? '활동 내용 입력' : '수행평가 내용 입력'}
                 required
                 rows={3}
               />
@@ -2508,7 +2777,9 @@ export default function Dashboard() {
               }} className="flex-1">
                 취소
               </Button>
-              <Button type="submit" className="flex-1">
+              <Button type="submit" className="flex-1 text-white font-bold"
+                style={{ background: formData.activityType === '기타 활동' ? 'linear-gradient(135deg,#7c3aed,#a855f7)' : undefined }}
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 추가하기
               </Button>
@@ -2530,6 +2801,42 @@ export default function Dashboard() {
             </p>
           </DialogHeader>
           <form onSubmit={handleUpdate} className="space-y-4">
+            {/* 활동 유형 선택 메뉴 */}
+            <div
+              style={{
+                display: 'flex',
+                background: '#f1f5f9',
+                borderRadius: 12,
+                padding: 4,
+                gap: 4,
+              }}
+            >
+              {(['수행평가', '기타 활동'] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, activityType: type })}
+                  style={{
+                    flex: 1,
+                    padding: '8px 0',
+                    borderRadius: 8,
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                    transition: 'all 0.18s',
+                    background: formData.activityType === type
+                      ? (type === '수행평가' ? '#3b82f6' : '#7c3aed')
+                      : 'transparent',
+                    color: formData.activityType === type ? '#fff' : '#64748b',
+                    boxShadow: formData.activityType === type ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
+                  }}
+                >
+                  {type === '수행평가' ? '📝 수행평가' : '✨ 기타 활동'}
+                </button>
+              ))}
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">날짜</label>
@@ -2579,11 +2886,11 @@ export default function Dashboard() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">내용</label>
+              <label className="block text-sm font-medium mb-1">{formData.activityType === '기타 활동' ? '활동 내용' : '수행평가 내용'}</label>
               <Textarea
                 value={formData.content}
                 onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                placeholder="수행평가 내용 입력"
+                placeholder={formData.activityType === '기타 활동' ? '활동 내용 입력' : '수행평가 내용 입력'}
                 required
                 rows={3}
               />
@@ -2595,7 +2902,9 @@ export default function Dashboard() {
               }} className="flex-1">
                 취소
               </Button>
-              <Button type="submit" className="flex-1">
+              <Button type="submit" className="flex-1 text-white font-bold"
+                style={{ background: formData.activityType === '기타 활동' ? 'linear-gradient(135deg,#7c3aed,#a855f7)' : undefined }}
+              >
                 수정하기
               </Button>
             </div>
@@ -2626,6 +2935,11 @@ export default function Dashboard() {
                     <span className="font-semibold text-lg text-gray-900">
                       {assessment.subject}
                     </span>
+                    {assessment.isTeacherCreated === 1 && (
+                      <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold border border-emerald-200 whitespace-nowrap">
+                        선생님 직접 등록
+                      </span>
+                    )}
                     {assessment.classCode && (
                       <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full font-medium">
                         {assessment.classCode}그룹
@@ -2652,8 +2966,8 @@ export default function Dashboard() {
                       </span>
                     )}
                   </div>
-                  {/* 과거 날짜가 아닐 때만 수정/삭제 버튼 표시 */}
-                  {assessment.dueDate >= toDateString(new Date()) && (
+                  {/* 과거 날짜가 아닐 때만 수정/삭제 버튼 표시 (선생님이 직접 등록한 경우 수정/삭제 불가) */}
+                  {assessment.dueDate >= toDateString(new Date()) && assessment.isTeacherCreated !== 1 && (
                     <div className="flex bg-gray-100 rounded-md">
                       <Button
                         variant="ghost"
@@ -2676,21 +2990,21 @@ export default function Dashboard() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  )
-                  }
+                  )}
                 </div>
                 <p className="text-gray-700 mb-2">{assessment.title}</p>
                 <div className="flex justify-between items-end mt-2">
                   <div className="text-xs text-gray-500">
                     {assessment.dueDate}
                   </div>
-                  {assessment.dueDate >= toDateString(new Date()) && (
+                  {assessment.dueDate >= toDateString(new Date()) && assessment.isTeacherCreated !== 1 && (
                     <Button
                       variant="outline"
                       size="sm"
                       className="text-xs h-7 px-3 border-orange-200 text-orange-600 hover:bg-orange-50 hover:text-orange-700 transition-colors font-semibold"
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (!checkStudentPermission(assessment.grade)) return;
                         setRelocatingAssessment(assessment);
                         setShowViewDialog(false);
                       }}
@@ -2718,53 +3032,112 @@ export default function Dashboard() {
         <div className="md:hidden mt-6 mb-2 space-y-2">
           {/* App Download for Normal Browsers (Chrome, etc.) vs Add to Home Screen for Samsung/In-App */}
           {isSamsungBrowser ? (
-            // For Samsung browsers: respect admin toggle from '미해결 문제' settings
-            !hasPwaCookie && settings?.samsung_install_button_visible !== false && (
-              <>
-                <Button
-                  onClick={handleInstallClick}
-                  disabled={isInstalling}
-                  className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
-                >
-                  {isInstalling ? (
-                    <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 outline-none">
-                      <path d="M11 17h2v-6h-2v6Zm1-8q.425 0 .713-.288T13 8q0-.425-.288-.713T12 7q-.425 0-.713.288T11 8q0 .425.288.713T12 9Zm0 13q-2.075 0-3.9-.788t-3.175-2.137q-1.35-1.35-2.137-3.175T2 12q0-2.075.788-3.9t2.137-3.175q1.35-1.35 3.175-2.137T12 2q2.075 0 3.9.788t3.175 2.137q1.35 1.35 2.137 3.175T22 12q0 2.075-.788 3.9t-2.137 3.175q-1.35 1.35-3.175 2.137T12 22Z" />
-                    </svg>
-                  )}
-                  <span>{isInstalling ? '설치 중...' : '홈 화면에 성지수행 추가'}</span>
-                </Button>
-              </>
+            // For Samsung browsers: play_store_url 있을 때만 Play Store 버튼 표시
+            !hasPwaCookie && settings?.samsung_install_button_visible !== false && settings?.play_store_url && (
+              <a
+                href={settings.play_store_url}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+              >
+                {/* Play Store 로고 SVG */}
+                <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
+                  <path d="M3.18 23.76c.33.18.7.2 1.04.08L14.76 12 4.22.16A1.25 1.25 0 0 0 3.18.4C2.6.74 2.25 1.35 2.25 2v20c0 .65.35 1.26.93 1.76Z" fill="#EA4335"/>
+                  <path d="M21.25 10.3 17.98 8.5l-3.69 3.5 3.69 3.5 3.27-1.8c.93-.51.93-1.89 0-2.4Z" fill="#FBBC04"/>
+                  <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
+                  <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
+                </svg>
+                <span>Google Play에서 다운로드</span>
+              </a>
+            )
+          ) : isOtherBrowser ? (
+            // 그외 브라우저: play_store_url이 있으면 Play Store 버튼, 없으면 숙짔
+            !hasPwaCookie && settings?.other_install_button_visible !== false && settings?.play_store_url && (
+              <a
+                href={settings.play_store_url}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+              >
+                <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
+                  <path d="M3.18 23.76c.33.18.7.2 1.04.08L14.76 12 4.22.16A1.25 1.25 0 0 0 3.18.4C2.6.74 2.25 1.35 2.25 2v20c0 .65.35 1.26.93 1.76Z" fill="#EA4335"/>
+                  <path d="M21.25 10.3 17.98 8.5l-3.69 3.5 3.69 3.5 3.27-1.8c.93-.51.93-1.89 0-2.4Z" fill="#FBBC04"/>
+                  <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
+                  <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
+                </svg>
+                <span>Google Play에서 다운로드</span>
+              </a>
             )
           ) : (
-            // Normal PWA Prompt (Chrome, Safari, etc.)
+            // Normal PWA Prompt — iOS Safari → App Store, Chrome → PWA
             !hasPwaCookie && !isStandalone && (
               <>
-                <Button
-                  onClick={handleInstallClick}
-                  disabled={isInstalling}
-                  className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
-                >
-                  {isInstalling ? (
-                    <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
+                {isIOS && settings?.safari_install_button_visible !== false ? (
+                  // iOS Safari
+                  settings?.app_store_url ? (
+                    // App Store 링크 설정됨 → App Store 버튼
+                    <a
+                      href={settings.app_store_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full h-14 bg-black hover:bg-gray-900 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+                    >
+                      {/* Apple 로고 */}
+                      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="white">
+                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
+                      </svg>
+                      <span>App Store에서 다운로드</span>
+                    </a>
                   ) : (
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
-                      <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
-                    </svg>
-                  )}
-                  <span>{isInstalling ? '설치 중...' : '성지수행 앱 다운로드'}</span>
-                </Button>
+                    // App Store 미설정 → 기존 PWA 프롬프트
+                    <Button
+                      onClick={handleInstallClick}
+                      disabled={isInstalling}
+                      className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
+                    >
+                      {isInstalling ? (
+                        <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
+                          <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
+                        </svg>
+                      )}
+                      <span>{isInstalling ? '설치 중...' : '성지수행 앱 다운로드'}</span>
+                    </Button>
+                  )
+                ) : settings?.chrome_install_button_visible !== false ? (
+                  // Chrome / 기타 → 기존 PWA 버튼
+                  <Button
+                    onClick={handleInstallClick}
+                    disabled={isInstalling}
+                    className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
+                  >
+                    {isInstalling ? (
+                      <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
+                        <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
+                      </svg>
+                    )}
+                    <span>{isInstalling ? '설치 중...' : '성지수행 앱 다운로드'}</span>
+                  </Button>
+                ) : null}
               </>
             )
           )}
+
         </div>
       )}
       {/* 수행평가 목록 */}
       <Card className="mt-8">
         <CardHeader>
-          <CardTitle>
+          <CardTitle className="flex items-center gap-2 flex-wrap">
             <span>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}</span> 수행평가 ({weekRangeText})
+            {isOutOfDateRange && (
+              <span className="text-xs font-bold text-red-500 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse">
+                미확정 시간표
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -2855,6 +3228,11 @@ export default function Dashboard() {
                             <span className="font-bold text-lg text-blue-600">
                               {assessment.subject}
                             </span>
+                            {assessment.isTeacherCreated === 1 && (
+                              <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold border border-emerald-200 whitespace-nowrap">
+                                선생님 직접 등록
+                              </span>
+                            )}
                             <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                               {assessment.description}
                             </span>
@@ -2925,13 +3303,14 @@ export default function Dashboard() {
                             </>
                           )}
                         </div>
-                        {assessment.isPostponed && (
+                        {assessment.isPostponed && assessment.isTeacherCreated !== 1 && (
                           <Button 
                             variant="outline" 
                             size="sm" 
                             className="text-red-600 border-red-200 hover:bg-red-50 h-7 text-xs px-2 shadow-sm ml-2 shrink-0 pointer-events-auto"
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (!checkStudentPermission(assessment.grade)) return;
                               setRelocatingAssessment(assessment);
                               setPendingRelocation(null);
                               window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2964,7 +3343,7 @@ export default function Dashboard() {
 
       {/* Instruction Notification */}
       {
-        showInstructionTooltip && !showElectiveDialog && !useUserConfig().instructionDismissedV2 && (
+        showInstructionTooltip && isPromotionPopupEnabled && !showElectiveDialog && !instructionDismissedV2 && (
           <div className="fixed bottom-4 right-4 z-[9999] bg-white dark:bg-gray-800 border border-orange-200 shadow-lg rounded-lg p-6 md:p-8 max-w-[90vw] md:max-w-xl animate-in slide-in-from-bottom-2 fade-in duration-300">
             <div className="flex flex-col gap-4 md:gap-6">
               <div className="flex flex-col gap-1 md:gap-2">
@@ -3038,6 +3417,7 @@ export default function Dashboard() {
         grade={grade}
         classNum={classNum}
         studentNumber={studentNumber}
+        studentName={studentName}
         datasetId={(rawTimetableData as any)?.datasetId || ''}
         forceManualMode={
           grade === '2'

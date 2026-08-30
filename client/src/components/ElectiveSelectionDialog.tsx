@@ -35,6 +35,7 @@ interface ElectiveSelectionDialogProps {
     grade: string;
     classNum: string;
     studentNumber: string;
+    studentName: string;        // 복합 식별자 구성 (이름 + 학번)
     datasetId?: string;
     forceManualMode?: boolean;
     onSaveSuccess: () => void;
@@ -137,11 +138,13 @@ export default function ElectiveSelectionDialog({
     grade,
     classNum,
     studentNumber,
+    studentName,
     datasetId,
     forceManualMode = false,
     onSaveSuccess,
     onBack
 }: ElectiveSelectionDialogProps) {
+    // 이름을 props에서 직접 받음 (Dashboard가 UserConfig에서 전달)
     const queryClient = useQueryClient();
 
     // UI mode: "smart" = subject-name picker, "manual" = group dropdown fallback
@@ -172,10 +175,10 @@ export default function ElectiveSelectionDialog({
     });
 
     const { data: existingProfile, isLoading: profileLoading } = useQuery({
-        queryKey: ['studentProfile', grade, classNum, studentNumber, datasetId],
+        queryKey: ['studentProfile', grade, classNum, studentNumber, studentName, datasetId],
         queryFn: async () => {
-            if (!datasetId) return null;
-            const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&dataset=${datasetId}`);
+            if (!datasetId || !studentName) return null;
+            const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&studentName=${encodeURIComponent(studentName)}&dataset=${datasetId}`);
             if (!res.ok) throw new Error("Failed to fetch student profile");
             const data = await res.json();
             if (data?.electives && typeof data.electives === 'string') {
@@ -183,7 +186,7 @@ export default function ElectiveSelectionDialog({
             }
             return data;
         },
-        enabled: isOpen && !!grade && !!classNum && !!studentNumber && !!datasetId
+        enabled: isOpen && !!grade && !!classNum && !!studentNumber && !!studentName && !!datasetId
     });
 
     // ── Derived Data ───────────────────────────────────────────────────
@@ -328,6 +331,7 @@ export default function ElectiveSelectionDialog({
                     grade: parseInt(grade),
                     classNum: parseInt(classNum),
                     studentNumber: parseInt(studentNumber),
+                    studentName,
                     dataset: datasetId || '',
                     electives: toSave,
                 }),

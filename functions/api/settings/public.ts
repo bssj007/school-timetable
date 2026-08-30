@@ -7,7 +7,7 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'elective_input_mode_grade2', 'elective_input_mode_grade3', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'show_target_class_main_menu', 'promotion_reset_days', 'assessment_distrust_threshold', 'assessment_positive_color', 'assessment_positive_ratio', 'assessment_negative_color', 'assessment_negative_ratio', 'assessment_timetable_color', 'changed_class_tint_color', 'changed_class_tint_opacity', 'comcigan_debug_overlay_enabled', 'comcigan_debug_whitelist', 'special_schedules', 'special_schedules_enabled', 'meal_lunch_cutoff_hour', 'meal_rating_enabled', 'meal_emphasis_enabled')").all();
+        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'elective_input_mode_grade2', 'elective_input_mode_grade3', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'chrome_install_button_visible', 'safari_install_button_visible', 'other_install_button_visible', 'play_store_url', 'app_store_url', 'show_target_class_main_menu', 'promotion_popup_enabled', 'promotion_reset_days', 'assessment_distrust_threshold', 'assessment_positive_color', 'assessment_positive_ratio', 'assessment_negative_color', 'assessment_negative_ratio', 'assessment_timetable_color', 'changed_class_tint_color', 'changed_class_tint_opacity', 'comcigan_debug_overlay_enabled', 'comcigan_debug_whitelist', 'special_schedules', 'special_schedules_enabled', 'meal_lunch_cutoff_hour', 'meal_rating_enabled', 'meal_emphasis_enabled', 'teacher_ignore_keywords', 'semester_key', 'assessment_allow_student_grade1', 'assessment_allow_student_grade2', 'assessment_allow_student_grade3', 'assessment_allow_teacher_grade1', 'assessment_allow_teacher_grade2', 'assessment_allow_teacher_grade3', 'assessment_disallow_msg_student', 'assessment_disallow_msg_teacher', 'teacher_default_password', 'teacher_auth_expire_days', 'teacher_passwords')").all();
 
         const settings: any = {};
         if (rows && rows.results) {
@@ -58,8 +58,14 @@ export const onRequest = async (context: any) => {
             allow_print_by_grade: settings['allow_print_by_grade'] ? JSON.parse(settings['allow_print_by_grade']) : [1, 2, 3],
             print_subject_font_size: settings['print_subject_font_size'] || 'large',
             samsung_install_button_visible: settings['samsung_install_button_visible'] !== 'false', // default true
-            pwa_install_button_visible: settings['pwa_install_button_visible'] !== 'false', // default true
+            pwa_install_button_visible: settings['pwa_install_button_visible'] !== 'false', // default true (global circuit breaker)
+            chrome_install_button_visible: settings['chrome_install_button_visible'] !== 'false', // default true
+            safari_install_button_visible: settings['safari_install_button_visible'] !== 'false', // default true
+            other_install_button_visible: settings['other_install_button_visible'] !== 'false', // default true
+            play_store_url: settings['play_store_url'] || '', // external Play Store / app store link
+            app_store_url: settings['app_store_url'] || '', // iOS App Store link
             show_target_class_main_menu: settings['show_target_class_main_menu'] !== 'false', // default true
+            promotion_popup_enabled: settings['promotion_popup_enabled'] === 'true' || settings['promotion_popup_enabled'] === true || settings['promotion_popup_enabled'] === '1' || settings['promotion_popup_enabled'] === 1 || settings['promotion_popup_enabled'] === 'on', // default false (꺼짐)
             promotion_reset_days: settings['promotion_reset_days'] || '0',
             assessment_distrust_threshold: settings['assessment_distrust_threshold'] || '3',
             assessment_positive_color: settings['assessment_positive_color'] || '#22c55e',
@@ -72,12 +78,34 @@ export const onRequest = async (context: any) => {
             comcigan_debug_overlay_enabled: settings['comcigan_debug_overlay_enabled'] === 'true',
             special_schedules_enabled: settings['special_schedules_enabled'] !== 'false',
             special_schedules: settings['special_schedules'] ? JSON.parse(settings['special_schedules']) : [],
+            teacher_ignore_keywords: settings['teacher_ignore_keywords'],
             // 급식 설정
             meal_lunch_cutoff_hour: parseInt(settings['meal_lunch_cutoff_hour'] || '14'),
             meal_rating_enabled: settings['meal_rating_enabled'] !== 'false',   // default true
             meal_emphasis_enabled: settings['meal_emphasis_enabled'] !== 'false', // default true
+            // 학기 리셋 키 — 클라이언트가 쿨키 버전과 비교하여 불일치 시 재등록 유도
+            semester_key: settings['semester_key'] || '1',
+            // 수행평가 등록주체 권한 및 차단 안내 메시지
+            assessment_allow_student_grade1: settings['assessment_allow_student_grade1'] !== 'false',
+            assessment_allow_student_grade2: settings['assessment_allow_student_grade2'] !== 'false',
+            assessment_allow_student_grade3: settings['assessment_allow_student_grade3'] !== 'false',
+            assessment_allow_teacher_grade1: settings['assessment_allow_teacher_grade1'] !== 'false',
+            assessment_allow_teacher_grade2: settings['assessment_allow_teacher_grade2'] !== 'false',
+            assessment_allow_teacher_grade3: settings['assessment_allow_teacher_grade3'] !== 'false',
+            assessment_disallow_msg_student: settings['assessment_disallow_msg_student'] || '현재 학생의 수행평가 등록이 제한되어 있습니다.',
+            assessment_disallow_msg_teacher: settings['assessment_disallow_msg_teacher'] || '현재 선생님의 수행평가 등록이 제한되어 있습니다.',
+            // 교사 페이지 인증 (장난방지 수준 — 클라이언트 직접 비교용)
+            teacher_default_password: settings['teacher_default_password'] || '관리',
+            teacher_auth_expire_days: parseInt(settings['teacher_auth_expire_days'] || '0', 10),
+            // 선생님별 개별 비밀번호 (JSON: {"홍길동": "pw1", ...}, 미설정이면 디폴트 사용)
+            teacher_passwords: settings['teacher_passwords'] || '{}',
         }), {
-            headers: { 'Content-Type': 'application/json' }
+            headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+            }
         });
 
     } catch (e: any) {

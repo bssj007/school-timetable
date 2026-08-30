@@ -17,6 +17,7 @@ export interface IPProfile {
     lastAccess: string | null; // ISO Date string
     recentUserAgents: string[];
     isStandalone?: boolean;
+    studentName?: string | null;      // 복합 식별자 — 이름 부분
     grade?: string | null;
     classNum?: string | null;
     studentNumber?: string | null;

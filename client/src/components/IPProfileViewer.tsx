@@ -193,9 +193,18 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                 </div>
                             </div>
                             <div className="bg-green-50 p-4 rounded-lg flex flex-col gap-1 border border-green-200">
-                                <span className="text-xs text-green-600 font-bold flex items-center gap-1"><User className="w-3 h-3" /> 학년/반/번호</span>
+                                <span className="text-xs text-green-600 font-bold flex items-center gap-1"><User className="w-3 h-3" /> 프로필 (이름 + 학번)</span>
                                 <span className="text-2xl font-bold">
-                                    {data.grade && data.classNum ? `${data.grade}학년 ${data.classNum}반 ${data.studentNumber ? data.studentNumber + '번' : ''}` : <span className="text-gray-400 text-lg">-</span>}
+                                    {data.studentName
+                                        ? <span className="text-slate-900">{data.studentName}</span>
+                                        : <span className="text-gray-400 text-lg">이름 없음</span>
+                                    }
+                                </span>
+                                <span className="text-sm text-green-700 font-mono">
+                                    {data.grade && data.classNum
+                                        ? `${data.grade}학년 ${data.classNum}반 ${data.studentNumber ? data.studentNumber + '번' : ''}`
+                                        : <span className="text-gray-400">학번 미등록</span>
+                                    }
                                 </span>
                             </div>
                             <div className="bg-gray-50 p-4 rounded-lg flex flex-col gap-1 border border-gray-200">

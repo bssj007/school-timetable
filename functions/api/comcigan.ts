@@ -150,11 +150,68 @@ export const onRequest = async (context: any) => {
                 }), { status: 503, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
             }
 
+            // Sanitize rawData to clean string codes starting with '>' (indicating changed/subbed classes in Comcigan)
+            const sanitizeTimetable = (obj: any) => {
+                if (!obj || typeof obj !== 'object') return;
+                for (const key of Object.keys(obj)) {
+                    const val = obj[key];
+                    if (typeof val === 'string' && val.startsWith('>')) {
+                        obj[key] = parseInt(val.replace(/>/g, ''), 10) || 0;
+                    } else if (typeof val === 'object') {
+                        sanitizeTimetable(val);
+                    }
+                }
+            };
+
+            // ── 교사/과목/시간표 키를 동적으로 탐지 ──────────────────────────────────────────
+            // 컴시간은 매 학기/갱신마다 자료번호가 바뀜(예: 자료446→자료512).
+            // 따라서 특정 번호를 하드코딩하지 않고, 각 배열의 구조적 특징으로 탐지함.
+            const rawKeys = Object.keys(rawData);
+
+            // 교사 배열: 원소 중 '*'로 끝나는 문자열 포함 → 담임 교사 표시 컨벤션
+            const detectedTeacherProp = rawKeys.find(k =>
+                Array.isArray(rawData[k]) && rawData[k].some((s: any) => typeof s === 'string' && s.endsWith('*'))
+            ) ?? null;
+
+            // 과목 배열: 교과목 키워드 2개 이상 포함
+            const subjectKeywords = ["국어", "수학", "영어", "한국사", "체육", "음악", "미술", "진로", "문학", "정보", "화학", "생물", "물리", "지리", "역사", "경제", "정치", "사회", "과학"];
+            const detectedSubjectProp = rawKeys.find(k => {
+                if (k === detectedTeacherProp) return false;
+                const val = rawData[k];
+                if (!Array.isArray(val)) return false;
+                let cnt = 0;
+                for (let i = 0; i < Math.min(val.length, 100); i++) {
+                    if (typeof val[i] === 'string' && subjectKeywords.some(kw => val[i].includes(kw))) {
+                        if (++cnt >= 2) return true;
+                    }
+                }
+                return false;
+            }) ?? null;
+
+            // 시간표 배열: val[grade][class][weekday]가 Array 구조인 키 탐지
+            // 번호가 가장 큰 것 = baseline(통합) 데이터셋으로 간주
+            // key.replace('자료','')는 특정 번호 하드코딩이 아닌 컴시간 네이밍 컨벤션 패턴
+            const detectedTimetableProps = rawKeys.filter(k => {
+                const val = rawData[k];
+                return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+            });
+            const detectedBaseline = detectedTimetableProps.length > 0
+                ? detectedTimetableProps.reduce((max, key) => {
+                    const num = parseInt(key.replace('자료', '')) || 0;
+                    return num > max.num ? { key, num } : max;
+                }, { key: detectedTimetableProps[0], num: -1 }).key
+                : null;
+
+            if (!detectedTeacherProp || !detectedSubjectProp || !detectedBaseline) {
+                console.warn('[Teacher Timetable] Detection failed:', { detectedTeacherProp, detectedSubjectProp, detectedBaseline });
+            }
+
             return new Response(JSON.stringify({
-                success: true,
-                teachers: rawData['자료446'] || [],
-                subjects: rawData['자료492'] || [],
-                timetable: rawData['자료542'] || []
+                success: !!(detectedTeacherProp && detectedSubjectProp && detectedBaseline),
+                teachers: detectedTeacherProp ? (rawData[detectedTeacherProp] || []) : [],
+                subjects:  detectedSubjectProp ? (rawData[detectedSubjectProp] || []) : [],
+                timetable: detectedBaseline    ? (rawData[detectedBaseline] || [])    : [],
+                _detectedKeys: { teacher: detectedTeacherProp, subject: detectedSubjectProp, timetable: detectedBaseline }
             }), {
                 status: 200,
                 headers: {
@@ -258,42 +315,113 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     let ipOverrideApplied: string | false = false;
     let jsonString = cachedRawDataString;
 
-    // --- FUTURE BOUNDARY STALE CHECK ---
-    // If the frontend legitimately requests a date that exceeds the maximum timeline of our currently
-    // cached Comcigan payload, mark it as out-of-range so we can fallback to the standard dataset.
-    // We do NOT discard the raw cache—doing so would also discard the standard baseline dataset
-    // (e.g. 자료481) that has no date bounds and is valid for any week.
-    let isOutOfRange = false;
+    // --- DATE BOUNDARY CHECK (PAST & FUTURE) ---
+    // 캐시된 raw_data의 날짜 범위와 targetDate를 비교해 경계 여부를 판단:
+    //   - isFutureOutOfRange: targetDate가 마지막 범위 종료일보다 미래
+    //     → 컴시간에 아직 미래 시간표가 없음. 아카이브에도 없으므로 조회 불필요
+    //   - isPastOutOfRange:   targetDate가 첫 번째 범위 시작일보다 과거
+    //     → timetable_archive에서 해당 날짜 구간 스냅샷 조회 가능
+    let isFutureOutOfRange = false;
+    let isPastOutOfRange = false;
     if (jsonString && targetDate) {
         try {
             const tempRaw = JSON.parse(jsonString);
             const dateArr = tempRaw['일자'];
             const dateArrNew = tempRaw['일자자료'];
-            let lastRange = null;
-            
+
+            let firstRange: string | null = null;
+            let lastRange: string | null = null;
+
             if (dateArr && Array.isArray(dateArr) && dateArr.length > 0) {
-                lastRange = dateArr[dateArr.length - 1]; // e.g. "26-03-23 ~ 26-03-28"
+                // 일자[0]은 항상 "" (빈 문자열) → 건너뛰고 실제 범위만 사용
+                firstRange = dateArr.find((r: any) => typeof r === 'string' && r.includes('~')) ?? null;
+                lastRange  = [...dateArr].reverse().find((r: any) => typeof r === 'string' && r.includes('~')) ?? null;
             } else if (dateArrNew && Array.isArray(dateArrNew) && dateArrNew.length > 0) {
-                const lastItem = dateArrNew[dateArrNew.length - 1]; // e.g. [2, "26-03-30 ~ 26-04-04"]
+                const firstItem = dateArrNew[0];
+                const lastItem = dateArrNew[dateArrNew.length - 1];
+                firstRange = Array.isArray(firstItem) ? firstItem[1] : firstItem;
                 lastRange = Array.isArray(lastItem) ? lastItem[1] : lastItem;
             }
-            
+
+            const targetShort = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
+            const targetDateObj = new Date(`20${targetShort}`);
+
+            // 미래 초과: targetDate가 마지막 범위의 종료일보다 이후
             if (lastRange && typeof lastRange === 'string') {
                 const parts = lastRange.split('~').map(s => s.trim());
                 if (parts.length >= 2) {
                     const endDate = new Date(`20${parts[1]}`);
                     endDate.setHours(23, 59, 59, 999);
-                    const targetShort = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
-                    const targetDateObj = new Date(`20${targetShort}`);
-                    
                     if (targetDateObj > endDate) {
-                        console.log(`[Comcigan Debug] targetDate ${targetShort} exceeds cached raw_data max date ${parts[1]}. Will use standard (baseline) dataset instead.`);
-                        isOutOfRange = true;
+                        console.log(`[Comcigan Debug] targetDate ${targetShort} exceeds cached max date ${parts[1]}. isFutureOutOfRange=true`);
+                        isFutureOutOfRange = true;
+                    }
+                }
+            }
+
+            // 과거 초과: targetDate가 첫 번째 범위의 시작일보다 이전
+            if (!isFutureOutOfRange && firstRange && typeof firstRange === 'string') {
+                const parts = firstRange.split('~').map(s => s.trim());
+                if (parts.length >= 1) {
+                    const startDate = new Date(`20${parts[0]}`);
+                    startDate.setHours(0, 0, 0, 0);
+                    if (targetDateObj < startDate) {
+                        console.log(`[Comcigan Debug] targetDate ${targetShort} is before cached min date ${parts[0]}. isPastOutOfRange=true`);
+                        isPastOutOfRange = true;
                     }
                 }
             }
         } catch (e) {
-            console.warn('[Comcigan Debug] Failed to evaluate raw_data date expiration boundary', e);
+            console.warn('[Comcigan Debug] Failed to evaluate raw_data date boundary', e);
+        }
+    }
+    // 프론트엔드/하위 로직에서 사용하는 통합 isOutOfRange
+    let isOutOfRange = isFutureOutOfRange || isPastOutOfRange;
+
+    // --- PAST OUT-OF-RANGE: timetable_archive 조회 ---
+    // 과거 날짜만 아카이브에 저장되어 있으므로, isPastOutOfRange인 경우에만 조회
+    // 미래 날짜(isFutureOutOfRange)는 아카이브에 데이터가 없으므로 조회 생략
+    let isArchivedData = false;
+    let matchedArchiveDateRange: string | null = null;
+    if (isPastOutOfRange && targetDate && db) {
+        const targetShortForArchive = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
+        const targetDateObjForArchive = new Date(`20${targetShortForArchive}`);
+        try {
+            await db.prepare(`
+                CREATE TABLE IF NOT EXISTS timetable_archive (
+                    date_range TEXT PRIMARY KEY,
+                    response_json TEXT NOT NULL,
+                    saved_at TEXT DEFAULT (datetime('now'))
+                )
+            `).run();
+
+            const archiveRows = await db.prepare("SELECT date_range, response_json FROM timetable_archive").all();
+            let matchedArchive: string | null = null;
+            for (const row of (archiveRows.results || [])) {
+                const rangeStr = row.date_range as string;
+                const parts = rangeStr.split('~').map((s: string) => s.trim());
+                if (parts.length < 2) continue;
+                const start = new Date(`20${parts[0]}`);
+                const end = new Date(`20${parts[1]}`);
+                end.setHours(23, 59, 59, 999);
+                if (targetDateObjForArchive >= start && targetDateObjForArchive <= end) {
+                    matchedArchive = row.response_json as string;
+                    matchedArchiveDateRange = rangeStr; // ← 매칭된 구간 기록
+                    break;
+                }
+            }
+
+            if (matchedArchive) {
+                console.log(`[Archive] Found archived timetable for ${targetShortForArchive}. Serving from archive.`);
+                // 아카이브 JSON으로 jsonString 대체 → 이후 데이터셋 선택/파싱 로직이 이 데이터로 실행됨
+                jsonString = matchedArchive;
+                isOutOfRange = false;  // 아카이브로 해결됨 → 미확정 표시 안 함
+                isArchivedData = true;
+            } else {
+                console.log(`[Archive] No archive found for ${targetShortForArchive}. isOutOfRange remains true.`);
+            }
+        } catch (e) {
+            console.warn('[Archive] Failed to query timetable_archive:', e);
         }
     }
 
@@ -493,10 +621,22 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     let isFallbackApplied = false;
     let datasetDateRanges: Record<string, string> = {};
     
-    // Always build the date ranges map first
+    // 날짜 범위 맵 구성 — 각 시간표 데이터셋의 유효 날짜 구간을 매핑
+    // 컴시간은 두 가지 형식으로 날짜 정보를 제공함:
+    //
+    //   형식 A - '일자' 배열 (구형):
+    //     ["", "26-08-25~26-08-29", "26-09-01~26-09-05", ...]
+    //     [0] = 공백(무시), [1] = 첫 번째 시간표 데이터셋 범위, [2] = 두 번째 ...
+    //     → timetableProps[idx]와 rawData['일자'][idx+1]을 순서대로 매핑
+    //     → allDatasetKeys(모든 자료~) 대신 timetableProps(실제 시간표만) 사용해야
+    //       교사배열(자료446), 과목배열(자료492) 등이 섞여 인덱스가 어긋나는 버그 방지
+    //
+    //   형식 B - '일자자료' 배열 (신형):
+    //     [[0, "26-08-25~26-08-29"], [1, "26-09-01~26-09-05"], ...]
+    //     → directIdx로 timetableProps[directIdx]를 직접 참조 → 더 정확
     if (rawData['일자'] && Array.isArray(rawData['일자'])) {
-        const allDatasetKeys = Object.keys(rawData).filter(k => k.startsWith('자료') && !isNaN(parseInt(k.replace('자료', ''))));
-        allDatasetKeys.forEach((key, idx) => {
+        // timetableProps만 사용 — 실제 시간표 데이터를 가진 키만으로 인덱스 매핑
+        timetableProps.forEach((key, idx) => {
             if (idx + 1 < rawData['일자'].length) {
                 datasetDateRanges[key] = rawData['일자'][idx + 1];
             }
@@ -550,70 +690,87 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         return null;
     };
 
-    // When the target date is beyond the cached comcigan range, skip date-matching and
-    // directly use designatedDatasetId (the admin-configured standard dataset for this grade).
+    // ── 날짜 기반 데이터셋 탐색 헬퍼 ───────────────────────────────────────
+    // 컴시간 raw_data 내에서 targetShort를 커버하는 데이터셋을 탐색.
+    // 관리자 고정 데이터셋이 해당 날짜를 커버하지 못할 때 우선 적용됨.
+    // (예: 이번 주 데이터셋을 고정했을 때 다음 주를 조회하면,
+    //       컴시간에 다음 주 전용 데이터셋이 이미 있으면 그것을 사용)
+    const findDatasetByDate = (targetStr: string): string | null => {
+        for (const [key, rangeStr] of Object.entries(datasetDateRanges)) {
+            if (isDateInRange(targetStr, rangeStr)) {
+                console.log(`[Comcigan Debug] Date-match found dataset ${key} for ${targetStr}`);
+                return key;
+            }
+        }
+        return null;
+    };
+
+    // ── 데이터셋 최종 폴백 헬퍼 ─────────────────────────────────────────────
+    // 우선순위: adminFallback(표준 설정) → baselineDatasetId(통합) → 첫 번째 데이터셋
+    const applyUltimateFallback = (): string => {
+        const adminFallback = resolveAdminFallback();
+        return adminFallback || baselineDatasetId || timetableProps[0] || "";
+    };
+
+    // ── 데이터셋 선택 메인 로직 ──────────────────────────────────────────────
     if (isOutOfRange) {
-        console.log(`[Comcigan Debug] isOutOfRange=true. Forcing standard dataset. designatedDatasetId=${designatedDatasetId}, finalDataset=${finalDataset}, fallbackDataset=${fallbackDataset}, baselineDatasetId=${baselineDatasetId}`);
+        // targetDate가 캐시 범위 완전 초과 (isFutureOutOfRange || isPastOutOfRange)
+        // 날짜 매칭이 불가능하므로 관리자 설정 데이터셋 또는 baseline 사용
+        console.log(`[Comcigan Debug] isOutOfRange=true. designatedDatasetId=${designatedDatasetId}, finalDataset=${finalDataset}, baselineDatasetId=${baselineDatasetId}`);
         if (designatedDatasetId && designatedDatasetId !== '_auto_' && (timetableProps.includes(designatedDatasetId) || designatedDatasetId === 'MANUAL_PLAN')) {
             timedataProp = designatedDatasetId;
         } else if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
             timedataProp = finalDataset;
         } else {
-            // [FIX] _auto_ 모드일 때: 관리자가 설정한 표준 데이터셋 우선, 그 다음 동적 추론
-            const adminFallback = resolveAdminFallback();
-            timedataProp = adminFallback || baselineDatasetId || timetableProps[0] || "";
-            if (adminFallback) {
-                console.log(`[Comcigan Debug] Out-of-range: Using admin fallback dataset: ${adminFallback}`);
-            }
+            timedataProp = applyUltimateFallback();
         }
         isFallbackApplied = true;
-        console.log(`[Comcigan Debug] Out-of-range fallback resolved to: ${timedataProp}`);
-    } else if (datasetSelected && datasetSelected !== 'MANUAL_PLAN' && datasetSelected !== '_auto_') {
+        console.log(`[Comcigan Debug] Out-of-range resolved to: ${timedataProp}`);
+
+    } else if (datasetSelected === 'MANUAL_PLAN') {
+        timedataProp = 'MANUAL_PLAN';
+
+    } else if (datasetSelected && datasetSelected !== '_auto_') {
+        // 관리자가 특정 데이터셋을 고정한 경우
         const rangeStr = datasetDateRanges[datasetSelected];
-        let covers = false;
-        
-        if (rangeStr) {
-            covers = isDateInRange(targetShort, rangeStr);
-        }
+        const covers = rangeStr ? isDateInRange(targetShort, rangeStr) : false;
 
         if (covers) {
+            // 고정 데이터셋이 해당 날짜를 커버함 → 그대로 사용
             timedataProp = datasetSelected;
-            console.log(`[Comcigan Debug] datasetSelected ${datasetSelected} covers ${targetShort}`);
+            console.log(`[Comcigan Debug] Fixed dataset ${datasetSelected} covers ${targetShort}`);
         } else {
-            console.log(`[Comcigan Debug] datasetSelected ${datasetSelected} does NOT cover ${targetShort}. Applying explicit fallback.`);
-            if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
+            // 고정 데이터셋이 해당 날짜를 커버하지 못함
+            // 1순위: 컴시간 내 날짜 매칭 데이터셋 (미래 주차 전용 데이터셋 등)
+            // 2순위: finalDataset (관리자 설정)
+            // 3순위: adminFallback → baselineDatasetId (통합 데이터셋)
+            console.log(`[Comcigan Debug] Fixed dataset ${datasetSelected} does NOT cover ${targetShort}. Searching date-match...`);
+            const dateMatched = findDatasetByDate(targetShort);
+            if (dateMatched) {
+                timedataProp = dateMatched;
+                console.log(`[Comcigan Debug] Using date-matched dataset: ${dateMatched}`);
+            } else if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
                 timedataProp = finalDataset;
             } else {
-                // [FIX] 관리자가 설정한 표준 데이터셋 우선 시도
-                const adminFallback = resolveAdminFallback();
-                timedataProp = adminFallback || baselineDatasetId || timetableProps[0] || "";
+                timedataProp = applyUltimateFallback();
             }
             isFallbackApplied = true;
         }
-    } else if (datasetSelected === 'MANUAL_PLAN') {
-        timedataProp = 'MANUAL_PLAN';
-    } else {
-        console.log(`[Comcigan Debug] No concrete datasetSelected found. Auto-applying dynamic date resolution.`);
-        
-        let matchedDataset = null;
-        for (const [key, rangeStr] of Object.entries(datasetDateRanges)) {
-            if (isDateInRange(targetShort, rangeStr)) {
-                matchedDataset = key;
-                break;
-            }
-        }
 
-        if (matchedDataset) {
-            timedataProp = matchedDataset;
-            console.log(`[Comcigan Debug] Auto-resolved to ${matchedDataset} for date ${targetShort}`);
+    } else {
+        // _auto_ 모드 또는 데이터셋 미설정 — 날짜 기반 자동 해결
+        console.log(`[Comcigan Debug] Auto mode. Searching date-match for ${targetShort}...`);
+        const dateMatched = findDatasetByDate(targetShort);
+        if (dateMatched) {
+            timedataProp = dateMatched;
+            console.log(`[Comcigan Debug] Auto-resolved to ${dateMatched} for date ${targetShort}`);
         } else {
-            console.log(`[Comcigan Debug] No dataset matches date ${targetShort}. Applying explicit fallback.`);
+            // 날짜 매칭 없음 → 통합(baseline) 데이터셋으로 폴백
+            console.log(`[Comcigan Debug] No date-match for ${targetShort}. Falling back to baseline.`);
             if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
                 timedataProp = finalDataset;
             } else {
-                // [FIX] 관리자가 설정한 표준 데이터셋 우선, 그 다음 동적 추론 baseline
-                const adminFallback = resolveAdminFallback();
-                timedataProp = adminFallback || baselineDatasetId || timetableProps[0] || "";
+                timedataProp = applyUltimateFallback();
             }
             isFallbackApplied = true;
         }
@@ -911,32 +1068,101 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         };
     });
 
-    if (db && !isEmptyDataset && !isFallbackApplied) {
+    // ─────────────────────────────────────────────────────────────────────────
+    // 캐시 / 아카이브 저장 — 데이터 출처에 따라 3개 경로로 완전 분리
+    //
+    //   [A] isArchivedData=true
+    //       : timetable_archive에서 읽어온 과거 스냅샷
+    //       → raw_data 캐시 오염 방지를 위해 저장 완전 건너뜀
+    //
+    //   [B] isFreshLiveFetch=true  (크론 / 자동갱신 / 전체갱신 버튼 경로)
+    //       : allowLiveFetch=true + cachedRawDataString 없이 컴시간에서 직접 fetch한 최신 LIVE 데이터
+    //       → raw_data 캐시 갱신 (frozen 보호 CASE 유지)
+    //       → LIVE 범위 전체를 INSERT OR REPLACE로 아카이브 최신화
+    //       → isEmptyDataset / isFallbackApplied 여부와 완전 무관하게 항상 실행
+    //         (날짜 매칭 실패나 데이터셋 선택 상태가 저장을 막아서는 안 됨)
+    //
+    //   [C] 일반 사용자 요청 (캐시에서 읽어온 데이터)
+    //       → isFallbackApplied=true 이면 저장 건너뜀 (폴백 데이터로 캐시 오염 방지)
+    //       → isEmptyDataset=true 이면 저장 건너뜀
+    //       → raw_data 캐시 갱신 허용 (stale-while-revalidate 흐름)
+    //       → 아카이브는 INSERT OR IGNORE만 — 기존 항목 보호
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // isFreshLiveFetch: cachedRawDataString이 없었고(=캐시 미스 또는 refreshCache 호출)
+    //                   실제로 컴시간 서버에서 직접 fetch한 경우
+    const isFreshLiveFetch = allowLiveFetch && !cachedRawDataString && !isArchivedData;
+
+    // 날짜 범위 파싱 — 모듈 레벨 parseArchiveRanges() 사용
+
+    if (isArchivedData) {
+        // ── [A] 아카이브 서빙 경로 ─────────────────────────────────────────
+        console.log('[Cache] [A] Archived data — skipping all writes to prevent contamination.');
+
+    } else if (isFreshLiveFetch && db) {
+        // ── [B] LIVE fetch 경로 ────────────────────────────────────────────
+        // 크론 / 자동갱신 / 전체갱신 버튼: 컴시간에서 방금 받은 신선한 데이터
+        // raw_data 갱신 + 대기 중(LIVE 상태) 아카이브 범위를 모두 INSERT OR REPLACE로 최신화
+        // isEmptyDataset / isFallbackApplied와 완전 독립 실행
+        console.log(`[Cache] [B] Fresh live fetch — syncing raw_data + archive (isFallbackApplied=${isFallbackApplied}, isEmptyDataset=${isEmptyDataset})`);
         try {
+            await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_archive (
+                date_range TEXT PRIMARY KEY,
+                response_json TEXT NOT NULL,
+                saved_at TEXT DEFAULT (datetime('now'))
+            )`).run();
             await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_cache (cache_key TEXT PRIMARY KEY, response_json TEXT NOT NULL, dataset_id TEXT, updated_at TEXT DEFAULT (datetime('now')))`).run();
+
+            // 1) raw_data 캐시 갱신 (frozen 시 DB 내 CASE로 자동 보호)
             await db.prepare(`
-                INSERT INTO timetable_cache (cache_key, response_json, updated_at) 
-                VALUES ('raw_data', ?, datetime('now')) 
-                ON CONFLICT(cache_key) DO UPDATE SET 
+                INSERT INTO timetable_cache (cache_key, response_json, updated_at)
+                VALUES ('raw_data', ?, datetime('now'))
+                ON CONFLICT(cache_key) DO UPDATE SET
                     response_json = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.response_json ELSE excluded.response_json END,
-                    updated_at = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.updated_at ELSE datetime('now') END
+                    updated_at    = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.updated_at    ELSE datetime('now')            END
             `).bind(jsonString).run();
+
+            // 2) LIVE 범위 아카이브 — INSERT OR REPLACE로 "대기 중" 항목 전부 최신화
+            const liveArchiveRanges = parseArchiveRanges(jsonString);
+            console.log(`[Cache] [B] Archive ranges to upsert: [${liveArchiveRanges.join(', ')}]`);
+            for (const range of liveArchiveRanges) {
+                try {
+                    await db.prepare(
+                        "INSERT OR REPLACE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))"
+                    ).bind(range, jsonString).run();
+                    console.log(`[Cache] [B] Archive upserted: ${range}`);
+                } catch (archErr) {
+                    console.warn(`[Cache] [B] Archive upsert failed for ${range}:`, archErr);
+                }
+            }
         } catch (e) {
-            console.error('[Comcigan Debug] Failed to cache raw_data (deferred):', e);
+            console.error('[Cache] [B] Failed to sync raw_data + archive:', e);
         }
+
+    } else {
+        // ── [C] 캐시 읽기 경로 ─────────────────────────────────────────────
+        // cachedRawDataString을 그대로 응답 — DB 쓰기 없음.
+        // DB 쓰기(updated_at / saved_at 갱신)는 오직 [B] LIVE fetch 시에만 발생.
+        // 여기서 DB를 건드리면 타임스탬프가 오염되어 "탭 전환 시 현재 시간으로 리셋"되는 문제가 생김.
     }
+
 
     return new Response(JSON.stringify({
         schoolName: "부산성지고등학교",
         datasetId: timedataProp,
         originalDatasetId,
         ipOverrideApplied: typeof ipOverrideApplied !== 'undefined' ? ipOverrideApplied : false,
+        isOutOfRange,
+        isArchivedData,
+        matchedArchiveRange: matchedArchiveDateRange,  // 아카이브 서빙 시 매칭된 구간 (예: "26-08-25~26-08-29")
         data: result,
         debugTokens: { 
             override1: datasetSelectedGrade1 || null, 
             override23: typeof datasetSelected !== 'undefined' ? datasetSelected : null,
             isFallbackApplied,
             isEmptyDataset,
+            isFutureOutOfRange,
+            isPastOutOfRange,
             keysCount: keys.length,
             teacherProp,
             subjectProp,
@@ -948,7 +1174,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             bunriLogic: bunri === 100 ? "100" : "other",
             subjectsCount: subjects.length,
             teachersCount: teachers.length,
-            parsedSamples
+            parsedSamples,
+            datasetDateRanges   // 각 데이터셋의 날짜 구간 맵 (예: {"자료481": "26-08-25~26-08-29"})
         }
     }), {
         headers: {
@@ -958,11 +1185,84 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     });
 }
 
+// --- 모듈 레벨 유틸리티 ---
+
+/**
+ * 컴시간 raw_data JSON 문자열에서 날짜 구간 배열을 파싱.
+ * '일자' 또는 '일자자료' 배열에서 'YY-MM-DD~YY-MM-DD' 형식 항목 추출.
+ * getTimetable 내부와 refreshCache 양쪽에서 공통 사용.
+ */
+function parseArchiveRanges(jsonStr: string): string[] {
+    try {
+        const parsed = JSON.parse(jsonStr);
+        const ranges: string[] = [];
+        const dateArr = parsed['일자'];
+        const dateArrNew = parsed['일자자료'];
+        if (dateArr && Array.isArray(dateArr)) {
+            for (const r of dateArr) {
+                if (typeof r === 'string' && r.includes('~')) ranges.push(r.trim());
+            }
+        } else if (dateArrNew && Array.isArray(dateArrNew)) {
+            for (const item of dateArrNew) {
+                const r = Array.isArray(item) ? item[1] : item;
+                if (typeof r === 'string' && r.includes('~')) ranges.push((r as string).trim());
+            }
+        }
+        return ranges;
+    } catch (_) { return []; }
+}
+
 // --- 캐시 헬퍼 함수 ---
 
+/**
+ * 컴시간에서 최신 raw_data를 직접 fetch해 timetable_cache에 저장하고
+ * 현재 LIVE 날짜 구간의 archive를 INSERT OR REPLACE로 동기화한다.
+ *
+ * cron(/api/cron/run)과 관리자 전체갱신(POST /api/admin/comcigan-cache) 양쪽에서
+ * 동일하게 호출되어 두 경로의 동작을 통일한다.
+ */
 async function refreshCache(db: any, grade: number = 1, targetDate?: string | null) {
-    console.log(`[Comcigan Cache] Refreshing global raw_data cache via background ...`);
+    console.log(`[Cache] refreshCache: fetching live data from Comcigan ...`);
+
+    // 1. 컴시간 live fetch → raw_data 갱신 ([B] 경로)
+    //    allowLiveFetch=true, cachedRawDataString=undefined → 항상 컴시간 서버에서 fetch
     await getTimetable(grade, 'all', db, null, 'cache-refresh', targetDate, undefined, true);
+
+    // 2. raw_data에서 현재 LIVE 날짜 구간을 읽어 archive를 명시적으로 동기화
+    //    — getTimetable 내부 [B] 경로에도 동일 로직이 있지만,
+    //      cron/전체갱신 경로에서 명시적으로 재실행해 누락 없이 보장
+    try {
+        await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_archive (
+            date_range TEXT PRIMARY KEY,
+            response_json TEXT NOT NULL,
+            saved_at TEXT DEFAULT (datetime('now'))
+        )`).run();
+
+        const rawRow = await db.prepare(
+            "SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'"
+        ).first();
+
+        if (rawRow?.response_json) {
+            const ranges = parseArchiveRanges(rawRow.response_json as string);
+            console.log(`[Cache] refreshCache: syncing archive ranges: [${ranges.join(', ')}]`);
+            for (const range of ranges) {
+                try {
+                    await db.prepare(
+                        "INSERT OR REPLACE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))"
+                    ).bind(range, rawRow.response_json).run();
+                    console.log(`[Cache] refreshCache: archive upserted: ${range}`);
+                } catch (archErr) {
+                    console.warn(`[Cache] refreshCache: archive upsert failed for ${range}:`, archErr);
+                }
+            }
+        } else {
+            console.warn('[Cache] refreshCache: raw_data not found after fetch — archive sync skipped.');
+        }
+    } catch (e) {
+        console.error('[Cache] refreshCache: archive sync failed:', e);
+    }
+
+    console.log('[Cache] refreshCache: done (raw_data + archive synced).');
 }
 
 export { refreshCache, getTimetable };
