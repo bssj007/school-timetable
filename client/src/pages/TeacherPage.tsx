@@ -1899,15 +1899,12 @@ export default function TeacherPage() {
           </div>
         </div>
 
-        {/* ===== 모바일: 탭 전환 영역 — 당일형 표를 기준으로 크기 고정 ===== */}
-        {/* 당일형 표는 항상 렌더(invisible로 공간 유지), 숙제/달력 패널은 absolute로 덮는다 */}
-        <div className="md:hidden w-full relative">
-
         {/* ===== 모바일: 숙제형 패널 ===== */}
         {mobileViewMode === 'homework' && (
           <div
-            className="w-full rounded-xl shadow-sm flex flex-col overflow-hidden absolute inset-0 z-10"
+            className="md:hidden w-full rounded-xl shadow-sm flex flex-col overflow-hidden"
             style={{
+              minHeight: 'calc(7 * 50px + 44px)',
               ...(!isCurrentTeacherVerified ? {
                 background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
                 border: '1px solid rgba(255,255,255,0.6)',
@@ -2153,7 +2150,7 @@ export default function TeacherPage() {
           };
 
           return (
-            <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col absolute inset-0 z-10">
+            <div className="md:hidden w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col" style={{ minHeight: 'calc(7 * 50px + 44px)' }}>
               {/* 달력 헤더 */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
                 <button type="button"
@@ -2349,10 +2346,9 @@ export default function TeacherPage() {
           );
         })() : null}
 
-        {/* 시간표: absolute 오버레이의 기준 크기 제공. 당일형 아닐 때 invisible로 공간 유지. PC: 항상 표시. */}
-      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:min-h-0 ${
-        mobileViewMode !== 'daily' ? 'invisible pointer-events-none md:visible md:pointer-events-auto' : ''
-      }`}>
+      {/* Main Timetable — Card wrapper */}
+      {/* 모바일에서 당일형이 아니면 표 숨김 */}
+      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:min-h-0 ${mobileViewMode !== 'daily' ? 'hidden md:flex' : ''}`}>
           {(isTimetableLoading || isGroupDataLoading) ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
@@ -2595,7 +2591,7 @@ export default function TeacherPage() {
             </div>
           ) : null}
       </div>
-        </div>{/* end md:hidden relative panels wrapper */}
+
 
       {/* ===== PC 전용: 표 밑 설명 텍스트 ===== */}
       <p className="hidden md:flex items-center justify-center text-slate-500 text-sm mt-2 w-full">
