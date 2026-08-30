@@ -1718,7 +1718,7 @@ export default function TeacherPage() {
                 </span>
                 {teacherName && (
                   isCurrentTeacherVerified
-                    ? <Link href="/teacher-account">
+                    ? <Link href="/teacher/account">
                         <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 leading-tight hover:bg-emerald-100 transition-colors cursor-pointer">✓ 인증됨 · 계정</span>
                       </Link>
                     : <button
@@ -2556,7 +2556,7 @@ export default function TeacherPage() {
                 </div>
 
                 {/* 계정 버튼 */}
-                <Link href="/teacher-account" className="flex">
+                <Link href="/teacher/account" className="flex">
                   <button type="button" style={{ WebkitTapHighlightColor: 'transparent' }}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-bold text-xs shrink-0 transition-colors border border-slate-200 cursor-pointer shadow-sm"
                     title="선생님 계정 관리">
