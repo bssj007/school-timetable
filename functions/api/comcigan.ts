@@ -1093,26 +1093,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     //                   실제로 컴시간 서버에서 직접 fetch한 경우
     const isFreshLiveFetch = allowLiveFetch && !cachedRawDataString && !isArchivedData;
 
-    // 날짜 범위 파싱 헬퍼 (저장 경로에서 공통 사용)
-    const parseArchiveRanges = (jsonStr: string): string[] => {
-        try {
-            const parsed = JSON.parse(jsonStr);
-            const ranges: string[] = [];
-            const dateArr = parsed['일자'];
-            const dateArrNew = parsed['일자자료'];
-            if (dateArr && Array.isArray(dateArr)) {
-                for (const r of dateArr) {
-                    if (typeof r === 'string' && r.includes('~')) ranges.push(r.trim());
-                }
-            } else if (dateArrNew && Array.isArray(dateArrNew)) {
-                for (const item of dateArrNew) {
-                    const r = Array.isArray(item) ? item[1] : item;
-                    if (typeof r === 'string' && r.includes('~')) ranges.push((r as string).trim());
-                }
-            }
-            return ranges;
-        } catch (_) { return []; }
-    };
+    // 날짜 범위 파싱 — 모듈 레벨 parseArchiveRanges() 사용
 
     if (isArchivedData) {
         // ── [A] 아카이브 서빙 경로 ─────────────────────────────────────────
@@ -1204,11 +1185,84 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     });
 }
 
+// --- 모듈 레벨 유틸리티 ---
+
+/**
+ * 컴시간 raw_data JSON 문자열에서 날짜 구간 배열을 파싱.
+ * '일자' 또는 '일자자료' 배열에서 'YY-MM-DD~YY-MM-DD' 형식 항목 추출.
+ * getTimetable 내부와 refreshCache 양쪽에서 공통 사용.
+ */
+function parseArchiveRanges(jsonStr: string): string[] {
+    try {
+        const parsed = JSON.parse(jsonStr);
+        const ranges: string[] = [];
+        const dateArr = parsed['일자'];
+        const dateArrNew = parsed['일자자료'];
+        if (dateArr && Array.isArray(dateArr)) {
+            for (const r of dateArr) {
+                if (typeof r === 'string' && r.includes('~')) ranges.push(r.trim());
+            }
+        } else if (dateArrNew && Array.isArray(dateArrNew)) {
+            for (const item of dateArrNew) {
+                const r = Array.isArray(item) ? item[1] : item;
+                if (typeof r === 'string' && r.includes('~')) ranges.push((r as string).trim());
+            }
+        }
+        return ranges;
+    } catch (_) { return []; }
+}
+
 // --- 캐시 헬퍼 함수 ---
 
+/**
+ * 컴시간에서 최신 raw_data를 직접 fetch해 timetable_cache에 저장하고
+ * 현재 LIVE 날짜 구간의 archive를 INSERT OR REPLACE로 동기화한다.
+ *
+ * cron(/api/cron/run)과 관리자 전체갱신(POST /api/admin/comcigan-cache) 양쪽에서
+ * 동일하게 호출되어 두 경로의 동작을 통일한다.
+ */
 async function refreshCache(db: any, grade: number = 1, targetDate?: string | null) {
-    console.log(`[Comcigan Cache] Refreshing global raw_data cache via background ...`);
+    console.log(`[Cache] refreshCache: fetching live data from Comcigan ...`);
+
+    // 1. 컴시간 live fetch → raw_data 갱신 ([B] 경로)
+    //    allowLiveFetch=true, cachedRawDataString=undefined → 항상 컴시간 서버에서 fetch
     await getTimetable(grade, 'all', db, null, 'cache-refresh', targetDate, undefined, true);
+
+    // 2. raw_data에서 현재 LIVE 날짜 구간을 읽어 archive를 명시적으로 동기화
+    //    — getTimetable 내부 [B] 경로에도 동일 로직이 있지만,
+    //      cron/전체갱신 경로에서 명시적으로 재실행해 누락 없이 보장
+    try {
+        await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_archive (
+            date_range TEXT PRIMARY KEY,
+            response_json TEXT NOT NULL,
+            saved_at TEXT DEFAULT (datetime('now'))
+        )`).run();
+
+        const rawRow = await db.prepare(
+            "SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'"
+        ).first();
+
+        if (rawRow?.response_json) {
+            const ranges = parseArchiveRanges(rawRow.response_json as string);
+            console.log(`[Cache] refreshCache: syncing archive ranges: [${ranges.join(', ')}]`);
+            for (const range of ranges) {
+                try {
+                    await db.prepare(
+                        "INSERT OR REPLACE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))"
+                    ).bind(range, rawRow.response_json).run();
+                    console.log(`[Cache] refreshCache: archive upserted: ${range}`);
+                } catch (archErr) {
+                    console.warn(`[Cache] refreshCache: archive upsert failed for ${range}:`, archErr);
+                }
+            }
+        } else {
+            console.warn('[Cache] refreshCache: raw_data not found after fetch — archive sync skipped.');
+        }
+    } catch (e) {
+        console.error('[Cache] refreshCache: archive sync failed:', e);
+    }
+
+    console.log('[Cache] refreshCache: done (raw_data + archive synced).');
 }
 
 export { refreshCache, getTimetable };
