@@ -1854,8 +1854,6 @@ export default function TeacherPage() {
           </div>
         </div>
 
-
-
         {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
         <div className="w-full md:flex-1 md:max-w-[1000px] min-w-0 flex flex-col order-2 md:order-1 shrink-0 md:min-h-0">
 
@@ -1889,155 +1887,197 @@ export default function TeacherPage() {
 
         {/* ===== 모바일: 숙제형 패널 ===== */}
         {mobileViewMode === 'homework' && (
-          <div className="md:hidden w-full rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col" style={{ minHeight: 'calc(7 * 50px + 44px)' }}>
-            {/* 헤더 */}
-            <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-slate-100 shrink-0">
-              <BookOpen className="w-5 h-5 text-indigo-500" />
-              <h3 className="text-base font-extrabold text-slate-800">숙제형 수행평가 등록</h3>
-              <span className="ml-auto text-xs text-slate-400 font-bold">{hwPage} / 2</span>
-            </div>
-
-            {/* 콘텐츠 영역 */}
-            <div className="flex-1 overflow-y-auto px-4 py-4">
-
-              {hwPage === 1 ? (
-                <div className="flex flex-col gap-3">
-                  {/* 평가 제목 */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">평가 제목</label>
-                    <Input
-                      placeholder="예: 독서록 작성, 탐구 보고서 제출"
-                      value={hwForm.title}
-                      onChange={e => setHwForm(f => ({ ...f, title: e.target.value }))}
-                      className="h-10 text-sm"
-                    />
-                  </div>
-
-                  {/* 과목 / 반 */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">과목</label>
-                      <select
-                        value={hwForm.subject}
-                        onChange={e => setHwForm(f => ({ ...f, subject: e.target.value, classNum: '' }))}
-                        className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                      >
-                        <option value="">과목 선택</option>
-                        {(taughtSubjects || []).map(s => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">반</label>
-                      <select
-                        value={hwForm.classNum}
-                        onChange={e => setHwForm(f => ({ ...f, classNum: e.target.value }))}
-                        disabled={!hwForm.subject || classesForHwSubject.length === 0}
-                        className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
-                      >
-                        <option value="">{!hwForm.subject ? '과목 먼저 선택' : '반 선택'}</option>
-                        {classesForHwSubject.map(({ grade, classNum }) => (
-                          <option key={`${grade}-${classNum}`} value={String(classNum)}>
-                            {grade}학년 {classNum}반
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* 시작일 / 마감일 */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">시작일</label>
-                      <Input type="date" value={hwForm.startDate}
-                        onChange={e => setHwForm(f => ({ ...f, startDate: e.target.value }))}
-                        className="h-10 text-sm px-2" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">마감일</label>
-                      <Input type="date" value={hwForm.dueDate}
-                        onChange={e => setHwForm(f => ({ ...f, dueDate: e.target.value }))}
-                        className="h-10 text-sm px-2" />
-                    </div>
-                  </div>
+          <div
+            className="md:hidden w-full rounded-xl shadow-sm flex flex-col overflow-hidden"
+            style={{
+              minHeight: 'calc(7 * 50px + 44px)',
+              ...(!isCurrentTeacherVerified ? {
+                background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
+                border: '1px solid rgba(255,255,255,0.6)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
+              } : {
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
+              })
+            }}
+          >
+            {!isCurrentTeacherVerified ? (
+              <div
+                onClick={() => setShowAuthDialog(true)}
+                className="flex-1 flex flex-col items-center justify-center p-6 text-center cursor-pointer select-none min-h-[350px]"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-white/70 shadow-md border border-white/90 flex items-center justify-center mb-3">
+                  <svg className="w-7 h-7 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
                 </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {/* 활동 내용 */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">활동 내용</label>
-                    <Textarea
-                      placeholder="예: 준비물, 실습, 생기부 활동 등등"
-                      value={hwForm.content}
-                      onChange={e => setHwForm(f => ({ ...f, content: e.target.value }))}
-                      className="h-28 text-sm resize-none"
-                    />
-                  </div>
-                  {/* 제출 링크 */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
-                      <Link2 className="w-3 h-3" /> 제출 사이트 / 링크
-                    </label>
-                    <Input type="url" placeholder="예: https://school.go.kr/..."
-                      value={hwForm.link}
-                      onChange={e => setHwForm(f => ({ ...f, link: e.target.value }))}
-                      className="h-10 text-sm" />
-                  </div>
+                <h4 className="text-lg font-extrabold text-slate-800 mb-1">로그인이 필요합니다</h4>
+                <p className="text-xs text-slate-600 font-medium mb-4">
+                  숙제형 수행평가를 등록하려면 로그인이 필요합니다
+                </p>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setShowAuthDialog(true); }}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                  </svg>
+                  로그인하기
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* 헤더 */}
+                <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-slate-100 shrink-0">
+                  <BookOpen className="w-5 h-5 text-indigo-500" />
+                  <h3 className="text-base font-extrabold text-slate-800">숙제형 수행평가 등록</h3>
+                  <span className="ml-auto text-xs text-slate-400 font-bold">{hwPage} / 2</span>
                 </div>
-              )}
-            </div>
 
-            {/* 하단 버튼 영역 */}
-            <div className="shrink-0 px-4 pb-4 pt-2 flex gap-2">
-              {hwPage === 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setMobileViewMode('daily')}
-                  className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition-colors flex items-center justify-center gap-1"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  취소
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setHwPage(1)}
-                  className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition-colors flex items-center justify-center gap-1"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  이전
-                </button>
-              )}
-              {hwPage === 1 ? (() => {
-                const page1Valid = !!(hwForm.title && hwForm.subject && hwForm.classNum && hwForm.startDate && hwForm.dueDate);
-                return (
-                  <button
-                    type="button"
-                    onClick={() => { if (page1Valid) setHwPage(2); }}
-                    disabled={!page1Valid}
-                    className={[
-                      'flex-[2] h-11 rounded-xl font-extrabold text-sm transition-colors flex items-center justify-center gap-1',
-                      page1Valid
-                        ? 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white cursor-pointer'
-                        : 'bg-indigo-200 text-white cursor-not-allowed',
-                    ].join(' ')}
-                  >
-                    다음
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                );
-              })() : (
-                <button
-                  type="button"
-                  onClick={() => {/* TODO: DB 연동 후 등록 처리 */}}
-                  className="flex-[2] h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-sm transition-colors flex items-center justify-center gap-1"
-                >
-                  <Plus className="w-4 h-4" />
-                  등록
-                </button>
-              )}
-            </div>
+                {/* 콘텐츠 영역 */}
+                <div className="flex-1 overflow-y-auto px-4 py-4">
+
+                  {hwPage === 1 ? (
+                    <div className="flex flex-col gap-3">
+                      {/* 평가 제목 */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">평가 제목</label>
+                        <Input
+                          placeholder="예: 독서록 작성, 탐구 보고서 제출"
+                          value={hwForm.title}
+                          onChange={e => setHwForm(f => ({ ...f, title: e.target.value }))}
+                          className="h-10 text-sm"
+                        />
+                      </div>
+
+                      {/* 과목 / 반 */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">과목</label>
+                          <select
+                            value={hwForm.subject}
+                            onChange={e => setHwForm(f => ({ ...f, subject: e.target.value, classNum: '' }))}
+                            className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                          >
+                            <option value="">과목 선택</option>
+                            {(taughtSubjects || []).map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">반</label>
+                          <select
+                            value={hwForm.classNum}
+                            onChange={e => setHwForm(f => ({ ...f, classNum: e.target.value }))}
+                            disabled={!hwForm.subject || classesForHwSubject.length === 0}
+                            className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+                          >
+                            <option value="">{!hwForm.subject ? '과목 먼저 선택' : '반 선택'}</option>
+                            {classesForHwSubject.map(({ grade, classNum }) => (
+                              <option key={`${grade}-${classNum}`} value={String(classNum)}>
+                                {grade}학년 {classNum}반
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* 시작일 / 마감일 */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">시작일</label>
+                          <Input type="date" value={hwForm.startDate}
+                            onChange={e => setHwForm(f => ({ ...f, startDate: e.target.value }))}
+                            className="h-10 text-sm px-2" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">마감일</label>
+                          <Input type="date" value={hwForm.dueDate}
+                            onChange={e => setHwForm(f => ({ ...f, dueDate: e.target.value }))}
+                            className="h-10 text-sm px-2" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {/* 활동 내용 */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">활동 내용</label>
+                        <Textarea
+                          placeholder="예: 준비물, 실습, 생기부 활동 등등"
+                          value={hwForm.content}
+                          onChange={e => setHwForm(f => ({ ...f, content: e.target.value }))}
+                          className="h-28 text-sm resize-none"
+                        />
+                      </div>
+                      {/* 제출 링크 */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
+                          <Link2 className="w-3 h-3" /> 제출 사이트 / 링크
+                        </label>
+                        <Input type="url" placeholder="예: https://school.go.kr/..."
+                          value={hwForm.link}
+                          onChange={e => setHwForm(f => ({ ...f, link: e.target.value }))}
+                          className="h-10 text-sm" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 하단 버튼 영역 */}
+                <div className="shrink-0 px-4 pb-4 pt-2 flex gap-2">
+                  {hwPage === 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setMobileViewMode('daily')}
+                      className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition-colors flex items-center justify-center gap-1"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      취소
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setHwPage(1)}
+                      className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition-colors flex items-center justify-center gap-1"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      이전
+                    </button>
+                  )}
+                  {hwPage === 1 ? (() => {
+                    const page1Valid = !!(hwForm.title && hwForm.subject && hwForm.classNum && hwForm.startDate && hwForm.dueDate);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => { if (page1Valid) setHwPage(2); }}
+                        disabled={!page1Valid}
+                        className={[
+                          'flex-[2] h-11 rounded-xl font-extrabold text-sm transition-colors flex items-center justify-center gap-1',
+                          page1Valid
+                            ? 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white cursor-pointer'
+                            : 'bg-indigo-200 text-white cursor-not-allowed',
+                        ].join(' ')}
+                      >
+                        다음
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    );
+                  })() : (
+                    <button
+                      type="button"
+                      onClick={() => {/* TODO: DB 연동 후 등록 처리 */}}
+                      className="flex-[2] h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-sm transition-colors flex items-center justify-center gap-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      등록
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
 
           </div>
         )}
@@ -2596,14 +2636,25 @@ export default function TeacherPage() {
                       보기 전용
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowAuthDialog(true)}
-                    style={{ WebkitTapHighlightColor: 'transparent' }}
-                    className="shrink-0 px-2.5 md:px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs font-bold transition-colors cursor-pointer shadow-sm whitespace-nowrap"
-                  >
-                    로그인
-                  </button>
+                  <div className="relative">
+                    {mobileViewMode === 'homework' && (
+                      <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none z-30 animate-bounce">
+                        <svg className="w-4 h-4 text-red-500 fill-red-500 filter drop-shadow" viewBox="0 0 24 24">
+                          <path d="M12 21l-8-9h5V3h6v9h5z" />
+                        </svg>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowAuthDialog(true)}
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
+                      className={`shrink-0 px-2.5 md:px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs font-bold transition-all cursor-pointer shadow-sm whitespace-nowrap ${
+                        mobileViewMode === 'homework' ? 'ring-2 ring-red-500 ring-offset-1 shadow-red-200' : ''
+                      }`}
+                    >
+                      로그인
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
