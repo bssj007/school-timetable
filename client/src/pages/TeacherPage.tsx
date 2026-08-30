@@ -1694,13 +1694,13 @@ export default function TeacherPage() {
 
       {/* 보기전용 배너: 바 인라인으로 이동 (fixed 배너 제거) */}
 
-      <div className="max-w-[1240px] mx-auto w-full md:flex-1 flex flex-col md:min-h-0">
+      <div className="max-w-[1440px] mx-auto w-full md:flex-1 flex flex-col md:min-h-0">
 
         {/* ===== PC 전용 TOP SECTION ===== */}
         <div className="hidden md:flex flex-row gap-4 xl:gap-6 items-center mb-2 flex-shrink-0">
 
           {/* ── 좌: 제목 + 선생님 정보 + 주선택기 ── */}
-          <div className="flex-1 md:max-w-[850px] min-w-0 flex items-center gap-3">
+          <div className="flex-1 md:max-w-[1000px] min-w-0 flex items-center gap-3">
 
             {/* 뱃지형 제목 */}
             <div className="flex flex-col min-w-0">
@@ -1863,7 +1863,7 @@ export default function TeacherPage() {
 
 
         {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
-        <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-2 md:order-1 shrink-0 md:min-h-0">
+        <div className="w-full md:flex-1 md:max-w-[1000px] min-w-0 flex flex-col order-2 md:order-1 shrink-0 md:min-h-0">
 
         {/* ===== 모바일 전용: 뷰 모드 선택기 (당일형 / 숙제형 / 달력) ===== */}
         <div className="md:hidden mb-2 shrink-0">
@@ -2272,7 +2272,7 @@ export default function TeacherPage() {
 
       {/* Main Timetable — Card wrapper */}
       {/* 모바일에서 당일형이 아니면 표 숨김 */}
-      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:min-h-[600px] ${mobileViewMode !== 'daily' ? 'hidden md:flex' : ''}`}>
+      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:min-h-0 ${mobileViewMode !== 'daily' ? 'hidden md:flex' : ''}`}>
           {(isTimetableLoading || isGroupDataLoading) ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
@@ -2287,7 +2287,7 @@ export default function TeacherPage() {
             </div>
           ) : timetableData && selectedSchedule ? (
             <div className="w-full overflow-x-auto flex-1 flex flex-col min-h-0">
-              <table className="w-full table-fixed min-w-[340px] md:min-w-[600px] xl:min-w-[700px] flex-1 h-full" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
+              <table className="w-full table-fixed min-w-[340px] md:min-w-[500px] xl:min-w-[600px] flex-1 h-full" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
@@ -2326,10 +2326,10 @@ export default function TeacherPage() {
                     const p = periodIndex + 1;
                     const isCurrentPeriod = currentPeriod === p && weekOffset === 0;
                     return (
-                      <tr key={p} className="h-[50px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px]">
+                      <tr key={p} className="h-[50px] md:h-[calc((100vh-150px)/7)] md:min-h-[44px]">
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[50px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px] overflow-hidden"
+                          className="h-[50px] md:h-[calc((100vh-150px)/7)] md:min-h-[44px] overflow-hidden"
                           style={{
                             width: 36,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
@@ -2382,7 +2382,7 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[52px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px] overflow-hidden"
+                              className="group h-[52px] md:h-[calc((100vh-150px)/7)] md:min-h-[44px] overflow-hidden"
                               style={{
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
