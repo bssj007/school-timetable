@@ -2782,7 +2782,7 @@ export default function Dashboard() {
               <Textarea
                 value={formData.content}
                 onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                placeholder={formData.activityType === '기타 활동' ? '활동 내용 입력' : '수행평가 내용 입력'}
+                placeholder={formData.activityType === '기타 활동' ? '예: 준비물, 실습, 생기부 활동 등등' : '수행평가 내용 입력'}
                 required
                 rows={3}
               />
@@ -2907,7 +2907,7 @@ export default function Dashboard() {
               <Textarea
                 value={formData.content}
                 onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                placeholder={formData.activityType === '기타 활동' ? '활동 내용 입력' : '수행평가 내용 입력'}
+                placeholder={formData.activityType === '기타 활동' ? '예: 준비물, 실습, 생기부 활동 등등' : '수행평가 내용 입력'}
                 required
                 rows={3}
               />
