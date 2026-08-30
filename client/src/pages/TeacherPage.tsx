@@ -1899,12 +1899,17 @@ export default function TeacherPage() {
           </div>
         </div>
 
+        {/* ===== 모바일 전용: 패널 영역 — 항상 동일 높이 유지 ===== */}
+        <div
+          className="md:hidden w-full relative"
+          style={{ minHeight: 'calc(7 * 50px + 44px)' }}
+        >
+
         {/* ===== 모바일: 숙제형 패널 ===== */}
         {mobileViewMode === 'homework' && (
           <div
-            className="md:hidden w-full rounded-xl shadow-sm flex flex-col overflow-hidden"
+            className="md:hidden w-full rounded-xl shadow-sm flex flex-col overflow-hidden min-h-full"
             style={{
-              minHeight: 'calc(7 * 50px + 44px)',
               ...(!isCurrentTeacherVerified ? {
                 background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
                 border: '1px solid rgba(255,255,255,0.6)',
@@ -2150,7 +2155,7 @@ export default function TeacherPage() {
           };
 
           return (
-            <div className="md:hidden w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col" style={{ minHeight: 'calc(7 * 50px + 44px)' }}>
+            <div className="md:hidden w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col min-h-full">
               {/* 달력 헤더 */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
                 <button type="button"
@@ -2345,7 +2350,7 @@ export default function TeacherPage() {
             </div>
           );
         })() : null}
-
+        </div>{/* end mobile panels wrapper */}
 
 
 
