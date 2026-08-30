@@ -35,6 +35,7 @@ interface AssessmentItem {
   teacher?: string;
   classCode?: string;
   isTeacherCreated?: number;
+  activityType?: string;
 }
 
 // Helper: Download PC Desktop .url Shortcut
@@ -355,6 +356,7 @@ export default function TeacherPage() {
     round: "1",
     teacher: "",
     classCode: "",
+    activityType: "수행평가",
   });
 
   // Keep teacher selection in localStorage
@@ -1466,6 +1468,7 @@ export default function TeacherPage() {
         round: roundNum,
         teacher: cellAssessments[0].teacher || teacherName,
         classCode: cellAssessments[0].classCode || "",
+        activityType: cellAssessments[0].activityType || "수행평가",
       });
       setShowEditDialog(true);
     } else {
@@ -1502,6 +1505,7 @@ export default function TeacherPage() {
         round: "1",
         teacher: teacherName,
         classCode: cellGroup || extractClassCode(decoded.subjectName),
+        activityType: "수행평가",
       });
       
       setShowAddDialog(true);
@@ -1533,6 +1537,7 @@ export default function TeacherPage() {
       teacher: formData.teacher,
       classCode: formData.classCode,
       isTeacherCreated: 1,
+      activityType: formData.activityType || "수행평가",
     });
   };
 
@@ -1549,6 +1554,7 @@ export default function TeacherPage() {
       classTime: parseInt(formData.classTime, 10),
       teacher: formData.teacher,
       classCode: formData.classCode,
+      activityType: formData.activityType || "수행평가",
     });
   };
 
@@ -2270,6 +2276,7 @@ export default function TeacherPage() {
                           round: roundNum,
                           teacher: a.teacher || teacherName,
                           classCode: a.classCode || '',
+                          activityType: a.activityType || '수행평가',
                         });
                         setShowEditDialog(true);
                       }}
@@ -2362,7 +2369,6 @@ export default function TeacherPage() {
         </div>{/* end content area */}
       </div>{/* end max-w wrapper */}
 
-      {/* Add Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
@@ -2373,6 +2379,42 @@ export default function TeacherPage() {
           </DialogHeader>
           
           <form onSubmit={handleAddSubmit} className="space-y-4 pt-3">
+            {/* 활동 유형 선택 메뉴 */}
+            <div
+              style={{
+                display: 'flex',
+                background: '#f1f5f9',
+                borderRadius: 12,
+                padding: 4,
+                gap: 4,
+              }}
+            >
+              {(['수행평가', '기타 활동'] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, activityType: type })}
+                  style={{
+                    flex: 1,
+                    padding: '8px 0',
+                    borderRadius: 8,
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                    transition: 'all 0.18s',
+                    background: formData.activityType === type
+                      ? (type === '수행평가' ? '#3b82f6' : '#7c3aed')
+                      : 'transparent',
+                    color: formData.activityType === type ? '#fff' : '#64748b',
+                    boxShadow: formData.activityType === type ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
+                  }}
+                >
+                  {type === '수행평가' ? '📝 수행평가' : '✨ 기타 활동'}
+                </button>
+              ))}
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">일시</label>
@@ -2428,11 +2470,11 @@ export default function TeacherPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">수행평가 내용 (주제/제목)</label>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">{formData.activityType === '기타 활동' ? '활동 내용 (주제/제목)' : '수행평가 내용 (주제/제목)'}</label>
               <Textarea
                 value={formData.content}
                 onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                placeholder="예: 다항식의 계산 서술형 평가"
+                placeholder={formData.activityType === '기타 활동' ? '예: 베에나 행사, 실험실습, 엄사' : '예: 다항식의 계산 서술형 평가'}
                 required
                 rows={3}
                 className="text-sm border-gray-200"
@@ -2443,8 +2485,10 @@ export default function TeacherPage() {
               <Button type="button" variant="outline" className="flex-1" onClick={() => setShowAddDialog(false)}>
                 취소
               </Button>
-              <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold" disabled={createMutation.isPending}>
-                {createMutation.isPending ? "등록 중..." : "등록하기"}
+              <Button type="submit" className="flex-1 text-white font-bold" disabled={createMutation.isPending}
+                style={{ background: formData.activityType === '기타 활동' ? 'linear-gradient(135deg,#7c3aed,#a855f7)' : 'linear-gradient(135deg,#2563eb,#3b82f6)' }}
+              >
+                {createMutation.isPending ? '등록 중...' : '등록하기'}
               </Button>
             </div>
           </form>
@@ -2481,6 +2525,42 @@ export default function TeacherPage() {
           </DialogHeader>
 
           <form onSubmit={handleUpdateSubmit} className="space-y-4 pt-3">
+            {/* 활동 유형 선택 메뉴 */}
+            <div
+              style={{
+                display: 'flex',
+                background: '#f1f5f9',
+                borderRadius: 12,
+                padding: 4,
+                gap: 4,
+              }}
+            >
+              {(['수행평가', '기타 활동'] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, activityType: type })}
+                  style={{
+                    flex: 1,
+                    padding: '8px 0',
+                    borderRadius: 8,
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                    transition: 'all 0.18s',
+                    background: formData.activityType === type
+                      ? (type === '수행평가' ? '#3b82f6' : '#7c3aed')
+                      : 'transparent',
+                    color: formData.activityType === type ? '#fff' : '#64748b',
+                    boxShadow: formData.activityType === type ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
+                  }}
+                >
+                  {type === '수행평가' ? '📝 수행평가' : '✨ 기타 활동'}
+                </button>
+              ))}
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">일시</label>
@@ -2536,7 +2616,7 @@ export default function TeacherPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">수행평가 내용 (주제/제목)</label>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">{formData.activityType === '기타 활동' ? '활동 내용 (주제/제목)' : '수행평가 내용 (주제/제목)'}</label>
               <Textarea
                 value={formData.content}
                 onChange={(e) => setFormData({ ...formData, content: e.target.value })}
@@ -2551,8 +2631,10 @@ export default function TeacherPage() {
               <Button type="button" variant="outline" className="flex-1" onClick={() => setShowEditDialog(false)}>
                 취소
               </Button>
-              <Button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold" disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? "저장 중..." : "수정 완료"}
+              <Button type="submit" className="flex-1 text-white font-bold" disabled={updateMutation.isPending}
+                style={{ background: formData.activityType === '기타 활동' ? 'linear-gradient(135deg,#7c3aed,#a855f7)' : 'linear-gradient(135deg,#4f46e5,#6366f1)' }}
+              >
+                {updateMutation.isPending ? '저장 중...' : '수정 완료'}
               </Button>
             </div>
           </form>

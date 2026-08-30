@@ -62,7 +62,8 @@ export const onRequest = async (context: any) => {
                           tempClassTime INTEGER,
                           teacher TEXT,
                           classCode TEXT,
-                          isTeacherCreated INTEGER DEFAULT 0
+                          isTeacherCreated INTEGER DEFAULT 0,
+                          activityType TEXT DEFAULT '수행평가'
                         )
                     `).run();
                     // Add isDeleted column if missing (migration for older tables)
@@ -78,6 +79,8 @@ export const onRequest = async (context: any) => {
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN teacher TEXT").run(); } catch (_) {}
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN classCode TEXT").run(); } catch (_) {}
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isTeacherCreated INTEGER DEFAULT 0").run(); } catch (_) {}
+                    // Add activityType column if missing
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN activityType TEXT DEFAULT '수행평가'").run(); } catch (_) {}
                     return new Response(JSON.stringify([]), {
                         headers: { 'Content-Type': 'application/json' }
                     });
@@ -245,11 +248,13 @@ export const onRequest = async (context: any) => {
             }
 
             const body = await request.json();
-            const { subject, title, dueDate, description, grade, classNum, classTime, teacher, classCode, isTeacherCreated } = body;
+            const { subject, title, dueDate, description, grade, classNum, classTime, teacher, classCode, isTeacherCreated, activityType } = body;
 
             if (!subject || !title || !dueDate || !grade || !classNum) {
                 return new Response("Missing required fields", { status: 400 });
             }
+            // activityType 정규화: NULL이나 미입력 시 '수행평가'로 취급
+            const resolvedActivityType = (activityType && activityType.trim()) ? activityType.trim() : '수행평가';
 
             // 학년별 등록 주체(학생/선생님) 권한 검증
             const targetGrade = parseInt(grade, 10);
@@ -327,9 +332,9 @@ export const onRequest = async (context: any) => {
             try {
                 // Try inserting with lastModifiedIp and dataset (New Schema)
                 const result = await env.DB.prepare(
-                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode, isTeacherCreated)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`
-                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null, isTeacherCreated || 0).run();
+                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode, isTeacherCreated, activityType)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`
+                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null, isTeacherCreated || 0, resolvedActivityType).run();
 
                 try { const { applyAutoPredictions } = await import('../server/autoPredict'); const { results } = await env.DB.prepare("SELECT * FROM performance_assessments WHERE isDeleted = 0").all(); await applyAutoPredictions(results, env.DB); } catch(e) { console.error("[Assessment API/POST] Predict error:", e); }
                 return new Response(JSON.stringify({ success: true, result }), {
@@ -359,7 +364,8 @@ export const onRequest = async (context: any) => {
                           tempClassTime INTEGER,
                           teacher TEXT,
                           classCode TEXT,
-                          isTeacherCreated INTEGER DEFAULT 0
+                          isTeacherCreated INTEGER DEFAULT 0,
+                          activityType TEXT DEFAULT '수행평가'
                         )
                     `).run();
                     // Add isDeleted column if missing (migration for older tables)
@@ -373,12 +379,14 @@ export const onRequest = async (context: any) => {
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN teacher TEXT").run(); } catch (_) {}
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN classCode TEXT").run(); } catch (_) {}
                     try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isTeacherCreated INTEGER DEFAULT 0").run(); } catch (_) {}
+                    // Add activityType column if missing
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN activityType TEXT DEFAULT '수행평가'").run(); } catch (_) {}
 
                     // Retry
                     const result = await env.DB.prepare(
-                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode, isTeacherCreated)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`
-                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null, isTeacherCreated || 0).run();
+                        `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, lastModifiedIp, teacher, classCode, isTeacherCreated, activityType)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`
+                    ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, ip, teacher || null, classCode || null, isTeacherCreated || 0, resolvedActivityType).run();
 
                     try { const { applyAutoPredictions } = await import('../server/autoPredict'); const { results } = await env.DB.prepare("SELECT * FROM performance_assessments WHERE isDeleted = 0").all(); await applyAutoPredictions(results, env.DB); } catch(e) { console.error("[Assessment API/POST] Predict error:", e); }
                     return new Response(JSON.stringify({ success: true, result }), {
@@ -534,7 +542,7 @@ export const onRequest = async (context: any) => {
         // PATCH: 수정 및 연기
         if (request.method === 'PATCH') {
             const body = await request.json();
-            const { id, subject, title, description, dueDate, round, classTime, tempDueDate, tempClassTime, teacher, classCode, isAutoPredicted } = body;
+            const { id, subject, title, description, dueDate, round, classTime, tempDueDate, tempClassTime, teacher, classCode, isAutoPredicted, activityType: patchActivityType } = body;
 
             if (!id) return new Response('Missing ID', { status: 400 });
 
@@ -580,6 +588,7 @@ export const onRequest = async (context: any) => {
             if (classTime !== undefined) { updates.push("classTime = ?"); values.push(classTime); }
             if (teacher !== undefined) { updates.push("teacher = ?"); values.push(teacher); }
             if (classCode !== undefined) { updates.push("classCode = ?"); values.push(classCode); }
+            if (patchActivityType !== undefined) { updates.push("activityType = ?"); values.push((patchActivityType && patchActivityType.trim()) ? patchActivityType.trim() : '수행평가'); }
             // tempDueDate 비교를 위해 현재 DB의 원본 dueDate를 조회
             let originalDueDate = dueDate;
             let originalClassTime = classTime;

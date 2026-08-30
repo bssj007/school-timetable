@@ -1033,9 +1033,9 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 for (const range of archiveRanges) {
                     try {
                         await db.prepare(
-                            "INSERT OR REPLACE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))"
+                            "INSERT OR IGNORE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))"
                         ).bind(range.trim(), jsonString).run();
-                        console.log(`[Archive] Updated snapshot for range: ${range.trim()}`);
+                        console.log(`[Archive] Saved snapshot for range: ${range.trim()} (skipped if already exists)`);
                     } catch (_) {}
                 }
             } catch (archiveErr) {

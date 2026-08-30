@@ -55,6 +55,7 @@ interface AssessmentItem {
   teacher?: string;
   classCode?: string;
   isTeacherCreated?: number;
+  activityType?: string;
 }
 
 // 주의 시작일 계산 (월요일 기준)
@@ -179,6 +180,7 @@ export default function Dashboard() {
     round: "1",
     teacher: "",
     classCode: "",
+    activityType: "수행평가",
   });
 
   const [showElectiveDialog, setShowElectiveDialog] = useState(false);
@@ -496,6 +498,7 @@ export default function Dashboard() {
           round: "1",
           teacher: teacher,
           classCode: classCode,
+          activityType: "수행평가",
         });
         setShowAddDialog(true);
       }
@@ -1128,6 +1131,7 @@ export default function Dashboard() {
           dataset: datasetType || '',
           teacher: data.teacher,
           classCode: data.classCode,
+          activityType: data.activityType || '수행평가',
         }),
       });
 
@@ -1216,6 +1220,7 @@ export default function Dashboard() {
         round: "1",
         teacher: "",
         classCode: "",
+        activityType: "수행평가",
       });
       setShowAddDialog(false); // 다이얼로그 닫기
       setSelectedCell(null); // 선택 셀 해제
@@ -1253,6 +1258,7 @@ export default function Dashboard() {
       round: parsedRound,
       teacher: assessment.teacher || "",
       classCode: assessment.classCode || "",
+      activityType: assessment.activityType || "수행평가",
     });
     setShowViewDialog(false);
     setShowEditDialog(true);
@@ -1276,6 +1282,7 @@ export default function Dashboard() {
         description: formData.round ? `${formData.round}차` : "",
         teacher: formData.teacher,
         classCode: formData.classCode,
+        activityType: formData.activityType || '수행평가',
       });
     } catch (error) {
       console.error("수행평가 수정 실패:", error);
@@ -2619,6 +2626,42 @@ export default function Dashboard() {
             </p>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* 활동 유형 선택 메뉴 */}
+            <div
+              style={{
+                display: 'flex',
+                background: '#f1f5f9',
+                borderRadius: 12,
+                padding: 4,
+                gap: 4,
+              }}
+            >
+              {(['수행평가', '기타 활동'] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, activityType: type })}
+                  style={{
+                    flex: 1,
+                    padding: '8px 0',
+                    borderRadius: 8,
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                    transition: 'all 0.18s',
+                    background: formData.activityType === type
+                      ? (type === '수행평가' ? '#3b82f6' : '#7c3aed')
+                      : 'transparent',
+                    color: formData.activityType === type ? '#fff' : '#64748b',
+                    boxShadow: formData.activityType === type ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
+                  }}
+                >
+                  {type === '수행평가' ? '📝 수행평가' : '✨ 기타 활동'}
+                </button>
+              ))}
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">날짜</label>
@@ -2668,11 +2711,11 @@ export default function Dashboard() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">내용</label>
+              <label className="block text-sm font-medium mb-1">{formData.activityType === '기타 활동' ? '활동 내용' : '수행평가 내용'}</label>
               <Textarea
                 value={formData.content}
                 onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                placeholder="수행평가 내용 입력"
+                placeholder={formData.activityType === '기타 활동' ? '활동 내용 입력' : '수행평가 내용 입력'}
                 required
                 rows={3}
               />
@@ -2684,7 +2727,9 @@ export default function Dashboard() {
               }} className="flex-1">
                 취소
               </Button>
-              <Button type="submit" className="flex-1">
+              <Button type="submit" className="flex-1 text-white font-bold"
+                style={{ background: formData.activityType === '기타 활동' ? 'linear-gradient(135deg,#7c3aed,#a855f7)' : undefined }}
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 추가하기
               </Button>
@@ -2706,6 +2751,42 @@ export default function Dashboard() {
             </p>
           </DialogHeader>
           <form onSubmit={handleUpdate} className="space-y-4">
+            {/* 활동 유형 선택 메뉴 */}
+            <div
+              style={{
+                display: 'flex',
+                background: '#f1f5f9',
+                borderRadius: 12,
+                padding: 4,
+                gap: 4,
+              }}
+            >
+              {(['수행평가', '기타 활동'] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, activityType: type })}
+                  style={{
+                    flex: 1,
+                    padding: '8px 0',
+                    borderRadius: 8,
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                    transition: 'all 0.18s',
+                    background: formData.activityType === type
+                      ? (type === '수행평가' ? '#3b82f6' : '#7c3aed')
+                      : 'transparent',
+                    color: formData.activityType === type ? '#fff' : '#64748b',
+                    boxShadow: formData.activityType === type ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
+                  }}
+                >
+                  {type === '수행평가' ? '📝 수행평가' : '✨ 기타 활동'}
+                </button>
+              ))}
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">날짜</label>
@@ -2755,11 +2836,11 @@ export default function Dashboard() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">내용</label>
+              <label className="block text-sm font-medium mb-1">{formData.activityType === '기타 활동' ? '활동 내용' : '수행평가 내용'}</label>
               <Textarea
                 value={formData.content}
                 onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                placeholder="수행평가 내용 입력"
+                placeholder={formData.activityType === '기타 활동' ? '활동 내용 입력' : '수행평가 내용 입력'}
                 required
                 rows={3}
               />
@@ -2771,7 +2852,9 @@ export default function Dashboard() {
               }} className="flex-1">
                 취소
               </Button>
-              <Button type="submit" className="flex-1">
+              <Button type="submit" className="flex-1 text-white font-bold"
+                style={{ background: formData.activityType === '기타 활동' ? 'linear-gradient(135deg,#7c3aed,#a855f7)' : undefined }}
+              >
                 수정하기
               </Button>
             </div>
