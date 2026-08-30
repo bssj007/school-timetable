@@ -2602,12 +2602,12 @@ export default function TeacherPage() {
                 )}
               </div>
 
-              {/* 간편공지 (모바일 - 인증 시) */}
+              {/* 학생공지 (모바일 - 인증 시) */}
               {isCurrentTeacherVerified && (
                 <button type="button" onClick={() => {}} style={{ WebkitTapHighlightColor: 'transparent' }}
                   className="md:hidden ml-auto flex items-center gap-1 px-2.5 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs sm:text-sm shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
-                  title="간편공지">
-                  <Bell className="w-3.5 h-3.5" /><span>간편공지</span>
+                  title="학생공지">
+                  <Bell className="w-3.5 h-3.5" /><span>학생공지</span>
                 </button>
               )}
 
