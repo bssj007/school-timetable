@@ -1636,7 +1636,7 @@ export default function TeacherPage() {
 
   return (
     <div 
-      className="w-full min-h-screen md:h-screen md:overflow-hidden px-2 md:px-4 py-2 md:py-4 flex flex-col"
+      className="w-full min-h-screen md:h-screen md:overflow-hidden px-2 md:px-4 py-2 flex flex-col"
       style={{
         backgroundColor: '#f6e7c9',
         backgroundImage: `
@@ -1697,7 +1697,7 @@ export default function TeacherPage() {
       <div className="max-w-[1240px] mx-auto w-full md:flex-1 flex flex-col md:min-h-0">
 
         {/* ===== PC 전용 TOP SECTION ===== */}
-        <div className="hidden md:flex flex-row gap-4 xl:gap-6 items-center mb-3 flex-shrink-0">
+        <div className="hidden md:flex flex-row gap-4 xl:gap-6 items-center mb-2 flex-shrink-0">
 
           {/* ── 좌: 제목 + 선생님 정보 + 주선택기 ── */}
           <div className="flex-1 md:max-w-[850px] min-w-0 flex items-center gap-3">
@@ -2272,7 +2272,7 @@ export default function TeacherPage() {
 
       {/* Main Timetable — Card wrapper */}
       {/* 모바일에서 당일형이 아니면 표 숨김 */}
-      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:h-[calc(100vh-115px)] md:min-h-[600px] ${mobileViewMode !== 'daily' ? 'hidden md:flex' : ''}`}>
+      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:min-h-[600px] ${mobileViewMode !== 'daily' ? 'hidden md:flex' : ''}`}>
           {(isTimetableLoading || isGroupDataLoading) ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
@@ -2326,10 +2326,10 @@ export default function TeacherPage() {
                     const p = periodIndex + 1;
                     const isCurrentPeriod = currentPeriod === p && weekOffset === 0;
                     return (
-                      <tr key={p} className="h-[50px] md:h-[calc((100vh-180px)/7)] md:min-h-[84px]">
+                      <tr key={p} className="h-[50px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px]">
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[50px] md:h-[calc((100vh-180px)/7)] md:min-h-[84px] overflow-hidden"
+                          className="h-[50px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px] overflow-hidden"
                           style={{
                             width: 36,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
@@ -2382,7 +2382,7 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[52px] md:h-[calc((100vh-180px)/7)] md:min-h-[84px] overflow-hidden"
+                              className="group h-[52px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px] overflow-hidden"
                               style={{
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
@@ -2517,7 +2517,7 @@ export default function TeacherPage() {
       </div>
 
       {/* ===== PC 전용: 표 밑 설명 텍스트 ===== */}
-      <p className="hidden md:flex items-center justify-center text-slate-500 text-sm mt-3 w-full">
+      <p className="hidden md:flex items-center justify-center text-slate-500 text-sm mt-2 w-full">
         <MousePointerClick className="w-4 h-4 mr-1.5" />
         시간표 <strong className="text-slate-600 mx-1">클릭</strong>
         <ArrowRight className="w-3.5 h-3.5 mx-1 text-slate-400" />

@@ -41,6 +41,7 @@ function AppContent() {
 
   const isTeacherRoute = location.startsWith("/teacher");
   const isAdminRoute = location.startsWith("/admin");
+  const isMealRoute = location.startsWith("/meal");
 
   // 사이트 디자인설정 동적 적용 (제목 + 파비콘 + PWA 아이콘)
   useEffect(() => {
@@ -88,10 +89,10 @@ function AppContent() {
   //   2) 이 useEffect가 실행 → setLocation("/teacher") → wouter 상태 업데이트
   //   3) 다음 렌더에서 /teacher 경로로 TeacherPage 렌더
   useEffect(() => {
-    if (!isValidating && userRole === "teacher" && !isTeacherRoute && !isAdminRoute) {
+    if (!isValidating && userRole === "teacher" && !isTeacherRoute && !isAdminRoute && !isMealRoute) {
       setLocation("/teacher");
     }
-  }, [isValidating, userRole, isTeacherRoute, isAdminRoute]);
+  }, [isValidating, userRole, isTeacherRoute, isAdminRoute, isMealRoute]);
 
   // 학기 키 검증 완료 전 — 아무 데이터도 렌더링하지 않음
   if (isValidating) {
@@ -105,10 +106,9 @@ function AppContent() {
     );
   }
 
-  // ── 교사 쿠키 확인 후 리다이렉트 — Dashboard 플래시 방지 ─────────────────
   // useEffect(위)가 setLocation을 실행하기 전 1프레임 동안 null을 반환하여
   // Dashboard가 절대 보이지 않도록 막는다.
-  if (userRole === "teacher" && !isTeacherRoute && !isAdminRoute) {
+  if (userRole === "teacher" && !isTeacherRoute && !isAdminRoute && !isMealRoute) {
     return null;
   }
 
