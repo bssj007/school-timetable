@@ -1784,7 +1784,7 @@ export default function TeacherPage() {
         <div className="flex flex-col md:flex-row gap-3 md:gap-4 xl:gap-6 items-start md:items-stretch md:flex-1 md:min-h-0">
 
         {/* ===== MOBILE ONLY: Title row — 항상 표시 ===== */}
-        <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 shrink-0">
+        <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 shrink-0 min-h-[44px]">
           <h2 className="text-lg font-extrabold truncate leading-tight">
             <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h2>
@@ -2393,10 +2393,11 @@ export default function TeacherPage() {
                 type="button"
                 onClick={() => setLocation("/teacher/account")}
                 style={{ WebkitTapHighlightColor: 'transparent' }}
-                className="flex items-center justify-center px-2.5 py-1.5 bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer shrink-0"
+                className="flex items-center justify-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer shrink-0 text-xs font-bold"
                 title="계정 관리"
               >
                 <User className="w-3.5 h-3.5" />
+                <span>계정</span>
               </button>
             </div>
 
