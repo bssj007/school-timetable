@@ -2075,7 +2075,7 @@ export default function TeacherPage() {
 
               {/* 단일 grid — 이벤트 위임 방식 */}
               <div
-                className="grid grid-cols-7 px-1 pb-1 select-none"
+                className="relative grid grid-cols-7 px-1 pb-1 select-none"
                 style={{ touchAction: 'none' }}
                 onPointerDown={(e) => {
                   e.preventDefault();
@@ -2085,6 +2085,21 @@ export default function TeacherPage() {
                 onPointerMove={(e) => {
                   if (!calIsDragging) return;
                   e.preventDefault();
+                  // month-nav 존 감지
+                  const elNav = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+                  const navZone = elNav?.closest('[data-month-nav]') as HTMLElement | null;
+                  if (navZone) {
+                    const nav = navZone.getAttribute('data-month-nav');
+                    if (nav === 'prev') {
+                      const prevDate = new Date(year, month - 1, 1);
+                      setCalDragEnd(`${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-01`);
+                    } else if (nav === 'next') {
+                      const lastDay = new Date(year, month + 2, 0).getDate();
+                      const nextDate = new Date(year, month + 1, lastDay);
+                      setCalDragEnd(`${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`);
+                    }
+                    return;
+                  }
                   const ds = dateFromPoint(e.clientX, e.clientY);
                   if (ds) setCalDragEnd(ds);
                 }}
@@ -2120,6 +2135,35 @@ export default function TeacherPage() {
                 }}
                 onPointerCancel={() => { setCalDragStart(null); setCalDragEnd(null); }}
               >
+                {/* ── 드래그 중에만 표시: 지난 달 / 다음 달 확장 존 ── */}
+                {calIsDragging && (
+                  <>
+                    {/* 지난 달: 첫째 행 왼쪽 테두리 */}
+                    <div
+                      data-month-nav="prev"
+                      className="absolute left-0 z-20 flex items-center justify-start"
+                      style={{ top: 'calc(8px + 8px + 11px)', height: 44 }}
+                    >
+                      <div className="flex flex-col items-center justify-center w-9 h-9 rounded-r-xl bg-indigo-600/90 shadow-lg">
+                        <ChevronLeft className="w-4 h-4 text-white animate-bounce" style={{ animationDirection: 'alternate', animationDuration: '0.5s' }} />
+                        <span className="text-[8px] text-white font-bold leading-none mt-0.5">지난달</span>
+                      </div>
+                    </div>
+
+                    {/* 다음 달: 마지막 행 오른쪽 테두리 */}
+                    <div
+                      data-month-nav="next"
+                      className="absolute right-0 z-20 flex items-center justify-end"
+                      style={{ bottom: 'calc(4px)', height: 44 }}
+                    >
+                      <div className="flex flex-col items-center justify-center w-9 h-9 rounded-l-xl bg-indigo-600/90 shadow-lg">
+                        <ChevronRight className="w-4 h-4 text-white animate-bounce" style={{ animationDirection: 'alternate', animationDuration: '0.5s' }} />
+                        <span className="text-[8px] text-white font-bold leading-none mt-0.5">다음달</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 {DOW_LABELS.map((dow, i) => (
                   <div key={dow} className={[
                     'py-2 text-center text-[11px] font-bold pointer-events-none',
@@ -2421,9 +2465,8 @@ export default function TeacherPage() {
           {/* Teacher Picker — 모바일에서 독립 카드, PC에서 패널 내부 바 */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-2 px-2 py-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b md:border-slate-100 md:px-3 flex-shrink-0 flex items-center justify-start gap-2">
 
-            {/* 선생님 선택 + 계정 — 하나의 pill로 융합 */}
+            {/* 선생님 선택기 — pill (선택기만) */}
             <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm shrink-0 min-w-0">
-              {/* 좌: 선생님 선택기 */}
               {timetableData ? (
                 <button
                   type="button"
@@ -2446,49 +2489,43 @@ export default function TeacherPage() {
                   {teacherName ? `${teacherName} 선생님` : '선생님'}
                 </span>
               )}
-
-              {/* 구분선 */}
-              <div className="w-px bg-indigo-200 self-stretch" />
-
-              {/* 우: 인증 상태 인라인 표시 */}
-              {isCurrentTeacherVerified ? (
-                <div className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold shrink-0">
-                  <Check className="w-3.5 h-3.5" />
-                  <span>인증됨</span>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center px-2 py-1.5 bg-slate-50 text-slate-400 text-[11px] font-bold shrink-0 whitespace-nowrap">
-                    보기 전용
-                  </div>
-                  <div className="w-px bg-indigo-200 self-stretch" />
-                  <button
-                    type="button"
-                    onClick={() => setShowAuthDialog(true)}
-                    style={{ WebkitTapHighlightColor: 'transparent' }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold shrink-0 transition-colors cursor-pointer"
-                    title="인증하기"
-                  >
-                    <User className="w-3.5 h-3.5" />
-                    <span>인증하기</span>
-                  </button>
-                </>
-              )}
             </div>
 
-
-            {/* 간편공지 버튼 — 모바일 전용, 우측 정렬 */}
-            <button
-              type="button"
-              onClick={() => {/* TODO: 간편공지 기능 */}}
-              style={{ WebkitTapHighlightColor: 'transparent' }}
-              className="md:hidden ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
-              title="간편공지"
-            >
-              <Bell className="w-3.5 h-3.5" />
-              <span>간편공지</span>
-            </button>
+            {/* 우측 영역: 미인증 → 인증 배너, 인증됨 → 간편공지 (모바일 전용) */}
+            {!isCurrentTeacherVerified ? (
+              /* 미인증: 바 우측을 배너로 덮어씀 */
+              <div className="md:hidden ml-auto flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <EyeOff className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <div className="flex flex-col leading-tight min-w-0">
+                    <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">보기 전용</span>
+                    <span className="text-[10px] text-slate-400 whitespace-nowrap">등록·수정하려면 인증하세요</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAuthDialog(true)}
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold text-xs shrink-0 transition-colors cursor-pointer shadow-sm"
+                >
+                  인증하기
+                </button>
+              </div>
+            ) : (
+              /* 인증됨: 간편공지 버튼 */
+              <button
+                type="button"
+                onClick={() => {/* TODO: 간편공지 기능 */}}
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+                className="md:hidden ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
+                title="간편공지"
+              >
+                <Bell className="w-3.5 h-3.5" />
+                <span>간편공지</span>
+              </button>
+            )}
           </div>
+
 
 
 
