@@ -43,6 +43,22 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
+declare const __BUILD_INFO__: {
+    commitSha: string;
+    commitShort: string;
+    branch: string;
+    buildTime: string;
+    buildTimeFormatted: string;
+} | undefined;
+
+const BUILD_INFO = typeof __BUILD_INFO__ !== 'undefined' ? __BUILD_INFO__ : {
+    commitSha: '',
+    commitShort: '',
+    branch: '',
+    buildTime: '',
+    buildTimeFormatted: '',
+};
+
 // Helper to resolve the semantic dataset mode globally
 export const getDatasetMode = (overrideVal?: string) => {
     if (!overrideVal) return 'COMCIGAN';
@@ -6840,6 +6856,13 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         <CardDescription className="text-center">
                             관리자 암호를 입력하세요
                         </CardDescription>
+                        {(BUILD_INFO.commitShort || BUILD_INFO.branch || BUILD_INFO.buildTimeFormatted) && (
+                            <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 font-mono">
+                                <span className="font-semibold text-slate-600">{BUILD_INFO.commitShort || 'dev'}</span>
+                                {BUILD_INFO.branch && <span className="text-blue-600 font-medium">({BUILD_INFO.branch})</span>}
+                                {BUILD_INFO.buildTimeFormatted && <span className="text-slate-400">· {BUILD_INFO.buildTimeFormatted}</span>}
+                            </div>
+                        )}
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleLogin} className="space-y-4">
@@ -6913,12 +6936,35 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         <span className="md:hidden">초기화</span>
                     </Button>
                 </div>
-                {userIp && (
-                    <div className="self-end md:self-auto flex items-center gap-2 text-xs md:text-sm text-gray-500 font-mono bg-gray-50 px-3 py-1.5 md:px-4 md:py-2 rounded-lg border border-gray-200">
-                        <span className="text-gray-400">현재 IP:</span>
-                        <span className="font-bold text-gray-700">{userIp}</span>
-                    </div>
-                )}
+                <div className="self-end md:self-auto flex flex-wrap items-center gap-2">
+                    {/* Cloudflare Build Info */}
+                    {(BUILD_INFO.commitShort || BUILD_INFO.branch || BUILD_INFO.buildTimeFormatted) && (
+                        <div className="flex items-center gap-1.5 text-[11px] md:text-xs text-slate-500 font-mono bg-slate-50 px-2.5 py-1 md:px-3 md:py-1.5 rounded-lg border border-slate-200" title={`Build Time: ${BUILD_INFO.buildTimeFormatted}\nCommit: ${BUILD_INFO.commitSha}`}>
+                            <span className="text-slate-400 font-sans font-medium">빌드</span>
+                            {BUILD_INFO.commitShort && (
+                                <span className="font-bold text-slate-700">{BUILD_INFO.commitShort}</span>
+                            )}
+                            {BUILD_INFO.branch && (
+                                <>
+                                    <span className="text-slate-300">/</span>
+                                    <span className="text-blue-600 font-semibold">{BUILD_INFO.branch}</span>
+                                </>
+                            )}
+                            {BUILD_INFO.buildTimeFormatted && (
+                                <>
+                                    <span className="text-slate-300">·</span>
+                                    <span className="text-slate-500">{BUILD_INFO.buildTimeFormatted}</span>
+                                </>
+                            )}
+                        </div>
+                    )}
+                    {userIp && (
+                        <div className="flex items-center gap-2 text-xs md:text-sm text-gray-500 font-mono bg-gray-50 px-3 py-1.5 md:px-4 md:py-2 rounded-lg border border-gray-200">
+                            <span className="text-gray-400">현재 IP:</span>
+                            <span className="font-bold text-gray-700">{userIp}</span>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <Tabs defaultValue="assessments" className="w-full">
