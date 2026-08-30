@@ -1771,7 +1771,7 @@ export default function TeacherPage() {
           </div>
 
           {/* ── 우: 네비게이션 버튼 묶음 ── */}
-          <div className="md:w-[320px] xl:w-[360px] shrink-0 flex items-center justify-end gap-2">
+          <div className="hidden md:flex md:w-[320px] xl:w-[360px] shrink-0 items-center justify-end gap-2">
             <Button variant="outline" size="sm"
               className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
               onClick={handleReturnToStudentPage}
@@ -2413,17 +2413,17 @@ export default function TeacherPage() {
                                   {hasAssessment && cellAssessments.some(a => !a.isTeacherCreated) && (
                                     <span style={{
                                       position: 'absolute',
-                                      top: 3,
-                                      right: 3,
-                                      fontSize: 8.5,
-                                      fontWeight: 700,
+                                      top: 2,
+                                      right: 2,
+                                      fontSize: 10,
+                                      fontWeight: 800,
                                       border: '1px solid #94a3b8',
                                       color: '#475569',
-                                      padding: '1px 3.5px',
+                                      padding: '2px 4px',
                                       borderRadius: 3,
                                       background: '#f1f5f9',
                                       whiteSpace: 'nowrap',
-                                      lineHeight: 1.3,
+                                      lineHeight: 1.2,
                                       zIndex: 1,
                                     }}>
                                       학생
@@ -2528,106 +2528,84 @@ export default function TeacherPage() {
             className="bg-white rounded-xl border border-slate-200 shadow-sm mb-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b md:border-slate-100 flex-shrink-0 relative"
             style={{ minHeight: isCurrentTeacherVerified ? undefined : '88px' }}
           >
-            {isCurrentTeacherVerified ? (
-              /* ── 인증됨: 일반 padding + 한 행 ── */
-              <div className="flex items-center gap-2 px-2 py-2 md:px-3">
-                {/* 선생님 선택기 */}
-                <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm shrink-0 min-w-0">
-                  {timetableData ? (
-                    <button
-                      type="button"
-                      onClick={() => { setTeacherSearchQuery(""); setShowTeacherSelectModal(true); }}
-                      style={{ WebkitTapHighlightColor: 'transparent' }}
-                      className="flex items-center gap-1 pl-3 pr-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0"
-                    >
-                      <span className="truncate max-w-[120px]">
-                        {selectedTeacherId
-                          ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
-                          : "교사 선택"}
-                      </span>
-                      <ChevronsUpDown className="w-3 h-3 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
-                    </button>
-                  ) : (
-                    <span className="pl-3 pr-2 py-1.5 text-sm font-extrabold text-slate-700 bg-indigo-50 flex items-center">
-                      {teacherName ? `${teacherName} 선생님` : '선생님'}
-                    </span>
-                  )}
-                </div>
-
-                {/* 계정 버튼 */}
-                <Link href="/teacher/account" className="flex">
-                  <button type="button" style={{ WebkitTapHighlightColor: 'transparent' }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-bold text-xs shrink-0 transition-colors border border-slate-200 cursor-pointer shadow-sm"
-                    title="선생님 계정 관리">
-                    <User className="w-3.5 h-3.5" /><span>계정</span>
+            {/* 미인증 시 실버 오버레이 (z-0) */}
+            {!isCurrentTeacherVerified && (
+              <div
+                className="absolute inset-0 rounded-xl md:rounded-none flex flex-col justify-end gap-1 px-3 py-2"
+                style={{
+                  background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
+                  border: '1px solid rgba(255,255,255,0.6)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
+                  zIndex: 0,
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 shrink-0" style={{ color: '#4b5563' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  <span className="text-xs font-semibold leading-tight flex-1" style={{ color: '#1f2937' }}>
+                    보기 전용<br />등록·수정하려면 인증하세요
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAuthDialog(true)}
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                    className="shrink-0 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    인증하기
                   </button>
-                </Link>
+                </div>
+              </div>
+            )}
 
-                {/* 간편공지 (모바일) */}
+            {/* 실제 내용물들 (z-10) */}
+            <div className={`relative z-10 flex items-center gap-2 px-2 md:px-3 ${isCurrentTeacherVerified ? 'py-2' : 'pt-2 pb-1'}`}>
+              
+              {/* 융합된 선생님 선택기 + 계정 버튼 */}
+              <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm shrink-0 min-w-0 bg-indigo-50">
+                {/* 선생님 선택기 */}
+                {timetableData ? (
+                  <button
+                    type="button"
+                    onClick={() => { setTeacherSearchQuery(""); setShowTeacherSelectModal(true); }}
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                    className="flex items-center gap-1 pl-3 pr-2 py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0"
+                  >
+                    <span className="truncate max-w-[120px]">
+                      {selectedTeacherId
+                        ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
+                        : "교사 선택"}
+                    </span>
+                    <ChevronsUpDown className="w-3 h-3 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
+                  </button>
+                ) : (
+                  <span className="pl-3 pr-2 py-1.5 text-sm font-extrabold text-slate-700 flex items-center">
+                    {teacherName ? `${teacherName} 선생님` : '선생님'}
+                  </span>
+                )}
+
+                {/* 계정 버튼: 인증 시에만 표시되며, 구분선을 주어 융합된 형태 유지 */}
+                {isCurrentTeacherVerified && (
+                  <Link href="/teacher/account" className="flex">
+                    <button type="button" style={{ WebkitTapHighlightColor: 'transparent' }}
+                      className="flex items-center gap-1 px-3 py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-600 font-bold text-xs shrink-0 transition-colors border-l border-indigo-200 cursor-pointer"
+                      title="선생님 계정 관리">
+                      <User className="w-3.5 h-3.5" /><span>계정</span>
+                    </button>
+                  </Link>
+                )}
+              </div>
+
+              {/* 간편공지 (모바일) */}
+              {isCurrentTeacherVerified && (
                 <button type="button" onClick={() => {}} style={{ WebkitTapHighlightColor: 'transparent' }}
                   className="md:hidden ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
                   title="간편공지">
                   <Bell className="w-3.5 h-3.5" /><span>간편공지</span>
                 </button>
-              </div>
-            ) : (
-              /* ── 미인증: 실버 absolute 오버레이 + 선생님 선택기 z-10 ── */
-              <>
-                {/* 실버 오버레이 — absolute inset-0, 컨테이너 꽉 채움 */}
-                <div
-                  className="absolute inset-0 rounded-xl md:rounded-none flex flex-col justify-end gap-1 px-3 py-2"
-                  style={{
-                    background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
-                    border: '1px solid rgba(255,255,255,0.6)',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
-                    zIndex: 0,
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 shrink-0" style={{ color: '#4b5563' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                    <span className="text-xs font-semibold leading-tight flex-1" style={{ color: '#1f2937' }}>
-                      보기 전용<br />등록·수정하려면 인증하세요
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowAuthDialog(true)}
-                      style={{ WebkitTapHighlightColor: 'transparent' }}
-                      className="shrink-0 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs font-bold transition-colors cursor-pointer"
-                    >
-                      인증하기
-                    </button>
-                  </div>
-                </div>
-
-                {/* 선생님 선택기 — z-10으로 실버 위에 표시 */}
-                <div className="relative z-10 flex items-center gap-2 px-2 pt-2 pb-1 md:px-3">
-                  <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm shrink-0 min-w-0">
-                    {timetableData ? (
-                      <button
-                        type="button"
-                        onClick={() => { setTeacherSearchQuery(""); setShowTeacherSelectModal(true); }}
-                        style={{ WebkitTapHighlightColor: 'transparent' }}
-                        className="flex items-center gap-1 pl-3 pr-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0"
-                      >
-                        <span className="truncate max-w-[120px]">
-                          {selectedTeacherId
-                            ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
-                            : "교사 선택"}
-                        </span>
-                        <ChevronsUpDown className="w-3 h-3 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
-                      </button>
-                    ) : (
-                      <span className="pl-3 pr-2 py-1.5 text-sm font-extrabold text-slate-700 bg-indigo-50 flex items-center">
-                        {teacherName ? `${teacherName} 선생님` : '선생님'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
+              )}
+            </div>
           </div>
 
 
