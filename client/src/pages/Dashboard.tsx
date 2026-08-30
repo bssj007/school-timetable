@@ -136,6 +136,8 @@ export default function Dashboard() {
       return res.json();
     },
     staleTime: 0, // 항상 최신 설정을 가져오도록 (그룹 override 등 즉시 반영)
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   const handleLogout = async () => {
@@ -1475,6 +1477,13 @@ export default function Dashboard() {
     }
   }, [isLoading, grade, classNum, studentNumber, timetableLoading, assessmentLoading]);
 
+  // 점검 모드 감지 시 강제 새로고침 (Edge 차단 페이지로 전환 및 로드된 데이터 클리어)
+  useEffect(() => {
+    if (settings?.maintenance_mode?.active && !settings?.is_whitelisted) {
+      window.location.reload();
+    }
+  }, [settings?.maintenance_mode?.active, settings?.is_whitelisted]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1491,9 +1500,17 @@ export default function Dashboard() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 text-center px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-red-100 p-8 flex flex-col items-center">
-          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6">
-            <ShieldAlert className="w-8 h-8" />
-          </div>
+          {settings?.site_favicon_url ? (
+            <img 
+              src={settings.site_favicon_url} 
+              alt="Logo" 
+              className="w-16 h-16 object-contain mb-6"
+            />
+          ) : (
+            <div className="text-red-500 mb-6 flex items-center justify-center">
+              <AlertTriangle className="w-14 h-14" />
+            </div>
+          )}
           <h2 className="text-2xl font-bold text-gray-900 mb-2">사이트 점검 중</h2>
           <p className="text-gray-600 mb-6 whitespace-pre-wrap leading-relaxed">
             {settings?.maintenance_mode?.message || "서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요."}
@@ -1869,7 +1886,7 @@ export default function Dashboard() {
               <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
                 <ShieldAlert className="w-10 h-10" />
               </div>
-              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 text-center">접근 제한 안내</h3>
+              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 text-center">이용 제한 안내</h3>
               <p className="text-gray-600 text-lg md:text-xl whitespace-pre-wrap text-center leading-relaxed font-medium">
                 {settings?.restriction_reason || `${grade}학년 서비스가 일시적으로 제한되었습니다.`}
               </p>
@@ -3129,8 +3146,9 @@ export default function Dashboard() {
         </div>
       )}
       {/* 수행평가 목록 */}
-      <Card className="mt-8">
-        <CardHeader>
+      {!isRestricted && (
+        <Card className="mt-8">
+          <CardHeader>
           <CardTitle className="flex items-center gap-2 flex-wrap">
             <span>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}</span> 수행평가 ({weekRangeText})
             {isOutOfDateRange && (
@@ -3333,6 +3351,7 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+      )}
       <div className="mt-2 flex justify-end">
         <Link href="/admin">
           <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-transparent text-xs font-normal h-auto p-0">
