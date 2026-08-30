@@ -453,11 +453,11 @@ export const onRequest = async (context: any) => {
                     });
                 }
 
-                // Final fallback if both are missing or other error
+                // Final fallback if both are missing or other error — still include dataset
                 const result = await env.DB.prepare(
-                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, teacher, classCode)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
-                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, teacher || null, classCode || null).run();
+                    `INSERT INTO performance_assessments (subject, title, description, dueDate, grade, classNum, classTime, isDone, dataset, teacher, classCode)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
+                ).bind(subject, title, description || '', dueDate, grade, actualClassNum, classTime || null, dataset, teacher || null, classCode || null).run();
 
                 return new Response(JSON.stringify({ success: true, result, warning: "IP not saved due to schema mismatch" }), {
                     headers: { 'Content-Type': 'application/json' }
