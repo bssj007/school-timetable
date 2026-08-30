@@ -2533,21 +2533,19 @@ export default function TeacherPage() {
                미인증 시: relative + min-height → 실버 absolute inset-0으로 꽉 채움
                선생님 선택기는 z-10으로 실버 위에 표시 */}
           <div
-            className={`rounded-xl border shadow-sm mb-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b flex-shrink-0 flex flex-col ${
+            className={`rounded-xl border shadow-sm mb-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b flex-shrink-0 flex flex-col justify-center ${
               isCurrentTeacherVerified 
                 ? 'bg-white border-slate-200 md:border-slate-100 p-2 md:p-3' 
-                : ''
+                : 'p-2 md:p-3'
             }`}
             style={!isCurrentTeacherVerified ? {
               background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
               border: '1px solid rgba(255,255,255,0.6)',
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
-              padding: '10px 12px',
-              gap: '8px'
             } : undefined}
           >
-            {/* 상단 묶음: 선생님 선택기 + 계정버튼 + 간편공지 */}
-            <div className="flex items-center gap-2">
+            {/* 선생님 선택기 + (인증 시: 계정버튼 / 미인증 시: [보기 전용] [로그인]) 한 줄 배치 */}
+            <div className="flex items-center gap-2 justify-between">
               {/* 융합된 선생님 선택기 + 계정 버튼 */}
               <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm shrink-0 min-w-0 bg-indigo-50">
                 {/* 선생님 선택기 */}
@@ -2558,7 +2556,7 @@ export default function TeacherPage() {
                     style={{ WebkitTapHighlightColor: 'transparent' }}
                     className="flex items-center gap-1 pl-3 pr-2 py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0"
                   >
-                    <span className="truncate max-w-[120px]">
+                    <span className="truncate max-w-[110px] md:max-w-[120px]">
                       {selectedTeacherId
                         ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
                         : "교사 선택"}
@@ -2583,7 +2581,7 @@ export default function TeacherPage() {
                 )}
               </div>
 
-              {/* 간편공지 (모바일) */}
+              {/* 간편공지 (모바일 - 인증 시) */}
               {isCurrentTeacherVerified && (
                 <button type="button" onClick={() => {}} style={{ WebkitTapHighlightColor: 'transparent' }}
                   className="md:hidden ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
@@ -2591,30 +2589,30 @@ export default function TeacherPage() {
                   <Bell className="w-3.5 h-3.5" /><span>간편공지</span>
                 </button>
               )}
-            </div>
 
-            {/* 미인증 시 하단 인증 안내 바 */}
-            {!isCurrentTeacherVerified && (
-              <div className="flex items-center justify-end gap-2 px-1">
-                <div className="flex items-center gap-1 text-gray-800">
-                  <svg className="w-4 h-4 shrink-0 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  <span className="text-xs font-semibold leading-tight">
-                    보기 전용
-                  </span>
+              {/* 미인증 시 우측 묶음: [보기 전용] [로그인] */}
+              {!isCurrentTeacherVerified && (
+                <div className="flex items-center gap-1.5 md:gap-2 ml-auto shrink-0">
+                  <div className="flex items-center gap-1 text-gray-800">
+                    <svg className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <span className="text-[11px] md:text-xs font-semibold leading-tight whitespace-nowrap">
+                      보기 전용
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAuthDialog(true)}
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                    className="shrink-0 px-2.5 md:px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs font-bold transition-colors cursor-pointer shadow-sm whitespace-nowrap"
+                  >
+                    로그인
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowAuthDialog(true)}
-                  style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className="shrink-0 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs font-bold transition-colors cursor-pointer shadow-sm"
-                >
-                  로그인
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
 
