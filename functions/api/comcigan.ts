@@ -163,17 +163,49 @@ export const onRequest = async (context: any) => {
                 }
             };
 
-            for (const key of Object.keys(rawData)) {
-                if (key.startsWith('자료') && rawData[key]) {
-                    sanitizeTimetable(rawData[key]);
+            // ── 교사/과목/시간표 키를 동적으로 탐지 (자료446/자료492/자료542 등의 번호는 학기마다 바뀜) ──
+            const rawKeys = Object.keys(rawData);
+
+            // 교사 배열: 원소 중 '*'로 끝나는 문자열이 있으면 교사 배열
+            const detectedTeacherProp = rawKeys.find(k =>
+                Array.isArray(rawData[k]) && rawData[k].some((s: any) => typeof s === 'string' && s.endsWith('*'))
+            ) || '자료446';
+
+            // 과목 배열: 교과 키워드 2개 이상 매칭
+            const subjectKeywords = ["국어", "수학", "영어", "한국사", "체육", "음악", "미술", "진로", "문학", "정보", "화학", "생물", "물리", "지리", "역사", "경제", "정치", "사회", "과학"];
+            const detectedSubjectProp = rawKeys.find(k => {
+                if (k === detectedTeacherProp) return false;
+                const val = rawData[k];
+                if (!Array.isArray(val)) return false;
+                let cnt = 0;
+                for (let i = 0; i < Math.min(val.length, 100); i++) {
+                    if (typeof val[i] === 'string' && subjectKeywords.some(kw => val[i].includes(kw))) {
+                        if (++cnt >= 2) return true;
+                    }
                 }
-            }
+                return false;
+            }) || '자료492';
+
+            // 시간표 배열: grade[1][weekday]가 Array인 키 중 가장 높은 번호 (baseline)
+            const detectedTimetableProps = rawKeys.filter(k => {
+                const val = rawData[k];
+                return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+            });
+            // 날짜 범위 없이 데이터가 있는 가장 높은 번호 데이터셋 = baseline
+            const detectedBaseline = detectedTimetableProps.length > 0
+                ? detectedTimetableProps.reduce((max, key) => {
+                    const num = parseInt(key.replace('자료', ''));
+                    return num > max.num ? { key, num } : max;
+                }, { key: detectedTimetableProps[0], num: -1 }).key
+                : '자료542';
 
             return new Response(JSON.stringify({
                 success: true,
-                teachers: rawData['자료446'] || [],
-                subjects: rawData['자료492'] || [],
-                timetable: rawData['자료542'] || []
+                teachers: rawData[detectedTeacherProp] || [],
+                subjects: rawData[detectedSubjectProp] || [],
+                timetable: rawData[detectedBaseline] || [],
+                // 디버그: 어떤 키가 탐지됐는지 확인용
+                _detectedKeys: { teacher: detectedTeacherProp, subject: detectedSubjectProp, timetable: detectedBaseline }
             }), {
                 status: 200,
                 headers: {
