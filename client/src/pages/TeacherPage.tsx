@@ -1788,53 +1788,53 @@ export default function TeacherPage() {
           <h2 className="text-lg font-extrabold truncate leading-tight">
             <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h2>
-          {/* 주 선택기 — 당일형일 때만 표시 */}
-          {mobileViewMode === 'daily' && (
-            <div className="flex flex-col items-center gap-0.5 shrink-0">
-              <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none"
-                  style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
-                  onClick={(e) => {
-                    setWeekOffset(prev => prev - 1);
-                    (e.currentTarget as HTMLElement).blur();
-                  }}
-                  disabled={weekOffset <= -2}
-                  title="이전 주"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="flex flex-col items-center min-w-[82px] px-1 select-none">
-                  <span className={`text-sm font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-white' : 'text-yellow-300'}`}>
-                    {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
-                  </span>
-                  <span className="text-[10px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
+          {/* 주 선택기 — 레이아웃 공간 항상 유지, 당일형이 아닐 때 invisible */}
+          <div className={`flex flex-col items-center gap-0.5 shrink-0 ${mobileViewMode !== 'daily' ? 'invisible pointer-events-none' : ''}`}>
+            <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none"
+                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                onClick={(e) => {
+                  setWeekOffset(prev => prev - 1);
+                  (e.currentTarget as HTMLElement).blur();
+                }}
+                disabled={weekOffset <= -2}
+                title="이전 주"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="flex flex-col items-center min-w-[82px] px-1 select-none">
+                <span className={`text-sm font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-white' : 'text-yellow-300'}`}>
+                  {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
                 </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none"
-                  style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
-                  onClick={(e) => {
-                    setWeekOffset(prev => prev + 1);
-                    (e.currentTarget as HTMLElement).blur();
-                  }}
-                  disabled={weekOffset >= 8}
-                  title="다음 주"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-              {isOutOfDateRange && (
-                <span className="text-xs font-bold text-red-500 bg-red-50/80 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse whitespace-nowrap">
-                  미확정 시간표
-                </span>
-              )}
+                <span className="text-[10px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-7 h-7 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none"
+                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                onClick={(e) => {
+                  setWeekOffset(prev => prev + 1);
+                  (e.currentTarget as HTMLElement).blur();
+                }}
+                disabled={weekOffset >= 8}
+                title="다음 주"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
-          )}
+            {/* 미확정 뱃지 — 당일형 + 범위 초과 시에만 표시 */}
+            {mobileViewMode === 'daily' && isOutOfDateRange && (
+              <span className="text-xs font-bold text-red-500 bg-red-50/80 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse whitespace-nowrap">
+                미확정 시간표
+              </span>
+            )}
+          </div>
         </div>
+
 
 
         {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
@@ -1993,12 +1993,18 @@ export default function TeacherPage() {
             ...Array(totalCells - startDow - totalDays).fill(null),
           ];
 
-          // 드래그 범위 체크
+          // 드래그 범위 체크 헬퍼
           const dragMin = calDragStart && calDragEnd ? [calDragStart, calDragEnd].sort()[0] : null;
           const dragMax = calDragStart && calDragEnd ? [calDragStart, calDragEnd].sort()[1] : null;
           const isInDragRange = (ds: string) => !!dragMin && !!dragMax && ds >= dragMin && ds <= dragMax;
-          const isDragStart  = (ds: string) => ds === dragMin;
-          const isDragEnd    = (ds: string) => ds === dragMax;
+          const isDragStartDate = (ds: string) => ds === dragMin;
+          const isDragEndDate   = (ds: string) => ds === dragMax;
+
+          // 좌표에서 data-date 속성 읽기
+          const dateFromPoint = (cx: number, cy: number): string | null => {
+            const el = document.elementFromPoint(cx, cy) as HTMLElement | null;
+            return el?.closest('[data-date]')?.getAttribute('data-date') ?? null;
+          };
 
           return (
             <div className="md:hidden bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -2023,80 +2029,84 @@ export default function TeacherPage() {
                 </button>
               </div>
 
-              {/* 단일 grid */}
+              {/* 단일 grid — 이벤트 위임 방식 */}
               <div
                 className="grid grid-cols-7 px-1 pb-1 select-none"
-                onPointerLeave={() => { if (calIsDragging) setCalDragEnd(calDragStart); }}
+                style={{ touchAction: 'none' }}
+                onPointerDown={(e) => {
+                  const ds = dateFromPoint(e.clientX, e.clientY);
+                  if (ds) { setCalDragStart(ds); setCalDragEnd(ds); }
+                }}
+                onPointerMove={(e) => {
+                  if (!calIsDragging) return;
+                  const ds = dateFromPoint(e.clientX, e.clientY);
+                  if (ds) setCalDragEnd(ds);
+                }}
+                onPointerUp={(e) => {
+                  if (!calIsDragging) return;
+                  const ds = calDragStart;
+                  const de = dateFromPoint(e.clientX, e.clientY) ?? calDragEnd;
+                  setCalDragStart(null);
+                  setCalDragEnd(null);
+
+                  if (!ds || !de || ds === de) {
+                    // 클릭: 당일형으로 이동
+                    const target = ds ?? de;
+                    if (!target) return;
+                    const [ty, tm, td2] = target.split('-').map(Number);
+                    const clicked = new Date(ty, tm - 1, td2);
+                    const cdow = clicked.getDay();
+                    const clickedMon = new Date(clicked);
+                    clickedMon.setDate(clicked.getDate() - (cdow === 0 ? 6 : cdow - 1));
+                    const today2 = new Date();
+                    const tdow = today2.getDay();
+                    const curMon = new Date(today2);
+                    curMon.setDate(today2.getDate() - (tdow === 0 ? 6 : tdow - 1));
+                    const diffWeeks = Math.round((clickedMon.getTime() - curMon.getTime()) / (7 * 86400000));
+                    setWeekOffset(Math.max(-2, Math.min(8, diffWeeks)));
+                    setMobileViewMode('daily');
+                  } else {
+                    // 드래그: 숙제형 탭으로 이동 + 날짜 자동 입력
+                    const [s, e2] = [ds, de].sort();
+                    setHwForm(f => ({ ...f, startDate: s, dueDate: e2 }));
+                    setMobileViewMode('homework');
+                  }
+                }}
+                onPointerCancel={() => { setCalDragStart(null); setCalDragEnd(null); }}
               >
                 {DOW_LABELS.map((dow, i) => (
                   <div key={dow} className={[
-                    'py-2 text-center text-[11px] font-bold',
+                    'py-2 text-center text-[11px] font-bold pointer-events-none',
                     i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-500',
-                  ].join(' ')}>{dow}</div>
+                  ].join('')}>{dow}</div>
                 ))}
 
                 {cells.map((d, idx) => {
                   const col = idx % 7;
                   if (!d) return <div key={`empty-${idx}`} className="h-11" />;
                   const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                  const isToday     = dateStr === todayStr;
-                  const isSun       = col === 0;
-                  const isSat       = col === 6;
-                  const inRange     = isInDragRange(dateStr);
-                  const isRangeStart = isDragStart(dateStr);
-                  const isRangeEnd  = isDragEnd(dateStr);
+                  const isToday      = dateStr === todayStr;
+                  const isSun        = col === 0;
+                  const isSat        = col === 6;
+                  const inRange      = isInDragRange(dateStr);
+                  const isRangeStart = isDragStartDate(dateStr);
+                  const isRangeEnd   = isDragEndDate(dateStr);
                   const hasDailyAssessment = (allAssessments || []).some(a => a.dueDate === dateStr);
 
                   return (
                     <div
                       key={dateStr}
+                      data-date={dateStr}
                       className={[
                         'h-11 flex flex-col items-center justify-center text-[13px] font-bold transition-colors cursor-pointer',
-                        // 드래그 범위 스타일
+                        isRangeStart || isRangeEnd     ? 'bg-indigo-500 text-white rounded-lg' : '',
                         inRange && !isRangeStart && !isRangeEnd ? 'bg-indigo-100 text-indigo-700' : '',
-                        isRangeStart || isRangeEnd ? 'bg-indigo-500 text-white rounded-lg' : '',
-                        // 드래그 아닐 때 기본 스타일
-                        !inRange && !isRangeStart && !isRangeEnd && isToday ? 'ring-2 ring-emerald-500 text-emerald-700 bg-emerald-50 rounded-lg' : '',
-                        !inRange && !isRangeStart && !isRangeEnd && !isToday && isSun ? 'text-red-500' : '',
-                        !inRange && !isRangeStart && !isRangeEnd && !isToday && isSat ? 'text-blue-500' : '',
+                        !inRange && !isRangeStart && !isRangeEnd && isToday  ? 'ring-2 ring-emerald-500 text-emerald-700 bg-emerald-50 rounded-lg' : '',
+                        !inRange && !isRangeStart && !isRangeEnd && !isToday && isSun  ? 'text-red-500' : '',
+                        !inRange && !isRangeStart && !isRangeEnd && !isToday && isSat  ? 'text-blue-500' : '',
                         !inRange && !isRangeStart && !isRangeEnd && !isToday && !isSun && !isSat ? 'text-slate-700' : '',
                       ].join(' ')}
-                      style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'none' }}
-                      onPointerDown={(e) => {
-                        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-                        setCalDragStart(dateStr);
-                        setCalDragEnd(dateStr);
-                      }}
-                      onPointerEnter={() => {
-                        if (calIsDragging) setCalDragEnd(dateStr);
-                      }}
-                      onPointerUp={(e) => {
-                        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-                        const ds = calDragStart;
-                        const de = dateStr;
-                        setCalDragStart(null);
-                        setCalDragEnd(null);
-
-                        if (!ds || ds === de) {
-                          // 클릭: 당일형 이동
-                          const clicked = new Date(year, month, d);
-                          const cdow = clicked.getDay();
-                          const clickedMon = new Date(clicked);
-                          clickedMon.setDate(clicked.getDate() - (cdow === 0 ? 6 : cdow - 1));
-                          const today2 = new Date();
-                          const tdow = today2.getDay();
-                          const curMon = new Date(today2);
-                          curMon.setDate(today2.getDate() - (tdow === 0 ? 6 : tdow - 1));
-                          const diffWeeks = Math.round((clickedMon.getTime() - curMon.getTime()) / (7 * 86400000));
-                          setWeekOffset(Math.max(-2, Math.min(8, diffWeeks)));
-                          setMobileViewMode('daily');
-                        } else {
-                          // 드래그: 숙제형 시작일/마감일 자동 입력 후 이동
-                          const [s, e] = [ds, de].sort();
-                          setHwForm(f => ({ ...f, startDate: s, dueDate: e }));
-                          setMobileViewMode('homework');
-                        }
-                      }}
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
                       <span>{d}</span>
                       {hasDailyAssessment && (
@@ -2120,6 +2130,7 @@ export default function TeacherPage() {
             </div>
           );
         })() : null}
+
 
 
 
