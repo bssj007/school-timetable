@@ -1492,13 +1492,19 @@ export default function Dashboard() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 text-center px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-red-100 p-8 flex flex-col items-center">
-          <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 p-2">
-            <img 
-              src={settings?.site_favicon_url || "/icon.svg"} 
-              alt="Logo" 
-              className="w-full h-full object-contain"
-            />
-          </div>
+          {settings?.site_favicon_url ? (
+            <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 p-2">
+              <img 
+                src={settings.site_favicon_url} 
+                alt="Logo" 
+                className="w-full h-full object-contain"
+              />
+            </div>
+          ) : (
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+          )}
           <h2 className="text-2xl font-bold text-gray-900 mb-2">사이트 점검 중</h2>
           <p className="text-gray-600 mb-6 whitespace-pre-wrap leading-relaxed">
             {settings?.maintenance_mode?.message || "서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요."}
