@@ -11,7 +11,8 @@ export const onRequest = async (context: any) => {
 
     // 0. 점검 모드(Maintenance) 원천 차단 (Edge 레벨)
     // HTML(페이지) 요청에 대해서만 점검 모드 차단을 수행하여 API/에셋을 보호합니다.
-    if (request.headers.get('accept')?.includes('text/html')) {
+    // 단, /admin 경로는 어떠한 접속제한도 적용하지 않습니다 (관리자 접근 완전 보장).
+    if (request.headers.get('accept')?.includes('text/html') && !url.pathname.startsWith('/admin')) {
         try {
             if (env.DB) {
                 // 설정 DB 조회
