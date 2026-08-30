@@ -368,6 +368,7 @@ export default function TeacherPage() {
     title: '',
     content: '',
     link: '',
+    activityType: '수행평가',
   });
   // 숙제형 wizard 페이지 (1 | 2)
   const [hwPage, setHwPage] = useState<1 | 2>(1);
@@ -1940,6 +1941,42 @@ export default function TeacherPage() {
 
                   {hwPage === 1 ? (
                     <div className="flex flex-col gap-3">
+                      {/* 종류 선택 */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          background: '#f1f5f9',
+                          borderRadius: 12,
+                          padding: 4,
+                          gap: 4,
+                        }}
+                      >
+                        {(['수행평가', '기타 활동'] as const).map((type) => (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => setHwForm(f => ({ ...f, activityType: type }))}
+                            style={{
+                              flex: 1,
+                              padding: '8px 0',
+                              borderRadius: 8,
+                              border: 'none',
+                              fontWeight: 700,
+                              fontSize: 14,
+                              cursor: 'pointer',
+                              transition: 'all 0.18s',
+                              background: hwForm.activityType === type
+                                ? (type === '수행평가' ? '#3b82f6' : '#7c3aed')
+                                : 'transparent',
+                              color: hwForm.activityType === type ? '#fff' : '#64748b',
+                              boxShadow: hwForm.activityType === type ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
+                            }}
+                          >
+                            {type === '수행평가' ? '📝 수행평가' : '✨ 기타 활동'}
+                          </button>
+                        ))}
+                      </div>
+
                       {/* 평가 제목 */}
                       <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1">평가 제목</label>
