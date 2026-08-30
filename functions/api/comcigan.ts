@@ -163,15 +163,17 @@ export const onRequest = async (context: any) => {
                 }
             };
 
-            // ── 교사/과목/시간표 키를 동적으로 탐지 (자료446/자료492/자료542 등의 번호는 학기마다 바뀜) ──
+            // ── 교사/과목/시간표 키를 동적으로 탐지 ──────────────────────────────────────────
+            // 컴시간은 매 학기/갱신마다 자료번호가 바뀜(예: 자료446→자료512).
+            // 따라서 특정 번호를 하드코딩하지 않고, 각 배열의 구조적 특징으로 탐지함.
             const rawKeys = Object.keys(rawData);
 
-            // 교사 배열: 원소 중 '*'로 끝나는 문자열이 있으면 교사 배열
+            // 교사 배열: 원소 중 '*'로 끝나는 문자열 포함 → 담임 교사 표시 컨벤션
             const detectedTeacherProp = rawKeys.find(k =>
                 Array.isArray(rawData[k]) && rawData[k].some((s: any) => typeof s === 'string' && s.endsWith('*'))
-            ) || '자료446';
+            ) ?? null;
 
-            // 과목 배열: 교과 키워드 2개 이상 매칭
+            // 과목 배열: 교과목 키워드 2개 이상 포함
             const subjectKeywords = ["국어", "수학", "영어", "한국사", "체육", "음악", "미술", "진로", "문학", "정보", "화학", "생물", "물리", "지리", "역사", "경제", "정치", "사회", "과학"];
             const detectedSubjectProp = rawKeys.find(k => {
                 if (k === detectedTeacherProp) return false;
@@ -184,27 +186,31 @@ export const onRequest = async (context: any) => {
                     }
                 }
                 return false;
-            }) || '자료492';
+            }) ?? null;
 
-            // 시간표 배열: grade[1][weekday]가 Array인 키 중 가장 높은 번호 (baseline)
+            // 시간표 배열: val[grade][class][weekday]가 Array 구조인 키 탐지
+            // 번호가 가장 큰 것 = baseline(통합) 데이터셋으로 간주
+            // key.replace('자료','')는 특정 번호 하드코딩이 아닌 컴시간 네이밍 컨벤션 패턴
             const detectedTimetableProps = rawKeys.filter(k => {
                 const val = rawData[k];
                 return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
             });
-            // 날짜 범위 없이 데이터가 있는 가장 높은 번호 데이터셋 = baseline
             const detectedBaseline = detectedTimetableProps.length > 0
                 ? detectedTimetableProps.reduce((max, key) => {
-                    const num = parseInt(key.replace('자료', ''));
+                    const num = parseInt(key.replace('자료', '')) || 0;
                     return num > max.num ? { key, num } : max;
                 }, { key: detectedTimetableProps[0], num: -1 }).key
-                : '자료542';
+                : null;
+
+            if (!detectedTeacherProp || !detectedSubjectProp || !detectedBaseline) {
+                console.warn('[Teacher Timetable] Detection failed:', { detectedTeacherProp, detectedSubjectProp, detectedBaseline });
+            }
 
             return new Response(JSON.stringify({
-                success: true,
-                teachers: rawData[detectedTeacherProp] || [],
-                subjects: rawData[detectedSubjectProp] || [],
-                timetable: rawData[detectedBaseline] || [],
-                // 디버그: 어떤 키가 탐지됐는지 확인용
+                success: !!(detectedTeacherProp && detectedSubjectProp && detectedBaseline),
+                teachers: detectedTeacherProp ? (rawData[detectedTeacherProp] || []) : [],
+                subjects:  detectedSubjectProp ? (rawData[detectedSubjectProp] || []) : [],
+                timetable: detectedBaseline    ? (rawData[detectedBaseline] || [])    : [],
                 _detectedKeys: { teacher: detectedTeacherProp, subject: detectedSubjectProp, timetable: detectedBaseline }
             }), {
                 status: 200,
