@@ -5331,8 +5331,8 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                                 {lookupArchiveResult.summary}
                             </p>
                             {lookupArchiveResult.found && (
-                                <p className="text-slate-600">
-                                    저장일시 (KST): <span className="font-mono">{toKST(lookupArchiveResult.matchedSavedAt)}</span>
+                                <p className="text-slate-600 flex items-center gap-1 flex-wrap">
+                                    저장일시: <span className="font-mono"><CacheTimestamp updatedAt={lookupArchiveResult.matchedSavedAt} /></span>
                                     {' · '}
                                     <span className="font-mono">{Math.round((lookupArchiveResult.matchedDataSize ?? 0) / 1024)}KB</span>
                                 </p>
@@ -5414,8 +5414,8 @@ function ComciganCacheManager({ adminPassword }: { adminPassword: string }) {
                                                 </span>
                                             )}
                                         </div>
-                                        <span className="text-[10px] text-slate-400">
-                                            마지막 저장: {toKST(entry.savedAt)}
+                                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                            마지막 저장: <CacheTimestamp updatedAt={entry.savedAt} />
                                             &nbsp;&middot;&nbsp;{Math.round(entry.dataSize / 1024)}KB
                                         </span>
                                     </div>
