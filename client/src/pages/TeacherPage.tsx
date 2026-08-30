@@ -1808,6 +1808,30 @@ export default function TeacherPage() {
         {/* ===== CONTENT AREA: flex-col on mobile (panel top, title+week, table bottom), flex-row on desktop ===== */}
         <div className="flex flex-col md:flex-row gap-3 md:gap-4 xl:gap-6 items-start md:items-stretch md:flex-1 md:min-h-0">
 
+        {/* ===== MOBILE ONLY: Top Nav Bar (학생용, 급식정보) ===== */}
+        <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 mb-1 shrink-0">
+          <div className="flex items-center gap-1.5">
+            <Button variant="outline" size="sm"
+              className="h-7 px-2.5 rounded-full shadow-sm gap-1 text-xs bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
+              onClick={handleReturnToStudentPage}
+              title="학생용 페이지로 이동"
+            >
+              <ArrowLeft className="w-3 h-3 text-emerald-600" />
+              <span>학생용</span>
+            </Button>
+            <Link href="/meal">
+              <Button variant="outline" size="sm"
+                className="h-7 px-2.5 rounded-full shadow-sm gap-1 text-xs bg-white hover:bg-orange-50 border-orange-200 text-orange-700 font-semibold"
+                title="급식 정보 보기"
+              >
+                <UtensilsCrossed className="w-3 h-3 text-orange-500" />
+                <span>급식정보</span>
+                <ArrowRight className="w-3 h-3 text-orange-500" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+
         {/* ===== MOBILE ONLY: Title row — 항상 표시 ===== */}
         <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 shrink-0 min-h-[44px]">
           <h2 className="text-lg font-extrabold truncate leading-tight">
