@@ -2500,11 +2500,44 @@ export default function TeacherPage() {
       {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
       <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4 h-fit">
         <div className="md:bg-white md:rounded-2xl md:border md:border-slate-200 md:shadow-md md:overflow-hidden flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
-          {/* Teacher Picker — 모바일에서 독립 카드, PC에서 패널 내부 바 */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-2 px-2 py-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b md:border-slate-100 md:px-3 flex-shrink-0 flex flex-col gap-1.5">
+          {/* Teacher Picker — 모바일에서 독립 카드, PC에서 패널 내부 바
+               relative: 실버 오버레이의 기준점
+               선생님 선택기 행은 z-10으로 오버레이 위에 표시 */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-2 px-2 py-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b md:border-slate-100 md:px-3 flex-shrink-0 relative">
 
-            {/* 1행: 선생님 선택기 + 간편공지 */}
-            <div className="flex items-center gap-2">
+            {/* 미인증 시 실버 오버레이 — absolute inset-0, z-0 (선생님선택기가 z-10으로 위에 뜸) */}
+            {!isCurrentTeacherVerified && (
+              <div
+                className="absolute inset-0 flex items-center gap-2 px-3 py-2 rounded-xl md:rounded-none"
+                style={{
+                  background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
+                  border: '1px solid rgba(255,255,255,0.6)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
+                  zIndex: 0,
+                }}
+              >
+                {/* 선생님 선택기 너비만큼 공간 확보 (겹침 방지) */}
+                <div className="shrink-0" style={{ width: '140px' }} />
+                <svg className="w-4 h-4 shrink-0" style={{ color: '#4b5563' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <span className="text-xs font-semibold leading-tight flex-1 whitespace-nowrap" style={{ color: '#1f2937' }}>
+                  보기 전용 · 인증하세요
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAuthDialog(true)}
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                  className="shrink-0 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  인증하기
+                </button>
+              </div>
+            )}
+
+            {/* 선생님 선택기 + 계정 버튼 + 간편공지 — z-10으로 실버 오버레이 위에 표시 */}
+            <div className="flex items-center gap-2 relative z-10">
               {/* 선생님 선택기 — pill */}
               <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm shrink-0 min-w-0">
                 {timetableData ? (
@@ -2531,7 +2564,7 @@ export default function TeacherPage() {
                 )}
               </div>
 
-              {/* PC 전용: 계정 버튼 */}
+              {/* PC 전용: 계정 버튼 — 인증 여부 무관, 항상 표시 */}
               <Link href="/teacher-account">
                 <button
                   type="button"
@@ -2556,34 +2589,6 @@ export default function TeacherPage() {
                 <span>간편공지</span>
               </button>
             </div>
-
-            {/* 2행: 미인증 시 실버 배너 (모바일 전용) */}
-            {!isCurrentTeacherVerified && (
-              <div
-                className="md:hidden flex items-center gap-2 w-full px-3 py-2 rounded-xl"
-                style={{
-                  background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
-                  border: '1px solid rgba(255,255,255,0.6)',
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
-                }}
-              >
-                <svg className="w-4 h-4 shrink-0" style={{ color: '#4b5563' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-                <span className="text-xs font-semibold leading-tight flex-1" style={{ color: '#1f2937' }}>
-                  보기 전용<br />등록·수정하려면 인증하세요
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowAuthDialog(true)}
-                  style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className="shrink-0 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs font-bold transition-colors cursor-pointer"
-                >
-                  인증하기
-                </button>
-              </div>
-            )}
           </div>
 
 
