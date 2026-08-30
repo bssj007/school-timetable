@@ -2550,16 +2550,16 @@ export default function TeacherPage() {
                     style={{ WebkitTapHighlightColor: 'transparent' }}
                     className="flex items-center gap-1 pl-3 pr-2 py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0"
                   >
-                    <span className="truncate max-w-[110px] md:max-w-[120px]">
+                    <span className="truncate max-w-[110px] md:max-w-[130px]">
                       {selectedTeacherId
-                        ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
+                        ? (teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10)))
                         : "교사 선택"}
                     </span>
                     <ChevronsUpDown className="w-3 h-3 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
                   </button>
                 ) : (
                   <span className="pl-3 pr-2 py-1.5 text-sm font-extrabold text-slate-700 flex items-center">
-                    {teacherName ? `${teacherName} 선생님` : '선생님'}
+                    {teacherName || '교사 선택'}
                   </span>
                 )}
 
