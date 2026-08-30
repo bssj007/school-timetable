@@ -1878,7 +1878,7 @@ export default function Dashboard() {
               <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
                 <ShieldAlert className="w-10 h-10" />
               </div>
-              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 text-center">접근 제한 안내</h3>
+              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 text-center">이용 제한 안내</h3>
               <p className="text-gray-600 text-lg md:text-xl whitespace-pre-wrap text-center leading-relaxed font-medium">
                 {settings?.restriction_reason || `${grade}학년 서비스가 일시적으로 제한되었습니다.`}
               </p>
