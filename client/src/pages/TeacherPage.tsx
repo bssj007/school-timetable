@@ -1716,16 +1716,10 @@ export default function TeacherPage() {
                     ? <><span className="text-slate-700 font-bold">{teacherName}</span> 선생님</>
                     : <span className="text-slate-400">선생님을 선택하세요</span>}
                 </span>
-                {teacherName && (
-                  isCurrentTeacherVerified
-                    ? <Link href="/teacher/account">
-                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 leading-tight hover:bg-emerald-100 transition-colors cursor-pointer">✓ 인증됨 · 계정</span>
-                      </Link>
-                    : <button
-                        type="button"
-                        onClick={() => setShowAuthDialog(true)}
-                        className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 leading-tight hover:bg-slate-200 transition-colors cursor-pointer"
-                      >보기 전용 · 로그인</button>
+                {teacherName && isCurrentTeacherVerified && (
+                  <Link href="/teacher/account">
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 leading-tight hover:bg-emerald-100 transition-colors cursor-pointer">✓ 인증됨 · 계정</span>
+                  </Link>
                 )}
               </div>
             </div>
