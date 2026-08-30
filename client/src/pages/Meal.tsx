@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { UtensilsCrossed, ChevronLeft, ChevronRight, Sun, Moon, MessageSquarePlus, X, Send, Loader2, Star } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation, Link } from "wouter";
+import { useUserConfig } from "@/contexts/UserConfigContext";
 
 interface MealEntry {
     date: string; // "YYYY-MM-DD"
@@ -267,6 +269,17 @@ function MealSuggestionDialog({ onClose }: { onClose: () => void }) {
 
 // ── 메인 페이지 ──────────────────────────────────────────────────
 export default function MealPage() {
+    const { userRole, isValidating } = useUserConfig();
+    const [, setLocation] = useLocation();
+
+    // Redirect to home if no role is established
+    useEffect(() => {
+        if (!isValidating && !userRole) {
+            toast.error("프로필 정보가 없습니다. 메인 페이지로 이동합니다.");
+            setLocation("/");
+        }
+    }, [userRole, isValidating, setLocation]);
+
     // 주말(토=6, 일=0)에는 다음 주 급식표를 기본으로 표시 (Dashboard와 동일)
     const baseOffset = (() => { const d = new Date().getDay(); return (d === 0 || d === 6) ? 1 : 0; })();
     const [weekOffset, setWeekOffset] = useState(baseOffset);
@@ -381,12 +394,12 @@ export default function MealPage() {
                             </div>
                             {/* 시간표/급식표 토글 — 데스크탑: 제목 바로 오른쪽 */}
                             <div className="hidden md:flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5 ml-2">
-                                <a
-                                    href="/"
+                                <Link
+                                    href={userRole === "teacher" ? "/teacher" : "/"}
                                     className="px-4 py-1.5 rounded-full text-sm font-semibold text-gray-500 hover:text-gray-800 hover:bg-white/60 transition-all whitespace-nowrap"
                                 >
                                     📅 시간표
-                                </a>
+                                </Link>
                                 <div className="px-4 py-1.5 rounded-full bg-white text-sm font-semibold text-gray-800 shadow-sm whitespace-nowrap">
                                     🍱 급식표
                                 </div>
@@ -406,12 +419,12 @@ export default function MealPage() {
                     {/* 둘째 줄: 시간표/급식표 토글 — 모바일만 */}
                     <div className="flex items-center gap-2 mt-2 md:hidden">
                         <div className="flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5">
-                            <a
-                                href="/"
+                            <Link
+                                href={userRole === "teacher" ? "/teacher" : "/"}
                                 className="px-3 py-1 rounded-full text-xs font-semibold text-gray-500 hover:text-gray-800 hover:bg-white/60 transition-all whitespace-nowrap"
                             >
                                 📅 시간표
-                            </a>
+                            </Link>
                             <div className="px-3 py-1 rounded-full bg-white text-xs font-semibold text-gray-800 shadow-sm whitespace-nowrap">
                                 🍱 급식표
                             </div>
