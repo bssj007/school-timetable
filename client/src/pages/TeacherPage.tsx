@@ -371,7 +371,21 @@ export default function TeacherPage() {
     activityType: "수행평가",
   });
 
-  // Keep teacher selection in localStorage
+  // 달력 탭 진입 시 항상 이번 달로 초기화
+  useEffect(() => {
+    if (mobileViewMode === 'calendar') {
+      const now = new Date();
+      setCalendarMonth({ year: now.getFullYear(), month: now.getMonth() });
+    }
+    // 당일형이 아닌 탭으로 전환 시 weekOffset을 디폴트(오늘 기준)로 초기화
+    if (mobileViewMode !== 'daily') {
+      const today = new Date();
+      const day = today.getDay();
+      setWeekOffset((day === 0 || day === 6) ? 1 : 0);
+    }
+  }, [mobileViewMode]);
+
+
   useEffect(() => {
     localStorage.setItem("teacher-page-selected-teacher", selectedTeacherId);
   }, [selectedTeacherId]);
@@ -1753,8 +1767,8 @@ export default function TeacherPage() {
         {/* ===== CONTENT AREA: flex-col on mobile (panel top, title+week, table bottom), flex-row on desktop ===== */}
         <div className="flex flex-col md:flex-row gap-3 md:gap-4 xl:gap-6 items-start md:items-stretch md:flex-1 md:min-h-0">
 
-        {/* ===== MOBILE ONLY: Title + Week nav row — order-1 (above timetable) ===== */}
-        <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 shrink-0">
+        {/* ===== MOBILE ONLY: Title + Week nav row — 당일형일 때만 표시 ===== */}
+        <div className={`md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 shrink-0 ${mobileViewMode !== 'daily' ? 'invisible pointer-events-none h-0 overflow-hidden mb-0' : ''}`}>
           <h2 className="text-lg font-extrabold truncate leading-tight">
             <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h2>
