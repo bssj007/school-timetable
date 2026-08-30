@@ -9,6 +9,66 @@ export const onRequest = async (context: any) => {
     const { request, env, next } = context;
     const url = new URL(request.url);
 
+    // 0. 점검 모드(Maintenance) 원천 차단 (Edge 레벨)
+    // HTML(페이지) 요청에 대해서만 점검 모드 차단을 수행하여 API/에셋을 보호합니다.
+    if (request.headers.get('accept')?.includes('text/html')) {
+        try {
+            if (env.DB) {
+                // 설정 DB 조회
+                const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('maintenance_mode', 'ip_whitelist')").all();
+                const settings: Record<string, string> = {};
+                if (rows && rows.results) {
+                    rows.results.forEach((row: any) => { settings[row.key] = row.value; });
+                }
+
+                const maintenanceMode = settings['maintenance_mode'] ? JSON.parse(settings['maintenance_mode']) : { active: false };
+                
+                if (maintenanceMode.active) {
+                    const clientIp = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
+                    const ipWhitelist = settings['ip_whitelist'] ? JSON.parse(settings['ip_whitelist']) : [];
+                    const isWhitelisted = ipWhitelist.includes(clientIp);
+
+                    if (!isWhitelisted) {
+                        const maintenanceMessage = maintenanceMode.message || "서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.";
+                        const html = `
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>사이트 점검 중</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .container { background-color: #ffffff; border: 2px solid #fee2e2; border-radius: 1rem; padding: 2.5rem; max-width: 28rem; width: 90%; text-align: center; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); }
+        .icon { width: 4rem; height: 4rem; background-color: #fef2f2; color: #ef4444; border-radius: 9999px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem auto; }
+        .icon svg { width: 2rem; height: 2rem; }
+        h1 { font-size: 1.5rem; font-weight: 700; color: #111827; margin: 0 0 1rem 0; letter-spacing: -0.025em; }
+        p { color: #475569; font-size: 1.125rem; line-height: 1.6; margin: 0; white-space: pre-wrap; word-break: keep-all; font-weight: 500; }
+        .footer { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; font-size: 0.875rem; color: #94a3b8; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        </div>
+        <h1>사이트 점검 중</h1>
+        <p>${maintenanceMessage.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+        ${maintenanceMode.endTime ? `<div class="footer">점검 종료 예정: ${new Date(maintenanceMode.endTime).toLocaleString('ko-KR')}</div>` : ''}
+    </div>
+</body>
+</html>`;
+                        return new Response(html, {
+                            status: 503,
+                            headers: { 'Content-Type': 'text/html; charset=utf-8' }
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[Middleware] Maintenance check failed:', e);
+        }
+    }
 
     // 1. Log Access (Response)
     const response = await next();

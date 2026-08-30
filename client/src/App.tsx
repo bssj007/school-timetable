@@ -93,8 +93,8 @@ function AppContent() {
     }
   }, [isValidating, userRole, isTeacherRoute, isAdminRoute]);
 
-  // 학기 키 검증 완료 전 또는 설정 정보(접속제한 등) 로딩 전 — 아무 데이터도 렌더링하지 않음
-  if (isValidating || publicSettings === null) {
+  // 학기 키 검증 완료 전 — 아무 데이터도 렌더링하지 않음
+  if (isValidating) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f8fafc' }}>
         <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
