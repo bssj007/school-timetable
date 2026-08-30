@@ -1160,7 +1160,9 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
     } else if (db && !isEmptyDataset && !isFallbackApplied) {
         // ── [C] 일반 사용자 요청 경로 ─────────────────────────────────────
-        // 캐시에서 읽어온 데이터. 폴백이나 빈 데이터면 저장 건너뜀.
+        // 캐시에서 읽어온 데이터를 그대로 재사용. 폴백이나 빈 데이터면 저장 건너뜀.
+        // ⚠️ updated_at은 절대 갱신하지 않음 — 오직 [B](LIVE fetch)에서만 갱신해야
+        //    실제 컴시간 갱신 시각이 정확히 표시됨.
         try {
             await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_archive (
                 date_range TEXT PRIMARY KEY,
@@ -1169,14 +1171,16 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             )`).run();
             await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_cache (cache_key TEXT PRIMARY KEY, response_json TEXT NOT NULL, dataset_id TEXT, updated_at TEXT DEFAULT (datetime('now')))`).run();
 
-            // raw_data 캐시 갱신
+            // raw_data 캐시 갱신 — response_json만 업데이트, updated_at은 기존 값 유지
             await db.prepare(`
                 INSERT INTO timetable_cache (cache_key, response_json, updated_at)
                 VALUES ('raw_data', ?, datetime('now'))
                 ON CONFLICT(cache_key) DO UPDATE SET
-                    response_json = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.response_json ELSE excluded.response_json END,
-                    updated_at    = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.updated_at    ELSE datetime('now')            END
+                    response_json = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.response_json ELSE excluded.response_json END
+                    -- updated_at은 갱신하지 않음: 캐시에서 읽어온 데이터를 다시 쓰는 것이므로
+                    -- 실제 컴시간 갱신 시각은 [B] LIVE fetch 경로에서만 updated_at을 갱신
             `).bind(jsonString).run();
+
 
             // 아카이브: INSERT OR IGNORE — 기존 LIVE 항목을 오래된 캐시로 덮어쓰지 않음
             const userArchiveRanges = parseArchiveRanges(jsonString);
