@@ -376,6 +376,8 @@ export default function TeacherPage() {
   const [calDragStart, setCalDragStart] = useState<string | null>(null);
   const [calDragEnd, setCalDragEnd] = useState<string | null>(null);
   const calIsDragging = calDragStart !== null;
+  // 달력 그리드 컨테이너 ref (좌표 기반 month-nav 감지용)
+  const calGridRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState({
     assessmentDate: "",
@@ -2088,21 +2090,33 @@ export default function TeacherPage() {
                 onPointerMove={(e) => {
                   if (!calIsDragging) return;
                   e.preventDefault();
-                  // month-nav 존 감지
-                  const elNav = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
-                  const navZone = elNav?.closest('[data-month-nav]') as HTMLElement | null;
-                  if (navZone) {
-                    const nav = navZone.getAttribute('data-month-nav');
-                    if (nav === 'prev') {
+
+                  // 좌표 기반 month-nav 감지 (pointer-events-none 존을 우회)
+                  if (calGridRef.current) {
+                    const rect = calGridRef.current.getBoundingClientRect();
+                    const relX = e.clientX - rect.left;
+                    const relY = e.clientY - rect.top;
+                    const DOW_H = 32; // py-2 + text-[11px] 행 높이 근사
+                    const CELL_H = 44; // h-11
+                    const ZONE_W = 44; // 좌우 감지 너비
+                    const numRows = totalCells / 7;
+
+                    // 첫 행 왼쪽 경계
+                    if (relY >= DOW_H && relY < DOW_H + CELL_H && relX >= 0 && relX < ZONE_W) {
                       const prevDate = new Date(year, month - 1, 1);
                       setCalDragEnd(`${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-01`);
-                    } else if (nav === 'next') {
+                      return;
+                    }
+                    // 마지막 행 오른쪽 경계
+                    const lastRowTop = DOW_H + (numRows - 1) * CELL_H;
+                    if (relY >= lastRowTop && relY < lastRowTop + CELL_H && relX > rect.width - ZONE_W) {
                       const lastDay = new Date(year, month + 2, 0).getDate();
                       const nextDate = new Date(year, month + 1, lastDay);
                       setCalDragEnd(`${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`);
+                      return;
                     }
-                    return;
                   }
+
                   const ds = dateFromPoint(e.clientX, e.clientY);
                   if (ds) setCalDragEnd(ds);
                 }}
@@ -2137,30 +2151,29 @@ export default function TeacherPage() {
                   }
                 }}
                 onPointerCancel={() => { setCalDragStart(null); setCalDragEnd(null); }}
+                ref={calGridRef}
               >
-                {/* ── 드래그 중에만 표시: 지난 달 / 다음 달 확장 존 ── */}
+                {/* ── 드래그 중에만 표시: 지난 달 / 다음 달 시각 힌트 (pointer-events-none) ── */}
                 {calIsDragging && (
                   <>
-                    {/* 지난 달: 첫째 행 왼쪽 테두리 */}
+                    {/* 지난 달: 첫째 행 왼쪽 테두리 — 시각 전용 */}
                     <div
-                      data-month-nav="prev"
-                      className="absolute left-0 z-20 flex items-center justify-start"
-                      style={{ top: 'calc(8px + 8px + 11px)', height: 44 }}
+                      className="absolute left-0 z-10 flex items-center justify-start pointer-events-none"
+                      style={{ top: 32, height: 44 }}
                     >
-                      <div className="flex flex-col items-center justify-center w-9 h-9 rounded-r-xl bg-indigo-600/90 shadow-lg">
-                        <ChevronLeft className="w-4 h-4 text-white animate-bounce" style={{ animationDirection: 'alternate', animationDuration: '0.5s' }} />
+                      <div className="flex flex-col items-center justify-center w-9 h-9 rounded-r-xl bg-indigo-600/80 shadow-md">
+                        <ChevronLeft className="w-4 h-4 text-white animate-bounce" style={{ animationDuration: '0.5s' }} />
                         <span className="text-[8px] text-white font-bold leading-none mt-0.5">지난달</span>
                       </div>
                     </div>
 
-                    {/* 다음 달: 마지막 행 오른쪽 테두리 */}
+                    {/* 다음 달: 마지막 행 오른쪽 테두리 — 시각 전용 */}
                     <div
-                      data-month-nav="next"
-                      className="absolute right-0 z-20 flex items-center justify-end"
-                      style={{ bottom: 'calc(4px)', height: 44 }}
+                      className="absolute right-0 z-10 flex items-center justify-end pointer-events-none"
+                      style={{ bottom: 4, height: 44 }}
                     >
-                      <div className="flex flex-col items-center justify-center w-9 h-9 rounded-l-xl bg-indigo-600/90 shadow-lg">
-                        <ChevronRight className="w-4 h-4 text-white animate-bounce" style={{ animationDirection: 'alternate', animationDuration: '0.5s' }} />
+                      <div className="flex flex-col items-center justify-center w-9 h-9 rounded-l-xl bg-indigo-600/80 shadow-md">
+                        <ChevronRight className="w-4 h-4 text-white animate-bounce" style={{ animationDuration: '0.5s' }} />
                         <span className="text-[8px] text-white font-bold leading-none mt-0.5">다음달</span>
                       </div>
                     </div>
