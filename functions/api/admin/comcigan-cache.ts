@@ -178,14 +178,21 @@ export const onRequest = async (context: any) => {
                     return new Response(JSON.stringify({ success: false, error: '날짜 범위를 파싱할 수 없습니다. raw_data 구조를 확인하세요.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
                 }
 
-                // 3. 모든 범위를 INSERT OR REPLACE (테스트용 — 최신 스냅샷으로 강제 덮어쓰기)
+                // 3. 이미 저장된 아카이브는 덮어쓰지 않음 (INSERT OR IGNORE)
+                // — 활성화 상태(과거) 아카이브 항목 보호를 위해 INSERT OR REPLACE 대신 INSERT OR IGNORE 사용
                 const savedRanges: string[] = [];
+                const skippedRanges: string[] = []; // 이미 존재하여 건너뛴 범위
                 for (const range of ranges) {
                     try {
-                        await db.prepare(
-                            "INSERT OR REPLACE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))"
+                        const result = await db.prepare(
+                            "INSERT OR IGNORE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))"
                         ).bind(range, rawJson).run();
-                        savedRanges.push(range);
+                        // D1: meta.changes === 1이면 실제 삽입, 0이면 IGNORE(이미 존재)
+                        if (result?.meta?.changes === 1) {
+                            savedRanges.push(range);
+                        } else {
+                            skippedRanges.push(range);
+                        }
                     } catch (_) {}
                 }
 
@@ -218,11 +225,13 @@ export const onRequest = async (context: any) => {
                 return new Response(JSON.stringify({
                     success: true,
                     savedRanges,
+                    skippedRanges,
                     totalArchived: savedRanges.length,
+                    totalSkipped: skippedRanges.length,
                     lookupTest: lookupResult,
                     summary: lookupResult.found
-                        ? `✅ 저장(${savedRanges.length}개) + 조회 성공: '${lookupResult.matchedRange}' (${Math.round((lookupResult.dataSize ?? 0) / 1024)}KB)`
-                        : `⚠️ 저장(${savedRanges.length}개) 완료, 조회 실패: ${testTargetShort}에 해당하는 범위 없음`
+                        ? `✅ 신규저장(${savedRanges.length}개) / 기존보호(${skippedRanges.length}개) + 조회 성공: '${lookupResult.matchedRange}' (${Math.round((lookupResult.dataSize ?? 0) / 1024)}KB)`
+                        : `⚠️ 신규저장(${savedRanges.length}개) / 기존보호(${skippedRanges.length}개) — 조회 실패: ${testTargetShort}에 해당하는 범위 없음`
                 }), { headers: { 'Content-Type': 'application/json' } });
             }
 
