@@ -375,6 +375,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     // 과거 날짜만 아카이브에 저장되어 있으므로, isPastOutOfRange인 경우에만 조회
     // 미래 날짜(isFutureOutOfRange)는 아카이브에 데이터가 없으므로 조회 생략
     let isArchivedData = false;
+    let matchedArchiveDateRange: string | null = null;
     if (isPastOutOfRange && targetDate && db) {
         const targetShortForArchive = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
         const targetDateObjForArchive = new Date(`20${targetShortForArchive}`);
@@ -398,6 +399,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 end.setHours(23, 59, 59, 999);
                 if (targetDateObjForArchive >= start && targetDateObjForArchive <= end) {
                     matchedArchive = row.response_json as string;
+                    matchedArchiveDateRange = rangeStr; // ← 매칭된 구간 기록
                     break;
                 }
             }
@@ -1191,6 +1193,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         ipOverrideApplied: typeof ipOverrideApplied !== 'undefined' ? ipOverrideApplied : false,
         isOutOfRange,
         isArchivedData,
+        matchedArchiveRange: matchedArchiveDateRange,  // 아카이브 서빙 시 매칭된 구간 (예: "26-08-25~26-08-29")
         data: result,
         debugTokens: { 
             override1: datasetSelectedGrade1 || null, 
@@ -1210,7 +1213,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             bunriLogic: bunri === 100 ? "100" : "other",
             subjectsCount: subjects.length,
             teachersCount: teachers.length,
-            parsedSamples
+            parsedSamples,
+            datasetDateRanges   // 각 데이터셋의 날짜 구간 맵 (예: {"자료481": "26-08-25~26-08-29"})
         }
     }), {
         headers: {

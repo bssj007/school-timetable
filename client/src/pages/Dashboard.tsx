@@ -2007,51 +2007,64 @@ export default function Dashboard() {
                   {/* System Dataset Config UI (Debug) */}
                   {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled && (settings?.comcigan_debug_whitelist_hit !== false) && (() => {
                     const dt = (rawTimetableData as any).debugTokens;
-                    const usedDatasetId = (rawTimetableData as any)?.datasetId;
+                    const usedDatasetId  = (rawTimetableData as any)?.datasetId;
                     const configDatasetId = (rawTimetableData as any)?.originalDatasetId;
-                    const isArchived = (rawTimetableData as any)?.isArchivedData;
-                    const isOOR = (rawTimetableData as any)?.isOutOfRange;
-                    const isFuture = dt?.isFutureOutOfRange;
-                    const isPast = dt?.isPastOutOfRange;
+                    const isArchived      = (rawTimetableData as any)?.isArchivedData;
+                    const matchedArchiveRange = (rawTimetableData as any)?.matchedArchiveRange;
+                    const isFuture   = dt?.isFutureOutOfRange;
+                    const isPast     = dt?.isPastOutOfRange;
                     const isFallback = dt?.isFallbackApplied;
                     const ipOverride = (rawTimetableData as any)?.ipOverrideApplied;
+                    const dateRanges: Record<string, string> = dt?.datasetDateRanges || {};
+                    const usedRange = usedDatasetId ? dateRanges[usedDatasetId] : null;
 
-                    // 날짜 구간 상태 배지
-                    let rangeBadge: React.ReactNode = null;
+                    // ── '소스' 배지: 현재 표시되는 데이터의 출처를 하나만 표시 ──────────
+                    let sourceBadge: React.ReactNode;
                     if (isArchived) {
-                      rangeBadge = <span className="bg-amber-100 text-amber-700 border border-amber-300 rounded px-1.5 py-0.5 font-bold">📂 아카이브</span>;
+                      // 아카이브 서빙: 구간명이 전부. 내부 자료번호는 표시 불필요
+                      sourceBadge = (
+                        <span className="bg-amber-100 text-amber-700 border border-amber-300 rounded px-1.5 py-0.5 font-bold font-mono">
+                          📂 {matchedArchiveRange || '아카이브'}
+                        </span>
+                      );
                     } else if (isFuture) {
-                      rangeBadge = <span className="bg-red-100 text-red-600 border border-red-300 rounded px-1.5 py-0.5 font-bold">🔮 미래초과</span>;
+                      // 미래초과: 데이터셋 + 상태
+                      sourceBadge = (
+                        <span className="bg-red-50 text-red-600 border border-red-300 rounded px-1.5 py-0.5 font-mono">
+                          🔮 {usedDatasetId || '?'} · 미래초과
+                        </span>
+                      );
                     } else if (isPast) {
-                      rangeBadge = <span className="bg-purple-100 text-purple-600 border border-purple-300 rounded px-1.5 py-0.5 font-bold">🕰 과거초과</span>;
+                      // 과거초과 (아카이브 없음): 데이터셋 + 상태
+                      sourceBadge = (
+                        <span className="bg-purple-50 text-purple-600 border border-purple-300 rounded px-1.5 py-0.5 font-mono">
+                          🕰 {usedDatasetId || '?'} · 과거초과
+                        </span>
+                      );
                     } else {
-                      rangeBadge = <span className="bg-green-100 text-green-700 border border-green-300 rounded px-1.5 py-0.5">✅ 범위내</span>;
+                      // 정상: 데이터셋 + 날짜구간을 하나의 파란 배지로
+                      sourceBadge = (
+                        <span className="text-blue-600 font-bold border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded font-mono">
+                          {usedDatasetId || '?'}{usedRange ? ` · ${usedRange}` : ''}
+                        </span>
+                      );
                     }
 
                     return (
                       <div className="print:hidden capturing:hidden text-[10px] md:text-xs text-gray-500 mb-1 tracking-tight flex flex-wrap items-center justify-end gap-1 md:gap-1.5 pr-1">
-                        {/* 1. 사용 중 데이터셋 */}
-                        <span className="text-blue-600 font-bold border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded font-mono">
-                          {usedDatasetId || '?'}
-                        </span>
-                        {/* 2. 설정된 데이터셋 (다를 때만) */}
-                        {configDatasetId && configDatasetId !== usedDatasetId && (
-                          <span className="text-slate-400 border border-slate-200 bg-slate-50 px-1.5 py-0.5 rounded font-mono">
-                            설정: {configDatasetId}
-                          </span>
-                        )}
-                        {/* 3. 날짜 범위 상태 */}
-                        {rangeBadge}
-                        {/* 4. 관리자 설정 */}
+                        {/* 소스: 하나만 표시 */}
+                        {sourceBadge}
+                        {/* 관리자 설정 */}
                         <span className="hidden md:inline text-slate-300">|</span>
                         <span>1학년: {dt?.override1 && dt.override1 !== '_auto_' ? <span className="text-orange-500 font-bold font-mono">{dt.override1}</span> : <span className="text-slate-400">auto</span>}</span>
                         <span>2,3학년: {dt?.override23 && dt.override23 !== '_auto_' ? <span className="text-orange-500 font-bold font-mono">{dt.override23}</span> : <span className="text-slate-400">auto</span>}</span>
-                        {/* 5. 폴백 / IP 오버라이드 */}
+                        {/* 폴백 / IP 오버라이드 */}
                         {isFallback && <span className="text-red-400 font-bold">⚠ Fallback</span>}
                         {ipOverride && <span className="text-orange-500 font-bold">🔀 IP:{ipOverride}</span>}
                       </div>
                     );
                   })()}
+
 
 
                   {/* Print Capture Header */}
