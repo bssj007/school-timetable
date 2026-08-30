@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff, ArrowLeft, User, BookOpen, FileText, CalendarDays, Link2, Clock, BookMarked, Bell } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff, ArrowLeft, User, BookOpen, FileText, CalendarDays, Link2, Clock, BookMarked, Bell, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -1696,24 +1696,40 @@ export default function TeacherPage() {
 
       <div className="max-w-[1240px] mx-auto w-full md:flex-1 flex flex-col md:min-h-0">
 
-        {/* ===== TOP SECTION (PC only) — mirrors CONTENT AREA column layout for pixel-perfect alignment ===== */}
-        {/* [timetable-col: flex-1 max-w-[850px]] + [gap-4/xl:gap-6] + [panel-col: 320px/360px] */}
+        {/* ===== PC 전용 TOP SECTION ===== */}
         <div className="hidden md:flex flex-row gap-4 xl:gap-6 items-center mb-3 flex-shrink-0">
 
-          {/* ── Left: timetable column header (same sizing as timetable column) ── */}
-          <div className="flex-1 md:max-w-[850px] min-w-0 flex items-center justify-between gap-3">
-            {/* Title — grows, truncates */}
-            <h1
-              className="font-extrabold text-gray-900 truncate leading-tight min-w-0"
-              style={{ fontSize: 'clamp(1.125rem, 2.5vw, 1.875rem)' }}
-            >
-              <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">
-                교사용 수행평가 등록 시스템
-              </span>
-            </h1>
+          {/* ── 좌: 제목 + 선생님 정보 + 주선택기 ── */}
+          <div className="flex-1 md:max-w-[850px] min-w-0 flex items-center gap-3">
 
-            {/* Week selector — right-aligned to timetable column right edge */}
-            <div className="flex flex-col items-center gap-0.5 shrink-0">
+            {/* 뱃지형 제목 */}
+            <div className="flex flex-col min-w-0">
+              <h1 className="font-extrabold text-gray-900 leading-tight truncate" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+                <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">
+                  교사용 수행평가 시스템
+                </span>
+              </h1>
+              {/* 선생님 이름 & 인증 상태 */}
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-xs text-slate-400 font-medium">
+                  {teacherName
+                    ? <><span className="text-slate-700 font-bold">{teacherName}</span> 선생님</>
+                    : <span className="text-slate-400">선생님을 선택하세요</span>}
+                </span>
+                {teacherName && (
+                  isCurrentTeacherVerified
+                    ? <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 leading-tight">✓ 인증됨</span>
+                    : <button
+                        type="button"
+                        onClick={() => setShowAuthDialog(true)}
+                        className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 leading-tight hover:bg-slate-200 transition-colors cursor-pointer"
+                      >보기 전용 · 인증하기</button>
+                )}
+              </div>
+            </div>
+
+            {/* 주 선택기 */}
+            <div className="flex flex-col items-center gap-0.5 shrink-0 ml-auto">
               <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400 shadow-md">
                 <Button
                   variant="ghost"
@@ -1752,34 +1768,38 @@ export default function TeacherPage() {
             </div>
           </div>
 
-          {/* ── Right: panel column header (same sizing as right panel) ── */}
-          <div className="md:w-[320px] xl:w-[360px] shrink-0 flex justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full shadow-sm gap-1.5 text-xs md:text-sm bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
+          {/* ── 우: 네비게이션 버튼 묶음 ── */}
+          <div className="md:w-[320px] xl:w-[360px] shrink-0 flex items-center justify-end gap-2">
+            <Link href="/meal">
+              <Button variant="outline" size="sm"
+                className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-orange-50 border-orange-200 text-orange-700 font-semibold"
+                title="급식 메뉴 보기"
+              >
+                <UtensilsCrossed className="w-3.5 h-3.5 text-orange-500" />
+                <span>급식</span>
+              </Button>
+            </Link>
+            <Button variant="outline" size="sm"
+              className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
               onClick={handleReturnToStudentPage}
               title="학생용 페이지로 이동"
             >
               <Home className="w-3.5 h-3.5 text-emerald-600" />
-              <span>학생용 페이지</span>
+              <span>학생용</span>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full shadow-sm gap-1.5 text-xs md:text-sm bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
+            <Button variant="outline" size="sm"
+              className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
               onClick={() => {
                 downloadDesktopShortcut("교사용_수행평가_등록시스템");
-                toast.success("바탕화면 바로가기(.url) 파일이 다운로드되었습니다. 다운로드된 파일을 바탕화면으로 옮겨서 사용하세요.");
+                toast.success("바탕화면 바로가기(.url) 파일이 다운로드되었습니다.");
               }}
               title="PC 바탕화면에 바로가기 파일 다운로드"
             >
               <Download className="w-3.5 h-3.5 text-blue-600" />
-              <span>바탕화면에 바로가기 추가</span>
+              <span>바로가기</span>
             </Button>
           </div>
         </div>
-
 
 
         {/* ===== CONTENT AREA: flex-col on mobile (panel top, title+week, table bottom), flex-row on desktop ===== */}
@@ -2508,6 +2528,19 @@ export default function TeacherPage() {
                   </span>
                 )}
               </div>
+
+              {/* PC 전용: 계정 버튼 */}
+              <Link href="/teacher-account">
+                <button
+                  type="button"
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                  className="hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-bold text-xs shrink-0 transition-colors border border-slate-200 cursor-pointer shadow-sm"
+                  title="선생님 계정 관리"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>계정</span>
+                </button>
+              </Link>
 
               {/* 간편공지 — 인증 여부와 무관하게 항상 우측에 (모바일 전용) */}
               <button
