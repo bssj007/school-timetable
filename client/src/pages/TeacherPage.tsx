@@ -1914,19 +1914,6 @@ export default function TeacherPage() {
                 숙제형 수행평가 등록 (DB 연동 후 활성화)
               </button>
             </div>
-
-            {/* 등록된 목록 자리 (껍데기) */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <FileText className="w-4 h-4 text-slate-400" />
-                <h4 className="text-sm font-bold text-slate-600">등록된 숙제형 목록</h4>
-              </div>
-              <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-300">
-                <BookMarked className="w-10 h-10" />
-                <p className="text-xs font-medium">등록된 숙제형 수행평가가 없습니다.</p>
-                <p className="text-[10px] text-slate-400">DB 연동 후 이곳에 표시됩니다.</p>
-              </div>
-            </div>
           </div>
         )}
 
@@ -1935,8 +1922,8 @@ export default function TeacherPage() {
           const { year, month } = calendarMonth;
           const firstDay = new Date(year, month, 1);
           const lastDay  = new Date(year, month + 1, 0);
-          // 첫 날의 요일 (0=일, 1=월 ... 6=토) → 월요일 시작으로 변환
-          const startDow = (firstDay.getDay() + 6) % 7; // 0=월, 6=일
+          // 일요일 시작: getDay() 그대로 사용 (0=일, 1=월 ... 6=토)
+          const startDow = firstDay.getDay();
           const totalDays = lastDay.getDate();
           const weeks: (number | null)[][] = [];
           let cur: (number | null)[] = Array(startDow).fill(null);
@@ -1946,7 +1933,7 @@ export default function TeacherPage() {
           }
           if (cur.length > 0) { while (cur.length < 7) cur.push(null); weeks.push(cur); }
           const todayStr = toDateString(new Date());
-          const DOW_LABELS = ['월','화','수','목','금','토','일'];
+          const DOW_LABELS = ['일','월','화','수','목','금','토'];
           return (
             <div className="md:hidden bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               {/* 달력 헤더 */}
@@ -1999,8 +1986,8 @@ export default function TeacherPage() {
                       if (!d) return <div key={di} className="h-12" />;
                       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                       const isToday = dateStr === todayStr;
-                      const isSat = di === 5;
-                      const isSun = di === 6;
+                      const isSun = di === 0;
+                      const isSat = di === 6;
                       // 해당 날짜에 당일형 수행이 있는지 체크 (allAssessments 활용)
                       const hasDailyAssessment = (allAssessments || []).some(a => a.dueDate === dateStr);
                       return (
@@ -2010,11 +1997,10 @@ export default function TeacherPage() {
                           style={{ WebkitTapHighlightColor: 'transparent' }}
                           className={[
                             'h-12 flex flex-col items-center justify-center rounded-lg text-[13px] font-bold transition-colors active:scale-95',
-                            isToday ? 'bg-indigo-600 text-white' : '',
-                            !isToday && isSat ? 'text-blue-600' : '',
-                            !isToday && isSun ? 'text-red-600' : '',
-                            !isToday && !isSat && !isSun ? 'text-slate-700' : '',
-                            !isToday ? 'active:bg-indigo-50' : '',
+                            isToday ? 'ring-2 ring-emerald-500 text-emerald-700 bg-emerald-50' : '',
+                            !isToday && isSat ? 'text-blue-600 active:bg-blue-50' : '',
+                            !isToday && isSun ? 'text-red-600 active:bg-red-50' : '',
+                            !isToday && !isSat && !isSun ? 'text-slate-700 active:bg-indigo-50' : '',
                           ].join(' ')}
                           onClick={() => {
                             // 당일형으로 이동하면서 해당 주로 weekOffset 계산
