@@ -2021,7 +2021,7 @@ export default function Dashboard() {
                     // ── '소스' 배지: 현재 표시되는 데이터의 출처를 하나만 표시 ──────────
                     let sourceBadge: React.ReactNode;
                     if (isArchived) {
-                      // 아카이브 서빙: 구간명이 전부. 내부 자료번호는 표시 불필요
+                      // 아카이브 서빙: 날짜구간만 표시
                       sourceBadge = (
                         <span className="bg-amber-100 text-amber-700 border border-amber-300 rounded px-1.5 py-0.5 font-bold font-mono">
                           📂 {matchedArchiveRange || '아카이브'}

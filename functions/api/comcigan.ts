@@ -333,8 +333,9 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             let lastRange: string | null = null;
 
             if (dateArr && Array.isArray(dateArr) && dateArr.length > 0) {
-                firstRange = dateArr[0];
-                lastRange = dateArr[dateArr.length - 1];
+                // 일자[0]은 항상 "" (빈 문자열) → 건너뛰고 실제 범위만 사용
+                firstRange = dateArr.find((r: any) => typeof r === 'string' && r.includes('~')) ?? null;
+                lastRange  = [...dateArr].reverse().find((r: any) => typeof r === 'string' && r.includes('~')) ?? null;
             } else if (dateArrNew && Array.isArray(dateArrNew) && dateArrNew.length > 0) {
                 const firstItem = dateArrNew[0];
                 const lastItem = dateArrNew[dateArrNew.length - 1];
