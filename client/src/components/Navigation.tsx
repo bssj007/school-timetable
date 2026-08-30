@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Download, Bell, X, ArrowLeft, ArrowRight } from "lucide-react";
+import { AlertTriangle, Download, Bell, X, ArrowLeft, ArrowRight, UtensilsCrossed } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -118,8 +118,8 @@ export default function Navigation() {
         <div className="container mx-auto px-2 sm:px-4">
           <div className="flex justify-between items-center h-16">
             {isTeacherPage ? (
-              /* 교사용 페이지: 내비게이션 바 맨 왼쪽에 학생용 돌아가기 버튼 정렬 (빨간색) */
-              <div className="flex items-center">
+              /* 교사용 페이지: 내비게이션 바 맨 왼쪽에 학생용 및 급식정보 버튼 정렬 */
+              <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -130,6 +130,18 @@ export default function Navigation() {
                   <span className="xs:hidden leading-none">학생용</span>
                   <span className="hidden xs:inline leading-none">학생용 페이지로 돌아가기</span>
                 </Button>
+                <Link href="/meal">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-1.5 sm:px-2.5 font-bold text-xs text-orange-600 hover:bg-orange-50 hover:text-orange-700 flex items-center gap-1 rounded-lg border-none shadow-none cursor-pointer select-none"
+                    title="급식 정보 보기"
+                  >
+                    <UtensilsCrossed className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+                    <span className="leading-none">급식정보</span>
+                    <ArrowRight className="h-3.5 w-3.5 stroke-[2.2] text-orange-500 shrink-0" />
+                  </Button>
+                </Link>
               </div>
             ) : (
               /* 메인(학생) 페이지: 로고 및 오른쪽에 초록색 '교사용' 버튼 표시 */
