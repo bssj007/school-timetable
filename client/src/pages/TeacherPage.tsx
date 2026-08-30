@@ -370,6 +370,10 @@ export default function TeacherPage() {
     link: '',
   });
 
+  // ── 달력 드래그 선택 상태 ──
+  const [calDragStart, setCalDragStart] = useState<string | null>(null);
+  const [calDragEnd, setCalDragEnd] = useState<string | null>(null);
+  const calIsDragging = calDragStart !== null;
 
   const [formData, setFormData] = useState({
     assessmentDate: "",
@@ -381,6 +385,7 @@ export default function TeacherPage() {
     classCode: "",
     activityType: "수행평가",
   });
+
 
   // 달력 탭 진입 시 항상 이번 달로 초기화
   useEffect(() => {
@@ -1977,11 +1982,10 @@ export default function TeacherPage() {
           const { year, month } = calendarMonth;
           const firstDay = new Date(year, month, 1);
           const totalDays = new Date(year, month + 1, 0).getDate();
-          const startDow = firstDay.getDay(); // 0=일 ... 6=토
+          const startDow = firstDay.getDay();
           const todayStr = toDateString(new Date());
           const DOW_LABELS = ['일','월','화','수','목','금','토'];
 
-          // 단일 flat 배열: 앞 빈 칸 + 날짜 + 뒤 빈 칸
           const totalCells = Math.ceil((startDow + totalDays) / 7) * 7;
           const cells: (number | null)[] = [
             ...Array(startDow).fill(null),
@@ -1989,102 +1993,134 @@ export default function TeacherPage() {
             ...Array(totalCells - startDow - totalDays).fill(null),
           ];
 
+          // 드래그 범위 체크
+          const dragMin = calDragStart && calDragEnd ? [calDragStart, calDragEnd].sort()[0] : null;
+          const dragMax = calDragStart && calDragEnd ? [calDragStart, calDragEnd].sort()[1] : null;
+          const isInDragRange = (ds: string) => !!dragMin && !!dragMax && ds >= dragMin && ds <= dragMax;
+          const isDragStart  = (ds: string) => ds === dragMin;
+          const isDragEnd    = (ds: string) => ds === dragMax;
+
           return (
             <div className="md:hidden bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               {/* 달력 헤더 */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
-                <button
-                  type="button"
+                <button type="button"
                   onClick={() => setCalendarMonth(prev => {
                     const d = new Date(prev.year, prev.month - 1, 1);
                     return { year: d.getFullYear(), month: d.getMonth() };
                   })}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-200 active:bg-slate-100 text-slate-600"
-                >
+                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-200 active:bg-slate-100 text-slate-600">
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="font-extrabold text-slate-800 text-base">
-                  {year}년 {month + 1}월
-                </span>
-                <button
-                  type="button"
+                <span className="font-extrabold text-slate-800 text-base">{year}년 {month + 1}월</span>
+                <button type="button"
                   onClick={() => setCalendarMonth(prev => {
                     const d = new Date(prev.year, prev.month + 1, 1);
                     return { year: d.getFullYear(), month: d.getMonth() };
                   })}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-200 active:bg-slate-100 text-slate-600"
-                >
+                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-200 active:bg-slate-100 text-slate-600">
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* 단일 grid — 요일 헤더 + 날짜 모두 포함 */}
-              <div className="grid grid-cols-7 px-1 pb-1">
-                {/* 요일 헤더 */}
+              {/* 단일 grid */}
+              <div
+                className="grid grid-cols-7 px-1 pb-1 select-none"
+                onPointerLeave={() => { if (calIsDragging) setCalDragEnd(calDragStart); }}
+              >
                 {DOW_LABELS.map((dow, i) => (
-                  <div
-                    key={dow}
-                    className={[
-                      'py-2 text-center text-[11px] font-bold',
-                      i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-500',
-                    ].join(' ')}
-                  >
-                    {dow}
-                  </div>
+                  <div key={dow} className={[
+                    'py-2 text-center text-[11px] font-bold',
+                    i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-500',
+                  ].join(' ')}>{dow}</div>
                 ))}
 
-                {/* 날짜 칸 (flat) */}
                 {cells.map((d, idx) => {
                   const col = idx % 7;
                   if (!d) return <div key={`empty-${idx}`} className="h-11" />;
                   const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                  const isToday = dateStr === todayStr;
-                  const isSun = col === 0;
-                  const isSat = col === 6;
+                  const isToday     = dateStr === todayStr;
+                  const isSun       = col === 0;
+                  const isSat       = col === 6;
+                  const inRange     = isInDragRange(dateStr);
+                  const isRangeStart = isDragStart(dateStr);
+                  const isRangeEnd  = isDragEnd(dateStr);
                   const hasDailyAssessment = (allAssessments || []).some(a => a.dueDate === dateStr);
+
                   return (
-                    <button
+                    <div
                       key={dateStr}
-                      type="button"
-                      style={{ WebkitTapHighlightColor: 'transparent' }}
                       className={[
-                        'h-11 flex flex-col items-center justify-center rounded-lg text-[13px] font-bold transition-colors active:scale-95',
-                        isToday ? 'ring-2 ring-emerald-500 text-emerald-700 bg-emerald-50' : '',
-                        !isToday && isSun ? 'text-red-500 active:bg-red-50' : '',
-                        !isToday && isSat ? 'text-blue-500 active:bg-blue-50' : '',
-                        !isToday && !isSun && !isSat ? 'text-slate-700 active:bg-indigo-50' : '',
+                        'h-11 flex flex-col items-center justify-center text-[13px] font-bold transition-colors cursor-pointer',
+                        // 드래그 범위 스타일
+                        inRange && !isRangeStart && !isRangeEnd ? 'bg-indigo-100 text-indigo-700' : '',
+                        isRangeStart || isRangeEnd ? 'bg-indigo-500 text-white rounded-lg' : '',
+                        // 드래그 아닐 때 기본 스타일
+                        !inRange && !isRangeStart && !isRangeEnd && isToday ? 'ring-2 ring-emerald-500 text-emerald-700 bg-emerald-50 rounded-lg' : '',
+                        !inRange && !isRangeStart && !isRangeEnd && !isToday && isSun ? 'text-red-500' : '',
+                        !inRange && !isRangeStart && !isRangeEnd && !isToday && isSat ? 'text-blue-500' : '',
+                        !inRange && !isRangeStart && !isRangeEnd && !isToday && !isSun && !isSat ? 'text-slate-700' : '',
                       ].join(' ')}
-                      onClick={() => {
-                        const clicked = new Date(year, month, d);
-                        const cdow = clicked.getDay();
-                        const clickedMon = new Date(clicked);
-                        clickedMon.setDate(clicked.getDate() - (cdow === 0 ? 6 : cdow - 1));
-                        const today2 = new Date();
-                        const tdow = today2.getDay();
-                        const curMon = new Date(today2);
-                        curMon.setDate(today2.getDate() - (tdow === 0 ? 6 : tdow - 1));
-                        const diffWeeks = Math.round((clickedMon.getTime() - curMon.getTime()) / (7 * 86400000));
-                        setWeekOffset(Math.max(-2, Math.min(8, diffWeeks)));
-                        setMobileViewMode('daily');
+                      style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'none' }}
+                      onPointerDown={(e) => {
+                        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                        setCalDragStart(dateStr);
+                        setCalDragEnd(dateStr);
+                      }}
+                      onPointerEnter={() => {
+                        if (calIsDragging) setCalDragEnd(dateStr);
+                      }}
+                      onPointerUp={(e) => {
+                        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+                        const ds = calDragStart;
+                        const de = dateStr;
+                        setCalDragStart(null);
+                        setCalDragEnd(null);
+
+                        if (!ds || ds === de) {
+                          // 클릭: 당일형 이동
+                          const clicked = new Date(year, month, d);
+                          const cdow = clicked.getDay();
+                          const clickedMon = new Date(clicked);
+                          clickedMon.setDate(clicked.getDate() - (cdow === 0 ? 6 : cdow - 1));
+                          const today2 = new Date();
+                          const tdow = today2.getDay();
+                          const curMon = new Date(today2);
+                          curMon.setDate(today2.getDate() - (tdow === 0 ? 6 : tdow - 1));
+                          const diffWeeks = Math.round((clickedMon.getTime() - curMon.getTime()) / (7 * 86400000));
+                          setWeekOffset(Math.max(-2, Math.min(8, diffWeeks)));
+                          setMobileViewMode('daily');
+                        } else {
+                          // 드래그: 숙제형 시작일/마감일 자동 입력 후 이동
+                          const [s, e] = [ds, de].sort();
+                          setHwForm(f => ({ ...f, startDate: s, dueDate: e }));
+                          setMobileViewMode('homework');
+                        }
                       }}
                     >
                       <span>{d}</span>
                       {hasDailyAssessment && (
-                        <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isToday ? 'bg-emerald-500' : 'bg-pink-500'}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${
+                          isRangeStart || isRangeEnd ? 'bg-white' : isToday ? 'bg-emerald-500' : 'bg-pink-500'
+                        }`} />
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
 
               {/* 하단 안내 */}
-              <div className="px-4 py-3 border-t border-slate-100 bg-slate-50 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-pink-500 shrink-0" />
-                <p className="text-[11px] text-slate-500">분홍 점: 당일형 수행평가 있음. 날짜 클릭 시 해당 주로 이동합니다.</p>
+              <div className="px-4 py-3 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="flex items-center gap-1 text-[11px] text-slate-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-pink-500 shrink-0" />
+                  분홍 점: 당일형 평가 있음
+                </span>
+                <span className="text-[11px] text-slate-400">• 클릭 → 당일형 이동 • 드래그 → 숙제 구간 선택</span>
               </div>
             </div>
           );
         })() : null}
+
 
 
 
@@ -2322,38 +2358,47 @@ export default function TeacherPage() {
         <div className="md:bg-white md:rounded-2xl md:border md:border-slate-200 md:shadow-md md:overflow-hidden flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
           {/* Teacher Picker — 모바일에서 독립 카드, PC에서 패널 내부 바 */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-2 px-2 py-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b md:border-slate-100 md:px-3 flex-shrink-0 flex items-center justify-start gap-2">
-            {timetableData ? (
+
+            {/* 선생님 선택 + 계정 — 하나의 pill로 융합 */}
+            <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm shrink-0 min-w-0">
+              {/* 좌: 선생님 선택기 */}
+              {timetableData ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTeacherSearchQuery("");
+                    setShowTeacherSelectModal(true);
+                  }}
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                  className="flex items-center gap-1 pl-3 pr-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0"
+                >
+                  <span className="truncate max-w-[120px]">
+                    {selectedTeacherId
+                      ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
+                      : "교사 선택"}
+                  </span>
+                  <ChevronsUpDown className="w-3 h-3 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
+                </button>
+              ) : (
+                <span className="pl-3 pr-2 py-1.5 text-sm font-extrabold text-slate-700 bg-indigo-50 flex items-center">
+                  {teacherName ? `${teacherName} 선생님` : '선생님'}
+                </span>
+              )}
+
+              {/* 구분선 */}
+              <div className="w-px bg-indigo-200 self-stretch" />
+
+              {/* 우: 계정 아이콘 버튼 */}
               <button
                 type="button"
-                onClick={() => {
-                  setTeacherSearchQuery("");
-                  setShowTeacherSelectModal(true);
-                }}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors border border-indigo-200 focus:outline-none cursor-pointer group max-w-full"
+                onClick={() => setLocation("/teacher/account")}
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+                className="flex items-center justify-center px-2.5 py-1.5 bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer shrink-0"
+                title="계정 관리"
               >
-                <span className="truncate">
-                  {selectedTeacherId
-                    ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
-                    : "교사 선택"}
-                </span>
-                <ChevronsUpDown className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0 ml-0.5" />
+                <User className="w-3.5 h-3.5" />
               </button>
-            ) : (
-              <span className="text-sm font-extrabold text-slate-700">
-                {teacherName ? `${teacherName} 선생님` : '선생님'}
-              </span>
-            )}
-
-            {/* 계정 관리 버튼 (선생님 선택기 바로 오른쪽) */}
-            <button
-              type="button"
-              onClick={() => setLocation("/teacher/account")}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-bold text-xs shrink-0 transition-colors border border-slate-200 cursor-pointer"
-              title="계정 관리"
-            >
-              <User className="w-3.5 h-3.5 text-slate-500" />
-              <span>계정</span>
-            </button>
+            </div>
 
             {/* 간편공지 버튼 — 모바일 전용, 우측 정렬 */}
             <button
@@ -2367,6 +2412,8 @@ export default function TeacherPage() {
               <span>간편공지</span>
             </button>
           </div>
+
+
 
 
           {/* ===== 모바일: 과목탭 + 반선택 + 평가목록 — 선생님선택과 분리된 별도 카드 ===== */}
@@ -2956,6 +3003,7 @@ export default function TeacherPage() {
           </form>
         </DialogContent>
       </Dialog>
+
 
       {/* Clean Teacher Selection Popup Dialog */}
       <Dialog open={showTeacherSelectModal} onOpenChange={setShowTeacherSelectModal}>
