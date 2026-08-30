@@ -1508,7 +1508,6 @@ export default function Dashboard() {
     );
   }
 
-  const isRestricted = Boolean(settings?.restricted_grades?.includes(parseInt(grade)) && !settings?.is_whitelisted);
   const isKakaoRestricted = Boolean(settings?.kakao_login_restricted && !settings?.is_whitelisted);
   const isBugReportEnabled = Boolean(settings?.bug_report_enabled);
 
@@ -1846,38 +1845,8 @@ export default function Dashboard() {
 
 
       <div>
-        {/* Visit Restriction Overlay (Completely Replaces Timetable Card) */}
-        {isRestricted ? (
-          <div className="w-full flex flex-col pt-2 md:pt-4">
-            {/* Student info + change button during restriction */}
-            <div className="hidden md:flex items-center gap-3 justify-center mb-6">
-              <div className="flex flex-col items-end leading-tight">
-                <span className="text-[12px] text-slate-400 font-medium">학번 <span className="text-slate-700 font-bold text-base">{grade || "?"}{classNum || "?"}{studentNumber?.padStart(2,"0") || "??"}</span></span>
-                <span className="text-[12px] text-slate-400 font-medium">이름 <span className="text-slate-700 font-semibold text-base">{studentName || "-"}</span></span>
-              </div>
-              <button
-                type="button"
-                onClick={() => { setChangeStudentName(""); setChangeStudentId(""); setShowChangeDialog(true); }}
-                className="text-sm font-bold px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                변경
-              </button>
-            </div>
-
-            {/* Restricted Message Card */}
-            <div className="min-h-[400px] flex flex-col items-center justify-center bg-white/50 backdrop-blur-sm rounded-2xl border-2 border-red-100 shadow-sm p-8 max-w-2xl mx-auto w-full">
-              <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
-                <ShieldAlert className="w-10 h-10" />
-              </div>
-              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 text-center">접근 제한 안내</h3>
-              <p className="text-gray-600 text-lg md:text-xl whitespace-pre-wrap text-center leading-relaxed font-medium">
-                {settings?.restriction_reason || `${grade}학년 서비스가 일시적으로 제한되었습니다.`}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <Card className="py-1 gap-1 md:py-2 md:gap-2">
-            <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
+        <Card className="py-1 gap-1 md:py-2 md:gap-2">
+          <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
               {/* Desktop Actions */}
               <div className="hidden md:flex items-center gap-2 flex-1 min-w-0">
                 {(grade === "2" || grade === "3") && (
@@ -2509,8 +2478,7 @@ export default function Dashboard() {
                 </div>
               </div>
             </CardContent>
-          </Card>
-        )}
+        </Card>
       </div>
 
       {/* Print Options Dialog */}

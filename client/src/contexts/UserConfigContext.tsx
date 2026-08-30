@@ -60,6 +60,8 @@ interface UserConfigContextType {
     clearRole: () => void;
     /** 서버 점검 중 여부 — true이면 역할 선택/온보딩 다이얼로그를 숨긴다 */
     isMaintenanceMode: boolean;
+    /** 전역 public 설정 데이터 (캐시된 상태 포함) */
+    publicSettings: any;
 }
 
 const UserConfigContext = createContext<UserConfigContextType | undefined>(undefined);
@@ -101,6 +103,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     const [isValidating, setIsValidating] = useState(initial.isValidating);
     const [kakaoUser, setKakaoUser] = useState<KakaoUser | null>(null);
     const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
+    const [publicSettings, setPublicSettings] = useState<any>(null);
 
     // ── 역할 상태: 쿠키에서 즉시 읽기 ──
     const [userRole, setUserRoleState] = useState<"student" | "teacher" | null>(() => {
@@ -145,6 +148,9 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
                     settings?.maintenance_mode?.active && !settings?.is_whitelisted
                 );
                 setIsMaintenanceMode(maintenanceActive);
+                
+                // 설정 상태 저장 (방문제한 등은 캐싱하지 않음)
+                setPublicSettings(settings);
 
                 // localStorage 캐시 갱신
                 localStorage.setItem(LS_SEMESTER_KEY, serverKey);
@@ -250,6 +256,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
             refreshRole,
             clearRole,
             isMaintenanceMode,
+            publicSettings,
         }}>
             {children}
         </UserConfigContext.Provider>
