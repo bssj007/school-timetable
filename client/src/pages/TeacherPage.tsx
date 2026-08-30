@@ -378,6 +378,7 @@ export default function TeacherPage() {
   const calIsDragging = calDragStart !== null;
   // 달력 그리드 컨테이너 ref (좌표 기반 month-nav 감지용)
   const calGridRef = useRef<HTMLDivElement>(null);
+  const lastMonthSwitchTimeRef = useRef<number>(0);
 
   const [formData, setFormData] = useState({
     assessmentDate: "",
@@ -2148,6 +2149,11 @@ export default function TeacherPage() {
                     // 첫 행 왼쪽 경계
                     if (relY >= DOW_H && relY < DOW_H + CELL_H && relX >= 0 && relX < ZONE_W) {
                       const prevDate = new Date(year, month - 1, 1);
+                      const now = Date.now();
+                      if (now - lastMonthSwitchTimeRef.current > 600) {
+                        setCalendarMonth({ year: prevDate.getFullYear(), month: prevDate.getMonth() });
+                        lastMonthSwitchTimeRef.current = now;
+                      }
                       setCalDragEnd(`${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-01`);
                       return;
                     }
@@ -2156,6 +2162,11 @@ export default function TeacherPage() {
                     if (relY >= lastRowTop && relY < lastRowTop + CELL_H && relX > rect.width - ZONE_W) {
                       const lastDay = new Date(year, month + 2, 0).getDate();
                       const nextDate = new Date(year, month + 1, lastDay);
+                      const now = Date.now();
+                      if (now - lastMonthSwitchTimeRef.current > 600) {
+                        setCalendarMonth({ year: nextDate.getFullYear(), month: nextDate.getMonth() });
+                        lastMonthSwitchTimeRef.current = now;
+                      }
                       setCalDragEnd(`${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`);
                       return;
                     }
