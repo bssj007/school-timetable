@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff, ArrowLeft, User, BookOpen, FileText, CalendarDays, Link2, Clock, BookMarked, Bell, UtensilsCrossed } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff, ArrowLeft, ArrowRight, User, BookOpen, FileText, CalendarDays, Link2, Clock, BookMarked, Bell, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -1772,23 +1772,24 @@ export default function TeacherPage() {
 
           {/* ── 우: 네비게이션 버튼 묶음 ── */}
           <div className="md:w-[320px] xl:w-[360px] shrink-0 flex items-center justify-end gap-2">
-            <Link href="/meal">
-              <Button variant="outline" size="sm"
-                className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-orange-50 border-orange-200 text-orange-700 font-semibold"
-                title="급식 메뉴 보기"
-              >
-                <UtensilsCrossed className="w-3.5 h-3.5 text-orange-500" />
-                <span>급식</span>
-              </Button>
-            </Link>
             <Button variant="outline" size="sm"
               className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
               onClick={handleReturnToStudentPage}
               title="학생용 페이지로 이동"
             >
-              <Home className="w-3.5 h-3.5 text-emerald-600" />
+              <ArrowLeft className="w-3.5 h-3.5 text-emerald-600" />
               <span>학생용</span>
             </Button>
+            <Link href="/meal">
+              <Button variant="outline" size="sm"
+                className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-orange-50 border-orange-200 text-orange-700 font-semibold"
+                title="급식 정보 보기"
+              >
+                <UtensilsCrossed className="w-3.5 h-3.5 text-orange-500" />
+                <span>급식정보</span>
+                <ArrowRight className="w-3.5 h-3.5 text-orange-500" />
+              </Button>
+            </Link>
             <Button variant="outline" size="sm"
               className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
               onClick={() => {
