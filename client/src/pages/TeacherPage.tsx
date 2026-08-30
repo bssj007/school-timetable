@@ -1718,7 +1718,9 @@ export default function TeacherPage() {
                 </span>
                 {teacherName && (
                   isCurrentTeacherVerified
-                    ? <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 leading-tight">✓ 인증됨</span>
+                    ? <Link href="/teacher-account">
+                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 leading-tight hover:bg-emerald-100 transition-colors cursor-pointer">✓ 인증됨 · 계정</span>
+                      </Link>
                     : <button
                         type="button"
                         onClick={() => setShowAuthDialog(true)}
