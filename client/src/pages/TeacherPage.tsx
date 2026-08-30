@@ -2482,7 +2482,7 @@ export default function TeacherPage() {
               <Textarea
                 value={formData.content}
                 onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                placeholder={formData.activityType === '기타 활동' ? '예: 베에나 행사, 실험실습, 엄사' : '예: 다항식의 계산 서술형 평가'}
+                placeholder={formData.activityType === '기타 활동' ? '예: 준비물, 실습, 생기부 활동 등등' : '예: 다항식의 계산 서술형 평가'}
                 required
                 rows={3}
                 className="text-sm border-gray-200"
@@ -2628,7 +2628,7 @@ export default function TeacherPage() {
               <Textarea
                 value={formData.content}
                 onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                placeholder="수행평가 내용 입력"
+                placeholder={formData.activityType === '기타 활동' ? '예: 준비물, 실습, 생기부 활동 등등' : '예: 다항식의 계산 서술형 평가'}
                 required
                 rows={3}
                 className="text-sm border-gray-200"
