@@ -2579,35 +2579,35 @@ export default function TeacherPage() {
             } : undefined}
           >
             {/* 선생님 선택기 + (인증 시: 계정버튼 / 미인증 시: [보기 전용] [로그인]) 한 줄 배치 */}
-            <div className="flex items-center gap-2 justify-between">
+            <div className="flex items-center gap-1.5 md:gap-2 justify-between w-full min-w-0">
               {/* 융합된 선생님 선택기 + 계정 버튼 */}
-              <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm shrink-0 min-w-0 bg-indigo-50">
+              <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm min-w-0 bg-indigo-50 flex-shrink">
                 {/* 선생님 선택기 */}
                 {timetableData ? (
                   <button
                     type="button"
                     onClick={() => { setTeacherSearchQuery(""); setShowTeacherSelectModal(true); }}
                     style={{ WebkitTapHighlightColor: 'transparent' }}
-                    className="flex items-center gap-1 pl-3 pr-2 py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0"
+                    className="flex items-center gap-1 pl-2.5 pr-1.5 py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-xs md:text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0"
                   >
-                    <span className="truncate max-w-[110px] md:max-w-[130px]">
+                    <span className="truncate max-w-[85px] sm:max-w-[105px] md:max-w-[95px] xl:max-w-[125px]">
                       {selectedTeacherId
                         ? (teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10)))
                         : "교사 선택"}
                     </span>
-                    <ChevronsUpDown className="w-3 h-3 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
+                    <ChevronsUpDown className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
                   </button>
                 ) : (
-                  <span className="pl-3 pr-2 py-1.5 text-sm font-extrabold text-slate-700 flex items-center">
+                  <span className="pl-2.5 pr-1.5 py-1.5 text-xs md:text-sm font-extrabold text-slate-700 flex items-center truncate">
                     {teacherName || '교사 선택'}
                   </span>
                 )}
 
                 {/* 계정 버튼: 인증 시에만 표시되며, 구분선을 주어 융합된 형태 유지 */}
                 {isCurrentTeacherVerified && (
-                  <Link href="/teacher/account" className="flex">
+                  <Link href="/teacher/account" className="flex shrink-0">
                     <button type="button" style={{ WebkitTapHighlightColor: 'transparent' }}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-bold text-xs shrink-0 transition-colors border-l border-indigo-200 cursor-pointer"
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-bold text-xs shrink-0 transition-colors border-l border-indigo-200 cursor-pointer"
                       title="선생님 계정 관리">
                       <User className="w-3.5 h-3.5" /><span>계정</span>
                     </button>
@@ -2618,7 +2618,7 @@ export default function TeacherPage() {
               {/* 간편공지 (모바일 - 인증 시) */}
               {isCurrentTeacherVerified && (
                 <button type="button" onClick={() => {}} style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className="md:hidden ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
+                  className="md:hidden ml-auto flex items-center gap-1 px-2 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
                   title="간편공지">
                   <Bell className="w-3.5 h-3.5" /><span>간편공지</span>
                 </button>
@@ -2626,17 +2626,17 @@ export default function TeacherPage() {
 
               {/* 미인증 시 우측 묶음: [보기 전용] [로그인] */}
               {!isCurrentTeacherVerified && (
-                <div className="flex items-center gap-1.5 md:gap-2 ml-auto shrink-0">
-                  <div className="flex items-center gap-1 text-gray-800">
-                    <svg className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+                  <div className="flex items-center gap-1 text-gray-800 bg-black/5 rounded-xl px-2 py-1.5 border border-black/5 shrink-0">
+                    <svg className="w-3.5 h-3.5 shrink-0 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
-                    <span className="text-[11px] md:text-xs font-semibold leading-tight whitespace-nowrap">
+                    <span className="text-[11px] md:text-xs font-bold leading-tight whitespace-nowrap text-gray-800">
                       보기 전용
                     </span>
                   </div>
-                  <div className="relative">
+                  <div className="relative shrink-0">
                     {mobileViewMode === 'homework' && (
                       <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none z-30 animate-bounce">
                         <svg className="w-4 h-4 text-red-500 fill-red-500 filter drop-shadow" viewBox="0 0 24 24">
@@ -2648,7 +2648,7 @@ export default function TeacherPage() {
                       type="button"
                       onClick={() => setShowAuthDialog(true)}
                       style={{ WebkitTapHighlightColor: 'transparent' }}
-                      className={`shrink-0 px-2.5 md:px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs font-bold transition-all cursor-pointer shadow-sm whitespace-nowrap ${
+                      className={`shrink-0 px-2.5 md:px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs md:text-sm font-bold transition-all cursor-pointer shadow-md whitespace-nowrap ${
                         mobileViewMode === 'homework' ? 'ring-2 ring-red-500 ring-offset-1 shadow-red-200' : ''
                       }`}
                     >
