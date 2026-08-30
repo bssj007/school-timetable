@@ -843,6 +843,18 @@ export default function TeacherPage() {
     return teacherSubjectsMap.get(tId) || [];
   }, [tId, teacherSubjectsMap]);
 
+  // 과목이 1개밖에 없는 경우 숙제형 폼의 과목 자동 선택
+  useEffect(() => {
+    if (taughtSubjects && taughtSubjects.length === 1) {
+      setHwForm(f => {
+        if (f.subject !== taughtSubjects[0]) {
+          return { ...f, subject: taughtSubjects[0], classNum: '' };
+        }
+        return f;
+      });
+    }
+  }, [taughtSubjects]);
+
   // Decode cell value
   const decodeCell = (val: any) => {
     if (!val) return null;
@@ -2565,30 +2577,33 @@ export default function TeacherPage() {
                미인증 시: relative + min-height → 실버 absolute inset-0으로 꽉 채움
                선생님 선택기는 z-10으로 실버 위에 표시 */}
           <div
-            className={`rounded-xl border shadow-sm mb-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b flex-shrink-0 flex flex-col justify-center ${
+            className={`rounded-xl border shadow-sm mb-2 md:mb-0 md:rounded-t-2xl md:rounded-b-none md:border-none md:shadow-none md:border-b flex-shrink-0 flex flex-col justify-center ${
               isCurrentTeacherVerified 
-                ? 'bg-white border-slate-200 md:border-slate-100 p-2.5 sm:p-3 md:p-3' 
-                : 'p-2.5 sm:p-3 md:p-2.5'
+                ? 'bg-white border-slate-200 md:border-slate-100 p-2 sm:p-2.5 md:p-3' 
+                : 'p-2 sm:p-2.5 md:p-2.5'
             }`}
             style={!isCurrentTeacherVerified ? {
               background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
-              border: '1px solid rgba(255,255,255,0.6)',
+              borderTop: '1px solid rgba(255,255,255,0.6)',
+              borderLeft: '1px solid rgba(255,255,255,0.6)',
+              borderRight: '1px solid rgba(255,255,255,0.6)',
+              borderBottom: '1px solid rgba(200,200,200,0.5)',
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
             } : undefined}
           >
             {/* 선생님 선택기 + (인증 시: 계정버튼 / 미인증 시: [보기 전용] [로그인]) 한 줄 배치 */}
             <div className="flex items-center gap-2 justify-between w-full min-w-0">
               {/* 융합된 선생님 선택기 + 계정 버튼 */}
-              <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm min-w-0 bg-indigo-50 flex-1">
+              <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm min-w-0 bg-indigo-50 shrink">
                 {/* 선생님 선택기 */}
                 {timetableData ? (
                   <button
                     type="button"
                     onClick={() => { setTeacherSearchQuery(""); setShowTeacherSelectModal(true); }}
                     style={{ WebkitTapHighlightColor: 'transparent' }}
-                    className="flex items-center gap-1 pl-3 pr-2 py-2 md:pl-2.5 md:pr-1.5 md:py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group w-full min-w-0"
+                    className="flex items-center gap-1 pl-3 pr-2 py-2 md:pl-2.5 md:pr-1.5 md:py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0 max-w-[160px] md:max-w-[190px]"
                   >
-                    <span className="truncate flex-1 text-left min-w-0">
+                    <span className="truncate text-left min-w-0">
                       {selectedTeacherId
                         ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
                         : "선생님 선택"}
