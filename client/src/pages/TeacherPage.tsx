@@ -2549,12 +2549,12 @@ export default function TeacherPage() {
 
       {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
       <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4 h-fit">
-        <div className="md:bg-white md:rounded-2xl md:border md:border-slate-200 md:shadow-md md:overflow-hidden flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
+        <div className="md:bg-white md:rounded-2xl md:border md:border-slate-200 md:shadow-md flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
           {/* Teacher Picker — 모바일 카드 / PC 패널 내부 바
                미인증 시: relative + min-height → 실버 absolute inset-0으로 꽉 채움
                선생님 선택기는 z-10으로 실버 위에 표시 */}
           <div
-            className={`rounded-xl border shadow-sm mb-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b flex-shrink-0 flex flex-col justify-center overflow-hidden ${
+            className={`rounded-xl border shadow-sm mb-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b flex-shrink-0 flex flex-col justify-center ${
               isCurrentTeacherVerified 
                 ? 'bg-white border-slate-200 md:border-slate-100 p-2.5 sm:p-3 md:p-3' 
                 : 'p-2.5 sm:p-3 md:p-2.5'
@@ -2579,14 +2579,14 @@ export default function TeacherPage() {
                   >
                     <span className="truncate flex-1 text-left min-w-0">
                       {selectedTeacherId
-                        ? (teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10)))
-                        : "교사 선택"}
+                        ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
+                        : "선생님 선택"}
                     </span>
                     <ChevronsUpDown className="w-4 h-4 md:w-3.5 md:h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
                   </button>
                 ) : (
                   <span className="pl-3 pr-2 py-2 md:pl-2.5 md:pr-1.5 md:py-1.5 text-sm font-extrabold text-slate-700 flex items-center truncate flex-1 min-w-0">
-                    {teacherName || '교사 선택'}
+                    {teacherName ? `${teacherName} 선생님` : '선생님 선택'}
                   </span>
                 )}
 
