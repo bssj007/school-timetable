@@ -911,6 +911,26 @@ export default function TeacherPage() {
     return Array.from(classesMap.values());
   }, [selectedSchedule]);
 
+  // 숙제형 폼: 선택된 과목에 해당하는 반 목록 (시간표 기반)
+  const classesForHwSubject = useMemo(() => {
+    if (!selectedSchedule || !hwForm.subject) return [];
+    const result = new Map<string, { grade: number; classNum: number }>();
+    for (let d = 1; d <= 5; d++) {
+      const daySchedule = selectedSchedule[d];
+      if (!daySchedule) continue;
+      for (let p = 1; p < daySchedule.length; p++) {
+        const decoded = decodeCell(daySchedule[p]);
+        if (decoded && decoded.subjectName === hwForm.subject) {
+          const key = `${decoded.grade}-${decoded.classNum}`;
+          result.set(key, { grade: decoded.grade, classNum: decoded.classNum });
+        }
+      }
+    }
+    return Array.from(result.values()).sort((a, b) =>
+      a.grade !== b.grade ? a.grade - b.grade : a.classNum - b.classNum
+    );
+  }, [selectedSchedule, hwForm.subject]);
+
   // 2. Fetch Assessments for all taught classes concurrently
   const { data: allAssessments, isLoading: isAssessmentsLoading } = useQuery<AssessmentItem[]>({
     // weekOffset excluded: assessment panel shows ALL weeks regardless of timetable navigation
@@ -1670,31 +1690,7 @@ export default function TeacherPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ===== 보기전용 배너 (미인증 시) — 모바일 전용 fixed ===== */}
-      {settings !== undefined && !isCurrentTeacherVerified && (
-        <div
-          className="md:hidden fixed bottom-4 left-4 right-4 z-40 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl backdrop-blur-sm"
-          style={{
-            background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
-            border: '1px solid rgba(255,255,255,0.6)',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.7)',
-          }}
-        >
-          <svg className="w-4 h-4 shrink-0" style={{ color: '#4b5563' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
-          <span className="text-sm font-semibold leading-relaxed flex-1" style={{ color: '#1f2937' }}>
-            보기 전용<br />등록·수정하려면 인증하세요
-          </span>
-          <button
-            onClick={() => setShowAuthDialog(true)}
-            className="shrink-0 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-bold transition-colors"
-          >
-            인증하기
-          </button>
-        </div>
-      )}
+      {/* 보기전용 배너: 바 인라인으로 이동 (fixed 배너 제거) */}
 
       <div className="max-w-[1240px] mx-auto w-full md:flex-1 flex flex-col md:min-h-0">
 
@@ -1904,7 +1900,7 @@ export default function TeacherPage() {
                       <label className="block text-xs font-bold text-slate-600 mb-1">과목</label>
                       <select
                         value={hwForm.subject}
-                        onChange={e => setHwForm(f => ({ ...f, subject: e.target.value }))}
+                        onChange={e => setHwForm(f => ({ ...f, subject: e.target.value, classNum: '' }))}
                         className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
                       >
                         <option value="">과목 선택</option>
@@ -1915,12 +1911,19 @@ export default function TeacherPage() {
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-600 mb-1">반</label>
-                      <Input
-                        type="number" min={1} max={20} placeholder="반 번호"
+                      <select
                         value={hwForm.classNum}
                         onChange={e => setHwForm(f => ({ ...f, classNum: e.target.value }))}
-                        className="h-10 text-sm"
-                      />
+                        disabled={!hwForm.subject || classesForHwSubject.length === 0}
+                        className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+                      >
+                        <option value="">{!hwForm.subject ? '과목 먼저 선택' : '반 선택'}</option>
+                        {classesForHwSubject.map(({ grade, classNum }) => (
+                          <option key={`${grade}-${classNum}`} value={String(classNum)}>
+                            {grade}학년 {classNum}반
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
@@ -2491,22 +2494,29 @@ export default function TeacherPage() {
               )}
             </div>
 
-            {/* 우측 영역: 미인증 → 인증 배너, 인증됨 → 간편공지 (모바일 전용) */}
+            {/* 우측 영역: 미인증 → 실버 배너로 덮어씀, 인증됨 → 간편공지 (모바일 전용) */}
             {!isCurrentTeacherVerified ? (
-              /* 미인증: 바 우측을 배너로 덮어씀 */
-              <div className="md:hidden ml-auto flex items-center gap-2 min-w-0">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <EyeOff className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <div className="flex flex-col leading-tight min-w-0">
-                    <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">보기 전용</span>
-                    <span className="text-[10px] text-slate-400 whitespace-nowrap">등록·수정하려면 인증하세요</span>
-                  </div>
-                </div>
+              /* 미인증: 기존 실버 그라데이션 디자인을 그대로 바 우측에 인라인으로 덮어씀 */
+              <div
+                className="md:hidden ml-auto flex items-center gap-2 flex-1 min-w-0 px-3 py-1.5 rounded-xl"
+                style={{
+                  background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
+                  border: '1px solid rgba(255,255,255,0.6)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
+                }}
+              >
+                <svg className="w-4 h-4 shrink-0" style={{ color: '#4b5563' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <span className="text-xs font-semibold leading-tight flex-1 min-w-0" style={{ color: '#1f2937' }}>
+                  보기 전용<br />등록·수정하려면 인증하세요
+                </span>
                 <button
                   type="button"
                   onClick={() => setShowAuthDialog(true)}
                   style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold text-xs shrink-0 transition-colors cursor-pointer shadow-sm"
+                  className="shrink-0 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs font-bold transition-colors cursor-pointer"
                 >
                   인증하기
                 </button>
