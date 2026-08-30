@@ -2602,7 +2602,7 @@ export default function TeacherPage() {
                   </div>
                 </div>
 
-                {/* 선생님 선택기 + 계정 버튼 — z-10으로 실버 위에 표시 */}
+                {/* 선생님 선택기 — z-10으로 실버 위에 표시 */}
                 <div className="relative z-10 flex items-center gap-2 px-2 pt-2 pb-1 md:px-3">
                   <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm shrink-0 min-w-0">
                     {timetableData ? (
@@ -2625,15 +2625,6 @@ export default function TeacherPage() {
                       </span>
                     )}
                   </div>
-
-                  {/* 계정 버튼 */}
-                  <Link href="/teacher-account" className="flex">
-                    <button type="button" style={{ WebkitTapHighlightColor: 'transparent' }}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/80 hover:bg-white active:bg-slate-100 text-slate-600 font-bold text-xs shrink-0 transition-colors border border-slate-300 cursor-pointer shadow-sm backdrop-blur-sm"
-                      title="선생님 계정 관리">
-                      <User className="w-3.5 h-3.5" /><span>계정</span>
-                    </button>
-                  </Link>
                 </div>
               </>
             )}
