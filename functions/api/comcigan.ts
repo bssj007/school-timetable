@@ -994,7 +994,28 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         };
     });
 
-    if (db && !isEmptyDataset && !isFallbackApplied) {
+    // 캐시 / 아카이브 저장 — 데이터 출처에 따라 분기
+    //
+    // [핵심] jsonString의 출처를 반드시 구분해야 함:
+    //   A) isArchivedData=true  : timetable_archive에서 읽어온 과거 스냅샷
+    //      → raw_data 캐시에 저장하면 캐시가 과거 데이터로 오염 → liveRanges 역전 버그 유발
+    //      → 아무것도 저장하지 않음
+    //   B) isFreshLiveFetch=true : allowLiveFetch=true + cachedRawDataString 없이 컴시간에서 직접 fetch
+    //      → 가장 신뢰할 수 있는 최신 데이터
+    //      → raw_data 캐시 갱신 + 아카이브 INSERT OR REPLACE (현재 LIVE 구간 최신화)
+    //   C) 그 외 (일반 사용자 요청, 캐시에서 읽어온 경우)
+    //      → raw_data 캐시 갱신은 허용 (stale-while-revalidate 흐름)
+    //      → 아카이브는 INSERT OR IGNORE만 — 최신 데이터가 아닐 수 있으므로 기존 항목 보호
+    // ─────────────────────────────────────────────────────────────────
+
+    // isFreshLiveFetch: cachedRawDataString이 없었고(=캐시 미스 또는 refreshCache 호출) 실제로 컴시간에서 fetch한 경우
+    const isFreshLiveFetch = allowLiveFetch && !cachedRawDataString && !isArchivedData;
+
+    if (isArchivedData) {
+        // [A] 과거 아카이브에서 읽어온 데이터 → 저장 완전 건너뜀
+        // raw_data 캐시를 과거 스냅샷으로 오염시키지 않음
+        console.log('[Archive] Serving from archive — skipping cache/archive write to prevent data contamination.');
+    } else if (db && !isEmptyDataset && !isFallbackApplied) {
         try {
             await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_archive (
                 date_range TEXT PRIMARY KEY,
@@ -1002,6 +1023,8 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 saved_at TEXT DEFAULT (datetime('now'))
             )`).run();
             await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_cache (cache_key TEXT PRIMARY KEY, response_json TEXT NOT NULL, dataset_id TEXT, updated_at TEXT DEFAULT (datetime('now')))`).run();
+
+            // raw_data 캐시 갱신 (frozen 시 보호)
             await db.prepare(`
                 INSERT INTO timetable_cache (cache_key, response_json, updated_at) 
                 VALUES ('raw_data', ?, datetime('now')) 
@@ -1010,8 +1033,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                     updated_at = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.updated_at ELSE datetime('now') END
             `).bind(jsonString).run();
 
-            // --- 아카이브: 현재 raw_data의 모든 날짜 범위 스냅샵을 timetable_archive에 저장 ---
-            // 이미 저장된 스냅샵은 덮어쓰지 않음 (INSERT OR IGNORE)
+            // --- 아카이브 저장 ---
             try {
                 const archiveRaw = JSON.parse(jsonString);
                 const archiveDateArr = archiveRaw['일자'];
@@ -1029,13 +1051,21 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                     }
                 }
 
-                // 각 날짜 범위를 키로 저장 (INSERT OR IGNORE → 중복 시 스�)
                 for (const range of archiveRanges) {
                     try {
-                        await db.prepare(
-                            "INSERT OR IGNORE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))"
-                        ).bind(range.trim(), jsonString).run();
-                        console.log(`[Archive] Saved snapshot for range: ${range.trim()} (skipped if already exists)`);
+                        if (isFreshLiveFetch) {
+                            // [B] 컴시간 LIVE fetch: INSERT OR REPLACE — 현재 LIVE 구간 최신 데이터로 갱신
+                            await db.prepare(
+                                "INSERT OR REPLACE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))"
+                            ).bind(range.trim(), jsonString).run();
+                            console.log(`[Archive] Live fetch — upserted snapshot for range: ${range.trim()}`);
+                        } else {
+                            // [C] 캐시 기반 요청: INSERT OR IGNORE — 기존 아카이브 항목 보호
+                            await db.prepare(
+                                "INSERT OR IGNORE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))"
+                            ).bind(range.trim(), jsonString).run();
+                            console.log(`[Archive] Cache request — insert-or-ignore for range: ${range.trim()}`);
+                        }
                     } catch (_) {}
                 }
             } catch (archiveErr) {
