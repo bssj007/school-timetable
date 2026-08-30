@@ -41,15 +41,6 @@ function AppContent() {
   const isTeacherRoute = location.startsWith("/teacher");
   const isAdminRoute = location.startsWith("/admin");
 
-  // 접속제한 상태 판별 (관리자/교사 페이지 제외)
-  const isRestricted = Boolean(
-    !isAdminRoute && 
-    !isTeacherRoute && 
-    grade && 
-    publicSettings?.restricted_grades?.includes(parseInt(grade)) && 
-    !publicSettings?.is_whitelisted
-  );
-
   // 사이트 디자인설정 동적 적용 (제목 + 파비콘 + PWA 아이콘)
   useEffect(() => {
     fetch('/api/settings/public')
@@ -110,24 +101,6 @@ function AppContent() {
   // Dashboard가 절대 보이지 않도록 막는다.
   if (userRole === "teacher" && !isTeacherRoute && !isAdminRoute) {
     return null;
-  }
-
-  // ── 방문제한 전역 차단 ───────────────────────────────────────────────────────
-  // 학년이 제한되었을 경우, 접속유형 선택 및 메뉴 등 어떠한 기능도 작동하지 못하도록 완전히 차단
-  if (isRestricted) {
-    return (
-      <div className="w-full min-h-screen bg-gray-50 flex flex-col pt-12 md:pt-24 px-4">
-        <div className="flex flex-col items-center justify-center bg-white rounded-2xl border-2 border-red-100 shadow-sm p-8 max-w-2xl mx-auto w-full">
-          <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
-            <ShieldAlert className="w-10 h-10" />
-          </div>
-          <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 text-center">접근 제한 안내</h3>
-          <p className="text-gray-600 text-lg md:text-xl whitespace-pre-wrap text-center leading-relaxed font-medium">
-            {publicSettings?.restriction_reason || `${grade}학년 서비스가 일시적으로 제한되었습니다.`}
-          </p>
-        </div>
-      </div>
-    );
   }
 
   return (
