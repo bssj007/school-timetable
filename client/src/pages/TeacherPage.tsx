@@ -2287,7 +2287,7 @@ export default function TeacherPage() {
             </div>
           ) : timetableData && selectedSchedule ? (
             <div className="w-full overflow-x-auto flex-1 flex flex-col min-h-0">
-              <table className="w-full table-fixed min-w-[340px] flex-1 h-full" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
+              <table className="w-full table-fixed min-w-[340px] md:min-w-[600px] xl:min-w-[700px] flex-1 h-full" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
@@ -2517,11 +2517,11 @@ export default function TeacherPage() {
       </div>
 
       {/* ===== PC 전용: 표 밑 설명 텍스트 ===== */}
-      <p className="hidden md:flex items-center justify-center text-slate-400 text-sm mt-3 w-full animate-pulse opacity-90">
-        <MousePointerClick className="w-4 h-4 mr-1.5 opacity-70" />
-        시간표 <strong className="text-slate-500 mx-1">클릭</strong>
-        <ArrowRight className="w-3.5 h-3.5 mx-1 opacity-50" />
-        수행평가 <strong className="text-slate-500 ml-1">등록</strong>
+      <p className="hidden md:flex items-center justify-center text-slate-500 text-sm mt-3 w-full">
+        <MousePointerClick className="w-4 h-4 mr-1.5" />
+        시간표 <strong className="text-slate-600 mx-1">클릭</strong>
+        <ArrowRight className="w-3.5 h-3.5 mx-1 text-slate-400" />
+        수행평가 <strong className="text-slate-600 ml-1">등록</strong>
       </p>
 
       </div>{/* end timetable column */}
