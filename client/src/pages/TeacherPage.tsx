@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff, ArrowLeft, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff, ArrowLeft, User, BookOpen, FileText, CalendarDays, Link2, Clock, BookMarked } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -347,6 +347,18 @@ export default function TeacherPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedAssessment, setSelectedAssessment] = useState<AssessmentItem | null>(null);
+
+  // ── 모바일 뷰 모드 선택기 ──
+  type MobileViewMode = 'daily' | 'homework' | 'calendar';
+  const [mobileViewMode, setMobileViewMode] = useState<MobileViewMode>('daily');
+  // 달력에서 클릭한 날짜 (당일형 이동용)
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState<string | null>(null);
+  // 달력 표시 월 (기본: 이번 달)
+  const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number }>(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() }; // month: 0-indexed
+  });
+
 
   const [formData, setFormData] = useState({
     assessmentDate: "",
@@ -1794,9 +1806,256 @@ export default function TeacherPage() {
         {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
         <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-2 md:order-1 shrink-0 md:min-h-0">
 
+        {/* ===== 모바일 전용: 뷰 모드 선택기 (당일형 / 숙제형 / 달력) ===== */}
+        <div className="md:hidden mb-2 shrink-0">
+          <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+            {([
+              { key: 'daily',    label: '당일형 수행', Icon: Clock },
+              { key: 'homework', label: '숙제형 수행', Icon: BookOpen },
+              { key: 'calendar', label: '달력',        Icon: CalendarDays },
+            ] as { key: MobileViewMode; label: string; Icon: React.ElementType }[]).map(({ key, label, Icon }, i, arr) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setMobileViewMode(key)}
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+                className={[
+                  'flex-1 flex flex-col items-center gap-0.5 py-2 px-1 text-[11px] font-bold leading-tight transition-colors select-none',
+                  i > 0 ? 'border-l border-slate-200' : '',
+                  mobileViewMode === key
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white text-slate-500 active:bg-slate-100',
+                ].join(' ')}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ===== 모바일: 숙제형 패널 (껍데기) ===== */}
+        {mobileViewMode === 'homework' && (
+          <div className="md:hidden flex flex-col gap-3">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <BookOpen className="w-5 h-5 text-indigo-500" />
+                <h3 className="text-base font-extrabold text-slate-800">숙제형 수행평가 등록</h3>
+                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold border border-amber-200">준비 중</span>
+              </div>
+
+              {/* 과목 / 반 */}
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">과목</label>
+                  <div className="w-full h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 flex items-center text-sm text-slate-400 cursor-not-allowed">
+                    과목 선택
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">반</label>
+                  <div className="w-full h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 flex items-center text-sm text-slate-400 cursor-not-allowed">
+                    반 선택
+                  </div>
+                </div>
+              </div>
+
+              {/* 시작일 / 마감일 */}
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">시작일</label>
+                  <div className="w-full h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 flex items-center gap-2 text-sm text-slate-400 cursor-not-allowed">
+                    <Calendar className="w-3.5 h-3.5" />
+                    날짜 선택
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">마감일</label>
+                  <div className="w-full h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 flex items-center gap-2 text-sm text-slate-400 cursor-not-allowed">
+                    <Calendar className="w-3.5 h-3.5" />
+                    날짜 선택
+                  </div>
+                </div>
+              </div>
+
+              {/* 평가 제목 */}
+              <div className="mb-3">
+                <label className="block text-xs font-bold text-slate-600 mb-1">평가 제목</label>
+                <div className="w-full h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 flex items-center text-sm text-slate-400 cursor-not-allowed">
+                  예: 독서록 작성, 탐구 보고서 제출
+                </div>
+              </div>
+
+              {/* 활동 내용 */}
+              <div className="mb-3">
+                <label className="block text-xs font-bold text-slate-600 mb-1">활동 내용</label>
+                <div className="w-full h-20 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-400 cursor-not-allowed">
+                  예: 준비물, 실습, 생기부 활동 등등
+                </div>
+              </div>
+
+              {/* 제출 링크 */}
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
+                  <Link2 className="w-3 h-3" /> 제출 사이트 / 링크
+                </label>
+                <div className="w-full h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 flex items-center text-sm text-slate-400 cursor-not-allowed">
+                  예: https://school.go.kr/...
+                </div>
+              </div>
+
+              {/* 등록 버튼 (비활성) */}
+              <button
+                type="button"
+                disabled
+                className="w-full h-11 rounded-xl bg-indigo-200 text-white font-extrabold text-sm cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                숙제형 수행평가 등록 (DB 연동 후 활성화)
+              </button>
+            </div>
+
+            {/* 등록된 목록 자리 (껍데기) */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <FileText className="w-4 h-4 text-slate-400" />
+                <h4 className="text-sm font-bold text-slate-600">등록된 숙제형 목록</h4>
+              </div>
+              <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-300">
+                <BookMarked className="w-10 h-10" />
+                <p className="text-xs font-medium">등록된 숙제형 수행평가가 없습니다.</p>
+                <p className="text-[10px] text-slate-400">DB 연동 후 이곳에 표시됩니다.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== 모바일: 달력 패널 (껍데기) ===== */}
+        {mobileViewMode === 'calendar' && (() => {
+          const { year, month } = calendarMonth;
+          const firstDay = new Date(year, month, 1);
+          const lastDay  = new Date(year, month + 1, 0);
+          // 첫 날의 요일 (0=일, 1=월 ... 6=토) → 월요일 시작으로 변환
+          const startDow = (firstDay.getDay() + 6) % 7; // 0=월, 6=일
+          const totalDays = lastDay.getDate();
+          const weeks: (number | null)[][] = [];
+          let cur: (number | null)[] = Array(startDow).fill(null);
+          for (let d = 1; d <= totalDays; d++) {
+            cur.push(d);
+            if (cur.length === 7) { weeks.push(cur); cur = []; }
+          }
+          if (cur.length > 0) { while (cur.length < 7) cur.push(null); weeks.push(cur); }
+          const todayStr = toDateString(new Date());
+          const DOW_LABELS = ['월','화','수','목','금','토','일'];
+          return (
+            <div className="md:hidden bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              {/* 달력 헤더 */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
+                <button
+                  type="button"
+                  onClick={() => setCalendarMonth(prev => {
+                    const d = new Date(prev.year, prev.month - 1, 1);
+                    return { year: d.getFullYear(), month: d.getMonth() };
+                  })}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-200 active:bg-slate-100 text-slate-600"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="font-extrabold text-slate-800 text-base">
+                  {year}년 {month + 1}월
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCalendarMonth(prev => {
+                    const d = new Date(prev.year, prev.month + 1, 1);
+                    return { year: d.getFullYear(), month: d.getMonth() };
+                  })}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-200 active:bg-slate-100 text-slate-600"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* 요일 행 */}
+              <div className="grid grid-cols-7 border-b border-slate-100">
+                {DOW_LABELS.map((dow, i) => (
+                  <div
+                    key={dow}
+                    className={[
+                      'py-1.5 text-center text-[11px] font-bold',
+                      i === 5 ? 'text-blue-500' : i === 6 ? 'text-red-500' : 'text-slate-500',
+                    ].join(' ')}
+                  >
+                    {dow}
+                  </div>
+                ))}
+              </div>
+
+              {/* 날짜 그리드 */}
+              <div className="px-1 py-1">
+                {weeks.map((week, wi) => (
+                  <div key={wi} className="grid grid-cols-7">
+                    {week.map((d, di) => {
+                      if (!d) return <div key={di} className="h-12" />;
+                      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                      const isToday = dateStr === todayStr;
+                      const isSat = di === 5;
+                      const isSun = di === 6;
+                      // 해당 날짜에 당일형 수행이 있는지 체크 (allAssessments 활용)
+                      const hasDailyAssessment = (allAssessments || []).some(a => a.dueDate === dateStr);
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          style={{ WebkitTapHighlightColor: 'transparent' }}
+                          className={[
+                            'h-12 flex flex-col items-center justify-center rounded-lg text-[13px] font-bold transition-colors active:scale-95',
+                            isToday ? 'bg-indigo-600 text-white' : '',
+                            !isToday && isSat ? 'text-blue-600' : '',
+                            !isToday && isSun ? 'text-red-600' : '',
+                            !isToday && !isSat && !isSun ? 'text-slate-700' : '',
+                            !isToday ? 'active:bg-indigo-50' : '',
+                          ].join(' ')}
+                          onClick={() => {
+                            // 당일형으로 이동하면서 해당 주로 weekOffset 계산
+                            const clicked = new Date(year, month, d);
+                            const clickedMon = new Date(clicked);
+                            const dow2 = clickedMon.getDay();
+                            clickedMon.setDate(clickedMon.getDate() - (dow2 === 0 ? 6 : dow2 - 1));
+                            const curMon = new Date();
+                            const curDow = curMon.getDay();
+                            curMon.setDate(curMon.getDate() - (curDow === 0 ? 6 : curDow - 1));
+                            const diffMs = clickedMon.getTime() - curMon.getTime();
+                            const diffWeeks = Math.round(diffMs / (7 * 86400000));
+                            setWeekOffset(Math.max(-2, Math.min(8, diffWeeks)));
+                            setMobileViewMode('daily');
+                          }}
+                        >
+                          <span>{d}</span>
+                          {hasDailyAssessment && (
+                            <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isToday ? 'bg-white' : 'bg-pink-500'}`} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              {/* 하단 안내 */}
+              <div className="px-4 py-3 border-t border-slate-100 bg-slate-50 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-pink-500 shrink-0" />
+                <p className="text-[11px] text-slate-500">분홍 점: 당일형 수행평가 있음. 날짜 클릭 시 해당 주로 이동합니다.</p>
+              </div>
+            </div>
+          );
+        })()}
+
+
 
       {/* Main Timetable — Card wrapper */}
-      <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:h-[calc(100vh-115px)] md:min-h-[600px]">
+      {/* 모바일에서 당일형이 아니면 표 숨김 */}
+      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:h-[calc(100vh-115px)] md:min-h-[600px] ${mobileViewMode !== 'daily' ? 'hidden md:flex' : ''}`}>
           {(isTimetableLoading || isGroupDataLoading) ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
