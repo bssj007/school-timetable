@@ -1492,8 +1492,12 @@ export default function Dashboard() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 text-center px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-red-100 p-8 flex flex-col items-center">
-          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6">
-            <ShieldAlert className="w-8 h-8" />
+          <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 p-2">
+            <img 
+              src={settings?.site_favicon_url || "/icon.svg"} 
+              alt="Logo" 
+              className="w-full h-full object-contain"
+            />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">사이트 점검 중</h2>
           <p className="text-gray-600 mb-6 whitespace-pre-wrap leading-relaxed">
@@ -3130,8 +3134,9 @@ export default function Dashboard() {
         </div>
       )}
       {/* 수행평가 목록 */}
-      <Card className="mt-8">
-        <CardHeader>
+      {!isRestricted && (
+        <Card className="mt-8">
+          <CardHeader>
           <CardTitle className="flex items-center gap-2 flex-wrap">
             <span>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}</span> 수행평가 ({weekRangeText})
             {isOutOfDateRange && (
@@ -3334,6 +3339,7 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+      )}
       <div className="mt-2 flex justify-end">
         <Link href="/admin">
           <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-transparent text-xs font-normal h-auto p-0">

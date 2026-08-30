@@ -40,8 +40,8 @@ export const onRequest = async (context: any) => {
     <style>
         body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
         .container { background-color: #ffffff; border: 2px solid #fee2e2; border-radius: 1rem; padding: 2.5rem; max-width: 28rem; width: 90%; text-align: center; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); }
-        .icon { width: 4rem; height: 4rem; background-color: #fef2f2; color: #ef4444; border-radius: 9999px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem auto; }
-        .icon svg { width: 2rem; height: 2rem; }
+        .logo-container { width: 5rem; height: 5rem; border-radius: 1rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem auto; background-color: #f8fafc; padding: 0.5rem; }
+        .logo-container img { width: 100%; height: 100%; object-fit: contain; }
         h1 { font-size: 1.5rem; font-weight: 700; color: #111827; margin: 0 0 1rem 0; letter-spacing: -0.025em; }
         p { color: #475569; font-size: 1.125rem; line-height: 1.6; margin: 0; white-space: pre-wrap; word-break: keep-all; font-weight: 500; }
         .footer { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; font-size: 0.875rem; color: #94a3b8; font-weight: 500; }
@@ -49,8 +49,8 @@ export const onRequest = async (context: any) => {
 </head>
 <body>
     <div class="container">
-        <div class="icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        <div class="logo-container">
+            <img src="${settings['site_favicon_url'] || '/icon.svg'}" alt="Logo" />
         </div>
         <h1>사이트 점검 중</h1>
         <p>${maintenanceMessage.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
