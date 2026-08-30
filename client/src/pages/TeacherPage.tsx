@@ -2466,39 +2466,53 @@ export default function TeacherPage() {
       <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4 h-fit">
         <div className="md:bg-white md:rounded-2xl md:border md:border-slate-200 md:shadow-md md:overflow-hidden flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
           {/* Teacher Picker — 모바일에서 독립 카드, PC에서 패널 내부 바 */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-2 px-2 py-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b md:border-slate-100 md:px-3 flex-shrink-0 flex items-center justify-start gap-2">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-2 px-2 py-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b md:border-slate-100 md:px-3 flex-shrink-0 flex flex-col gap-1.5">
 
-            {/* 선생님 선택기 — pill (선택기만) */}
-            <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm shrink-0 min-w-0">
-              {timetableData ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTeacherSearchQuery("");
-                    setShowTeacherSelectModal(true);
-                  }}
-                  style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className="flex items-center gap-1 pl-3 pr-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0"
-                >
-                  <span className="truncate max-w-[120px]">
-                    {selectedTeacherId
-                      ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
-                      : "교사 선택"}
+            {/* 1행: 선생님 선택기 + 간편공지 */}
+            <div className="flex items-center gap-2">
+              {/* 선생님 선택기 — pill */}
+              <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm shrink-0 min-w-0">
+                {timetableData ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTeacherSearchQuery("");
+                      setShowTeacherSelectModal(true);
+                    }}
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                    className="flex items-center gap-1 pl-3 pr-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0"
+                  >
+                    <span className="truncate max-w-[120px]">
+                      {selectedTeacherId
+                        ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
+                        : "교사 선택"}
+                    </span>
+                    <ChevronsUpDown className="w-3 h-3 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
+                  </button>
+                ) : (
+                  <span className="pl-3 pr-2 py-1.5 text-sm font-extrabold text-slate-700 bg-indigo-50 flex items-center">
+                    {teacherName ? `${teacherName} 선생님` : '선생님'}
                   </span>
-                  <ChevronsUpDown className="w-3 h-3 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
-                </button>
-              ) : (
-                <span className="pl-3 pr-2 py-1.5 text-sm font-extrabold text-slate-700 bg-indigo-50 flex items-center">
-                  {teacherName ? `${teacherName} 선생님` : '선생님'}
-                </span>
-              )}
+                )}
+              </div>
+
+              {/* 간편공지 — 인증 여부와 무관하게 항상 우측에 (모바일 전용) */}
+              <button
+                type="button"
+                onClick={() => {/* TODO: 간편공지 기능 */}}
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+                className="md:hidden ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
+                title="간편공지"
+              >
+                <Bell className="w-3.5 h-3.5" />
+                <span>간편공지</span>
+              </button>
             </div>
 
-            {/* 우측 영역: 미인증 → 실버 배너로 덮어씀, 인증됨 → 간편공지 (모바일 전용) */}
-            {!isCurrentTeacherVerified ? (
-              /* 미인증: 기존 실버 그라데이션 디자인을 그대로 바 우측에 인라인으로 덮어씀 */
+            {/* 2행: 미인증 시 실버 배너 (모바일 전용) */}
+            {!isCurrentTeacherVerified && (
               <div
-                className="md:hidden ml-auto flex items-center gap-2 flex-1 min-w-0 px-3 py-1.5 rounded-xl"
+                className="md:hidden flex items-center gap-2 w-full px-3 py-2 rounded-xl"
                 style={{
                   background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
                   border: '1px solid rgba(255,255,255,0.6)',
@@ -2509,7 +2523,7 @@ export default function TeacherPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                 </svg>
-                <span className="text-xs font-semibold leading-tight flex-1 min-w-0" style={{ color: '#1f2937' }}>
+                <span className="text-xs font-semibold leading-tight flex-1" style={{ color: '#1f2937' }}>
                   보기 전용<br />등록·수정하려면 인증하세요
                 </span>
                 <button
@@ -2521,20 +2535,9 @@ export default function TeacherPage() {
                   인증하기
                 </button>
               </div>
-            ) : (
-              /* 인증됨: 간편공지 버튼 */
-              <button
-                type="button"
-                onClick={() => {/* TODO: 간편공지 기능 */}}
-                style={{ WebkitTapHighlightColor: 'transparent' }}
-                className="md:hidden ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
-                title="간편공지"
-              >
-                <Bell className="w-3.5 h-3.5" />
-                <span>간편공지</span>
-              </button>
             )}
           </div>
+
 
 
 
