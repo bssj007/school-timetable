@@ -2408,6 +2408,26 @@ export default function TeacherPage() {
                             >
                               {cellData ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>
+                                  {/* 학생등록 배지 — td의 position:relative 기준 우측 상단 */}
+                                  {hasAssessment && cellAssessments.some(a => !a.isTeacherCreated) && (
+                                    <span style={{
+                                      position: 'absolute',
+                                      top: 2,
+                                      right: 3,
+                                      fontSize: 7,
+                                      fontWeight: 700,
+                                      border: '1px solid #94a3b8',
+                                      color: '#64748b',
+                                      padding: '0 3px',
+                                      borderRadius: 2,
+                                      background: '#f1f5f9',
+                                      whiteSpace: 'nowrap',
+                                      lineHeight: 1.6,
+                                      zIndex: 1,
+                                    }}>
+                                      학생등록
+                                    </span>
+                                  )}
                                   {/* Class label */}
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                     <span style={{
@@ -2471,11 +2491,6 @@ export default function TeacherPage() {
                                           <span className="hidden md:inline" style={{ fontSize: 7, border: '1px solid #f472b6', color: '#be185d', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap', background: '#fdf2f8' }}>
                                             {a.description && a.description.includes('차') ? a.description : '평가'}
                                           </span>
-                                          {!a.isTeacherCreated && (
-                                            <span style={{ fontSize: 7, border: '1px solid #94a3b8', color: '#64748b', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap', background: '#f1f5f9' }}>
-                                              학생
-                                            </span>
-                                          )}
                                         </div>
                                       ))}
                                     </div>
@@ -2538,11 +2553,11 @@ export default function TeacherPage() {
                 </div>
 
                 {/* PC 전용: 계정 버튼 */}
-                <Link href="/teacher-account">
+                <Link href="/teacher-account" className="hidden md:flex">
                   <button
                     type="button"
                     style={{ WebkitTapHighlightColor: 'transparent' }}
-                    className="hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-bold text-xs shrink-0 transition-colors border border-slate-200 cursor-pointer shadow-sm"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-bold text-xs shrink-0 transition-colors border border-slate-200 cursor-pointer shadow-sm"
                     title="선생님 계정 관리"
                   >
                     <User className="w-3.5 h-3.5" />
@@ -2567,7 +2582,7 @@ export default function TeacherPage() {
               <>
                 {/* 계정 버튼 — 실버 배너 위에 단독 표시 (PC 전용) */}
                 <div className="hidden md:flex justify-end">
-                  <Link href="/teacher-account">
+                  <Link href="/teacher-account" className="flex">
                     <button
                       type="button"
                       style={{ WebkitTapHighlightColor: 'transparent' }}
