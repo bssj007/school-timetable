@@ -2005,17 +2005,54 @@ export default function Dashboard() {
                 </style>
                 <div ref={timetableRef} id="timetable-container" className="group" data-print-theme={printTheme} data-print-font-size={settings?.print_subject_font_size || 'large'}>
                   {/* System Dataset Config UI (Debug) */}
-                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled && (settings?.comcigan_debug_whitelist_hit !== false) && (
-                    <div className="print:hidden capturing:hidden text-[10px] md:text-xs text-gray-400 text-right mb-1 tracking-tight flex flex-wrap items-center justify-end gap-1 md:gap-2 pr-1">
-                      <span className="text-blue-500 font-semibold text-xs border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">사용중: {(rawTimetableData as any)?.datasetId}{((rawTimetableData as any)?.originalDatasetId && (rawTimetableData as any)?.originalDatasetId !== (rawTimetableData as any)?.datasetId) ? ` (설정: ${(rawTimetableData as any)?.originalDatasetId})` : ''}</span>
-                      <span className="hidden md:inline">|</span>
-                      <span>1학년: {(rawTimetableData as any).debugTokens.override1 && (rawTimetableData as any).debugTokens.override1 !== '_auto_' ? `고정(${(rawTimetableData as any).debugTokens.override1})` : '자동'}</span>
-                      <span className="hidden md:inline">|</span>
-                      <span>2,3학년: {(rawTimetableData as any).debugTokens.override23 && (rawTimetableData as any).debugTokens.override23 !== '_auto_' ? `고정(${(rawTimetableData as any).debugTokens.override23})` : '자동'}</span>
-                      {(rawTimetableData as any).debugTokens.isFallbackApplied && <span className="text-red-400 font-bold ml-1">(! Fallback 가동중)</span>}
-                      {(rawTimetableData as any)?.ipOverrideApplied && <span className="text-orange-500 font-bold ml-1">(IP 오버라이드: {(rawTimetableData as any)?.ipOverrideApplied})</span>}
-                    </div>
-                  )}
+                  {(rawTimetableData as any)?.debugTokens && settings?.comcigan_debug_overlay_enabled && (settings?.comcigan_debug_whitelist_hit !== false) && (() => {
+                    const dt = (rawTimetableData as any).debugTokens;
+                    const usedDatasetId = (rawTimetableData as any)?.datasetId;
+                    const configDatasetId = (rawTimetableData as any)?.originalDatasetId;
+                    const isArchived = (rawTimetableData as any)?.isArchivedData;
+                    const isOOR = (rawTimetableData as any)?.isOutOfRange;
+                    const isFuture = dt?.isFutureOutOfRange;
+                    const isPast = dt?.isPastOutOfRange;
+                    const isFallback = dt?.isFallbackApplied;
+                    const ipOverride = (rawTimetableData as any)?.ipOverrideApplied;
+
+                    // 날짜 구간 상태 배지
+                    let rangeBadge: React.ReactNode = null;
+                    if (isArchived) {
+                      rangeBadge = <span className="bg-amber-100 text-amber-700 border border-amber-300 rounded px-1.5 py-0.5 font-bold">📂 아카이브</span>;
+                    } else if (isFuture) {
+                      rangeBadge = <span className="bg-red-100 text-red-600 border border-red-300 rounded px-1.5 py-0.5 font-bold">🔮 미래초과</span>;
+                    } else if (isPast) {
+                      rangeBadge = <span className="bg-purple-100 text-purple-600 border border-purple-300 rounded px-1.5 py-0.5 font-bold">🕰 과거초과</span>;
+                    } else {
+                      rangeBadge = <span className="bg-green-100 text-green-700 border border-green-300 rounded px-1.5 py-0.5">✅ 범위내</span>;
+                    }
+
+                    return (
+                      <div className="print:hidden capturing:hidden text-[10px] md:text-xs text-gray-500 mb-1 tracking-tight flex flex-wrap items-center justify-end gap-1 md:gap-1.5 pr-1">
+                        {/* 1. 사용 중 데이터셋 */}
+                        <span className="text-blue-600 font-bold border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded font-mono">
+                          {usedDatasetId || '?'}
+                        </span>
+                        {/* 2. 설정된 데이터셋 (다를 때만) */}
+                        {configDatasetId && configDatasetId !== usedDatasetId && (
+                          <span className="text-slate-400 border border-slate-200 bg-slate-50 px-1.5 py-0.5 rounded font-mono">
+                            설정: {configDatasetId}
+                          </span>
+                        )}
+                        {/* 3. 날짜 범위 상태 */}
+                        {rangeBadge}
+                        {/* 4. 관리자 설정 */}
+                        <span className="hidden md:inline text-slate-300">|</span>
+                        <span>1학년: {dt?.override1 && dt.override1 !== '_auto_' ? <span className="text-orange-500 font-bold font-mono">{dt.override1}</span> : <span className="text-slate-400">auto</span>}</span>
+                        <span>2,3학년: {dt?.override23 && dt.override23 !== '_auto_' ? <span className="text-orange-500 font-bold font-mono">{dt.override23}</span> : <span className="text-slate-400">auto</span>}</span>
+                        {/* 5. 폴백 / IP 오버라이드 */}
+                        {isFallback && <span className="text-red-400 font-bold">⚠ Fallback</span>}
+                        {ipOverride && <span className="text-orange-500 font-bold">🔀 IP:{ipOverride}</span>}
+                      </div>
+                    );
+                  })()}
+
 
                   {/* Print Capture Header */}
                   <div className="capture-only mb-1.5 p-1.5 border rounded-md text-black flex flex-col gap-0.5">
