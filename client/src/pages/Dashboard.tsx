@@ -1493,16 +1493,14 @@ export default function Dashboard() {
       <div className="flex items-center justify-center min-h-screen bg-gray-50 text-center px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-red-100 p-8 flex flex-col items-center">
           {settings?.site_favicon_url ? (
-            <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 p-2">
-              <img 
-                src={settings.site_favicon_url} 
-                alt="Logo" 
-                className="w-full h-full object-contain"
-              />
-            </div>
+            <img 
+              src={settings.site_favicon_url} 
+              alt="Logo" 
+              className="w-16 h-16 object-contain mb-6"
+            />
           ) : (
-            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6">
-              <AlertTriangle className="w-8 h-8" />
+            <div className="text-red-500 mb-6 flex items-center justify-center">
+              <AlertTriangle className="w-14 h-14" />
             </div>
           )}
           <h2 className="text-2xl font-bold text-gray-900 mb-2">사이트 점검 중</h2>
