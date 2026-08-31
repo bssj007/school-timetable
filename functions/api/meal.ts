@@ -16,12 +16,15 @@ CREATE TABLE IF NOT EXISTS meals (
 );
 `;
 
-async function scrapeAndSave(env: Env) {
+async function scrapeAndSave(env: Env): Promise<{ saved: number; errors: string[] }> {
     const nowTs = Math.floor(Date.now() / 1000);
     const now = new Date();
     const currentYear = now.getFullYear();
     const mFirst = `${currentYear}/01/01`;
     const mEnd = `${currentYear}/12/31`;
+
+    let totalSaved = 0;
+    const errors: string[] = [];
 
     for (const dietTy of ['중식', '석식']) {
         try {
@@ -30,10 +33,30 @@ async function scrapeAndSave(env: Env) {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({ sysId: 'bssj-h', dietTy, monthFirst: mFirst, monthEnmt: mEnd })
             });
-            if (!res.ok) continue;
-            const data: any[] = await res.json();
+            if (!res.ok) {
+                errors.push(`HTTP ${res.status} for ${dietTy}`);
+                continue;
+            }
+            // Content-Type 헤더가 없는 경우에도 안전하게 파싱
+            const rawText = await res.text();
+            let data: any[];
+            try {
+                data = JSON.parse(rawText);
+            } catch (parseErr) {
+                errors.push(`JSON parse error for ${dietTy}: ${String(parseErr)}`);
+                continue;
+            }
+            if (!Array.isArray(data)) {
+                errors.push(`Unexpected response format for ${dietTy}: not an array`);
+                continue;
+            }
             const fetched = data.filter(i => i.dietSeq && i.dietSeq !== 'holiday');
             
+            if (fetched.length === 0) {
+                console.log(`[Scraper] No data returned for ${dietTy} (API returned ${data.length} items including holidays)`);
+                continue;
+            }
+
             // D1 Batch insertion for large data, avoiding limits
             const chunkSize = 80;
             for (let i = 0; i < fetched.length; i += chunkSize) {
@@ -50,11 +73,15 @@ async function scrapeAndSave(env: Env) {
                 `).bind(item.dietDate, item.dietCn, item.dietCal, item.orgplce, item.dietTy || dietTy, 'bssj-h', nowTs));
                 await env.DB.batch(stmts);
             }
+            totalSaved += fetched.length;
             console.log(`[Scraper] Saved ${fetched.length} ${dietTy} entries collectively`);
         } catch (e) {
+            const errMsg = String(e instanceof Error ? e.message : e);
+            errors.push(`${dietTy}: ${errMsg}`);
             console.error(`[Scraper] Error fetching ${dietTy}:`, e);
         }
     }
+    return { saved: totalSaved, errors };
 }
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
@@ -170,10 +197,18 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
             return new Response(JSON.stringify({ success: true, message: '수동 식단이 삭제되었습니다.' }), { headers: { 'Content-Type': 'application/json' } });
         }
 
-        // General refresh
-        await scrapeAndSave(env);
-        return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+        // General refresh — 결과를 응답에 포함
+        const result = await scrapeAndSave(env);
+        return new Response(JSON.stringify({ 
+            success: result.errors.length === 0,
+            saved: result.saved,
+            errors: result.errors,
+            message: result.errors.length > 0
+                ? `저장 ${result.saved}건 완료, 오류 ${result.errors.length}건: ${result.errors.join('; ')}`
+                : `급식 데이터 ${result.saved}건이 갱신되었습니다.`
+        }), { headers: { 'Content-Type': 'application/json' } });
     } catch (e: any) {
         return new Response(JSON.stringify({ error: e.message }), { status: 500 });
     }
 };
+

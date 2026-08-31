@@ -6036,8 +6036,11 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
             if (!res.ok) throw new Error(data.error || "갱신 실패");
             return data;
         },
-        onSuccess: () => {
-            toast.success("식단 캐시가 갱신되었습니다.");
+        onSuccess: (data) => {
+            toast.success(data.message || "식단 캐시가 갱신되었습니다.");
+            if (data.errors && data.errors.length > 0) {
+                toast.warning(`스크래핑 오류 발생: ${data.errors.join(', ')}`);
+            }
             queryClient.invalidateQueries({ queryKey: ["meal"] });
         },
         onError: (err: Error) => {
