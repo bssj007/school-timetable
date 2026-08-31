@@ -2150,7 +2150,7 @@ export default function TeacherPage() {
           };
 
           return (
-            <div className="md:hidden w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col" style={{ minHeight: 'calc(7 * 50px + 44px)' }}>
+            <div className="md:hidden w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
               {/* 달력 헤더 */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
                 <button type="button"
