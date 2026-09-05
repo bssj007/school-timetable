@@ -7022,6 +7022,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                     >
                         📋 교사용 성지수행
                     </TabsTrigger>
+                    <TabsTrigger
+                        value="exam-schedule"
+                        className="data-[state=active]:bg-indigo-100 data-[state=active]:text-indigo-800 font-medium"
+                    >
+                        📅 시험일정
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="trash" className="space-y-6">
@@ -7917,6 +7923,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
 
                 <TabsContent value="teacher-mgmt" className="space-y-6">
                     <TeacherMgmtManager adminPassword={password} />
+                </TabsContent>
+
+                <TabsContent value="exam-schedule" className="space-y-6">
+                    <ExamScheduleManager adminPassword={password} />
                 </TabsContent>
 
             </Tabs >
@@ -10845,6 +10855,443 @@ function AssessmentRolePermissionsSettings({ adminPassword }: { adminPassword: s
     );
 }
 
+
+
+
+// ======================================================================
+// ExamScheduleManager - 시험일정 관리 (2레이어 사이드바 레이아웃)
+// ======================================================================
+interface ExamItem {
+    id: number;
+    title: string;
+    exam_type: string;   // '' | 'single' | 'period'
+    start_date: string | null;
+    end_date: string | null;
+    display_order: number;
+    created_at: string;
+    updated_at: string;
+}
+
+// 시험 종류 정의
+const EXAM_TYPE_OPTIONS = [
+    { value: "single", label: "학력평가", dateMode: "single" as const },
+    { value: "period", label: "중간/기말", dateMode: "period" as const },
+];
+
+function ExamScheduleManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    // 1레이어 사이드바 선택 ('exam-dates' | 'exam-timetable')
+    const [layer1, setLayer1] = useState<"exam-dates" | "exam-timetable">("exam-dates");
+    // 2레이어: 선택된 시험 id
+    const [selectedExamId, setSelectedExamId] = useState<number | null>(null);
+
+    // 새 시험 추가 인라인 입력 상태
+    const [isAdding, setIsAdding] = useState(false);
+    const [newTitle, setNewTitle] = useState("");
+    const addInputRef = React.useRef<HTMLInputElement>(null);
+
+    // 콘텐츠 영역 편집 상태 (선택된 시험의 draft)
+    const [draftType, setDraftType] = useState<string>("");
+    const [draftStartDate, setDraftStartDate] = useState<string>("");
+    const [draftEndDate, setDraftEndDate] = useState<string>("");
+
+    // ── Query: 시험 목록 ────────────────────────────────────────────────────
+    const examsQuery = useQuery<ExamItem[]>({
+        queryKey: ["admin", "exam-schedules"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/exam-schedules", {
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) throw new Error("시험 목록 조회 실패");
+            const json = await res.json();
+            return json.exams || [];
+        },
+    });
+
+    const exams: ExamItem[] = examsQuery.data || [];
+
+    // 선택된 시험 객체
+    const selectedExam = exams.find((e) => e.id === selectedExamId) ?? null;
+
+    // 선택된 시험이 바뀌면 draft 초기화
+    React.useEffect(() => {
+        if (selectedExam) {
+            setDraftType(selectedExam.exam_type || "");
+            setDraftStartDate(selectedExam.start_date || "");
+            setDraftEndDate(selectedExam.end_date || "");
+        } else {
+            setDraftType("");
+            setDraftStartDate("");
+            setDraftEndDate("");
+        }
+    }, [selectedExamId, selectedExam?.exam_type, selectedExam?.start_date, selectedExam?.end_date]);
+
+    // ── Mutation: 추가 ──────────────────────────────────────────────────────
+    const addMutation = useMutation({
+        mutationFn: async (title: string) => {
+            const res = await fetch("/api/admin/exam-schedules", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify({ title }),
+            });
+            if (!res.ok) throw new Error("추가 실패");
+            return res.json();
+        },
+        onSuccess: (data) => {
+            toast.success("시험이 추가되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "exam-schedules"] });
+            setIsAdding(false);
+            setNewTitle("");
+            if (data.id) setSelectedExamId(data.id);
+        },
+        onError: (e: any) => toast.error(e.message),
+    });
+
+    // ── Mutation: 수정 ──────────────────────────────────────────────────────
+    const saveMutation = useMutation({
+        mutationFn: async (payload: { id: number; title: string; exam_type: string; start_date: string | null; end_date: string | null }) => {
+            const res = await fetch("/api/admin/exam-schedules", {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "exam-schedules"] });
+        },
+        onError: (e: any) => toast.error(e.message),
+    });
+
+    // ── Mutation: 삭제 ──────────────────────────────────────────────────────
+    const deleteMutation = useMutation({
+        mutationFn: async (id: number) => {
+            const res = await fetch(`/api/admin/exam-schedules?id=${id}`, {
+                method: "DELETE",
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) throw new Error("삭제 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("삭제되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "exam-schedules"] });
+            setSelectedExamId(null);
+        },
+        onError: (e: any) => toast.error(e.message),
+    });
+
+    // 인라인 입력 열릴 때 포커스
+    React.useEffect(() => {
+        if (isAdding) {
+            setTimeout(() => addInputRef.current?.focus(), 50);
+        }
+    }, [isAdding]);
+
+    const handleAddConfirm = () => {
+        const t = newTitle.trim();
+        if (!t) { toast.error("제목을 입력하세요."); return; }
+        addMutation.mutate(t);
+    };
+
+    const handleSave = () => {
+        if (!selectedExam) return;
+        if (!draftType) { toast.error("종류를 선택하세요."); return; }
+        const typeOption = EXAM_TYPE_OPTIONS.find(o => o.value === draftType);
+        if (!typeOption) return;
+
+        if (typeOption.dateMode === "single") {
+            if (!draftStartDate) { toast.error("날짜를 입력하세요."); return; }
+            saveMutation.mutate({
+                id: selectedExam.id,
+                title: selectedExam.title,
+                exam_type: draftType,
+                start_date: draftStartDate,
+                end_date: draftStartDate, // single은 end = start
+            });
+        } else {
+            if (!draftStartDate || !draftEndDate) { toast.error("시작일과 종료일을 모두 입력하세요."); return; }
+            if (draftEndDate < draftStartDate) { toast.error("종료일이 시작일보다 빠를 수 없습니다."); return; }
+            saveMutation.mutate({
+                id: selectedExam.id,
+                title: selectedExam.title,
+                exam_type: draftType,
+                start_date: draftStartDate,
+                end_date: draftEndDate,
+            });
+        }
+    };
+
+    const selectedTypeOption = EXAM_TYPE_OPTIONS.find(o => o.value === draftType) ?? null;
+
+    // 사이드바 버튼 공통 클래스
+    const sidebarBtnClass = (active: boolean) =>
+        `justify-start whitespace-nowrap text-left transition-colors w-full ${
+            active
+                ? "bg-indigo-100 text-indigo-900 font-bold hover:bg-indigo-200/80 border border-indigo-300 shadow-xs"
+                : "text-slate-600 hover:text-indigo-800 hover:bg-indigo-50/70 font-medium"
+        }`;
+
+    return (
+        <div className="flex flex-col md:flex-row gap-0 h-[calc(100vh-200px)] min-h-[600px] md:h-[640px] border rounded-xl overflow-hidden bg-white shadow-sm">
+
+            {/* ── 1레이어 사이드바 ─────────────────────────────────────── */}
+            <div className="w-full md:w-36 flex flex-row md:flex-col gap-1 p-2 bg-slate-50 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
+                <p className="hidden md:block text-[10px] font-semibold text-slate-400 uppercase tracking-widest px-2 pt-1 pb-0.5">카테고리</p>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className={sidebarBtnClass(layer1 === "exam-dates")}
+                    onClick={() => setLayer1("exam-dates")}
+                >
+                    <Calendar className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                    고사날짜
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`justify-start whitespace-nowrap text-left w-full font-medium text-slate-400 cursor-not-allowed`}
+                    disabled
+                    title="추후 구현 예정"
+                >
+                    <Clock className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                    시험 시간표
+                </Button>
+            </div>
+
+            {/* ── 2레이어 사이드바 (고사날짜 선택 시) ─────────────────── */}
+            {layer1 === "exam-dates" && (
+                <div className="w-full md:w-52 flex flex-col border-b md:border-b-0 md:border-r shrink-0 bg-white overflow-hidden">
+                    {/* 헤더 + 추가 버튼 */}
+                    <div className="flex items-center justify-between px-3 py-2.5 border-b bg-slate-50/60">
+                        <span className="text-xs font-semibold text-slate-500">시험 목록</span>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs text-indigo-600 hover:bg-indigo-50 hover:text-indigo-800 font-semibold"
+                            onClick={() => { setIsAdding(true); setNewTitle(""); }}
+                            disabled={isAdding}
+                        >
+                            <Plus className="w-3 h-3 mr-0.5" />
+                            추가하기
+                        </Button>
+                    </div>
+
+                    {/* 인라인 입력 */}
+                    {isAdding && (
+                        <div className="px-2 py-2 border-b bg-indigo-50/60 flex gap-1.5 items-center">
+                            <input
+                                ref={addInputRef}
+                                value={newTitle}
+                                onChange={(e) => setNewTitle(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleAddConfirm();
+                                    if (e.key === "Escape") { setIsAdding(false); setNewTitle(""); }
+                                }}
+                                placeholder="시험 제목"
+                                className="flex-1 text-sm border border-indigo-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
+                            />
+                            <button
+                                onClick={handleAddConfirm}
+                                disabled={addMutation.isPending}
+                                className="text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                                title="확인"
+                            >
+                                <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => { setIsAdding(false); setNewTitle(""); }}
+                                className="text-slate-400 hover:text-slate-600"
+                                title="취소"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                    )}
+
+                    {/* 시험 목록 */}
+                    <div className="flex-1 overflow-y-auto py-1">
+                        {examsQuery.isLoading && (
+                            <p className="text-xs text-slate-400 text-center py-4">불러오는 중...</p>
+                        )}
+                        {!examsQuery.isLoading && exams.length === 0 && !isAdding && (
+                            <p className="text-xs text-slate-400 text-center py-6 px-3">
+                                시험이 없습니다.<br />위의 추가하기를 눌러 등록하세요.
+                            </p>
+                        )}
+                        {exams.map((exam) => {
+                            const isSelected = exam.id === selectedExamId;
+                            const typeLabel = EXAM_TYPE_OPTIONS.find(o => o.value === exam.exam_type)?.label;
+                            return (
+                                <div
+                                    key={exam.id}
+                                    className={`group flex items-center gap-1 px-2 py-2 mx-1 my-0.5 rounded-lg cursor-pointer transition-colors ${
+                                        isSelected
+                                            ? "bg-indigo-100 text-indigo-900"
+                                            : "hover:bg-slate-100 text-slate-700"
+                                    }`}
+                                    onClick={() => setSelectedExamId(exam.id)}
+                                >
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-sm font-medium truncate ${isSelected ? "text-indigo-900" : ""}`}>
+                                            {exam.title}
+                                        </p>
+                                        {typeLabel && (
+                                            <p className="text-[10px] text-slate-400 mt-0.5">{typeLabel}</p>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (confirm(`"${exam.title}"을 삭제하시겠습니까?`)) {
+                                                deleteMutation.mutate(exam.id);
+                                            }
+                                        }}
+                                        className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-opacity"
+                                        title="삭제"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* ── 콘텐츠 영역 ──────────────────────────────────────────── */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+                {!selectedExam ? (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-400 select-none">
+                        <Calendar className="w-10 h-10 opacity-30" />
+                        <p className="text-sm font-medium">시험을 선택하세요</p>
+                        <p className="text-xs opacity-70">좌측 목록에서 시험을 선택하거나 새 시험을 추가하세요.</p>
+                    </div>
+                ) : (
+                    <div className="flex-1 flex flex-col gap-0 overflow-y-auto">
+                        {/* 헤더 */}
+                        <div className="flex items-center gap-2 px-6 py-4 border-b bg-slate-50/60 shrink-0">
+                            <Calendar className="w-4 h-4 text-indigo-500" />
+                            <h3 className="text-base font-bold text-indigo-800 flex-1">{selectedExam.title}</h3>
+                        </div>
+
+                        <div className="px-6 py-6 space-y-6">
+                            {/* 종류 선택 */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-slate-700">시험 종류</label>
+                                <p className="text-xs text-slate-400">종류를 선택하면 날짜 입력 방식이 결정됩니다.</p>
+                                <div className="flex gap-3 mt-1">
+                                    {EXAM_TYPE_OPTIONS.map((opt) => (
+                                        <button
+                                            key={opt.value}
+                                            onClick={() => {
+                                                setDraftType(opt.value);
+                                                setDraftStartDate("");
+                                                setDraftEndDate("");
+                                            }}
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                                draftType === opt.value
+                                                    ? "border-indigo-500 bg-indigo-50 text-indigo-800"
+                                                    : "border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-indigo-50/40"
+                                            }`}
+                                        >
+                                            <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                                draftType === opt.value ? "border-indigo-500" : "border-slate-300"
+                                            }`}>
+                                                {draftType === opt.value && (
+                                                    <span className="w-2 h-2 rounded-full bg-indigo-500 block" />
+                                                )}
+                                            </span>
+                                            {opt.label}
+                                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-normal ${
+                                                opt.dateMode === "single"
+                                                    ? "bg-amber-100 text-amber-700"
+                                                    : "bg-blue-100 text-blue-700"
+                                            }`}>
+                                                {opt.dateMode === "single" ? "당일" : "기간"}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 날짜 입력 — 종류 선택 후에만 표시 */}
+                            {!selectedTypeOption && (
+                                <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border border-dashed border-slate-300 rounded-lg text-slate-400 text-sm">
+                                    <AlertCircle className="w-4 h-4 shrink-0" />
+                                    시험 종류를 먼저 선택하면 날짜 입력 항목이 나타납니다.
+                                </div>
+                            )}
+
+                            {selectedTypeOption?.dateMode === "single" && (
+                                <div className="space-y-2 animate-in fade-in duration-150">
+                                    <label className="text-sm font-semibold text-slate-700">시험 날짜</label>
+                                    <input
+                                        type="date"
+                                        value={draftStartDate}
+                                        onChange={(e) => setDraftStartDate(e.target.value)}
+                                        className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 w-52"
+                                    />
+                                </div>
+                            )}
+
+                            {selectedTypeOption?.dateMode === "period" && (
+                                <div className="space-y-2 animate-in fade-in duration-150">
+                                    <label className="text-sm font-semibold text-slate-700">시험 기간</label>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-xs text-slate-500">시작일</span>
+                                            <input
+                                                type="date"
+                                                value={draftStartDate}
+                                                onChange={(e) => setDraftStartDate(e.target.value)}
+                                                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 w-44"
+                                            />
+                                        </div>
+                                        <span className="text-slate-400 mt-5 font-bold">~</span>
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-xs text-slate-500">종료일</span>
+                                            <input
+                                                type="date"
+                                                value={draftEndDate}
+                                                min={draftStartDate}
+                                                onChange={(e) => setDraftEndDate(e.target.value)}
+                                                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 w-44"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 저장 버튼 — 종류 선택 후에만 표시 */}
+                            {selectedTypeOption && (
+                                <div className="pt-2">
+                                    <Button
+                                        onClick={handleSave}
+                                        disabled={saveMutation.isPending}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-6"
+                                    >
+                                        <Save className="w-4 h-4 mr-2" />
+                                        {saveMutation.isPending ? "저장 중..." : "저장"}
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
 
 
 

@@ -10,7 +10,8 @@ export const ALL_TABLES = [
     "timetable_cache",
     "meal_cache",
     "meal_suggestions",
-    "meal_ratings"
+    "meal_ratings",
+    "exam_schedules"
 ];
 
 export const createStudentProfilesTable = `
@@ -155,6 +156,19 @@ CREATE TABLE IF NOT EXISTS meal_suggestions (
 );
 `;
 
+export const createExamSchedulesTable = `
+CREATE TABLE IF NOT EXISTS exam_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    exam_type TEXT NOT NULL DEFAULT '',
+    start_date TEXT,
+    end_date TEXT,
+    display_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+`;
+
 export const createMealRatingsTable = `
 CREATE TABLE IF NOT EXISTS meal_ratings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -274,6 +288,7 @@ export async function ensureAllTables(db: any) {
         await db.prepare(createMealCacheTable).run();
         await db.prepare(createMealSuggestionsTable).run();
         await db.prepare(createMealRatingsTable).run();
+        await db.prepare(createExamSchedulesTable).run();
 
         // ── 컬럼 마이그레이션 ──────────────────────────────────────────────────
         try {
