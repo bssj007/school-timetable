@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff, ArrowLeft, ArrowRight, User, BookOpen, FileText, CalendarDays, Link2, Clock, BookMarked, Bell, UtensilsCrossed, MousePointerClick } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff, ArrowLeft, ArrowRight, User, BookOpen, FileText, CalendarDays, Link2, Clock, BookMarked, Bell, UtensilsCrossed, MousePointerClick, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -3146,31 +3146,31 @@ export default function TeacherPage() {
                             <p className="hidden md:block text-[10px] text-slate-400 mt-0.5">{a.teacher} 선생님</p>
                           )}
                         </div>
-                        <div className="shrink-0 text-right flex items-center gap-2">
-                          {/* 픽셀아트 하트 카운터 */}
-                          {helpfulCount > 0 && (
-                            <div className="flex items-center gap-0.5 text-pink-500" title={`땡큐 ${helpfulCount}개`}>
-                              <svg width="12" height="12" viewBox="0 0 7 7" style={{ imageRendering: 'pixelated', shapeRendering: 'crispEdges' }} fill="#ec4899" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="1" y="0" width="2" height="1"/>
-                                <rect x="4" y="0" width="2" height="1"/>
-                                <rect x="0" y="1" width="3" height="1"/>
-                                <rect x="4" y="1" width="3" height="1"/>
-                                <rect x="0" y="2" width="7" height="1"/>
-                                <rect x="1" y="3" width="5" height="1"/>
-                                <rect x="2" y="4" width="3" height="1"/>
-                                <rect x="3" y="5" width="1" height="1"/>
-                              </svg>
-                              <span className="text-[10px] font-extrabold leading-none">{helpfulCount}</span>
-                            </div>
-                          )}
-                          <div>
-                          {/* Mobile: date + day on one line */}
-                          <div className="md:hidden text-[11px] font-extrabold text-indigo-600 whitespace-nowrap">
-                            {mmdd} <span className="font-semibold text-slate-400">({wd})</span>
+                        <div className="shrink-0 text-right">
+                          {/* Mobile: date + thumbs-up 동일선 */}
+                          <div className="md:hidden flex items-center justify-end gap-1.5 whitespace-nowrap">
+                            {helpfulCount > 0 && (
+                              <span className="flex items-center gap-0.5 text-[10px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-1.5 py-0.5" title={`땡큐 ${helpfulCount}개`}>
+                                <ThumbsUp className="w-2.5 h-2.5" />
+                                {helpfulCount}
+                              </span>
+                            )}
+                            <span className="text-[11px] font-extrabold text-indigo-600">{mmdd}</span>
+                            <span className="text-[11px] font-semibold text-slate-400">({wd})</span>
                           </div>
-                          {/* Desktop: stacked */}
-                          <div className="hidden md:block text-[11px] font-extrabold text-indigo-600">{mmdd}</div>
-                          <div className="hidden md:block text-[9px] text-slate-400">{wd}요일</div>
+                          {/* Desktop: mmdd + thumbs-up 동일선상 */}
+                          <div className="hidden md:block">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {helpfulCount > 0 && (
+                                <span className="flex items-center gap-0.5 text-[10px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-1.5 py-0.5" title={`땡큐 ${helpfulCount}개`}>
+                                  <ThumbsUp className="w-2.5 h-2.5" />
+                                  {helpfulCount}
+                                </span>
+                              )}
+                              <span className="text-[11px] font-extrabold text-indigo-600">{mmdd}</span>
+                            </div>
+                            <div className="text-[9px] text-slate-400 text-right">{wd}요일</div>
+                          </div>
                           {a.description && (
                             <div className="mt-1 flex justify-end">
                               <span className="text-[10px] bg-indigo-600 text-white rounded-md px-1.5 py-0.5 font-extrabold whitespace-nowrap shadow-xs">
@@ -3178,7 +3178,6 @@ export default function TeacherPage() {
                               </span>
                             </div>
                           )}
-                          </div>
                         </div>
                       </div>
                     </div>
