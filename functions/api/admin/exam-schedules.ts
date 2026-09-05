@@ -1,4 +1,4 @@
-import { adminPassword } from "../../../server/adminPW";
+﻿import { adminPassword } from "../../../server/adminPW";
 import { ensureAllTables } from "../../db_schema";
 
 export const onRequest = async (context: any) => {
@@ -23,6 +23,7 @@ export const onRequest = async (context: any) => {
 
     const method = request.method.toUpperCase();
 
+    // GET: 시험 목록 조회
     if (method === "GET") {
         try {
             const { results } = await env.DB.prepare(
@@ -39,6 +40,7 @@ export const onRequest = async (context: any) => {
         }
     }
 
+    // POST: 시험 추가
     if (method === "POST") {
         try {
             const body = await request.json();
@@ -73,6 +75,7 @@ export const onRequest = async (context: any) => {
         }
     }
 
+    // PUT: 시험 수정
     if (method === "PUT") {
         try {
             const body = await request.json();
@@ -86,9 +89,7 @@ export const onRequest = async (context: any) => {
             }
 
             await env.DB.prepare(
-                UPDATE exam_schedules
-                 SET title = ?, exam_type = ?, start_date = ?, end_date = ?, updated_at = datetime('now')
-                 WHERE id = ?
+                "UPDATE exam_schedules SET title = ?, exam_type = ?, start_date = ?, end_date = ?, updated_at = datetime('now') WHERE id = ?"
             )
                 .bind(
                     (title || "").trim(),
@@ -110,6 +111,7 @@ export const onRequest = async (context: any) => {
         }
     }
 
+    // DELETE: 시험 삭제
     if (method === "DELETE") {
         try {
             const url = new URL(request.url);
