@@ -2546,17 +2546,6 @@ export default function Dashboard() {
               );
               if (periodAssessments.length === 0) return null;
 
-              const PERIOD_BAR_COLORS = [
-                '#fca5a5','#fdba74','#fcd34d','#86efac','#67e8f9','#a5b4fc','#c4b5fd','#f9a8d4','#fda4af','#99f6e4',
-              ];
-              const subjectColorMap = new Map<string, string>();
-              let colorIdx = 0;
-              periodAssessments.forEach(a => {
-                if (!subjectColorMap.has(a.subject)) {
-                  subjectColorMap.set(a.subject, PERIOD_BAR_COLORS[colorIdx % PERIOD_BAR_COLORS.length]);
-                  colorIdx++;
-                }
-              });
               const fmtShort = (d: string) => {
                 const p = d.split('-');
                 return `${parseInt(p[1])}/${parseInt(p[2])}`;
@@ -2564,16 +2553,30 @@ export default function Dashboard() {
 
               return (
                 <div className="px-3 pb-2 space-y-1">
-                  {periodAssessments.map(a => (
-                    <div
-                      key={a.id}
-                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold truncate"
-                      style={{ background: subjectColorMap.get(a.subject) || '#e2e8f0', color: '#1e293b' }}
-                    >
-                      <span className="truncate">{a.subject} · {a.title}</span>
-                      <span className="ml-auto shrink-0 text-[10px] font-medium opacity-70">{fmtShort(a.startDate!)}~{fmtShort(a.endDate!)}</span>
-                    </div>
-                  ))}
+                  {periodAssessments.map(a => {
+                    const isPast = a.endDate! < todayStr;
+                    return (
+                      <div
+                        key={a.id}
+                        className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border text-xs font-semibold ${
+                          isPast
+                            ? 'bg-gray-100 border-gray-300 text-gray-400'
+                            : 'bg-blue-50 border-blue-300 text-gray-800'
+                        }`}
+                      >
+                        <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                          isPast ? 'bg-gray-400 text-white' : 'bg-blue-600 text-white'
+                        }`}>
+                          숙제
+                        </span>
+                        <span className="truncate font-bold">{a.subject}</span>
+                        <span className="truncate opacity-70">{a.title}</span>
+                        <span className={`ml-auto shrink-0 text-[11px] font-bold whitespace-nowrap ${isPast ? 'text-gray-400' : 'text-blue-700'}`}>
+                          {fmtShort(a.startDate!)} ~ {fmtShort(a.endDate!)}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })()}
