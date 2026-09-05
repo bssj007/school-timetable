@@ -166,6 +166,8 @@ export default function Dashboard() {
   const [viewingAssessments, setViewingAssessments] = useState<AssessmentItem[]>([]);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<AssessmentItem | null>(null);
+  // 수행평가 목록: 과목 선택 뷰 (null = 타일, string = 해당 과목 상세)
+  const [assessmentSubjectView, setAssessmentSubjectView] = useState<string | null>(null);
   
   // Custom Orphan Relocation State
   const [relocatingAssessment, setRelocatingAssessment] = useState<AssessmentItem | null>(null);
@@ -2535,10 +2537,10 @@ export default function Dashboard() {
             {(() => {
               if (!allAssessments || !Array.isArray(allAssessments)) return null;
               const now = new Date();
-              const oneMonthLater = new Date(now);
-              oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+              const twoWeeksLater = new Date(now);
+              twoWeeksLater.setDate(twoWeeksLater.getDate() + 14);
               const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-              const limitStr = `${oneMonthLater.getFullYear()}-${String(oneMonthLater.getMonth()+1).padStart(2,'0')}-${String(oneMonthLater.getDate()).padStart(2,'0')}`;
+              const limitStr = `${twoWeeksLater.getFullYear()}-${String(twoWeeksLater.getMonth()+1).padStart(2,'0')}-${String(twoWeeksLater.getDate()).padStart(2,'0')}`;
 
               const periodAssessments = (allAssessments as AssessmentItem[]).filter(a =>
                 a.endDate && a.startDate &&
@@ -2558,7 +2560,7 @@ export default function Dashboard() {
                     return (
                       <div
                         key={a.id}
-                        className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border text-xs font-semibold ${
+                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-sm font-semibold ${
                           isPast
                             ? 'bg-gray-100 border-gray-300 text-gray-400'
                             : 'bg-blue-50 border-blue-300 text-gray-800'
@@ -3199,212 +3201,312 @@ export default function Dashboard() {
 
         </div>
       )}
-      {/* 수행평가 목록 */}
+      {/* 수행평가 목록 — 과목 타일 + 페이지 전환 */}
       {!isRestricted && (
         <Card className="mt-8">
-          <CardHeader>
-          <CardTitle className="flex items-center gap-2 flex-wrap">
-            <span>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}</span> 수행평가 ({weekRangeText})
-            {isOutOfDateRange && (
-              <span className="text-xs font-bold text-red-500 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse">
-                미확정 시간표
-              </span>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {(() => {
+            // 전체 수행평가에서 과거 제외 (당일형: dueDate >= today, 숙제형: endDate >= today)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStr = toDateString(today);
+            const allFiltered = (allAssessments || []).filter(a => {
+              if (a.endDate) {
+                return a.endDate >= todayStr;
+              }
+              const effDate = a.tempDueDate || a.dueDate;
+              return effDate >= todayStr;
+            });
 
-            {assessments && assessments.filter(assessment => {
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              const effDate = assessment.tempDueDate || assessment.dueDate;
-              return new Date(effDate) >= today;
-            }).length > 0 ? (
-              assessments
-                .filter(assessment => {
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  const effDate = assessment.tempDueDate || assessment.dueDate;
-                  return new Date(effDate) >= today;
+            // 2/3학년 과목 필터링 적용
+            const studentFiltered = (grade === "2" || grade === "3")
+              ? allFiltered.filter(a => {
+                  const baseSubject = a.subject.replace(/\s*\(.*$/, '').trim();
+                  return myActualSubjects.has(baseSubject);
                 })
-                .map((assessment) => {
-                  const effDate = assessment.tempDueDate || assessment.dueDate;
-                  const diffDate = Math.ceil((new Date(effDate).getTime() - new Date(toDateString(new Date())).getTime()) / (1000 * 60 * 60 * 24));
-                  const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
-                  const isToday = diffDate === 0;
+              : allFiltered;
 
-                  // Compute card background based on vote reliability
-                  const voteInfo = votesData?.votes?.[String(assessment.id)];
-                  let cardBg = isToday ? '#fef2f2' : '#ffffff'; // default: red-50 or white
-                  if (voteInfo && !isToday) {
-                    const net = (voteInfo.helpful || 0) - (voteInfo.distrust || 0);
-                    if (net > 0) {
-                      // Positive: blend bg-white with positive color
-                      const mixColor = settings?.assessment_positive_color || '#22c55e';
-                      const ratio = Math.min(100, parseInt(settings?.assessment_positive_ratio || '30')) / 100;
-                      const scaled = Math.min(1, (voteInfo.helpful || 0) / 10) * ratio;
-                      const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
-                      const b = p('#ffffff'), m = p(mixColor);
-                      cardBg = '#' + b.map((c, i) => Math.round(c*(1-scaled)+m[i]*scaled).toString(16).padStart(2,'0')).join('');
-                    } else if (net < 0) {
-                      // Negative: blend bg-white with negative color
-                      const mixColor = settings?.assessment_negative_color || '#9ca3af';
-                      const ratio = Math.min(100, parseInt(settings?.assessment_negative_ratio || '40')) / 100;
-                      const scaled = Math.min(1, (voteInfo.distrust || 0) / 10) * ratio;
-                      const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
-                      const b = p('#ffffff'), m = p(mixColor);
-                      cardBg = '#' + b.map((c, i) => Math.round(c*(1-scaled)+m[i]*scaled).toString(16).padStart(2,'0')).join('');
-                    }
-                  }
+            // 고유 과목명 추출
+            const uniqueSubjects = Array.from(new Set(studentFiltered.map(a => a.subject)));
 
-                  return (
-                    <div
-                      key={assessment.id}
-                      className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col h-full ${isToday ? 'border-red-200' : ''}`}
-                      style={{ 
-                        backgroundColor: cardBg,
-                        backgroundImage: assessment.isPostponed ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.05) 10px, rgba(239, 68, 68, 0.05) 20px)' : 'none'
-                      }}
-                      onClick={() => {
-                        // Find the cell logic
-                        const targetDate = new Date(assessment.tempDueDate || assessment.dueDate); // This might be string 'YYYY-MM-DD'
-                        // We need to find which column (weekday) and row (classTime) this corresponds to.
-                        // However, viewingAssessments are "this week's" assessments, so they should be on the screen.
-                        // But wait, the assessments list is "This Week's".
+            // BOOKMARK_COLORS (TeacherPage에서 차용)
+            const TILE_COLORS = [
+              { bg: '#dbeafe', activeBg: '#2563eb', text: '#1e40af', activeText: '#ffffff' },
+              { bg: '#fce7f3', activeBg: '#be185d', text: '#9d174d', activeText: '#ffffff' },
+              { bg: '#d1fae5', activeBg: '#059669', text: '#065f46', activeText: '#ffffff' },
+              { bg: '#fef3c7', activeBg: '#d97706', text: '#92400e', activeText: '#ffffff' },
+              { bg: '#e0e7ff', activeBg: '#4f46e5', text: '#3730a3', activeText: '#ffffff' },
+              { bg: '#fce4ec', activeBg: '#c62828', text: '#b71c1c', activeText: '#ffffff' },
+              { bg: '#e0f2f1', activeBg: '#00897b', text: '#004d40', activeText: '#ffffff' },
+              { bg: '#fff3e0', activeBg: '#ef6c00', text: '#e65100', activeText: '#ffffff' },
+              { bg: '#ede7f6', activeBg: '#5e35b1', text: '#4527a0', activeText: '#ffffff' },
+              { bg: '#e8f5e9', activeBg: '#2e7d32', text: '#1b5e20', activeText: '#ffffff' },
+            ];
 
-                        // Let's find the weekday index.
-                        // assessment.weekday might be available if we joined it, but currently AssessmentItem has weekday optional.
-                        // Actually, we can calculate weekday from date.
-                        const aDate = new Date(assessment.dueDate);
-                        const day = aDate.getDay(); // 0(Sun) - 6(Sat). 
-                        const weekdayIdx = day === 0 ? 6 : day - 1; // 0(Mon) - 4(Fri). Adjust for Sunday (0) and Saturday (6) if needed, assuming Mon-Fri.
-
-                        // Check if weekday is valid (Mon-Fri) and classTime exists
-                        if (weekdayIdx >= 0 && weekdayIdx <= 4 && assessment.classTime) {
-                          const cellId = `cell-${weekdayIdx}-${assessment.classTime}`;
-                          const element = document.getElementById(cellId);
-                          if (element) {
-                            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            element.classList.add('highlight-cell');
-                            setTimeout(() => {
-                              element.classList.remove('highlight-cell');
-                            }, 2000);
-                          }
-                        }
-                      }}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-1 flex-wrap mb-1">
-                            <span className="font-bold text-lg text-blue-600">
-                              {assessment.subject}
-                            </span>
-                            {assessment.isTeacherCreated === 1 && (
-                              <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold border border-emerald-200 whitespace-nowrap">
-                                선생님 직접 등록
-                              </span>
-                            )}
-                            <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-                              {assessment.description}
-                            </span>
-                            {!assessment.isPostponed && (
-                              <span className={`text-base font-bold ${isToday ? 'text-red-600' : 'text-gray-500'} ml-1`}>
-                                {dDay}
-                              </span>
-                            )}
-                          </div>
-                          {assessment.isPostponed && Boolean(assessment.isAutoPredicted) && (
-                            <div className="text-red-500 text-sm font-bold mt-0.5">
-                              시간표 변경
-                            </div>
-                          )}
-                        </div>
-                        {grade && classNum && studentNumber && (
-                          <div className="flex items-center gap-2 flex-shrink-0 ml-2" onClick={e => e.stopPropagation()}>
-                            <button
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                                votesData?.myVotes?.[String(assessment.id)] === 'helpful'
-                                  ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
-                                  : 'bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-green-600'
-                              }`}
-                              onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'helpful' }); e.currentTarget.blur(); }}
-                              disabled={voteMutation.isPending}
-                            >
-                              <ThumbsUp className="w-4 h-4" />
-                              <span>땡큐</span>
-                              <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.helpful || 0}</span>
-                            </button>
-                            <button
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                                votesData?.myVotes?.[String(assessment.id)] === 'distrust'
-                                  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
-                                  : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600'
-                              }`}
-                              onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' }); e.currentTarget.blur(); }}
-                              disabled={voteMutation.isPending}
-                            >
-                              <X className="w-4 h-4" />
-                              <span>가짜</span>
-                              <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.distrust || 0}</span>
-                            </button>
-                          </div>
-                        )}
+            if (assessmentSubjectView === null) {
+              // ===== PAGE 1: 과목 타일 선택 =====
+              return (
+                <>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      수행평가
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {uniqueSubjects.length === 0 ? (
+                      <div className="text-center py-12 text-gray-500">
+                        등록된 수행평가가 없습니다.
                       </div>
-                      <p className="text-gray-700 mb-2">{assessment.title}</p>
-                      <div className="flex items-end justify-between mt-auto">
-                        <div className={`flex text-sm text-gray-500 ${assessment.isPostponed ? 'flex-col items-start gap-1' : 'items-center'}`}>
-                          {assessment.isPostponed ? (
-                            <>
-                              <div className="flex items-center">
-                                <span className="line-through text-gray-400">{formatShortDateText(assessment.originalDueDate || assessment.dueDate)} {(assessment.originalClassTime || assessment.classTime)}교시</span>
-                                <span className="mx-1 font-bold text-red-500">➔</span>
-                              </div>
-                              <div className="flex items-center">
-                                <span className="font-bold text-red-600">{formatShortDateText(assessment.tempDueDate || assessment.dueDate)} {assessment.tempClassTime || assessment.classTime}교시</span>
-                                {Boolean(assessment.isAutoPredicted) && (
-                                  <span className="ml-1 text-xs text-orange-500 font-bold whitespace-nowrap">(자동예측)</span>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        {uniqueSubjects.map((subject, idx) => {
+                          const color = TILE_COLORS[idx % TILE_COLORS.length];
+                          const count = studentFiltered.filter(a => a.subject === subject).length;
+                          return (
+                            <button
+                              key={subject}
+                              type="button"
+                              onClick={() => setAssessmentSubjectView(subject)}
+                              className="flex flex-col items-center justify-center gap-1 p-4 rounded-xl border-2 transition-all hover:scale-[1.03] active:scale-[0.97] cursor-pointer shadow-sm hover:shadow-md"
+                              style={{
+                                background: color.bg,
+                                borderColor: color.activeBg + '40',
+                                color: color.text,
+                              }}
+                            >
+                              <span className="font-extrabold text-base leading-tight">{subject}</span>
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: color.activeBg + '20' }}>
+                                {count}건
+                              </span>
+                            </button>
+                          );
+                        })}
+                        {/* 전체 보기 타일 */}
+                        <button
+                          type="button"
+                          onClick={() => setAssessmentSubjectView('__ALL__')}
+                          className="flex flex-col items-center justify-center gap-1 p-4 rounded-xl border-2 border-slate-200 bg-slate-50 text-slate-600 transition-all hover:scale-[1.03] active:scale-[0.97] cursor-pointer shadow-sm hover:shadow-md hover:bg-slate-100"
+                        >
+                          <span className="font-extrabold text-base leading-tight">전체</span>
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-200">
+                            {studentFiltered.length}건
+                          </span>
+                        </button>
+                      </div>
+                    )}
+                  </CardContent>
+                </>
+              );
+            } else {
+              // ===== PAGE 2: 과목 상세 카드 목록 =====
+              const isAll = assessmentSubjectView === '__ALL__';
+              const filtered = isAll
+                ? studentFiltered
+                : studentFiltered.filter(a => a.subject === assessmentSubjectView);
+              const subjectLabel = isAll ? '전체' : assessmentSubjectView;
+
+              const fmtShort = (d: string) => {
+                const p = d.split('-');
+                return `${parseInt(p[1])}/${parseInt(p[2])}`;
+              };
+
+              return (
+                <>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2">
+                        {subjectLabel} 수행평가
+                        <span className="text-sm font-medium text-gray-400">({filtered.length}건)</span>
+                      </CardTitle>
+                      <button
+                        type="button"
+                        onClick={() => setAssessmentSubjectView(null)}
+                        className="flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-blue-50"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        돌아가기
+                      </button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filtered.length > 0 ? (
+                        filtered.map((assessment) => {
+                          const isHomework = !!assessment.endDate;
+                          const effDate = assessment.tempDueDate || assessment.dueDate;
+                          const diffDate = Math.ceil((new Date(effDate).getTime() - new Date(todayStr).getTime()) / (1000 * 60 * 60 * 24));
+                          const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
+                          const isToday = diffDate === 0;
+
+                          const voteInfo = votesData?.votes?.[String(assessment.id)];
+                          let cardBg = isToday ? '#fef2f2' : '#ffffff';
+                          if (voteInfo && !isToday && !isHomework) {
+                            const net = (voteInfo.helpful || 0) - (voteInfo.distrust || 0);
+                            if (net > 0) {
+                              const mixColor = settings?.assessment_positive_color || '#22c55e';
+                              const ratio = Math.min(100, parseInt(settings?.assessment_positive_ratio || '30')) / 100;
+                              const scaled = Math.min(1, (voteInfo.helpful || 0) / 10) * ratio;
+                              const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
+                              const b = p('#ffffff'), m = p(mixColor);
+                              cardBg = '#' + b.map((c, i) => Math.round(c*(1-scaled)+m[i]*scaled).toString(16).padStart(2,'0')).join('');
+                            } else if (net < 0) {
+                              const mixColor = settings?.assessment_negative_color || '#9ca3af';
+                              const ratio = Math.min(100, parseInt(settings?.assessment_negative_ratio || '40')) / 100;
+                              const scaled = Math.min(1, (voteInfo.distrust || 0) / 10) * ratio;
+                              const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
+                              const b = p('#ffffff'), m = p(mixColor);
+                              cardBg = '#' + b.map((c, i) => Math.round(c*(1-scaled)+m[i]*scaled).toString(16).padStart(2,'0')).join('');
+                            }
+                          }
+
+                          return (
+                            <div
+                              key={assessment.id}
+                              className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col h-full ${isToday ? 'border-red-200' : ''}`}
+                              style={{
+                                backgroundColor: cardBg,
+                                backgroundImage: assessment.isPostponed ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.05) 10px, rgba(239, 68, 68, 0.05) 20px)' : 'none'
+                              }}
+                              onClick={() => {
+                                if (isHomework) return;
+                                const aDate = new Date(assessment.dueDate);
+                                const day = aDate.getDay();
+                                const weekdayIdx = day === 0 ? 6 : day - 1;
+                                if (weekdayIdx >= 0 && weekdayIdx <= 4 && assessment.classTime) {
+                                  const cellId = `cell-${weekdayIdx}-${assessment.classTime}`;
+                                  const element = document.getElementById(cellId);
+                                  if (element) {
+                                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    element.classList.add('highlight-cell');
+                                    setTimeout(() => element.classList.remove('highlight-cell'), 2000);
+                                  }
+                                }
+                              }}
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-1 flex-wrap mb-1">
+                                    <span className="font-bold text-lg text-blue-600">
+                                      {assessment.subject}
+                                    </span>
+                                    {assessment.isTeacherCreated === 1 && (
+                                      <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold border border-emerald-200 whitespace-nowrap">
+                                        선생님 직접 등록
+                                      </span>
+                                    )}
+                                    {isHomework ? (
+                                      <span className="text-sm px-2 py-0.5 rounded-full bg-blue-600 text-white font-bold">
+                                        숙제
+                                      </span>
+                                    ) : assessment.description ? (
+                                      <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                                        {assessment.description}
+                                      </span>
+                                    ) : null}
+                                    {!assessment.isPostponed && (
+                                      <span className={`text-base font-bold ${isToday ? 'text-red-600' : 'text-gray-500'} ml-1`}>
+                                        {dDay}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {assessment.isPostponed && Boolean(assessment.isAutoPredicted) && (
+                                    <div className="text-red-500 text-sm font-bold mt-0.5">
+                                      시간표 변경
+                                    </div>
+                                  )}
+                                </div>
+                                {!isHomework && grade && classNum && studentNumber && (
+                                  <div className="flex items-center gap-2 flex-shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+                                    <button
+                                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                        votesData?.myVotes?.[String(assessment.id)] === 'helpful'
+                                          ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
+                                          : 'bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-green-600'
+                                      }`}
+                                      onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'helpful' }); e.currentTarget.blur(); }}
+                                      disabled={voteMutation.isPending}
+                                    >
+                                      <ThumbsUp className="w-4 h-4" />
+                                      <span>땡큐</span>
+                                      <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.helpful || 0}</span>
+                                    </button>
+                                    <button
+                                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                        votesData?.myVotes?.[String(assessment.id)] === 'distrust'
+                                          ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
+                                          : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600'
+                                      }`}
+                                      onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' }); e.currentTarget.blur(); }}
+                                      disabled={voteMutation.isPending}
+                                    >
+                                      <X className="w-4 h-4" />
+                                      <span>가짜</span>
+                                      <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.distrust || 0}</span>
+                                    </button>
+                                  </div>
                                 )}
                               </div>
-                            </>
-                          ) : (
-                            <>
-                              <span>{assessment.dueDate}</span>
-                              <span className="mx-2">|</span>
-                              <span>{assessment.classTime}교시</span>
-                            </>
-                          )}
+                              <p className="text-gray-700 mb-2">{assessment.title}</p>
+                              <div className="flex items-end justify-between mt-auto">
+                                <div className={`flex text-sm text-gray-500 ${assessment.isPostponed ? 'flex-col items-start gap-1' : 'items-center'}`}>
+                                  {isHomework ? (
+                                    <span className="font-bold text-blue-700">
+                                      {fmtShort(assessment.startDate!)} ~ {fmtShort(assessment.endDate!)}
+                                    </span>
+                                  ) : assessment.isPostponed ? (
+                                    <>
+                                      <div className="flex items-center">
+                                        <span className="line-through text-gray-400">{formatShortDateText(assessment.originalDueDate || assessment.dueDate)} {(assessment.originalClassTime || assessment.classTime)}교시</span>
+                                        <span className="mx-1 font-bold text-red-500">➔</span>
+                                      </div>
+                                      <div className="flex items-center">
+                                        <span className="font-bold text-red-600">{formatShortDateText(assessment.tempDueDate || assessment.dueDate)} {assessment.tempClassTime || assessment.classTime}교시</span>
+                                        {Boolean(assessment.isAutoPredicted) && (
+                                          <span className="ml-1 text-xs text-orange-500 font-bold whitespace-nowrap">(자동예측)</span>
+                                        )}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span>{assessment.dueDate}</span>
+                                      <span className="mx-2">|</span>
+                                      <span>{assessment.classTime}교시</span>
+                                    </>
+                                  )}
+                                </div>
+                                {!isHomework && assessment.isPostponed && assessment.isTeacherCreated !== 1 && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-600 border-red-200 hover:bg-red-50 h-7 text-xs px-2 shadow-sm ml-2 shrink-0 pointer-events-auto"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (!checkStudentPermission(assessment.grade)) return;
+                                      setRelocatingAssessment(assessment);
+                                      setPendingRelocation(null);
+                                      window.scrollTo({ top: 0, behavior: "smooth" });
+                                    }}
+                                  >
+                                    날짜 바꾸기
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="col-span-full text-center py-12 text-gray-500">
+                          등록된 수행평가가 없습니다.
+                          <br />
+                          <span className="text-sm">시간표에서 과목을 클릭하여 추가하세요.</span>
                         </div>
-                        {assessment.isPostponed && assessment.isTeacherCreated !== 1 && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="text-red-600 border-red-200 hover:bg-red-50 h-7 text-xs px-2 shadow-sm ml-2 shrink-0 pointer-events-auto"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!checkStudentPermission(assessment.grade)) return;
-                              setRelocatingAssessment(assessment);
-                              setPendingRelocation(null);
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
-                          >
-                            날짜 바꾸기
-                          </Button>
-                        )}
-                      </div>
+                      )}
                     </div>
-                  );
-                })
-            ) : (
-              <div className="col-span-full text-center py-12 text-gray-500">
-                이번 주 등록된 수행평가가 없습니다.
-                <br />
-                <span className="text-sm">시간표에서 과목을 클릭하여 추가하세요.</span>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                  </CardContent>
+                </>
+              );
+            }
+          })()}
+        </Card>
       )}
       <div className="mt-2 flex justify-end">
         <Link href="/admin">
