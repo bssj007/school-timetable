@@ -36,6 +36,10 @@ interface AssessmentItem {
   classCode?: string;
   isTeacherCreated?: number;
   activityType?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  submissionLink?: string | null;
+  attachments?: string | null;
 }
 
 // Helper: Download PC Desktop .url Shortcut
@@ -2105,11 +2109,47 @@ export default function TeacherPage() {
                   })() : (
                     <button
                       type="button"
-                      onClick={() => {/* TODO: DB 연동 후 등록 처리 */}}
-                      className="flex-[2] h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-sm transition-colors flex items-center justify-center gap-1"
+                      disabled={createMutation.isPending}
+                      onClick={() => {
+                        // 학년/반 파싱
+                        const selectedClass = classesForHwSubject.find(
+                          c => String(c.classNum) === hwForm.classNum
+                        );
+                        if (!selectedClass) { toast.error("반을 선택하세요."); return; }
+
+                        let resolvedDataset = 'COMCIGAN';
+                        if (selectedClass.grade === 1) resolvedDataset = g1DatasetType;
+                        else if (selectedClass.grade === 2) resolvedDataset = g2DatasetType;
+                        else if (selectedClass.grade === 3) resolvedDataset = g3DatasetType;
+
+                        createMutation.mutate({
+                          subject: hwForm.subject,
+                          title: hwForm.title,
+                          description: hwForm.content || '',
+                          dueDate: hwForm.dueDate,
+                          startDate: hwForm.startDate,
+                          endDate: hwForm.dueDate,
+                          grade: selectedClass.grade,
+                          classNum: selectedClass.classNum,
+                          classTime: null,
+                          dataset: resolvedDataset,
+                          teacher: teacherName,
+                          classCode: extractClassCode(hwForm.subject),
+                          isTeacherCreated: 1,
+                          activityType: hwForm.activityType || '수행평가',
+                          submissionLink: hwForm.link || null,
+                        }, {
+                          onSuccess: () => {
+                            setHwForm({ subject: '', classNum: '', startDate: '', dueDate: '', title: '', content: '', link: '', activityType: '수행평가' });
+                            setHwPage(1);
+                            setMobileViewMode('daily');
+                          }
+                        });
+                      }}
+                      className={`flex-[2] h-11 rounded-xl font-extrabold text-sm transition-colors flex items-center justify-center gap-1 ${createMutation.isPending ? 'bg-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800'} text-white`}
                     >
                       <Plus className="w-4 h-4" />
-                      등록
+                      {createMutation.isPending ? '등록 중...' : '등록'}
                     </button>
                   )}
                 </div>
@@ -2595,6 +2635,55 @@ export default function TeacherPage() {
               </table>
             </div>
           ) : null}
+
+      {/* ── 기간형 수행평가 컨테이너 하단 바 ── */}
+      {(() => {
+        if (!allAssessments) return null;
+        const now = new Date();
+        const oneMonthLater = new Date(now);
+        oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+        const limitStr = `${oneMonthLater.getFullYear()}-${String(oneMonthLater.getMonth()+1).padStart(2,'0')}-${String(oneMonthLater.getDate()).padStart(2,'0')}`;
+
+        const periodAssessments = allAssessments.filter(a =>
+          a.endDate && a.startDate &&
+          a.startDate <= limitStr && a.endDate >= todayStr
+        );
+        if (periodAssessments.length === 0) return null;
+
+        // 과목별 해시 기반 파스텔 색상
+        const PERIOD_BAR_COLORS = [
+          '#fca5a5','#fdba74','#fcd34d','#86efac','#67e8f9','#a5b4fc','#c4b5fd','#f9a8d4','#fda4af','#99f6e4',
+        ];
+        const subjectColorMap = new Map<string, string>();
+        let colorIdx = 0;
+        periodAssessments.forEach(a => {
+          if (!subjectColorMap.has(a.subject)) {
+            subjectColorMap.set(a.subject, PERIOD_BAR_COLORS[colorIdx % PERIOD_BAR_COLORS.length]);
+            colorIdx++;
+          }
+        });
+
+        const fmtShort = (d: string) => {
+          const p = d.split('-');
+          return `${parseInt(p[1])}/${parseInt(p[2])}`;
+        };
+
+        return (
+          <div className="px-1 pb-1 space-y-0.5 border-t border-slate-200 bg-slate-50/50">
+            {periodAssessments.map(a => (
+              <div
+                key={a.id}
+                className="flex items-center gap-2 px-2 py-1 rounded text-xs font-semibold truncate"
+                style={{ background: subjectColorMap.get(a.subject) || '#e2e8f0', color: '#1e293b' }}
+              >
+                <span className="truncate">{a.subject} · {a.title}</span>
+                <span className="ml-auto shrink-0 text-[10px] font-medium opacity-70">{fmtShort(a.startDate!)}~{fmtShort(a.endDate!)}</span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
       </div>
 
       {/* ===== PC 전용: 표 밑 설명 텍스트 ===== */}

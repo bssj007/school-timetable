@@ -46,6 +46,10 @@ async function ensureSchema(db: any) {
         "ALTER TABLE performance_assessments ADD COLUMN isTeacherCreated INTEGER DEFAULT 0",
         "ALTER TABLE performance_assessments ADD COLUMN activityType TEXT DEFAULT '수행평가'",
         "ALTER TABLE performance_assessments ADD COLUMN lastModifiedIp TEXT",
+        "ALTER TABLE performance_assessments ADD COLUMN startDate TEXT",
+        "ALTER TABLE performance_assessments ADD COLUMN endDate TEXT",
+        "ALTER TABLE performance_assessments ADD COLUMN submissionLink TEXT",
+        "ALTER TABLE performance_assessments ADD COLUMN attachments TEXT DEFAULT '[]'",
     ];
     for (const sql of migrations) {
         try { await db.prepare(sql).run(); } catch (_) { /* 이미 존재하면 무시 */ }
@@ -296,7 +300,7 @@ export const onRequest = async (context: any) => {
             }
 
             const body = await request.json();
-            const { subject, title, dueDate, description, grade, classNum, classTime, teacher, classCode, isTeacherCreated, activityType } = body;
+            const { subject, title, dueDate, description, grade, classNum, classTime, teacher, classCode, isTeacherCreated, activityType, startDate, endDate, submissionLink, attachments } = body;
 
             if (!subject || !title || !dueDate || !grade || !classNum) {
                 return new Response("Missing required fields", { status: 400 });
@@ -361,8 +365,8 @@ export const onRequest = async (context: any) => {
             const rawDataset = body.dataset || '';
             const dataset = (rawDataset === 'MANUAL_PLAN' || rawDataset === 'SEMESTER_PLAN') ? rawDataset : 'COMCIGAN';
 
-            // 중복 체크
-            if (classTime) {
+            // 중복 체크 (당일형만 — 기간형은 교시 개념이 없으므로 스킵)
+            if (classTime && !endDate) {
                 const existing = await env.DB.prepare(
                     "SELECT id FROM performance_assessments WHERE grade = ? AND classNum = ? AND COALESCE(tempDueDate, dueDate) = ? AND COALESCE(tempClassTime, classTime) = ? AND dataset = ? AND isDeleted = 0"
                 ).bind(grade, actualClassNum, dueDate, classTime, dataset).first();
@@ -384,13 +388,16 @@ export const onRequest = async (context: any) => {
                 const result = await env.DB.prepare(
                     `INSERT INTO performance_assessments
                      (subject, title, description, dueDate, grade, classNum, classTime, isDone,
-                      dataset, lastModifiedIp, teacher, classCode, isTeacherCreated, activityType)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`
+                      dataset, lastModifiedIp, teacher, classCode, isTeacherCreated, activityType,
+                      startDate, endDate, submissionLink, attachments)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
                 ).bind(
                     subject, title, description || '', dueDate, grade, actualClassNum,
                     classTime || null, dataset, ip,
                     teacher || null, classCode || null,
-                    isTeacherCreated || 0, resolvedActivityType
+                    isTeacherCreated || 0, resolvedActivityType,
+                    startDate || null, endDate || null,
+                    submissionLink || null, attachments || '[]'
                 ).run();
 
                 try {
