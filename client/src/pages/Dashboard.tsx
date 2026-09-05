@@ -3251,7 +3251,7 @@ export default function Dashboard() {
                       수행평가
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="min-h-[200px]">
                     {uniqueSubjects.length === 0 ? (
                       <div className="text-center py-12 text-gray-500">
                         등록된 수행평가가 없습니다.
