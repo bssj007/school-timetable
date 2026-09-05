@@ -10895,6 +10895,7 @@ function ExamScheduleManager({ adminPassword }: { adminPassword: string }) {
     const [draftType, setDraftType] = useState<string>("");
     const [draftStartDate, setDraftStartDate] = useState<string>("");
     const [draftEndDate, setDraftEndDate] = useState<string>("");
+    const [confirmDelete, setConfirmDelete] = useState(false);
 
     // ── Query: 시험 목록 ────────────────────────────────────────────────────
     const examsQuery = useQuery<ExamItem[]>({
@@ -10926,6 +10927,9 @@ function ExamScheduleManager({ adminPassword }: { adminPassword: string }) {
             setDraftEndDate("");
         }
     }, [selectedExamId, selectedExam?.exam_type, selectedExam?.start_date, selectedExam?.end_date]);
+
+    // 시험이 바뀌면 삭제 확인 상태도 초기화
+    React.useEffect(() => { setConfirmDelete(false); }, [selectedExamId]);
 
     // ── Mutation: 추가 ──────────────────────────────────────────────────────
     const addMutation = useMutation({
@@ -11134,7 +11138,7 @@ function ExamScheduleManager({ adminPassword }: { adminPassword: string }) {
                             return (
                                 <div
                                     key={exam.id}
-                                    className={`group flex items-center gap-1 px-2 py-2 mx-1 my-0.5 rounded-lg cursor-pointer transition-colors ${
+                                    className={`flex items-center gap-1 px-2 py-2 mx-1 my-0.5 rounded-lg cursor-pointer transition-colors ${
                                         isSelected
                                             ? "bg-indigo-100 text-indigo-900"
                                             : "hover:bg-slate-100 text-slate-700"
@@ -11149,18 +11153,6 @@ function ExamScheduleManager({ adminPassword }: { adminPassword: string }) {
                                             <p className="text-[10px] text-slate-400 mt-0.5">{typeLabel}</p>
                                         )}
                                     </div>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (confirm(`"${exam.title}"을 삭제하시겠습니까?`)) {
-                                                deleteMutation.mutate(exam.id);
-                                            }
-                                        }}
-                                        className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-opacity"
-                                        title="삭제"
-                                    >
-                                        <X className="w-3.5 h-3.5" />
-                                    </button>
                                 </div>
                             );
                         })}
@@ -11285,6 +11277,47 @@ function ExamScheduleManager({ adminPassword }: { adminPassword: string }) {
                                     </Button>
                                 </div>
                             )}
+
+                            {/* 삭제 영역 — 항상 표시, 우측 패널 하단 */}
+                            <div className="pt-4 mt-4 border-t border-slate-100">
+                                {!confirmDelete ? (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs px-3"
+                                        onClick={() => setConfirmDelete(true)}
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                                        이 시험 삭제
+                                    </Button>
+                                ) : (
+                                    <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                                        <span className="text-sm text-red-700 font-medium flex-1">
+                                            "{selectedExam.title}"를 삭제하시겠습니까?
+                                        </span>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-7 text-xs border-slate-300 text-slate-600"
+                                                onClick={() => setConfirmDelete(false)}
+                                            >
+                                                취소
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                className="h-7 text-xs bg-red-600 hover:bg-red-700 text-white"
+                                                onClick={() => deleteMutation.mutate(selectedExam.id)}
+                                                disabled={deleteMutation.isPending}
+                                            >
+                                                <Trash2 className="w-3 h-3 mr-1" />
+                                                {deleteMutation.isPending ? "삭제 중..." : "삭제"}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
