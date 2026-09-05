@@ -1650,7 +1650,7 @@ export default function TeacherPage() {
 
   return (
     <div 
-      className="w-full min-h-screen md:h-screen md:overflow-hidden px-2 md:px-4 pt-2 pb-0 flex flex-col"
+      className="w-full min-h-screen md:h-dvh md:overflow-hidden px-2 md:px-4 pt-2 pb-0 flex flex-col"
       style={{
         backgroundColor: '#f6e7c9',
         backgroundImage: `
@@ -2407,10 +2407,10 @@ export default function TeacherPage() {
                     const p = periodIndex + 1;
                     const isCurrentPeriod = currentPeriod === p && weekOffset === 0;
                     return (
-                      <tr key={p} className="h-[50px] md:h-[calc((100vh-130px)/7)] md:min-h-[44px]">
+                      <tr key={p} className="h-[50px] md:h-[calc((100dvh-130px)/7)] md:min-h-[44px]">
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[50px] md:h-[calc((100vh-130px)/7)] md:min-h-[44px] overflow-hidden"
+                          className="h-[50px] md:h-[calc((100dvh-130px)/7)] md:min-h-[44px] overflow-hidden"
                           style={{
                             width: 36,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
@@ -2463,7 +2463,7 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[52px] md:h-[calc((100vh-130px)/7)] md:min-h-[44px] overflow-hidden"
+                              className="group h-[52px] md:h-[calc((100dvh-130px)/7)] md:min-h-[44px] overflow-hidden"
                               style={{
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
