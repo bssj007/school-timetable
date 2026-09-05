@@ -40,6 +40,7 @@ interface AssessmentItem {
   endDate?: string | null;
   submissionLink?: string | null;
   attachments?: string | null;
+  votes?: string | null;
 }
 
 // Helper: Download PC Desktop .url Shortcut
@@ -2341,7 +2342,7 @@ export default function TeacherPage() {
                   const inRange      = isInDragRange(dateStr);
                   const isRangeStart = isDragStartDate(dateStr);
                   const isRangeEnd   = isDragEndDate(dateStr);
-                  const hasDailyAssessment = (allAssessments || []).some(a => a.dueDate === dateStr);
+                  const hasDailyAssessment = (allAssessments || []).some(a => !a.endDate && a.dueDate === dateStr);
 
                   return (
                     <div
@@ -2367,6 +2368,88 @@ export default function TeacherPage() {
                     </div>
                   );
                 })}
+
+                {/* ── 숙제형(기간형) 수행 오버레이 바 ── */}
+                {(() => {
+                  const hwAssessments = (allAssessments || []).filter(a => !!a.endDate && !!a.startDate);
+                  if (hwAssessments.length === 0) return null;
+
+                  // 달의 첫날 일요일 기준 offset
+                  const numRows = Math.ceil((startDow + totalDays) / 7);
+                  const DOW_H = 32;  // 요일 헤더 높이 (py-2 + text-[11px])
+                  const CELL_H = 44; // h-11
+                  const BAR_H = 14;  // 바 높이
+                  const BAR_TOP_OFFSET = CELL_H * 0.62; // 날짜숫자 아래 (점 위치)
+                  const BAR_COLOR = '#ec4899'; // pink-500
+
+                  const bars: React.ReactNode[] = [];
+
+                  hwAssessments.forEach((a, aIdx) => {
+                    // 이 달과 겹치는 기간 계산
+                    const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+                    const monthEnd   = `${year}-${String(month + 1).padStart(2, '0')}-${String(totalDays).padStart(2, '0')}`;
+                    const clampedStart = a.startDate! > monthStart ? a.startDate! : monthStart;
+                    const clampedEnd   = a.endDate!   < monthEnd   ? a.endDate!   : monthEnd;
+                    if (clampedStart > clampedEnd) return;
+
+                    // 날짜 → 그리드 인덱스 (0-based)
+                    const toIdx = (ds: string) => {
+                      const day = parseInt(ds.split('-')[2]);
+                      return startDow + day - 1;
+                    };
+
+                    const startIdx = toIdx(clampedStart);
+                    const endIdx   = toIdx(clampedEnd);
+
+                    // 행(주)별로 분할
+                    const startRow = Math.floor(startIdx / 7);
+                    const endRow   = Math.floor(endIdx   / 7);
+                    const verticalLayer = aIdx % 3; // 겹침 방지용 수직 레이어
+
+                    for (let row = startRow; row <= endRow; row++) {
+                      const rowStartCol = row === startRow ? (startIdx % 7) : 0;
+                      const rowEndCol   = row === endRow   ? (endIdx   % 7) : 6;
+                      const isFirstRow  = row === startRow;
+                      const isLastRow   = row === endRow;
+                      // 달 시작이 아닌 실제 기간 시작인지
+                      const isActualStart = a.startDate! >= monthStart && row === startRow;
+                      const isActualEnd   = a.endDate!   <= monthEnd   && row === endRow;
+
+                      const leftPct  = (rowStartCol / 7) * 100;
+                      const rightPct = ((6 - rowEndCol) / 7) * 100;
+                      const topPx = DOW_H + row * CELL_H + BAR_TOP_OFFSET + verticalLayer * (BAR_H + 2);
+
+                      const borderRadius = [
+                        isActualStart && isFirstRow ? '999px' : '0',
+                        isActualEnd   && isLastRow  ? '999px' : '0',
+                        isActualEnd   && isLastRow  ? '999px' : '0',
+                        isActualStart && isFirstRow ? '999px' : '0',
+                      ].join(' ');
+
+                      bars.push(
+                        <div
+                          key={`hw-bar-${a.id}-row${row}`}
+                          className="absolute pointer-events-none"
+                          style={{
+                            top: topPx,
+                            left: `calc(${leftPct}% + ${isActualStart && isFirstRow ? 4 : 0}px)`,
+                            right: `calc(${rightPct}% + ${isActualEnd && isLastRow ? 4 : 0}px)`,
+                            height: BAR_H,
+                            border: `2px solid ${BAR_COLOR}`,
+                            borderRadius,
+                            // 안이 빈 바이므로 배경 투명
+                            background: 'transparent',
+                            // 시작/끝이 아닌 쪽 테두리 제거
+                            borderLeft:  isActualStart && isFirstRow ? `2px solid ${BAR_COLOR}` : 'none',
+                            borderRight: isActualEnd   && isLastRow  ? `2px solid ${BAR_COLOR}` : 'none',
+                          }}
+                        />
+                      );
+                    }
+                  });
+
+                  return bars;
+                })()}
               </div>
 
               {/* 하단 안내 */}
@@ -3011,6 +3094,12 @@ export default function TeacherPage() {
                     const cn = lectureClassNameMap.get(`${a.grade}-${(a.subject || '').trim()}-${panelCodes[0]}`);
                     return cn || `${a.grade}-?`;
                   })();
+                  // 딥큐 카운터 계산
+                  let helpfulCount = 0;
+                  try {
+                    const votesArr: { v: string }[] = JSON.parse(a.votes || '[]');
+                    helpfulCount = votesArr.filter(x => x.v === 'helpful').length;
+                  } catch { helpfulCount = 0; }
                   return (
                     <div
                       key={a.id}
@@ -3057,7 +3146,24 @@ export default function TeacherPage() {
                             <p className="hidden md:block text-[10px] text-slate-400 mt-0.5">{a.teacher} 선생님</p>
                           )}
                         </div>
-                        <div className="shrink-0 text-right">
+                        <div className="shrink-0 text-right flex items-center gap-2">
+                          {/* 픽셀아트 하트 카운터 */}
+                          {helpfulCount > 0 && (
+                            <div className="flex items-center gap-0.5 text-pink-500" title={`땡큐 ${helpfulCount}개`}>
+                              <svg width="12" height="12" viewBox="0 0 7 7" style={{ imageRendering: 'pixelated', shapeRendering: 'crispEdges' }} fill="#ec4899" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="1" y="0" width="2" height="1"/>
+                                <rect x="4" y="0" width="2" height="1"/>
+                                <rect x="0" y="1" width="3" height="1"/>
+                                <rect x="4" y="1" width="3" height="1"/>
+                                <rect x="0" y="2" width="7" height="1"/>
+                                <rect x="1" y="3" width="5" height="1"/>
+                                <rect x="2" y="4" width="3" height="1"/>
+                                <rect x="3" y="5" width="1" height="1"/>
+                              </svg>
+                              <span className="text-[10px] font-extrabold leading-none">{helpfulCount}</span>
+                            </div>
+                          )}
+                          <div>
                           {/* Mobile: date + day on one line */}
                           <div className="md:hidden text-[11px] font-extrabold text-indigo-600 whitespace-nowrap">
                             {mmdd} <span className="font-semibold text-slate-400">({wd})</span>
@@ -3072,6 +3178,7 @@ export default function TeacherPage() {
                               </span>
                             </div>
                           )}
+                          </div>
                         </div>
                       </div>
                     </div>

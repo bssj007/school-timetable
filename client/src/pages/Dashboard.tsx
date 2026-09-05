@@ -3414,8 +3414,9 @@ export default function Dashboard() {
                                     </div>
                                   )}
                                 </div>
-                                {!isHomework && grade && classNum && studentNumber && (
+                                {grade && classNum && studentNumber && (
                                   <div className="flex items-center gap-2 flex-shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+                                    {/* 땡큐 버튼: 항상 표시 (당일형/숙제형/선생님등록 모두) */}
                                     <button
                                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                                         votesData?.myVotes?.[String(assessment.id)] === 'helpful'
@@ -3429,19 +3430,22 @@ export default function Dashboard() {
                                       <span>땡큐</span>
                                       <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.helpful || 0}</span>
                                     </button>
-                                    <button
-                                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                                        votesData?.myVotes?.[String(assessment.id)] === 'distrust'
-                                          ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
-                                          : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600'
-                                      }`}
-                                      onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' }); e.currentTarget.blur(); }}
-                                      disabled={voteMutation.isPending}
-                                    >
-                                      <X className="w-4 h-4" />
-                                      <span>가짜</span>
-                                      <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.distrust || 0}</span>
-                                    </button>
+                                    {/* 가짜 버튼: 학생 등록(isTeacherCreated !== 1)이고 숙제형이 아닌 경우에만 표시 */}
+                                    {!isHomework && assessment.isTeacherCreated !== 1 && (
+                                      <button
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                          votesData?.myVotes?.[String(assessment.id)] === 'distrust'
+                                            ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
+                                            : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600'
+                                        }`}
+                                        onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' }); e.currentTarget.blur(); }}
+                                        disabled={voteMutation.isPending}
+                                      >
+                                        <X className="w-4 h-4" />
+                                        <span>가짜</span>
+                                        <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.distrust || 0}</span>
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                               </div>
