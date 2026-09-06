@@ -18,6 +18,7 @@ import Meal from "./pages/Meal";
 import TeacherPage from "./pages/TeacherPage";
 import TeacherAccount from "./pages/TeacherAccount";
 import IOSInstallGuide from "./pages/IOSInstallGuide";
+import AppDownloadPage, { shouldShowDownloadPage } from "./pages/AppDownloadPage";
 
 function Router() {
   return (
@@ -31,6 +32,7 @@ function Router() {
       <Route path={"/teacher"} component={TeacherPage} />
       <Route path={"/teachers"} component={TeacherPage} />
       <Route path={"/ios-install-guide"} component={IOSInstallGuide} />
+      <Route path={"/download"} component={AppDownloadPage} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -44,6 +46,8 @@ function AppContent() {
   const isTeacherRoute = location.startsWith("/teacher");
   const isAdminRoute = location.startsWith("/admin");
   const isMealRoute = location.startsWith("/meal");
+  const isDownloadRoute = location === "/download";
+  const isIOSGuideRoute = location === "/ios-install-guide";
 
   // 사이트 디자인설정 동적 적용 (제목 + 파비콘 + PWA 아이콘)
   useEffect(() => {
@@ -75,6 +79,15 @@ function AppContent() {
       })
       .catch(() => {}); // 실패 시 기본값 유지
   }, []);
+
+  // iOS Safari / Samsung / 기타 브라우저 → 다운로드 유도 페이지로 리다이렉트
+  // Chrome, 이미 설치됨, dismiss된 경우는 건너뜀
+  const _shouldDownload = shouldShowDownloadPage();
+  useEffect(() => {
+    if (_shouldDownload && location === "/") {
+      setLocation("/download");
+    }
+  }, [_shouldDownload]);
 
   // ── 점검 모드 감지 시 강제 새로고침 (Edge 차단 페이지로 전환 및 메모리 클리어) ──────
   useEffect(() => {
@@ -108,6 +121,11 @@ function AppContent() {
     );
   }
 
+  // 다운로드 유도 대상 브라우저 + 아직 redirect 되지 않은 경우 → 빈 화면 유지
+  if (_shouldDownload && location === "/") {
+    return null;
+  }
+
   // useEffect(위)가 setLocation을 실행하기 전 1프레임 동안 null을 반환하여
   // Dashboard가 절대 보이지 않도록 막는다.
   if (userRole === "teacher" && !isTeacherRoute && !isAdminRoute && !isMealRoute) {
@@ -117,13 +135,13 @@ function AppContent() {
   return (
     <>
       <Toaster />
-      {!isAdminRoute && location !== "/admin/factory-reset" && location !== "/meal" && location !== "/teacher/account" && location !== "/ios-install-guide" && (
+      {!isAdminRoute && location !== "/admin/factory-reset" && location !== "/meal" && location !== "/teacher/account" && !isIOSGuideRoute && !isDownloadRoute && (
         <div className={location === "/" || isTeacherRoute ? "md:hidden" : ""}>
           <Navigation />
         </div>
       )}
-      {/* 역할 미선택 시 역할 선택 다이얼로그 */}
-      <RoleSelectDialog onRoleSelected={() => refreshRole()} />
+      {/* 역할 미선택 시 역할 선택 다이얼로그 — 다운로드/가이드 페이지에서는 숨김 */}
+      {!isDownloadRoute && !isIOSGuideRoute && <RoleSelectDialog onRoleSelected={() => refreshRole()} />}
       <OnboardingDialog />
       <Router />
     </>

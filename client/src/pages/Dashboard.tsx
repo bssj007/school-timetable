@@ -3122,7 +3122,7 @@ export default function Dashboard() {
             // For Samsung browsers: play_store_url 있을 때만 Play Store 버튼 표시
             !hasPwaCookie && settings?.samsung_install_button_visible !== false && settings?.play_store_url && (
               <a
-                href={settings.play_store_url}
+                href={settings.play_store_url && !/^https?:\/\//i.test(settings.play_store_url) ? `https://${settings.play_store_url}` : settings.play_store_url}
                 target="_blank"
                 rel="noreferrer"
                 className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
@@ -3141,7 +3141,7 @@ export default function Dashboard() {
             // 그외 브라우저: play_store_url이 있으면 Play Store 버튼, 없으면 숙짔
             !hasPwaCookie && settings?.other_install_button_visible !== false && settings?.play_store_url && (
               <a
-                href={settings.play_store_url}
+                href={settings.play_store_url && !/^https?:\/\//i.test(settings.play_store_url) ? `https://${settings.play_store_url}` : settings.play_store_url}
                 target="_blank"
                 rel="noreferrer"
                 className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
@@ -3164,7 +3164,7 @@ export default function Dashboard() {
                   settings?.app_store_url ? (
                     // App Store 링크 설정됨 → App Store 버튼
                     <a
-                      href={settings.app_store_url}
+                      href={settings.app_store_url && !/^https?:\/\//i.test(settings.app_store_url) ? `https://${settings.app_store_url}` : settings.app_store_url}
                       target="_blank"
                       rel="noreferrer"
                       className="w-full h-14 bg-black hover:bg-gray-900 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
