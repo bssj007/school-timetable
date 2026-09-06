@@ -2490,8 +2490,8 @@ export default function TeacherPage() {
               <p className="text-sm text-red-400">네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.</p>
             </div>
           ) : timetableData && selectedSchedule ? (
-            <div className="w-full overflow-x-auto flex-1 flex flex-col min-h-0">
-              <table className="w-full table-fixed min-w-[340px] md:min-w-[500px] xl:min-w-[600px] flex-1 h-full" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
+            <div className="w-full overflow-x-auto flex-1" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <table className="w-full table-fixed min-w-[340px] md:min-w-[500px] xl:min-w-[600px]" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px', height: '100%' }}>
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
@@ -2525,15 +2525,15 @@ export default function TeacherPage() {
                     })}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody style={{ height: '100%' }}>
                   {Array.from({ length: maxPeriods }).map((_, periodIndex) => {
                     const p = periodIndex + 1;
                     const isCurrentPeriod = currentPeriod === p && weekOffset === 0;
                     return (
-                      <tr key={p} className="h-[50px] md:h-[calc((100dvh-130px)/7)] md:min-h-[44px]">
+                      <tr key={p} className="h-[50px] md:min-h-[44px]">
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[50px] md:h-[calc((100dvh-130px)/7)] md:min-h-[44px] overflow-hidden"
+                          className="h-[50px] md:min-h-[44px] overflow-hidden"
                           style={{
                             width: 36,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
@@ -2586,7 +2586,7 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[52px] md:h-[calc((100dvh-130px)/7)] md:min-h-[44px] overflow-hidden"
+                              className="group h-[52px] md:min-h-[44px] overflow-hidden"
                               style={{
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
