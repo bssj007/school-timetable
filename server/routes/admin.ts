@@ -166,7 +166,11 @@ router.get("/users", async (req, res) => {
                 kakaoNickname, 
                 lastAccess, 
                 modificationCount, 
-                instructionDismissed
+                instructionDismissed,
+                browserKey,
+                deviceType,
+                os,
+                isInApp
             FROM ip_profiles 
             ORDER BY lastAccess DESC
             LIMIT 100

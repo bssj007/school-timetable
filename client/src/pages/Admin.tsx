@@ -7311,6 +7311,13 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                             <CardContent>
                                 {(() => {
                                     const isKnownUser = (user: IPProfile) => {
+                                        // 신규 row: browserKey 컬럼으로 판별
+                                        const bk = (user as any).browserKey;
+                                        if (bk !== undefined && bk !== null) {
+                                            const hasInfo = !!(user.grade && user.classNum);
+                                            return bk !== 'other' && hasInfo;
+                                        }
+                                        // 구버전 row fallback: recentUserAgents UA 키워드 검사
                                         if (!user.recentUserAgents || user.recentUserAgents.length === 0) return false;
                                         const knownKeywords = ['Mozilla', 'Chrome', 'Safari', 'Firefox', 'Edge', 'Opera', 'Whale', 'Kakao', 'iPhone', 'Android'];
                                         const hasKnownUA = user.recentUserAgents.some(ua => knownKeywords.some(keyword => ua.includes(keyword)));
@@ -7714,7 +7721,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     return (
                                         <div className="space-y-6">
                                             <div className="rounded-md border overflow-x-auto">
-                                                <Table className="min-w-[1000px]">
+                                                <Table className="min-w-[1280px]">
                                                     <TableHeader>
                                                         <TableRow>
                                                             <TableHead className="w-[120px] min-w-[120px]">IP 주소</TableHead>
@@ -7758,7 +7765,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     </div>
                                                     {isOthersExpanded && (
                                                         <div className="bg-gray-50 border-t overflow-x-auto">
-                                                            <Table className="min-w-[1000px]">
+                                                            <Table className="min-w-[1280px]">
                                                                 <TableBody>
                                                                     {unknownUsers.map((user: IPProfile, idx: number) => (
                                                                         <TableRow key={idx}>
