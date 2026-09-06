@@ -10219,6 +10219,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
         if (agent.browserKey === "samsung") return "samsung_install_button_visible";
         if (agent.browserKey === "safari")  return "safari_install_button_visible";
         if (agent.browserKey === "chrome")  return "chrome_install_button_visible";
+        if (agent.browserKey === "kakao")   return "other_install_button_visible";
         return "other_install_button_visible";
     })();
     const currentDesktopOS = agent.desktopOS;   // null = 모바일
@@ -10249,7 +10250,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
             key: "other_install_button_visible",
             label: "그외",
             icon: "❓",
-            desc: "Opera·Firefox·Whale·Edge 등 모바일 브라우저",
+            desc: "카카오톡·Opera·Firefox·Whale·Edge 등 모바일 브라우저",
             value: isOther,
         },
     ] as const;

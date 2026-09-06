@@ -118,81 +118,13 @@ export default function AppDownloadPage() {
     setLocation("/");
   };
 
-  // Desktop 또는 이미 설치됨, 또는 다운로드 액션 미지원/비활성화 시 → 메인으로 직행
+  // Desktop 또는 이미 설치됨, 또는 다운로드 액션 미지원/비활성화 시 → 메인으로 직행 (단일 진실원천: shouldShowDownloadPage)
   useEffect(() => {
     if (isDesktop || agent.isInstalledApp) { setLocation("/"); return; }
     if (!settings) return;
-    // 카카오톡 브라우저별 유효성 검사
-    if (agent.isKakaoTalk) {
-      if (agent.isAndroid) {
-        if (!settings.play_store_url || settings.other_install_button_visible === false) {
-          setLocation("/");
-          return;
-        }
-      } else if (agent.isIOS) {
-        if (!settings.app_store_url || settings.other_install_button_visible === false) {
-          setLocation("/");
-          return;
-        }
-      } else {
-        setLocation("/");
-        return;
-      }
-      return;
-    }
-
-    // 그 외 일반 인앱 브라우저는 메인으로 직행
-    if (agent.isInAppBrowser) {
+    if (!shouldShowDownloadPage(settings)) {
       setLocation("/");
       return;
-    }
-
-    // Android 브라우저별 유효성 검사
-    if (agent.isAndroid) {
-      if (browserType === "chrome") {
-        if (settings.chrome_install_button_visible === false) {
-          setLocation("/");
-          return;
-        }
-      } else {
-        const isSamsung = browserType === "samsung";
-        const isHidden = isSamsung ? settings.samsung_install_button_visible === false : settings.other_install_button_visible === false;
-        if (!settings.play_store_url || isHidden) {
-          setLocation("/");
-          return;
-        }
-      }
-    }
-
-    // iOS 브라우저별 유효성 검사
-    if (agent.isIOS) {
-      if (settings.app_store_url) {
-        const isHidden = agent.isIOSSafari
-          ? settings.safari_install_button_visible === false
-          : browserType === "chrome"
-            ? settings.chrome_install_button_visible === false
-            : settings.other_install_button_visible === false;
-        if (isHidden) {
-          setLocation("/");
-          return;
-        }
-      } else {
-        if (agent.isIOSSafari) {
-          if (settings.safari_install_button_visible === false) {
-            setLocation("/");
-            return;
-          }
-        } else if (browserType === "chrome") {
-          if (settings.chrome_install_button_visible === false) {
-            setLocation("/");
-            return;
-          }
-        } else {
-          // iOS 기타 브라우저(Firefox, Edge, Opera, Whale 등)는 앱스토어 링크 미등록 시 사이트로 직행
-          setLocation("/");
-          return;
-        }
-      }
     }
   }, [settings]);
 
@@ -214,6 +146,15 @@ export default function AppDownloadPage() {
     if (agent.isIOS) {
       // 1-1. 앱스토어 링크가 등록되어 있으면 iOS의 모든 브라우저에서 App Store 다운로드 버튼 표시
       if (appStoreUrl && settings?.app_store_url) {
+        const isHidden = (agent.isKakaoTalk || browserType === "kakao")
+          ? settings?.other_install_button_visible === false
+          : agent.isIOSSafari
+            ? settings?.safari_install_button_visible === false
+            : browserType === "chrome"
+              ? settings?.chrome_install_button_visible === false
+              : settings?.other_install_button_visible === false;
+        if (isHidden) return null;
+
         return (
           <a href={appStoreUrl} target="_blank" rel="noreferrer"
             className="w-full h-14 bg-black text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 no-underline active:opacity-80 shadow-lg">
@@ -223,7 +164,7 @@ export default function AppDownloadPage() {
         );
       }
       // 카카오톡 iOS는 앱스토어 링크 미등록 시 버튼 미표시
-      if (agent.isKakaoTalk) return null;
+      if (agent.isKakaoTalk || browserType === "kakao") return null;
 
       // 1-2. Safari인 경우 Safari 전용 PWA 가이드 버튼 표시
       if (agent.isIOSSafari && settings?.safari_install_button_visible !== false) {
@@ -251,7 +192,7 @@ export default function AppDownloadPage() {
     // 2. Android 환경
     if (agent.isAndroid) {
       // 2-1. 카카오톡 Android: Play Store 링크가 등록되어 있을 때만 버튼 표시
-      if (agent.isKakaoTalk) {
+      if (agent.isKakaoTalk || browserType === "kakao") {
         if (playStoreUrl && settings?.play_store_url && settings?.other_install_button_visible !== false) {
           return (
             <a href={playStoreUrl} target="_blank" rel="noreferrer"

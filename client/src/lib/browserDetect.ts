@@ -18,7 +18,7 @@
 
 // ── 타입 정의 ─────────────────────────────────────────────────────────────────
 
-export type BrowserKey = "samsung" | "safari" | "chrome" | "other";
+export type BrowserKey = "samsung" | "safari" | "chrome" | "kakao" | "other";
 export type DesktopOS   = "windows" | "macos" | "linux" | null;
 
 export interface AgentInfo {
@@ -128,13 +128,16 @@ function detectLayer1(): Partial<AgentInfo> | null {
 
   // 브라우저 판별: Client Hints + UA 교차 검증
   // Samsung Internet, Opera, Edge, Whale 등을 정확하게 구분
+  const isKakao = /KAKAOTALK/i.test(rawUA);
   const isOpera = /opera|opr|opt/i.test(brandStr) || /OPR\/|Opera|OPT\//i.test(rawUA);
   const isSamsung = /samsung internet|samsungbrowser/i.test(brandStr) || /SamsungBrowser/i.test(rawUA);
   const isEdge = /microsoft edge|edg/i.test(brandStr) || /EdgA?\/|Edge\//i.test(rawUA);
   const isWhale = /whale/i.test(brandStr) || /Whale\//i.test(rawUA);
 
   let browserKey: BrowserKey = "chrome";
-  if (isSamsung) {
+  if (isKakao) {
+    browserKey = "kakao";
+  } else if (isSamsung) {
     browserKey = "samsung";
   } else if (isOpera || isEdge || isWhale) {
     browserKey = "other";
@@ -162,7 +165,8 @@ function detectLayer1(): Partial<AgentInfo> | null {
     isIOSChrome: false,
     isIOSOther: false,
     browserKey,
-    isKakaoTalk: /KAKAOTALK/i.test(rawUA),
+    isInAppBrowser: isKakao || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(rawUA),
+    isKakaoTalk: isKakao,
     // iOS 버전: Chromium 환경이므로 항상 0
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     detectionLayer: 1,
@@ -175,10 +179,11 @@ function detectLayer1(): Partial<AgentInfo> | null {
 // iPad 신형(iPadOS 13+) 감지를 위해 maxTouchPoints 를 보조로 사용.
 //
 // 브라우저 감지 우선순위:
-//   1. SamsungBrowser (UA)
-//   2. Safari (UA) && !Chrome → iOS/iPadOS/macOS Safari, iOS CriOS 포함
-//   3. Chrome (UA)
-//   4. 기타
+//   1. KakaoTalk (UA)
+//   2. SamsungBrowser (UA)
+//   3. Safari (UA) && !Chrome → iOS/iPadOS/macOS Safari, iOS CriOS 포함
+//   4. Chrome (UA)
+//   5. 기타
 //
 // iOS 버전: Safari/iOS 기기에서만 계산, 그 외 0
 
@@ -203,7 +208,9 @@ function detectLayer2(): AgentInfo {
   let browserKey: BrowserKey = "other";
   let isIOSSafari = false;
 
-  if (/SamsungBrowser/i.test(ua)) {
+  if (isKakaoTalk) {
+    browserKey = "kakao";
+  } else if (/SamsungBrowser/i.test(ua)) {
     browserKey = "samsung";
   } else if (/OPR\/|Opera|OPT\//i.test(ua)) {
     // Opera (Android 및 iOS)
@@ -257,7 +264,7 @@ function detectLayer2(): AgentInfo {
   const isIOS13Plus  = iosVersion >= 13;
 
   const isIOSChrome = isIOS && browserKey === "chrome";
-  const isIOSOther  = isIOS && !isIOSSafari && !isIOSChrome;
+  const isIOSOther  = isIOS && !isIOSSafari && !isIOSChrome && browserKey !== "kakao";
 
   return {
     isMobile: mobile, isDesktop: !mobile, desktopOS,
@@ -287,12 +294,16 @@ function detectLayer3(): AgentInfo {
   const isIPad = mtp > 1 && !isCoarse;
   const isIOS = isIPad;
   const isAndroid = mobile && !isIOS;
+  const isKakaoTalk = typeof navigator !== "undefined" && /KAKAOTALK/i.test(navigator.userAgent);
+  const isInApp = isKakaoTalk || (typeof navigator !== "undefined" && /NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent));
 
   return {
     isMobile: mobile, isDesktop: !mobile, desktopOS: null,
     isIPad, isIPhone: false, isIOS, isAndroid, isIOSSafari: false,
     isIOSChrome: false, isIOSOther: false,
-    browserKey: "other", isInAppBrowser: false, isKakaoTalk: false,
+    browserKey: isKakaoTalk ? "kakao" : "other",
+    isInAppBrowser: isInApp,
+    isKakaoTalk,
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 3,
@@ -322,11 +333,13 @@ export function detect(): AgentInfo {
   const isKakaoTalk = /KAKAOTALK/i.test(navigator.userAgent);
   const inApp = isKakaoTalk || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent);
 
-  // PWA standalone / Native 앱 실행 여부 (브라우저 재접속 시는 false)
+  // PWA standalone / Native 앱 실행 여부 (인앱 브라우저는 제외)
   const isInstalledApp =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as any).standalone === true ||
-    (/; wv\)/i.test(navigator.userAgent) && !/GSA\//i.test(navigator.userAgent));  // Android TWA / WebView (Google 앱 제외)
+    !inApp && (
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as any).standalone === true ||
+      (/; wv\)/i.test(navigator.userAgent) && !/GSA\//i.test(navigator.userAgent))
+    );
 
   // Layer 1: Client Hints (Chromium 전용)
   const ch = detectLayer1();
@@ -342,7 +355,7 @@ export function detect(): AgentInfo {
       isIOSSafari:    false,
       isIOSChrome:    false,
       isIOSOther:     false,
-      browserKey:     ch.browserKey!,
+      browserKey:     isKakaoTalk ? "kakao" : ch.browserKey!,
       isInAppBrowser: inApp,
       isKakaoTalk,
       iosVersion:     0,
@@ -354,14 +367,26 @@ export function detect(): AgentInfo {
     };
   }
 
-  // Layer 2: UA 파싱 (Safari / Firefox / 기타)
+  // Layer 2: UA 파싱 (Safari / Firefox / 기타 전 브라우저)
   const ua2 = detectLayer2();
-  if (ua2.browserKey !== "other" || ua2.isIPad || ua2.isIPhone || ua2.desktopOS !== null) {
-    return { ...ua2, isInAppBrowser: inApp, isKakaoTalk, isInstalledApp };
+  if (typeof navigator !== "undefined" && navigator.userAgent) {
+    return {
+      ...ua2,
+      browserKey: isKakaoTalk ? "kakao" : ua2.browserKey,
+      isInAppBrowser: inApp,
+      isKakaoTalk,
+      isInstalledApp,
+    };
   }
 
-  // Layer 3: 기능 감지 fallback
-  return { ...detectLayer3(), isInAppBrowser: inApp, isKakaoTalk, isInstalledApp };
+  // Layer 3: 기능 감지 fallback (UA가 비어있거나 감지 불가할 때만 사용)
+  return {
+    ...detectLayer3(),
+    browserKey: isKakaoTalk ? "kakao" : "other",
+    isInAppBrowser: inApp,
+    isKakaoTalk,
+    isInstalledApp,
+  };
 }
 
 // ── 모듈 레벨 싱글턴 (모듈 로드 시 1회만 실행) ─────────────────────────────────
@@ -397,6 +422,8 @@ export const isOtherBrowser          = agent.browserKey === "other";
 export const isInAppBrowser          = agent.isInAppBrowser;
 /** 카카오톡 인앱 브라우저 여부 */
 export const isKakaoTalk             = agent.isKakaoTalk;
+/** 카카오톡 브라우저 여부 (agent.browserKey === "kakao" || agent.isKakaoTalk) */
+export const isKakaoBrowser          = agent.browserKey === "kakao" || agent.isKakaoTalk;
 /** @deprecated agent.isIPad 사용 */
 export const isIPad                  = agent.isIPad;
 /** @deprecated agent.isIPhone 사용 */
@@ -450,20 +477,23 @@ export function isPwaInstalled(): boolean {
 // ── 다운로드 유도 페이지 표시 여부 ───────────────────────────────────────────
 
 /**
- * shouldShowDownloadPage(settings?: any)
+ * shouldShowDownloadPage(settings?: any) — 단일 진실원천
  * 표시 조건:
- *   1. 인앱 브라우저 아닐 것
+ *   1. 인앱 브라우저 아닐 것 (단, 카카오톡은 스토어 링크 등록 및 스위치 활성 시 허용)
  *   2. 앱으로 실행 중이 아닐 것 (PWA standalone / TWA / WebView)
  *      → 브라우저로 재접속 시 쿠키·설치 여부와 무관하게 표시함
  *   3. 사용자가 dismiss 하지 않았을 것
  *   4. 모바일 기기일 것 (데스크톱 제외)
- *   5. 다운로드 대상 브라우저 및 링크 등록 여부:
+ *   5. 전체 서킷브레이커(pwa_install_button_visible)가 켜져 있을 것
+ *   6. 다운로드 대상 브라우저 및 링크 등록 / 개별 스위치 여부:
  *      - Android:
- *        * Chrome/Google: PWA 설치 지원하므로 항상 표시
- *        * 기타 브라우저: 관리페이지에 play_store_url 등록 시에만 표시 (미등록 시 사이트 직행)
+ *        * Chrome/Google: chrome_install_button_visible 켜져 있으면 항상 표시
+ *        * 카카오톡: play_store_url 등록 + other_install_button_visible 켜져 있을 때만 표시
+ *        * 삼성: play_store_url 등록 + samsung_install_button_visible 켜져 있을 때만 표시
+ *        * 기타 브라우저: play_store_url 등록 + other_install_button_visible 켜져 있을 때만 표시
  *      - iOS:
- *        * 관리페이지에 app_store_url 등록 시: 브라우저 무관 무조건 표시
- *        * app_store_url 미등록 시: Safari 및 iOS Chrome만 PWA 가이드 유도 페이지 표시 (기타 브라우저는 사이트 직행)
+ *        * app_store_url 등록 시: 해당 브라우저 스위치(safari/chrome/other) 켜져 있으면 표시
+ *        * app_store_url 미등록 시: Safari(safari_install_button_visible) 및 Chrome(chrome_install_button_visible)만 PWA 가이드 유도 (카카오 및 기타 브라우저는 사이트 직행)
  */
 export function shouldShowDownloadPage(settings?: any): boolean {
   if (typeof window === "undefined") return false;
@@ -474,13 +504,27 @@ export function shouldShowDownloadPage(settings?: any): boolean {
     return false;
   }
 
-  const hasAppStore = Boolean(settings?.app_store_url && settings.app_store_url.trim());
-  const hasPlayStore = Boolean(settings?.play_store_url && settings.play_store_url.trim());
+  let resolvedSettings = settings;
+  if (!resolvedSettings && typeof localStorage !== "undefined") {
+    try {
+      const cached = localStorage.getItem("public_settings_cache");
+      if (cached) resolvedSettings = JSON.parse(cached);
+    } catch {}
+  }
+
+  // 전체 서킷브레이커 OFF 시 유도 페이지 미표시
+  if (resolvedSettings?.pwa_install_button_visible === false) {
+    return false;
+  }
+
+  const hasAppStore = Boolean(resolvedSettings?.app_store_url && resolvedSettings.app_store_url.trim());
+  const hasPlayStore = Boolean(resolvedSettings?.play_store_url && resolvedSettings.play_store_url.trim());
 
   // 카카오톡 브라우저:
-  // - Android 카카오: PlayStore 링크가 있을 때만 유도 페이지 표시
-  // - iOS 카카오: AppStore 링크가 있을 때만 유도 페이지 표시
-  if (agent.isKakaoTalk) {
+  // - Android 카카오: PlayStore 링크가 있고 '그외' 스위치가 켜져 있을 때만 유도 페이지 표시
+  // - iOS 카카오: AppStore 링크가 있고 '그외' 스위치가 켜져 있을 때만 유도 페이지 표시
+  if (agent.isKakaoTalk || agent.browserKey === "kakao") {
+    if (resolvedSettings?.other_install_button_visible === false) return false;
     if (agent.isAndroid) return hasPlayStore;
     if (agent.isIOS) return hasAppStore;
     return false;
@@ -492,17 +536,35 @@ export function shouldShowDownloadPage(settings?: any): boolean {
   }
 
   if (agent.isIOS) {
-    // 1. 앱스토어 링크가 있으면 브라우저에 관계없이 무조건 표시
-    if (hasAppStore) return true;
-    // 2. 링크 없으면: Safari와 Chrome에만 전용 PWA 가이드 유도 페이지 표시 (기타 브라우저는 사이트 직행)
-    return agent.isIOSSafari || agent.isIOSChrome;
+    // 1. 앱스토어 링크가 있는 경우: 해당 브라우저의 스위치 확인 후 표시
+    if (hasAppStore) {
+      const isHidden = agent.isIOSSafari
+        ? resolvedSettings?.safari_install_button_visible === false
+        : agent.browserKey === "chrome"
+          ? resolvedSettings?.chrome_install_button_visible === false
+          : resolvedSettings?.other_install_button_visible === false;
+      if (isHidden) return false;
+      return true;
+    }
+    // 2. 앱스토어 링크 없는 경우: Safari와 Chrome만 PWA 가이드 유도 (기타 브라우저는 사이트 직행)
+    if (agent.isIOSSafari) return resolvedSettings?.safari_install_button_visible !== false;
+    if (agent.isIOSChrome) return resolvedSettings?.chrome_install_button_visible !== false;
+    return false;
   }
 
   if (agent.isAndroid) {
-    // 1. Chrome/Google 브라우저이면 PWA 설치 버튼 지원하므로 항상 표시
-    if (agent.browserKey === "chrome") return true;
-    // 2. 그 외 모든 Android 브라우저는 Play Store 링크가 등록되어 있을 때만 표시
-    if (settings) {
+    // 1. Chrome/Google 브라우저이면 PWA 설치 버튼 지원하므로 스위치 확인 후 표시
+    if (agent.browserKey === "chrome") {
+      return resolvedSettings?.chrome_install_button_visible !== false;
+    }
+    // 2. 삼성 브라우저 및 기타 Android 브라우저: Play Store 링크 등록 + 스위치 활성 시 표시
+    const isSamsung = agent.browserKey === "samsung";
+    const isHidden = isSamsung
+      ? resolvedSettings?.samsung_install_button_visible === false
+      : resolvedSettings?.other_install_button_visible === false;
+    if (isHidden) return false;
+
+    if (resolvedSettings) {
       return hasPlayStore;
     }
     return true;
