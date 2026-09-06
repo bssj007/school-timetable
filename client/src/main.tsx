@@ -48,6 +48,11 @@ if (typeof window !== 'undefined') {
     }
   }
 
+  // Firefox 브라우저 감지 시 html 태그에 클래스 주입 (전용 비대증 방지 CSS 룰 연동)
+  if (agent.isFirefox) {
+    document.documentElement.classList.add('is-firefox');
+  }
+
   // agent.isInstalledApp — browserDetect.ts (standalone + TWA 통합 감지)
   // Track PWA Installation Status (모바일 전용)
   if (agent.isInstalledApp && agent.isMobile) {

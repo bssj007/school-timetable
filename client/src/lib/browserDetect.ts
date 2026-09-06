@@ -48,6 +48,8 @@ export interface AgentInfo {
   isInAppBrowser: boolean;
   /** 카카오톡 인앱 브라우저 여부 */
   isKakaoTalk: boolean;
+  /** Firefox 브라우저 여부 (Android/iOS/Desktop 전체) */
+  isFirefox: boolean;
   /**
    * iOS / iPadOS / Safari 메이저 버전
    * - iOS 26+부터 Apple이 UA OS 버전을 동결(freeze) → "CPU iPhone OS 18_x" 처럼 표시됨
@@ -83,6 +85,7 @@ function defaultAgent(): AgentInfo {
     isIOS: false, isAndroid: false, isIOSSafari: false,
     isIOSChrome: false, isIOSOther: false,
     browserKey: "other", isInAppBrowser: false, isKakaoTalk: false,
+    isFirefox: false,
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     isInstalledApp: false,
     detectionLayer: 3,
@@ -167,6 +170,7 @@ function detectLayer1(): Partial<AgentInfo> | null {
     browserKey,
     isInAppBrowser: isKakao || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(rawUA),
     isKakaoTalk: isKakao,
+    isFirefox: false,
     // iOS 버전: Chromium 환경이므로 항상 0
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     detectionLayer: 1,
@@ -271,6 +275,7 @@ function detectLayer2(): AgentInfo {
     isIPad, isIPhone, isIOS, isAndroid, isIOSSafari,
     isIOSChrome, isIOSOther,
     browserKey, isInAppBrowser: isInApp, isKakaoTalk,
+    isFirefox: /Firefox|FxiOS/i.test(ua),
     iosVersion, isIOS26Plus, isIOS15Plus, isIOS13Plus,
     isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 2,
@@ -304,6 +309,7 @@ function detectLayer3(): AgentInfo {
     browserKey: "other",
     isInAppBrowser: isInApp,
     isKakaoTalk,
+    isFirefox: typeof navigator !== "undefined" && /Firefox|FxiOS/i.test(navigator.userAgent),
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 3,

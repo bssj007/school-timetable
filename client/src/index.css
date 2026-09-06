@@ -120,18 +120,18 @@
   *::after {
     @apply border-border outline-ring/50;
     -webkit-text-size-adjust: 100% !important;
-    -moz-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: none !important;
     -ms-text-size-adjust: 100% !important;
-    text-size-adjust: 100% !important;
+    text-size-adjust: none !important;
   }
 
   body {
     @apply bg-background text-foreground;
     max-height: 999999px; /* Gecko & WebKit font inflation killer */
     -webkit-text-size-adjust: 100% !important;
-    -moz-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: none !important;
     -ms-text-size-adjust: 100% !important;
-    text-size-adjust: 100% !important;
+    text-size-adjust: none !important;
   }
 
   html, body, #root {
@@ -142,17 +142,17 @@
   html {
     max-height: 999999px;
     -webkit-text-size-adjust: 100% !important;
-    -moz-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: none !important;
     -ms-text-size-adjust: 100% !important;
-    text-size-adjust: 100% !important;
+    text-size-adjust: none !important;
   }
 
-  /* 테이블 및 셀 내에서 모든 브라우저 엔진(Blink, WebKit, Gecko)의 폰트 비대화/부스팅 방지 */
+  /* 테이블 및 셀 내에서 모든 브라우저 엔진의 폰트 비대화/부스팅 방지 */
   table, thead, tbody, tfoot, tr, th, td {
     -webkit-text-size-adjust: 100% !important;
-    -moz-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: none !important;
     -ms-text-size-adjust: 100% !important;
-    text-size-adjust: 100% !important;
+    text-size-adjust: none !important;
   }
 
   button:not(:disabled),
@@ -260,6 +260,39 @@
 @media (min-width: 1024px) {
   :root {
     font-size: 90%;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Firefox 전용 모바일 UI 비대증 방지 및 정밀 보정
+ * ─────────────────────────────────────────────────────────────────────────────
+ * - Chrome, Safari, Samsung Internet, Whale 등 WebKit/Blink 일반 브라우저:
+ *   브라우저 표준 16px(1rem = 16px)를 100% 그대로 유지하여 일체 축소되지 않음.
+ * - Firefox (Gecko 엔진):
+ *   Android OS의 '글자 크기 크게' 설정 상속 및 Gecko 폰트 인플레이션으로 인해
+ *   발생하는 비정상적인 UI 비대증을 CSS 엔진 레벨에서 원천 억제하여
+ *   일반 브라우저와 완벽하게 동일한 쾌적한 비례감 제공.
+ */
+@supports (-moz-appearance: none) {
+  @media (max-width: 639px) {
+    :root {
+      font-size: 14px !important;
+    }
+  }
+  @media (min-width: 640px) and (max-width: 1023px) {
+    :root {
+      font-size: 15px !important;
+    }
+  }
+}
+
+/* JS 브라우저 감지 폴백 (동일 보정 적용) */
+html.is-firefox {
+  @media (max-width: 639px) {
+    font-size: 14px !important;
+  }
+  @media (min-width: 640px) and (max-width: 1023px) {
+    font-size: 15px !important;
   }
 }
 

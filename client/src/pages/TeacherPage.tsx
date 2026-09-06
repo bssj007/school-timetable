@@ -2327,14 +2327,14 @@ export default function TeacherPage() {
 
                 {DOW_LABELS.map((dow, i) => (
                   <div key={dow} className={[
-                    'py-2 text-center text-[11px] font-bold pointer-events-none',
+                    'h-[32px] flex items-center justify-center text-[11px] font-bold pointer-events-none',
                     i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-500',
-                  ].join('')}>{dow}</div>
+                  ].join(' ')}>{dow}</div>
                 ))}
 
                 {cells.map((d, idx) => {
                   const col = idx % 7;
-                  if (!d) return <div key={`empty-${idx}`} className="h-11" />;
+                  if (!d) return <div key={`empty-${idx}`} className="h-[44px]" />;
                   const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                   const isToday      = dateStr === todayStr;
                   const isSun        = col === 0;
@@ -2349,7 +2349,7 @@ export default function TeacherPage() {
                       key={dateStr}
                       data-date={dateStr}
                       className={[
-                        'h-11 flex flex-col items-center justify-center text-[13px] font-bold transition-colors cursor-pointer relative z-10',
+                        'h-[44px] flex flex-col items-center justify-center text-[13px] font-bold transition-colors cursor-pointer relative z-10',
                         isRangeStart || isRangeEnd     ? 'bg-indigo-500 text-white rounded-lg' : '',
                         inRange && !isRangeStart && !isRangeEnd ? 'bg-indigo-100 text-indigo-700' : '',
                         !inRange && !isRangeStart && !isRangeEnd && isToday  ? 'ring-2 ring-emerald-500 text-emerald-700 bg-emerald-50 rounded-lg' : '',
