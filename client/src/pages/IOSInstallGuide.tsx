@@ -150,7 +150,7 @@ function GuideIPadNew() {
           <p className="text-sm text-gray-500 mt-0.5">앱 행 오른쪽 끝 버튼이 아닌, 가장 하단의 더 보기</p>
 
           {/* 액션 바 일러스트 */}
-          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm max-w-xs">
             {/* 상단 앱 아이콘 행 */}
             <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 border-b border-gray-100">
               {[
@@ -182,8 +182,8 @@ function GuideIPadNew() {
                   <polyline points="6 9 12 15 18 9"/>
                 </svg>
                 <span className="text-[9px] text-gray-400">더 보기</span>
-                <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }}
-                  viewBox="0 0 60 42" preserveAspectRatio="none" fill="none">
+                <svg style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -60%)', width: '60px', height: '42px', overflow: 'visible', pointerEvents: 'none' }}
+                  viewBox="0 0 60 42" fill="none">
                   <ellipse cx="30" cy="21" rx="28" ry="19" stroke="#ef4444" strokeWidth="2.5"/>
                   <line x1="30" y1="-18" x2="30" y2="2" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"/>
                   <polyline points="24,-8 30,2 36,-8" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
@@ -292,7 +292,7 @@ function Guide26() {
           <p className="text-sm text-gray-500 mt-0.5">앱 행 오른쪽 끝 버튼이 아닌, 가장 하단의 더 보기</p>
 
           {/* 액션 바 일러스트 */}
-          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm max-w-xs">
             {/* 상단 앱 아이콘 행 */}
             <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 border-b border-gray-100">
               {[
@@ -324,8 +324,8 @@ function Guide26() {
                   <polyline points="6 9 12 15 18 9"/>
                 </svg>
                 <span className="text-[9px] text-gray-400">더 보기</span>
-                <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }}
-                  viewBox="0 0 60 42" preserveAspectRatio="none" fill="none">
+                <svg style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -60%)', width: '60px', height: '42px', overflow: 'visible', pointerEvents: 'none' }}
+                  viewBox="0 0 60 42" fill="none">
                   <ellipse cx="30" cy="21" rx="28" ry="19" stroke="#ef4444" strokeWidth="2.5"/>
                   <line x1="30" y1="-18" x2="30" y2="2" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"/>
                   <polyline points="24,-8 30,2 36,-8" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
