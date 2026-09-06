@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import {
+  detectBrowser,
+  detectIOSVersion,
+  isInAppBrowser,
+  isSamsungBrowser,
+  isIOSSafari,
+  isOtherBrowser,
+  shouldShowDownloadPage,
+} from "@/lib/browserDetect";
 
 // URL 보정 (프로토콜 없는 경우 https:// 자동 추가)
 function normalizeUrl(url: string): string {
@@ -7,44 +16,8 @@ function normalizeUrl(url: string): string {
   return url;
 }
 
-// 브라우저 종류 감지
-type BrowserType = "ios" | "samsung" | "other" | "chrome";
-
-function detectBrowserType(): BrowserType {
-  if (typeof window === "undefined") return "other";
-  const ua = navigator.userAgent;
-  const isIOS =
-    /iPad|iPhone|iPod/.test(ua) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const isSamsungBrowser = /SamsungBrowser/i.test(ua);
-  const isChrome = /Chrome/i.test(ua) && !isSamsungBrowser;
-  if (isIOS) return "ios";
-  if (isSamsungBrowser) return "samsung";
-  if (!isChrome) return "other";
-  return "chrome";
-}
-
-// 다운로드 유도 페이지 표시 여부 판단 (App.tsx에서 import)
-export function shouldShowDownloadPage(): boolean {
-  if (typeof window === "undefined") return false;
-  const ua = navigator.userAgent;
-  const isIOS =
-    /iPad|iPhone|iPod/.test(ua) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const isSamsungBrowser = /SamsungBrowser/i.test(ua);
-  const isInAppBrowser = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(ua);
-  const isChrome = /Chrome/i.test(ua) && !isSamsungBrowser;
-  const isOtherBrowser = !isSamsungBrowser && !isIOS && !isChrome;
-  const isStandalone =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as any).standalone === true;
-  const hasPwaCookie = document.cookie.includes("pwa_standalone=1");
-  const isDismissed = localStorage.getItem("download_page_dismissed") === "1";
-  return (
-    !isInAppBrowser && !isStandalone && !hasPwaCookie && !isDismissed &&
-    (isIOS || isSamsungBrowser || isOtherBrowser)
-  );
-}
+// 다운로드 유도 페이지 표시 여부 — browserDetect로 통일
+export { shouldShowDownloadPage };
 
 function PlayStoreLogo() {
   return (
@@ -68,7 +41,10 @@ function AppleLogo() {
 export default function AppDownloadPage() {
   const [, setLocation] = useLocation();
   const [settings, setSettings] = useState<any>(null);
-  const browserType = detectBrowserType();
+  // browserDetect 통일 기준 사용
+  const browserType = detectBrowser();
+  const iosVersion  = detectIOSVersion();
+  const isIOS26Plus = iosVersion >= 26;
 
   useEffect(() => {
     fetch("/api/settings/public")
@@ -91,49 +67,48 @@ export default function AppDownloadPage() {
     setLocation("/");
   }
 
-  const appTitle = settings?.pwa_app_title || "앱";
-  const appIconUrl = settings?.pwa_app_icon_url || settings?.site_favicon_url || "/icon.svg";
+  const appTitle    = settings?.pwa_app_title || "앱";
+  const appIconUrl  = settings?.pwa_app_icon_url || settings?.site_favicon_url || "/icon.svg";
   const playStoreUrl = normalizeUrl(settings?.play_store_url || "");
-  const appStoreUrl = normalizeUrl(settings?.app_store_url || "");
+  const appStoreUrl  = normalizeUrl(settings?.app_store_url  || "");
   const pwaBtnVisible = settings?.pwa_install_button_visible !== false;
 
   function DownloadButton() {
     if (!settings || !pwaBtnVisible) return null;
 
-    if (browserType === "ios" && settings?.safari_install_button_visible !== false) {
+    // Safari (iOS / macOS Safari / iOS Chrome)
+    if (browserType === "safari" && settings?.safari_install_button_visible !== false) {
       return appStoreUrl ? (
-        <a
-          href={appStoreUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="w-full h-14 bg-black text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 no-underline active:opacity-80 shadow-lg"
-        >
+        <a href={appStoreUrl} target="_blank" rel="noreferrer"
+          className="w-full h-14 bg-black text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 no-underline active:opacity-80 shadow-lg">
           <AppleLogo />
           <span>App Store에서 다운로드</span>
         </a>
       ) : (
-        <button
-          onClick={() => setLocation("/ios-install-guide")}
-          className="w-full h-14 bg-black text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg"
-        >
+        <button onClick={() => setLocation("/ios-install-guide")}
+          className="w-full h-14 bg-black text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg">
           <AppleLogo />
           <span>홈 화면에 추가하기</span>
         </button>
       );
     }
 
-    if (
-      (browserType === "samsung" && settings?.samsung_install_button_visible !== false) ||
-      (browserType === "other" && settings?.other_install_button_visible !== false)
-    ) {
-      if (!playStoreUrl) return null;
+    // Samsung Browser
+    if (browserType === "samsung" && settings?.samsung_install_button_visible !== false && playStoreUrl) {
       return (
-        <a
-          href={playStoreUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="w-full h-14 bg-[#01875f] text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 no-underline active:opacity-80 shadow-lg"
-        >
+        <a href={playStoreUrl} target="_blank" rel="noreferrer"
+          className="w-full h-14 bg-[#01875f] text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 no-underline active:opacity-80 shadow-lg">
+          <PlayStoreLogo />
+          <span>Google Play에서 다운로드</span>
+        </a>
+      );
+    }
+
+    // 기타 브라우저
+    if (browserType === "other" && settings?.other_install_button_visible !== false && playStoreUrl) {
+      return (
+        <a href={playStoreUrl} target="_blank" rel="noreferrer"
+          className="w-full h-14 bg-[#01875f] text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 no-underline active:opacity-80 shadow-lg">
           <PlayStoreLogo />
           <span>Google Play에서 다운로드</span>
         </a>
@@ -144,21 +119,13 @@ export default function AppDownloadPage() {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-white flex flex-col"
-      style={{
-        paddingTop: "env(safe-area-inset-top, 0px)",
-        paddingBottom: "env(safe-area-inset-bottom, 0px)",
-      }}
-    >
-      {/* 로고 + 앱 이름 (중앙) */}
+    <div className="fixed inset-0 z-50 bg-white flex flex-col"
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      {/* 로고 + 앱 이름 */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8 text-center">
-        <img
-          src={appIconUrl}
-          alt={appTitle}
+        <img src={appIconUrl} alt={appTitle}
           className="w-24 h-24 rounded-3xl shadow-xl object-cover"
-          onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }}
-        />
+          onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }} />
         <div>
           <h1 className="text-2xl font-black text-gray-900 leading-tight">{appTitle}</h1>
           <p className="text-sm text-gray-400 mt-2 leading-relaxed">
@@ -166,18 +133,14 @@ export default function AppDownloadPage() {
           </p>
         </div>
       </div>
-
       {/* 다운로드 버튼 + 사이트로 계속 */}
       <div className="flex-shrink-0 px-6 pb-6 space-y-2">
-        {!settings ? (
-          <div className="w-full h-14 bg-gray-100 rounded-2xl animate-pulse" />
-        ) : (
-          <DownloadButton />
-        )}
-        <button
-          onClick={handleContinue}
-          className="w-full py-3 text-sm text-gray-400 hover:text-gray-600 transition-colors"
-        >
+        {!settings
+          ? <div className="w-full h-14 bg-gray-100 rounded-2xl animate-pulse" />
+          : <DownloadButton />
+        }
+        <button onClick={handleContinue}
+          className="w-full py-3 text-sm text-gray-400 hover:text-gray-600 transition-colors">
           사이트로 계속
         </button>
       </div>

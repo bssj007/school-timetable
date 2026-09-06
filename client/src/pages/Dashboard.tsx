@@ -1,4 +1,5 @@
-
+﻿
+import { isSamsungBrowser, isIOSSafari as isIOS, isInAppBrowser, isOtherBrowser, detectIOSVersion } from "@/lib/browserDetect";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -265,31 +266,12 @@ export default function Dashboard() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalling, setIsInstalling] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
-  const isIOS = typeof window !== 'undefined' ? /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) : false;
-  // iOS 26+부터 Apple이 UA의 OS 버전을 동결(freeze)함 → "CPU iPhone OS 18_x" 처럼 구버전이 표시됨
-  // 대신 Safari의 "Version/26.x" 헤더는 실제 메이저 버전을 노출하므로, 두 값 중 큰 것을 사용
-  const iosVersion = typeof window !== 'undefined' ? (() => {
-    const ua = navigator.userAgent;
-    const osVer  = parseInt(/os (\d+)/i.exec(ua.toLowerCase())?.[1]    ?? '0', 10);
-    const safVer = parseInt(/version\/(\d+)/i.exec(ua)?.[1]            ?? '0', 10);
-    return Math.max(osVer, safVer);
-  })() : 0;
-  // iOS 26+: Compact 탭 레이아웃 기본값 → 공유 버튼이 주소창 ... 안에 숨겨짐 (iPhone 17 / iOS 26)
+  // 브라우저 감지 — @/lib/browserDetect (관리페이지 미해결문제 패널 기준)
+  // isSamsungBrowser, isIOS(=isIOSSafari), isInAppBrowser, isOtherBrowser: 상단 import에서 주입
+  const iosVersion  = detectIOSVersion();
   const isIOS26Plus = iosVersion >= 26;
-  // iOS 15~25: 공유 버튼이 하단 중앙 툴바
-  // iOS 14 이하: 공유 버튼이 상단 우측
   const isIOS15Plus = iosVersion >= 15;
-  const isSamsungBrowser = typeof window !== 'undefined' ?
-    /SamsungBrowser/i.test(navigator.userAgent) ||
-    (/Android/i.test(navigator.userAgent) && /SM-|SAMSUNG/i.test(navigator.userAgent) && !/Chrome\/[.0-9]* Mobile/i.test(navigator.userAgent)) // Catch edge cases where it's a Samsung device but not standard Chrome
-    : false;
-  const isInAppBrowser = typeof window !== 'undefined' ? /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent) : false;
-  const isAndroid = typeof window !== 'undefined' ? /Android/i.test(navigator.userAgent) : false;
-  // 그외 브라우저: 삼성/iOS/Chrome 이외 환경
-  const isOtherBrowser = typeof window !== 'undefined' ? (
-    !isSamsungBrowser && !isIOS &&
-    !/Chrome/i.test(navigator.userAgent)
-  ) : false;
+  const isAndroid   = typeof window !== 'undefined' ? /Android/i.test(navigator.userAgent) : false;
   const [hasPwaCookie, setHasPwaCookie] = useState(typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1'));
 
   useEffect(() => {

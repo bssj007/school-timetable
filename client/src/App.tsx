@@ -18,7 +18,8 @@ import Meal from "./pages/Meal";
 import TeacherPage from "./pages/TeacherPage";
 import TeacherAccount from "./pages/TeacherAccount";
 import IOSInstallGuide from "./pages/IOSInstallGuide";
-import AppDownloadPage, { shouldShowDownloadPage } from "./pages/AppDownloadPage";
+import AppDownloadPage from "./pages/AppDownloadPage";
+import { shouldShowDownloadPage } from "@/lib/browserDetect";
 
 function Router() {
   return (

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+﻿import React, { useState, useRef, useEffect, useMemo } from "react";
+import { detectBrowser } from "@/lib/browserDetect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10107,12 +10108,12 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
         return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
     }
 
-    // 현재 접속 브라우저 감지
+    // 현재 접속 브라우저 감지 — @/lib/browserDetect (관리페이지 기준을 단일 진실원천으로 사용)
     const currentBrowserKey = (() => {
-        const ua = navigator.userAgent;
-        if (/SamsungBrowser/i.test(ua)) return "samsung_install_button_visible";
-        if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) return "safari_install_button_visible";
-        if (/Chrome/i.test(ua)) return "chrome_install_button_visible";
+        const key = detectBrowser();
+        if (key === "samsung") return "samsung_install_button_visible";
+        if (key === "safari")  return "safari_install_button_visible";
+        if (key === "chrome")  return "chrome_install_button_visible";
         return "other_install_button_visible";
     })();
 
