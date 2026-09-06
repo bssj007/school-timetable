@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { agent } from "@/lib/browserDetect";
 import { useLocation } from "wouter";
 
 // ── detect() 결과 직접 참조 ──────────────────────────────────────────────────
-const { isIPad, isIPhone, iosVersion, isIOS26Plus, isIOS15Plus, isIOS13Plus } = agent;
+const { isIPad, isIPhone, iosVersion } = agent;
 
 // ── 공통 SVG 아이콘 ───────────────────────────────────────────────────────────
 function ShareIcon({ className }: { className?: string }) {
@@ -69,13 +69,34 @@ function TipBox({ children }: { children: React.ReactNode }) {
   );
 }
 
+function AppIconPreview({ appIconUrl, appTitle }: { appIconUrl: string; appTitle: string }) {
+  return (
+    <div className="mt-3.5 rounded-2xl border border-gray-200 bg-gray-50 p-3 flex items-center gap-3.5 shadow-2xs">
+      <img
+        src={appIconUrl}
+        alt={appTitle}
+        className="w-12 h-12 rounded-2xl shadow-sm object-cover bg-white border border-gray-200/80 shrink-0"
+        onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }}
+      />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-extrabold text-gray-900 truncate">{appTitle}</p>
+        <p className="text-xs text-gray-400 mt-0.5">홈 화면에 생성될 PWA 앱 아이콘</p>
+      </div>
+    </div>
+  );
+}
+
+interface GuideProps {
+  appTitle: string;
+  appIconUrl: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // iPad 안내 섹션
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── iPadOS 26+ 안내 ──────────────────────────────────────────────────────────
-// 상단 주소창 공유 버튼 → 공유 시트 하단 더 보기 [∨] → 홈 화면에 추가
-function GuideIPadNew() {
+function GuideIPadNew({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 상단 공유 버튼 */}
@@ -95,7 +116,7 @@ function GuideIPadNew() {
           <div className="mt-3 bg-gray-100 rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-gray-200">
             <div className="flex-1 bg-white rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs text-gray-400 border border-gray-200">
               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <span className="truncate">학교 시간표 사이트</span>
+              <span className="truncate">{appTitle}</span>
             </div>
             <div className="relative">
               <div className="w-8 h-8 rounded-lg bg-white border-2 border-red-500 flex items-center justify-center shadow-sm">
@@ -206,6 +227,8 @@ function GuideIPadNew() {
               <div className="w-5 h-5 bg-white rounded-full shadow" />
             </div>
           </div>
+          {/* PWA 앱 로고 미리보기 */}
+          <AppIconPreview appIconUrl={appIconUrl} appTitle={appTitle} />
         </div>
       </div>
     </div>
@@ -213,8 +236,7 @@ function GuideIPadNew() {
 }
 
 // ── iPadOS 13~25 안내 ────────────────────────────────────────────────────────
-// 상단 주소창 우측 공유 버튼 → 세로 카드 목록 스크롤 → 홈 화면에 추가
-function GuideIPad13_25() {
+function GuideIPad13_25({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 상단 공유 버튼 */}
@@ -233,7 +255,7 @@ function GuideIPad13_25() {
           <div className="mt-3 bg-gray-100 rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-gray-200">
             <div className="flex-1 bg-white rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs text-gray-400 border border-gray-200">
               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <span className="truncate">학교 시간표 사이트</span>
+              <span className="truncate">{appTitle}</span>
             </div>
             <div className="relative">
               <div className="w-8 h-8 rounded-lg bg-white border-2 border-red-500 flex items-center justify-center shadow-sm">
@@ -280,6 +302,7 @@ function GuideIPad13_25() {
         <div className="flex-1">
           <p className="text-base font-bold text-gray-900">오른쪽 위 <span className="font-black">'추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">홈 화면에 앱 아이콘이 추가됩니다!</p>
+          <AppIconPreview appIconUrl={appIconUrl} appTitle={appTitle} />
         </div>
       </div>
     </div>
@@ -287,8 +310,7 @@ function GuideIPad13_25() {
 }
 
 // ── iPad iOS 12 이하 안내 (iOS 7~12) ─────────────────────────────────────────
-// 상단 우측 공유 버튼 → 팝업 내 가로 스크롤 흑백 아이콘 줄에서 [+] 홈 화면에 추가
-function GuideIPad12() {
+function GuideIPad12({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 상단 우측 공유 버튼 */}
@@ -307,7 +329,7 @@ function GuideIPad12() {
           <div className="mt-3 bg-gray-100 rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-gray-200">
             <div className="flex-1 bg-white rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs text-gray-400 border border-gray-200">
               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <span className="truncate">학교 시간표 사이트</span>
+              <span className="truncate">{appTitle}</span>
             </div>
             <div className="relative">
               <div className="w-8 h-8 rounded-lg bg-white border-2 border-red-500 flex items-center justify-center shadow-sm">
@@ -364,6 +386,7 @@ function GuideIPad12() {
         <div className="flex-1">
           <p className="text-base font-bold text-gray-900">오른쪽 위 <span className="font-black">'추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">홈 화면에 앱 아이콘이 추가됩니다!</p>
+          <AppIconPreview appIconUrl={appIconUrl} appTitle={appTitle} />
         </div>
       </div>
     </div>
@@ -375,8 +398,7 @@ function GuideIPad12() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── iPhone iOS 26+ 안내 (iPhone 17 / iOS 26+) ────────────────────────────────
-// 하단 ··· 버튼 → 메뉴 내 '공유' → 공유 시트 하단 '더 보기' → 홈 화면에 추가 → 웹 앱 토글
-function Guide26() {
+function Guide26({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 하단 ··· 버튼 */}
@@ -396,7 +418,7 @@ function Guide26() {
               </div>
             </div>
             <div className="flex-1 bg-gray-700 rounded-lg px-3 py-1.5 flex items-center justify-center">
-              <span className="text-gray-300 text-xs truncate">학교 시간표 사이트</span>
+              <span className="text-gray-300 text-xs truncate">{appTitle}</span>
             </div>
             {/* ··· 버튼 강조 */}
             <div className="relative">
@@ -523,6 +545,8 @@ function Guide26() {
               <div className="w-5 h-5 bg-white rounded-full shadow" />
             </div>
           </div>
+          {/* PWA 앱 로고 미리보기 */}
+          <AppIconPreview appIconUrl={appIconUrl} appTitle={appTitle} />
         </div>
       </div>
     </div>
@@ -530,8 +554,7 @@ function Guide26() {
 }
 
 // ── iPhone iOS 15~25 안내 ─────────────────────────────────────────────────────
-// 하단 툴바/탭 막대 중앙 공유 버튼 → 세로 목록 홈 화면에 추가 → 추가
-function Guide15() {
+function Guide15({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 하단 공유 버튼 */}
@@ -597,6 +620,7 @@ function Guide15() {
         <div className="flex-1">
           <p className="text-base font-bold text-gray-900">오른쪽 위 <span className="font-black">'추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">홈 화면에 바로가기 앱 아이콘이 추가됩니다!</p>
+          <AppIconPreview appIconUrl={appIconUrl} appTitle={appTitle} />
         </div>
       </div>
     </div>
@@ -604,9 +628,7 @@ function Guide15() {
 }
 
 // ── iPhone iOS 13~14 안내 ─────────────────────────────────────────────────────
-// 상단 주소창 + 화면 맨 아래 툴바 가운데에 공유 아이콘
-// 스크롤 시 툴바 숨김 해제 팁 + 세로 카드 목록 스크롤
-function Guide13_14() {
+function Guide13_14({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 하단 공유 버튼 */}
@@ -627,14 +649,14 @@ function Guide13_14() {
             {/* 상단 주소창 */}
             <div className="bg-gray-200/80 px-3 py-2 border-b border-gray-200 flex items-center gap-2">
               <div className="flex-1 bg-white rounded-lg px-2.5 py-1 flex items-center justify-between text-xs text-gray-500 shadow-xs">
-                <span className="truncate">학교 시간표 사이트</span>
+                <span className="truncate">{appTitle}</span>
                 <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
               </div>
             </div>
 
             {/* 웹페이지 콘텐츠 영역 (미니 프리뷰) */}
             <div className="py-4 px-3 flex flex-col items-center justify-center text-center">
-              <p className="text-[11px] text-gray-400">웹페이지 화면</p>
+              <p className="text-[11px] text-gray-400">{appTitle} 웹페이지 화면</p>
             </div>
 
             {/* 하단 고정 툴바 */}
@@ -695,6 +717,7 @@ function Guide13_14() {
         <div className="flex-1">
           <p className="text-base font-bold text-gray-900">오른쪽 위 <span className="font-black">'추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">홈 화면에 바로가기 앱 아이콘이 추가됩니다!</p>
+          <AppIconPreview appIconUrl={appIconUrl} appTitle={appTitle} />
         </div>
       </div>
     </div>
@@ -702,9 +725,7 @@ function Guide13_14() {
 }
 
 // ── iPhone iOS 12 이하 안내 (iOS 7~12) ───────────────────────────────────────
-// 상단 주소창 + 하단 5버튼 툴바 (중앙에 공유 아이콘)
-// 공유 창은 세로 목록이 아닌 가로 스크롤 아이콘 행(흑백 액션 행) 형태
-function Guide12() {
+function Guide12({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 하단 공유 버튼 */}
@@ -823,6 +844,7 @@ function Guide12() {
         <div className="flex-1">
           <p className="text-base font-bold text-gray-900">오른쪽 위 <span className="font-black">'추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">홈 화면에 바로가기 앱 아이콘이 추가됩니다!</p>
+          <AppIconPreview appIconUrl={appIconUrl} appTitle={appTitle} />
         </div>
       </div>
     </div>
@@ -840,9 +862,23 @@ type IPadVersion = "ipad26" | "ipad13_25" | "ipad12_under";
 export default function IOSInstallGuide() {
   const [, setLocation] = useLocation();
 
-  // 감지된 기기 및 버전 계산
+  // 디자인설정 비동기 로드
+  const [settings, setSettings] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("/api/settings/public")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setSettings(data))
+      .catch(() => {});
+  }, []);
+
+  const appTitle = settings?.pwa_app_title || "성지수행";
+  const appIconUrl = settings?.pwa_app_icon_url || settings?.site_favicon_url || "/icon.svg";
+
+  // 자동 감지: 기기 구분 (iPad / iPhone)
   const detectedDevice: DeviceMode = isIPad ? "ipad" : "iphone";
 
+  // 자동 감지: iPhone OS 버전
   const detectedIPhoneVer: IPhoneVersion = (() => {
     if (iosVersion >= 26) return "ios26";
     if (iosVersion >= 15) return "ios15_25";
@@ -851,6 +887,7 @@ export default function IOSInstallGuide() {
     return "ios26"; // 데스크톱/기타 접속 시 최신 버전 기본
   })();
 
+  // 자동 감지: iPad OS 버전
   const detectedIPadVer: IPadVersion = (() => {
     if (iosVersion >= 26) return "ipad26";
     if (iosVersion >= 13) return "ipad13_25";
@@ -858,149 +895,262 @@ export default function IOSInstallGuide() {
     return "ipad26";
   })();
 
-  // 사용자 선택 상태
-  const [device, setDevice] = useState<DeviceMode>(detectedDevice);
-  const [iphoneVer, setIPhoneVer] = useState<IPhoneVersion>(detectedIPhoneVer);
-  const [ipadVer, setIPadVer] = useState<IPadVersion>(detectedIPadVer);
+  // ── IP별 디버그 모드 상태 ─────────────────────────────────────────────────────
+  const isDebug = !!settings?.access_debug_mode_hit;
+  const [debugMode, setDebugMode] = useState<"auto" | "manual">("auto");
+
+  // 수동 선택용 상태 (디버그 모드에서만 조작 가능)
+  const [manualDevice, setManualDevice] = useState<DeviceMode>(detectedDevice);
+  const [manualIPhoneVer, setManualIPhoneVer] = useState<IPhoneVersion>(detectedIPhoneVer);
+  const [manualIPadVer, setManualIPadVer] = useState<IPadVersion>(detectedIPadVer);
+
+  // 디버그 사용자 접속 시 관리페이지에서 설정한 기본 모드(manual 등) 반영
+  useEffect(() => {
+    if (settings?.access_debug_mode_hit) {
+      if (settings.access_debug_default_mode === "manual") {
+        setDebugMode("manual");
+      }
+    }
+  }, [settings?.access_debug_mode_hit, settings?.access_debug_default_mode]);
+
+  const isManual = isDebug && debugMode === "manual";
+  const effectiveDevice: DeviceMode = isManual ? manualDevice : detectedDevice;
+  const effectiveIPhoneVer: IPhoneVersion = isManual ? manualIPhoneVer : detectedIPhoneVer;
+  const effectiveIPadVer: IPadVersion = isManual ? manualIPadVer : detectedIPadVer;
+
+  const iphoneTabs: { id: IPhoneVersion; label: string }[] = [
+    { id: "ios26", label: "iOS 26+ (iPhone 17+)" },
+    { id: "ios15_25", label: "iOS 15~25" },
+    { id: "ios13_14", label: "iOS 13~14" },
+    { id: "ios12_under", label: "iOS 12 이하" },
+  ];
+
+  const ipadTabs: { id: IPadVersion; label: string }[] = [
+    { id: "ipad26", label: "iPadOS 26+" },
+    { id: "ipad13_25", label: "iPadOS 13~25" },
+    { id: "ipad12_under", label: "iOS 12 이하" },
+  ];
 
   // 헤더 감지 뱃지 텍스트
   const detectedSummary = (() => {
     if (isIPad) {
-      return iosVersion > 0 ? `iPadOS ${iosVersion} 감지됨` : "iPad 감지됨";
+      if (iosVersion >= 26) return "iPad (iPadOS 26+)";
+      if (iosVersion >= 13) return `iPad (iPadOS ${iosVersion})`;
+      if (iosVersion > 0) return `iPad (iOS ${iosVersion})`;
+      return "iPad (iPadOS)";
     }
     if (isIPhone) {
-      return iosVersion > 0 ? `iOS ${iosVersion} 감지됨` : "iPhone 감지됨";
+      if (iosVersion >= 26) return "iOS 26+ (iPhone 17+)";
+      if (iosVersion >= 15) return `iOS 15~25 (iOS ${iosVersion})`;
+      if (iosVersion >= 13) return `iOS 13~14 (iOS ${iosVersion})`;
+      if (iosVersion > 0) return `iOS 12 이하 (iOS ${iosVersion})`;
+      return "iPhone (iOS)";
     }
-    return "맞춤 안내 가이드";
+    return "iOS 26+";
   })();
 
-  const iphoneTabs: { id: IPhoneVersion; label: string; sub: string }[] = [
-    { id: "ios26", label: "iOS 26+", sub: "iPhone 17+" },
-    { id: "ios15_25", label: "iOS 15~25", sub: "하단 툴바" },
-    { id: "ios13_14", label: "iOS 13~14", sub: "상단 주소창" },
-    { id: "ios12_under", label: "iOS 12 이하", sub: "가로 스크롤" },
-  ];
+  const displaySummary = (() => {
+    if (isManual) {
+      if (manualDevice === "ipad") {
+        const t = ipadTabs.find((x) => x.id === manualIPadVer);
+        return `[수동선택] iPad · ${t?.label || ""}`;
+      } else {
+        const t = iphoneTabs.find((x) => x.id === manualIPhoneVer);
+        return `[수동선택] iPhone · ${t?.label || ""}`;
+      }
+    }
+    return detectedSummary;
+  })();
 
-  const ipadTabs: { id: IPadVersion; label: string; sub: string }[] = [
-    { id: "ipad26", label: "iPadOS 26+", sub: "더 보기 경유" },
-    { id: "ipad13_25", label: "iPadOS 13~25", sub: "상단 주소창" },
-    { id: "ipad12_under", label: "iOS 12 이하", sub: "가로 스크롤" },
-  ];
+  const guideProps: GuideProps = { appTitle, appIconUrl };
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col overflow-hidden">
       {/* 헤더 */}
       <div
-        className="bg-black px-5 flex-shrink-0"
+        className="bg-black px-5 pb-3.5 flex-shrink-0"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
       >
-        <div className="pb-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {/* 뒤로 가기 */}
-            <button
-              onClick={() => setLocation("/")}
-              className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0 active:bg-white/20 transition-colors"
-              aria-label="뒤로 가기"
-            >
-              <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6"/>
-              </svg>
-            </button>
-            {/* Apple 로고 */}
-            <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" fill="white">
-              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
+        <div className="flex items-center gap-3 min-w-0">
+          {/* 뒤로 가기 */}
+          <button
+            onClick={() => setLocation("/")}
+            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0 active:bg-white/20 transition-colors"
+            aria-label="뒤로 가기"
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
             </svg>
-            <div>
-              <h1 className="text-base font-extrabold text-white leading-tight">홈 화면에 앱 추가하기</h1>
-              <p className="text-gray-400 text-xs mt-0.5 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block shrink-0 animate-pulse" />
-                <span>{detectedSummary}</span>
-              </p>
+          </button>
+
+          {/* PWA 앱 로고 (관리페이지 디자인설정 PWA 로고 사용) */}
+          <div className="relative shrink-0">
+            <img
+              src={appIconUrl}
+              alt={appTitle}
+              className="w-9 h-9 rounded-xl object-cover shadow-sm bg-white border border-white/20"
+              onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }}
+            />
+            <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-black border border-white/30 flex items-center justify-center shadow-xs">
+              <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="white">
+                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
+              </svg>
             </div>
           </div>
 
-          {/* 기기 전환 (iPhone / iPad) 세그먼트 버튼 */}
-          <div className="flex items-center bg-white/10 p-0.5 rounded-xl border border-white/10 shrink-0">
-            <button
-              onClick={() => setDevice("iphone")}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${device === "iphone" ? "bg-white text-black shadow-xs" : "text-gray-300 hover:text-white"}`}
-            >
-              iPhone
-            </button>
-            <button
-              onClick={() => setDevice("ipad")}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${device === "ipad" ? "bg-white text-black shadow-xs" : "text-gray-300 hover:text-white"}`}
-            >
-              iPad
-            </button>
+          <div className="min-w-0">
+            <h1 className="text-base font-extrabold text-white leading-tight truncate">
+              {appTitle} 홈 화면에 추가
+            </h1>
+            <p className="text-gray-400 text-xs mt-0.5 flex items-center gap-1.5 truncate">
+              <span className={`w-1.5 h-1.5 rounded-full inline-block shrink-0 ${isManual ? "bg-amber-400" : "bg-green-400 animate-pulse"}`} />
+              <span>{displaySummary}</span>
+            </p>
           </div>
-        </div>
-
-        {/* 버전 선택 탭 (가로 스크롤) */}
-        <div className="pb-3 overflow-x-auto no-scrollbar flex items-center gap-2 border-t border-white/10 pt-2.5">
-          {device === "iphone"
-            ? iphoneTabs.map((tab) => {
-                const isActive = iphoneVer === tab.id;
-                const isAuto = isIPhone && detectedIPhoneVer === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setIPhoneVer(tab.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
-                      isActive
-                        ? "bg-white text-black shadow-sm"
-                        : "bg-white/10 text-gray-300 hover:bg-white/15"
-                    }`}
-                  >
-                    <span>{tab.label}</span>
-                    {isAuto && (
-                      <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-green-600" : "bg-green-400"}`} title="현재 기기 버전" />
-                    )}
-                  </button>
-                );
-              })
-            : ipadTabs.map((tab) => {
-                const isActive = ipadVer === tab.id;
-                const isAuto = isIPad && detectedIPadVer === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setIPadVer(tab.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
-                      isActive
-                        ? "bg-white text-black shadow-sm"
-                        : "bg-white/10 text-gray-300 hover:bg-white/15"
-                    }`}
-                  >
-                    <span>{tab.label}</span>
-                    {isAuto && (
-                      <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-green-600" : "bg-green-400"}`} title="현재 기기 버전" />
-                    )}
-                  </button>
-                );
-              })}
         </div>
       </div>
 
-      {/* 스크롤 가능한 단계 안내 본문 */}
+      {/* 디버그 모드 상태 바 (IP 등록된 기기에서만 노출) */}
+      {isDebug && (
+        <div className="bg-amber-500/15 border-b border-amber-500/25 px-5 py-2 flex items-center justify-between text-xs shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="inline-flex items-center gap-1.5 font-black text-amber-950 shrink-0">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              🛠️ 디버그 모드
+            </span>
+            <span className="text-[11px] font-mono text-amber-900/70 truncate">
+              ({settings?.client_ip || "IP 일치"})
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[11px] text-amber-950 font-bold">모드:</span>
+            <div className="inline-flex rounded-lg bg-black/10 p-0.5 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setDebugMode("auto")}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  debugMode === "auto"
+                    ? "bg-white text-gray-950 shadow-xs font-black"
+                    : "text-amber-950/70 hover:text-black"
+                }`}
+              >
+                ⚡ 자동 감지
+              </button>
+              <button
+                type="button"
+                onClick={() => setDebugMode("manual")}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  debugMode === "manual"
+                    ? "bg-amber-600 text-white shadow-xs font-black"
+                    : "text-amber-950/70 hover:text-black"
+                }`}
+              >
+                🛠️ 수동 선택
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 수동 선택 모드 선택 시 수동선택 버튼(기기 전환 + 버전 탭) 표시 */}
+      {isManual && (
+        <div className="bg-gray-900 px-5 pt-3 pb-3 border-b border-gray-800 shrink-0 space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-bold text-gray-400">기기 전환</span>
+            <div className="flex items-center bg-white/10 p-0.5 rounded-xl border border-white/10 shrink-0">
+              <button
+                type="button"
+                onClick={() => setManualDevice("iphone")}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                  manualDevice === "iphone"
+                    ? "bg-white text-black shadow-xs font-black"
+                    : "text-gray-300 hover:text-white"
+                }`}
+              >
+                iPhone
+              </button>
+              <button
+                type="button"
+                onClick={() => setManualDevice("ipad")}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                  manualDevice === "ipad"
+                    ? "bg-white text-black shadow-xs font-black"
+                    : "text-gray-300 hover:text-white"
+                }`}
+              >
+                iPad
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto no-scrollbar flex items-center gap-1.5 pt-0.5">
+            {manualDevice === "iphone"
+              ? iphoneTabs.map((tab) => {
+                  const isActive = manualIPhoneVer === tab.id;
+                  const isAuto = isIPhone && detectedIPhoneVer === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setManualIPhoneVer(tab.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
+                        isActive
+                          ? "bg-amber-400 text-gray-950 font-black shadow-sm"
+                          : "bg-white/10 text-gray-300 hover:bg-white/20"
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      {isAuto && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" title="현재 감지된 기기 버전" />
+                      )}
+                    </button>
+                  );
+                })
+              : ipadTabs.map((tab) => {
+                  const isActive = manualIPadVer === tab.id;
+                  const isAuto = isIPad && detectedIPadVer === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setManualIPadVer(tab.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
+                        isActive
+                          ? "bg-amber-400 text-gray-950 font-black shadow-sm"
+                          : "bg-white/10 text-gray-300 hover:bg-white/20"
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      {isAuto && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" title="현재 감지된 기기 버전" />
+                      )}
+                    </button>
+                  );
+                })}
+          </div>
+        </div>
+      )}
+
+      {/* 스크롤 가능한 단계 안내 본문 (자동 감지 또는 수동 선택 기반 분기) */}
       <div className="flex-1 overflow-y-auto">
         <div className="px-6 py-6 max-w-lg mx-auto">
-          {device === "iphone" ? (
-            iphoneVer === "ios26" ? (
-              <Guide26 />
-            ) : iphoneVer === "ios15_25" ? (
-              <Guide15 />
-            ) : iphoneVer === "ios13_14" ? (
-              <Guide13_14 />
+          {effectiveDevice === "ipad" ? (
+            effectiveIPadVer === "ipad26" ? (
+              <GuideIPadNew {...guideProps} />
+            ) : effectiveIPadVer === "ipad13_25" ? (
+              <GuideIPad13_25 {...guideProps} />
             ) : (
-              <Guide12 />
+              <GuideIPad12 {...guideProps} />
             )
-          ) : ipadVer === "ipad26" ? (
-            <GuideIPadNew />
-          ) : ipadVer === "ipad13_25" ? (
-            <GuideIPad13_25 />
+          ) : effectiveIPhoneVer === "ios26" ? (
+            <Guide26 {...guideProps} />
+          ) : effectiveIPhoneVer === "ios15_25" ? (
+            <Guide15 {...guideProps} />
+          ) : effectiveIPhoneVer === "ios13_14" ? (
+            <Guide13_14 {...guideProps} />
           ) : (
-            <GuideIPad12 />
+            <Guide12 {...guideProps} />
           )}
         </div>
       </div>

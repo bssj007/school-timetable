@@ -68,14 +68,26 @@ function AppContent() {
           }
           link.href = settings.site_favicon_url;
         }
-        if (settings.pwa_app_icon_url) {
+        const pwaIcon = settings.pwa_app_icon_url || settings.site_favicon_url || '/icon.svg';
+        if (pwaIcon) {
           let appleLink = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
           if (!appleLink) {
             appleLink = document.createElement('link');
             appleLink.rel = 'apple-touch-icon';
             document.head.appendChild(appleLink);
           }
-          appleLink.href = settings.pwa_app_icon_url;
+          appleLink.href = pwaIcon;
+        }
+
+        const pwaTitle = settings.pwa_app_title || settings.site_title;
+        if (pwaTitle) {
+          let metaTitle = document.querySelector("meta[name='apple-mobile-web-app-title']") as HTMLMetaElement;
+          if (!metaTitle) {
+            metaTitle = document.createElement('meta');
+            metaTitle.name = 'apple-mobile-web-app-title';
+            document.head.appendChild(metaTitle);
+          }
+          metaTitle.content = pwaTitle;
         }
       })
       .catch(() => {}); // 실패 시 기본값 유지

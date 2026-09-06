@@ -10087,6 +10087,52 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
         }
     }, [settingsData?.play_store_url, settingsData?.app_store_url]);
 
+    // IP별 디버그 모드 설정 (admin settings)
+    const { data: adminSettingsData } = useQuery({
+        queryKey: ["admin", "accessDebugSettings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 불러오기 실패");
+            return res.json();
+        }
+    });
+
+    const isAccessDebugEnabled = adminSettingsData?.access_debug_mode_enabled === "true";
+
+    interface DebugIpItem {
+        ip: string;
+        memo?: string;
+        mode: "manual" | "auto";
+    }
+
+    const [debugIpList, setDebugIpList] = useState<DebugIpItem[]>([]);
+    const [newIpInput, setNewIpInput] = useState("");
+    const [newMemoInput, setNewMemoInput] = useState("");
+    const [newModeInput, setNewModeInput] = useState<"manual" | "auto">("manual");
+
+    useEffect(() => {
+        if (adminSettingsData?.access_debug_ip_list) {
+            try {
+                const parsed = JSON.parse(adminSettingsData.access_debug_ip_list);
+                if (Array.isArray(parsed)) {
+                    setDebugIpList(
+                        parsed.map((item: any) =>
+                            typeof item === "string"
+                                ? { ip: item, memo: "", mode: "manual" }
+                                : { ip: item.ip, memo: item.memo || "", mode: item.mode || "manual" }
+                        )
+                    );
+                }
+            } catch (e) {
+                setDebugIpList([]);
+            }
+        } else {
+            setDebugIpList([]);
+        }
+    }, [adminSettingsData?.access_debug_ip_list]);
+
     const saveSettingMutation = useMutation({
         mutationFn: async (payload: Record<string, string>) => {
             const res = await fetch("/api/admin/settings", {
@@ -10101,6 +10147,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin", "installButtonSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "accessDebugSettings"] });
             queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
             toast.success("설정이 저장되었습니다.");
         },
@@ -10117,6 +10164,50 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
 
     const saveAppStoreUrl = () =>
         saveSettingMutation.mutate({ app_store_url: appStoreUrl.trim() });
+
+    const saveDebugIpList = (nextList: DebugIpItem[]) => {
+        setDebugIpList(nextList);
+        saveSettingMutation.mutate({
+            access_debug_ip_list: JSON.stringify(nextList)
+        });
+    };
+
+    const addDebugIp = (ipToAdd?: string) => {
+        const ip = (ipToAdd || newIpInput).trim();
+        if (!ip) {
+            toast.error("IP 주소를 입력해주세요.");
+            return;
+        }
+        if (debugIpList.some(item => item.ip === ip)) {
+            toast.error("이미 등록된 IP 주소입니다.");
+            return;
+        }
+        const nextList: DebugIpItem[] = [
+            ...debugIpList,
+            { ip, memo: (ipToAdd ? "현재 관리자 기기" : newMemoInput.trim()), mode: newModeInput }
+        ];
+        saveDebugIpList(nextList);
+        if (!ipToAdd) {
+            setNewIpInput("");
+            setNewMemoInput("");
+        }
+        toast.success(`IP ${ip}가 디버그 목록에 추가되었습니다.`);
+    };
+
+    const removeDebugIp = (ipToRemove: string) => {
+        const nextList = debugIpList.filter(item => item.ip !== ipToRemove);
+        saveDebugIpList(nextList);
+        toast.success("IP가 삭제되었습니다.");
+    };
+
+    const updateIpMode = (ipToUpdate: string, newMode: "manual" | "auto") => {
+        const nextList = debugIpList.map(item =>
+            item.ip === ipToUpdate ? { ...item, mode: newMode } : item
+        );
+        saveDebugIpList(nextList);
+    };
+
+    const currentClientIp = settingsData?.client_ip || "";
 
     if (isLoading) {
         return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
@@ -10516,6 +10607,197 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                         ) : (
                             <p className="text-xs text-gray-400">미설정 — iOS Safari에서 기존 PWA 프롬프트 사용</p>
                         )}
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* ── IP별 디버그 모드 설정 ────────────────────────────────────────── */}
+            <Card className="border-2 border-amber-200 bg-amber-50/40">
+                <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="text-base flex items-center gap-2 text-amber-950">
+                            <span className="text-lg">🛠️</span>
+                            접속환경 디버그 모드 (IP 목록)
+                        </CardTitle>
+                        <div className="flex items-center gap-2">
+                            <a
+                                href="/guide/ios"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors"
+                            >
+                                <span>📱 iOS 설치 안내 새 창 열기</span>
+                                <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            </a>
+                        </div>
+                    </div>
+                    <CardDescription>
+                        지정된 IP로 접속 시 <strong>디버그 모드</strong>가 활성화되며, 모드 선택 시 숨겨진 <strong>수동 선택 버튼(iPhone/iPad 및 iOS 버전)</strong>을 표시하여 모든 버전을 테스트할 수 있습니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {/* 전체 디버그 모드 토글 */}
+                    <div className="flex items-center justify-between bg-white p-3.5 rounded-xl border border-amber-200 shadow-2xs">
+                        <div className="space-y-0.5">
+                            <Label htmlFor="access-debug-toggle" className="text-sm font-bold text-gray-800 cursor-pointer flex items-center gap-2">
+                                <span>IP별 디버그 모드 활성화</span>
+                                {isAccessDebugEnabled ? (
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold">작동 중</span>
+                                ) : (
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">비활성화됨</span>
+                                )}
+                            </Label>
+                            <p className="text-xs text-gray-500">
+                                켜져 있을 때만 아래 등록된 IP 목록의 기기에서 디버그 모드 및 수동 선택 기능이 제공됩니다.
+                            </p>
+                        </div>
+                        <Switch
+                            id="access-debug-toggle"
+                            checked={isAccessDebugEnabled}
+                            onCheckedChange={(checked) => toggle("access_debug_mode_enabled", checked)}
+                            disabled={saveSettingMutation.isPending}
+                        />
+                    </div>
+
+                    {/* 내 현재 IP & 빠른 추가 */}
+                    {currentClientIp && currentClientIp !== "unknown" && (
+                        <div className="flex items-center justify-between bg-white/80 p-2.5 px-3 rounded-lg border border-amber-100 text-xs text-gray-600">
+                            <span className="flex items-center gap-1.5 font-mono">
+                                <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+                                현재 내 접속 IP: <strong>{currentClientIp}</strong>
+                                {debugIpList.some(item => item.ip === currentClientIp) && (
+                                    <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[11px] font-bold">✓ 등록됨</span>
+                                )}
+                            </span>
+                            {!debugIpList.some(item => item.ip === currentClientIp) && (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => addDebugIp(currentClientIp)}
+                                    className="text-xs h-7 px-2.5 bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100"
+                                >
+                                    + 내 현재 IP 등록
+                                </Button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* 등록된 IP 목록 테이블 */}
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-2xs">
+                        <div className="p-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                            <span className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                                <span>등록된 디버그 IP 목록</span>
+                                <span className="text-gray-400 font-normal">({debugIpList.length}개)</span>
+                            </span>
+                        </div>
+
+                        {debugIpList.length === 0 ? (
+                            <div className="py-8 text-center text-xs text-gray-400">
+                                등록된 디버그 IP가 없습니다. 아래 폼을 통해 테스트할 기기의 IP를 등록하세요.
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                    <thead>
+                                        <tr className="border-b bg-gray-50/50 text-gray-500 text-left font-medium">
+                                            <th className="px-3 py-2">IP 주소</th>
+                                            <th className="px-3 py-2">메모 / 기기명</th>
+                                            <th className="px-3 py-2">기본 모드</th>
+                                            <th className="px-3 py-2 text-center">삭제</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {debugIpList.map((item) => {
+                                            const isCurrent = item.ip === currentClientIp;
+                                            return (
+                                                <tr key={item.ip} className={isCurrent ? "bg-amber-50/60" : "hover:bg-gray-50"}>
+                                                    <td className="px-3 py-2.5 font-mono font-bold text-gray-800">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span>{item.ip}</span>
+                                                            {isCurrent && (
+                                                                <span className="text-[10px] bg-amber-200 text-amber-900 px-1 rounded font-bold">현재 기기</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-2.5 text-gray-600">
+                                                        {item.memo || <span className="text-gray-300 italic">메모 없음</span>}
+                                                    </td>
+                                                    <td className="px-3 py-2.5">
+                                                        <select
+                                                            value={item.mode}
+                                                            onChange={(e) => updateIpMode(item.ip, e.target.value as "manual" | "auto")}
+                                                            className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-800 shadow-2xs focus:outline-none"
+                                                        >
+                                                            <option value="manual">🛠️ 수동선택 모드</option>
+                                                            <option value="auto">⚡ 자동감지 모드</option>
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-3 py-2.5 text-center">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeDebugIp(item.ip)}
+                                                            className="w-6 h-6 rounded text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors inline-flex items-center justify-center font-bold"
+                                                            title="삭제"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {/* 새 IP 추가 입력 폼 */}
+                        <div className="p-3 bg-gray-50/80 border-t border-gray-200">
+                            <p className="text-[11px] font-bold text-gray-600 mb-2">새 디버그 IP 추가</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Input
+                                    value={newIpInput}
+                                    onChange={(e) => setNewIpInput(e.target.value)}
+                                    placeholder="IP 주소 (예: 211.234.56.78)"
+                                    className="font-mono text-xs h-8 flex-1 min-w-[150px] bg-white"
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            addDebugIp();
+                                        }
+                                    }}
+                                />
+                                <Input
+                                    value={newMemoInput}
+                                    onChange={(e) => setNewMemoInput(e.target.value)}
+                                    placeholder="기기명/메모 (선택)"
+                                    className="text-xs h-8 flex-1 min-w-[120px] bg-white"
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            addDebugIp();
+                                        }
+                                    }}
+                                />
+                                <select
+                                    value={newModeInput}
+                                    onChange={(e) => setNewModeInput(e.target.value as "manual" | "auto")}
+                                    className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-800 shadow-2xs h-8 focus:outline-none shrink-0"
+                                >
+                                    <option value="manual">🛠️ 수동선택 모드</option>
+                                    <option value="auto">⚡ 자동감지 모드</option>
+                                </select>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => addDebugIp()}
+                                    disabled={!newIpInput.trim() || saveSettingMutation.isPending}
+                                    className="h-8 text-xs shrink-0"
+                                >
+                                    + 추가
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
