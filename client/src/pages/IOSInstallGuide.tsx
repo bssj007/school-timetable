@@ -50,20 +50,20 @@ function IOSShareButton({ className = "" }: { className?: string }) {
 
 function StepBadge({ n }: { n: number }) {
   return (
-    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black text-white flex items-center justify-center text-sm sm:text-base font-extrabold shrink-0 shadow-xs">
+    <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-sm font-extrabold shrink-0">
       {n}
     </div>
   );
 }
 
 function Divider() {
-  return <div className="border-t border-gray-100 my-1" />;
+  return <div className="border-t border-gray-100" />;
 }
 
 function TipBox({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl bg-amber-50/90 border border-amber-200/80 p-3 sm:p-3.5 text-xs sm:text-sm text-amber-900 flex items-start gap-2.5 w-full max-w-sm sm:max-w-md md:max-w-lg">
-      <span className="text-base sm:text-lg shrink-0 leading-none">💡</span>
+    <div className="rounded-xl bg-amber-50/90 border border-amber-200/80 p-3 text-xs text-amber-900 flex items-start gap-2.5">
+      <span className="text-base shrink-0 leading-none">💡</span>
       <div className="flex-1 leading-relaxed font-medium">{children}</div>
     </div>
   );
@@ -71,16 +71,16 @@ function TipBox({ children }: { children: React.ReactNode }) {
 
 function AppIconPreview({ appIconUrl, appTitle }: { appIconUrl: string; appTitle: string }) {
   return (
-    <div className="mt-3.5 rounded-2xl border border-gray-200 bg-gray-50 p-3 sm:p-4 flex items-center gap-3.5 sm:gap-4 shadow-2xs w-full max-w-sm sm:max-w-md md:max-w-lg">
+    <div className="mt-3.5 rounded-2xl border border-gray-200 bg-gray-50 p-3 flex items-center gap-3.5 shadow-2xs">
       <img
         src={appIconUrl}
         alt={appTitle}
-        className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl shadow-sm object-cover bg-white border border-gray-200/80 shrink-0"
+        className="w-12 h-12 rounded-2xl shadow-sm object-cover bg-white border border-gray-200/80 shrink-0"
         onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }}
       />
       <div className="min-w-0 flex-1">
-        <p className="text-sm sm:text-base font-extrabold text-gray-900 truncate">{appTitle}</p>
-        <p className="text-xs sm:text-sm text-gray-400 mt-0.5">홈 화면에 생성될 PWA 앱 아이콘</p>
+        <p className="text-sm font-extrabold text-gray-900 truncate">{appTitle}</p>
+        <p className="text-xs text-gray-400 mt-0.5">홈 화면에 생성될 PWA 앱 아이콘</p>
       </div>
     </div>
   );
@@ -100,9 +100,9 @@ function GuideIPadNew({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 상단 공유 버튼 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={1} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900 flex items-center flex-wrap gap-1.5">
             <span>상단 주소창 옆</span>
             <span className="font-black inline-flex items-center gap-1.5 align-middle">
@@ -113,18 +113,18 @@ function GuideIPadNew({ appTitle, appIconUrl }: GuideProps) {
           </p>
           <p className="text-sm text-gray-500 mt-0.5">주소창 오른쪽 끝, ↑ 박스 아이콘</p>
           {/* iPad 주소창 일러스트 */}
-          <div className="mt-3 bg-gray-100 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 border border-gray-200 w-full max-w-sm sm:max-w-md md:max-w-lg">
-            <div className="flex-1 bg-white rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs text-gray-400 border border-gray-200 min-w-0">
+          <div className="mt-3 bg-gray-100 rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-gray-200">
+            <div className="flex-1 bg-white rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs text-gray-400 border border-gray-200">
               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <span className="truncate">{appTitle}</span>
             </div>
-            <div className="relative shrink-0">
+            <div className="relative">
               <div className="w-8 h-8 rounded-lg bg-white border-2 border-red-500 flex items-center justify-center shadow-sm">
                 <ShareIcon className="w-4 h-4 text-blue-500" />
               </div>
               <div className="absolute -inset-1 rounded-xl border-2 border-red-400 pointer-events-none" />
             </div>
-            <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>
             </div>
           </div>
@@ -134,23 +134,23 @@ function GuideIPadNew({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 2 — 하단 더 보기 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={2} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900">공유 시트 하단 <span className="font-black text-red-500">더 보기</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">앱 행 오른쪽 끝 버튼이 아닌, 가장 하단의 더 보기</p>
 
           {/* 액션 바 일러스트 — iPad 최적화 */}
-          <div className="mt-4 rounded-2xl border border-gray-200 shadow-sm w-full max-w-sm sm:max-w-md md:max-w-lg" style={{ overflow: 'visible' }}>
+          <div className="mt-4 rounded-2xl border border-gray-200 shadow-sm max-w-sm" style={{ overflow: 'visible' }}>
             {/* 상단 앱 아이콘 행 */}
-            <div className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 border-b border-gray-100 rounded-t-2xl overflow-hidden">
+            <div className="flex items-center gap-4 px-4 py-3 bg-gray-50 border-b border-gray-100 rounded-t-2xl overflow-hidden">
               {[
                 { label: "News",     bg: "bg-red-100",  content: <span className="text-red-500 text-sm font-black">N</span> },
                 { label: "미리 알림", bg: "bg-blue-50",  content: <svg viewBox="0 0 24 24" className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> },
                 { label: "더 보기",  bg: "bg-gray-100", content: <span className="text-gray-500 text-sm font-black">···</span> },
               ].map((app, i) => (
                 <div key={i} className="flex flex-col items-center gap-1 shrink-0">
-                  <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl ${app.bg} flex items-center justify-center`}>{app.content}</div>
+                  <div className={`w-11 h-11 rounded-xl ${app.bg} flex items-center justify-center`}>{app.content}</div>
                   <span className="text-[10px] text-gray-400">{app.label}</span>
                 </div>
               ))}
@@ -158,11 +158,11 @@ function GuideIPadNew({ appTitle, appIconUrl }: GuideProps) {
             {/* 하단 액션 바 */}
             <div className="flex items-center divide-x divide-gray-100 bg-white rounded-b-2xl overflow-hidden" style={{ overflow: 'visible' }}>
               {[
-                { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>, label: "복사" },
-                { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>, label: "북마크" },
-                { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: "읽기" },
+                { icon: <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>, label: "복사" },
+                { icon: <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>, label: "북마크" },
+                { icon: <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: "읽기" },
               ].map((action, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1 py-2 sm:py-3">
+                <div key={i} className="flex-1 flex flex-col items-center gap-1 py-3">
                   {action.icon}
                   <span className="text-[10px] text-gray-400">{action.label}</span>
                 </div>
@@ -178,11 +178,11 @@ function GuideIPadNew({ appTitle, appIconUrl }: GuideProps) {
                     <line x1="7" y1="22" x2="7" y2="5" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"/>
                     <polyline points="2,14 7,5 12,14" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
-                  <div className="flex flex-col items-center gap-1 sm:gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 border-2 border-red-400 rounded-full">
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2">
+                  <div className="flex flex-col items-center gap-1.5 px-5 py-2.5 border-2 border-red-400 rounded-full">
+                    <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2">
                       <polyline points="6 9 12 15 18 9"/>
                     </svg>
-                    <span className="text-[10px] sm:text-[11px] text-gray-600 font-semibold">더 보기</span>
+                    <span className="text-[11px] text-gray-600 font-semibold">더 보기</span>
                   </div>
                 </div>
               </div>
@@ -194,11 +194,11 @@ function GuideIPadNew({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 3 — 홈 화면에 추가 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={3} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900">목록에서 <span className="font-black">'홈 화면에 추가'</span>를 누르세요</p>
-          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm w-full max-w-sm sm:max-w-md md:max-w-lg">
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
             {[
               { icon: <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>, label: "AirPlay" },
               { icon: <AddToHomeIcon className="w-5 h-5 text-gray-800" />, label: "홈 화면에 추가", highlight: true },
@@ -216,12 +216,12 @@ function GuideIPadNew({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 4 — 웹 앱 토글 + 추가 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={4} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900"><span className="font-black">'웹 앱으로 열기'</span> 켜고 <span className="font-black">'추가'</span> 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">iPadOS 26+에서는 웹 앱 모드를 활성화해야 해요</p>
-          <div className="mt-3 rounded-2xl border border-gray-200 px-4 py-3 flex items-center justify-between bg-gray-50 w-full max-w-sm sm:max-w-md md:max-w-lg">
+          <div className="mt-3 rounded-2xl border border-gray-200 px-4 py-3 flex items-center justify-between bg-gray-50">
             <span className="text-sm font-medium text-gray-800">웹 앱으로 열기</span>
             <div className="w-11 h-6 bg-green-500 rounded-full flex items-center justify-end pr-0.5">
               <div className="w-5 h-5 bg-white rounded-full shadow" />
@@ -240,9 +240,9 @@ function GuideIPad13_25({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 상단 공유 버튼 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={1} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900 flex items-center flex-wrap gap-1.5">
             <span>상단 주소창 옆</span>
             <span className="font-black inline-flex items-center gap-1.5 align-middle">
@@ -252,18 +252,18 @@ function GuideIPad13_25({ appTitle, appIconUrl }: GuideProps) {
             <span>버튼을 누르세요</span>
           </p>
           <p className="text-sm text-gray-500 mt-0.5">주소창 오른쪽 끝, ↑ 박스 아이콘</p>
-          <div className="mt-3 bg-gray-100 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 border border-gray-200 w-full max-w-sm sm:max-w-md md:max-w-lg">
-            <div className="flex-1 bg-white rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs text-gray-400 border border-gray-200 min-w-0">
+          <div className="mt-3 bg-gray-100 rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-gray-200">
+            <div className="flex-1 bg-white rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs text-gray-400 border border-gray-200">
               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <span className="truncate">{appTitle}</span>
             </div>
-            <div className="relative shrink-0">
+            <div className="relative">
               <div className="w-8 h-8 rounded-lg bg-white border-2 border-red-500 flex items-center justify-center shadow-sm">
                 <ShareIcon className="w-4 h-4 text-blue-500" />
               </div>
               <div className="absolute -inset-1 rounded-xl border-2 border-red-400 pointer-events-none" />
             </div>
-            <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>
             </div>
           </div>
@@ -273,12 +273,12 @@ function GuideIPad13_25({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 2 — 홈 화면에 추가 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={2} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900">공유 창에서 <span className="font-black">'홈 화면에 추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">목록을 아래로 스크롤하여 찾으세요</p>
-          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm w-full max-w-sm sm:max-w-md md:max-w-lg">
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
             {[
               { icon: <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>, label: "AirPlay" },
               { icon: <AddToHomeIcon className="w-5 h-5 text-gray-800" />, label: "홈 화면에 추가", highlight: true },
@@ -297,9 +297,9 @@ function GuideIPad13_25({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 3 — 추가 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={3} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900">오른쪽 위 <span className="font-black">'추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">홈 화면에 앱 아이콘이 추가됩니다!</p>
           <AppIconPreview appIconUrl={appIconUrl} appTitle={appTitle} />
@@ -314,9 +314,9 @@ function GuideIPad12({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 상단 우측 공유 버튼 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={1} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900 flex items-center flex-wrap gap-1.5">
             <span>상단 주소창 오른쪽</span>
             <span className="font-black inline-flex items-center gap-1.5 align-middle">
@@ -326,18 +326,18 @@ function GuideIPad12({ appTitle, appIconUrl }: GuideProps) {
             <span>버튼을 누르세요</span>
           </p>
           <p className="text-sm text-gray-500 mt-0.5">상단 바 오른쪽 끝에 있는 ↑ 박스 아이콘</p>
-          <div className="mt-3 bg-gray-100 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 border border-gray-200 w-full max-w-sm sm:max-w-md md:max-w-lg">
-            <div className="flex-1 bg-white rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs text-gray-400 border border-gray-200 min-w-0">
+          <div className="mt-3 bg-gray-100 rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-gray-200">
+            <div className="flex-1 bg-white rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs text-gray-400 border border-gray-200">
               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <span className="truncate">{appTitle}</span>
             </div>
-            <div className="relative shrink-0">
+            <div className="relative">
               <div className="w-8 h-8 rounded-lg bg-white border-2 border-red-500 flex items-center justify-center shadow-sm">
                 <ShareIcon className="w-4 h-4 text-blue-500" />
               </div>
               <div className="absolute -inset-1 rounded-xl border-2 border-red-400 pointer-events-none" />
             </div>
-            <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>
             </div>
           </div>
@@ -347,13 +347,13 @@ function GuideIPad12({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 2 — 가로 스크롤로 '홈 화면에 추가' 찾기 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={2} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900">공유 팝업창 하단 줄에서 <span className="font-black text-blue-600">'홈 화면에 추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">맨 아래 회색 사각형 아이콘 줄을 넘겨 [+] 모양 아이콘 선택</p>
 
-          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm bg-gray-50 p-3.5 space-y-2.5 w-full max-w-sm sm:max-w-md md:max-w-lg">
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm bg-gray-50 p-3.5 space-y-2.5 max-w-sm">
             <p className="text-[10px] text-gray-400 font-semibold mb-1">맨 아래 회색 아이콘 줄을 왼쪽으로 스와이프</p>
             <div className="flex items-center gap-3 overflow-x-auto py-1">
               {[
@@ -381,9 +381,9 @@ function GuideIPad12({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 3 — 추가 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={3} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900">오른쪽 위 <span className="font-black">'추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">홈 화면에 앱 아이콘이 추가됩니다!</p>
           <AppIconPreview appIconUrl={appIconUrl} appTitle={appTitle} />
@@ -402,14 +402,14 @@ function Guide26({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 하단 ··· 버튼 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={1} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900">하단 오른쪽 <span className="font-black">···</span> 버튼을 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">화면 아래 툴바 오른쪽 끝 점 세 개 아이콘</p>
           {/* 툴바 일러스트 */}
-          <div className="mt-3 bg-gray-900 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 w-full max-w-sm sm:max-w-md md:max-w-lg">
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="mt-3 bg-gray-900 rounded-2xl px-4 py-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-3">
               <div className="w-7 h-7 rounded-lg bg-gray-700 flex items-center justify-center">
                 <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
               </div>
@@ -417,11 +417,11 @@ function Guide26({ appTitle, appIconUrl }: GuideProps) {
                 <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
               </div>
             </div>
-            <div className="flex-1 bg-gray-700 rounded-lg px-2.5 sm:px-3 py-1.5 flex items-center justify-center min-w-0">
+            <div className="flex-1 bg-gray-700 rounded-lg px-3 py-1.5 flex items-center justify-center">
               <span className="text-gray-300 text-xs truncate">{appTitle}</span>
             </div>
             {/* ··· 버튼 강조 */}
-            <div className="relative shrink-0">
+            <div className="relative">
               <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
                 <span className="text-white font-black text-sm leading-none">···</span>
               </div>
@@ -434,9 +434,9 @@ function Guide26({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 2 — 공유 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={2} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900 flex items-center flex-wrap gap-1.5">
             <span>메뉴에서</span>
             <span className="font-black inline-flex items-center gap-1.5 align-middle">
@@ -452,23 +452,23 @@ function Guide26({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 3 — 하단 더 보기 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={3} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900">공유 시트 하단 <span className="font-black text-red-500">더 보기</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">앱 행 오른쪽 끝 버튼이 아닌, 가장 하단의 더 보기</p>
 
           {/* 액션 바 일러스트 */}
-          <div className="mt-3 rounded-2xl border border-gray-200 shadow-sm w-full max-w-sm sm:max-w-md md:max-w-lg" style={{ overflow: 'visible' }}>
+          <div className="mt-3 rounded-2xl border border-gray-200 shadow-sm max-w-xs" style={{ overflow: 'visible' }}>
             {/* 상단 앱 아이콘 행 */}
-            <div className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-50 border-b border-gray-100 rounded-t-2xl overflow-hidden">
+            <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 border-b border-gray-100 rounded-t-2xl overflow-hidden">
               {[
                 { label: "News",    bg: "bg-red-100",  content: <span className="text-red-500 text-xs font-black">N</span> },
                 { label: "미리 알림", bg: "bg-blue-50", content: <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> },
                 { label: "더 보기", bg: "bg-gray-100", content: <span className="text-gray-500 text-xs font-black">···</span> },
               ].map((app, i) => (
                 <div key={i} className="flex flex-col items-center gap-0.5 shrink-0">
-                  <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${app.bg} flex items-center justify-center`}>{app.content}</div>
+                  <div className={`w-9 h-9 rounded-xl ${app.bg} flex items-center justify-center`}>{app.content}</div>
                   <span className="text-[9px] text-gray-400">{app.label}</span>
                 </div>
               ))}
@@ -496,7 +496,7 @@ function Guide26({ appTitle, appIconUrl }: GuideProps) {
                     <line x1="6" y1="18" x2="6" y2="4" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"/>
                     <polyline points="2,11 6,4 10,11" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
-                  <div className="flex flex-col items-center gap-0.5 px-2.5 sm:px-4 py-1 sm:py-1.5 border-2 border-red-400 rounded-full">
+                  <div className="flex flex-col items-center gap-0.5 px-4 py-1.5 border-2 border-red-400 rounded-full">
                     <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2">
                       <polyline points="6 9 12 15 18 9"/>
                     </svg>
@@ -512,11 +512,11 @@ function Guide26({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 4 — 홈 화면에 추가 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={4} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900">목록에서 <span className="font-black">'홈 화면에 추가'</span>를 누르세요</p>
-          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm w-full max-w-sm sm:max-w-md md:max-w-lg">
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
             {[
               { icon: <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>, label: "AirPlay" },
               { icon: <AddToHomeIcon className="w-5 h-5 text-gray-800" />, label: "홈 화면에 추가", highlight: true },
@@ -534,12 +534,12 @@ function Guide26({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 5 — 웹 앱 토글 + 추가 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={5} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900"><span className="font-black">'웹 앱으로 열기'</span> 켜고 <span className="font-black">'추가'</span> 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">iOS 26+에서는 웹 앱 모드를 활성화해야 해요</p>
-          <div className="mt-3 rounded-2xl border border-gray-200 px-4 py-3 flex items-center justify-between bg-gray-50 w-full max-w-sm sm:max-w-md md:max-w-lg">
+          <div className="mt-3 rounded-2xl border border-gray-200 px-4 py-3 flex items-center justify-between bg-gray-50">
             <span className="text-sm font-medium text-gray-800">웹 앱으로 열기</span>
             <div className="w-11 h-6 bg-green-500 rounded-full flex items-center justify-end pr-0.5">
               <div className="w-5 h-5 bg-white rounded-full shadow" />
@@ -558,9 +558,9 @@ function Guide15({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 하단 공유 버튼 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={1} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900 flex items-center flex-wrap gap-1.5">
             <span>화면 하단 가운데</span>
             <span className="font-black inline-flex items-center gap-1.5 align-middle">
@@ -570,11 +570,11 @@ function Guide15({ appTitle, appIconUrl }: GuideProps) {
             <span>버튼을 누르세요</span>
           </p>
           <p className="text-sm text-gray-500 mt-0.5">하단 툴바 가운데, ↑ 박스 모양 아이콘</p>
-          <div className="mt-3 bg-gray-900 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-around gap-2 w-full max-w-sm sm:max-w-md md:max-w-lg">
+          <div className="mt-3 bg-gray-900 rounded-2xl px-4 py-3 flex items-center justify-around gap-2">
             {[
               <svg key="0" viewBox="0 0 24 24" className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>,
               <svg key="1" viewBox="0 0 24 24" className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
-              <div key="2" className="relative shrink-0">
+              <div key="2" className="relative">
                 <div className="w-8 h-8 rounded-lg bg-gray-800 border border-gray-600 flex items-center justify-center">
                   <ShareIcon className="w-4 h-4 text-white" />
                 </div>
@@ -592,12 +592,12 @@ function Guide15({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 2 — 홈 화면에 추가 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={2} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900"><span className="font-black">'홈 화면에 추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">공유 창 목록을 아래로 스크롤하세요</p>
-          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm w-full max-w-sm sm:max-w-md md:max-w-lg">
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
             {[
               { icon: <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>, label: "AirPlay" },
               { icon: <AddToHomeIcon className="w-5 h-5 text-gray-800" />, label: "홈 화면에 추가", highlight: true },
@@ -615,9 +615,9 @@ function Guide15({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 3 — 추가 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={3} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900">오른쪽 위 <span className="font-black">'추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">홈 화면에 바로가기 앱 아이콘이 추가됩니다!</p>
           <AppIconPreview appIconUrl={appIconUrl} appTitle={appTitle} />
@@ -632,9 +632,9 @@ function Guide13_14({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 하단 공유 버튼 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={1} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900 flex items-center flex-wrap gap-1.5">
             <span>화면 하단 가운데</span>
             <span className="font-black inline-flex items-center gap-1.5 align-middle">
@@ -645,10 +645,10 @@ function Guide13_14({ appTitle, appIconUrl }: GuideProps) {
           </p>
           <p className="text-sm text-gray-500 mt-0.5">주소창은 화면 위에 있고, 공유(↑ 박스)는 맨 아래 툴바 가운데에 있어요</p>
 
-          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm bg-gray-50 w-full max-w-sm sm:max-w-md md:max-w-lg">
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm bg-gray-50">
             {/* 상단 주소창 */}
             <div className="bg-gray-200/80 px-3 py-2 border-b border-gray-200 flex items-center gap-2">
-              <div className="flex-1 bg-white rounded-lg px-2.5 py-1 flex items-center justify-between text-xs text-gray-500 shadow-xs min-w-0">
+              <div className="flex-1 bg-white rounded-lg px-2.5 py-1 flex items-center justify-between text-xs text-gray-500 shadow-xs">
                 <span className="truncate">{appTitle}</span>
                 <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
               </div>
@@ -660,11 +660,11 @@ function Guide13_14({ appTitle, appIconUrl }: GuideProps) {
             </div>
 
             {/* 하단 고정 툴바 */}
-            <div className="bg-gray-100 border-t border-gray-200 px-3 sm:px-4 py-2 flex items-center justify-around gap-2">
+            <div className="bg-gray-100 border-t border-gray-200 px-4 py-2 flex items-center justify-around gap-2">
               {[
                 <svg key="0" viewBox="0 0 24 24" className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>,
                 <svg key="1" viewBox="0 0 24 24" className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
-                <div key="2" className="relative shrink-0">
+                <div key="2" className="relative">
                   <div className="w-8 h-8 rounded-lg bg-white border border-gray-300 flex items-center justify-center shadow-2xs">
                     <ShareIcon className="w-4 h-4 text-blue-500" />
                   </div>
@@ -689,12 +689,12 @@ function Guide13_14({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 2 — 홈 화면에 추가 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={2} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900"><span className="font-black">'홈 화면에 추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">공유 창 목록을 아래로 스크롤하세요</p>
-          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm w-full max-w-sm sm:max-w-md md:max-w-lg">
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
             {[
               { icon: <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>, label: "AirPlay" },
               { icon: <AddToHomeIcon className="w-5 h-5 text-gray-800" />, label: "홈 화면에 추가", highlight: true },
@@ -712,9 +712,9 @@ function Guide13_14({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 3 — 추가 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={3} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900">오른쪽 위 <span className="font-black">'추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">홈 화면에 바로가기 앱 아이콘이 추가됩니다!</p>
           <AppIconPreview appIconUrl={appIconUrl} appTitle={appTitle} />
@@ -729,9 +729,9 @@ function Guide12({ appTitle, appIconUrl }: GuideProps) {
   return (
     <div className="space-y-5">
       {/* Step 1 — 하단 공유 버튼 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={1} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900 flex items-center flex-wrap gap-1.5">
             <span>화면 하단 가운데</span>
             <span className="font-black inline-flex items-center gap-1.5 align-middle">
@@ -742,13 +742,13 @@ function Guide12({ appTitle, appIconUrl }: GuideProps) {
           </p>
           <p className="text-sm text-gray-500 mt-0.5">화면 맨 아래 툴바 가운데 있는 ↑ 박스 아이콘</p>
 
-          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm bg-gray-50 w-full max-w-sm sm:max-w-md md:max-w-lg">
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm bg-gray-50">
             {/* 하단 고정 툴바 */}
-            <div className="bg-gray-100 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-around gap-2">
+            <div className="bg-gray-100 px-4 py-2.5 flex items-center justify-around gap-2">
               {[
                 <svg key="0" viewBox="0 0 24 24" className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>,
                 <svg key="1" viewBox="0 0 24 24" className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
-                <div key="2" className="relative shrink-0">
+                <div key="2" className="relative">
                   <div className="w-8 h-8 rounded-lg bg-white border border-gray-300 flex items-center justify-center shadow-2xs">
                     <ShareIcon className="w-4 h-4 text-blue-500" />
                   </div>
@@ -773,14 +773,14 @@ function Guide12({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 2 — 가로 스크롤로 '홈 화면에 추가' 찾기 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={2} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900">아래 회색 아이콘 줄에서 <span className="font-black text-blue-600">'홈 화면에 추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">맨 아래 회색 사각형 아이콘 줄을 왼쪽으로 넘겨 [+] 모양 아이콘 선택</p>
 
           {/* iOS 7~12 클래식 공유 창 일러스트 */}
-          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm bg-gray-50 p-3.5 space-y-3 w-full max-w-sm sm:max-w-md md:max-w-lg">
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm bg-gray-50 p-3.5 space-y-3">
             {/* 1행: AirDrop 배너 */}
             <div className="bg-white/90 rounded-xl px-3 py-2 border border-gray-100 flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
@@ -839,9 +839,9 @@ function Guide12({ appTitle, appIconUrl }: GuideProps) {
       <Divider />
 
       {/* Step 3 — 추가 */}
-      <div className="flex items-start gap-3.5 sm:gap-4">
+      <div className="flex items-start gap-4">
         <StepBadge n={3} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <p className="text-base font-bold text-gray-900">오른쪽 위 <span className="font-black">'추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">홈 화면에 바로가기 앱 아이콘이 추가됩니다!</p>
           <AppIconPreview appIconUrl={appIconUrl} appTitle={appTitle} />
@@ -965,218 +965,193 @@ export default function IOSInstallGuide() {
   const guideProps: GuideProps = { appTitle, appIconUrl };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-slate-100 sm:bg-slate-900/40 sm:backdrop-blur-sm flex items-center justify-center overflow-hidden p-0 sm:p-4 md:p-6 lg:p-8 transition-colors"
-      style={{
-        paddingTop: "max(env(safe-area-inset-top, 0px), 0px)",
-        paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0px)",
-      }}
-    >
-      {/* 모바일 전체화면 / 태블릿·데스크톱 플로팅 모달 카드 */}
-      <div className="w-full h-full sm:h-auto sm:max-h-[94vh] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl bg-white sm:rounded-3xl sm:shadow-2xl sm:border sm:border-gray-200/80 flex flex-col overflow-hidden transition-all">
-        {/* 헤더 */}
-        <div
-          className="bg-black px-4 sm:px-6 pb-3.5 sm:pb-4 flex-shrink-0"
-          style={{ paddingTop: "max(calc(env(safe-area-inset-top, 0px) + 12px), 14px)" }}
-        >
-          <div className="flex items-center justify-between gap-3 min-w-0">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              {/* 뒤로 가기 */}
-              <button
-                onClick={() => setLocation("/")}
-                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center shrink-0 active:bg-white/30 transition-colors"
-                aria-label="뒤로 가기"
-                title="메인으로 돌아가기"
-              >
-                <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 18 9 12 15 6"/>
-                </svg>
-              </button>
+    <div className="fixed inset-0 z-50 bg-white flex flex-col overflow-hidden">
+      {/* 헤더 */}
+      <div
+        className="bg-black px-5 pb-3.5 flex-shrink-0"
+        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          {/* 뒤로 가기 */}
+          <button
+            onClick={() => setLocation("/")}
+            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0 active:bg-white/20 transition-colors"
+            aria-label="뒤로 가기"
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
 
-              {/* PWA 앱 로고 (관리페이지 디자인설정 PWA 로고 사용) */}
-              <div className="relative shrink-0">
-                <img
-                  src={appIconUrl}
-                  alt={appTitle}
-                  className="w-9 h-9 rounded-xl object-cover shadow-sm bg-white border border-white/20"
-                  onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }}
-                />
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-black border border-white/30 flex items-center justify-center shadow-xs">
-                  <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="white">
-                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
-                  </svg>
-                </div>
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <h1 className="text-sm sm:text-base md:text-lg font-extrabold text-white leading-tight truncate">
-                  {appTitle} 홈 화면에 추가
-                </h1>
-                <p className="text-gray-400 text-xs mt-0.5 flex items-center gap-1.5 truncate">
-                  <span className={`w-1.5 h-1.5 rounded-full inline-block shrink-0 ${isManual ? "bg-amber-400" : "bg-green-400 animate-pulse"}`} />
-                  <span className="truncate">{displaySummary}</span>
-                </p>
-              </div>
-            </div>
-
-            {/* 태블릿/데스크톱 닫기 버튼 */}
-            <button
-              onClick={() => setLocation("/")}
-              className="hidden sm:flex w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white items-center justify-center transition-colors shrink-0"
-              aria-label="닫기"
-              title="닫기"
-            >
-              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
+          {/* PWA 앱 로고 (관리페이지 디자인설정 PWA 로고 사용) */}
+          <div className="relative shrink-0">
+            <img
+              src={appIconUrl}
+              alt={appTitle}
+              className="w-9 h-9 rounded-xl object-cover shadow-sm bg-white border border-white/20"
+              onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }}
+            />
+            <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-black border border-white/30 flex items-center justify-center shadow-xs">
+              <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="white">
+                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
               </svg>
-            </button>
+            </div>
+          </div>
+
+          <div className="min-w-0">
+            <h1 className="text-base font-extrabold text-white leading-tight truncate">
+              {appTitle} 홈 화면에 추가
+            </h1>
+            <p className="text-gray-400 text-xs mt-0.5 flex items-center gap-1.5 truncate">
+              <span className={`w-1.5 h-1.5 rounded-full inline-block shrink-0 ${isManual ? "bg-amber-400" : "bg-green-400 animate-pulse"}`} />
+              <span>{displaySummary}</span>
+            </p>
           </div>
         </div>
+      </div>
 
-        {/* 디버그 모드 상태 바 (IP 등록된 기기에서만 노출) */}
-        {isDebug && (
-          <div className="bg-amber-500/15 border-b border-amber-500/25 px-4 sm:px-6 py-2 sm:py-2.5 flex items-center justify-between text-xs shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="inline-flex items-center gap-1.5 font-black text-amber-950 shrink-0">
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                🛠️ 디버그 모드
-              </span>
-              <span className="text-[11px] font-mono text-amber-900/70 truncate">
-                ({settings?.client_ip || "IP 일치"})
-              </span>
-            </div>
+      {/* 디버그 모드 상태 바 (IP 등록된 기기에서만 노출) */}
+      {isDebug && (
+        <div className="bg-amber-500/15 border-b border-amber-500/25 px-5 py-2 flex items-center justify-between text-xs shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="inline-flex items-center gap-1.5 font-black text-amber-950 shrink-0">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              🛠️ 디버그 모드
+            </span>
+            <span className="text-[11px] font-mono text-amber-900/70 truncate">
+              ({settings?.client_ip || "IP 일치"})
+            </span>
+          </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[11px] text-amber-950 font-bold hidden xs:inline">모드:</span>
-              <div className="inline-flex rounded-lg bg-black/10 p-0.5 text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setDebugMode("auto")}
-                  className={`px-2 sm:px-2.5 py-1 rounded-md transition-all ${
-                    debugMode === "auto"
-                      ? "bg-white text-gray-950 shadow-xs font-black"
-                      : "text-amber-950/70 hover:text-black"
-                  }`}
-                >
-                  ⚡ 자동
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDebugMode("manual")}
-                  className={`px-2 sm:px-2.5 py-1 rounded-md transition-all ${
-                    debugMode === "manual"
-                      ? "bg-amber-600 text-white shadow-xs font-black"
-                      : "text-amber-950/70 hover:text-black"
-                  }`}
-                >
-                  🛠️ 수동
-                </button>
-              </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[11px] text-amber-950 font-bold">모드:</span>
+            <div className="inline-flex rounded-lg bg-black/10 p-0.5 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setDebugMode("auto")}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  debugMode === "auto"
+                    ? "bg-white text-gray-950 shadow-xs font-black"
+                    : "text-amber-950/70 hover:text-black"
+                }`}
+              >
+                ⚡ 자동 감지
+              </button>
+              <button
+                type="button"
+                onClick={() => setDebugMode("manual")}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  debugMode === "manual"
+                    ? "bg-amber-600 text-white shadow-xs font-black"
+                    : "text-amber-950/70 hover:text-black"
+                }`}
+              >
+                🛠️ 수동 선택
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* 수동 선택 모드 선택 시 수동선택 버튼(기기 전환 + 버전 탭) 표시 */}
-        {isManual && (
-          <div className="bg-gray-900 px-4 sm:px-6 pt-3 pb-3 border-b border-gray-800 shrink-0 space-y-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-bold text-gray-400">기기 전환</span>
-              <div className="flex items-center bg-white/10 p-0.5 rounded-xl border border-white/10 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setManualDevice("iphone")}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
-                    manualDevice === "iphone"
-                      ? "bg-white text-black shadow-xs font-black"
-                      : "text-gray-300 hover:text-white"
-                  }`}
-                >
-                  iPhone
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setManualDevice("ipad")}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
-                    manualDevice === "ipad"
-                      ? "bg-white text-black shadow-xs font-black"
-                      : "text-gray-300 hover:text-white"
-                  }`}
-                >
-                  iPad
-                </button>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto no-scrollbar flex items-center gap-1.5 pt-0.5">
-              {manualDevice === "iphone"
-                ? iphoneTabs.map((tab) => {
-                    const isActive = manualIPhoneVer === tab.id;
-                    const isAuto = isIPhone && detectedIPhoneVer === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setManualIPhoneVer(tab.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
-                          isActive
-                            ? "bg-amber-400 text-gray-950 font-black shadow-sm"
-                            : "bg-white/10 text-gray-300 hover:bg-white/20"
-                        }`}
-                      >
-                        <span>{tab.label}</span>
-                        {isAuto && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-400" title="현재 감지된 기기 버전" />
-                        )}
-                      </button>
-                    );
-                  })
-                : ipadTabs.map((tab) => {
-                    const isActive = manualIPadVer === tab.id;
-                    const isAuto = isIPad && detectedIPadVer === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setManualIPadVer(tab.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
-                          isActive
-                            ? "bg-amber-400 text-gray-950 font-black shadow-sm"
-                            : "bg-white/10 text-gray-300 hover:bg-white/20"
-                        }`}
-                      >
-                        <span>{tab.label}</span>
-                        {isAuto && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-400" title="현재 감지된 기기 버전" />
-                        )}
-                      </button>
-                    );
-                  })}
+      {/* 수동 선택 모드 선택 시 수동선택 버튼(기기 전환 + 버전 탭) 표시 */}
+      {isManual && (
+        <div className="bg-gray-900 px-5 pt-3 pb-3 border-b border-gray-800 shrink-0 space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-bold text-gray-400">기기 전환</span>
+            <div className="flex items-center bg-white/10 p-0.5 rounded-xl border border-white/10 shrink-0">
+              <button
+                type="button"
+                onClick={() => setManualDevice("iphone")}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                  manualDevice === "iphone"
+                    ? "bg-white text-black shadow-xs font-black"
+                    : "text-gray-300 hover:text-white"
+                }`}
+              >
+                iPhone
+              </button>
+              <button
+                type="button"
+                onClick={() => setManualDevice("ipad")}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                  manualDevice === "ipad"
+                    ? "bg-white text-black shadow-xs font-black"
+                    : "text-gray-300 hover:text-white"
+                }`}
+              >
+                iPad
+              </button>
             </div>
           </div>
-        )}
 
-        {/* 스크롤 가능한 단계 안내 본문 (자동 감지 또는 수동 선택 기반 분기) */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="px-5 sm:px-8 md:px-10 py-6 sm:py-8 max-w-xl md:max-w-2xl lg:max-w-3xl mx-auto">
-            {effectiveDevice === "ipad" ? (
-              effectiveIPadVer === "ipad26" ? (
-                <GuideIPadNew {...guideProps} />
-              ) : effectiveIPadVer === "ipad13_25" ? (
-                <GuideIPad13_25 {...guideProps} />
-              ) : (
-                <GuideIPad12 {...guideProps} />
-              )
-            ) : effectiveIPhoneVer === "ios26" ? (
-              <Guide26 {...guideProps} />
-            ) : effectiveIPhoneVer === "ios15_25" ? (
-              <Guide15 {...guideProps} />
-            ) : effectiveIPhoneVer === "ios13_14" ? (
-              <Guide13_14 {...guideProps} />
+          <div className="overflow-x-auto no-scrollbar flex items-center gap-1.5 pt-0.5">
+            {manualDevice === "iphone"
+              ? iphoneTabs.map((tab) => {
+                  const isActive = manualIPhoneVer === tab.id;
+                  const isAuto = isIPhone && detectedIPhoneVer === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setManualIPhoneVer(tab.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
+                        isActive
+                          ? "bg-amber-400 text-gray-950 font-black shadow-sm"
+                          : "bg-white/10 text-gray-300 hover:bg-white/20"
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      {isAuto && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" title="현재 감지된 기기 버전" />
+                      )}
+                    </button>
+                  );
+                })
+              : ipadTabs.map((tab) => {
+                  const isActive = manualIPadVer === tab.id;
+                  const isAuto = isIPad && detectedIPadVer === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setManualIPadVer(tab.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
+                        isActive
+                          ? "bg-amber-400 text-gray-950 font-black shadow-sm"
+                          : "bg-white/10 text-gray-300 hover:bg-white/20"
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      {isAuto && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" title="현재 감지된 기기 버전" />
+                      )}
+                    </button>
+                  );
+                })}
+          </div>
+        </div>
+      )}
+
+      {/* 스크롤 가능한 단계 안내 본문 (자동 감지 또는 수동 선택 기반 분기) */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-6 py-6 max-w-lg mx-auto">
+          {effectiveDevice === "ipad" ? (
+            effectiveIPadVer === "ipad26" ? (
+              <GuideIPadNew {...guideProps} />
+            ) : effectiveIPadVer === "ipad13_25" ? (
+              <GuideIPad13_25 {...guideProps} />
             ) : (
-              <Guide12 {...guideProps} />
-            )}
-          </div>
+              <GuideIPad12 {...guideProps} />
+            )
+          ) : effectiveIPhoneVer === "ios26" ? (
+            <Guide26 {...guideProps} />
+          ) : effectiveIPhoneVer === "ios15_25" ? (
+            <Guide15 {...guideProps} />
+          ) : effectiveIPhoneVer === "ios13_14" ? (
+            <Guide13_14 {...guideProps} />
+          ) : (
+            <Guide12 {...guideProps} />
+          )}
         </div>
       </div>
     </div>
