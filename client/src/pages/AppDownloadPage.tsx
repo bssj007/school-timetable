@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { agent, shouldShowDownloadPage } from "@/lib/browserDetect";
+import { AlertTriangle, Loader2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { useUserConfig } from "@/contexts/UserConfigContext";
 
 // ── detect() 결과 직접 참조 ──────────────────────────────────────────────────
 const isInAppBrowser  = agent.isInAppBrowser;
@@ -51,6 +57,43 @@ export default function AppDownloadPage() {
   const [settings, setSettings] = useState<any>(null);
   // browserDetect 통일 기준 사용
   const browserType = agent.browserKey;
+
+  const { grade, classNum, studentNumber, studentName } = useUserConfig();
+  const [showBugReportDialog, setShowBugReportDialog] = useState(false);
+  const [bugReportMessage, setBugReportMessage] = useState("");
+  const [isBugReportSending, setIsBugReportSending] = useState(false);
+
+  const isBugReportEnabled =
+    settings?.bug_report_enabled !== false &&
+    settings?.bug_report_enabled !== "false" &&
+    Boolean(settings?.bug_report_enabled);
+
+  const handleBugReportSubmit = async () => {
+    if (!bugReportMessage.trim()) return;
+    setIsBugReportSending(true);
+    try {
+      const deviceTag = `[다운로드 페이지 | ${browserType.toUpperCase()} | ${agent.isIOS ? 'iOS' : agent.isAndroid ? 'Android' : '기타'}]`;
+      const res = await fetch("/api/bug-reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `${deviceTag} ${bugReportMessage.trim()}`,
+          grade: grade ? parseInt(grade) : null,
+          classNum: classNum ? parseInt(classNum) : null,
+          studentNumber: studentNumber ? parseInt(studentNumber) : null,
+          studentName: studentName || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      toast.success("오류신고가 접수되었습니다.");
+      setBugReportMessage("");
+      setShowBugReportDialog(false);
+    } catch {
+      toast.error("오류신고 전송에 실패했습니다.");
+    } finally {
+      setIsBugReportSending(false);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/settings/public")
@@ -214,10 +257,25 @@ export default function AppDownloadPage() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col"
+    <div className="fixed inset-0 z-50 bg-white flex flex-col justify-between"
       style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      {/* 상단 유틸리티 바: 우측 오류신고 버튼 */}
+      <div className="flex-shrink-0 flex items-center justify-between px-6 pt-4 min-h-[44px]">
+        <div />
+        {isBugReportEnabled && (
+          <button
+            type="button"
+            onClick={() => setShowBugReportDialog(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 rounded-full transition-all active:scale-95 shadow-2xs"
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <span>오류신고</span>
+          </button>
+        )}
+      </div>
+
       {/* 로고 + 앱 이름 */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8 text-center">
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8 text-center -mt-6">
         <img src={appIconUrl} alt={appTitle}
           className="w-24 h-24 rounded-3xl shadow-xl object-cover"
           onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }} />
@@ -228,6 +286,7 @@ export default function AppDownloadPage() {
           </p>
         </div>
       </div>
+
       {/* 다운로드 버튼 + 사이트로 계속 */}
       <div className="flex-shrink-0 px-6 pb-6 space-y-2">
         {!settings
@@ -239,6 +298,53 @@ export default function AppDownloadPage() {
           사이트로 계속
         </button>
       </div>
+
+      {/* 오류신고 다이얼로그 */}
+      <Dialog open={showBugReportDialog} onOpenChange={setShowBugReportDialog}>
+        <DialogContent className="sm:max-w-[425px] w-[90vw] rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-900">
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+              <span>오류신고</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-xs text-gray-500 leading-relaxed">
+              앱 설치 또는 페이지 이용 중 발견하신 오류나 불편사항을 알려주시면 신속히 반영하겠습니다.
+            </p>
+            <Textarea
+              placeholder="예) 앱 다운로드 버튼이 작동하지 않거나 화면이 올바르게 표시되지 않습니다."
+              value={bugReportMessage}
+              onChange={(e) => setBugReportMessage(e.target.value)}
+              rows={4}
+              className="resize-none text-sm rounded-xl focus:ring-2 focus:ring-amber-500"
+            />
+            <div className="flex gap-2 justify-end pt-1">
+              <Button
+                variant="outline"
+                onClick={() => setShowBugReportDialog(false)}
+                className="rounded-xl text-sm"
+              >
+                취소
+              </Button>
+              <Button
+                className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-xl text-sm font-bold shadow-sm"
+                onClick={handleBugReportSubmit}
+                disabled={isBugReportSending || !bugReportMessage.trim()}
+              >
+                {isBugReportSending ? (
+                  <div className="flex items-center gap-1.5">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>전송 중...</span>
+                  </div>
+                ) : (
+                  '신고 전송'
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
