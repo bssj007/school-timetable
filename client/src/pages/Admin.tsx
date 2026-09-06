@@ -1,5 +1,5 @@
 ﻿import React, { useState, useRef, useEffect, useMemo } from "react";
-import { detectBrowser, desktopOS } from "@/lib/browserDetect";
+import { agent, shouldShowDownloadPage } from "@/lib/browserDetect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10108,18 +10108,16 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
         return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
     }
 
-    // 현재 접속 브라우저 감지 — @/lib/browserDetect (관리페이지 기준을 단일 진실원천으로 사용)
+    // 현재 접속 환경 감지 — agent 싱글턴 (browserDetect.ts 3-Layer 단일 진실원천)
+    // agent = detect() 결과: Layer1(ClientHints) → Layer2(UA) → Layer3(Feature)
     const currentBrowserKey = (() => {
-        const key = detectBrowser();
-        if (key === "samsung") return "samsung_install_button_visible";
-        if (key === "safari")  return "safari_install_button_visible";
-        if (key === "chrome")  return "chrome_install_button_visible";
+        if (agent.browserKey === "samsung") return "samsung_install_button_visible";
+        if (agent.browserKey === "safari")  return "safari_install_button_visible";
+        if (agent.browserKey === "chrome")  return "chrome_install_button_visible";
         return "other_install_button_visible";
     })();
-    // 데스크톱 여부 (macOS Safari, Windows Firefox 등 — 버튼이 자동 억제됨)
-    // currentIsDesktop 제거됨 — currentDesktopOS (desktopOS) 사용
-    // currentIsDesktop 제거 → currentDesktopOS (desktopOS) 사용
-    const currentIsMobile  = currentDesktopOS === null;
+    const currentDesktopOS = agent.desktopOS;   // null = 모바일
+    const currentIsMobile  = agent.isMobile;
     const browsers = [
         {
             key: "chrome_install_button_visible",
@@ -10178,6 +10176,67 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                 : <span className="text-red-600">🔴 전체 숨김 (서킷브레이커 작동 중)</span>
                             }
                         </Label>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* ── 감지 결과 테스트 패널 ──────────────────────────────────────────── */}
+            <Card className="border-2 border-indigo-200 bg-indigo-50">
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <span className="text-lg">🔍</span>
+                        현재 접속 환경 감지 결과
+                        <span className="text-xs font-normal text-indigo-500 ml-1">browserDetect.ts — detect()</span>
+                    </CardTitle>
+                    <CardDescription>
+                        3-Layer 통합 감지 함수가 반환한 AgentInfo 값입니다.
+                        사이트 전체의 버튼 표시/숨김 로직이 이 값을 기준으로 동작합니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {/* 감지 계층 배지 */}
+                    <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
+                            agent.detectionLayer === 1 ? "bg-blue-100 text-blue-700 border border-blue-300" :
+                            agent.detectionLayer === 2 ? "bg-green-100 text-green-700 border border-green-300" :
+                            "bg-gray-100 text-gray-600 border border-gray-300"
+                        }`}>
+                            {agent.detectionLayer === 1 ? "Layer 1 — UA Client Hints (Chromium)" :
+                             agent.detectionLayer === 2 ? "Layer 2 — UA 문자열 파싱" :
+                             "Layer 3 — CSS/JS 기능 감지 (Fallback)"}
+                        </span>
+                    </div>
+
+                    {/* AgentInfo 그리드 */}
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                        {([
+                            { label: "browserKey",     value: agent.browserKey,     highlight: true },
+                            { label: "isMobile",       value: String(agent.isMobile) },
+                            { label: "isDesktop",      value: String(agent.isDesktop) },
+                            { label: "desktopOS",      value: agent.desktopOS ?? "(null — 모바일)" },
+                            { label: "isIPad",         value: String(agent.isIPad) },
+                            { label: "isIPhone",       value: String(agent.isIPhone) },
+                            { label: "isInAppBrowser", value: String(agent.isInAppBrowser) },
+                            { label: "iosVersion",     value: agent.iosVersion > 0 ? `v${agent.iosVersion}` : "(0 — 해당없음)", highlight: agent.iosVersion > 0 },
+                            { label: "isIOS26Plus",    value: String(agent.isIOS26Plus) },
+                            { label: "isIOS15Plus",    value: String(agent.isIOS15Plus) },
+                        ] as const).map(({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) => (
+                            <div key={label} className="flex flex-col gap-0.5">
+                                <span className="text-xs text-gray-500 font-mono">{label}</span>
+                                <span className={`font-mono font-semibold ${highlight ? "text-indigo-700" : value === "true" ? "text-emerald-600" : value === "false" ? "text-gray-400" : "text-gray-800"}`}>
+                                    {value}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* shouldShowDownloadPage 결과 */}
+                    <div className="border-t pt-3">
+                        <p className="text-xs text-gray-500 mb-1 font-mono">shouldShowDownloadPage()</p>
+                        {shouldShowDownloadPage()
+                            ? <span className="inline-flex items-center gap-1 text-sm font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-3 py-1 rounded-full">✅ 다운로드 유도 페이지 표시 대상</span>
+                            : <span className="inline-flex items-center gap-1 text-sm font-bold text-gray-500 bg-gray-100 border border-gray-200 px-3 py-1 rounded-full">— 표시 안함 (PC·Chrome·이미설치 등)</span>
+                        }
                     </div>
                 </CardContent>
             </Card>

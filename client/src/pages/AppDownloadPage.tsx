@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import {
   detectBrowser,
-  detectIOSVersion,
   isInAppBrowser,
   isSamsungBrowser,
   isIOSSafari,
   isOtherBrowser,
   shouldShowDownloadPage,
   isDesktop,
+  iosVersion,
+  isIOS26Plus,
+  isIOS15Plus,
 } from "@/lib/browserDetect";
 
 // URL 보정 (프로토콜 없는 경우 https:// 자동 추가)
@@ -44,8 +46,7 @@ export default function AppDownloadPage() {
   const [settings, setSettings] = useState<any>(null);
   // browserDetect 통일 기준 사용
   const browserType = detectBrowser();
-  const iosVersion  = detectIOSVersion();
-  const isIOS26Plus = iosVersion >= 26;
+  // iosVersion, isIOS26Plus, isIOS15Plus — agent.iosVersion (browserDetect.ts) 에서 import
 
   useEffect(() => {
     fetch("/api/settings/public")

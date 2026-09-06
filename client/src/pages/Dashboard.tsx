@@ -1,5 +1,5 @@
-
-import { isSamsungBrowser, isIOSSafari as isIOS, isInAppBrowser, isOtherBrowser, isMobileDevice, detectIOSVersion } from "@/lib/browserDetect";
+﻿
+import { isSamsungBrowser, isIOSSafari as isIOS, isInAppBrowser, isOtherBrowser, isMobileDevice, iosVersion, isIOS26Plus, isIOS15Plus } from "@/lib/browserDetect";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -268,9 +268,7 @@ export default function Dashboard() {
   const [isStandalone, setIsStandalone] = useState(false);
   // 브라우저 감지 — @/lib/browserDetect (관리페이지 미해결문제 패널 기준)
   // isSamsungBrowser, isIOS(=isIOSSafari), isInAppBrowser, isOtherBrowser: 상단 import에서 주입
-  const iosVersion  = detectIOSVersion();
-  const isIOS26Plus = iosVersion >= 26;
-  const isIOS15Plus = iosVersion >= 15;
+  // iosVersion, isIOS26Plus, isIOS15Plus — @/lib/browserDetect (agent.iosVersion) 에서 직접 import
   const isAndroid   = typeof window !== 'undefined' ? /Android/i.test(navigator.userAgent) : false;
   const [hasPwaCookie, setHasPwaCookie] = useState(typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1'));
 

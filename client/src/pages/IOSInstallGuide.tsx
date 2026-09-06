@@ -1,4 +1,4 @@
-import { detectIOSVersion, isIPad, isIPhone } from "@/lib/browserDetect";
+import { isIPad, isIPhone, iosVersion, isIOS26Plus, isIOS15Plus } from "@/lib/browserDetect";
 import { useLocation } from "wouter";
 
 // ── 공통 SVG 아이콘 ───────────────────────────────────────────────────────────
@@ -360,7 +360,7 @@ function Guide14() {
 }
 
 // ── 기기/버전별 레이블 ────────────────────────────────────────────────────────
-function deviceLabel(isIpad: boolean, iosVersion: number): string {
+function deviceLabel(isIpad: boolean): string {
   if (isIpad) return "iPad (모든 버전)";
   if (iosVersion >= 26) return "iOS 26+ (iPhone 17+)";
   if (iosVersion >= 15) return "iOS 15~25";
@@ -370,9 +370,7 @@ function deviceLabel(isIpad: boolean, iosVersion: number): string {
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export default function IOSInstallGuide() {
   const [, setLocation] = useLocation();
-  const iosVersion = detectIOSVersion();
-  const isIOS26Plus = iosVersion >= 26;
-  const isIOS15Plus = iosVersion >= 15;
+  // iosVersion, isIOS26Plus, isIOS15Plus — @/lib/browserDetect (agent.iosVersion) 에서 직접 import
 
   // iPad 우선 분기 (iPad는 버전 무관하게 상단 공유 버튼)
   const showIPadGuide = isIPad;
@@ -403,7 +401,7 @@ export default function IOSInstallGuide() {
             <h1 className="text-base font-extrabold text-white leading-tight">홈 화면에 앱 추가하기</h1>
             <p className="text-gray-400 text-xs mt-0.5 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block shrink-0" />
-              {deviceLabel(showIPadGuide, iosVersion)}
+              {deviceLabel(showIPadGuide)}
             </p>
           </div>
         </div>
