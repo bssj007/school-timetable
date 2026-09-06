@@ -1605,7 +1605,7 @@ export default function Dashboard() {
       )}
 
       {/* New Top Bar (Replaces Navigation on Desktop) */}
-      <div className="hidden md:flex justify-between items-center mb-4">
+      <div className="hidden lg:flex justify-between items-center mb-4">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
             <span
@@ -1645,7 +1645,7 @@ export default function Dashboard() {
             <Button
               variant="outline"
               size="sm"
-              className="hidden md:flex h-9 rounded-full px-4 font-bold text-xs gap-2 border-gray-200 hover:bg-gray-50 shadow-sm"
+              className="hidden lg:flex h-9 rounded-full px-4 font-bold text-xs gap-2 border-gray-200 hover:bg-gray-50 shadow-sm"
               onClick={() => setShowPrintOptions(true)}
             >
               <Printer className="w-4 h-4" />
@@ -1847,7 +1847,7 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-center justify-between gap-2 md:hidden mb-1.5">
+      <div className="flex items-center justify-between gap-2 lg:hidden mb-1.5">
         {/* Left column: toggle */}
         <div className="flex items-center gap-1 w-[136px] shrink-0">
           <div className="flex-1 flex items-center justify-center gap-0.5 px-[9px] py-[5px] text-[12.5px] font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap">
@@ -1887,7 +1887,7 @@ export default function Dashboard() {
         {isRestricted ? (
           <div className="w-full flex flex-col pt-2 md:pt-4">
             {/* Student info + change button during restriction */}
-            <div className="hidden md:flex items-center gap-3 justify-center mb-6">
+            <div className="hidden lg:flex items-center gap-3 justify-center mb-6">
               <div className="flex flex-col items-end leading-tight">
                 <span className="text-[12px] text-slate-400 font-medium">학번 <span className="text-slate-700 font-bold text-base">{grade || "?"}{classNum || "?"}{studentNumber?.padStart(2,"0") || "??"}</span></span>
                 <span className="text-[12px] text-slate-400 font-medium">이름 <span className="text-slate-700 font-semibold text-base">{studentName || "-"}</span></span>
@@ -1916,7 +1916,7 @@ export default function Dashboard() {
           <Card className="py-1 gap-1 md:py-2 md:gap-2">
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
               {/* Desktop Actions */}
-              <div className="hidden md:flex items-center gap-2 flex-1 min-w-0">
+              <div className="hidden lg:flex items-center gap-2 flex-1 min-w-0">
                 {(grade === "2" || grade === "3") && (
                   <div className="relative inline-block">
                     <Button
@@ -1939,7 +1939,7 @@ export default function Dashboard() {
 
               {/* Mobile Elective Edit Button */}
               {(grade === "2" || grade === "3") && (
-                <div className="absolute left-0 -translate-x-[10px] top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center md:hidden z-20 pointer-events-none">
+                <div className="absolute left-0 -translate-x-[10px] top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center lg:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative">
                     <Button
                       size="sm"
@@ -1960,7 +1960,7 @@ export default function Dashboard() {
 
               {/* Mobile Print Button */}
               {shouldShowPrintButton && (
-                <div className="absolute right-0 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-end md:hidden z-20 pointer-events-none">
+                <div className="absolute right-0 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-end lg:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative mr-1 md:mr-0">
                     <Button
                       variant="ghost"
@@ -2013,7 +2013,7 @@ export default function Dashboard() {
               </div>
 
               {/* Desktop: student info + change button */}
-              <div className="hidden md:flex items-center gap-3 flex-1 justify-end min-w-0 md:ml-[3px]">
+              <div className="hidden lg:flex items-center gap-3 flex-1 justify-end min-w-0 md:ml-[3px]">
                 <div className="flex flex-col items-end leading-tight">
                   <span className="text-[11px] text-slate-400 font-medium">학번 <span className="text-slate-900 font-bold text-base">{grade || "?"}{classNum || "?"}{studentNumber?.padStart(2,"0") || "??"}</span></span>
                   <span className="text-[11px] text-slate-400 font-medium">이름 <span className="text-slate-700 font-semibold text-sm">{studentName || "-"}</span></span>
@@ -2092,7 +2092,7 @@ export default function Dashboard() {
                         {/* 소스: 하나만 표시 */}
                         {sourceBadge}
                         {/* 관리자 설정 */}
-                        <span className="hidden md:inline text-slate-300">|</span>
+                        <span className="hidden lg:inline text-slate-300">|</span>
                         <span>1학년: {dt?.override1 && dt.override1 !== '_auto_' ? <span className="text-orange-500 font-bold font-mono">{dt.override1}</span> : <span className="text-slate-400">auto</span>}</span>
                         <span>2,3학년: {dt?.override23 && dt.override23 !== '_auto_' ? <span className="text-orange-500 font-bold font-mono">{dt.override23}</span> : <span className="text-slate-400">auto</span>}</span>
                         {/* 폴백 / IP 오버라이드 */}
@@ -2417,7 +2417,7 @@ export default function Dashboard() {
                                 >
                                   {isElectiveActive && group && (
                                     <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400 print:!bg-orange-100 print:!text-orange-800 capturing:!bg-orange-100 capturing:!text-orange-800" : "bg-orange-100 text-orange-800"}`}>
-                                      <span>{group}</span><span className="hidden md:inline">그룹</span>
+                                      <span>{group}</span><span className="hidden lg:inline">그룹</span>
                                     </div>
                                   )}
                                   {includeAssessments && cellAssessments.length > 0 && (() => {
@@ -2450,13 +2450,13 @@ export default function Dashboard() {
                                             {isCancelledByFreePeriod ? (
                                               <span className="print:flex print:flex-col print:items-center">
                                                 <span className="line-through opacity-60 flex-shrink-0 whitespace-nowrap">{displaySubject}</span>
-                                                <span className={`block md:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400 print:!text-blue-500 capturing:!text-blue-500" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
+                                                <span className={`block lg:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400 print:!text-blue-500 capturing:!text-blue-500" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
                                               </span>
                                             ) : (
                                               displaySubject?.includes("공강") && displaySubject !== "공강" ? (
-                                                <span className="flex flex-col md:inline md:flex-row items-center">
+                                                <span className="flex flex-col lg:inline lg:flex-row items-center">
                                                   <span>{displaySubject.replace("공강", "")}</span>
-                                                  <span className="block md:inline md:ml-1">공강</span>
+                                                  <span className="block lg:inline md:ml-1">공강</span>
                                                 </span>
                                               ) : (
                                                 <span>{displaySubject}</span>
@@ -3116,7 +3116,7 @@ export default function Dashboard() {
 
       {/* 모바일 전용 PWA 앱 다운로드 버튼 (설치 상태 및 환경에 따라 상태 변경) */}
       {!isInAppBrowser && settings?.pwa_install_button_visible !== false && (
-        <div className="md:hidden mt-6 mb-2 space-y-2">
+        <div className="mt-6 mb-2 space-y-2">
           {/* App Download for Normal Browsers (Chrome, etc.) vs Add to Home Screen for Samsung/In-App */}
           {isSamsungBrowser ? (
             // For Samsung browsers: play_store_url 있을 때만 Play Store 버튼 표시
@@ -3269,7 +3269,7 @@ export default function Dashboard() {
                         등록된 수행평가가 없습니다.
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                         {uniqueSubjects.map((subject, idx) => {
                           const color = TILE_COLORS[idx % TILE_COLORS.length];
                           const count = studentFiltered.filter(a => a.subject === subject).length;
@@ -3340,7 +3340,7 @@ export default function Dashboard() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                       {filtered.length > 0 ? (
                         filtered.map((assessment) => {
                           const isHomework = !!assessment.endDate;
@@ -3562,7 +3562,7 @@ export default function Dashboard() {
       {/* Custom Relocation Action Bar */}
       {relocatingAssessment && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-red-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] p-4 z-[9999] animate-in slide-in-from-bottom-2 duration-300">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5 text-red-600" />
@@ -3581,7 +3581,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 w-full md:w-auto">
               <Button 
                 variant="outline" 
-                className="flex-1 md:flex-none hover:bg-gray-50"
+                className="flex-1 lg:flex-none hover:bg-gray-50"
                 onClick={() => {
                   setRelocatingAssessment(null);
                   setPendingRelocation(null);
@@ -3591,7 +3591,7 @@ export default function Dashboard() {
                 취소
               </Button>
               <Button 
-                className="flex-1 md:flex-none bg-red-600 hover:bg-red-700 text-white transition-colors"
+                className="flex-1 lg:flex-none bg-red-600 hover:bg-red-700 text-white transition-colors"
                 disabled={!pendingRelocation || isRelocatingUpdating || updateMutation.isPending}
                 onClick={handleRelocationSubmit}
               >

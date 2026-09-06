@@ -136,7 +136,7 @@ function AppContent() {
     <>
       <Toaster />
       {!isAdminRoute && location !== "/admin/factory-reset" && location !== "/meal" && location !== "/teacher/account" && !isIOSGuideRoute && !isDownloadRoute && (
-        <div className={location === "/" || isTeacherRoute ? "md:hidden" : ""}>
+        <div className={location === "/" || isTeacherRoute ? "lg:hidden" : ""}>
           <Navigation />
         </div>
       )}
