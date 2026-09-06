@@ -8,6 +8,7 @@ import {
   isIOSSafari,
   isOtherBrowser,
   shouldShowDownloadPage,
+  isDesktop,
 } from "@/lib/browserDetect";
 
 // URL 보정 (프로토콜 없는 경우 https:// 자동 추가)
@@ -55,7 +56,7 @@ export default function AppDownloadPage() {
 
   // Chrome이거나 이미 설치됨 → 메인으로
   useEffect(() => {
-    if (browserType === "chrome") { setLocation("/"); return; }
+    if (browserType === "chrome" || isDesktop) { setLocation("/"); return; }
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (navigator as any).standalone === true;

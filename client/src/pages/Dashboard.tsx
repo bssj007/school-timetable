@@ -1,5 +1,5 @@
-﻿
-import { isSamsungBrowser, isIOSSafari as isIOS, isInAppBrowser, isOtherBrowser, detectIOSVersion } from "@/lib/browserDetect";
+
+import { isSamsungBrowser, isIOSSafari as isIOS, isInAppBrowser, isOtherBrowser, isMobileDevice, detectIOSVersion } from "@/lib/browserDetect";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -3119,7 +3119,7 @@ export default function Dashboard() {
                 <span>Google Play에서 다운로드</span>
               </a>
             )
-          ) : isOtherBrowser ? (
+          ) : isOtherBrowser && isMobileDevice ? (
             // 그외 브라우저: play_store_url이 있으면 Play Store 버튼, 없으면 숙짔
             !hasPwaCookie && settings?.other_install_button_visible !== false && settings?.play_store_url && (
               <a
@@ -3141,7 +3141,7 @@ export default function Dashboard() {
             // Normal PWA Prompt — iOS Safari → App Store, Chrome → PWA
             !hasPwaCookie && !isStandalone && (
               <>
-                {isIOS && settings?.safari_install_button_visible !== false ? (
+                {isIOS && isMobileDevice && settings?.safari_install_button_visible !== false ? (
                   // iOS Safari
                   settings?.app_store_url ? (
                     // App Store 링크 설정됨 → App Store 버튼

@@ -1,5 +1,5 @@
 ﻿import React, { useState, useRef, useEffect, useMemo } from "react";
-import { detectBrowser } from "@/lib/browserDetect";
+import { detectBrowser, desktopOS } from "@/lib/browserDetect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10116,14 +10116,16 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
         if (key === "chrome")  return "chrome_install_button_visible";
         return "other_install_button_visible";
     })();
-
-    // 브라우저 행 정의
+    // 데스크톱 여부 (macOS Safari, Windows Firefox 등 — 버튼이 자동 억제됨)
+    const currentIsDesktop = isDesktop;
+    // currentIsDesktop 제거 → currentDesktopOS (desktopOS) 사용
+    const currentIsMobile  = currentDesktopOS === null;
     const browsers = [
         {
             key: "chrome_install_button_visible",
             label: "Chrome",
             icon: "🌐",
-            desc: "Android Chrome / 크로미움 계열",
+            desc: "Android Chrome / 크로미움 계열 (모바일 PWA)",
             value: isChrome,
         },
         {
@@ -10137,14 +10139,14 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
             key: "safari_install_button_visible",
             label: "Safari",
             icon: "🧭",
-            desc: "iOS Safari (Add to Home Screen)",
+            desc: "iOS·iPadOS Safari 홈화면 추가 (macOS 데스크톱 제외)",
             value: isSafari,
         },
         {
             key: "other_install_button_visible",
             label: "그외",
             icon: "❓",
-            desc: "위 3가지에 해당하지 않는 브라우저",
+            desc: "위 3가지 외 모바일 브라우저 (데스크톱 Firefox 등 제외)",
             value: isOther,
         },
     ] as const;
@@ -10180,10 +10182,70 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                 </CardContent>
             </Card>
 
-            {/* 브라우저별 표 */}
+            {/* ── PC 환경 섹션 ─────────────────────────────────────────────── */}
+            <Card>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <span className="text-lg">🖥️</span>
+                        PC 환경 <span className="text-sm font-normal text-gray-500 ml-1">— 버튼 항상 미표시</span>
+                    </CardTitle>
+                    <CardDescription>
+                        Windows·macOS·Linux 데스크톱/노트북 환경에서는 브라우저에 관계없이 앱 다운로드 버튼이 표시되지 않습니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b bg-gray-50">
+                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">운영체제</th>
+                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">다운로드 버튼</th>
+                                    <th className="text-center px-4 py-2.5 font-semibold text-gray-600">현재 환경</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {([
+                                    { os: "windows" as const, label: "Windows", icon: "🪟", desc: "Windows 10/11 PC·노트북" },
+                                    { os: "macos"   as const, label: "macOS",   icon: "🍏", desc: "Mac·MacBook (iPad 제외)" },
+                                    { os: "linux"   as const, label: "Linux",   icon: "🐧", desc: "Linux 데스크톱 (ChromeOS 제외)" },
+                                ] as const).map((row) => (
+                                    <tr key={row.os} className={`border-b last:border-b-0 transition-colors ${currentDesktopOS === row.os ? "bg-amber-50" : "hover:bg-gray-50"}`}>
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-base">{row.icon}</span>
+                                                <div>
+                                                    <p className="font-semibold text-gray-800">{row.label}</p>
+                                                    <p className="text-xs text-gray-500">{row.desc}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
+                                                🚫 항상 미표시
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {currentDesktopOS === row.os && (
+                                                <span className="inline-flex flex-col items-center gap-0.5 text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+                                                    🖥️ 현재
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* ── 모바일 환경 섹션 ─────────────────────────────────────────── */}
             <Card className={!isPwaButtonVisible ? "opacity-40 pointer-events-none" : ""}>
                 <CardHeader className="pb-3">
-                    <CardTitle className="text-base">브라우저별 앱 다운로드 버튼 표시</CardTitle>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <span className="text-lg">📱</span>
+                        모바일 — 브라우저별 표시 설정
+                    </CardTitle>
                     <CardDescription>
                         각 모바일 브라우저 환경별로 버튼 표시 여부를 개별 제어합니다.
                         전체 서킷브레이커가 OFF이면 이 설정은 무시됩니다.
@@ -10202,9 +10264,9 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                             </thead>
                             <tbody>
                                 {browsers.map((browser) => {
-                                    const isCurrent = browser.key === currentBrowserKey;
+                                    const isCurrent = browser.key === currentBrowserKey && currentIsMobile;
                                     return (
-                                    <tr key={browser.key} className={`border-b last:border-b-0 transition-colors ${isCurrent ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}>
+                                    <tr key={browser.key} className={`border-b last:border-b-0 transition-colors ${isCurrent ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-gray-50"}`}>
                                         <td className="px-4 py-3">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-base">{browser.icon}</span>
