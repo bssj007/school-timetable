@@ -2370,142 +2370,80 @@ export default function TeacherPage() {
                   );
                 })}
 
-                {/* 오버레이 바 제거됨 — 아래 부착형 바 섹션으로 이전 */}
-              </div>
+                {/* ── 숙제형(기간형) 수행 오버레이 바 ── */}
+                {(() => {
+                  const hwAssessments = (allAssessments || []).filter(a => !!a.endDate && !!a.startDate);
+                  if (hwAssessments.length === 0) return null;
 
-              {/* ── 기간형 수행 부착형 바 섹션 ── */}
-              {(() => {
-                const hwAssessments = (allAssessments || []).filter(a => !!a.endDate && !!a.startDate);
-                if (hwAssessments.length === 0) return null;
+                  const numRows = Math.ceil((startDow + totalDays) / 7);
+                  const DOW_H = 32;  // 요일 헤더 높이 (py-2 + text-[11px])
+                  const CELL_H = 44; // h-11
+                  const BAR_H = 36;  // 바 높이
+                  const BAR_TOP_OFFSET = 4; // (44 - 36) / 2
+                  const BAR_COLOR = '#ec4899'; // pink-500
 
-                const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-                const monthEnd   = `${year}-${String(month + 1).padStart(2, '0')}-${String(totalDays).padStart(2, '0')}`;
-                const BAR_COLOR = '#ec4899'; // pink-500
+                  const bars: React.ReactNode[] = [];
 
-                // 날짜 → 그리드 column 인덱스 (0-based)
-                const toIdx = (ds: string) => {
-                  const day = parseInt(ds.split('-')[2]);
-                  return startDow + day - 1;
-                };
+                  hwAssessments.forEach((a) => {
+                    const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+                    const monthEnd   = `${year}-${String(month + 1).padStart(2, '0')}-${String(totalDays).padStart(2, '0')}`;
+                    const clampedStart = a.startDate! > monthStart ? a.startDate! : monthStart;
+                    const clampedEnd   = a.endDate!   < monthEnd   ? a.endDate!   : monthEnd;
+                    if (clampedStart > clampedEnd) return;
 
-                // 각 수행에 대해, 이 달에서 주별로 나뉜 바 세그먼트 목록 계산
-                type BarSegment = {
-                  key: string;
-                  colStart: number; // 0-based column (0=일 ~ 6=토)
-                  colEnd: number;
-                  isActualStart: boolean;
-                  isActualEnd: boolean;
-                  label: string;
-                  calRow: number; // 달력의 몇 번째 주(0-based)인지
-                };
+                    const toIdx = (ds: string) => {
+                      const day = parseInt(ds.split('-')[2]);
+                      return startDow + day - 1;
+                    };
 
-                // 달력 행(row) × 수행 순서로 배치
-                // 동일 달력 주(calRow)에 속하는 각 수행의 바를 한 줄(section row)에 묶어 표시
-                // 여러 수행이 같은 주에 겹치면 수직으로 쌓임
+                    const startIdx = toIdx(clampedStart);
+                    const endIdx   = toIdx(clampedEnd);
+                    const startRow = Math.floor(startIdx / 7);
+                    const endRow   = Math.floor(endIdx   / 7);
 
-                // 1) 수행별 세그먼트 목록 수집
-                const assessmentSegments: { assessment: typeof hwAssessments[0]; segments: BarSegment[] }[] = [];
-                hwAssessments.forEach(a => {
-                  const clampedStart = a.startDate! > monthStart ? a.startDate! : monthStart;
-                  const clampedEnd   = a.endDate!   < monthEnd   ? a.endDate!   : monthEnd;
-                  if (clampedStart > clampedEnd) return;
+                    for (let row = startRow; row <= endRow; row++) {
+                      const rowStartCol = row === startRow ? (startIdx % 7) : 0;
+                      const rowEndCol   = row === endRow   ? (endIdx   % 7) : 6;
+                      const isFirstRow  = row === startRow;
+                      const isLastRow   = row === endRow;
+                      const isActualStart = a.startDate! >= monthStart && row === startRow;
+                      const isActualEnd   = a.endDate!   <= monthEnd   && row === endRow;
 
-                  const startIdx = toIdx(clampedStart);
-                  const endIdx   = toIdx(clampedEnd);
-                  const startRow = Math.floor(startIdx / 7);
-                  const endRow   = Math.floor(endIdx   / 7);
+                      const leftPct  = (rowStartCol / 7) * 100;
+                      const rightPct = ((6 - rowEndCol) / 7) * 100;
+                      const topPx = DOW_H + row * CELL_H + BAR_TOP_OFFSET;
 
-                  const segs: BarSegment[] = [];
-                  for (let r = startRow; r <= endRow; r++) {
-                    const colStart = r === startRow ? (startIdx % 7) : 0;
-                    const colEnd   = r === endRow   ? (endIdx   % 7) : 6;
-                    const isActualStart = a.startDate! >= monthStart && r === startRow;
-                    const isActualEnd   = a.endDate!   <= monthEnd   && r === endRow;
-                    segs.push({
-                      key: `hw-bar-${a.id}-r${r}`,
-                      colStart, colEnd,
-                      isActualStart, isActualEnd,
-                      label: a.title || '',
-                      calRow: r,
-                    });
-                  }
-                  assessmentSegments.push({ assessment: a, segments: segs });
-                });
+                      const borderRadius = [
+                        isActualStart && isFirstRow ? '999px' : '0',
+                        isActualEnd   && isLastRow  ? '999px' : '0',
+                        isActualEnd   && isLastRow  ? '999px' : '0',
+                        isActualStart && isFirstRow ? '999px' : '0',
+                      ].join(' ');
 
-                if (assessmentSegments.length === 0) return null;
-
-                // 2) 달력 주(calRow) 별로 그룹화 — calRow 순서 정렬
-                const calRowGroups = new Map<number, { assessment: typeof hwAssessments[0]; seg: BarSegment }[]>();
-                assessmentSegments.forEach(({ assessment, segments }) => {
-                  segments.forEach(seg => {
-                    if (!calRowGroups.has(seg.calRow)) calRowGroups.set(seg.calRow, []);
-                    calRowGroups.get(seg.calRow)!.push({ assessment, seg });
-                  });
-                });
-
-                // 3) calRow 순 정렬 후 렌더링 — 수행마다 section row 하나
-                const sortedCalRows = Array.from(calRowGroups.keys()).sort((a, b) => a - b);
-
-                return (
-                  <div className="border-t border-pink-100 bg-pink-50/40 px-1 pb-1">
-                    {/* 7컬럼 기준선 헤더 (투명 — 날짜 열 너비와 정렬) */}
-                    {sortedCalRows.map(calRow => {
-                      const entries = calRowGroups.get(calRow)!;
-                      // 같은 calRow에 여러 수행이 있으면 수직으로 쌓음
-                      // 수행마다 한 행
-                      return entries.map(({ assessment, seg }) => (
+                      bars.push(
                         <div
-                          key={seg.key}
-                          className="grid py-0.5"
-                          style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}
-                        >
-                          {/* 왼쪽 빈 칸 (colStart 이전) */}
-                          {seg.colStart > 0 && (
-                            <div style={{ gridColumn: `1 / ${seg.colStart + 1}` }} />
-                          )}
-                          {/* 바 본체 */}
-                          <div
-                            style={{
-                              gridColumn: `${seg.colStart + 1} / ${seg.colEnd + 2}`,
-                              marginLeft:  seg.isActualStart ? 4 : 0,
-                              marginRight: seg.isActualEnd   ? 4 : 0,
-                              height: 22,
-                              background: 'rgba(236, 72, 153, 0.12)',
-                              borderTop:    `2px solid ${BAR_COLOR}`,
-                              borderBottom: `2px solid ${BAR_COLOR}`,
-                              borderLeft:   seg.isActualStart ? `2px solid ${BAR_COLOR}` : 'none',
-                              borderRight:  seg.isActualEnd   ? `2px solid ${BAR_COLOR}` : 'none',
-                              borderRadius: [
-                                seg.isActualStart ? '999px' : '0',
-                                seg.isActualEnd   ? '999px' : '0',
-                                seg.isActualEnd   ? '999px' : '0',
-                                seg.isActualStart ? '999px' : '0',
-                              ].join(' '),
-                              display: 'flex',
-                              alignItems: 'center',
-                              overflow: 'hidden',
-                            }}
-                          >
-                            {/* 라벨: 시작 세그먼트에만 표시 */}
-                            {seg.isActualStart && (
-                              <span
-                                className="text-[10px] font-bold text-pink-600 truncate"
-                                style={{ paddingLeft: 6, pointerEvents: 'none', whiteSpace: 'nowrap' }}
-                              >
-                                {seg.label}
-                              </span>
-                            )}
-                          </div>
-                          {/* 오른쪽 빈 칸 (colEnd 이후) */}
-                          {seg.colEnd < 6 && (
-                            <div style={{ gridColumn: `${seg.colEnd + 2} / 8` }} />
-                          )}
-                        </div>
-                      ));
-                    })}
-                  </div>
-                );
-              })()}
+                          key={`hw-bar-${a.id}-row${row}`}
+                          className="absolute pointer-events-none z-[5]"
+                          style={{
+                            top: topPx,
+                            left: `calc(${leftPct}% + ${isActualStart && isFirstRow ? 4 : 0}px)`,
+                            right: `calc(${rightPct}% + ${isActualEnd && isLastRow ? 4 : 0}px)`,
+                            height: BAR_H,
+                            background: 'rgba(236, 72, 153, 0.12)',
+                            borderTop: `2px solid ${BAR_COLOR}`,
+                            borderBottom: `2px solid ${BAR_COLOR}`,
+                            borderLeft:  isActualStart && isFirstRow ? `2px solid ${BAR_COLOR}` : 'none',
+                            borderRight: isActualEnd   && isLastRow  ? `2px solid ${BAR_COLOR}` : 'none',
+                            borderRadius,
+                          }}
+                        />
+                      );
+                    }
+                  });
+
+                  return bars;
+                })()}
+              </div>
 
               {/* 하단 안내 */}
               <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50 flex items-center justify-center gap-4 mt-auto">
@@ -2585,12 +2523,14 @@ export default function TeacherPage() {
                     const p = periodIndex + 1;
                     const isCurrentPeriod = currentPeriod === p && weekOffset === 0;
                     return (
-                      <tr key={p} className="h-[50px] sm:min-h-[44px]">
+                      <tr key={p} className="h-[50px] sm:min-h-[44px]" style={{ height: 50 }}>
                         {/* Row number cell — Excel row header */}
                         <td
                           className="h-[50px] sm:min-h-[44px] overflow-hidden"
                           style={{
                             width: 36,
+                            maxHeight: 50,
+                            overflow: 'hidden',
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
                             borderRight: isCurrentPeriod ? '2px solid #217346' : '1px solid #d0d0d0',
                             borderBottom: '1px solid #d0d0d0',
@@ -2643,6 +2583,9 @@ export default function TeacherPage() {
                               key={d}
                               className="group h-[52px] sm:min-h-[44px] overflow-hidden"
                               style={{
+                                height: 50,
+                                maxHeight: 50,
+                                overflow: 'hidden',
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
                                 borderBottom: '1px solid #d0d0d0',
@@ -2667,7 +2610,7 @@ export default function TeacherPage() {
                               }}
                             >
                               {cellData ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 42, gap: 2, overflow: 'hidden' }}>
                                   {/* 학생 배지 — td의 position:relative 기준 우측 상단 */}
                                   {hasAssessment && cellAssessments.some(a => !a.isTeacherCreated) && (
                                     <span style={{
