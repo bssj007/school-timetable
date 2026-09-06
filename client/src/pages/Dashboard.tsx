@@ -1,9 +1,11 @@
-﻿
+
 import { agent } from "@/lib/browserDetect";
 
 // ── detect() 결과 직접 참조 (단일 진실원천: agent 싱글턴) ───────────────────
 const isSamsungBrowser = agent.browserKey === "samsung";
-const isIOS            = agent.browserKey === "safari";   // iOS·iPadOS·macOS Safari
+const isIOS            = agent.isIOS;
+const isAndroid        = agent.isAndroid;
+const isIOSSafari      = agent.isIOSSafari;
 const isChromeBrowser  = agent.browserKey === "chrome";
 const isOtherBrowser   = agent.browserKey === "other";
 const isInAppBrowser   = agent.isInAppBrowser;
@@ -32,6 +34,25 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import ElectiveSelectionDialog from "@/components/ElectiveSelectionDialog";
+
+function PlayStoreLogo() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
+      <path d="M3.18 23.76c.33.18.7.2 1.04.08L14.76 12 4.22.16A1.25 1.25 0 0 0 3.18.4C2.6.74 2.25 1.35 2.25 2v20c0 .65.35 1.26.93 1.76Z" fill="#EA4335"/>
+      <path d="M21.25 10.3 17.98 8.5l-3.69 3.5 3.69 3.5 3.27-1.8c.93-.51.93-1.89 0-2.4Z" fill="#FBBC04"/>
+      <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
+      <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
+    </svg>
+  );
+}
+
+function AppleLogo() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="white">
+      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
+    </svg>
+  );
+}
 
 // 타입 정의
 interface TimetableItem {
@@ -3103,82 +3124,53 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog >
 
-      {/* 모바일 전용 PWA 앱 다운로드 버튼 (설치 상태 및 환경에 따라 상태 변경) */}
-      {!isInAppBrowser && settings?.pwa_install_button_visible !== false && (
+      {/* 모바일 전용 앱 다운로드 버튼 (기기/브라우저 환경별 분기) */}
+      {!isInAppBrowser && !agent.isInstalledApp && isMobileDevice && settings?.pwa_install_button_visible !== false && (
         <div className="mt-6 mb-2 space-y-2">
-          {/* App Download for Normal Browsers (Chrome, etc.) vs Add to Home Screen for Samsung/In-App */}
-          {isSamsungBrowser ? (
-            // For Samsung browsers: play_store_url 있을 때만 Play Store 버튼 표시
-            settings?.samsung_install_button_visible !== false && settings?.play_store_url && (
-              <a
-                href={settings.play_store_url && !/^https?:\/\//i.test(settings.play_store_url) ? `https://${settings.play_store_url}` : settings.play_store_url}
-                target="_blank"
-                rel="noreferrer"
-                className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-              >
-                {/* Play Store 로고 SVG */}
-                <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
-                  <path d="M3.18 23.76c.33.18.7.2 1.04.08L14.76 12 4.22.16A1.25 1.25 0 0 0 3.18.4C2.6.74 2.25 1.35 2.25 2v20c0 .65.35 1.26.93 1.76Z" fill="#EA4335"/>
-                  <path d="M21.25 10.3 17.98 8.5l-3.69 3.5 3.69 3.5 3.27-1.8c.93-.51.93-1.89 0-2.4Z" fill="#FBBC04"/>
-                  <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
-                  <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
-                </svg>
-                <span>Google Play에서 다운로드</span>
-              </a>
-            )
-          ) : isOtherBrowser && isMobileDevice ? (
-            // 그외 브라우저: play_store_url이 있으면 Play Store 버튼, 없으면 숙짔
-            settings?.other_install_button_visible !== false && settings?.play_store_url && (
-              <a
-                href={settings.play_store_url && !/^https?:\/\//i.test(settings.play_store_url) ? `https://${settings.play_store_url}` : settings.play_store_url}
-                target="_blank"
-                rel="noreferrer"
-                className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-              >
-                <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
-                  <path d="M3.18 23.76c.33.18.7.2 1.04.08L14.76 12 4.22.16A1.25 1.25 0 0 0 3.18.4C2.6.74 2.25 1.35 2.25 2v20c0 .65.35 1.26.93 1.76Z" fill="#EA4335"/>
-                  <path d="M21.25 10.3 17.98 8.5l-3.69 3.5 3.69 3.5 3.27-1.8c.93-.51.93-1.89 0-2.4Z" fill="#FBBC04"/>
-                  <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
-                  <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
-                </svg>
-                <span>Google Play에서 다운로드</span>
-              </a>
-            )
-          ) : (
-            // Normal PWA Prompt — iOS Safari → App Store, Chrome → PWA
-            !agent.isInstalledApp && (
-              <>
-                {isIOS && isMobileDevice && settings?.safari_install_button_visible !== false ? (
-                  // iOS Safari
-                  settings?.app_store_url ? (
-                    // App Store 링크 설정됨 → App Store 버튼
-                    <a
-                      href={settings.app_store_url && !/^https?:\/\//i.test(settings.app_store_url) ? `https://${settings.app_store_url}` : settings.app_store_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="w-full h-14 bg-black hover:bg-gray-900 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-                    >
-                      {/* Apple 로고 */}
-                      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="white">
-                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
-                      </svg>
-                      <span>App Store에서 다운로드</span>
-                    </a>
-                  ) : (
-                    // App Store 미설정 → iOS PWA 홈화면 추가 안내 버튼
-                    <button
-                      onClick={() => setLocation("/ios-install-guide")}
-                      className="w-full h-14 bg-black hover:bg-gray-900 active:bg-gray-800 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
-                    >
-                      {/* Apple 로고 */}
-                      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="white">
-                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
-                      </svg>
-                      <span>홈 화면에 추가 (PWA)</span>
-                    </button>
-                  )
-                ) : isChromeBrowser && isMobileDevice && settings?.chrome_install_button_visible !== false ? (
-                  // Chrome / 기타 → 기존 PWA 버튼
+          {(() => {
+            const playUrl = settings?.play_store_url && !/^https?:\/\//i.test(settings.play_store_url)
+              ? `https://${settings.play_store_url}` : (settings?.play_store_url || "");
+            const appUrl = settings?.app_store_url && !/^https?:\/\//i.test(settings.app_store_url)
+              ? `https://${settings.app_store_url}` : (settings?.app_store_url || "");
+
+            // ── 1. Android 환경 ───────────────────────────────────────────
+            if (isAndroid) {
+              // 1-1. Samsung Internet
+              if (isSamsungBrowser) {
+                if (settings?.samsung_install_button_visible === false || !playUrl) return null;
+                return (
+                  <a
+                    href={playUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+                  >
+                    <PlayStoreLogo />
+                    <span>Google Play에서 다운로드</span>
+                  </a>
+                );
+              }
+
+              // 1-2. Android 기타 브라우저 (Opera, Firefox, Whale, Edge 등)
+              if (isOtherBrowser) {
+                if (settings?.other_install_button_visible === false || !playUrl) return null;
+                return (
+                  <a
+                    href={playUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+                  >
+                    <PlayStoreLogo />
+                    <span>Google Play에서 다운로드</span>
+                  </a>
+                );
+              }
+
+              // 1-3. Android Chrome
+              if (isChromeBrowser) {
+                if (settings?.chrome_install_button_visible === false) return null;
+                return (
                   <Button
                     onClick={handleInstallClick}
                     disabled={isInstalling}
@@ -3191,13 +3183,81 @@ export default function Dashboard() {
                         <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
                       </svg>
                     )}
-                    <span>{isInstalling ? '설치 중...' : '성지수행 앱 다운로드'}</span>
+                    <span>{isInstalling ? '설치 중...' : `${settings?.pwa_app_title || '성지수행'} 앱 다운로드`}</span>
                   </Button>
-                ) : null}
-              </>
-            )
-          )}
+                );
+              }
+            }
 
+            // ── 2. iOS 환경 ───────────────────────────────────────────────
+            if (isIOS) {
+              // 2-1. iOS Safari
+              if (isIOSSafari) {
+                if (settings?.safari_install_button_visible === false) return null;
+                if (appUrl) {
+                  return (
+                    <a
+                      href={appUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full h-14 bg-black hover:bg-gray-900 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+                    >
+                      <AppleLogo />
+                      <span>App Store에서 다운로드</span>
+                    </a>
+                  );
+                }
+                return (
+                  <button
+                    onClick={() => setLocation("/ios-install-guide")}
+                    className="w-full h-14 bg-black hover:bg-gray-900 active:bg-gray-800 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
+                  >
+                    <AppleLogo />
+                    <span>홈 화면에 추가 (PWA)</span>
+                  </button>
+                );
+              }
+
+              // 2-2. iOS 기타 브라우저 (Chrome, Firefox, Edge, Opera 등 Safari가 아닌 모든 iOS 브라우저)
+              const isAllowed = isChromeBrowser
+                ? settings?.chrome_install_button_visible !== false
+                : settings?.other_install_button_visible !== false;
+              if (!isAllowed) return null;
+
+              // 관리페이지에 앱스토어 링크가 등록되어 있다면 앱스토어에서 설치 버튼 표시
+              if (appUrl) {
+                return (
+                  <a
+                    href={appUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full h-14 bg-black hover:bg-gray-900 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+                  >
+                    <AppleLogo />
+                    <span>App Store에서 설치</span>
+                  </a>
+                );
+              }
+
+              // 앱스토어 링크 미등록 시: 마치 Android처럼 PWA 설명 없이 PWA 다운로드 버튼 표시 (검정색 애플로고 디자인)
+              return (
+                <Button
+                  onClick={handleInstallClick}
+                  disabled={isInstalling}
+                  className="w-full h-14 bg-black hover:bg-gray-900 active:bg-gray-800 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
+                >
+                  {isInstalling ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : (
+                    <AppleLogo />
+                  )}
+                  <span>{isInstalling ? '설치 중...' : `${settings?.pwa_app_title || '성지수행'} 앱 다운로드`}</span>
+                </Button>
+              );
+            }
+
+            return null;
+          })()}
         </div>
       )}
 

@@ -51,14 +51,15 @@ export default function AppDownloadPage() {
       .catch(() => {});
   }, []);
 
-  // Chrome이거나 이미 설치됨 → 메인으로
+  // Desktop 또는 이미 설치됨, 또는 Android Chrome, 또는 iOS 기타 브라우저(앱스토어 링크 없음) → 메인으로
   useEffect(() => {
-    if (browserType === "chrome" || isDesktop) { setLocation("/"); return; }
-    // agent.isInstalledApp — browserDetect.ts (standalone + TWA 통합 감지)
-    if (agent.isInstalledApp) { setLocation("/"); return; }
-
-
-  }, []);
+    if (isDesktop || agent.isInstalledApp) { setLocation("/"); return; }
+    if (agent.isAndroid && browserType === "chrome") { setLocation("/"); return; }
+    if (agent.isIOS && !agent.isIOSSafari && settings && !settings.app_store_url) {
+      setLocation("/");
+      return;
+    }
+  }, [settings]);
 
   function handleContinue() {
     localStorage.setItem("download_page_dismissed", "1");
@@ -74,24 +75,32 @@ export default function AppDownloadPage() {
   function DownloadButton() {
     if (!settings || !pwaBtnVisible) return null;
 
-    // Safari (iOS / macOS Safari / iOS Chrome)
-    if (browserType === "safari" && settings?.safari_install_button_visible !== false) {
-      return appStoreUrl ? (
-        <a href={appStoreUrl} target="_blank" rel="noreferrer"
-          className="w-full h-14 bg-black text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 no-underline active:opacity-80 shadow-lg">
-          <AppleLogo />
-          <span>App Store에서 다운로드</span>
-        </a>
-      ) : (
-        <button onClick={() => setLocation("/ios-install-guide")}
-          className="w-full h-14 bg-black text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg">
-          <AppleLogo />
-          <span>홈 화면에 추가하기</span>
-        </button>
-      );
+    // 1. iOS 환경
+    if (agent.isIOS) {
+      // 앱스토어 링크가 등록되어 있으면 iOS의 모든 브라우저(Safari 및 Chrome 등 기타)에서 App Store 다운로드 버튼 표시
+      if (appStoreUrl && settings?.app_store_url) {
+        return (
+          <a href={appStoreUrl} target="_blank" rel="noreferrer"
+            className="w-full h-14 bg-black text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 no-underline active:opacity-80 shadow-lg">
+            <AppleLogo />
+            <span>App Store에서 다운로드</span>
+          </a>
+        );
+      }
+      // Safari인 경우만 홈 화면 추가 가이드 버튼 표시
+      if (agent.isIOSSafari && settings?.safari_install_button_visible !== false) {
+        return (
+          <button onClick={() => setLocation("/ios-install-guide")}
+            className="w-full h-14 bg-black text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg">
+            <AppleLogo />
+            <span>홈 화면에 추가하기</span>
+          </button>
+        );
+      }
+      return null;
     }
 
-    // Samsung Browser
+    // 2. Android Samsung Browser
     if (browserType === "samsung" && settings?.samsung_install_button_visible !== false && playStoreUrl) {
       return (
         <a href={playStoreUrl} target="_blank" rel="noreferrer"
@@ -102,7 +111,7 @@ export default function AppDownloadPage() {
       );
     }
 
-    // 기타 브라우저
+    // 3. Android 기타 브라우저 (Opera, Firefox, Whale, Edge 등)
     if (browserType === "other" && settings?.other_install_button_visible !== false && playStoreUrl) {
       return (
         <a href={playStoreUrl} target="_blank" rel="noreferrer"

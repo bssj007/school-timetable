@@ -10228,14 +10228,14 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
             key: "chrome_install_button_visible",
             label: "Chrome",
             icon: "🌐",
-            desc: "Android Chrome / 크로미움 계열 (모바일 PWA)",
+            desc: "Android Chrome / iOS Chrome (모바일 PWA)",
             value: isChrome,
         },
         {
             key: "samsung_install_button_visible",
             label: "Samsung",
             icon: "📱",
-            desc: "삼성 인터넷 브라우저",
+            desc: "삼성 인터넷 브라우저 (Play Store)",
             value: isSamsung,
         },
         {
@@ -10249,7 +10249,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
             key: "other_install_button_visible",
             label: "그외",
             icon: "❓",
-            desc: "위 3가지 외 모바일 브라우저 (데스크톱 Firefox 등 제외)",
+            desc: "Opera·Firefox·Whale·Edge 등 모바일 브라우저",
             value: isOther,
         },
     ] as const;
@@ -10318,6 +10318,9 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                             { label: "browserKey",     value: agent.browserKey,     highlight: true },
                             { label: "isMobile",       value: String(agent.isMobile) },
                             { label: "isDesktop",      value: String(agent.isDesktop) },
+                            { label: "isAndroid",      value: String(agent.isAndroid), highlight: agent.isAndroid },
+                            { label: "isIOS",          value: String(agent.isIOS),     highlight: agent.isIOS },
+                            { label: "isIOSSafari",    value: String(agent.isIOSSafari), highlight: agent.isIOSSafari },
                             { label: "desktopOS",      value: agent.desktopOS ?? "(null — 모바일)" },
                             { label: "isIPad",         value: String(agent.isIPad) },
                             { label: "isIPhone",       value: String(agent.isIPhone) },
@@ -10532,9 +10535,9 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                 <CardHeader className="pb-3">
                     <CardTitle className="text-base">앱스토어 링크 설정</CardTitle>
                     <CardDescription>
-                        Samsung Internet·그외 브라우저에는 <strong>Play Store</strong> 버튼을,
-                        iOS Safari에는 <strong>App Store</strong> 버튼을 표시합니다.
-                        비워두면 해당 환경에서 기존 PWA 프롬프트 방식을 사용합니다.
+                        Samsung Internet 및 Opera 등 Android 기타 브라우저에는 <strong>Play Store</strong> 버튼을,
+                        iOS(Safari 및 Chrome 등 기타 브라우저)에는 <strong>App Store</strong> 버튼을 표시합니다.
+                        비워두면 해당 환경에서 기존 PWA 방식을 사용합니다.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -10547,7 +10550,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                 <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
                                 <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
                             </svg>
-                            Google Play Store <span className="text-xs font-normal text-gray-500">(Samsung / 그외 브라우저)</span>
+                            Google Play Store <span className="text-xs font-normal text-gray-500">(Samsung / Opera 등 Android 기타 브라우저)</span>
                         </div>
                         <div className="flex gap-2">
                             <Input
@@ -10582,7 +10585,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
                                 <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z" fill="#000"/>
                             </svg>
-                            Apple App Store <span className="text-xs font-normal text-gray-500">(iOS Safari)</span>
+                            Apple App Store <span className="text-xs font-normal text-gray-500">(iOS Safari / Chrome 등 iOS 기타 브라우저)</span>
                         </div>
                         <div className="flex gap-2">
                             <Input

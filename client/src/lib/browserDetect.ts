@@ -32,6 +32,12 @@ export interface AgentInfo {
   isIPad: boolean;
   /** Apple iPhone / iPod Touch */
   isIPhone: boolean;
+  /** Apple iOS / iPadOS 기기 여부 */
+  isIOS: boolean;
+  /** Android 모바일/태블릿 기기 여부 */
+  isAndroid: boolean;
+  /** iOS Mobile Safari 여부 (Chrome/Firefox 등 iOS 기타 브라우저 제외) */
+  isIOSSafari: boolean;
   /** 브라우저 카테고리 */
   browserKey: BrowserKey;
   /** 인앱브라우저 (카카오톡·네이버·인스타그램 등) */
@@ -68,6 +74,7 @@ function defaultAgent(): AgentInfo {
   return {
     isMobile: false, isDesktop: true, desktopOS: null,
     isIPad: false, isIPhone: false,
+    isIOS: false, isAndroid: false, isIOSSafari: false,
     browserKey: "other", isInAppBrowser: false,
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     isInstalledApp: false,
@@ -110,11 +117,23 @@ function detectLayer1(): Partial<AgentInfo> | null {
   const platform: string    = (uaData.platform ?? "").toLowerCase();
   const brands: { brand: string; version: string }[] = uaData.brands ?? [];
   const brandStr = brands.map((b) => b.brand.toLowerCase()).join(" ");
+  const rawUA = typeof navigator !== "undefined" ? navigator.userAgent : "";
 
-  // 브라우저 판별: Client Hints 가 있으면 무조건 Chromium 계열
-  // Samsung Internet 도 Chromium 기반이지만 brands 에 "samsung internet" 포함
+  // 브라우저 판별: Client Hints + UA 교차 검증
+  // Samsung Internet, Opera, Edge, Whale 등을 정확하게 구분
+  const isOpera = /opera|opr|opt/i.test(brandStr) || /OPR\/|Opera|OPT\//i.test(rawUA);
+  const isSamsung = /samsung internet|samsungbrowser/i.test(brandStr) || /SamsungBrowser/i.test(rawUA);
+  const isEdge = /microsoft edge|edg/i.test(brandStr) || /EdgA?\/|Edge\//i.test(rawUA);
+  const isWhale = /whale/i.test(brandStr) || /Whale\//i.test(rawUA);
+
   let browserKey: BrowserKey = "chrome";
-  if (/samsung internet|samsungbrowser/i.test(brandStr)) browserKey = "samsung";
+  if (isSamsung) {
+    browserKey = "samsung";
+  } else if (isOpera || isEdge || isWhale) {
+    browserKey = "other";
+  } else if (/google chrome/i.test(brandStr) || (/chromium/i.test(brandStr) && !isOpera && !isEdge && !isWhale)) {
+    browserKey = "chrome";
+  }
 
   // 데스크톱 OS 판별
   let desktopOS: DesktopOS = null;
@@ -124,10 +143,15 @@ function detectLayer1(): Partial<AgentInfo> | null {
     else if (platform === "linux" || platform === "chrome os") desktopOS = "linux";
   }
 
+  const isAndroid = mobile && (platform === "android" || /Android/i.test(rawUA));
+
   return {
     isMobile: mobile, isDesktop: !mobile, desktopOS,
     isIPad: false,   // Chromium 환경에서 Apple iPad 는 존재하지 않음
     isIPhone: false,
+    isIOS: false,
+    isAndroid,
+    isIOSSafari: false,
     browserKey,
     // iOS 버전: Chromium 환경이므로 항상 0
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
@@ -155,18 +179,50 @@ function detectLayer2(): AgentInfo {
   // iPad: 구형 (iPad in UA) + 신형 (Macintosh + touch > 1)
   const isIPad   = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && mtp > 1);
   const isIPhone = /iPhone|iPod/.test(ua) && !isIPad;
+  const isIOS    = isIPad || isIPhone;
 
   // 인앱 브라우저 (SNS/메신저 내부 WebView)
   const isInApp = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(ua);
 
+  // 모바일 여부: iPad + iPhone + Android/Mobi 계열
+  const mobile = isIOS || /Android|Mobi/i.test(ua);
+  const isAndroid = !isIOS && (/Android/i.test(ua) || (!isIPad && !isIPhone && mobile));
+
   // 브라우저 종류
   let browserKey: BrowserKey = "other";
-  if (/SamsungBrowser/i.test(ua))                       browserKey = "samsung";
-  else if (/Safari/i.test(ua) && !/Chrome/i.test(ua))  browserKey = "safari";
-  else if (/Chrome/i.test(ua))                          browserKey = "chrome";
+  let isIOSSafari = false;
 
-  // 모바일 여부: iPad + iPhone + Android/Mobi 계열
-  const mobile = isIPad || isIPhone || /Android|Mobi/i.test(ua);
+  if (/SamsungBrowser/i.test(ua)) {
+    browserKey = "samsung";
+  } else if (/OPR\/|Opera|OPT\//i.test(ua)) {
+    // Opera (Android 및 iOS)
+    browserKey = "other";
+  } else if (/EdgA?\/|EdgiOS|Edge\//i.test(ua)) {
+    // Edge
+    browserKey = "other";
+  } else if (/Whale\//i.test(ua)) {
+    // Naver Whale
+    browserKey = "other";
+  } else if (/Firefox|FxiOS/i.test(ua)) {
+    // Firefox
+    browserKey = "other";
+  } else if (/CriOS/i.test(ua)) {
+    // iOS Chrome
+    browserKey = "chrome";
+  } else if (isIOS) {
+    // iOS 환경: 위 서드파티(Chrome, Firefox, Edge, Opera 등)가 아닌 경우만 실제 Safari
+    if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) {
+      browserKey = "safari";
+      isIOSSafari = !isInApp;
+    } else {
+      browserKey = "other";
+    }
+  } else if (/Chrome/i.test(ua)) {
+    // Android 및 데스크톱 Chrome
+    browserKey = "chrome";
+  } else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) {
+    browserKey = "safari";
+  }
 
   // 데스크톱 OS (모바일이 아닐 경우만)
   let desktopOS: DesktopOS = null;
@@ -177,7 +233,7 @@ function detectLayer2(): AgentInfo {
   }
 
   // iOS/Safari 버전 — iOS/iPadOS 기기이거나 Safari UA 일 때만 계산
-  const needsIOSVersion = isIPad || isIPhone || browserKey === "safari";
+  const needsIOSVersion = isIOS || browserKey === "safari";
   const iosVersion   = needsIOSVersion ? calcIOSVersion(ua) : 0;
   const isIOS26Plus  = iosVersion >= 26;
   const isIOS15Plus  = iosVersion >= 15;
@@ -185,7 +241,8 @@ function detectLayer2(): AgentInfo {
 
   return {
     isMobile: mobile, isDesktop: !mobile, desktopOS,
-    isIPad, isIPhone, browserKey, isInAppBrowser: isInApp,
+    isIPad, isIPhone, isIOS, isAndroid, isIOSSafari,
+    browserKey, isInAppBrowser: isInApp,
     iosVersion, isIOS26Plus, isIOS15Plus, isIOS13Plus,
     isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 2,
@@ -207,10 +264,12 @@ function detectLayer3(): AgentInfo {
 
   const mobile = isCoarse && !hasHover;
   const isIPad = mtp > 1 && !isCoarse;
+  const isIOS = isIPad;
+  const isAndroid = mobile && !isIOS;
 
   return {
     isMobile: mobile, isDesktop: !mobile, desktopOS: null,
-    isIPad, isIPhone: false,
+    isIPad, isIPhone: false, isIOS, isAndroid, isIOSSafari: false,
     browserKey: "other", isInAppBrowser: false,
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
@@ -255,6 +314,9 @@ export function detect(): AgentInfo {
       desktopOS:      ch.desktopOS!,
       isIPad:         false,
       isIPhone:       false,
+      isIOS:          false,
+      isAndroid:      ch.isAndroid!,
+      isIOSSafari:    false,
       browserKey:     ch.browserKey!,
       isInAppBrowser: inApp,
       iosVersion:     0,
@@ -291,8 +353,12 @@ export const agent: AgentInfo =
 export const browserKey: BrowserKey  = agent.browserKey;
 /** @deprecated agent.browserKey === "samsung" 사용 */
 export const isSamsungBrowser        = agent.browserKey === "samsung";
-/** @deprecated agent.browserKey === "safari" 사용 */
-export const isIOSSafari             = agent.browserKey === "safari";
+/** iOS Mobile Safari 여부 (Chrome/Firefox 등 iOS 기타 브라우저 제외) */
+export const isIOSSafari             = agent.isIOSSafari;
+/** iOS/iPadOS 기기 여부 */
+export const isIOS                   = agent.isIOS;
+/** Android 기기 여부 */
+export const isAndroid               = agent.isAndroid;
 /** @deprecated agent.browserKey === "chrome" 사용 */
 export const isChromeBrowser         = agent.browserKey === "chrome";
 /** @deprecated agent.browserKey === "other" 사용 */
@@ -359,23 +425,27 @@ export function isPwaInstalled(): boolean {
  *      → 브라우저로 재접속 시 쿠키·설치 여부와 무관하게 표시함
  *   3. 사용자가 dismiss 하지 않았을 것
  *   4. 모바일 기기일 것 (데스크톱 제외)
- *   5. 다운로드 대상 브라우저 (Samsung | Safari | Other)
- *      → Chrome 은 PWA 프롬프트 방식으로 별도 처리
+ *   5. 다운로드 대상 브라우저:
+ *      - Android: Samsung Internet 및 Opera 등 기타 브라우저 (Google Chrome 제외)
+ *      - iOS: Safari만 표시 (Chrome 등 iOS 기타 브라우저는 Android처럼 PWA 가이드 없이 바로 진입)
  */
 export function shouldShowDownloadPage(): boolean {
   if (typeof window === "undefined") return false;
   const isDismissed =
     typeof localStorage !== "undefined" &&
     localStorage.getItem("download_page_dismissed") === "1";
-  return (
-    !agent.isInAppBrowser &&
-    !agent.isInstalledApp &&      // PWA/앱 실행 중이면 표시 안함
-    !isDismissed &&
-    agent.isMobile &&
-    (agent.browserKey === "samsung" ||
-     agent.browserKey === "safari"  ||
-     agent.browserKey === "other")
-  );
+  if (agent.isInAppBrowser || agent.isInstalledApp || isDismissed || !agent.isMobile) {
+    return false;
+  }
+  if (agent.isIOS) {
+    // iOS에서는 Safari만 다운로드 유도 페이지 표시 (Chrome 등 기타 브라우저는 바로 진입)
+    return agent.isIOSSafari;
+  }
+  if (agent.isAndroid) {
+    // Android에서는 Samsung 및 Opera 등 기타 브라우저에 표시 (Chrome 제외)
+    return agent.browserKey === "samsung" || agent.browserKey === "other";
+  }
+  return agent.browserKey === "samsung" || agent.browserKey === "other";
 }
 
 /** @internal UA 기반 인앱 브라우저 여부 (detect() 내부에서 사용) */
