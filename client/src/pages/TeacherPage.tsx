@@ -2484,7 +2484,7 @@ export default function TeacherPage() {
             </div>
           ) : timetableData && selectedSchedule ? (
             <div className="w-full overflow-x-auto flex-1" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <table className="w-full table-fixed min-w-[340px] sm:min-w-[420px] md:min-w-[500px] xl:min-w-[600px]" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px', height: '100%' }}>
+              <table className="w-full table-fixed min-w-[340px] sm:min-w-[420px] md:min-w-[500px] xl:min-w-[600px]" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
@@ -2518,16 +2518,23 @@ export default function TeacherPage() {
                     })}
                   </tr>
                 </thead>
-                <tbody style={{ height: '100%' }}>
+                <tbody className="sm:h-full">
                   {Array.from({ length: maxPeriods }).map((_, periodIndex) => {
                     const p = periodIndex + 1;
                     const isCurrentPeriod = currentPeriod === p && weekOffset === 0;
                     return (
-                      <tr key={p} className="min-h-[38px] sm:h-[50px]">
+                      <tr
+                        key={p}
+                        style={{
+                          height: 'auto',
+                          minHeight: 38,
+                        }}
+                        className="sm:h-[50px]"
+                      >
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="min-h-[38px] sm:h-[50px] sm:overflow-hidden"
                           style={{
+                            minHeight: 38,
                             width: 36,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
                             borderRight: isCurrentPeriod ? '2px solid #217346' : '1px solid #d0d0d0',
@@ -2579,7 +2586,7 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group min-h-[38px] sm:h-[50px] sm:max-h-[50px] sm:overflow-hidden"
+                              className="group sm:h-[50px] sm:max-h-[50px] sm:overflow-hidden"
                               style={{
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
@@ -2605,7 +2612,7 @@ export default function TeacherPage() {
                               }}
                             >
                               {cellData ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                   {/* 학생 배지 — td의 position:relative 기준 우측 상단 */}
                                   {hasAssessment && cellAssessments.some(a => !a.isTeacherCreated) && (
                                     <span style={{
