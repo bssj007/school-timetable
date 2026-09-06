@@ -27,6 +27,30 @@ export default function TeacherAccount() {
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
+  // 현재 비밀번호 표시 관련
+  const [currentPw, setCurrentPw] = useState<string | null>(null);
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [isLoadingPw, setIsLoadingPw] = useState(false);
+  const [currentPwError, setCurrentPwError] = useState("");
+
+  const handleShowCurrentPassword = async () => {
+    if (!teacherName) { setCurrentPwError("선생님 계정명을 확인할 수 없습니다."); return; }
+    setIsLoadingPw(true);
+    setCurrentPwError("");
+    setCurrentPw(null);
+    try {
+      const res = await fetch(`/api/teacher-password?name=${encodeURIComponent(teacherName)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "조회 실패");
+      setCurrentPw(data.password);
+      setShowCurrentPw(true);
+    } catch (err: any) {
+      setCurrentPwError(err.message || "오류가 발생했습니다.");
+    } finally {
+      setIsLoadingPw(false);
+    }
+  };
+
   // body 배경을 강제로 순수 흰색(#ffffff)으로 리셋
   useEffect(() => {
     const prevBg = document.body.style.backgroundColor;
@@ -159,17 +183,49 @@ export default function TeacherAccount() {
 
       {!showPasswordForm ? (
         <div>
-          <button
-            type="button"
-            onClick={() => {
-              setShowPasswordForm(true);
-              setMessage("");
-              setErrorMessage("");
-            }}
-            style={{ border: "1px solid #888", borderRadius: 4, padding: "4px 12px", cursor: "pointer", background: "#fff" }}
-          >
-            비밀번호 변경
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setShowPasswordForm(true);
+                setMessage("");
+                setErrorMessage("");
+                setCurrentPw(null);
+                setCurrentPwError("");
+              }}
+              style={{ border: "1px solid #888", borderRadius: 4, padding: "4px 12px", cursor: "pointer", background: "#fff" }}
+            >
+              비밀번호 변경
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (currentPw !== null) {
+                  // 이미 조회됨 → 표시/숨기기 토글
+                  setShowCurrentPw(v => !v);
+                } else {
+                  handleShowCurrentPassword();
+                }
+              }}
+              disabled={isLoadingPw}
+              style={{ border: "1px solid #888", borderRadius: 4, padding: "4px 12px", cursor: isLoadingPw ? "not-allowed" : "pointer", background: "#fff" }}
+            >
+              {isLoadingPw ? "조회 중..." : currentPw !== null ? (showCurrentPw ? "비밀번호 숨기기" : "비밀번호 표시") : "현재 비밀번호 표시"}
+            </button>
+          </div>
+
+          {/* 현재 비밀번호 표시 영역 */}
+          {currentPwError && (
+            <p style={{ color: "red", marginTop: 8, fontSize: 13 }}>{currentPwError}</p>
+          )}
+          {currentPw !== null && showCurrentPw && (
+            <div style={{ marginTop: 10, padding: "8px 12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 13, color: "#374151" }}>현재 비밀번호:</span>
+              <code style={{ fontSize: 15, fontWeight: 700, letterSpacing: 1, color: "#111827", background: "#e5e7eb", padding: "2px 8px", borderRadius: 4 }}>
+                {currentPw}
+              </code>
+            </div>
+          )}
         </div>
       ) : (
         <div>
