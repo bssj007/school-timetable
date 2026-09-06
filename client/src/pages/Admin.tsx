@@ -10117,7 +10117,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
         return "other_install_button_visible";
     })();
     // 데스크톱 여부 (macOS Safari, Windows Firefox 등 — 버튼이 자동 억제됨)
-    const currentIsDesktop = isDesktop;
+    // currentIsDesktop 제거됨 — currentDesktopOS (desktopOS) 사용
     // currentIsDesktop 제거 → currentDesktopOS (desktopOS) 사용
     const currentIsMobile  = currentDesktopOS === null;
     const browsers = [
