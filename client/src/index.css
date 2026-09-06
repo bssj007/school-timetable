@@ -127,6 +127,12 @@
     height: 100%;
   }
 
+  /* 모바일 브라우저 자동 폰트 크기 조정 방지 (Firefox, Safari 공통) */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
   [type="button"]:not(:disabled),
@@ -164,10 +170,9 @@
     padding-right: 1rem;
   }
 
-  .flex {
-    min-height: 0;
-    min-width: 0;
-  }
+  /* .flex 전역 min-height/min-width 오버라이드 제거:
+   * Firefox의 Flexbox 계산과 충돌하여 모바일 Firefox에서 레이아웃 깨짐 유발.
+   * 필요한 경우 개별 컴포넌트에 직접 min-h-0 / min-w-0 클래스를 추가할 것. */
 
   @media (min-width: 640px) {
     .container {
@@ -227,10 +232,12 @@
   }
 }
 
+/* PC 전용 UI 크기 90% 축소:
+ * 비표준 zoom 대신 표준 font-size를 :root에 적용 — Firefox/Chrome/Safari 모두 동일하게 동작.
+ * Tailwind의 rem 기반 크기 전체가 이 기준을 따르므로, UI 전체가 균일하게 90%로 적용됨. */
 @media (min-width: 1024px) {
-  body {
-    zoom: 0.9;
-    /* Site scale set to 90% for PC */
+  :root {
+    font-size: 90%;
   }
 }
 
