@@ -264,6 +264,7 @@ export default function Dashboard() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalling, setIsInstalling] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [showIOSInstallGuide, setShowIOSInstallGuide] = useState(false);
   const isIOS = typeof window !== 'undefined' ? /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) : false;
   const isSamsungBrowser = typeof window !== 'undefined' ?
     /SamsungBrowser/i.test(navigator.userAgent) ||
@@ -3162,21 +3163,17 @@ export default function Dashboard() {
                       <span>App Store에서 다운로드</span>
                     </a>
                   ) : (
-                    // App Store 미설정 → 기존 PWA 프롬프트
-                    <Button
-                      onClick={handleInstallClick}
-                      disabled={isInstalling}
-                      className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
+                    // App Store 미설정 → iOS PWA 홈화면 추가 안내 버튼
+                    <button
+                      onClick={() => setShowIOSInstallGuide(true)}
+                      className="w-full h-14 bg-black hover:bg-gray-900 active:bg-gray-800 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
                     >
-                      {isInstalling ? (
-                        <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
-                      ) : (
-                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
-                          <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
-                        </svg>
-                      )}
-                      <span>{isInstalling ? '설치 중...' : '성지수행 앱 다운로드'}</span>
-                    </Button>
+                      {/* Apple 로고 */}
+                      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="white">
+                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
+                      </svg>
+                      <span>홈 화면에 추가 (PWA)</span>
+                    </button>
                   )
                 ) : settings?.chrome_install_button_visible !== false ? (
                   // Chrome / 기타 → 기존 PWA 버튼
@@ -3201,6 +3198,95 @@ export default function Dashboard() {
 
         </div>
       )}
+
+      {/* iOS PWA 홈화면 추가 안내 다이얼로그 */}
+      <Dialog open={showIOSInstallGuide} onOpenChange={setShowIOSInstallGuide}>
+        <DialogContent className="sm:max-w-[340px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+          {/* 헤더 */}
+          <div className="bg-black px-5 py-4 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-base font-extrabold text-white flex items-center gap-2.5">
+                <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" fill="white">
+                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
+                </svg>
+                홈 화면에 앱 추가하기
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-gray-300 text-xs mt-1">Safari에서 아래 단계를 따라 설치하세요</p>
+          </div>
+
+          {/* 단계별 안내 */}
+          <div className="bg-white px-5 py-4 space-y-4">
+            {/* Step 1 */}
+            <div className="flex items-start gap-3">
+              <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-gray-800">Safari 하단 공유 버튼을 누르세요</p>
+                <p className="text-xs text-gray-500 mt-0.5">화면 아래 가운데의 공유(↑) 아이콘</p>
+                {/* Share icon illustration */}
+                <div className="mt-2 flex items-center justify-center">
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl px-6 py-2 flex items-center gap-2">
+                    <svg viewBox="0 0 24 24" className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                      <polyline points="16 6 12 2 8 6"/>
+                      <line x1="12" y1="2" x2="12" y2="15"/>
+                    </svg>
+                    <span className="text-blue-600 font-bold text-sm">공유</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-gray-100" />
+
+            {/* Step 2 */}
+            <div className="flex items-start gap-3">
+              <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-gray-800">스크롤 후 '홈 화면에 추가' 탭</p>
+                <p className="text-xs text-gray-500 mt-0.5">공유 메뉴를 아래로 스크롤하면 나타납니다</p>
+                {/* Add to Home Screen illustration */}
+                <div className="mt-2 flex items-center justify-center">
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-gray-200 flex items-center justify-center">
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="7" height="7" rx="1"/>
+                        <rect x="14" y="3" width="7" height="7" rx="1"/>
+                        <rect x="3" y="14" width="7" height="7" rx="1"/>
+                        <path d="M14 17h7M17.5 14v7"/>
+                      </svg>
+                    </div>
+                    <span className="text-gray-700 font-semibold text-sm">홈 화면에 추가</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-gray-100" />
+
+            {/* Step 3 */}
+            <div className="flex items-start gap-3">
+              <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">3</div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-gray-800">오른쪽 위 '추가'를 누르세요</p>
+                <p className="text-xs text-gray-500 mt-0.5">홈 화면에 앱 아이콘이 추가됩니다!</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 닫기 버튼 */}
+          <div className="bg-gray-50 px-5 py-3">
+            <button
+              onClick={() => setShowIOSInstallGuide(false)}
+              className="w-full py-2.5 rounded-xl bg-black text-white text-sm font-bold hover:bg-gray-800 active:bg-gray-700 transition-colors"
+            >
+              확인
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
       {/* 수행평가 목록 — 과목 타일 + 페이지 전환 */}
       {!isRestricted && (
         <Card className="mt-8">
