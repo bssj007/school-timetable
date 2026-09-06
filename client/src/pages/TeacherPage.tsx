@@ -2483,8 +2483,8 @@ export default function TeacherPage() {
               <p className="text-sm text-red-400">네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.</p>
             </div>
           ) : timetableData && selectedSchedule ? (
-            <div className="w-full overflow-x-auto flex-1" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <table className="w-full table-fixed min-w-0 sm:min-w-[420px] md:min-w-[500px] xl:min-w-[600px]" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
+            <div className="w-full overflow-x-auto flex-1 flex flex-col min-h-0 sm:h-full" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <table className="w-full table-fixed min-w-0 sm:min-w-[420px] md:min-w-[500px] xl:min-w-[600px] sm:h-full sm:flex-1" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
@@ -2525,24 +2525,19 @@ export default function TeacherPage() {
                     return (
                       <tr
                         key={p}
-                        className="h-[52px] sm:h-[50px]"
-                        style={{ height: 52 }}
+                        className="h-[52px] sm:h-[calc(100%/7)]"
                       >
                         {/* Row number cell — Excel row header */}
                         <td
+                          className="h-[52px] sm:h-auto select-none text-center align-middle p-0"
                           style={{
                             width: 32,
-                            height: 52,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
                             borderRight: isCurrentPeriod ? '2px solid #217346' : '1px solid #d0d0d0',
                             borderBottom: '1px solid #d0d0d0',
-                            textAlign: 'center',
-                            verticalAlign: 'middle',
-                            userSelect: 'none',
-                            padding: 0,
                           }}
                         >
-                          <div style={{ height: '100%', minHeight: 52, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1px 0' }}>
+                          <div className="h-full min-h-[52px] sm:min-h-0 flex flex-col items-center justify-center py-0.5">
                             <div style={{ fontWeight: 700, fontSize: 10.5, color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
                             {PERIOD_TIMES[p] && (
                               <div style={{ fontSize: 7.5, color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
@@ -2585,18 +2580,15 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[52px] sm:h-[50px] sm:max-h-[50px] sm:overflow-hidden"
+                              className="group h-[52px] sm:h-auto align-top relative overflow-hidden"
                               style={{
-                                height: 52,
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
                                 borderBottom: '1px solid #d0d0d0',
                                 borderLeft: hasAssessment ? '2px solid #ec4899' : '1px solid #d0d0d0',
-                                verticalAlign: 'top',
                                 cursor: cellData ? 'pointer' : 'default',
                                 transition: 'outline 0.08s',
                                 outline: 'none',
-                                position: 'relative',
                               }}
                               onClick={() => cellData && handleCellClick(dayIndex, p, val)}
                               onMouseEnter={e => {
@@ -2610,8 +2602,8 @@ export default function TeacherPage() {
                                 (e.currentTarget as HTMLElement).style.zIndex = 'auto';
                               }}
                             >
-                              {/* minHeight: 52로 빈 칸 함몰 완벽 방지 — 모든 행이 균일한 높이 유지 */}
-                              <div style={{ height: '100%', minHeight: 52, padding: '2px 2.5px', display: 'flex', flexDirection: 'column', justifyContent: cellData ? 'flex-start' : 'center' }}>
+                              {/* minHeight: 52로 빈 칸 함몰 완벽 방지 — 모바일은 52px 고정, PC는 균등 확장 */}
+                              <div className="h-full min-h-[52px] sm:min-h-0 flex flex-col" style={{ padding: '2px 2.5px', justifyContent: cellData ? 'flex-start' : 'center' }}>
                               {cellData ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                                   {/* 학생 배지 — td의 position:relative 기준 우측 상단 */}
