@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { agent, shouldShowDownloadPage } from "@/lib/browserDetect";
 
@@ -117,30 +117,73 @@ export default function AppDownloadPage() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col"
-      style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-      {/* 로고 + 앱 이름 */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8 text-center">
-        <img src={appIconUrl} alt={appTitle}
-          className="w-24 h-24 rounded-3xl shadow-xl object-cover"
-          onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }} />
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 leading-tight">{appTitle}</h1>
-          <p className="text-sm text-gray-400 mt-2 leading-relaxed">
-            앱을 설치하면 더 빠르고 편리하게<br />이용할 수 있어요
-          </p>
-        </div>
-      </div>
-      {/* 다운로드 버튼 + 사이트로 계속 */}
-      <div className="flex-shrink-0 px-6 pb-6 space-y-2">
-        {!settings
-          ? <div className="w-full h-14 bg-gray-100 rounded-2xl animate-pulse" />
-          : <DownloadButton />
-        }
-        <button onClick={handleContinue}
-          className="w-full py-3 text-sm text-gray-400 hover:text-gray-600 transition-colors">
-          사이트로 계속
+    <div
+      className="fixed inset-0 z-50 bg-slate-100 sm:bg-slate-900/40 sm:backdrop-blur-sm flex items-center justify-center overflow-y-auto p-0 sm:p-6 md:p-10 transition-colors"
+      style={{
+        paddingTop: "max(env(safe-area-inset-top, 0px), 0px)",
+        paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0px)",
+      }}
+    >
+      {/* 모바일 전체화면 / 태블릿·데스크톱 모달 카드 */}
+      <div className="w-full h-full sm:h-auto sm:max-w-md md:max-w-lg bg-white sm:rounded-3xl sm:shadow-2xl sm:border sm:border-gray-100 flex flex-col justify-between sm:justify-center p-6 sm:p-10 my-auto relative transition-all">
+        {/* 태블릿/데스크톱 닫기(사이트 바로가기) 버튼 */}
+        <button
+          onClick={handleContinue}
+          className="hidden sm:flex absolute top-5 right-5 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700 items-center justify-center transition-colors"
+          title="사이트로 바로 가기"
+          aria-label="닫기"
+        >
+          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
         </button>
+
+        {/* 로고 + 앱 이름 */}
+        <div className="flex-1 sm:flex-initial flex flex-col items-center justify-center gap-6 sm:gap-7 py-8 sm:py-4 text-center">
+          <div className="relative group">
+            <img
+              src={appIconUrl}
+              alt={appTitle}
+              className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-3xl sm:rounded-4xl shadow-xl sm:shadow-2xl object-cover bg-white border border-gray-100"
+              onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }}
+            />
+            <div className="absolute -bottom-1 -right-1 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-black text-white border-2 border-white flex items-center justify-center shadow-md">
+              {browserType === "safari" ? (
+                <AppleLogo />
+              ) : (
+                <PlayStoreLogo />
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2 max-w-xs sm:max-w-sm">
+            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight leading-tight">
+              {appTitle}
+            </h1>
+            <p className="text-sm sm:text-base text-gray-500 leading-relaxed font-medium">
+              홈 화면에 앱을 추가하면 전체 화면으로<br className="hidden sm:inline" /> 더 빠르고 편리하게 이용할 수 있어요.
+            </p>
+          </div>
+        </div>
+
+        {/* 다운로드 버튼 + 사이트로 바로 가기 */}
+        <div className="flex-shrink-0 w-full max-w-sm sm:max-w-md mx-auto space-y-3 pt-4 sm:pt-6">
+          {!settings ? (
+            <div className="w-full h-14 bg-gray-100 rounded-2xl animate-pulse" />
+          ) : (
+            <DownloadButton />
+          )}
+          <button
+            onClick={handleContinue}
+            className="w-full py-3.5 text-sm sm:text-base font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200/80 rounded-2xl transition-all flex items-center justify-center gap-1.5 active:scale-[0.99]"
+          >
+            <span>사이트로 바로 가기</span>
+            <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );
