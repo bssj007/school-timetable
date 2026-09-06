@@ -270,7 +270,10 @@ export default function Dashboard() {
   const iosVersion = typeof window !== 'undefined'
     ? parseInt(/os (\d+)/i.exec(navigator.userAgent.toLowerCase())?.[1] ?? '0')
     : 0;
-  // iOS 15부터 Safari 공유 버튼이 하단 중앙으로 이동 (14 이하는 상단 우측)
+  // iOS 26+: Compact 탭 레이아웃 기본값 → 공유 버튼이 주소창 ... 안에 숨겨짐 (iPhone 17 / iOS 26)
+  const isIOS26Plus = iosVersion >= 26;
+  // iOS 15~25: 공유 버튼이 하단 중앙 툴바
+  // iOS 14 이하: 공유 버튼이 상단 우측
   const isIOS15Plus = iosVersion >= 15;
   const isSamsungBrowser = typeof window !== 'undefined' ?
     /SamsungBrowser/i.test(navigator.userAgent) ||
@@ -3223,17 +3226,34 @@ export default function Dashboard() {
 
           {/* 단계별 안내 */}
           <div className="bg-white px-5 py-4 space-y-4">
-            {/* Step 1 — iOS 버전별 공유 버튼 위치 분기 */}
+            {/* Step 1 — iOS 버전별 공유 버튼 위치 3단계 분기 */}
             <div className="flex items-start gap-3">
               <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</div>
               <div className="flex-1">
-                {isIOS15Plus ? (
-                  // iOS 15+: 공유 버튼이 하단 중앙
+                {isIOS26Plus ? (
+                  // iOS 26+ (iPhone 17~): Compact 탭 → ... 버튼 → 공유
+                  <>
+                    <p className="text-sm font-semibold text-gray-800">주소창 오른쪽 <span className="font-black text-gray-900">···</span> 버튼을 누르세요</p>
+                    <p className="text-xs text-gray-500 mt-0.5">주소창 오른쪽 끝 점 세 개 아이콘 → 공유 선택</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      {/* 주소창 ... chip */}
+                      <div className="flex-1 bg-gray-900 rounded-xl px-3 py-2 flex items-center gap-2">
+                        <div className="flex-1 bg-gray-700 rounded-lg px-2 py-1 text-[11px] text-gray-300 truncate">성지수행.com</div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <div className="w-6 h-6 rounded-md bg-gray-600 flex items-center justify-center">
+                            <span className="text-white text-[11px] font-black leading-none">···</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1.5">▶ 메뉴에서 <span className="font-semibold">공유</span>를 선택하면 공유 시트가 열립니다</p>
+                  </>
+                ) : isIOS15Plus ? (
+                  // iOS 15~25: 공유 버튼이 하단 중앙
                   <>
                     <p className="text-sm font-semibold text-gray-800">하단 가운데 공유 버튼을 누르세요</p>
                     <p className="text-xs text-gray-500 mt-0.5">화면 <span className="font-semibold text-gray-700">아래 가운데</span>의 공유(↑) 아이콘</p>
                     <div className="mt-2 flex items-center gap-2">
-                      {/* 위치 chip: bottom-center */}
                       <div className="flex-1 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 flex flex-col items-center gap-1">
                         <div className="text-[10px] text-blue-400 font-medium">화면 아래쪽</div>
                         <div className="flex items-center gap-1.5">
@@ -3254,7 +3274,6 @@ export default function Dashboard() {
                     <p className="text-sm font-semibold text-gray-800">오른쪽 상단 공유 버튼을 누르세요</p>
                     <p className="text-xs text-gray-500 mt-0.5">화면 <span className="font-semibold text-gray-700">오른쪽 위</span>의 공유(↑) 아이콘</p>
                     <div className="mt-2 flex items-center gap-2">
-                      {/* 위치 chip: top-right */}
                       <div className="flex-1 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 flex flex-col items-center gap-1">
                         <div className="text-[10px] text-blue-400">↑ 오른쪽</div>
                         <div className="flex items-center gap-1.5">
@@ -3302,12 +3321,24 @@ export default function Dashboard() {
             {/* Divider */}
             <div className="border-t border-gray-100" />
 
-            {/* Step 3 */}
+            {/* Step 3 — iOS 26+는 'Web App으로 열기' 토글 안내 추가 */}
             <div className="flex items-start gap-3">
               <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">3</div>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-gray-800">오른쪽 위 '추가'를 누르세요</p>
-                <p className="text-xs text-gray-500 mt-0.5">홈 화면에 앱 아이콘이 추가됩니다!</p>
+                {isIOS26Plus ? (
+                  <>
+                    <p className="text-xs text-gray-500 mt-0.5">'Web App으로 열기' 켜진 상태에서 추가하면 앱처럼 실행됩니다</p>
+                    <div className="mt-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-gray-700">Web App으로 열기</span>
+                      <div className="w-9 h-5 bg-green-500 rounded-full flex items-center justify-end px-0.5">
+                        <div className="w-4 h-4 bg-white rounded-full shadow"/>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-0.5">홈 화면에 앱 아이콘이 추가됩니다!</p>
+                )}
               </div>
             </div>
           </div>
