@@ -4,6 +4,44 @@
 @custom-variant dark (&:is(.dark *));
 @custom-variant capturing (&:is(body.capturing *));
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   UA 기반 디바이스 레이아웃 오버라이드
+   main.tsx에서 <html>에 is-pc / is-mobile 클래스를 추가함.
+
+   is-pc  : PC 브라우저 (창 너비에 관계없이 항상 데스크톱 레이아웃)
+   is-mobile: 모바일 브라우저 (viewport가 넓어도 항상 모바일 레이아웃)
+              - 데스크톱 모드 사용 시 UA가 PC로 보이므로 is-pc로 분류됨 (허용)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── PC 브라우저: md: 클래스 항상 적용 (창 너비 무관) ─────────────────────── */
+html.is-pc .md\:hidden        { display: none         !important; }
+html.is-pc .md\:block         { display: block        !important; }
+html.is-pc .md\:flex          { display: flex         !important; }
+html.is-pc .md\:inline-flex   { display: inline-flex  !important; }
+html.is-pc .md\:inline-block  { display: inline-block !important; }
+html.is-pc .md\:inline        { display: inline       !important; }
+html.is-pc .md\:grid          { display: grid         !important; }
+html.is-pc .md\:table         { display: table        !important; }
+html.is-pc .md\:table-cell    { display: table-cell   !important; }
+html.is-pc .md\:table-row     { display: table-row    !important; }
+html.is-pc .md\:contents      { display: contents     !important; }
+
+/* ── 모바일 브라우저: md: 클래스 절대 적용 안 함 (viewport가 넓어도) ─────── */
+/* 모바일에서 가로 방향이나 태블릿 크기여도 항상 모바일 레이아웃 유지 */
+@media (min-width: 768px) {
+  html.is-mobile .md\:hidden        { display: revert  !important; }
+  html.is-mobile .md\:block         { display: revert  !important; }
+  html.is-mobile .md\:flex          { display: revert  !important; }
+  html.is-mobile .md\:inline-flex   { display: revert  !important; }
+  html.is-mobile .md\:inline-block  { display: revert  !important; }
+  html.is-mobile .md\:inline        { display: revert  !important; }
+  html.is-mobile .md\:grid          { display: revert  !important; }
+  html.is-mobile .md\:table         { display: revert  !important; }
+  html.is-mobile .md\:table-cell    { display: revert  !important; }
+  html.is-mobile .md\:table-row     { display: revert  !important; }
+  html.is-mobile .md\:contents      { display: revert  !important; }
+}
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
