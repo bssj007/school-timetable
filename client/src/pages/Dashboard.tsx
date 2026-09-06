@@ -3599,7 +3599,13 @@ export default function Dashboard() {
           })()}
         </Card>
       )}
-      <div className="mt-2 flex justify-end">
+      <div className="mt-2 flex justify-end items-center gap-3">
+        <Link href="/privacy">
+          <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-transparent text-xs font-normal h-auto p-0">
+            개인정보처리방침
+          </Button>
+        </Link>
+        <span className="text-gray-300 text-xs select-none">·</span>
         <Link href="/admin">
           <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-transparent text-xs font-normal h-auto p-0">
             관리사무소

@@ -20,6 +20,7 @@ import TeacherAccount from "./pages/TeacherAccount";
 import IOSInstallGuide from "./pages/IOSInstallGuide";
 import IOSChromeInstallGuide from "./pages/IOSChromeInstallGuide";
 import AppDownloadPage from "./pages/AppDownloadPage";
+import Privacy from "./pages/Privacy";
 import { shouldShowDownloadPage } from "@/lib/browserDetect";
 
 function Router() {
@@ -36,6 +37,7 @@ function Router() {
       <Route path={"/ios-install-guide"} component={IOSInstallGuide} />
       <Route path={"/ios-chrome-install-guide"} component={IOSChromeInstallGuide} />
       <Route path={"/download"} component={AppDownloadPage} />
+      <Route path={"/privacy"} component={Privacy} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -51,6 +53,7 @@ function AppContent() {
   const isMealRoute = location.startsWith("/meal");
   const isDownloadRoute = location === "/download";
   const isIOSGuideRoute = location === "/ios-install-guide" || location === "/ios-chrome-install-guide";
+  const isPrivacyRoute = location === "/privacy";
 
   // 사이트 디자인설정 동적 적용 (제목 + 파비콘 + PWA 아이콘)
   useEffect(() => {
@@ -106,11 +109,11 @@ function AppContent() {
 
   // ── 점검 모드 감지 시 강제 새로고침 (Edge 차단 페이지로 전환 및 메모리 클리어) ──────
   useEffect(() => {
-    if (isAdminRoute) return;
+    if (isAdminRoute || isPrivacyRoute) return;
     if (publicSettings?.maintenance_mode?.active && !publicSettings?.is_whitelisted) {
       window.location.reload();
     }
-  }, [publicSettings, isAdminRoute]);
+  }, [publicSettings, isAdminRoute, isPrivacyRoute]);
 
   // ── 교사 리다이렉트 ──────────────────────────────────────────────────────────
   // Rules of Hooks: useEffect는 반드시 conditional return 앞에 선언해야 함.
@@ -119,13 +122,13 @@ function AppContent() {
   //   2) 이 useEffect가 실행 → setLocation("/teacher") → wouter 상태 업데이트
   //   3) 다음 렌더에서 /teacher 경로로 TeacherPage 렌더
   useEffect(() => {
-    if (!isValidating && userRole === "teacher" && !isTeacherRoute && !isAdminRoute && !isMealRoute) {
+    if (!isValidating && userRole === "teacher" && !isTeacherRoute && !isAdminRoute && !isMealRoute && !isPrivacyRoute) {
       setLocation("/teacher");
     }
-  }, [isValidating, userRole, isTeacherRoute, isAdminRoute, isMealRoute]);
+  }, [isValidating, userRole, isTeacherRoute, isAdminRoute, isMealRoute, isPrivacyRoute]);
 
-  // 학기 키 검증 완료 전 — 아무 데이터도 렌더링하지 않음
-  if (isValidating) {
+  // 학기 키 검증 완료 전 — 아무 데이터도 렌더링하지 않음 (단, /privacy는 독립 접근 허용)
+  if (isValidating && !isPrivacyRoute) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f8fafc' }}>
         <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
@@ -143,21 +146,21 @@ function AppContent() {
 
   // useEffect(위)가 setLocation을 실행하기 전 1프레임 동안 null을 반환하여
   // Dashboard가 절대 보이지 않도록 막는다.
-  if (userRole === "teacher" && !isTeacherRoute && !isAdminRoute && !isMealRoute) {
+  if (userRole === "teacher" && !isTeacherRoute && !isAdminRoute && !isMealRoute && !isPrivacyRoute) {
     return null;
   }
 
   return (
     <>
       <Toaster />
-      {!isAdminRoute && location !== "/admin/factory-reset" && location !== "/meal" && location !== "/teacher/account" && !isIOSGuideRoute && !isDownloadRoute && (
+      {!isAdminRoute && location !== "/admin/factory-reset" && location !== "/meal" && location !== "/teacher/account" && !isIOSGuideRoute && !isDownloadRoute && !isPrivacyRoute && (
         <div className={location === "/" || isTeacherRoute ? "sm:hidden" : ""}>
           <Navigation />
         </div>
       )}
-      {/* 역할 미선택 시 역할 선택 다이얼로그 — 다운로드/가이드 페이지에서는 숨김 */}
-      {!isDownloadRoute && !isIOSGuideRoute && <RoleSelectDialog onRoleSelected={() => refreshRole()} />}
-      <OnboardingDialog />
+      {/* 역할 미선택 시 역할 선택 다이얼로그 — 다운로드/가이드/개인정보 페이지에서는 숨김 */}
+      {!isDownloadRoute && !isIOSGuideRoute && !isPrivacyRoute && <RoleSelectDialog onRoleSelected={() => refreshRole()} />}
+      {!isPrivacyRoute && <OnboardingDialog />}
       <Router />
     </>
   );
