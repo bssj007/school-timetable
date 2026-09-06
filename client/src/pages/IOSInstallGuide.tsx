@@ -1,4 +1,4 @@
-﻿import { agent } from "@/lib/browserDetect";
+import { agent } from "@/lib/browserDetect";
 
 // ── detect() 결과 직접 참조 ──────────────────────────────────────────────────
 const { isIPad, isIPhone, iosVersion, isIOS26Plus, isIOS15Plus } = agent;
@@ -149,45 +149,53 @@ function GuideIPadNew() {
           <p className="text-base font-bold text-gray-900">공유 시트 하단 <span className="font-black text-red-500">더 보기</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">앱 행 오른쪽 끝 버튼이 아닌, 가장 하단의 더 보기</p>
 
-          {/* 액션 바 일러스트 */}
-          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm max-w-xs">
+          {/* 액션 바 일러스트 — iPad 최적화 (크게) */}
+          <div className="mt-4 rounded-2xl border border-gray-200 shadow-sm max-w-sm" style={{ overflow: 'visible' }}>
             {/* 상단 앱 아이콘 행 */}
-            <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 border-b border-gray-100">
+            <div className="flex items-center gap-4 px-4 py-3 bg-gray-50 border-b border-gray-100 rounded-t-2xl overflow-hidden">
               {[
-                { label: "News",    bg: "bg-red-100",  content: <span className="text-red-500 text-xs font-black">N</span> },
-                { label: "미리 알림", bg: "bg-blue-50", content: <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> },
-                { label: "더 보기", bg: "bg-gray-100", content: <span className="text-gray-500 text-xs font-black">···</span> },
+                { label: "News",     bg: "bg-red-100",  content: <span className="text-red-500 text-sm font-black">N</span> },
+                { label: "미리 알림", bg: "bg-blue-50",  content: <svg viewBox="0 0 24 24" className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> },
+                { label: "더 보기",  bg: "bg-gray-100", content: <span className="text-gray-500 text-sm font-black">···</span> },
               ].map((app, i) => (
-                <div key={i} className="flex flex-col items-center gap-0.5 shrink-0">
-                  <div className={`w-9 h-9 rounded-xl ${app.bg} flex items-center justify-center`}>{app.content}</div>
-                  <span className="text-[9px] text-gray-400">{app.label}</span>
+                <div key={i} className="flex flex-col items-center gap-1 shrink-0">
+                  <div className={`w-11 h-11 rounded-xl ${app.bg} flex items-center justify-center`}>{app.content}</div>
+                  <span className="text-[10px] text-gray-400">{app.label}</span>
                 </div>
               ))}
             </div>
             {/* 하단 액션 바 */}
-            <div className="flex items-center gap-0 divide-x divide-gray-100 bg-white">
+            <div className="flex items-center divide-x divide-gray-100 bg-white rounded-b-2xl overflow-hidden" style={{ overflow: 'visible' }}>
               {[
-                { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>, label: "복사" },
-                { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>, label: "북마크" },
-                { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: "읽기" },
+                { icon: <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>, label: "복사" },
+                { icon: <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>, label: "북마크" },
+                { icon: <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: "읽기" },
               ].map((action, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-0.5 py-1.5">
+                <div key={i} className="flex-1 flex flex-col items-center gap-1 py-3">
                   {action.icon}
-                  <span className="text-[9px] text-gray-400">{action.label}</span>
+                  <span className="text-[10px] text-gray-400">{action.label}</span>
                 </div>
               ))}
-              {/* 더 보기 셀 — 빨간 원 + 직선 화살표 */}
-              <div className="flex-1 flex flex-col items-center gap-0.5 py-1.5 relative" style={{ overflow: 'visible' }}>
-                <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-                <span className="text-[9px] text-gray-400">더 보기</span>
-                <svg style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -60%)', width: '60px', height: '42px', overflow: 'visible', pointerEvents: 'none' }}
-                  viewBox="0 0 60 42" fill="none">
-                  <ellipse cx="30" cy="21" rx="28" ry="19" stroke="#ef4444" strokeWidth="2.5"/>
-                  <line x1="30" y1="-18" x2="30" y2="2" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"/>
-                  <polyline points="24,-8 30,2 36,-8" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                </svg>
+              {/* 더 보기 셀 — CSS 타원 강조 (위치 오차 없음) */}
+              <div className="flex-1 flex items-center justify-center py-2" style={{ overflow: 'visible' }}>
+                <div className="relative flex flex-col items-center">
+                  {/* 위쪽 화살표 */}
+                  <svg
+                    className="absolute pointer-events-none"
+                    style={{ bottom: 'calc(100% + 2px)', left: '50%', transform: 'translateX(-50%)' }}
+                    width="14" height="22" viewBox="0 0 14 22" fill="none"
+                  >
+                    <line x1="7" y1="22" x2="7" y2="5" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"/>
+                    <polyline points="2,14 7,5 12,14" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  {/* 타원 — CSS border + rounded-full */}
+                  <div className="flex flex-col items-center gap-1.5 px-5 py-2.5 border-2 border-red-400 rounded-full">
+                    <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                    <span className="text-[11px] text-gray-600 font-semibold">더 보기</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -292,9 +300,9 @@ function Guide26() {
           <p className="text-sm text-gray-500 mt-0.5">앱 행 오른쪽 끝 버튼이 아닌, 가장 하단의 더 보기</p>
 
           {/* 액션 바 일러스트 */}
-          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm max-w-xs">
+          <div className="mt-3 rounded-2xl border border-gray-200 shadow-sm max-w-xs" style={{ overflow: 'visible' }}>
             {/* 상단 앱 아이콘 행 */}
-            <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 border-b border-gray-100">
+            <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 border-b border-gray-100 rounded-t-2xl overflow-hidden">
               {[
                 { label: "News",    bg: "bg-red-100",  content: <span className="text-red-500 text-xs font-black">N</span> },
                 { label: "미리 알림", bg: "bg-blue-50", content: <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> },
@@ -307,7 +315,7 @@ function Guide26() {
               ))}
             </div>
             {/* 하단 액션 바 */}
-            <div className="flex items-center gap-0 divide-x divide-gray-100 bg-white">
+            <div className="flex items-center divide-x divide-gray-100 bg-white rounded-b-2xl overflow-hidden" style={{ overflow: 'visible' }}>
               {[
                 { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>, label: "복사" },
                 { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>, label: "북마크" },
@@ -318,18 +326,26 @@ function Guide26() {
                   <span className="text-[9px] text-gray-400">{action.label}</span>
                 </div>
               ))}
-              {/* 더 보기 셀 — 빨간 원 + 직선 화살표 */}
-              <div className="flex-1 flex flex-col items-center gap-0.5 py-1.5 relative" style={{ overflow: 'visible' }}>
-                <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-                <span className="text-[9px] text-gray-400">더 보기</span>
-                <svg style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -60%)', width: '60px', height: '42px', overflow: 'visible', pointerEvents: 'none' }}
-                  viewBox="0 0 60 42" fill="none">
-                  <ellipse cx="30" cy="21" rx="28" ry="19" stroke="#ef4444" strokeWidth="2.5"/>
-                  <line x1="30" y1="-18" x2="30" y2="2" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"/>
-                  <polyline points="24,-8 30,2 36,-8" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                </svg>
+              {/* 더 보기 셀 — CSS 타원 강조 (위치 오차 없음) */}
+              <div className="flex-1 flex items-center justify-center py-1.5" style={{ overflow: 'visible' }}>
+                <div className="relative flex flex-col items-center">
+                  {/* 위쪽 화살표 */}
+                  <svg
+                    className="absolute pointer-events-none"
+                    style={{ bottom: 'calc(100% + 2px)', left: '50%', transform: 'translateX(-50%)' }}
+                    width="12" height="18" viewBox="0 0 12 18" fill="none"
+                  >
+                    <line x1="6" y1="18" x2="6" y2="4" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"/>
+                    <polyline points="2,11 6,4 10,11" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  {/* 타원 — CSS border + rounded-full */}
+                  <div className="flex flex-col items-center gap-0.5 px-4 py-1.5 border-2 border-red-400 rounded-full">
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                    <span className="text-[9px] text-gray-500 font-medium">더 보기</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
