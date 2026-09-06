@@ -168,19 +168,19 @@ function Guide26() {
                   fill="none"
                 >
                   {/* 강조 타원 — 셀 전체를 감쌈 */}
-                  <ellipse cx="30" cy="15" rx="28" ry="19" stroke="#ef4444" strokeWidth="2.5"/>
+                  <ellipse cx="30" cy="21" rx="28" ry="19" stroke="#ef4444" strokeWidth="2.5"/>
 
                   {/* 직선 화살표 줄기 — 원 상단(30,2)에서 위로 */}
                   <line
-                    x1="30" y1="-24"
-                    x2="30" y2="-4"
+                    x1="30" y1="-18"
+                    x2="30" y2="2"
                     stroke="#ef4444"
                     strokeWidth="2.5"
                     strokeLinecap="round"
                   />
                   {/* 화살촉 — V자 */}
                   <polyline
-                    points="24,-14 30,-4 36,-14"
+                    points="24,-8 30,2 36,-8"
                     stroke="#ef4444"
                     strokeWidth="2.5"
                     strokeLinecap="round"
@@ -359,7 +359,7 @@ export default function IOSInstallGuide() {
       {/* 헤더 */}
       <div
         className="bg-black px-6 flex-shrink-0"
-        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
+        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
       >
         <div className="pb-3 flex items-center gap-3">
           {/* 뒤로 가기 */}
@@ -377,18 +377,16 @@ export default function IOSInstallGuide() {
             <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
           </svg>
           <div>
-            <h1 className="text-lg font-extrabold text-white leading-tight">홈 화면에 앱 추가하기</h1>
-            <p className="text-gray-400 text-xs mt-0.5">Safari에서 아래 단계를 따라 설치하세요</p>
+            <h1 className="text-base font-extrabold text-white leading-tight">홈 화면에 앱 추가하기</h1>
+            {/* iOS 버전 — 부제목 대체 */}
+            <p className="text-gray-400 text-xs mt-0.5 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block shrink-0" />
+              {isIOS26Plus ? "iOS 26+ (iPhone 17+)" : isIOS15Plus ? "iOS 15~25" : "iOS 14 이하"}
+            </p>
           </div>
         </div>
-        {/* iOS 버전 배지 */}
-        <div className="pb-4">
-          <span className="inline-flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1 text-xs text-gray-300 font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-            {isIOS26Plus ? "iOS 26+ (iPhone 17+)" : isIOS15Plus ? "iOS 15~25" : "iOS 14 이하"}
-          </span>
-        </div>
       </div>
+
 
       {/* 스크롤 가능한 단계 안내 */}
       <div className="flex-1 overflow-y-auto">
