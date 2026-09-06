@@ -2525,16 +2525,11 @@ export default function TeacherPage() {
                     return (
                       <tr
                         key={p}
-                        style={{
-                          height: 'auto',
-                          minHeight: 38,
-                        }}
                         className="sm:h-[50px]"
                       >
                         {/* Row number cell — Excel row header */}
                         <td
                           style={{
-                            minHeight: 38,
                             width: 36,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
                             borderRight: isCurrentPeriod ? '2px solid #217346' : '1px solid #d0d0d0',
@@ -2542,13 +2537,15 @@ export default function TeacherPage() {
                             textAlign: 'center',
                             verticalAlign: 'middle',
                             userSelect: 'none',
-                            padding: '2px 0',
+                            padding: 0,
                           }}
                         >
-                          <div style={{ fontWeight: 700, fontSize: 12, color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
-                          {PERIOD_TIMES[p] && (
-                            <div style={{ fontSize: 8, color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
-                          )}
+                          <div style={{ minHeight: 38, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2px 0' }}>
+                            <div style={{ fontWeight: 700, fontSize: 12, color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
+                            {PERIOD_TIMES[p] && (
+                              <div style={{ fontSize: 8, color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
+                            )}
+                          </div>
                         </td>
                         {weekdays.map((_, dayIndex) => {
                           const d = dayIndex + 1;
@@ -2588,12 +2585,10 @@ export default function TeacherPage() {
                               key={d}
                               className="group sm:h-[50px] sm:max-h-[50px] sm:overflow-hidden"
                               style={{
-                                minHeight: 38,
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
                                 borderBottom: '1px solid #d0d0d0',
                                 borderLeft: hasAssessment ? '2px solid #ec4899' : '1px solid #d0d0d0',
-                                padding: '4px 5px',
                                 verticalAlign: 'top',
                                 cursor: cellData ? 'pointer' : 'default',
                                 transition: 'outline 0.08s',
@@ -2612,6 +2607,8 @@ export default function TeacherPage() {
                                 (e.currentTarget as HTMLElement).style.zIndex = 'auto';
                               }}
                             >
+                              {/* minHeight는 td에서 무효 → 항상 렌더링되는 div에서 보장 */}
+                              <div style={{ minHeight: 38, padding: '4px 5px', display: 'flex', flexDirection: 'column' }}>
                               {cellData ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                   {/* 학생 배지 — td의 position:relative 기준 우측 상단 */}
@@ -2708,7 +2705,8 @@ export default function TeacherPage() {
                                     </div>
                                   )}
                                 </div>
-                              ) : null}
+                                ) : null}
+                              </div>{/* /wrapper minHeight div */}
                             </td>
                           );
                         })}
