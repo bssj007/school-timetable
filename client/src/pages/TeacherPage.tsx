@@ -1716,32 +1716,17 @@ export default function TeacherPage() {
       <div className="max-w-[1440px] mx-auto w-full sm:flex-1 flex flex-col sm:min-h-0">
 
         {/* ===== PC 전용 TOP SECTION ===== */}
-        <div className="hidden sm:flex flex-row gap-2 sm:gap-3 md:gap-4 xl:gap-6 items-center mb-2 flex-shrink-0">
+        <div className="hidden sm:flex flex-row gap-3 md:gap-4 xl:gap-6 items-center mb-3 flex-shrink-0">
 
-          {/* ── 좌: 제목 + 선생님 정보 + 주선택기 ── */}
-          <div className="flex-1 sm:max-w-[1000px] min-w-0 flex items-center gap-2 sm:gap-3">
+          {/* ── 좌: 제목 + 주선택기 ── */}
+          <div className="flex-1 sm:max-w-[1000px] min-w-0 flex items-center gap-3">
 
             {/* 뱃지형 제목 */}
-            <div className="flex flex-col min-w-0 overflow-hidden">
-              <h1 className="font-extrabold text-gray-900 leading-tight truncate" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
-                <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">
-                  교사용 수행평가 시스템
-                </span>
-              </h1>
-              {/* 선생님 이름 & 인증 상태 — 공간 부족 시 overflow clip (줄바꿈 없이 숨김) */}
-              <div className="flex items-center gap-1.5 mt-0.5 overflow-hidden min-w-0">
-                <span className="text-xs text-slate-400 font-medium truncate min-w-0">
-                  {teacherName
-                    ? <><span className="text-slate-700 font-bold">{teacherName}</span> 선생님</>
-                    : <span className="text-slate-400">선생님을 선택하세요</span>}
-                </span>
-                {teacherName && isCurrentTeacherVerified && (
-                  <Link href="/teacher/account" className="shrink-0">
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 leading-tight hover:bg-emerald-100 transition-colors cursor-pointer whitespace-nowrap">✓ 인증됨 · 계정</span>
-                  </Link>
-                )}
-              </div>
-            </div>
+            <h1 className="text-xl md:text-2xl font-extrabold text-gray-900 tracking-tight shrink-0 truncate leading-tight">
+              <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">
+                교사용 수행평가 등록 시스템
+              </span>
+            </h1>
 
             {/* 주 선택기 */}
             <div className={`flex flex-col items-center gap-0.5 shrink-0 ml-auto ${mobileViewMode !== 'daily' ? 'invisible pointer-events-none' : ''}`}>
@@ -2536,7 +2521,7 @@ export default function TeacherPage() {
                             borderBottom: '1px solid #d0d0d0',
                           }}
                         >
-                          <div className="h-full min-h-[52px] sm:min-h-0 flex flex-col items-center justify-center py-0.5">
+                          <div className="h-full min-h-[52px] sm:min-h-0 flex flex-col items-center justify-center py-0.5 sm:py-1">
                             <div style={{ fontWeight: 700, fontSize: 12, color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
                             {PERIOD_TIMES[p] && (
                               <div style={{ fontSize: 8.5, color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
@@ -2601,8 +2586,8 @@ export default function TeacherPage() {
                                 (e.currentTarget as HTMLElement).style.zIndex = 'auto';
                               }}
                             >
-                              {/* minHeight: 52로 빈 칸 함몰 완벽 방지 — 모바일은 52px 고정, PC는 균등 확장 */}
-                              <div className="h-full min-h-[52px] sm:min-h-0 flex flex-col" style={{ padding: '3px 4px', justifyContent: cellData ? 'flex-start' : 'center' }}>
+                              {/* minHeight: 52로 빈 칸 함몰 완벽 방지 — 모바일은 52px 고정(3px 4px 유지), PC는 teachershub 기준 4px 5px 패딩으로 확장 */}
+                              <div className="h-full min-h-[52px] sm:min-h-0 flex flex-col p-[3px_4px] sm:p-[4px_5px]" style={{ justifyContent: cellData ? 'flex-start' : 'center' }}>
                               {cellData ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                   {/* 학생 배지 — td의 position:relative 기준 우측 상단 */}
