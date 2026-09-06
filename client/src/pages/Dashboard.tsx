@@ -3514,24 +3514,26 @@ export default function Dashboard() {
 
             return (
               <div className="bg-white">
-                {/* 슬라이드 트랙 */}
-                <div className="overflow-hidden">
-                  <div
-                    className="flex transition-transform duration-300 ease-in-out"
-                    style={{ transform: `translateX(-${iosGuideStep * 100}%)` }}
-                  >
-                    {slides.map((slide, i) => (
-                      <div key={i} className="w-full shrink-0 px-5 pt-5 pb-4">
-                        {/* 비주얼 일러스트 */}
-                        <div className="mb-4">{slide.visual}</div>
-                        {/* 텍스트 */}
-                        <div className="text-center">
-                          <p className="text-sm font-bold text-gray-900">{slide.title}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">{slide.desc}</p>
-                        </div>
+                {/* 슬라이드 컨테이너 — absolute 방식으로 너비 문제 해결 */}
+                <div className="relative overflow-hidden" style={{ height: '260px' }}>
+                  {slides.map((slide, i) => (
+                    <div
+                      key={i}
+                      className="absolute inset-0 px-5 pt-5 pb-4"
+                      style={{
+                        transform: `translateX(${(i - iosGuideStep) * 100}%)`,
+                        transition: 'transform 0.3s ease-in-out',
+                      }}
+                    >
+                      {/* 비주얼 일러스트 */}
+                      <div className="mb-4">{slide.visual}</div>
+                      {/* 텍스트 */}
+                      <div className="text-center">
+                        <p className="text-sm font-bold text-gray-900">{slide.title}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{slide.desc}</p>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
 
                 {/* 내비게이션 바 */}
