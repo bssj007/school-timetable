@@ -246,7 +246,7 @@ function MealSuggestionDialog({ onClose }: { onClose: () => void }) {
                     }}
                 />
                 <div className="flex items-center justify-between text-[10px] text-slate-300">
-                    <span className="hidden md:block">Ctrl+Enter로 전송</span>
+                    <span className="hidden sm:block">Ctrl+Enter로 전송</span>
                     <span>{message.length}/500</span>
                 </div>
 
@@ -393,14 +393,14 @@ export default function MealPage() {
                                 )}
                             </div>
                             {/* 시간표/급식표 토글 — 데스크탑: 제목 바로 오른쪽 */}
-                            <div className="hidden md:flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5 ml-2">
+                            <div className="hidden sm:flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5 ml-2">
                                 <Link
                                     href={userRole === "teacher" ? "/teacher" : "/"}
-                                    className="px-4 py-1.5 rounded-full text-sm font-semibold text-gray-500 hover:text-gray-800 hover:bg-white/60 transition-all whitespace-nowrap"
+                                    className="px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold text-gray-500 hover:text-gray-800 hover:bg-white/60 transition-all whitespace-nowrap"
                                 >
                                     📅 시간표
                                 </Link>
-                                <div className="px-4 py-1.5 rounded-full bg-white text-sm font-semibold text-gray-800 shadow-sm whitespace-nowrap">
+                                <div className="px-3 sm:px-4 py-1.5 rounded-full bg-white text-xs sm:text-sm font-semibold text-gray-800 shadow-sm whitespace-nowrap">
                                     🍱 급식표
                                 </div>
                             </div>
@@ -417,7 +417,7 @@ export default function MealPage() {
                     </div>
 
                     {/* 둘째 줄: 시간표/급식표 토글 — 모바일만 */}
-                    <div className="flex items-center gap-2 mt-2 md:hidden">
+                    <div className="flex items-center gap-2 mt-2 sm:hidden">
                         <div className="flex items-center bg-gray-100 rounded-full p-0.5 gap-0.5">
                             <Link
                                 href={userRole === "teacher" ? "/teacher" : "/"}
@@ -463,7 +463,7 @@ export default function MealPage() {
                         <button onClick={() => window.location.reload()} className="mt-4 text-slate-500 underline text-sm">다시 시도</button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 sm:gap-2.5 md:gap-4">
                         {weekDays.map((day) => {
                             const dateStr = formatDate(day);
                             const meal = mealMap[dateStr];
@@ -474,12 +474,12 @@ export default function MealPage() {
                                 <div
                                     key={dateStr}
                                     ref={isToday ? todayDayRef : undefined}
-                                    className={`flex flex-col gap-3 scroll-mt-20 ${isToday ? "opacity-100" : "opacity-90"}`}
+                                    className={`flex flex-col gap-2 sm:gap-2.5 md:gap-3 scroll-mt-20 ${isToday ? "opacity-100" : "opacity-90"}`}
                                 >
                                     {/* Date indicator */}
-                                    <div className={`p-3 rounded-2xl flex items-center justify-between ${isToday ? "bg-orange-500 text-white shadow-md" : "bg-white border border-slate-200 text-slate-800"}`}>
-                                        <span className="font-bold text-base">{WEEKDAY_KR[weekday]}</span>
-                                        <span className="text-2xl font-black">{day.getDate()}</span>
+                                    <div className={`p-2.5 sm:p-2 md:p-3 rounded-2xl flex items-center justify-between ${isToday ? "bg-orange-500 text-white shadow-md" : "bg-white border border-slate-200 text-slate-800"}`}>
+                                        <span className="font-bold text-sm sm:text-sm md:text-base">{WEEKDAY_KR[weekday]}</span>
+                                        <span className="text-xl sm:text-xl md:text-2xl font-black">{day.getDate()}</span>
                                     </div>
 
                                     {/* Lunch Box */}
@@ -491,27 +491,27 @@ export default function MealPage() {
                                         const showRatingOnDinner = (isToday || isPast) && ratingEnabled;
                                         return (<>
                                     <div className={`bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all hover:shadow-md ${isLunchActive ? "ring-2 ring-orange-500 ring-offset-2" : ""}`}>
-                                        <div className="bg-amber-50 px-3 py-2 flex items-center justify-between border-b border-amber-100">
+                                        <div className="bg-amber-50 px-2.5 sm:px-2 md:px-3 py-1.5 sm:py-1.5 md:py-2 flex items-center justify-between border-b border-amber-100">
                                             <div className="flex items-center gap-1.5">
                                                 <Sun className="w-3.5 h-3.5 text-amber-500" />
-                                                <span className="text-sm font-bold text-amber-700">중식</span>
+                                                <span className="text-xs sm:text-xs md:text-sm font-bold text-amber-700">중식</span>
                                             </div>
                                             {showRatingOnLunch && <StarRating date={dateStr} type="lunch" readOnly={isPast} />}
                                         </div>
-                                        <div className="p-3 pb-4">
+                                        <div className="p-2.5 sm:p-2 md:p-3 pb-3 sm:pb-3 md:pb-4">
                                             {meal?.lunch && meal.lunch.length > 0 ? (
-                                                <ul className="space-y-1 md:space-y-2">
+                                                <ul className="space-y-1 sm:space-y-1 md:space-y-2">
                                                     {meal.lunch.map((raw, i) => {
                                                         const { name, allergens } = parseMenuItem(raw);
                                                         return (
-                                                            <li key={i} className={`flex items-baseline justify-between gap-2 ${i > 0 ? 'border-t border-slate-50 pt-1 md:pt-1.5' : ''}`}>
+                                                            <li key={i} className={`flex items-baseline justify-between gap-2 ${i > 0 ? 'border-t border-slate-50 pt-1 sm:pt-1 md:pt-1.5' : ''}`}>
                                                                 {i === 0 ? (
-                                                                    <span className="font-extrabold text-slate-900 text-[15px] leading-snug flex-1">{name}</span>
+                                                                    <span className="font-extrabold text-slate-900 text-sm sm:text-[13px] md:text-[15px] leading-snug flex-1">{name}</span>
                                                                 ) : (
-                                                                    <span className="text-sm text-slate-700 leading-snug flex-1">{name}</span>
+                                                                    <span className="text-xs sm:text-xs md:text-sm text-slate-700 leading-snug flex-1">{name}</span>
                                                                 )}
                                                                 {allergens && (
-                                                                    <span className="text-[11px] md:text-[10px] text-slate-500 shrink-0 leading-snug tabular-nums">{allergens}</span>
+                                                                    <span className="text-[11px] sm:text-[9.5px] md:text-[10px] text-slate-500 shrink-0 leading-snug tabular-nums">{allergens}</span>
                                                                 )}
                                                             </li>
                                                         );
@@ -525,27 +525,27 @@ export default function MealPage() {
 
                                     {/* Dinner Box */}
                                     <div className={`bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all hover:shadow-md ${isDinnerActive ? "ring-2 ring-indigo-500 ring-offset-2" : ""}`}>
-                                        <div className="bg-indigo-50 px-3 py-2 flex items-center justify-between border-b border-indigo-100">
+                                        <div className="bg-indigo-50 px-2.5 sm:px-2 md:px-3 py-1.5 sm:py-1.5 md:py-2 flex items-center justify-between border-b border-indigo-100">
                                             <div className="flex items-center gap-1.5">
                                                 <Moon className="w-3.5 h-3.5 text-indigo-500" />
-                                                <span className="text-sm font-bold text-indigo-700">석식</span>
+                                                <span className="text-xs sm:text-xs md:text-sm font-bold text-indigo-700">석식</span>
                                             </div>
                                             {showRatingOnDinner && <StarRating date={dateStr} type="dinner" readOnly={isPast} />}
                                         </div>
-                                        <div className="p-3 pb-4">
+                                        <div className="p-2.5 sm:p-2 md:p-3 pb-3 sm:pb-3 md:pb-4">
                                             {meal?.dinner && meal.dinner.length > 0 ? (
-                                                <ul className="space-y-1 md:space-y-2">
+                                                <ul className="space-y-1 sm:space-y-1 md:space-y-2">
                                                     {meal.dinner.map((raw, i) => {
                                                         const { name, allergens } = parseMenuItem(raw);
                                                         return (
-                                                            <li key={i} className={`flex items-baseline justify-between gap-2 ${i > 0 ? 'border-t border-slate-50 pt-1 md:pt-1.5' : ''}`}>
+                                                            <li key={i} className={`flex items-baseline justify-between gap-2 ${i > 0 ? 'border-t border-slate-50 pt-1 sm:pt-1 md:pt-1.5' : ''}`}>
                                                                 {i === 0 ? (
-                                                                    <span className="font-extrabold text-slate-900 text-[15px] leading-snug flex-1">{name}</span>
+                                                                    <span className="font-extrabold text-slate-900 text-sm sm:text-[13px] md:text-[15px] leading-snug flex-1">{name}</span>
                                                                 ) : (
-                                                                    <span className="text-sm text-slate-700 leading-snug flex-1">{name}</span>
+                                                                    <span className="text-xs sm:text-xs md:text-sm text-slate-700 leading-snug flex-1">{name}</span>
                                                                 )}
                                                                 {allergens && (
-                                                                    <span className="text-[11px] md:text-[10px] text-slate-500 shrink-0 leading-snug tabular-nums">{allergens}</span>
+                                                                    <span className="text-[11px] sm:text-[9.5px] md:text-[10px] text-slate-500 shrink-0 leading-snug tabular-nums">{allergens}</span>
                                                                 )}
                                                             </li>
                                                         );

@@ -1655,7 +1655,7 @@ export default function TeacherPage() {
 
   return (
     <div 
-      className="w-full min-h-screen md:h-dvh md:overflow-hidden px-2 md:px-4 pt-2 pb-0 flex flex-col"
+      className="w-full min-h-screen sm:h-dvh sm:overflow-hidden px-2 sm:px-3 md:px-4 pt-2 pb-0 flex flex-col"
       style={{
         backgroundColor: '#f6e7c9',
         backgroundImage: `
@@ -1713,13 +1713,13 @@ export default function TeacherPage() {
 
       {/* 보기전용 배너: 바 인라인으로 이동 (fixed 배너 제거) */}
 
-      <div className="max-w-[1440px] mx-auto w-full md:flex-1 flex flex-col md:min-h-0">
+      <div className="max-w-[1440px] mx-auto w-full sm:flex-1 flex flex-col sm:min-h-0">
 
         {/* ===== PC 전용 TOP SECTION ===== */}
-        <div className="hidden md:flex flex-row gap-4 xl:gap-6 items-center mb-2 flex-shrink-0">
+        <div className="hidden sm:flex flex-row gap-2 sm:gap-3 md:gap-4 xl:gap-6 items-center mb-2 flex-shrink-0">
 
           {/* ── 좌: 제목 + 선생님 정보 + 주선택기 ── */}
-          <div className="flex-1 md:max-w-[1000px] min-w-0 flex items-center gap-3">
+          <div className="flex-1 sm:max-w-[1000px] min-w-0 flex items-center gap-2 sm:gap-3">
 
             {/* 뱃지형 제목 */}
             <div className="flex flex-col min-w-0">
@@ -1784,7 +1784,7 @@ export default function TeacherPage() {
           </div>
 
           {/* ── 우: 네비게이션 버튼 묶음 ── */}
-          <div className="hidden md:flex md:w-[320px] xl:w-[360px] shrink-0 items-center justify-end gap-2">
+          <div className="hidden sm:flex sm:w-[260px] md:w-[320px] xl:w-[360px] shrink-0 items-center justify-end gap-1.5 sm:gap-2">
             <Button variant="outline" size="sm"
               className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
               onClick={handleReturnToStudentPage}
@@ -1819,10 +1819,10 @@ export default function TeacherPage() {
 
 
         {/* ===== CONTENT AREA: flex-col on mobile (panel top, title+week, table bottom), flex-row on desktop ===== */}
-        <div className="flex flex-col md:flex-row gap-3 md:gap-4 xl:gap-6 items-start md:items-stretch md:flex-1 md:min-h-0">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 md:gap-4 xl:gap-6 items-start sm:items-stretch sm:flex-1 sm:min-h-0">
 
         {/* ===== MOBILE ONLY: Title row — 항상 표시 ===== */}
-        <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 shrink-0 min-h-[44px]">
+        <div className="sm:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 shrink-0 min-h-[44px]">
           <h2 className="text-lg font-extrabold truncate leading-tight">
             <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h2>
@@ -1874,10 +1874,10 @@ export default function TeacherPage() {
         </div>
 
         {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
-        <div className="w-full md:flex-1 md:max-w-[1000px] min-w-0 flex flex-col order-2 md:order-1 md:min-h-0">
+        <div className="w-full sm:flex-1 sm:max-w-[1000px] min-w-0 flex flex-col order-2 sm:order-1 sm:min-h-0">
 
         {/* ===== 모바일 전용: 뷰 모드 선택기 (당일형 / 숙제형 / 달력) ===== */}
-        <div className="md:hidden mb-2 shrink-0">
+        <div className="sm:hidden mb-2 shrink-0">
           <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
             {([
               { key: 'daily',    label: '당일형 수행', Icon: Clock },
@@ -1907,7 +1907,7 @@ export default function TeacherPage() {
         {/* ===== 모바일: 숙제형 패널 ===== */}
         {mobileViewMode === 'homework' && (
           <div
-            className="md:hidden w-full rounded-xl shadow-sm flex flex-col overflow-hidden"
+            className="sm:hidden w-full rounded-xl shadow-sm flex flex-col overflow-hidden"
             style={{
               minHeight: 'calc(7 * 50px + 44px)',
               ...(!isCurrentTeacherVerified ? {
@@ -2191,7 +2191,7 @@ export default function TeacherPage() {
           };
 
           return (
-            <div className="md:hidden w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
+            <div className="sm:hidden w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
               {/* 달력 헤더 */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
                 <button type="button"
@@ -2476,7 +2476,7 @@ export default function TeacherPage() {
 
       {/* Main Timetable — Card wrapper */}
       {/* 모바일에서 당일형이 아니면 표 숨김 */}
-      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:min-h-0 ${mobileViewMode !== 'daily' ? 'hidden md:flex' : ''}`}>
+      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col sm:min-h-0 ${mobileViewMode !== 'daily' ? 'hidden sm:flex' : ''}`}>
           {(isTimetableLoading || isGroupDataLoading) ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
@@ -2491,7 +2491,7 @@ export default function TeacherPage() {
             </div>
           ) : timetableData && selectedSchedule ? (
             <div className="w-full overflow-x-auto flex-1" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <table className="w-full table-fixed min-w-[340px] md:min-w-[500px] xl:min-w-[600px]" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px', height: '100%' }}>
+              <table className="w-full table-fixed min-w-[340px] sm:min-w-[420px] md:min-w-[500px] xl:min-w-[600px]" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px', height: '100%' }}>
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
@@ -2530,10 +2530,10 @@ export default function TeacherPage() {
                     const p = periodIndex + 1;
                     const isCurrentPeriod = currentPeriod === p && weekOffset === 0;
                     return (
-                      <tr key={p} className="h-[50px] md:min-h-[44px]">
+                      <tr key={p} className="h-[50px] sm:min-h-[44px]">
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[50px] md:min-h-[44px] overflow-hidden"
+                          className="h-[50px] sm:min-h-[44px] overflow-hidden"
                           style={{
                             width: 36,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
@@ -2586,7 +2586,7 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[52px] md:min-h-[44px] overflow-hidden"
+                              className="group h-[52px] sm:min-h-[44px] overflow-hidden"
                               style={{
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
@@ -2693,7 +2693,7 @@ export default function TeacherPage() {
                                           title={`[${a.description || '수행'}] ${a.title}`}
                                         >
                                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.title}</span>
-                                          <span className="hidden md:inline" style={{ fontSize: 7, border: '1px solid #f472b6', color: '#be185d', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap', background: '#fdf2f8' }}>
+                                          <span className="hidden sm:inline" style={{ fontSize: 7, border: '1px solid #f472b6', color: '#be185d', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap', background: '#fdf2f8' }}>
                                             {a.description && a.description.includes('차') ? a.description : '평가'}
                                           </span>
                                         </div>
@@ -2770,7 +2770,7 @@ export default function TeacherPage() {
       </div>
 
       {/* ===== PC 전용: 표 밑 설명 텍스트 ===== */}
-      <p className="hidden md:flex items-center justify-center text-slate-500 text-sm mt-2 w-full">
+      <p className="hidden sm:flex items-center justify-center text-slate-500 text-sm mt-2 w-full">
         <MousePointerClick className="w-4 h-4 mr-1.5" />
         시간표 <strong className="text-slate-600 mx-1">클릭</strong>
         <ArrowRight className="w-3.5 h-3.5 mx-1 text-slate-400" />
@@ -2780,15 +2780,15 @@ export default function TeacherPage() {
       </div>{/* end timetable column */}
 
       {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
-      <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4 h-fit">
-        <div className="md:bg-white md:rounded-2xl md:border md:border-slate-200 md:shadow-md flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
+      <div className="w-full sm:w-[260px] md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 sm:order-2 sm:sticky sm:top-4 h-fit">
+        <div className="sm:bg-white sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-md flex flex-col h-fit sm:max-h-[calc(100vh-2rem)]">
           {/* Teacher Picker — 모바일 카드 / PC 패널 내부 바
                미인증 시: relative + min-height → 실버 absolute inset-0으로 꽉 채움
                선생님 선택기는 z-10으로 실버 위에 표시 */}
           <div
-            className={`rounded-xl border shadow-sm mb-2 md:mb-0 md:rounded-t-2xl md:rounded-b-none md:border-none md:shadow-none md:border-b flex-shrink-0 flex flex-col justify-center ${
+            className={`rounded-xl border shadow-sm mb-2 sm:mb-0 sm:rounded-t-2xl sm:rounded-b-none sm:border-none sm:shadow-none sm:border-b flex-shrink-0 flex flex-col justify-center ${
               isCurrentTeacherVerified 
-                ? 'bg-white border-slate-200 md:border-slate-100 p-2 sm:p-2.5 md:p-3' 
+                ? 'bg-white border-slate-200 sm:border-slate-100 p-2 sm:p-2.5 md:p-3' 
                 : 'p-2 sm:p-2.5 md:p-2.5'
             }`}
             style={!isCurrentTeacherVerified ? {
@@ -2810,17 +2810,17 @@ export default function TeacherPage() {
                     type="button"
                     onClick={() => { setTeacherSearchQuery(""); setShowTeacherSelectModal(true); }}
                     style={{ WebkitTapHighlightColor: 'transparent' }}
-                    className="flex items-center gap-1 pl-3 pr-2 py-2 md:pl-2.5 md:pr-1.5 md:py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0 max-w-[160px] md:max-w-[190px]"
+                    className="flex items-center gap-1 pl-3 pr-2 py-2 sm:pl-2.5 sm:pr-1.5 sm:py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0 max-w-[150px] sm:max-w-[190px]"
                   >
                     <span className="truncate text-left min-w-0">
                       {selectedTeacherId
                         ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
                         : "선생님 선택"}
                     </span>
-                    <ChevronsUpDown className="w-4 h-4 md:w-3.5 md:h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
+                    <ChevronsUpDown className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
                   </button>
                 ) : (
-                  <span className="pl-3 pr-2 py-2 md:pl-2.5 md:pr-1.5 md:py-1.5 text-sm font-extrabold text-slate-700 flex items-center truncate flex-1 min-w-0">
+                  <span className="pl-3 pr-2 py-2 sm:pl-2.5 sm:pr-1.5 sm:py-1.5 text-sm font-extrabold text-slate-700 flex items-center truncate flex-1 min-w-0">
                     {teacherName ? `${teacherName} 선생님` : '선생님 선택'}
                   </span>
                 )}
@@ -2829,7 +2829,7 @@ export default function TeacherPage() {
                 {isCurrentTeacherVerified && (
                   <Link href="/teacher/account" className="flex shrink-0">
                     <button type="button" style={{ WebkitTapHighlightColor: 'transparent' }}
-                      className="flex items-center gap-1 px-3 py-2 md:px-2.5 md:py-1.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-bold text-xs sm:text-sm md:text-xs shrink-0 transition-colors border-l border-indigo-200 cursor-pointer"
+                      className="flex items-center gap-1 px-3 py-2 sm:px-2.5 sm:py-1.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-bold text-xs sm:text-sm md:text-xs shrink-0 transition-colors border-l border-indigo-200 cursor-pointer"
                       title="선생님 계정 관리">
                       <User className="w-3.5 h-3.5" /><span>계정</span>
                     </button>
@@ -2840,7 +2840,7 @@ export default function TeacherPage() {
               {/* 학생공지 (모바일 - 인증 시) */}
               {isCurrentTeacherVerified && (
                 <button type="button" onClick={() => {}} style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className="md:hidden ml-auto flex items-center gap-1 px-2.5 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs sm:text-sm shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
+                  className="sm:hidden ml-auto flex items-center gap-1 px-2.5 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs sm:text-sm shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
                   title="학생공지">
                   <Bell className="w-3.5 h-3.5" /><span>학생공지</span>
                 </button>
@@ -2848,8 +2848,8 @@ export default function TeacherPage() {
 
               {/* 미인증 시 우측 묶음: [보기 전용] [로그인] */}
               {!isCurrentTeacherVerified && (
-                <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
-                  <div className="flex items-center gap-1 text-gray-800 bg-black/5 rounded-xl px-2.5 py-2 md:px-2 md:py-1.5 border border-black/5 shrink-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                  <div className="flex items-center gap-1 text-gray-800 bg-black/5 rounded-xl px-2.5 py-2 sm:px-2 sm:py-1.5 border border-black/5 shrink-0">
                     <svg className="w-3.5 h-3.5 shrink-0 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -2870,7 +2870,7 @@ export default function TeacherPage() {
                       type="button"
                       onClick={() => setShowAuthDialog(true)}
                       style={{ WebkitTapHighlightColor: 'transparent' }}
-                      className={`shrink-0 px-3 py-2 md:px-2.5 md:py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-md whitespace-nowrap ${
+                      className={`shrink-0 px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-md whitespace-nowrap ${
                         mobileViewMode === 'homework' ? 'ring-2 ring-red-500 ring-offset-1 shadow-red-200' : ''
                       }`}
                     >
@@ -2888,7 +2888,7 @@ export default function TeacherPage() {
 
 
           {/* ===== 모바일: 과목탭 + 반선택 + 평가목록 — 선생님선택과 분리된 별도 카드 ===== */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden md:bg-transparent md:rounded-none md:border-none md:shadow-none md:overflow-visible flex flex-col">
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden sm:bg-transparent sm:rounded-none sm:border-none sm:shadow-none sm:overflow-visible flex flex-col">
 
           {subjectTabs.length > 1 && (() => {
             const activeIdx = subjectTabs.indexOf(effectiveSubjectFilter);
@@ -2982,7 +2982,7 @@ export default function TeacherPage() {
                   onMouseLeave={handleTabMouseLeave}
                   onMouseUp={handleTabMouseUp}
                   onMouseMove={handleTabMouseMove}
-                  className="flex gap-1 overflow-x-auto px-1 md:px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
+                  className="flex gap-1 overflow-x-auto px-1 sm:px-2 md:px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
                   style={{ scrollbarWidth: 'none' }}
                 >
                   {filteredClassTabs.map(tab => {
@@ -3061,7 +3061,7 @@ export default function TeacherPage() {
 
           {/* Assessment List */}
           <div
-            className="overflow-y-auto px-1 md:px-4 py-2.5 md:max-h-[calc(100vh-200px)]"
+            className="overflow-y-auto px-1 sm:px-3 md:px-4 py-2.5 sm:max-h-[calc(100vh-200px)]"
             style={(() => {
               const activeIdx = subjectTabs.indexOf(effectiveSubjectFilter);
               if (activeIdx < 0) return {};
@@ -3081,7 +3081,7 @@ export default function TeacherPage() {
                 <p className="text-xs font-medium">등록된 수행평가가 없습니다.</p>
               </div>
             ) : (
-              <div className="space-y-0 md:space-y-2">
+              <div className="space-y-0 sm:space-y-1.5 md:space-y-2">
                 {panelAssessments.map(a => {
                   const dateObj = new Date(a.dueDate);
                   const mmdd = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
@@ -3103,7 +3103,7 @@ export default function TeacherPage() {
                   return (
                     <div
                       key={a.id}
-                      className="border-b border-slate-100/80 last:border-b-0 md:border md:border-slate-100 py-2.5 px-1 md:p-3 md:rounded-xl md:bg-slate-50 hover:bg-indigo-50/60 md:hover:border-indigo-200 transition-all duration-150 cursor-pointer"
+                      className="border-b border-slate-100/80 last:border-b-0 sm:border sm:border-slate-100 py-2.5 px-1 sm:p-2.5 md:p-3 sm:rounded-xl sm:bg-slate-50 hover:bg-indigo-50/60 sm:hover:border-indigo-200 transition-all duration-150 cursor-pointer"
                       onClick={() => {
                         if (!requireAuth()) return; // 미인증 시 인증 다이얼로그
                         setSelectedAssessment(a);
@@ -3143,12 +3143,12 @@ export default function TeacherPage() {
                             {a.title}
                           </p>
                           {a.teacher && (
-                            <p className="hidden md:block text-[10px] text-slate-400 mt-0.5">{a.teacher} 선생님</p>
+                            <p className="hidden sm:block text-[10px] text-slate-400 mt-0.5">{a.teacher} 선생님</p>
                           )}
                         </div>
                         <div className="shrink-0 text-right">
                           {/* Mobile: date + thumbs-up 동일선 */}
-                          <div className="md:hidden flex items-center justify-end gap-1.5 whitespace-nowrap">
+                          <div className="sm:hidden flex items-center justify-end gap-1.5 whitespace-nowrap">
                             {helpfulCount > 0 && (
                               <span className="flex items-center gap-0.5 text-[10px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-1.5 py-0.5" title={`땡큐 ${helpfulCount}개`}>
                                 <ThumbsUp className="w-2.5 h-2.5" />
@@ -3159,7 +3159,7 @@ export default function TeacherPage() {
                             <span className="text-[11px] font-semibold text-slate-400">({wd})</span>
                           </div>
                           {/* Desktop: mmdd + thumbs-up 동일선상 */}
-                          <div className="hidden md:block">
+                          <div className="hidden sm:block">
                             <div className="flex items-center justify-end gap-1.5">
                               {helpfulCount > 0 && (
                                 <span className="flex items-center gap-0.5 text-[10px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-1.5 py-0.5" title={`땡큐 ${helpfulCount}개`}>
