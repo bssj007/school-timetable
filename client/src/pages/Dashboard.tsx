@@ -1,5 +1,5 @@
 ﻿
-import { isSamsungBrowser, isIOSSafari as isIOS, isInAppBrowser, isOtherBrowser, isMobileDevice, iosVersion, isIOS26Plus, isIOS15Plus } from "@/lib/browserDetect";
+import { isSamsungBrowser, isIOSSafari as isIOS, isInAppBrowser, isOtherBrowser, isMobileDevice, isChromeBrowser, iosVersion, isIOS26Plus, isIOS15Plus } from "@/lib/browserDetect";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -3168,7 +3168,7 @@ export default function Dashboard() {
                       <span>홈 화면에 추가 (PWA)</span>
                     </button>
                   )
-                ) : settings?.chrome_install_button_visible !== false ? (
+                ) : isChromeBrowser && settings?.chrome_install_button_visible !== false ? (
                   // Chrome / 기타 → 기존 PWA 버튼
                   <Button
                     onClick={handleInstallClick}
