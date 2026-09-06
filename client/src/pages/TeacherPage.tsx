@@ -1784,7 +1784,7 @@ export default function TeacherPage() {
           </div>
 
           {/* ── 우: 네비게이션 버튼 묶음 ── */}
-          <div className="hidden sm:flex sm:w-[260px] md:w-[320px] xl:w-[360px] shrink-0 items-center justify-end gap-1.5 sm:gap-2">
+          <div className="hidden sm:flex shrink-0 items-center justify-end gap-1.5 sm:gap-2" style={{ flex: '35 1 0', minWidth: 240, maxWidth: 400 }}>
             <Button variant="outline" size="sm"
               className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
               onClick={handleReturnToStudentPage}
@@ -1874,7 +1874,7 @@ export default function TeacherPage() {
         </div>
 
         {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
-        <div className="w-full sm:flex-1 sm:max-w-[1000px] min-w-0 flex flex-col order-2 sm:order-1 sm:min-h-0">
+        <div className="w-full min-w-0 flex flex-col order-2 sm:order-1 sm:min-h-0" style={{ flex: '65 1 0', minWidth: 0 }}>
 
         {/* ===== 뷰 모드 선택기 (당일형 / 숙제형 / 달력) ===== */}
         <div className="mb-2 shrink-0">
@@ -2778,7 +2778,7 @@ export default function TeacherPage() {
       </div>{/* end timetable column */}
 
       {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
-      <div className="w-full sm:w-[260px] md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 sm:order-2 sm:sticky sm:top-4 h-fit">
+      <div className="w-full shrink-0 flex flex-col order-3 sm:order-2 sm:sticky sm:top-4 h-fit" style={{ flex: '35 1 0', minWidth: 240, maxWidth: 400 }}>
         <div className="sm:bg-white sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-md flex flex-col h-fit sm:max-h-[calc(100vh-2rem)]">
           {/* Teacher Picker — 모바일 카드 / PC 패널 내부 바
                미인증 시: relative + min-height → 실버 absolute inset-0으로 꽉 채움
