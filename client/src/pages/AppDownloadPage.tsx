@@ -51,11 +51,26 @@ export default function AppDownloadPage() {
       .catch(() => {});
   }, []);
 
-  // Desktop 또는 이미 설치됨, 또는 Android Chrome, 또는 iOS 기타 브라우저(앱스토어 링크 없음) → 메인으로
+  const handlePwaInstall = async () => {
+    const promptEvent = (window as any).__deferredPwaPrompt;
+    if (promptEvent) {
+      try {
+        promptEvent.prompt();
+        const { outcome } = await promptEvent.userChoice;
+        if (outcome === "accepted") {
+          (window as any).__deferredPwaPrompt = null;
+        }
+      } catch { }
+    }
+    setLocation("/");
+  };
+
+  // Desktop 또는 이미 설치됨, 또는 Android Chrome, 또는 iOS 기타 브라우저(앱스토어 링크 없음) → 메인으로 직행
   useEffect(() => {
     if (isDesktop || agent.isInstalledApp) { setLocation("/"); return; }
     if (agent.isAndroid && browserType === "chrome") { setLocation("/"); return; }
-    if (agent.isIOS && !agent.isIOSSafari && settings && !settings.app_store_url) {
+    // iOS 기타 브라우저(Firefox, Edge, Opera, Whale 등 PWA 프롬프트 미지원)는 앱스토어 링크 미등록 시 사이트로 직행
+    if (agent.isIOS && !agent.isIOSSafari && browserType !== "chrome" && settings && !settings.app_store_url) {
       setLocation("/");
       return;
     }
@@ -77,7 +92,7 @@ export default function AppDownloadPage() {
 
     // 1. iOS 환경
     if (agent.isIOS) {
-      // 앱스토어 링크가 등록되어 있으면 iOS의 모든 브라우저(Safari 및 Chrome 등 기타)에서 App Store 다운로드 버튼 표시
+      // 1-1. 앱스토어 링크가 등록되어 있으면 iOS의 모든 브라우저에서 App Store 다운로드 버튼 표시
       if (appStoreUrl && settings?.app_store_url) {
         return (
           <a href={appStoreUrl} target="_blank" rel="noreferrer"
@@ -87,13 +102,23 @@ export default function AppDownloadPage() {
           </a>
         );
       }
-      // Safari인 경우만 홈 화면 추가 가이드 버튼 표시
+      // 1-2. Safari인 경우만 홈 화면 추가 가이드 버튼 표시
       if (agent.isIOSSafari && settings?.safari_install_button_visible !== false) {
         return (
           <button onClick={() => setLocation("/ios-install-guide")}
             className="w-full h-14 bg-black text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg">
             <AppleLogo />
             <span>홈 화면에 추가하기</span>
+          </button>
+        );
+      }
+      // 1-3. iOS Chrome인 경우 PWA 설치화면 허용 (검정 애플 로고 디자인)
+      if (browserType === "chrome" && settings?.chrome_install_button_visible !== false) {
+        return (
+          <button onClick={handlePwaInstall}
+            className="w-full h-14 bg-black text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg transition-transform active:scale-95">
+            <AppleLogo />
+            <span>{appTitle} 앱 다운로드</span>
           </button>
         );
       }

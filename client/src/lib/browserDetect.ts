@@ -38,6 +38,10 @@ export interface AgentInfo {
   isAndroid: boolean;
   /** iOS Mobile Safari 여부 (Chrome/Firefox 등 iOS 기타 브라우저 제외) */
   isIOSSafari: boolean;
+  /** iOS Chrome 여부 (CriOS) */
+  isIOSChrome: boolean;
+  /** iOS 기타 브라우저 여부 (Firefox, Edge, Opera, Whale 등 Safari/Chrome 제외 브라우저) */
+  isIOSOther: boolean;
   /** 브라우저 카테고리 */
   browserKey: BrowserKey;
   /** 인앱브라우저 (카카오톡·네이버·인스타그램 등) */
@@ -75,6 +79,7 @@ function defaultAgent(): AgentInfo {
     isMobile: false, isDesktop: true, desktopOS: null,
     isIPad: false, isIPhone: false,
     isIOS: false, isAndroid: false, isIOSSafari: false,
+    isIOSChrome: false, isIOSOther: false,
     browserKey: "other", isInAppBrowser: false,
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     isInstalledApp: false,
@@ -152,6 +157,8 @@ function detectLayer1(): Partial<AgentInfo> | null {
     isIOS: false,
     isAndroid,
     isIOSSafari: false,
+    isIOSChrome: false,
+    isIOSOther: false,
     browserKey,
     // iOS 버전: Chromium 환경이므로 항상 0
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
@@ -206,11 +213,17 @@ function detectLayer2(): AgentInfo {
   } else if (/Firefox|FxiOS/i.test(ua)) {
     // Firefox
     browserKey = "other";
+  } else if (/DuckDuckGo\//i.test(ua)) {
+    // DuckDuckGo
+    browserKey = "other";
+  } else if (/Brave\//i.test(ua)) {
+    // Brave
+    browserKey = "other";
   } else if (/CriOS/i.test(ua)) {
     // iOS Chrome
     browserKey = "chrome";
   } else if (isIOS) {
-    // iOS 환경: 위 서드파티(Chrome, Firefox, Edge, Opera 등)가 아닌 경우만 실제 Safari
+    // iOS 환경: 위 서드파티(Chrome, Firefox, Edge, Opera, Whale, DuckDuckGo, Brave 등)가 아닌 경우만 실제 Safari
     if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) {
       browserKey = "safari";
       isIOSSafari = !isInApp;
@@ -239,9 +252,13 @@ function detectLayer2(): AgentInfo {
   const isIOS15Plus  = iosVersion >= 15;
   const isIOS13Plus  = iosVersion >= 13;
 
+  const isIOSChrome = isIOS && browserKey === "chrome";
+  const isIOSOther  = isIOS && !isIOSSafari && !isIOSChrome;
+
   return {
     isMobile: mobile, isDesktop: !mobile, desktopOS,
     isIPad, isIPhone, isIOS, isAndroid, isIOSSafari,
+    isIOSChrome, isIOSOther,
     browserKey, isInAppBrowser: isInApp,
     iosVersion, isIOS26Plus, isIOS15Plus, isIOS13Plus,
     isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
@@ -270,6 +287,7 @@ function detectLayer3(): AgentInfo {
   return {
     isMobile: mobile, isDesktop: !mobile, desktopOS: null,
     isIPad, isIPhone: false, isIOS, isAndroid, isIOSSafari: false,
+    isIOSChrome: false, isIOSOther: false,
     browserKey: "other", isInAppBrowser: false,
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
@@ -355,6 +373,10 @@ export const browserKey: BrowserKey  = agent.browserKey;
 export const isSamsungBrowser        = agent.browserKey === "samsung";
 /** iOS Mobile Safari 여부 (Chrome/Firefox 등 iOS 기타 브라우저 제외) */
 export const isIOSSafari             = agent.isIOSSafari;
+/** iOS Chrome 여부 (CriOS) */
+export const isIOSChrome             = agent.isIOSChrome;
+/** iOS 기타 브라우저 여부 (Safari/Chrome 제외) */
+export const isIOSOther              = agent.isIOSOther;
 /** iOS/iPadOS 기기 여부 */
 export const isIOS                   = agent.isIOS;
 /** Android 기기 여부 */
@@ -427,7 +449,7 @@ export function isPwaInstalled(): boolean {
  *   4. 모바일 기기일 것 (데스크톱 제외)
  *   5. 다운로드 대상 브라우저:
  *      - Android: Samsung Internet 및 Opera 등 기타 브라우저 (Google Chrome 제외)
- *      - iOS: Safari만 표시 (Chrome 등 iOS 기타 브라우저는 Android처럼 PWA 가이드 없이 바로 진입)
+ *      - iOS: Safari 및 iOS Chrome 표시 (기타 브라우저는 PWA 프롬프트 미지원으로 사이트 직행)
  */
 export function shouldShowDownloadPage(): boolean {
   if (typeof window === "undefined") return false;
@@ -438,8 +460,9 @@ export function shouldShowDownloadPage(): boolean {
     return false;
   }
   if (agent.isIOS) {
-    // iOS에서는 Safari만 다운로드 유도 페이지 표시 (Chrome 등 기타 브라우저는 바로 진입)
-    return agent.isIOSSafari;
+    // iOS에서는 Safari와 Chrome에 다운로드 유도 페이지 표시
+    // 기타 브라우저는 PWA 프롬프트를 띄울 수 없으므로 유도 페이지 없이 사이트 직행
+    return agent.isIOSSafari || agent.isIOSChrome;
   }
   if (agent.isAndroid) {
     // Android에서는 Samsung 및 Opera 등 기타 브라우저에 표시 (Chrome 제외)

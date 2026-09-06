@@ -3218,14 +3218,43 @@ export default function Dashboard() {
                 );
               }
 
-              // 2-2. iOS 기타 브라우저 (Chrome, Firefox, Edge, Opera 등 Safari가 아닌 모든 iOS 브라우저)
-              const isAllowed = isChromeBrowser
-                ? settings?.chrome_install_button_visible !== false
-                : settings?.other_install_button_visible !== false;
-              if (!isAllowed) return null;
+              // 2-2. iOS Chrome (PWA 설치 프롬프트 허용)
+              if (isChromeBrowser) {
+                if (settings?.chrome_install_button_visible === false) return null;
+                if (appUrl) {
+                  return (
+                    <a
+                      href={appUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full h-14 bg-black hover:bg-gray-900 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+                    >
+                      <AppleLogo />
+                      <span>App Store에서 설치</span>
+                    </a>
+                  );
+                }
+                return (
+                  <Button
+                    onClick={handleInstallClick}
+                    disabled={isInstalling}
+                    className="w-full h-14 bg-black hover:bg-gray-900 active:bg-gray-800 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
+                  >
+                    {isInstalling ? (
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                    ) : (
+                      <AppleLogo />
+                    )}
+                    <span>{isInstalling ? '설치 중...' : `${settings?.pwa_app_title || '성지수행'} 앱 다운로드`}</span>
+                  </Button>
+                );
+              }
 
-              // 관리페이지에 앱스토어 링크가 등록되어 있다면 앱스토어에서 설치 버튼 표시
+              // 2-3. iOS 기타 브라우저 (Firefox, Edge, Opera, Whale 등: PWA 프롬프트 미지원)
+              // PWA설치 버튼을 누른다고 프롬프트가 뜨지 않으므로 PWA 미지원 경우 사이트 내 버튼도 표시하지 않는다.
+              // (단, 관리페이지에 앱스토어 링크가 등록되어 있다면 앱스토어에서 설치 버튼 표시)
               if (appUrl) {
+                if (settings?.other_install_button_visible === false) return null;
                 return (
                   <a
                     href={appUrl}
@@ -3239,21 +3268,8 @@ export default function Dashboard() {
                 );
               }
 
-              // 앱스토어 링크 미등록 시: 마치 Android처럼 PWA 설명 없이 PWA 다운로드 버튼 표시 (검정색 애플로고 디자인)
-              return (
-                <Button
-                  onClick={handleInstallClick}
-                  disabled={isInstalling}
-                  className="w-full h-14 bg-black hover:bg-gray-900 active:bg-gray-800 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
-                >
-                  {isInstalling ? (
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  ) : (
-                    <AppleLogo />
-                  )}
-                  <span>{isInstalling ? '설치 중...' : `${settings?.pwa_app_title || '성지수행'} 앱 다운로드`}</span>
-                </Button>
-              );
+              // 앱스토어 링크 미등록 시 PWA 미지원이므로 사이트 내 버튼 미표시
+              return null;
             }
 
             return null;

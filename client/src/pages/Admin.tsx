@@ -10321,6 +10321,8 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                             { label: "isAndroid",      value: String(agent.isAndroid), highlight: agent.isAndroid },
                             { label: "isIOS",          value: String(agent.isIOS),     highlight: agent.isIOS },
                             { label: "isIOSSafari",    value: String(agent.isIOSSafari), highlight: agent.isIOSSafari },
+                            { label: "isIOSChrome",    value: String(agent.isIOSChrome), highlight: agent.isIOSChrome },
+                            { label: "isIOSOther",     value: String(agent.isIOSOther), highlight: agent.isIOSOther },
                             { label: "desktopOS",      value: agent.desktopOS ?? "(null — 모바일)" },
                             { label: "isIPad",         value: String(agent.isIPad) },
                             { label: "isIPhone",       value: String(agent.isIPhone) },
@@ -10536,8 +10538,8 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                     <CardTitle className="text-base">앱스토어 링크 설정</CardTitle>
                     <CardDescription>
                         Samsung Internet 및 Opera 등 Android 기타 브라우저에는 <strong>Play Store</strong> 버튼을,
-                        iOS(Safari 및 Chrome 등 기타 브라우저)에는 <strong>App Store</strong> 버튼을 표시합니다.
-                        비워두면 해당 환경에서 기존 PWA 방식을 사용합니다.
+                        iOS(Safari 및 Chrome)에는 <strong>App Store</strong> 링크 등록 시 앱스토어 버튼(미등록 시 PWA)을 표시합니다.
+                        Firefox·Edge·Whale 등 기타 iOS 브라우저는 PWA 프롬프트 미지원으로 앱스토어 링크 등록 시에만 설치 버튼이 표시됩니다.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
