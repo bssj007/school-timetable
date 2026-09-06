@@ -46,6 +46,8 @@ export interface AgentInfo {
   browserKey: BrowserKey;
   /** 인앱브라우저 (카카오톡·네이버·인스타그램 등) */
   isInAppBrowser: boolean;
+  /** 카카오톡 인앱 브라우저 여부 */
+  isKakaoTalk: boolean;
   /**
    * iOS / iPadOS / Safari 메이저 버전
    * - iOS 26+부터 Apple이 UA OS 버전을 동결(freeze) → "CPU iPhone OS 18_x" 처럼 표시됨
@@ -80,7 +82,7 @@ function defaultAgent(): AgentInfo {
     isIPad: false, isIPhone: false,
     isIOS: false, isAndroid: false, isIOSSafari: false,
     isIOSChrome: false, isIOSOther: false,
-    browserKey: "other", isInAppBrowser: false,
+    browserKey: "other", isInAppBrowser: false, isKakaoTalk: false,
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     isInstalledApp: false,
     detectionLayer: 3,
@@ -160,6 +162,7 @@ function detectLayer1(): Partial<AgentInfo> | null {
     isIOSChrome: false,
     isIOSOther: false,
     browserKey,
+    isKakaoTalk: /KAKAOTALK/i.test(rawUA),
     // iOS 버전: Chromium 환경이므로 항상 0
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     detectionLayer: 1,
@@ -189,7 +192,8 @@ function detectLayer2(): AgentInfo {
   const isIOS    = isIPad || isIPhone;
 
   // 인앱 브라우저 (SNS/메신저 내부 WebView)
-  const isInApp = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(ua);
+  const isKakaoTalk = /KAKAOTALK/i.test(ua);
+  const isInApp = isKakaoTalk || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(ua);
 
   // 모바일 여부: iPad + iPhone + Android/Mobi 계열
   const mobile = isIOS || /Android|Mobi/i.test(ua);
@@ -259,7 +263,7 @@ function detectLayer2(): AgentInfo {
     isMobile: mobile, isDesktop: !mobile, desktopOS,
     isIPad, isIPhone, isIOS, isAndroid, isIOSSafari,
     isIOSChrome, isIOSOther,
-    browserKey, isInAppBrowser: isInApp,
+    browserKey, isInAppBrowser: isInApp, isKakaoTalk,
     iosVersion, isIOS26Plus, isIOS15Plus, isIOS13Plus,
     isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 2,
@@ -288,7 +292,7 @@ function detectLayer3(): AgentInfo {
     isMobile: mobile, isDesktop: !mobile, desktopOS: null,
     isIPad, isIPhone: false, isIOS, isAndroid, isIOSSafari: false,
     isIOSChrome: false, isIOSOther: false,
-    browserKey: "other", isInAppBrowser: false,
+    browserKey: "other", isInAppBrowser: false, isKakaoTalk: false,
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 3,
@@ -315,7 +319,8 @@ function detectLayer3(): AgentInfo {
 export function detect(): AgentInfo {
   if (typeof window === "undefined") return defaultAgent();
 
-  const inApp = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent);
+  const isKakaoTalk = /KAKAOTALK/i.test(navigator.userAgent);
+  const inApp = isKakaoTalk || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent);
 
   // PWA standalone / Native 앱 실행 여부 (브라우저 재접속 시는 false)
   const isInstalledApp =
@@ -339,6 +344,7 @@ export function detect(): AgentInfo {
       isIOSOther:     false,
       browserKey:     ch.browserKey!,
       isInAppBrowser: inApp,
+      isKakaoTalk,
       iosVersion:     0,
       isIOS26Plus:    false,
       isIOS15Plus:    false,
@@ -351,11 +357,11 @@ export function detect(): AgentInfo {
   // Layer 2: UA 파싱 (Safari / Firefox / 기타)
   const ua2 = detectLayer2();
   if (ua2.browserKey !== "other" || ua2.isIPad || ua2.isIPhone || ua2.desktopOS !== null) {
-    return { ...ua2, isInAppBrowser: inApp, isInstalledApp };
+    return { ...ua2, isInAppBrowser: inApp, isKakaoTalk, isInstalledApp };
   }
 
   // Layer 3: 기능 감지 fallback
-  return { ...detectLayer3(), isInAppBrowser: inApp, isInstalledApp };
+  return { ...detectLayer3(), isInAppBrowser: inApp, isKakaoTalk, isInstalledApp };
 }
 
 // ── 모듈 레벨 싱글턴 (모듈 로드 시 1회만 실행) ─────────────────────────────────
@@ -389,6 +395,8 @@ export const isChromeBrowser         = agent.browserKey === "chrome";
 export const isOtherBrowser          = agent.browserKey === "other";
 /** @deprecated agent.isInAppBrowser 사용 */
 export const isInAppBrowser          = agent.isInAppBrowser;
+/** 카카오톡 인앱 브라우저 여부 */
+export const isKakaoTalk             = agent.isKakaoTalk;
 /** @deprecated agent.isIPad 사용 */
 export const isIPad                  = agent.isIPad;
 /** @deprecated agent.isIPhone 사용 */
@@ -462,12 +470,26 @@ export function shouldShowDownloadPage(settings?: any): boolean {
   const isDismissed =
     typeof localStorage !== "undefined" &&
     localStorage.getItem("download_page_dismissed") === "1";
-  if (agent.isInAppBrowser || agent.isInstalledApp || isDismissed || !agent.isMobile) {
+  if (agent.isInstalledApp || isDismissed || !agent.isMobile) {
     return false;
   }
 
   const hasAppStore = Boolean(settings?.app_store_url && settings.app_store_url.trim());
   const hasPlayStore = Boolean(settings?.play_store_url && settings.play_store_url.trim());
+
+  // 카카오톡 브라우저:
+  // - Android 카카오: PlayStore 링크가 있을 때만 유도 페이지 표시
+  // - iOS 카카오: AppStore 링크가 있을 때만 유도 페이지 표시
+  if (agent.isKakaoTalk) {
+    if (agent.isAndroid) return hasPlayStore;
+    if (agent.isIOS) return hasAppStore;
+    return false;
+  }
+
+  // 그 외 일반 인앱 브라우저(네이버, 인스타그램 등)는 유도 페이지 미표시
+  if (agent.isInAppBrowser) {
+    return false;
+  }
 
   if (agent.isIOS) {
     // 1. 앱스토어 링크가 있으면 브라우저에 관계없이 무조건 표시

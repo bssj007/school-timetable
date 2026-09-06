@@ -9,6 +9,7 @@ const isIOSSafari      = agent.isIOSSafari;
 const isChromeBrowser  = agent.browserKey === "chrome";
 const isOtherBrowser   = agent.browserKey === "other";
 const isInAppBrowser   = agent.isInAppBrowser;
+const isKakaoTalk      = agent.isKakaoTalk;
 const isMobileDevice   = agent.isMobile;
 const { iosVersion, isIOS26Plus, isIOS15Plus } = agent;
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -3126,7 +3127,7 @@ export default function Dashboard() {
       </Dialog >
 
       {/* 모바일 전용 앱 다운로드 버튼 (기기/브라우저 환경별 분기) */}
-      {!isInAppBrowser && !agent.isInstalledApp && isMobileDevice && settings?.pwa_install_button_visible !== false && (
+      {(!isInAppBrowser || (isKakaoTalk && ((isAndroid && !!settings?.play_store_url) || (isIOS && !!settings?.app_store_url)))) && !agent.isInstalledApp && isMobileDevice && settings?.pwa_install_button_visible !== false && (
         <div className="mt-6 mb-2 space-y-2">
           {(() => {
             const playUrl = settings?.play_store_url && !/^https?:\/\//i.test(settings.play_store_url)
@@ -3136,8 +3137,8 @@ export default function Dashboard() {
 
             // ── 1. Android 환경 ───────────────────────────────────────────
             if (isAndroid) {
-              // 1-1. Chrome / Google 브라우저인 경우: 항상 PWA 설치 버튼
-              if (isChromeBrowser) {
+              // 1-1. Chrome / Google 브라우저인 경우 (카카오톡 제외): 항상 PWA 설치 버튼
+              if (isChromeBrowser && !isKakaoTalk) {
                 if (settings?.chrome_install_button_visible === false) return null;
                 return (
                   <Button
@@ -3203,6 +3204,11 @@ export default function Dashboard() {
               }
 
               // 2-2. 앱스토어 링크가 없을 때:
+              // 카카오톡 iOS는 앱스토어 링크 미등록 시 버튼 미표시
+              if (isKakaoTalk) {
+                return null;
+              }
+
               // Safari: PWA 설치 가이드로 이동
               if (isIOSSafari) {
                 if (settings?.safari_install_button_visible === false) return null;
