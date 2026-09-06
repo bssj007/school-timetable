@@ -18,11 +18,13 @@ export interface IPProfile {
     recentUserAgents: string[];
     isStandalone?: boolean;
     studentName?: string | null;      // 복합 식별자 — 이름 부분
+    teacherName?: string | null;      // 선생님 이름 (sj_teacher_name 쿠키)
     grade?: string | null;
     classNum?: string | null;
     studentNumber?: string | null;
     hasElectives?: boolean;
     electives?: Record<string, any> | null;
+    instructionDismissed?: boolean;
 
     // --- Detailed History (Empty in List View, Populated in Detail View) ---
     assessments: { id: number, subject: string, title: string, createdAt: string, grade: number, classNum: number }[];

@@ -44,6 +44,7 @@ export const onRequest = async (context: any) => {
                     ip_profiles.deviceType,
                     ip_profiles.os,
                     ip_profiles.isInApp,
+                    ip_profiles.teacherName,
                     student_profiles.name as profileName,
                     student_profiles.grade as profileGrade,
                     student_profiles.classNum as profileClassNum,
@@ -99,6 +100,7 @@ export const onRequest = async (context: any) => {
                         "ALTER TABLE ip_profiles ADD COLUMN deviceType TEXT",
                         "ALTER TABLE ip_profiles ADD COLUMN os TEXT",
                         "ALTER TABLE ip_profiles ADD COLUMN isInApp INTEGER DEFAULT 0",
+                        "ALTER TABLE ip_profiles ADD COLUMN teacherName TEXT",
                         "ALTER TABLE student_profiles ADD COLUMN name TEXT NOT NULL DEFAULT ''",
                     ];
                     for (const sql of alters) {
@@ -158,6 +160,7 @@ export const onRequest = async (context: any) => {
                     deviceType: p.deviceType || null,
                     os: p.os || null,
                     isInApp: p.isInApp === 1,
+                    teacherName: p.teacherName || null,
                     studentName: p.profileName || null,
                     grade: p.profileGrade || null,
                     classNum: p.profileClassNum || null,

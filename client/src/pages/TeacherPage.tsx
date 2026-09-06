@@ -1722,22 +1722,22 @@ export default function TeacherPage() {
           <div className="flex-1 sm:max-w-[1000px] min-w-0 flex items-center gap-2 sm:gap-3">
 
             {/* 뱃지형 제목 */}
-            <div className="flex flex-col min-w-0">
+            <div className="flex flex-col min-w-0 overflow-hidden">
               <h1 className="font-extrabold text-gray-900 leading-tight truncate" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
                 <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">
                   교사용 수행평가 시스템
                 </span>
               </h1>
-              {/* 선생님 이름 & 인증 상태 */}
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-xs text-slate-400 font-medium">
+              {/* 선생님 이름 & 인증 상태 — 공간 부족 시 overflow clip (줄바꿈 없이 숨김) */}
+              <div className="flex items-center gap-1.5 mt-0.5 overflow-hidden min-w-0">
+                <span className="text-xs text-slate-400 font-medium truncate min-w-0">
                   {teacherName
                     ? <><span className="text-slate-700 font-bold">{teacherName}</span> 선생님</>
                     : <span className="text-slate-400">선생님을 선택하세요</span>}
                 </span>
                 {teacherName && isCurrentTeacherVerified && (
-                  <Link href="/teacher/account">
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 leading-tight hover:bg-emerald-100 transition-colors cursor-pointer">✓ 인증됨 · 계정</span>
+                  <Link href="/teacher/account" className="shrink-0">
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 leading-tight hover:bg-emerald-100 transition-colors cursor-pointer whitespace-nowrap">✓ 인증됨 · 계정</span>
                   </Link>
                 )}
               </div>

@@ -7351,7 +7351,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     // --- Group known users by (name + student ID) = composite identity ---
                                     type UserGroup = {
                                         key: string;
-                                        studentName: string | null;   // 복합 식별자의 이름 부분
+                                        studentName: string | null;
+                                        teacherName: string | null;
                                         grade: number | null;
                                         classNum: number | null;
                                         studentNumber: number | null;
@@ -7394,10 +7395,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                             if (user.isBlocked) existing.isBlocked = true;
                                             if (user.hasElectives) existing.hasElectives = true;
                                             if (user.instructionDismissed) existing.instructionDismissed = true;
+                                            if (!existing.teacherName && (user as any).teacherName) existing.teacherName = (user as any).teacherName;
                                         } else {
                                             groupMap.set(key, {
                                                 key,
                                                 studentName: user.studentName ?? null,
+                                                teacherName: (user as any).teacherName ?? null,
                                                 grade: user.grade ?? null,
                                                 classNum: user.classNum ?? null,
                                                 studentNumber: user.studentNumber ?? null,
@@ -7472,6 +7475,24 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         });
                                     };
 
+                                    // ── 앱 사용 여부 배지 헬퍼 ──────────────────────────────
+                                    // isStandalone = PWA standalone / TWA/WebView 실행 여부
+                                    // os = 플랫폼 (ios/android/windows/macos/linux)
+                                    const renderAppBadge = (isStandalone: boolean | undefined, os: string | null | undefined) => {
+                                        if (!isStandalone) return <span className="text-gray-300 text-xs">-</span>;
+                                        const platform =
+                                            os === 'ios'     ? { label: 'iOS',     cls: 'bg-slate-800 text-white border-slate-700' } :
+                                            os === 'android' ? { label: 'Android', cls: 'bg-green-600 text-white border-green-700' } :
+                                            (os === 'windows' || os === 'macos' || os === 'linux')
+                                                             ? { label: 'PC',      cls: 'bg-blue-600 text-white border-blue-700' } :
+                                                               { label: 'PWA',     cls: 'bg-purple-600 text-white border-purple-700' };
+                                        return (
+                                            <Badge variant="secondary" className={`font-mono text-xs px-1.5 py-0 ${platform.cls}`}>
+                                                PWA·{platform.label}
+                                            </Badge>
+                                        );
+                                    };
+
                                     const IpSubRow = ({ user }: { user: IPProfile }) => (
                                         <TableRow className="bg-slate-50/80 text-xs">
                                             <TableCell className="pl-8 font-mono text-slate-500">
@@ -7483,7 +7504,25 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     ↳ {user.ip}
                                                 </Button>
                                             </TableCell>
-                                            <TableCell />
+                                            <TableCell>
+                                                {/* 선생님 이름 (해당 시) */}
+                                                {(user as any).teacherName ? (
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <div className="flex items-center gap-1">
+                                                            <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 px-1.5 py-0 h-4">
+                                                                선생님
+                                                            </Badge>
+                                                            <span className="font-bold text-sm text-slate-800">{(user as any).teacherName}</span>
+                                                        </div>
+                                                        {user.grade && user.classNum && (
+                                                            <div className="flex items-center gap-1">
+                                                                <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-500 border-slate-200 px-1.5 py-0 h-4">학생</Badge>
+                                                                <span className="text-xs text-slate-600">{user.studentName || '이름 없음'} · {user.grade}학년 {user.classNum}반</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : null}
+                                            </TableCell>
                                             <TableCell>
                                                 {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
                                                     user.kakaoAccounts.map((k, i) => (
@@ -7519,9 +7558,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     : <span className="text-gray-300">-</span>}
                                             </TableCell>
                                             <TableCell>
-                                                {user.isStandalone
-                                                    ? <Badge variant="secondary" className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200">설치됨</Badge>
-                                                    : <span className="text-gray-300">-</span>}
+                                                {renderAppBadge(user.isStandalone, (user as any).os)}
                                             </TableCell>
                                             <TableCell className="text-slate-400">
                                                 {user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}
@@ -7583,6 +7620,13 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     <TableCell>
                                                         {group.grade && group.classNum ? (
                                                             <div className="flex flex-col gap-0.5">
+                                                                {/* 선생님 이름 (동시 접속 시) */}
+                                                                {group.teacherName && (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 px-1.5 py-0 h-4">선생님</Badge>
+                                                                        <span className="font-bold text-sm text-amber-800">{group.teacherName}</span>
+                                                                    </div>
+                                                                )}
                                                                 {/* 이름 */}
                                                                 <div className="flex items-center gap-1.5">
                                                                     <span className="font-bold text-sm text-slate-800">
@@ -7599,6 +7643,14 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                     <Badge variant="outline" className="font-mono text-green-700 border-green-200 bg-green-50 text-xs">
                                                                         {group.grade}학년 {group.classNum}반{group.studentNumber ? ` ${group.studentNumber}번` : ''}
                                                                     </Badge>
+                                                                </div>
+                                                            </div>
+                                                        ) : group.teacherName ? (
+                                                            // 선생님만 있는 경우 (학생 정보 없음)
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <div className="flex items-center gap-1">
+                                                                    <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 px-1.5 py-0 h-4">선생님</Badge>
+                                                                    <span className="font-bold text-sm text-slate-800">{group.teacherName}</span>
                                                                 </div>
                                                             </div>
                                                         ) : <span className="text-gray-300 text-xs">-</span>}
@@ -7640,9 +7692,13 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         ) : <span className="text-gray-400 text-xs">-</span>}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {group.ips.some(ip => ip.isStandalone) ? (
-                                                            <Badge variant="secondary" className="font-mono bg-purple-50 text-purple-700 border-purple-200">설치됨</Badge>
-                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                        {(() => {
+                                                            const standalonePeer = group.ips.find(ip => ip.isStandalone);
+                                                            return renderAppBadge(
+                                                                !!standalonePeer,
+                                                                standalonePeer ? (standalonePeer as any).os : null
+                                                            );
+                                                        })()}
                                                     </TableCell>
                                                     <TableCell>
                                                         {group.lastAccess ? new Date(group.lastAccess + 'Z').toLocaleString() : '-'}
@@ -7814,9 +7870,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                                 ) : <span className="text-gray-400 text-xs">-</span>}
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                {user.isStandalone ? (
-                                                                                    <Badge variant="secondary" className="font-mono bg-purple-50 text-purple-700 border-purple-200">설치됨</Badge>
-                                                                                ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                                {renderAppBadge(user.isStandalone, (user as any).os)}
                                                                             </TableCell>
                                                                             <TableCell>{user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}</TableCell>
                                                                             <TableCell>
