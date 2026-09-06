@@ -2350,7 +2350,7 @@ export default function TeacherPage() {
                       key={dateStr}
                       data-date={dateStr}
                       className={[
-                        'h-11 flex flex-col items-center justify-center text-[13px] font-bold transition-colors cursor-pointer',
+                        'h-11 flex flex-col items-center justify-center text-[13px] font-bold transition-colors cursor-pointer relative z-10',
                         isRangeStart || isRangeEnd     ? 'bg-indigo-500 text-white rounded-lg' : '',
                         inRange && !isRangeStart && !isRangeEnd ? 'bg-indigo-100 text-indigo-700' : '',
                         !inRange && !isRangeStart && !isRangeEnd && isToday  ? 'ring-2 ring-emerald-500 text-emerald-700 bg-emerald-50 rounded-lg' : '',
@@ -2379,13 +2379,13 @@ export default function TeacherPage() {
                   const numRows = Math.ceil((startDow + totalDays) / 7);
                   const DOW_H = 32;  // 요일 헤더 높이 (py-2 + text-[11px])
                   const CELL_H = 44; // h-11
-                  const BAR_H = 14;  // 바 높이
-                  const BAR_TOP_OFFSET = CELL_H * 0.62; // 날짜숫자 아래 (점 위치)
+                  const BAR_H = 36;  // 바 높이 (날짜 숫자를 아우르도록 확장)
+                  const BAR_TOP_OFFSET = 4; // 날짜 숫자 위/아래를 균일하게 감싸도록 수직 중앙 배치 (44 - 36) / 2
                   const BAR_COLOR = '#ec4899'; // pink-500
 
                   const bars: React.ReactNode[] = [];
 
-                  hwAssessments.forEach((a, aIdx) => {
+                  hwAssessments.forEach((a) => {
                     // 이 달과 겹치는 기간 계산
                     const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
                     const monthEnd   = `${year}-${String(month + 1).padStart(2, '0')}-${String(totalDays).padStart(2, '0')}`;
@@ -2405,7 +2405,6 @@ export default function TeacherPage() {
                     // 행(주)별로 분할
                     const startRow = Math.floor(startIdx / 7);
                     const endRow   = Math.floor(endIdx   / 7);
-                    const verticalLayer = aIdx % 3; // 겹침 방지용 수직 레이어
 
                     for (let row = startRow; row <= endRow; row++) {
                       const rowStartCol = row === startRow ? (startIdx % 7) : 0;
@@ -2418,7 +2417,7 @@ export default function TeacherPage() {
 
                       const leftPct  = (rowStartCol / 7) * 100;
                       const rightPct = ((6 - rowEndCol) / 7) * 100;
-                      const topPx = DOW_H + row * CELL_H + BAR_TOP_OFFSET + verticalLayer * (BAR_H + 2);
+                      const topPx = DOW_H + row * CELL_H + BAR_TOP_OFFSET;
 
                       const borderRadius = [
                         isActualStart && isFirstRow ? '999px' : '0',
@@ -2430,19 +2429,18 @@ export default function TeacherPage() {
                       bars.push(
                         <div
                           key={`hw-bar-${a.id}-row${row}`}
-                          className="absolute pointer-events-none"
+                          className="absolute pointer-events-none z-[5]"
                           style={{
                             top: topPx,
                             left: `calc(${leftPct}% + ${isActualStart && isFirstRow ? 4 : 0}px)`,
                             right: `calc(${rightPct}% + ${isActualEnd && isLastRow ? 4 : 0}px)`,
                             height: BAR_H,
-                            border: `2px solid ${BAR_COLOR}`,
-                            borderRadius,
-                            // 안이 빈 바이므로 배경 투명
-                            background: 'transparent',
-                            // 시작/끝이 아닌 쪽 테두리 제거
+                            background: 'rgba(236, 72, 153, 0.12)',
+                            borderTop: `2px solid ${BAR_COLOR}`,
+                            borderBottom: `2px solid ${BAR_COLOR}`,
                             borderLeft:  isActualStart && isFirstRow ? `2px solid ${BAR_COLOR}` : 'none',
                             borderRight: isActualEnd   && isLastRow  ? `2px solid ${BAR_COLOR}` : 'none',
+                            borderRadius,
                           }}
                         />
                       );

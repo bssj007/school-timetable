@@ -10,7 +10,6 @@ import { useUserConfig } from "@/contexts/UserConfigContext";
 
 // ── detect() 결과 직접 참조 ──────────────────────────────────────────────────
 const isInAppBrowser  = agent.isInAppBrowser;
-const isKakaoTalk      = agent.isKakaoTalk;
 const isSamsungBrowser = agent.browserKey === "samsung";
 const isIOSSafari     = agent.browserKey === "safari";
 const isOtherBrowser  = agent.browserKey === "other";
@@ -146,13 +145,11 @@ export default function AppDownloadPage() {
     if (agent.isIOS) {
       // 1-1. 앱스토어 링크가 등록되어 있으면 iOS의 모든 브라우저에서 App Store 다운로드 버튼 표시
       if (appStoreUrl && settings?.app_store_url) {
-        const isHidden = (agent.isKakaoTalk || browserType === "kakao")
-          ? settings?.other_install_button_visible === false
-          : agent.isIOSSafari
-            ? settings?.safari_install_button_visible === false
-            : browserType === "chrome"
-              ? settings?.chrome_install_button_visible === false
-              : settings?.other_install_button_visible === false;
+        const isHidden = agent.isIOSSafari
+          ? settings?.safari_install_button_visible === false
+          : browserType === "chrome"
+            ? settings?.chrome_install_button_visible === false
+            : settings?.other_install_button_visible === false;
         if (isHidden) return null;
 
         return (
@@ -163,8 +160,6 @@ export default function AppDownloadPage() {
           </a>
         );
       }
-      // 카카오톡 iOS는 앱스토어 링크 미등록 시 버튼 미표시
-      if (agent.isKakaoTalk || browserType === "kakao") return null;
 
       // 1-2. Safari인 경우 Safari 전용 PWA 가이드 버튼 표시
       if (agent.isIOSSafari && settings?.safari_install_button_visible !== false) {
@@ -191,21 +186,7 @@ export default function AppDownloadPage() {
 
     // 2. Android 환경
     if (agent.isAndroid) {
-      // 2-1. 카카오톡 Android: Play Store 링크가 등록되어 있을 때만 버튼 표시
-      if (agent.isKakaoTalk || browserType === "kakao") {
-        if (playStoreUrl && settings?.play_store_url && settings?.other_install_button_visible !== false) {
-          return (
-            <a href={playStoreUrl} target="_blank" rel="noreferrer"
-              className="w-full h-14 bg-[#3DDC84] hover:bg-[#35c073] text-black font-bold text-base rounded-2xl flex items-center justify-center gap-3 no-underline active:opacity-80 shadow-lg transition-transform active:scale-95">
-              <PlayStoreLogo />
-              <span>Google Play에서 다운로드</span>
-            </a>
-          );
-        }
-        return null;
-      }
-
-      // 2-2. Chrome / Google 브라우저인 경우: 항상 PWA 설치 버튼 표시
+      // 2-1. Chrome / Google 브라우저인 경우: 항상 PWA 설치 버튼 표시
       if (browserType === "chrome") {
         if (settings?.chrome_install_button_visible === false) return null;
         return (
@@ -217,7 +198,7 @@ export default function AppDownloadPage() {
         );
       }
 
-      // 2-2. 그 외 모든 Android 브라우저: Play Store 링크가 등록되어 있을 때만 버튼 표시
+      // 2-2. 그 외 모든 Android 브라우저 (Samsung, 카카오 포함 기타 브라우저): Play Store 링크가 등록되어 있을 때만 버튼 표시
       if (playStoreUrl && settings?.play_store_url) {
         const isSamsung = browserType === "samsung";
         const isHidden = isSamsung ? settings?.samsung_install_button_visible === false : settings?.other_install_button_visible === false;

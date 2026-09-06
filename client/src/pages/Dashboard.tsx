@@ -10,7 +10,6 @@ const isChromeBrowser  = agent.browserKey === "chrome";
 const isOtherBrowser   = agent.browserKey === "other";
 const isInAppBrowser   = agent.isInAppBrowser;
 const isKakaoTalk      = agent.isKakaoTalk;
-const isKakaoBrowser   = agent.browserKey === "kakao" || agent.isKakaoTalk;
 const isMobileDevice   = agent.isMobile;
 const { iosVersion, isIOS26Plus, isIOS15Plus } = agent;
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -3128,7 +3127,7 @@ export default function Dashboard() {
       </Dialog >
 
       {/* 모바일 전용 앱 다운로드 버튼 (기기/브라우저 환경별 분기) */}
-      {(!isInAppBrowser || (isKakaoBrowser && ((isAndroid && !!settings?.play_store_url) || (isIOS && !!settings?.app_store_url)))) && !agent.isInstalledApp && isMobileDevice && settings?.pwa_install_button_visible !== false && (
+      {(!isInAppBrowser || isKakaoTalk) && !agent.isInstalledApp && isMobileDevice && settings?.pwa_install_button_visible !== false && (
         <div className="mt-6 mb-2 space-y-2">
           {(() => {
             const playUrl = settings?.play_store_url && !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(settings.play_store_url)
@@ -3138,8 +3137,8 @@ export default function Dashboard() {
 
             // ── 1. Android 환경 ───────────────────────────────────────────
             if (isAndroid) {
-              // 1-1. Chrome / Google 브라우저인 경우 (카카오톡 제외): 항상 PWA 설치 버튼
-              if (isChromeBrowser && !isKakaoBrowser) {
+              // 1-1. Chrome / Google 브라우저인 경우: 항상 PWA 설치 버튼
+              if (isChromeBrowser) {
                 if (settings?.chrome_install_button_visible === false) return null;
                 return (
                   <Button
@@ -3159,26 +3158,7 @@ export default function Dashboard() {
                 );
               }
 
-              // 1-2. 카카오톡 Android: Play Store 링크 등록 시 표시
-              if (isKakaoBrowser) {
-                if (playUrl && settings?.play_store_url) {
-                  if (settings?.other_install_button_visible === false) return null;
-                  return (
-                    <a
-                      href={playUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="w-full h-14 bg-[#3DDC84] hover:bg-[#35c073] text-black font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-                    >
-                      <PlayStoreLogo />
-                      <span>Google Play에서 다운로드</span>
-                    </a>
-                  );
-                }
-                return null;
-              }
-
-              // 1-3. 그 외 모든 Android 브라우저 (Samsung, Opera, Firefox, Whale, Edge 등): Play Store 링크 등록 시 표시
+              // 1-2. 그 외 모든 Android 브라우저 (Samsung, 카카오 포함 기타 브라우저): Play Store 링크 등록 시 표시
               if (playUrl && settings?.play_store_url) {
                 const isHidden = isSamsungBrowser
                   ? settings?.samsung_install_button_visible === false
@@ -3204,13 +3184,11 @@ export default function Dashboard() {
             if (isIOS) {
               // 2-1. 앱스토어 링크가 등록되어 있다면 브라우저 무관 App Store 버튼 표시
               if (appUrl && settings?.app_store_url) {
-                const isHidden = isKakaoBrowser
-                  ? settings?.other_install_button_visible === false
-                  : isIOSSafari
-                    ? settings?.safari_install_button_visible === false
-                    : isChromeBrowser
-                      ? settings?.chrome_install_button_visible === false
-                      : settings?.other_install_button_visible === false;
+                const isHidden = isIOSSafari
+                  ? settings?.safari_install_button_visible === false
+                  : isChromeBrowser
+                    ? settings?.chrome_install_button_visible === false
+                    : settings?.other_install_button_visible === false;
                 if (isHidden) return null;
                 return (
                   <a
@@ -3226,11 +3204,6 @@ export default function Dashboard() {
               }
 
               // 2-2. 앱스토어 링크가 없을 때:
-              // 카카오톡 iOS는 앱스토어 링크 미등록 시 버튼 미표시
-              if (isKakaoBrowser) {
-                return null;
-              }
-
               // Safari: PWA 설치 가이드로 이동
               if (isIOSSafari) {
                 if (settings?.safari_install_button_visible === false) return null;
