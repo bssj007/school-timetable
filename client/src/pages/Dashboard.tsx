@@ -266,6 +266,12 @@ export default function Dashboard() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [showIOSInstallGuide, setShowIOSInstallGuide] = useState(false);
   const isIOS = typeof window !== 'undefined' ? /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) : false;
+  // 라이브러리(react-ios-pwa-prompt)의 useDeviceAndVersion 방식 차용: /os (\d+)/i 로 메이저 버전 추출
+  const iosVersion = typeof window !== 'undefined'
+    ? parseInt(/os (\d+)/i.exec(navigator.userAgent.toLowerCase())?.[1] ?? '0')
+    : 0;
+  // iOS 15부터 Safari 공유 버튼이 하단 중앙으로 이동 (14 이하는 상단 우측)
+  const isIOS15Plus = iosVersion >= 15;
   const isSamsungBrowser = typeof window !== 'undefined' ?
     /SamsungBrowser/i.test(navigator.userAgent) ||
     (/Android/i.test(navigator.userAgent) && /SM-|SAMSUNG/i.test(navigator.userAgent) && !/Chrome\/[.0-9]* Mobile/i.test(navigator.userAgent)) // Catch edge cases where it's a Samsung device but not standard Chrome
@@ -3217,23 +3223,53 @@ export default function Dashboard() {
 
           {/* 단계별 안내 */}
           <div className="bg-white px-5 py-4 space-y-4">
-            {/* Step 1 */}
+            {/* Step 1 — iOS 버전별 공유 버튼 위치 분기 */}
             <div className="flex items-start gap-3">
               <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</div>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-gray-800">Safari 하단 공유 버튼을 누르세요</p>
-                <p className="text-xs text-gray-500 mt-0.5">화면 아래 가운데의 공유(↑) 아이콘</p>
-                {/* Share icon illustration */}
-                <div className="mt-2 flex items-center justify-center">
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl px-6 py-2 flex items-center gap-2">
-                    <svg viewBox="0 0 24 24" className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-                      <polyline points="16 6 12 2 8 6"/>
-                      <line x1="12" y1="2" x2="12" y2="15"/>
-                    </svg>
-                    <span className="text-blue-600 font-bold text-sm">공유</span>
-                  </div>
-                </div>
+                {isIOS15Plus ? (
+                  // iOS 15+: 공유 버튼이 하단 중앙
+                  <>
+                    <p className="text-sm font-semibold text-gray-800">하단 가운데 공유 버튼을 누르세요</p>
+                    <p className="text-xs text-gray-500 mt-0.5">화면 <span className="font-semibold text-gray-700">아래 가운데</span>의 공유(↑) 아이콘</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      {/* 위치 chip: bottom-center */}
+                      <div className="flex-1 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 flex flex-col items-center gap-1">
+                        <div className="text-[10px] text-blue-400 font-medium">화면 아래쪽</div>
+                        <div className="flex items-center gap-1.5">
+                          <svg viewBox="0 0 24 24" className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                            <polyline points="16 6 12 2 8 6"/>
+                            <line x1="12" y1="2" x2="12" y2="15"/>
+                          </svg>
+                          <span className="text-blue-600 font-bold text-sm">공유</span>
+                        </div>
+                        <div className="text-[10px] text-blue-400">↑ 중앙</div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  // iOS 14 이하: 공유 버튼이 상단 우측
+                  <>
+                    <p className="text-sm font-semibold text-gray-800">오른쪽 상단 공유 버튼을 누르세요</p>
+                    <p className="text-xs text-gray-500 mt-0.5">화면 <span className="font-semibold text-gray-700">오른쪽 위</span>의 공유(↑) 아이콘</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      {/* 위치 chip: top-right */}
+                      <div className="flex-1 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 flex flex-col items-center gap-1">
+                        <div className="text-[10px] text-blue-400">↑ 오른쪽</div>
+                        <div className="flex items-center gap-1.5">
+                          <svg viewBox="0 0 24 24" className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                            <polyline points="16 6 12 2 8 6"/>
+                            <line x1="12" y1="2" x2="12" y2="15"/>
+                          </svg>
+                          <span className="text-blue-600 font-bold text-sm">공유</span>
+                        </div>
+                        <div className="text-[10px] text-blue-400 font-medium">화면 위쪽</div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
