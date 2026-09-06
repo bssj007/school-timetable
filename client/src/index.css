@@ -119,35 +119,40 @@
   *::before,
   *::after {
     @apply border-border outline-ring/50;
-    -webkit-text-size-adjust: 100%;
-    -moz-text-size-adjust: none;
-    text-size-adjust: none;
+    -webkit-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: 100% !important;
+    -ms-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
   }
 
   body {
     @apply bg-background text-foreground;
     max-height: 999999px; /* Gecko & WebKit font inflation killer */
-    -webkit-text-size-adjust: 100%;
-    -moz-text-size-adjust: none;
-    text-size-adjust: none;
+    -webkit-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: 100% !important;
+    -ms-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
   }
 
   html, body, #root {
     height: 100%;
   }
 
-  /* 모바일 브라우저 자동 폰트 크기 조정 방지 (Firefox Gecko, Safari WebKit 공통) */
+  /* 모바일 브라우저 자동 폰트 크기 조정 방지 (Chrome, Samsung Internet, Whale, Safari, Firefox 전 브라우저 공통) */
   html {
-    -webkit-text-size-adjust: 100%;
-    -moz-text-size-adjust: none;
-    text-size-adjust: none;
+    max-height: 999999px;
+    -webkit-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: 100% !important;
+    -ms-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
   }
 
-  /* 테이블 및 셀 내에서 Gecko 엔진의 폰트 비대화 방지 */
-  table, th, td {
+  /* 테이블 및 셀 내에서 모든 브라우저 엔진(Blink, WebKit, Gecko)의 폰트 비대화/부스팅 방지 */
+  table, thead, tbody, tfoot, tr, th, td {
     -webkit-text-size-adjust: 100% !important;
-    -moz-text-size-adjust: none !important;
-    text-size-adjust: none !important;
+    -moz-text-size-adjust: 100% !important;
+    -ms-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
   }
 
   button:not(:disabled),
@@ -250,17 +255,18 @@
 }
 
 /* 화면별 UI 폰트 및 rem 크기 기준 설정:
- * 모바일(기본): 15px로 명시적 고정하여 모바일 Firefox가 OS 시스템 글자 크기(120~140%)를
- * rem에 곱해 전체 UI가 팽창하는 현상을 원천 방지하고 360px 모바일 화면에 최적화.
- * 태블릿(640px 이상): 기본 16px.
+ * 모바일(기본): 14px로 명시적 고정하여 모바일 브라우저(Firefox, Chrome, 삼성인터넷 등)가
+ * OS 시스템 글자 크기(120~140%)를 rem에 곱해 전체 UI가 팽창하는 현상을 원천 방지하고
+ * PC(14.4px)와 유사한 안정적이고 컴팩트한 비례감 제공.
+ * 태블릿(640px 이상): 15px.
  * PC(1024px 이상): 14.4px (16px의 90%)로 컴팩트하게 축소. */
 :root {
-  font-size: 15px;
+  font-size: 14px;
 }
 
 @media (min-width: 640px) {
   :root {
-    font-size: 16px;
+    font-size: 15px;
   }
 }
 

@@ -1890,7 +1890,7 @@ export default function TeacherPage() {
                 onClick={() => setMobileViewMode(key)}
                 style={{ WebkitTapHighlightColor: 'transparent' }}
                 className={[
-                  'flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-2 sm:py-2.5 px-1 sm:px-4 text-[11px] sm:text-xs md:text-sm font-bold leading-tight transition-all select-none cursor-pointer',
+                  'flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 sm:py-2 px-1 sm:px-3 text-[10px] sm:text-xs md:text-sm font-bold leading-tight transition-all select-none cursor-pointer',
                   i > 0 ? 'border-l border-slate-200' : '',
                   mobileViewMode === key
                     ? 'bg-indigo-600 text-white shadow-sm'
@@ -1963,11 +1963,11 @@ export default function TeacherPage() {
                             onClick={() => setHwForm(f => ({ ...f, activityType: type }))}
                             style={{
                               flex: 1,
-                              padding: '8px 0',
+                              padding: '6px 0',
                               borderRadius: 8,
                               border: 'none',
                               fontWeight: 700,
-                              fontSize: 14,
+                              fontSize: 12.5,
                               cursor: 'pointer',
                               transition: 'all 0.18s',
                               background: hwForm.activityType === type
@@ -2194,23 +2194,23 @@ export default function TeacherPage() {
           return (
             <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col sm:flex-1 sm:min-h-0">
               {/* 달력 헤더 */}
-              <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-3.5 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
+              <div className="flex items-center justify-between px-3 py-2 sm:px-6 sm:py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
                 <button type="button"
                   onClick={() => setCalendarMonth(prev => {
                     const d = new Date(prev.year, prev.month - 1, 1);
                     return { year: d.getFullYear(), month: d.getMonth() };
                   })}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-600 cursor-pointer shadow-sm">
-                  <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-600 cursor-pointer shadow-sm">
+                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
-                <span className="font-extrabold text-slate-800 text-base sm:text-lg">{year}년 {month + 1}월</span>
+                <span className="font-extrabold text-slate-800 text-sm sm:text-base">{year}년 {month + 1}월</span>
                 <button type="button"
                   onClick={() => setCalendarMonth(prev => {
                     const d = new Date(prev.year, prev.month + 1, 1);
                     return { year: d.getFullYear(), month: d.getMonth() };
                   })}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-600 cursor-pointer shadow-sm">
-                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-600 cursor-pointer shadow-sm">
+                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
               </div>
 
@@ -2232,9 +2232,9 @@ export default function TeacherPage() {
                     const rect = calGridRef.current.getBoundingClientRect();
                     const relX = e.clientX - rect.left;
                     const relY = e.clientY - rect.top;
-                    const DOW_H = 32; // py-2 + text-[11px] 행 높이 근사
-                    const CELL_H = 44; // h-11
-                    const ZONE_W = 44; // 좌우 감지 너비
+                    const DOW_H = 26; // py-1 + text-[10px] 행 높이 근사
+                    const CELL_H = 36; // h-9
+                    const ZONE_W = 36; // 좌우 감지 너비
                     const numRows = totalCells / 7;
 
                     // 첫 행 왼쪽 경계
@@ -2305,22 +2305,22 @@ export default function TeacherPage() {
                     {/* 지난 달: 첫째 행 왼쪽 테두리 — 시각 전용 */}
                     <div
                       className="absolute left-0 z-10 flex items-center justify-start pointer-events-none"
-                      style={{ top: 32, height: 44 }}
+                      style={{ top: 26, height: 36 }}
                     >
-                      <div className="flex flex-col items-center justify-center w-9 h-9 rounded-r-xl bg-indigo-600/80 shadow-md">
-                        <ChevronLeft className="w-4 h-4 text-white animate-bounce" style={{ animationDuration: '0.5s' }} />
-                        <span className="text-[8px] text-white font-bold leading-none mt-0.5">지난달</span>
+                      <div className="flex flex-col items-center justify-center w-8 h-8 rounded-r-xl bg-indigo-600/80 shadow-md">
+                        <ChevronLeft className="w-3.5 h-3.5 text-white animate-bounce" style={{ animationDuration: '0.5s' }} />
+                        <span className="text-[7.5px] text-white font-bold leading-none mt-0.5">지난달</span>
                       </div>
                     </div>
 
                     {/* 다음 달: 마지막 행 오른쪽 테두리 — 시각 전용 */}
                     <div
                       className="absolute right-0 z-10 flex items-center justify-end pointer-events-none"
-                      style={{ bottom: 4, height: 44 }}
+                      style={{ bottom: 4, height: 36 }}
                     >
-                      <div className="flex flex-col items-center justify-center w-9 h-9 rounded-l-xl bg-indigo-600/80 shadow-md">
-                        <ChevronRight className="w-4 h-4 text-white animate-bounce" style={{ animationDuration: '0.5s' }} />
-                        <span className="text-[8px] text-white font-bold leading-none mt-0.5">다음달</span>
+                      <div className="flex flex-col items-center justify-center w-8 h-8 rounded-l-xl bg-indigo-600/80 shadow-md">
+                        <ChevronRight className="w-3.5 h-3.5 text-white animate-bounce" style={{ animationDuration: '0.5s' }} />
+                        <span className="text-[7.5px] text-white font-bold leading-none mt-0.5">다음달</span>
                       </div>
                     </div>
                   </>
@@ -2328,14 +2328,14 @@ export default function TeacherPage() {
 
                 {DOW_LABELS.map((dow, i) => (
                   <div key={dow} className={[
-                    'py-2 text-center text-[11px] font-bold pointer-events-none',
+                    'py-1 text-center text-[10px] sm:text-[11px] font-bold pointer-events-none',
                     i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-500',
                   ].join('')}>{dow}</div>
                 ))}
 
                 {cells.map((d, idx) => {
                   const col = idx % 7;
-                  if (!d) return <div key={`empty-${idx}`} className="h-11" />;
+                  if (!d) return <div key={`empty-${idx}`} className="h-9 sm:h-11" />;
                   const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                   const isToday      = dateStr === todayStr;
                   const isSun        = col === 0;
@@ -2350,7 +2350,7 @@ export default function TeacherPage() {
                       key={dateStr}
                       data-date={dateStr}
                       className={[
-                        'h-11 flex flex-col items-center justify-center text-[13px] font-bold transition-colors cursor-pointer relative z-10',
+                        'h-9 sm:h-11 flex flex-col items-center justify-center text-[11.5px] sm:text-[13px] font-bold transition-colors cursor-pointer relative z-10',
                         isRangeStart || isRangeEnd     ? 'bg-indigo-500 text-white rounded-lg' : '',
                         inRange && !isRangeStart && !isRangeEnd ? 'bg-indigo-100 text-indigo-700' : '',
                         !inRange && !isRangeStart && !isRangeEnd && isToday  ? 'ring-2 ring-emerald-500 text-emerald-700 bg-emerald-50 rounded-lg' : '',
@@ -2376,10 +2376,10 @@ export default function TeacherPage() {
                   if (hwAssessments.length === 0) return null;
 
                   const numRows = Math.ceil((startDow + totalDays) / 7);
-                  const DOW_H = 32;  // 요일 헤더 높이 (py-2 + text-[11px])
-                  const CELL_H = 44; // h-11
-                  const BAR_H = 36;  // 바 높이
-                  const BAR_TOP_OFFSET = 4; // (44 - 36) / 2
+                  const DOW_H = 26;  // 요일 헤더 높이
+                  const CELL_H = 36; // h-9
+                  const BAR_H = 28;  // 바 높이
+                  const BAR_TOP_OFFSET = 4; // (36 - 28) / 2
                   const BAR_COLOR = '#ec4899'; // pink-500
 
                   const bars: React.ReactNode[] = [];
@@ -2446,14 +2446,14 @@ export default function TeacherPage() {
               </div>
 
               {/* 하단 안내 */}
-              <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50 flex items-center justify-center gap-4 mt-auto">
-                <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                  <span className="text-base leading-none">👆</span>
+              <div className="px-3 py-2 border-t border-slate-100 bg-slate-50 flex items-center justify-center gap-3 mt-auto">
+                <span className="flex items-center gap-1 text-[10px] sm:text-[11px] text-slate-500">
+                  <span className="text-sm leading-none">👆</span>
                   <span><b className="text-slate-600">클릭</b> — 당일형 이동</span>
                 </span>
-                <span className="w-px h-3 bg-slate-300 shrink-0" />
-                <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                  <span className="text-base leading-none">↔️</span>
+                <span className="w-px h-2.5 bg-slate-300 shrink-0" />
+                <span className="flex items-center gap-1 text-[10px] sm:text-[11px] text-slate-500">
+                  <span className="text-sm leading-none">↔️</span>
                   <span><b className="text-slate-600">드래그</b> — 숙제 구간 선택</span>
                 </span>
               </div>
@@ -2488,7 +2488,7 @@ export default function TeacherPage() {
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
-                    <th style={{ width: 36, height: 30, background: '#f2f2f2', borderRight: '1px solid #d0d0d0', borderBottom: '1px solid #d0d0d0', position: 'sticky', top: 0, zIndex: 2 }} />
+                    <th style={{ width: 32, height: 28, background: '#f2f2f2', borderRight: '1px solid #d0d0d0', borderBottom: '1px solid #d0d0d0', position: 'sticky', top: 0, zIndex: 2 }} />
                     {weekdays.map((day, idx) => {
                       const dDate = weekDates[idx];
                       const todayStr = toDateString(new Date());
@@ -2498,13 +2498,13 @@ export default function TeacherPage() {
                         <th
                           key={day}
                           style={{
-                            height: 30,
+                            height: 28,
                             background: isToday ? '#cee8d0' : '#f2f2f2',
                             borderRight: '1px solid #d0d0d0',
                             borderBottom: isToday ? '2px solid #217346' : '1px solid #d0d0d0',
                             color: isToday ? '#1a5c30' : '#595959',
                             fontWeight: 700,
-                            fontSize: 12,
+                            fontSize: 10.5,
                             textAlign: 'center',
                             userSelect: 'none',
                             position: 'sticky',
@@ -2525,12 +2525,14 @@ export default function TeacherPage() {
                     return (
                       <tr
                         key={p}
-                        className="sm:h-[50px]"
+                        className="h-[52px] sm:h-[50px]"
+                        style={{ height: 52 }}
                       >
                         {/* Row number cell — Excel row header */}
                         <td
                           style={{
-                            width: 36,
+                            width: 32,
+                            height: 52,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
                             borderRight: isCurrentPeriod ? '2px solid #217346' : '1px solid #d0d0d0',
                             borderBottom: '1px solid #d0d0d0',
@@ -2540,10 +2542,10 @@ export default function TeacherPage() {
                             padding: 0,
                           }}
                         >
-                          <div style={{ minHeight: 38, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2px 0' }}>
-                            <div style={{ fontWeight: 700, fontSize: 12, color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
+                          <div style={{ height: '100%', minHeight: 52, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1px 0' }}>
+                            <div style={{ fontWeight: 700, fontSize: 10.5, color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
                             {PERIOD_TIMES[p] && (
-                              <div style={{ fontSize: 8, color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
+                              <div style={{ fontSize: 7.5, color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
                             )}
                           </div>
                         </td>
@@ -2583,8 +2585,9 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group sm:h-[50px] sm:max-h-[50px] sm:overflow-hidden"
+                              className="group h-[52px] sm:h-[50px] sm:max-h-[50px] sm:overflow-hidden"
                               style={{
+                                height: 52,
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
                                 borderBottom: '1px solid #d0d0d0',
@@ -2607,41 +2610,41 @@ export default function TeacherPage() {
                                 (e.currentTarget as HTMLElement).style.zIndex = 'auto';
                               }}
                             >
-                              {/* minHeight는 td에서 무효 → 항상 렌더링되는 div에서 보장 */}
-                              <div style={{ minHeight: 38, padding: '3px 3px', display: 'flex', flexDirection: 'column' }}>
+                              {/* minHeight: 52로 빈 칸 함몰 완벽 방지 — 모든 행이 균일한 높이 유지 */}
+                              <div style={{ height: '100%', minHeight: 52, padding: '2px 2.5px', display: 'flex', flexDirection: 'column', justifyContent: cellData ? 'flex-start' : 'center' }}>
                               {cellData ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                                   {/* 학생 배지 — td의 position:relative 기준 우측 상단 */}
                                   {hasAssessment && cellAssessments.some(a => !a.isTeacherCreated) && (
                                     <span style={{
                                       position: 'absolute',
                                       top: 2,
                                       right: 2,
-                                      fontSize: 10,
+                                      fontSize: 8,
                                       fontWeight: 800,
                                       border: '1px solid #94a3b8',
                                       color: '#475569',
-                                      padding: '2px 4px',
-                                      borderRadius: 3,
+                                      padding: '1px 3px',
+                                      borderRadius: 2.5,
                                       background: '#f1f5f9',
                                       whiteSpace: 'nowrap',
-                                      lineHeight: 1.2,
+                                      lineHeight: 1.1,
                                       zIndex: 1,
                                     }}>
                                       학생
                                     </span>
                                   )}
                                   {/* Class label */}
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                                     <span style={{
-                                      fontSize: 10,
+                                      fontSize: 9,
                                       fontWeight: 700,
-                                      padding: '1px 4px',
+                                      padding: '1px 3px',
                                       borderRadius: 2,
                                       background: '#217346',
                                       color: '#ffffff',
                                       display: 'inline-block',
-                                      lineHeight: 1.4,
+                                      lineHeight: 1.25,
                                       width: 'fit-content',
                                     }}>
                                       {(() => {
@@ -2655,8 +2658,8 @@ export default function TeacherPage() {
                                     <span style={{
                                       fontWeight: 700,
                                       color: '#1a1a1a',
-                                      lineHeight: 1.3,
-                                      fontSize: (cellData.subjectName || '').length > 6 ? 10.5 : (cellData.subjectName || '').length > 4 ? 11.5 : 13,
+                                      lineHeight: 1.2,
+                                      fontSize: (cellData.subjectName || '').length > 6 ? 8.5 : (cellData.subjectName || '').length > 4 ? 9.5 : 10.5,
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
                                       whiteSpace: 'nowrap',
@@ -2670,23 +2673,23 @@ export default function TeacherPage() {
 
                                   {/* Assessment badges — uncolored (white/transparent background) with pink border, positioned directly below subject name */}
                                   {hasAssessment ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 1 }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5, marginTop: 1 }}>
                                       {cellAssessments.map(a => (
                                         <div
                                           key={a.id}
                                           style={{
-                                            fontSize: 8,
+                                            fontSize: 7.5,
                                             fontWeight: 700,
-                                            padding: '1px 4px',
-                                            borderRadius: 3,
+                                            padding: '1px 3px',
+                                            borderRadius: 2.5,
                                             background: '#ffffff',
                                             border: '1px solid #ec4899',
                                             color: '#db2777',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'space-between',
-                                            gap: 2,
-                                            lineHeight: 1.4,
+                                            gap: 1.5,
+                                            lineHeight: 1.2,
                                           }}
                                           title={`[${a.description || '수행'}] ${a.title}`}
                                         >
@@ -2699,13 +2702,18 @@ export default function TeacherPage() {
                                     </div>
                                   ) : (
                                     <div className="opacity-0 group-hover:opacity-100" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 'auto', transition: 'opacity 0.12s' }}>
-                                      <span style={{ fontSize: 9, fontWeight: 700, color: '#217346', display: 'flex', alignItems: 'center', gap: 2 }}>
-                                        <Plus style={{ width: 10, height: 10 }} /> 등록
+                                      <span style={{ fontSize: 8.5, fontWeight: 700, color: '#217346', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        <Plus style={{ width: 9, height: 9 }} /> 등록
                                       </span>
                                     </div>
                                   )}
                                 </div>
-                                ) : null}
+                                ) : (
+                                  /* 빈 칸: 함몰 방지 및 깔끔한 시각적 균형 유지 */
+                                  <div className="w-full h-full flex items-center justify-center pointer-events-none select-none">
+                                    <span className="text-slate-200 text-[10px] sm:hidden">-</span>
+                                  </div>
+                                )}
                               </div>{/* /wrapper minHeight div */}
                             </td>
                           );
@@ -2756,7 +2764,7 @@ export default function TeacherPage() {
             {periodAssessments.map(a => (
               <div
                 key={a.id}
-                className="flex items-center gap-2 px-2 py-1 rounded text-xs font-semibold truncate"
+                className="flex items-center gap-2 px-2 py-0.5 rounded text-[10.5px] font-semibold truncate"
                 style={{ background: subjectColorMap.get(a.subject) || '#e2e8f0', color: '#1e293b' }}
               >
                 <span className="truncate">{a.subject} · {a.title}</span>
@@ -2809,17 +2817,17 @@ export default function TeacherPage() {
                     type="button"
                     onClick={() => { setTeacherSearchQuery(""); setShowTeacherSelectModal(true); }}
                     style={{ WebkitTapHighlightColor: 'transparent' }}
-                    className="flex items-center gap-1 pl-3 pr-2 py-2 sm:pl-2.5 sm:pr-1.5 sm:py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0 max-w-[150px] sm:max-w-[190px]"
+                    className="flex items-center gap-1 pl-2.5 pr-1.5 py-1.5 sm:pl-2.5 sm:pr-1.5 sm:py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-xs sm:text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0 max-w-[140px] sm:max-w-[190px]"
                   >
                     <span className="truncate text-left min-w-0">
                       {selectedTeacherId
                         ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
                         : "선생님 선택"}
                     </span>
-                    <ChevronsUpDown className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
+                    <ChevronsUpDown className="w-3.5 h-3.5 sm:w-3.5 sm:h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
                   </button>
                 ) : (
-                  <span className="pl-3 pr-2 py-2 sm:pl-2.5 sm:pr-1.5 sm:py-1.5 text-sm font-extrabold text-slate-700 flex items-center truncate flex-1 min-w-0">
+                  <span className="pl-2.5 pr-1.5 py-1.5 sm:pl-2.5 sm:pr-1.5 sm:py-1.5 text-xs sm:text-sm font-extrabold text-slate-700 flex items-center truncate flex-1 min-w-0">
                     {teacherName ? `${teacherName} 선생님` : '선생님 선택'}
                   </span>
                 )}
@@ -2828,7 +2836,7 @@ export default function TeacherPage() {
                 {isCurrentTeacherVerified && (
                   <Link href="/teacher/account" className="flex shrink-0">
                     <button type="button" style={{ WebkitTapHighlightColor: 'transparent' }}
-                      className="flex items-center gap-1 px-3 py-2 sm:px-2.5 sm:py-1.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-bold text-xs sm:text-sm md:text-xs shrink-0 transition-colors border-l border-indigo-200 cursor-pointer"
+                      className="flex items-center gap-1 px-2.5 py-1.5 sm:px-2.5 sm:py-1.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-bold text-xs shrink-0 transition-colors border-l border-indigo-200 cursor-pointer"
                       title="선생님 계정 관리">
                       <User className="w-3.5 h-3.5" /><span>계정</span>
                     </button>
@@ -2839,7 +2847,7 @@ export default function TeacherPage() {
               {/* 학생공지 (모바일 - 인증 시) */}
               {isCurrentTeacherVerified && (
                 <button type="button" onClick={() => {}} style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className="sm:hidden ml-auto flex items-center gap-1 px-2.5 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs sm:text-sm shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
+                  className="sm:hidden ml-auto flex items-center gap-1 px-2 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
                   title="학생공지">
                   <Bell className="w-3.5 h-3.5" /><span>학생공지</span>
                 </button>
@@ -2848,12 +2856,12 @@ export default function TeacherPage() {
               {/* 미인증 시 우측 묶음: [보기 전용] [로그인] */}
               {!isCurrentTeacherVerified && (
                 <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                  <div className="flex items-center gap-1 text-gray-800 bg-black/5 rounded-xl px-2.5 py-2 sm:px-2 sm:py-1.5 border border-black/5 shrink-0">
+                  <div className="flex items-center gap-1 text-gray-800 bg-black/5 rounded-xl px-2 py-1 sm:px-2 sm:py-1.5 border border-black/5 shrink-0">
                     <svg className="w-3.5 h-3.5 shrink-0 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
-                    <span className="text-xs font-bold leading-tight whitespace-nowrap text-gray-800">
+                    <span className="text-[11px] font-bold leading-tight whitespace-nowrap text-gray-800">
                       보기 전용
                     </span>
                   </div>
@@ -2869,7 +2877,7 @@ export default function TeacherPage() {
                       type="button"
                       onClick={() => setShowAuthDialog(true)}
                       style={{ WebkitTapHighlightColor: 'transparent' }}
-                      className={`shrink-0 px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-md whitespace-nowrap ${
+                      className={`shrink-0 px-2.5 py-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs font-bold transition-all cursor-pointer shadow-md whitespace-nowrap ${
                         mobileViewMode === 'homework' ? 'ring-2 ring-red-500 ring-offset-1 shadow-red-200' : ''
                       }`}
                     >
@@ -2917,7 +2925,7 @@ export default function TeacherPage() {
                             setSelectedSubjectFilter(subject);
                           }
                         }}
-                        className="relative flex-1 py-2.5 px-1 text-[13px] font-bold leading-tight text-center overflow-hidden"
+                        className="relative flex-1 py-2 px-1 text-xs font-bold leading-tight text-center overflow-hidden"
                         style={{
                           color: isActive ? '#fff' : color.activeBg,
                           backgroundColor: isActive ? `${color.activeBg}BF` : `${color.bg}20`,
@@ -3020,7 +3028,7 @@ export default function TeacherPage() {
                           return next;
                         });
                       }}
-                      className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all duration-150 flex items-center gap-0.5 relative
+                      className={`shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full border transition-all duration-150 flex items-center gap-0.5 relative
                         ${selectedTabId === tab.id
                           ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                           : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'
@@ -3102,7 +3110,7 @@ export default function TeacherPage() {
                   return (
                     <div
                       key={a.id}
-                      className="border-b border-slate-100/80 last:border-b-0 sm:border sm:border-slate-100 py-2.5 px-1 sm:p-2.5 md:p-3 sm:rounded-xl sm:bg-slate-50 hover:bg-indigo-50/60 sm:hover:border-indigo-200 transition-all duration-150 cursor-pointer"
+                      className="border-b border-slate-100/80 last:border-b-0 sm:border sm:border-slate-100 py-2 px-1 sm:p-2.5 md:p-3 sm:rounded-xl sm:bg-slate-50 hover:bg-indigo-50/60 sm:hover:border-indigo-200 transition-all duration-150 cursor-pointer"
                       onClick={() => {
                         if (!requireAuth()) return; // 미인증 시 인증 다이얼로그
                         setSelectedAssessment(a);
@@ -3124,11 +3132,11 @@ export default function TeacherPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
                             {/* 반 배지 — 표와 동일한 초록 배지, "반" 글자 제거 */}
-                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 4px', borderRadius: 2, background: '#217346', color: '#ffffff', display: 'inline-block', lineHeight: 1.4 }}>
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 3px', borderRadius: 2, background: '#217346', color: '#ffffff', display: 'inline-block', lineHeight: 1.25 }}>
                               {panelClassLabel}
                             </span>
                             {/* 과목명 — 그룹코드(무지개 워드아트) + 과목명, 표와 동일한 서식 */}
-                            <span style={{ fontWeight: 700, color: '#1a1a1a', lineHeight: 1.3, fontSize: (a.subject || '').length > 6 ? 11 : (a.subject || '').length > 4 ? 12 : 14 }}>
+                            <span style={{ fontWeight: 700, color: '#1a1a1a', lineHeight: 1.25, fontSize: (a.subject || '').length > 6 ? 10.5 : (a.subject || '').length > 4 ? 11.5 : 12.5 }}>
                               {panelCodes.map((code: string, i: number) =>
                                 renderGroupCode(code, i < panelCodes.length - 1 ? 2 : 3)
                               )}
@@ -3224,11 +3232,11 @@ export default function TeacherPage() {
                   onClick={() => setFormData({ ...formData, activityType: type })}
                   style={{
                     flex: 1,
-                    padding: '8px 0',
+                    padding: '6px 0',
                     borderRadius: 8,
                     border: 'none',
                     fontWeight: 700,
-                    fontSize: 14,
+                    fontSize: 12.5,
                     cursor: 'pointer',
                     transition: 'all 0.18s',
                     background: formData.activityType === type
@@ -3370,11 +3378,11 @@ export default function TeacherPage() {
                   onClick={() => setFormData({ ...formData, activityType: type })}
                   style={{
                     flex: 1,
-                    padding: '8px 0',
+                    padding: '6px 0',
                     borderRadius: 8,
                     border: 'none',
                     fontWeight: 700,
-                    fontSize: 14,
+                    fontSize: 12.5,
                     cursor: 'pointer',
                     transition: 'all 0.18s',
                     background: formData.activityType === type
