@@ -93,8 +93,8 @@ function AppContent() {
       .catch(() => {}); // 실패 시 기본값 유지
   }, []);
 
-  // iOS Safari / Samsung / 기타 브라우저 → 다운로드 유도 페이지로 리다이렉트
-  // Chrome, 이미 설치됨, dismiss된 경우는 건너뜀
+  // 모바일 브라우저(Android Chrome/Google/Samsung/기타, iOS Safari/Chrome) → 다운로드 유도 페이지로 리다이렉트
+  // 이미 설치된 앱(standalone), dismiss된 경우, PC는 건너뜀
   const _shouldDownload = shouldShowDownloadPage();
   useEffect(() => {
     if (_shouldDownload && location === "/") {

@@ -219,8 +219,8 @@ function detectLayer2(): AgentInfo {
   } else if (/Brave\//i.test(ua)) {
     // Brave
     browserKey = "other";
-  } else if (/CriOS/i.test(ua)) {
-    // iOS Chrome
+  } else if (/CriOS|GSA\//i.test(ua)) {
+    // iOS Chrome 및 Google 앱
     browserKey = "chrome";
   } else if (isIOS) {
     // iOS 환경: 위 서드파티(Chrome, Firefox, Edge, Opera, Whale, DuckDuckGo, Brave 등)가 아닌 경우만 실제 Safari
@@ -230,8 +230,8 @@ function detectLayer2(): AgentInfo {
     } else {
       browserKey = "other";
     }
-  } else if (/Chrome/i.test(ua)) {
-    // Android 및 데스크톱 Chrome
+  } else if (/Chrome/i.test(ua) || /GSA\//i.test(ua)) {
+    // Android 및 데스크톱 Chrome, Google 앱
     browserKey = "chrome";
   } else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) {
     browserKey = "safari";
@@ -321,7 +321,7 @@ export function detect(): AgentInfo {
   const isInstalledApp =
     window.matchMedia("(display-mode: standalone)").matches ||
     (navigator as any).standalone === true ||
-    /; wv\)/i.test(navigator.userAgent);  // Android TWA / WebView
+    (/; wv\)/i.test(navigator.userAgent) && !/GSA\//i.test(navigator.userAgent));  // Android TWA / WebView (Google 앱 제외)
 
   // Layer 1: Client Hints (Chromium 전용)
   const ch = detectLayer1();
@@ -450,7 +450,7 @@ export function isPwaInstalled(): boolean {
  *   3. 사용자가 dismiss 하지 않았을 것
  *   4. 모바일 기기일 것 (데스크톱 제외)
  *   5. 다운로드 대상 브라우저:
- *      - Android: Samsung Internet 및 Opera 등 기타 브라우저 (Google Chrome 제외)
+ *      - Android: Chrome/Google, Samsung Internet 및 Opera 등 브라우저 전체
  *      - iOS: Safari 및 iOS Chrome 표시 (기타 브라우저는 PWA 프롬프트 미지원으로 사이트 직행)
  */
 export function shouldShowDownloadPage(): boolean {
@@ -467,10 +467,10 @@ export function shouldShowDownloadPage(): boolean {
     return agent.isIOSSafari || agent.isIOSChrome;
   }
   if (agent.isAndroid) {
-    // Android에서는 Samsung 및 Opera 등 기타 브라우저에 표시 (Chrome 제외)
-    return agent.browserKey === "samsung" || agent.browserKey === "other";
+    // Android에서는 Chrome/Google, Samsung 및 Opera 등 브라우저 모두 표시
+    return true;
   }
-  return agent.browserKey === "samsung" || agent.browserKey === "other";
+  return true;
 }
 
 /** @internal UA 기반 인앱 브라우저 여부 (detect() 내부에서 사용) */

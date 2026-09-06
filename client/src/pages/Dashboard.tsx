@@ -3170,6 +3170,19 @@ export default function Dashboard() {
               // 1-3. Android Chrome
               if (isChromeBrowser) {
                 if (settings?.chrome_install_button_visible === false) return null;
+                if (playUrl) {
+                  return (
+                    <a
+                      href={playUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+                    >
+                      <PlayStoreLogo />
+                      <span>Google Play에서 다운로드</span>
+                    </a>
+                  );
+                }
                 return (
                   <Button
                     onClick={handleInstallClick}

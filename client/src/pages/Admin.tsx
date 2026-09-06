@@ -10228,7 +10228,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
             key: "chrome_install_button_visible",
             label: "Chrome",
             icon: "🌐",
-            desc: "Android Chrome / iOS Chrome (모바일 PWA)",
+            desc: "Android Chrome / iOS Chrome / Google (모바일)",
             value: isChrome,
         },
         {
@@ -10347,7 +10347,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                         <p className="text-xs text-gray-500 mb-1 font-mono">shouldShowDownloadPage()</p>
                         {shouldShowDownloadPage()
                             ? <span className="inline-flex items-center gap-1 text-sm font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-3 py-1 rounded-full">✅ 다운로드 유도 페이지 표시 대상</span>
-                            : <span className="inline-flex items-center gap-1 text-sm font-bold text-gray-500 bg-gray-100 border border-gray-200 px-3 py-1 rounded-full">— 표시 안함 (PC·Chrome·이미설치 등)</span>
+                            : <span className="inline-flex items-center gap-1 text-sm font-bold text-gray-500 bg-gray-100 border border-gray-200 px-3 py-1 rounded-full">— 표시 안함 (PC·이미설치 등)</span>
                         }
                     </div>
                 </CardContent>
@@ -10552,7 +10552,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                 <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
                                 <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
                             </svg>
-                            Google Play Store <span className="text-xs font-normal text-gray-500">(Samsung / Opera 등 Android 기타 브라우저)</span>
+                            Google Play Store <span className="text-xs font-normal text-gray-500">(등록 시 Android Chrome, Samsung, Opera 등 우선 연결)</span>
                         </div>
                         <div className="flex gap-2">
                             <Input
