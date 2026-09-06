@@ -54,6 +54,14 @@ if (typeof window !== 'undefined') {
     document.cookie = "pwa_standalone=1; max-age=31536000; path=/";
   }
 
+  // Firefox 브라우저 감지 클래스 부착 (배율 및 레이아웃 안정화)
+  if (agent.isFirefox) {
+    document.documentElement.classList.add('is-firefox');
+  }
+  if (agent.isAndroidFirefox) {
+    document.documentElement.classList.add('is-firefox-android');
+  }
+
   // Register beforeinstallprompt as early as possible, BEFORE React renders.
   // Samsung Internet fires this event very early on page load.
   // If we only listen inside a useEffect, the event will already be gone by the time
