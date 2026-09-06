@@ -335,6 +335,8 @@ export function detect(): AgentInfo {
       isIOS:          false,
       isAndroid:      ch.isAndroid!,
       isIOSSafari:    false,
+      isIOSChrome:    false,
+      isIOSOther:     false,
       browserKey:     ch.browserKey!,
       isInAppBrowser: inApp,
       iosVersion:     0,
