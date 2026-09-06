@@ -2588,6 +2588,7 @@ export default function TeacherPage() {
                               key={d}
                               className="group sm:h-[50px] sm:max-h-[50px] sm:overflow-hidden"
                               style={{
+                                minHeight: 38,
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
                                 borderBottom: '1px solid #d0d0d0',

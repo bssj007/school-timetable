@@ -8,11 +8,62 @@ export const onRequest = async (context: any) => {
         });
     }
 
-    if (request.method !== "POST") {
+    if (request.method !== "POST" && request.method !== "GET") {
         return new Response(JSON.stringify({ error: "Method not allowed" }), {
             status: 405,
             headers: { "Content-Type": "application/json" }
         });
+    }
+
+    // ── GET: 현재 비밀번호 조회 ──────────────────────────────────────
+    if (request.method === "GET") {
+        try {
+            const url = new URL(request.url);
+            const teacherName = (url.searchParams.get("name") || "").trim();
+
+            if (!teacherName) {
+                return new Response(JSON.stringify({ error: "선생님 이름을 지정해야 합니다." }), {
+                    status: 400,
+                    headers: { "Content-Type": "application/json" }
+                });
+            }
+
+            await env.DB.prepare(`
+                CREATE TABLE IF NOT EXISTS system_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            `).run();
+
+            const rows = await env.DB.prepare(
+                "SELECT key, value FROM system_settings WHERE key IN ('teacher_passwords', 'teacher_default_password')"
+            ).all();
+
+            let defaultPassword = "관리";
+            let pwMap: Record<string, string> = {};
+
+            if (rows && rows.results) {
+                for (const r of rows.results as any[]) {
+                    if (r.key === 'teacher_default_password' && r.value) defaultPassword = r.value;
+                    if (r.key === 'teacher_passwords' && r.value) {
+                        try { pwMap = JSON.parse(r.value); } catch { pwMap = {}; }
+                    }
+                }
+            }
+
+            const trimmedName = teacherName.replace(/선생님$/, '').trim();
+            const password = pwMap[trimmedName] ?? defaultPassword;
+
+            return new Response(JSON.stringify({ success: true, password }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        } catch (e: any) {
+            return new Response(JSON.stringify({ error: e.message || "오류 발생" }), {
+                status: 500,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
     }
 
     try {
