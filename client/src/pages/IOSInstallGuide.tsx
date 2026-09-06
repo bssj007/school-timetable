@@ -285,8 +285,28 @@ function Guide26() {
       <div className="flex items-start gap-4">
         <StepBadge n={2} />
         <div className="flex-1">
-          <p className="text-base font-bold text-gray-900">메뉴에서 <span className="font-black">'공유'</span>를 누르세요</p>
-          <p className="text-sm text-gray-500 mt-0.5">펼쳐진 메뉴에서 공유 아이콘을 찾으세요</p>
+          <p className="text-base font-bold text-gray-900 flex items-center gap-2 flex-wrap">
+            메뉴에서
+            <span className="inline-flex items-center gap-1.5 bg-gray-100 border border-gray-200 rounded-lg px-2 py-0.5 font-black text-gray-800">
+              <ShareIcon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              공유
+            </span>
+            를 누르세요
+          </p>
+          <p className="text-sm text-gray-500 mt-0.5">펼쳐진 ··· 메뉴 안에서 공유 항목을 찾으세요</p>
+          {/* 메뉴 미리보기 */}
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm max-w-xs bg-white">
+            {[
+              { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: "페이지 찾기" },
+              { icon: <ShareIcon className="w-4 h-4 text-blue-500" />, label: "공유", highlight: true },
+              { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>, label: "북마크 추가" },
+            ].map((item, i) => (
+              <div key={i} className={`flex items-center gap-3 px-4 py-2.5 ${item.highlight ? "bg-blue-50 border-l-4 border-blue-500" : "border-b border-gray-100"}`}>
+                {item.icon}
+                <span className={`text-sm ${item.highlight ? "text-blue-700 font-bold" : "text-gray-600"}`}>{item.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
