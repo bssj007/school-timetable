@@ -25,10 +25,9 @@ if ('serviceWorker' in navigator) {
 
 // Detect Android environment for specific behaviors if needed later
 if (typeof window !== 'undefined') {
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
-
+  // agent.isInstalledApp — browserDetect.ts (standalone + TWA 통합 감지)
   // Track PWA Installation Status
-  if (isStandalone) {
+  if (agent.isInstalledApp) {
     document.cookie = "pwa_standalone=1; max-age=31536000; path=/";
   }
 
