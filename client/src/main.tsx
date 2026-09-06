@@ -1,8 +1,9 @@
-import { trpc } from "@/lib/trpc";
+﻿import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
+import { isMobileDevice } from "@/lib/browserDetect";
 import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
@@ -37,8 +38,8 @@ if (typeof window !== 'undefined') {
   // React mounts. Storing it globally guarantees Dashboard can always access it.
   window.addEventListener('beforeinstallprompt', (e: any) => {
     e.preventDefault();
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|SamsungBrowser/i.test(navigator.userAgent);
-    if (isMobile) {
+    // isMobileDevice — browserDetect.ts agent.isMobile 사용
+    if (isMobileDevice) {
       (window as any).__deferredPwaPrompt = e;
     }
   });

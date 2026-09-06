@@ -269,7 +269,7 @@ export default function Dashboard() {
   // 브라우저 감지 — @/lib/browserDetect (관리페이지 미해결문제 패널 기준)
   // isSamsungBrowser, isIOS(=isIOSSafari), isInAppBrowser, isOtherBrowser: 상단 import에서 주입
   // iosVersion, isIOS26Plus, isIOS15Plus — @/lib/browserDetect (agent.iosVersion) 에서 직접 import
-  const isAndroid   = typeof window !== 'undefined' ? /Android/i.test(navigator.userAgent) : false;
+  // isAndroid 제거됨 — agent.isMobile (browserDetect.ts) 사용
   const [hasPwaCookie, setHasPwaCookie] = useState(typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1'));
 
   useEffect(() => {
@@ -284,8 +284,8 @@ export default function Dashboard() {
 
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|SamsungBrowser/i.test(navigator.userAgent);
-      if (isMobile) {
+      // isMobileDevice — agent.isMobile (browserDetect.ts 3-Layer 감지 결과 사용)
+      if (isMobileDevice) {
         (window as any).__deferredPwaPrompt = e;
         setDeferredPrompt(e);
       }
