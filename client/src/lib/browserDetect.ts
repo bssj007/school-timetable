@@ -42,10 +42,6 @@ export interface AgentInfo {
   isIOSChrome: boolean;
   /** iOS 기타 브라우저 여부 (Firefox, Edge, Opera, Whale 등 Safari/Chrome 제외 브라우저) */
   isIOSOther: boolean;
-  /** Firefox 브라우저 여부 (모바일/데스크톱 포함) */
-  isFirefox: boolean;
-  /** Android 환경 Firefox 여부 */
-  isAndroidFirefox: boolean;
   /** 브라우저 카테고리 */
   browserKey: BrowserKey;
   /** 인앱브라우저 (카카오톡·네이버·인스타그램 등) */
@@ -86,7 +82,6 @@ function defaultAgent(): AgentInfo {
     isIPad: false, isIPhone: false,
     isIOS: false, isAndroid: false, isIOSSafari: false,
     isIOSChrome: false, isIOSOther: false,
-    isFirefox: false, isAndroidFirefox: false,
     browserKey: "other", isInAppBrowser: false, isKakaoTalk: false,
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     isInstalledApp: false,
@@ -270,14 +265,11 @@ function detectLayer2(): AgentInfo {
 
   const isIOSChrome = isIOS && browserKey === "chrome";
   const isIOSOther  = isIOS && !isIOSSafari && !isIOSChrome;
-  const isFirefox = /Firefox|FxiOS/i.test(ua);
-  const isAndroidFirefox = isAndroid && isFirefox;
 
   return {
     isMobile: mobile, isDesktop: !mobile, desktopOS,
     isIPad, isIPhone, isIOS, isAndroid, isIOSSafari,
     isIOSChrome, isIOSOther,
-    isFirefox, isAndroidFirefox,
     browserKey, isInAppBrowser: isInApp, isKakaoTalk,
     iosVersion, isIOS26Plus, isIOS15Plus, isIOS13Plus,
     isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
@@ -309,7 +301,6 @@ function detectLayer3(): AgentInfo {
     isMobile: mobile, isDesktop: !mobile, desktopOS: null,
     isIPad, isIPhone: false, isIOS, isAndroid, isIOSSafari: false,
     isIOSChrome: false, isIOSOther: false,
-    isFirefox: false, isAndroidFirefox: false,
     browserKey: "other",
     isInAppBrowser: isInApp,
     isKakaoTalk,
@@ -364,8 +355,6 @@ export function detect(): AgentInfo {
       isIOSSafari:    false,
       isIOSChrome:    false,
       isIOSOther:     false,
-      isFirefox:      false,
-      isAndroidFirefox: false,
       browserKey:     isKakaoTalk ? "other" : ch.browserKey!,
       isInAppBrowser: inApp,
       isKakaoTalk,

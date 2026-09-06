@@ -115,57 +115,22 @@
 }
 
 @layer base {
-  *,
-  *::before,
-  *::after {
+  * {
     @apply border-border outline-ring/50;
-    -webkit-text-size-adjust: 100%;
-    -moz-text-size-adjust: none;
-    text-size-adjust: none;
   }
 
   body {
     @apply bg-background text-foreground;
-    max-height: 999999px; /* Gecko(Firefox) Font Inflation 완전 무력화 */
   }
 
-  html, body {
-    width: 100%;
-    max-width: 100%;
-    overflow-x: hidden;
+  html, body, #root {
     height: 100%;
+  }
+
+  /* 모바일 브라우저 자동 폰트 크기 조정 방지 (Firefox, Safari 공통) */
+  html {
     -webkit-text-size-adjust: 100%;
-    -moz-text-size-adjust: none;
-    text-size-adjust: none;
-  }
-
-  #root {
-    width: 100%;
-    max-width: 100%;
-    min-height: 100%;
-    height: 100%;
-    overflow-x: hidden;
-  }
-
-  /* 모바일 파이어폭스(Gecko)에서 테이블/셀 폰트 자동 비대화 방지 */
-  table, th, td {
-    -webkit-text-size-adjust: 100% !important;
-    -moz-text-size-adjust: none !important;
-    text-size-adjust: none !important;
-  }
-
-  /* Android Firefox 전용 명시적 스케일 및 배율 보정 */
-  .is-firefox-android {
-    font-size: 16px !important;
-    -moz-text-size-adjust: none !important;
-    text-size-adjust: none !important;
-  }
-
-  .is-firefox-android body {
-    font-size: 16px !important;
-    max-height: 999999px !important;
-    -moz-text-size-adjust: none !important;
-    text-size-adjust: none !important;
+    text-size-adjust: 100%;
   }
 
   button:not(:disabled),
@@ -267,17 +232,12 @@
   }
 }
 
-/* 모바일 및 PC 루트 폰트 기준 크기 명시적 고정:
- * 모바일(특히 Android Firefox)에서 OS의 '글자 크기 크게' 설정이 사이트 rem 배율 전체를
- * 1.2~1.5배로 강제 팽창시켜 화면이 깨지는 현상을 방지하기 위해 모바일은 16px로 고정.
- * PC(1024px 이상)에서는 16px의 90%인 14.4px로 축소하여 균일한 90% UI 배율을 보장. */
-:root {
-  font-size: 16px;
-}
-
+/* PC 전용 UI 크기 90% 축소:
+ * 비표준 zoom 대신 표준 font-size를 :root에 적용 — Firefox/Chrome/Safari 모두 동일하게 동작.
+ * Tailwind의 rem 기반 크기 전체가 이 기준을 따르므로, UI 전체가 균일하게 90%로 적용됨. */
 @media (min-width: 1024px) {
   :root {
-    font-size: 14.4px;
+    font-size: 90%;
   }
 }
 
