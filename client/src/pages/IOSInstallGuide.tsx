@@ -1,4 +1,7 @@
-import { isIPad, isIPhone, iosVersion, isIOS26Plus, isIOS15Plus } from "@/lib/browserDetect";
+﻿import { agent } from "@/lib/browserDetect";
+
+// ── detect() 결과 직접 참조 ──────────────────────────────────────────────────
+const { isIPad, isIPhone, iosVersion, isIOS26Plus, isIOS15Plus } = agent;
 import { useLocation } from "wouter";
 
 // ── 공통 SVG 아이콘 ───────────────────────────────────────────────────────────

@@ -47,6 +47,15 @@ export interface AgentInfo {
   isIOS26Plus: boolean;
   /** iOS 15~25 — 공유 버튼이 하단 중앙 툴바 */
   isIOS15Plus: boolean;
+  /**
+   * PWA standalone 모드 또는 네이티브 앱 래퍼(TWA/WebView)에서 실행 중
+   * - display-mode: standalone  → PWA 설치 후 앱으로 실행
+   * - navigator.standalone      → iOS Safari PWA
+   * - Android TWA / WebView     → UA 에 "; wv)" 포함
+   * ※ 브라우저로 재접속하면 false (쿠키·설치 여부와 무관)
+   * → 이 경우 다운로드 버튼 미표시, 별도 카테고리로 처리
+   */
+  isInstalledApp: boolean;
   /** 실제 사용된 감지 계층 (디버그용: 1=ClientHints, 2=UA, 3=Feature) */
   detectionLayer: 1 | 2 | 3;
 }
@@ -59,6 +68,7 @@ function defaultAgent(): AgentInfo {
     isIPad: false, isIPhone: false,
     browserKey: "other", isInAppBrowser: false,
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false,
+    isInstalledApp: false,
     detectionLayer: 3,
   };
 }
@@ -174,6 +184,7 @@ function detectLayer2(): AgentInfo {
     isMobile: mobile, isDesktop: !mobile, desktopOS,
     isIPad, isIPhone, browserKey, isInAppBrowser: isInApp,
     iosVersion, isIOS26Plus, isIOS15Plus,
+    isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 2,
   };
 }
@@ -199,6 +210,7 @@ function detectLayer3(): AgentInfo {
     isIPad, isIPhone: false,
     browserKey: "other", isInAppBrowser: false,
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false,
+    isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 3,
   };
 }
@@ -225,6 +237,12 @@ export function detect(): AgentInfo {
 
   const inApp = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent);
 
+  // PWA standalone / Native 앱 실행 여부 (브라우저 재접속 시는 false)
+  const isInstalledApp =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as any).standalone === true ||
+    /; wv\)/i.test(navigator.userAgent);  // Android TWA / WebView
+
   // Layer 1: Client Hints (Chromium 전용)
   const ch = detectLayer1();
   if (ch) {
@@ -239,6 +257,7 @@ export function detect(): AgentInfo {
       iosVersion:     0,
       isIOS26Plus:    false,
       isIOS15Plus:    false,
+      isInstalledApp,
       detectionLayer: 1,
     };
   }
@@ -246,11 +265,11 @@ export function detect(): AgentInfo {
   // Layer 2: UA 파싱 (Safari / Firefox / 기타)
   const ua2 = detectLayer2();
   if (ua2.browserKey !== "other" || ua2.isIPad || ua2.isIPhone || ua2.desktopOS !== null) {
-    return { ...ua2, isInAppBrowser: inApp };
+    return { ...ua2, isInAppBrowser: inApp, isInstalledApp };
   }
 
   // Layer 3: 기능 감지 fallback
-  return { ...detectLayer3(), isInAppBrowser: inApp };
+  return { ...detectLayer3(), isInAppBrowser: inApp, isInstalledApp };
 }
 
 // ── 모듈 레벨 싱글턴 (모듈 로드 시 1회만 실행) ─────────────────────────────────
@@ -259,19 +278,32 @@ export function detect(): AgentInfo {
 export const agent: AgentInfo =
   typeof window !== "undefined" ? detect() : defaultAgent();
 
-// ── 편의 상수 — 브라우저/기기 ────────────────────────────────────────────────
+// ── 편의 상수 (하위 호환 — 신규 코드는 agent.xxx 직접 사용 권장) ─────────────
+//   ex) agent.browserKey === "samsung"  대신  isSamsungBrowser
+//       agent.isMobile                 대신  isMobileDevice
+//   @deprecated — 향후 제거 예정. 소비 파일에서 agent를 직접 import 할 것.
 
+/** @deprecated agent.browserKey 사용 */
 export const browserKey: BrowserKey  = agent.browserKey;
+/** @deprecated agent.browserKey === "samsung" 사용 */
 export const isSamsungBrowser        = agent.browserKey === "samsung";
-/** Safari UA — iOS/iPadOS/macOS Safari, iOS Chrome(CriOS) 포함 */
+/** @deprecated agent.browserKey === "safari" 사용 */
 export const isIOSSafari             = agent.browserKey === "safari";
+/** @deprecated agent.browserKey === "chrome" 사용 */
 export const isChromeBrowser         = agent.browserKey === "chrome";
+/** @deprecated agent.browserKey === "other" 사용 */
 export const isOtherBrowser          = agent.browserKey === "other";
+/** @deprecated agent.isInAppBrowser 사용 */
 export const isInAppBrowser          = agent.isInAppBrowser;
+/** @deprecated agent.isIPad 사용 */
 export const isIPad                  = agent.isIPad;
+/** @deprecated agent.isIPhone 사용 */
 export const isIPhone                = agent.isIPhone;
+/** @deprecated agent.isDesktop 사용 */
 export const isDesktop               = agent.isDesktop;
+/** @deprecated agent.isMobile 사용 */
 export const isMobileDevice          = agent.isMobile;
+/** @deprecated agent.desktopOS 사용 */
 export const desktopOS: DesktopOS    = agent.desktopOS;
 
 // ── 편의 상수 — iOS/Safari 버전 ──────────────────────────────────────────────
@@ -319,9 +351,10 @@ export function isPwaInstalled(): boolean {
  * shouldShowDownloadPage()
  * 표시 조건:
  *   1. 인앱 브라우저 아닐 것
- *   2. PWA 미설치 상태일 것
+ *   2. 앱으로 실행 중이 아닐 것 (PWA standalone / TWA / WebView)
+ *      → 브라우저로 재접속 시 쿠키·설치 여부와 무관하게 표시함
  *   3. 사용자가 dismiss 하지 않았을 것
- *   4. 모바일 기기일 것 (데스크톱 제외 — macOS Safari, Windows Firefox 등)
+ *   4. 모바일 기기일 것 (데스크톱 제외)
  *   5. 다운로드 대상 브라우저 (Samsung | Safari | Other)
  *      → Chrome 은 PWA 프롬프트 방식으로 별도 처리
  */
@@ -332,7 +365,7 @@ export function shouldShowDownloadPage(): boolean {
     localStorage.getItem("download_page_dismissed") === "1";
   return (
     !agent.isInAppBrowser &&
-    !isPwaInstalled() &&
+    !agent.isInstalledApp &&      // PWA/앱 실행 중이면 표시 안함
     !isDismissed &&
     agent.isMobile &&
     (agent.browserKey === "samsung" ||

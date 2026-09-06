@@ -3,7 +3,7 @@ import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
-import { isMobileDevice } from "@/lib/browserDetect";
+import { agent } from "@/lib/browserDetect";
 import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
@@ -39,7 +39,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e: any) => {
     e.preventDefault();
     // isMobileDevice — browserDetect.ts agent.isMobile 사용
-    if (isMobileDevice) {
+    if (agent.isMobile) {
       (window as any).__deferredPwaPrompt = e;
     }
   });

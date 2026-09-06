@@ -1,5 +1,14 @@
 ﻿
-import { isSamsungBrowser, isIOSSafari as isIOS, isInAppBrowser, isOtherBrowser, isMobileDevice, isChromeBrowser, iosVersion, isIOS26Plus, isIOS15Plus } from "@/lib/browserDetect";
+import { agent } from "@/lib/browserDetect";
+
+// ── detect() 결과 직접 참조 (단일 진실원천: agent 싱글턴) ───────────────────
+const isSamsungBrowser = agent.browserKey === "samsung";
+const isIOS            = agent.browserKey === "safari";   // iOS·iPadOS·macOS Safari
+const isChromeBrowser  = agent.browserKey === "chrome";
+const isOtherBrowser   = agent.browserKey === "other";
+const isInAppBrowser   = agent.isInAppBrowser;
+const isMobileDevice   = agent.isMobile;
+const { iosVersion, isIOS26Plus, isIOS15Plus } = agent;
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -265,16 +274,16 @@ export default function Dashboard() {
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalling, setIsInstalling] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
+  // isStandalone 제거됨 — agent.isInstalledApp 사용 (PWA standalone + TWA 통합 감지)
   // 브라우저 감지 — @/lib/browserDetect (관리페이지 미해결문제 패널 기준)
   // isSamsungBrowser, isIOS(=isIOSSafari), isInAppBrowser, isOtherBrowser: 상단 import에서 주입
   // iosVersion, isIOS26Plus, isIOS15Plus — @/lib/browserDetect (agent.iosVersion) 에서 직접 import
   // isAndroid 제거됨 — agent.isMobile (browserDetect.ts) 사용
-  const [hasPwaCookie, setHasPwaCookie] = useState(typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1'));
+  // hasPwaCookie 제거됨 — 브라우저 재접속 시 설치 여부 무관하게 버튼 표시
 
   useEffect(() => {
-    const standsAlone = window.matchMedia('(display-mode: standalone)').matches || ('standalone' in navigator && (navigator as any).standalone) === true;
-    setIsStandalone(standsAlone);
+    // standsAlone 제거됨 — agent.isInstalledApp (browserDetect.ts) 사용
+    // setIsStandalone 제거됨
 
     // Immediately pick up the prompt if it was already captured in main.tsx
     // (Samsung Internet fires beforeinstallprompt very early, before React mounts)
@@ -3100,7 +3109,7 @@ export default function Dashboard() {
           {/* App Download for Normal Browsers (Chrome, etc.) vs Add to Home Screen for Samsung/In-App */}
           {isSamsungBrowser ? (
             // For Samsung browsers: play_store_url 있을 때만 Play Store 버튼 표시
-            !hasPwaCookie && settings?.samsung_install_button_visible !== false && settings?.play_store_url && (
+            settings?.samsung_install_button_visible !== false && settings?.play_store_url && (
               <a
                 href={settings.play_store_url && !/^https?:\/\//i.test(settings.play_store_url) ? `https://${settings.play_store_url}` : settings.play_store_url}
                 target="_blank"
@@ -3119,7 +3128,7 @@ export default function Dashboard() {
             )
           ) : isOtherBrowser && isMobileDevice ? (
             // 그외 브라우저: play_store_url이 있으면 Play Store 버튼, 없으면 숙짔
-            !hasPwaCookie && settings?.other_install_button_visible !== false && settings?.play_store_url && (
+            settings?.other_install_button_visible !== false && settings?.play_store_url && (
               <a
                 href={settings.play_store_url && !/^https?:\/\//i.test(settings.play_store_url) ? `https://${settings.play_store_url}` : settings.play_store_url}
                 target="_blank"
@@ -3137,7 +3146,7 @@ export default function Dashboard() {
             )
           ) : (
             // Normal PWA Prompt — iOS Safari → App Store, Chrome → PWA
-            !hasPwaCookie && !isStandalone && (
+            !agent.isInstalledApp && (
               <>
                 {isIOS && isMobileDevice && settings?.safari_install_button_visible !== false ? (
                   // iOS Safari

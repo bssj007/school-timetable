@@ -1,17 +1,14 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import {
-  detectBrowser,
-  isInAppBrowser,
-  isSamsungBrowser,
-  isIOSSafari,
-  isOtherBrowser,
-  shouldShowDownloadPage,
-  isDesktop,
-  iosVersion,
-  isIOS26Plus,
-  isIOS15Plus,
-} from "@/lib/browserDetect";
+import { agent, shouldShowDownloadPage } from "@/lib/browserDetect";
+
+// ── detect() 결과 직접 참조 ──────────────────────────────────────────────────
+const isInAppBrowser  = agent.isInAppBrowser;
+const isSamsungBrowser = agent.browserKey === "samsung";
+const isIOSSafari     = agent.browserKey === "safari";
+const isOtherBrowser  = agent.browserKey === "other";
+const isDesktop       = agent.isDesktop;
+const { iosVersion, isIOS26Plus, isIOS15Plus } = agent;
 
 // URL 보정 (프로토콜 없는 경우 https:// 자동 추가)
 function normalizeUrl(url: string): string {
@@ -45,8 +42,7 @@ export default function AppDownloadPage() {
   const [, setLocation] = useLocation();
   const [settings, setSettings] = useState<any>(null);
   // browserDetect 통일 기준 사용
-  const browserType = detectBrowser();
-  // iosVersion, isIOS26Plus, isIOS15Plus — agent.iosVersion (browserDetect.ts) 에서 import
+  const browserType = agent.browserKey;
 
   useEffect(() => {
     fetch("/api/settings/public")

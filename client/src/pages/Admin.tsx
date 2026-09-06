@@ -10217,6 +10217,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                             { label: "isIPad",         value: String(agent.isIPad) },
                             { label: "isIPhone",       value: String(agent.isIPhone) },
                             { label: "isInAppBrowser", value: String(agent.isInAppBrowser) },
+                            { label: "isInstalledApp",  value: String(agent.isInstalledApp), highlight: agent.isInstalledApp },
                             { label: "iosVersion",     value: agent.iosVersion > 0 ? `v${agent.iosVersion}` : "(0 — 해당없음)", highlight: agent.iosVersion > 0 },
                             { label: "isIOS26Plus",    value: String(agent.isIOS26Plus) },
                             { label: "isIOS15Plus",    value: String(agent.isIOS15Plus) },
