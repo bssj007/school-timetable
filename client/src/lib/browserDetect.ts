@@ -47,6 +47,8 @@ export interface AgentInfo {
   isIOS26Plus: boolean;
   /** iOS 15~25 — 공유 버튼이 하단 중앙 툴바 */
   isIOS15Plus: boolean;
+  /** iOS 13~14 — 상단 주소창 + 하단 툴바 가운데 공유 버튼 */
+  isIOS13Plus: boolean;
   /**
    * PWA standalone 모드 또는 네이티브 앱 래퍼(TWA/WebView)에서 실행 중
    * - display-mode: standalone  → PWA 설치 후 앱으로 실행
@@ -67,7 +69,7 @@ function defaultAgent(): AgentInfo {
     isMobile: false, isDesktop: true, desktopOS: null,
     isIPad: false, isIPhone: false,
     browserKey: "other", isInAppBrowser: false,
-    iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false,
+    iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     isInstalledApp: false,
     detectionLayer: 3,
   };
@@ -128,7 +130,7 @@ function detectLayer1(): Partial<AgentInfo> | null {
     isIPhone: false,
     browserKey,
     // iOS 버전: Chromium 환경이므로 항상 0
-    iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false,
+    iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     detectionLayer: 1,
   };
 }
@@ -179,11 +181,12 @@ function detectLayer2(): AgentInfo {
   const iosVersion   = needsIOSVersion ? calcIOSVersion(ua) : 0;
   const isIOS26Plus  = iosVersion >= 26;
   const isIOS15Plus  = iosVersion >= 15;
+  const isIOS13Plus  = iosVersion >= 13;
 
   return {
     isMobile: mobile, isDesktop: !mobile, desktopOS,
     isIPad, isIPhone, browserKey, isInAppBrowser: isInApp,
-    iosVersion, isIOS26Plus, isIOS15Plus,
+    iosVersion, isIOS26Plus, isIOS15Plus, isIOS13Plus,
     isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 2,
   };
@@ -209,7 +212,7 @@ function detectLayer3(): AgentInfo {
     isMobile: mobile, isDesktop: !mobile, desktopOS: null,
     isIPad, isIPhone: false,
     browserKey: "other", isInAppBrowser: false,
-    iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false,
+    iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
     isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 3,
   };
@@ -257,6 +260,7 @@ export function detect(): AgentInfo {
       iosVersion:     0,
       isIOS26Plus:    false,
       isIOS15Plus:    false,
+      isIOS13Plus:    false,
       isInstalledApp,
       detectionLayer: 1,
     };

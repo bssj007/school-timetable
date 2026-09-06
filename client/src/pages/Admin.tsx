@@ -10235,6 +10235,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                             { label: "iosVersion",     value: agent.iosVersion > 0 ? `v${agent.iosVersion}` : "(0 — 해당없음)", highlight: agent.iosVersion > 0 },
                             { label: "isIOS26Plus",    value: String(agent.isIOS26Plus) },
                             { label: "isIOS15Plus",    value: String(agent.isIOS15Plus) },
+                            { label: "isIOS13Plus",    value: String(agent.isIOS13Plus) },
                         ] as const).map(({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) => (
                             <div key={label} className="flex flex-col gap-0.5">
                                 <span className="text-xs text-gray-500 font-mono">{label}</span>
