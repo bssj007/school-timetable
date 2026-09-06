@@ -266,10 +266,14 @@ export default function Dashboard() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [showIOSInstallGuide, setShowIOSInstallGuide] = useState(false);
   const isIOS = typeof window !== 'undefined' ? /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) : false;
-  // 라이브러리(react-ios-pwa-prompt)의 useDeviceAndVersion 방식 차용: /os (\d+)/i 로 메이저 버전 추출
-  const iosVersion = typeof window !== 'undefined'
-    ? parseInt(/os (\d+)/i.exec(navigator.userAgent.toLowerCase())?.[1] ?? '0')
-    : 0;
+  // iOS 26+부터 Apple이 UA의 OS 버전을 동결(freeze)함 → "CPU iPhone OS 18_x" 처럼 구버전이 표시됨
+  // 대신 Safari의 "Version/26.x" 헤더는 실제 메이저 버전을 노출하므로, 두 값 중 큰 것을 사용
+  const iosVersion = typeof window !== 'undefined' ? (() => {
+    const ua = navigator.userAgent;
+    const osVer  = parseInt(/os (\d+)/i.exec(ua.toLowerCase())?.[1]    ?? '0', 10);
+    const safVer = parseInt(/version\/(\d+)/i.exec(ua)?.[1]            ?? '0', 10);
+    return Math.max(osVer, safVer);
+  })() : 0;
   // iOS 26+: Compact 탭 레이아웃 기본값 → 공유 버튼이 주소창 ... 안에 숨겨짐 (iPhone 17 / iOS 26)
   const isIOS26Plus = iosVersion >= 26;
   // iOS 15~25: 공유 버튼이 하단 중앙 툴바
