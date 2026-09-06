@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { agent, shouldShowDownloadPage } from "@/lib/browserDetect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -4570,10 +4570,10 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <div className="flex flex-col h-full gap-4">
                         <div className="flex gap-2 items-center pb-4 border-b">
                             <h3 className="text-lg font-bold flex-1 text-orange-600">⚠️ 미해결 문제</h3>
+                            <span className="text-xs text-slate-400">접속환경 · PWA 설정은 🌐 접속환경 탭으로 이전됨</span>
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <TargetClassDisplaySettings adminPassword={adminPassword} />
-                            <InstallButtonSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -7012,6 +7012,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         기타
                     </TabsTrigger>
                     <TabsTrigger
+                        value="access-environment"
+                        className="data-[state=active]:bg-sky-100 data-[state=active]:text-sky-800 font-medium"
+                    >
+                        🌐 접속환경
+                    </TabsTrigger>
+                    <TabsTrigger
                         value="meal"
                         className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800"
                     >
@@ -7916,6 +7922,14 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
 
                 <TabsContent value="etc" className="space-y-6">
                     <EtcManager adminPassword={password} />
+                </TabsContent>
+
+                <TabsContent value="access-environment" className="space-y-4">
+                    <div className="flex items-center gap-2 pb-4 border-b">
+                        <h3 className="text-lg font-bold flex-1 text-sky-700">🌐 접속환경 감지 &amp; PWA 설치 설정</h3>
+                        <span className="text-xs text-slate-400 font-mono">browserDetect.ts → agent 싱글턴 기반</span>
+                    </div>
+                    <InstallButtonSettings adminPassword={password} />
                 </TabsContent>
 
                 <TabsContent value="meal" className="space-y-6">
@@ -10269,7 +10283,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                     { os: "macos"   as const, label: "macOS",   icon: "🍏", desc: "Mac·MacBook (iPad 제외)" },
                                     { os: "linux"   as const, label: "Linux",   icon: "🐧", desc: "Linux 데스크톱 (ChromeOS 제외)" },
                                 ] as const).map((row) => (
-                                    <tr key={row.os} className={`border-b last:border-b-0 transition-colors ${currentDesktopOS === row.os ? "bg-amber-50" : "hover:bg-gray-50"}`}>
+                                    <tr key={row.os} className={`border-b last:border-b-0 transition-colors ${(currentDesktopOS === row.os && !agent.isInstalledApp) ? "bg-amber-50" : "hover:bg-gray-50"}`}>
                                         <td className="px-4 py-3">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-base">{row.icon}</span>
@@ -10285,7 +10299,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 text-center">
-                                            {currentDesktopOS === row.os && (
+                                            {currentDesktopOS === row.os && !agent.isInstalledApp && (
                                                 <span className="inline-flex flex-col items-center gap-0.5 text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
                                                     🖥️ 현재
                                                 </span>
@@ -10293,6 +10307,30 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                         </td>
                                     </tr>
                                 ))}
+                                {/* 설치된 앱 실행 (데스크톱 PWA) — agent.isInstalledApp */}
+                                <tr className={`border-b last:border-b-0 transition-colors ${agent.isInstalledApp && !agent.isMobile ? "bg-purple-50" : "hover:bg-gray-50"}`}>
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">📲</span>
+                                            <div>
+                                                <p className="font-semibold text-gray-800">설치된 앱 (데스크톱)</p>
+                                                <p className="text-xs text-gray-500">Chrome PWA 앱으로 실행 중 · display-mode: standalone</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
+                                            🚫 항상 미표시
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                        {agent.isInstalledApp && !agent.isMobile && (
+                                            <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100 border border-purple-300 px-2 py-0.5 rounded-full">
+                                                📲 현재 (앱)
+                                            </span>
+                                        )}
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -10324,7 +10362,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                             </thead>
                             <tbody>
                                 {browsers.map((browser) => {
-                                    const isCurrent = browser.key === currentBrowserKey && currentIsMobile;
+                                    const isCurrent = browser.key === currentBrowserKey && currentIsMobile && !agent.isInstalledApp;
                                     return (
                                     <tr key={browser.key} className={`border-b last:border-b-0 transition-colors ${isCurrent ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-gray-50"}`}>
                                         <td className="px-4 py-3">
@@ -10360,6 +10398,33 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                     </tr>
                                     );
                                 })}
+                                {/* 설치된 앱 실행 (PWA standalone·Android TWA) — agent.isInstalledApp */}
+                                <tr className={`border-b last:border-b-0 transition-colors ${agent.isInstalledApp && agent.isMobile ? "bg-purple-50 hover:bg-purple-100" : "hover:bg-gray-50"}`}>
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">📲</span>
+                                            <div>
+                                                <p className="font-semibold text-gray-800">설치된 앱</p>
+                                                <p className="text-xs text-gray-500">PWA standalone · Android TWA / WebView — agent.isInstalledApp</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                        <span className="text-xs text-gray-400 font-mono">—</span>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
+                                            🚫 항상 미표시
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                        {agent.isInstalledApp && agent.isMobile && (
+                                            <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100 border border-purple-300 px-2 py-0.5 rounded-full">
+                                                📲 현재 (앱)
+                                            </span>
+                                        )}
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>

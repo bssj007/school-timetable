@@ -38,9 +38,10 @@ function Divider() {
   return <div className="border-t border-gray-100" />;
 }
 
-// ── iPad 안내 (모든 iPadOS) ───────────────────────────────────────────────────
+// ── iPad 안내 — iPadOS 14~25 ─────────────────────────────────────────────────
 // 공유 버튼이 상단 주소창 우측에 항상 노출 (iPhone과 다름)
-function GuideIPad() {
+// 공유 시트에서 목록 스크롤하여 '홈 화면에 추가' 선택
+function GuideIPadLegacy() {
   return (
     <div className="space-y-5">
       {/* Step 1 — 상단 공유 버튼 */}
@@ -102,6 +103,133 @@ function GuideIPad() {
         <div className="flex-1">
           <p className="text-base font-bold text-gray-900">오른쪽 위 <span className="font-black">'추가'</span>를 누르세요</p>
           <p className="text-sm text-gray-500 mt-0.5">홈 화면에 앱 아이콘이 추가됩니다!</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── iPad 안내 — iPadOS 26+ ────────────────────────────────────────────────────
+// iPhone iOS 26+와 동일하게, 공유 시트 하단에 '더 보기' 버튼이 생김
+// 상단 주소창 공유 버튼 → 공유 시트 하단 더 보기 → 홈 화면에 추가
+function GuideIPadNew() {
+  return (
+    <div className="space-y-5">
+      {/* Step 1 — 상단 공유 버튼 */}
+      <div className="flex items-start gap-4">
+        <StepBadge n={1} />
+        <div className="flex-1">
+          <p className="text-base font-bold text-gray-900">상단 주소창 옆 <span className="font-black">공유</span> 버튼을 누르세요</p>
+          <p className="text-sm text-gray-500 mt-0.5">주소창 오른쪽 끝, ↑ 박스 아이콘</p>
+          {/* iPad 주소창 일러스트 */}
+          <div className="mt-3 bg-gray-100 rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-gray-200">
+            <div className="flex-1 bg-white rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs text-gray-400 border border-gray-200">
+              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span className="truncate">학교 시간표 사이트</span>
+            </div>
+            <div className="relative">
+              <div className="w-8 h-8 rounded-lg bg-white border-2 border-red-500 flex items-center justify-center shadow-sm">
+                <ShareIcon className="w-4 h-4 text-blue-500" />
+              </div>
+              <div className="absolute -inset-1 rounded-xl border-2 border-red-400 pointer-events-none" />
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Divider />
+
+      {/* Step 2 — 하단 더 보기 */}
+      <div className="flex items-start gap-4">
+        <StepBadge n={2} />
+        <div className="flex-1">
+          <p className="text-base font-bold text-gray-900">공유 시트 하단 <span className="font-black text-red-500">더 보기</span>를 누르세요</p>
+          <p className="text-sm text-gray-500 mt-0.5">앱 행 오른쪽 끝 버튼이 아닌, 가장 하단의 더 보기</p>
+
+          {/* 액션 바 일러스트 */}
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            {/* 상단 앱 아이콘 행 */}
+            <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 border-b border-gray-100">
+              {[
+                { label: "News",    bg: "bg-red-100",  content: <span className="text-red-500 text-xs font-black">N</span> },
+                { label: "미리 알림", bg: "bg-blue-50", content: <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> },
+                { label: "더 보기", bg: "bg-gray-100", content: <span className="text-gray-500 text-xs font-black">···</span> },
+              ].map((app, i) => (
+                <div key={i} className="flex flex-col items-center gap-0.5 shrink-0">
+                  <div className={`w-9 h-9 rounded-xl ${app.bg} flex items-center justify-center`}>{app.content}</div>
+                  <span className="text-[9px] text-gray-400">{app.label}</span>
+                </div>
+              ))}
+            </div>
+            {/* 하단 액션 바 */}
+            <div className="flex items-center gap-0 divide-x divide-gray-100 bg-white">
+              {[
+                { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>, label: "복사" },
+                { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>, label: "북마크" },
+                { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: "읽기" },
+              ].map((action, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-0.5 py-1.5">
+                  {action.icon}
+                  <span className="text-[9px] text-gray-400">{action.label}</span>
+                </div>
+              ))}
+              {/* 더 보기 셀 — 빨간 원 + 직선 화살표 */}
+              <div className="flex-1 flex flex-col items-center gap-0.5 py-1.5 relative" style={{ overflow: 'visible' }}>
+                <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+                <span className="text-[9px] text-gray-400">더 보기</span>
+                <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }}
+                  viewBox="0 0 60 42" preserveAspectRatio="none" fill="none">
+                  <ellipse cx="30" cy="21" rx="28" ry="19" stroke="#ef4444" strokeWidth="2.5"/>
+                  <line x1="30" y1="-18" x2="30" y2="2" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"/>
+                  <polyline points="24,-8 30,2 36,-8" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Divider />
+
+      {/* Step 3 — 홈 화면에 추가 */}
+      <div className="flex items-start gap-4">
+        <StepBadge n={3} />
+        <div className="flex-1">
+          <p className="text-base font-bold text-gray-900">목록에서 <span className="font-black">'홈 화면에 추가'</span>를 눌러요</p>
+          <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            {[
+              { icon: <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>, label: "AirPlay" },
+              { icon: <AddToHomeIcon className="w-5 h-5 text-gray-800" />, label: "홈 화면에 추가", highlight: true },
+              { icon: <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>, label: "메일로 링크 보내기" },
+            ].map((item, i) => (
+              <div key={i} className={`flex items-center gap-3 px-4 py-3 ${item.highlight ? "bg-blue-50 border-l-4 border-blue-500" : "border-b border-gray-100"}`}>
+                {item.icon}
+                <span className={`text-sm ${item.highlight ? "text-blue-700 font-bold" : "text-gray-700"}`}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <Divider />
+
+      {/* Step 4 — 웹 앱 토글 + 추가 */}
+      <div className="flex items-start gap-4">
+        <StepBadge n={4} />
+        <div className="flex-1">
+          <p className="text-base font-bold text-gray-900"><span className="font-black">'웹 앱으로 열기'</span> 켜고 <span className="font-black">'추가'</span> 누르세요</p>
+          <p className="text-sm text-gray-500 mt-0.5">iPadOS 26+에서는 웹 앱 모드를 활성화해야 해요</p>
+          <div className="mt-3 rounded-2xl border border-gray-200 px-4 py-3 flex items-center justify-between bg-gray-50">
+            <span className="text-sm font-medium text-gray-800">웹 앱으로 열기</span>
+            <div className="w-11 h-6 bg-green-500 rounded-full flex items-center justify-end pr-0.5">
+              <div className="w-5 h-5 bg-white rounded-full shadow" />
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -364,7 +492,8 @@ function Guide14() {
 
 // ── 기기/버전별 레이블 ────────────────────────────────────────────────────────
 function deviceLabel(isIpad: boolean): string {
-  if (isIpad) return "iPad (모든 버전)";
+  if (isIpad && iosVersion >= 26) return "iPad (iPadOS 26+)";
+  if (isIpad) return "iPad (iPadOS ~25)";
   if (iosVersion >= 26) return "iOS 26+ (iPhone 17+)";
   if (iosVersion >= 15) return "iOS 15~25";
   return "iOS 14 이하";
@@ -375,7 +504,7 @@ export default function IOSInstallGuide() {
   const [, setLocation] = useLocation();
   // iosVersion, isIOS26Plus, isIOS15Plus — @/lib/browserDetect (agent.iosVersion) 에서 직접 import
 
-  // iPad 우선 분기 (iPad는 버전 무관하게 상단 공유 버튼)
+  // iPad 우선 분기
   const showIPadGuide = isIPad;
 
   return (
@@ -414,7 +543,9 @@ export default function IOSInstallGuide() {
       <div className="flex-1 overflow-y-auto">
         <div className="px-6 py-6">
           {showIPadGuide
-            ? <GuideIPad />
+            ? isIOS26Plus
+              ? <GuideIPadNew />       // iPadOS 26+ — 하단 더보기 경유
+              : <GuideIPadLegacy />    // iPadOS ~25  — 스크롤로 홈화면에 추가
             : isIOS26Plus
               ? <Guide26 />
               : isIOS15Plus
