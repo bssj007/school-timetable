@@ -268,6 +268,8 @@ function detectLayer2(): AgentInfo {
   const isIOS15Plus  = iosVersion >= 15;
   const isIOS13Plus  = iosVersion >= 13;
 
+  const isIOSChrome = isIOS && browserKey === "chrome";
+  const isIOSOther  = isIOS && !isIOSSafari && !isIOSChrome;
   const isFirefox = /Firefox|FxiOS/i.test(ua);
   const isAndroidFirefox = isAndroid && isFirefox;
 
