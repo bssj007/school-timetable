@@ -1950,7 +1950,7 @@ export default function Dashboard() {
 
               {/* Mobile Elective Edit Button */}
               {(grade === "2" || grade === "3") && (
-                <div className="absolute left-0 -translate-x-[10px] top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center sm:hidden z-20 pointer-events-none">
+                <div className="absolute left-3 top-0 bottom-0 flex items-center justify-start sm:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative">
                     <Button
                       size="sm"
