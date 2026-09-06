@@ -115,22 +115,39 @@
 }
 
 @layer base {
-  * {
+  *,
+  *::before,
+  *::after {
     @apply border-border outline-ring/50;
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: none;
+    text-size-adjust: none;
   }
 
   body {
     @apply bg-background text-foreground;
+    max-height: 999999px; /* Gecko & WebKit font inflation killer */
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: none;
+    text-size-adjust: none;
   }
 
   html, body, #root {
     height: 100%;
   }
 
-  /* 모바일 브라우저 자동 폰트 크기 조정 방지 (Firefox, Safari 공통) */
+  /* 모바일 브라우저 자동 폰트 크기 조정 방지 (Firefox Gecko, Safari WebKit 공통) */
   html {
     -webkit-text-size-adjust: 100%;
-    text-size-adjust: 100%;
+    -moz-text-size-adjust: none;
+    text-size-adjust: none;
+  }
+
+  /* 테이블 및 셀 내에서 Gecko 엔진의 폰트 비대화 방지 */
+  table, th, td {
+    -webkit-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: none !important;
+    text-size-adjust: none !important;
   }
 
   button:not(:disabled),
@@ -232,12 +249,24 @@
   }
 }
 
-/* PC 전용 UI 크기 90% 축소:
- * 비표준 zoom 대신 표준 font-size를 :root에 적용 — Firefox/Chrome/Safari 모두 동일하게 동작.
- * Tailwind의 rem 기반 크기 전체가 이 기준을 따르므로, UI 전체가 균일하게 90%로 적용됨. */
+/* 화면별 UI 폰트 및 rem 크기 기준 설정:
+ * 모바일(기본): 15px로 명시적 고정하여 모바일 Firefox가 OS 시스템 글자 크기(120~140%)를
+ * rem에 곱해 전체 UI가 팽창하는 현상을 원천 방지하고 360px 모바일 화면에 최적화.
+ * 태블릿(640px 이상): 기본 16px.
+ * PC(1024px 이상): 14.4px (16px의 90%)로 컴팩트하게 축소. */
+:root {
+  font-size: 15px;
+}
+
+@media (min-width: 640px) {
+  :root {
+    font-size: 16px;
+  }
+}
+
 @media (min-width: 1024px) {
   :root {
-    font-size: 90%;
+    font-size: 14.4px;
   }
 }
 

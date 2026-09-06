@@ -1822,9 +1822,9 @@ export default function TeacherPage() {
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 md:gap-4 xl:gap-6 items-start sm:items-stretch sm:flex-1 sm:min-h-0">
 
         {/* ===== MOBILE ONLY: Title row — 항상 표시 ===== */}
-        <div className="sm:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 shrink-0 min-h-[44px]">
-          <h2 className="text-lg font-extrabold truncate leading-tight">
-            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
+        <div className="sm:hidden w-full order-1 flex items-center justify-between gap-1.5 px-0.5 shrink-0 min-h-[44px]">
+          <h2 className="text-base font-extrabold truncate leading-tight">
+            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가</span>
           </h2>
           {/* 주 선택기 — 레이아웃 공간 항상 유지, 당일형이 아닐 때 invisible */}
           <div className={`flex flex-col items-center gap-0.5 shrink-0 ${mobileViewMode !== 'daily' ? 'invisible pointer-events-none' : ''}`}>
@@ -2484,7 +2484,7 @@ export default function TeacherPage() {
             </div>
           ) : timetableData && selectedSchedule ? (
             <div className="w-full overflow-x-auto flex-1" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <table className="w-full table-fixed min-w-[340px] sm:min-w-[420px] md:min-w-[500px] xl:min-w-[600px]" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
+              <table className="w-full table-fixed min-w-0 sm:min-w-[420px] md:min-w-[500px] xl:min-w-[600px]" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
@@ -2608,7 +2608,7 @@ export default function TeacherPage() {
                               }}
                             >
                               {/* minHeight는 td에서 무효 → 항상 렌더링되는 div에서 보장 */}
-                              <div style={{ minHeight: 38, padding: '4px 5px', display: 'flex', flexDirection: 'column' }}>
+                              <div style={{ minHeight: 38, padding: '3px 3px', display: 'flex', flexDirection: 'column' }}>
                               {cellData ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                   {/* 학생 배지 — td의 position:relative 기준 우측 상단 */}
@@ -2656,7 +2656,7 @@ export default function TeacherPage() {
                                       fontWeight: 700,
                                       color: '#1a1a1a',
                                       lineHeight: 1.3,
-                                      fontSize: (cellData.subjectName || '').length > 6 ? 11 : (cellData.subjectName || '').length > 4 ? 12 : 14,
+                                      fontSize: (cellData.subjectName || '').length > 6 ? 10.5 : (cellData.subjectName || '').length > 4 ? 11.5 : 13,
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
                                       whiteSpace: 'nowrap',
