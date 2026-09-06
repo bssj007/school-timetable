@@ -1822,9 +1822,9 @@ export default function TeacherPage() {
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 md:gap-4 xl:gap-6 items-start sm:items-stretch sm:flex-1 sm:min-h-0">
 
         {/* ===== MOBILE ONLY: Title row — 항상 표시 ===== */}
-        <div className="sm:hidden w-full order-1 flex items-center justify-between gap-1.5 px-0.5 shrink-0 min-h-[44px]">
-          <h2 className="text-base font-extrabold truncate leading-tight">
-            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가</span>
+        <div className="sm:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 shrink-0 min-h-[44px]">
+          <h2 className="text-lg font-extrabold truncate leading-tight">
+            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h2>
           {/* 주 선택기 — 레이아웃 공간 항상 유지, 당일형이 아닐 때 invisible */}
           <div className={`flex flex-col items-center gap-0.5 shrink-0 ${mobileViewMode !== 'daily' ? 'invisible pointer-events-none' : ''}`}>
@@ -2194,23 +2194,23 @@ export default function TeacherPage() {
           return (
             <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col sm:flex-1 sm:min-h-0">
               {/* 달력 헤더 */}
-              <div className="flex items-center justify-between px-3 py-2 sm:px-6 sm:py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
+              <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-3.5 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
                 <button type="button"
                   onClick={() => setCalendarMonth(prev => {
                     const d = new Date(prev.year, prev.month - 1, 1);
                     return { year: d.getFullYear(), month: d.getMonth() };
                   })}
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-600 cursor-pointer shadow-sm">
-                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-600 cursor-pointer shadow-sm">
+                  <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
-                <span className="font-extrabold text-slate-800 text-sm sm:text-base">{year}년 {month + 1}월</span>
+                <span className="font-extrabold text-slate-800 text-base sm:text-lg">{year}년 {month + 1}월</span>
                 <button type="button"
                   onClick={() => setCalendarMonth(prev => {
                     const d = new Date(prev.year, prev.month + 1, 1);
                     return { year: d.getFullYear(), month: d.getMonth() };
                   })}
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-600 cursor-pointer shadow-sm">
-                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-600 cursor-pointer shadow-sm">
+                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               </div>
 
@@ -2232,9 +2232,9 @@ export default function TeacherPage() {
                     const rect = calGridRef.current.getBoundingClientRect();
                     const relX = e.clientX - rect.left;
                     const relY = e.clientY - rect.top;
-                    const DOW_H = 26; // py-1 + text-[10px] 행 높이 근사
-                    const CELL_H = 36; // h-9
-                    const ZONE_W = 36; // 좌우 감지 너비
+                    const DOW_H = 32; // py-2 + text-[11px] 행 높이 근사
+                    const CELL_H = 44; // h-11
+                    const ZONE_W = 44; // 좌우 감지 너비
                     const numRows = totalCells / 7;
 
                     // 첫 행 왼쪽 경계
@@ -2268,15 +2268,14 @@ export default function TeacherPage() {
                 }}
                 onPointerUp={(e) => {
                   if (!calIsDragging) return;
-                  const ds = calDragStart;
-                  const de = dateFromPoint(e.clientX, e.clientY) ?? calDragEnd;
+                  const [ds, de] = [calDragStart, calDragEnd];
                   setCalDragStart(null);
                   setCalDragEnd(null);
+                  if (!ds || !de) return;
 
-                  if (!ds || !de || ds === de) {
-                    // 클릭: 당일형으로 이동
-                    const target = ds ?? de;
-                    if (!target) return;
+                  if (ds === de) {
+                    // 단순 탭: 해당 날짜의 월요일 계산 -> weekOffset 계산 -> daily 뷰 전환
+                    const target = ds;
                     const [ty, tm, td2] = target.split('-').map(Number);
                     const clicked = new Date(ty, tm - 1, td2);
                     const cdow = clicked.getDay();
@@ -2305,22 +2304,22 @@ export default function TeacherPage() {
                     {/* 지난 달: 첫째 행 왼쪽 테두리 — 시각 전용 */}
                     <div
                       className="absolute left-0 z-10 flex items-center justify-start pointer-events-none"
-                      style={{ top: 26, height: 36 }}
+                      style={{ top: 32, height: 44 }}
                     >
-                      <div className="flex flex-col items-center justify-center w-8 h-8 rounded-r-xl bg-indigo-600/80 shadow-md">
-                        <ChevronLeft className="w-3.5 h-3.5 text-white animate-bounce" style={{ animationDuration: '0.5s' }} />
-                        <span className="text-[7.5px] text-white font-bold leading-none mt-0.5">지난달</span>
+                      <div className="flex flex-col items-center justify-center w-9 h-9 rounded-r-xl bg-indigo-600/80 shadow-md">
+                        <ChevronLeft className="w-4 h-4 text-white animate-bounce" style={{ animationDuration: '0.5s' }} />
+                        <span className="text-[8px] text-white font-bold leading-none mt-0.5">지난달</span>
                       </div>
                     </div>
 
                     {/* 다음 달: 마지막 행 오른쪽 테두리 — 시각 전용 */}
                     <div
                       className="absolute right-0 z-10 flex items-center justify-end pointer-events-none"
-                      style={{ bottom: 4, height: 36 }}
+                      style={{ bottom: 4, height: 44 }}
                     >
-                      <div className="flex flex-col items-center justify-center w-8 h-8 rounded-l-xl bg-indigo-600/80 shadow-md">
-                        <ChevronRight className="w-3.5 h-3.5 text-white animate-bounce" style={{ animationDuration: '0.5s' }} />
-                        <span className="text-[7.5px] text-white font-bold leading-none mt-0.5">다음달</span>
+                      <div className="flex flex-col items-center justify-center w-9 h-9 rounded-l-xl bg-indigo-600/80 shadow-md">
+                        <ChevronRight className="w-4 h-4 text-white animate-bounce" style={{ animationDuration: '0.5s' }} />
+                        <span className="text-[8px] text-white font-bold leading-none mt-0.5">다음달</span>
                       </div>
                     </div>
                   </>
@@ -2328,14 +2327,14 @@ export default function TeacherPage() {
 
                 {DOW_LABELS.map((dow, i) => (
                   <div key={dow} className={[
-                    'py-1 text-center text-[10px] sm:text-[11px] font-bold pointer-events-none',
+                    'py-2 text-center text-[11px] font-bold pointer-events-none',
                     i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-500',
                   ].join('')}>{dow}</div>
                 ))}
 
                 {cells.map((d, idx) => {
                   const col = idx % 7;
-                  if (!d) return <div key={`empty-${idx}`} className="h-9 sm:h-11" />;
+                  if (!d) return <div key={`empty-${idx}`} className="h-11" />;
                   const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                   const isToday      = dateStr === todayStr;
                   const isSun        = col === 0;
@@ -2350,7 +2349,7 @@ export default function TeacherPage() {
                       key={dateStr}
                       data-date={dateStr}
                       className={[
-                        'h-9 sm:h-11 flex flex-col items-center justify-center text-[11.5px] sm:text-[13px] font-bold transition-colors cursor-pointer relative z-10',
+                        'h-11 flex flex-col items-center justify-center text-[13px] font-bold transition-colors cursor-pointer relative z-10',
                         isRangeStart || isRangeEnd     ? 'bg-indigo-500 text-white rounded-lg' : '',
                         inRange && !isRangeStart && !isRangeEnd ? 'bg-indigo-100 text-indigo-700' : '',
                         !inRange && !isRangeStart && !isRangeEnd && isToday  ? 'ring-2 ring-emerald-500 text-emerald-700 bg-emerald-50 rounded-lg' : '',
@@ -2376,10 +2375,10 @@ export default function TeacherPage() {
                   if (hwAssessments.length === 0) return null;
 
                   const numRows = Math.ceil((startDow + totalDays) / 7);
-                  const DOW_H = 26;  // 요일 헤더 높이
-                  const CELL_H = 36; // h-9
-                  const BAR_H = 28;  // 바 높이
-                  const BAR_TOP_OFFSET = 4; // (36 - 28) / 2
+                  const DOW_H = 32;  // 요일 헤더 높이
+                  const CELL_H = 44; // h-11
+                  const BAR_H = 34;  // 바 높이
+                  const BAR_TOP_OFFSET = 5; // (44 - 34) / 2
                   const BAR_COLOR = '#ec4899'; // pink-500
 
                   const bars: React.ReactNode[] = [];
@@ -2488,7 +2487,7 @@ export default function TeacherPage() {
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
-                    <th style={{ width: 32, height: 28, background: '#f2f2f2', borderRight: '1px solid #d0d0d0', borderBottom: '1px solid #d0d0d0', position: 'sticky', top: 0, zIndex: 2 }} />
+                    <th style={{ width: 36, height: 30, background: '#f2f2f2', borderRight: '1px solid #d0d0d0', borderBottom: '1px solid #d0d0d0', position: 'sticky', top: 0, zIndex: 2 }} />
                     {weekdays.map((day, idx) => {
                       const dDate = weekDates[idx];
                       const todayStr = toDateString(new Date());
@@ -2498,7 +2497,7 @@ export default function TeacherPage() {
                         <th
                           key={day}
                           style={{
-                            height: 28,
+                            height: 30,
                             background: isToday ? '#cee8d0' : '#f2f2f2',
                             borderRight: '1px solid #d0d0d0',
                             borderBottom: isToday ? '2px solid #217346' : '1px solid #d0d0d0',
@@ -2531,7 +2530,7 @@ export default function TeacherPage() {
                         <td
                           className="h-[52px] sm:h-auto select-none text-center align-middle p-0"
                           style={{
-                            width: 32,
+                            width: 36,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
                             borderRight: isCurrentPeriod ? '2px solid #217346' : '1px solid #d0d0d0',
                             borderBottom: '1px solid #d0d0d0',
@@ -2603,9 +2602,9 @@ export default function TeacherPage() {
                               }}
                             >
                               {/* minHeight: 52로 빈 칸 함몰 완벽 방지 — 모바일은 52px 고정, PC는 균등 확장 */}
-                              <div className="h-full min-h-[52px] sm:min-h-0 flex flex-col" style={{ padding: '2px 2.5px', justifyContent: cellData ? 'flex-start' : 'center' }}>
+                              <div className="h-full min-h-[52px] sm:min-h-0 flex flex-col" style={{ padding: '3px 4px', justifyContent: cellData ? 'flex-start' : 'center' }}>
                               {cellData ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                   {/* 학생 배지 — td의 position:relative 기준 우측 상단 */}
                                   {hasAssessment && cellAssessments.some(a => !a.isTeacherCreated) && (
                                     <span style={{
@@ -3102,7 +3101,7 @@ export default function TeacherPage() {
                   return (
                     <div
                       key={a.id}
-                      className="border-b border-slate-100/80 last:border-b-0 sm:border sm:border-slate-100 py-2 px-1 sm:p-2.5 md:p-3 sm:rounded-xl sm:bg-slate-50 hover:bg-indigo-50/60 sm:hover:border-indigo-200 transition-all duration-150 cursor-pointer"
+                      className="border-b border-slate-100/80 last:border-b-0 sm:border sm:border-slate-100 py-2.5 px-1 sm:p-2.5 md:p-3 sm:rounded-xl sm:bg-slate-50 hover:bg-indigo-50/60 sm:hover:border-indigo-200 transition-all duration-150 cursor-pointer"
                       onClick={() => {
                         if (!requireAuth()) return; // 미인증 시 인증 다이얼로그
                         setSelectedAssessment(a);
