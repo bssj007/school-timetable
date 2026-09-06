@@ -235,6 +235,7 @@ export default function Dashboard() {
   const [showBugReportDialog, setShowBugReportDialog] = useState(false);
   const [bugReportMessage, setBugReportMessage] = useState("");
   const [isBugReportSending, setIsBugReportSending] = useState(false);
+  const [showIOSOtherGuideDialog, setShowIOSOtherGuideDialog] = useState(false);
 
   // ── 학번/이름 변경 다이얼로그 ────────────────────────────────────────
   const [showChangeDialog, setShowChangeDialog] = useState(false);
@@ -3135,54 +3136,9 @@ export default function Dashboard() {
 
             // ── 1. Android 환경 ───────────────────────────────────────────
             if (isAndroid) {
-              // 1-1. Samsung Internet
-              if (isSamsungBrowser) {
-                if (settings?.samsung_install_button_visible === false || !playUrl) return null;
-                return (
-                  <a
-                    href={playUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-                  >
-                    <PlayStoreLogo />
-                    <span>Google Play에서 다운로드</span>
-                  </a>
-                );
-              }
-
-              // 1-2. Android 기타 브라우저 (Opera, Firefox, Whale, Edge 등)
-              if (isOtherBrowser) {
-                if (settings?.other_install_button_visible === false || !playUrl) return null;
-                return (
-                  <a
-                    href={playUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-                  >
-                    <PlayStoreLogo />
-                    <span>Google Play에서 다운로드</span>
-                  </a>
-                );
-              }
-
-              // 1-3. Android Chrome
+              // 1-1. Chrome / Google 브라우저인 경우: 항상 PWA 설치 버튼
               if (isChromeBrowser) {
                 if (settings?.chrome_install_button_visible === false) return null;
-                if (playUrl) {
-                  return (
-                    <a
-                      href={playUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-                    >
-                      <PlayStoreLogo />
-                      <span>Google Play에서 다운로드</span>
-                    </a>
-                  );
-                }
                 return (
                   <Button
                     onClick={handleInstallClick}
@@ -3200,26 +3156,56 @@ export default function Dashboard() {
                   </Button>
                 );
               }
+
+              // 1-2. 그 외 모든 Android 브라우저 (Samsung, Opera, Firefox, Whale, Edge 등): Play Store 링크 등록 시 표시
+              if (playUrl && settings?.play_store_url) {
+                const isHidden = isSamsungBrowser
+                  ? settings?.samsung_install_button_visible === false
+                  : settings?.other_install_button_visible === false;
+                if (isHidden) return null;
+                return (
+                  <a
+                    href={playUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+                  >
+                    <PlayStoreLogo />
+                    <span>Google Play에서 다운로드</span>
+                  </a>
+                );
+              }
+
+              return null;
             }
 
             // ── 2. iOS 환경 ───────────────────────────────────────────────
             if (isIOS) {
-              // 2-1. iOS Safari
+              // 2-1. 앱스토어 링크가 등록되어 있다면 브라우저 무관 App Store 버튼 표시
+              if (appUrl && settings?.app_store_url) {
+                const isHidden = isIOSSafari
+                  ? settings?.safari_install_button_visible === false
+                  : isChromeBrowser
+                    ? settings?.chrome_install_button_visible === false
+                    : settings?.other_install_button_visible === false;
+                if (isHidden) return null;
+                return (
+                  <a
+                    href={appUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full h-14 bg-black hover:bg-gray-900 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+                  >
+                    <AppleLogo />
+                    <span>App Store에서 다운로드</span>
+                  </a>
+                );
+              }
+
+              // 2-2. 앱스토어 링크가 없을 때:
+              // Safari: PWA 설치 가이드로 이동
               if (isIOSSafari) {
                 if (settings?.safari_install_button_visible === false) return null;
-                if (appUrl) {
-                  return (
-                    <a
-                      href={appUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="w-full h-14 bg-black hover:bg-gray-900 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-                    >
-                      <AppleLogo />
-                      <span>App Store에서 다운로드</span>
-                    </a>
-                  );
-                }
                 return (
                   <button
                     onClick={() => setLocation("/ios-install-guide")}
@@ -3231,64 +3217,74 @@ export default function Dashboard() {
                 );
               }
 
-              // 2-2. iOS Chrome (PWA 설치 프롬프트 허용)
+              // iOS Chrome/Google: Chrome 전용 PWA 설치 가이드로 이동
               if (isChromeBrowser) {
                 if (settings?.chrome_install_button_visible === false) return null;
-                if (appUrl) {
-                  return (
-                    <a
-                      href={appUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="w-full h-14 bg-black hover:bg-gray-900 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-                    >
-                      <AppleLogo />
-                      <span>App Store에서 설치</span>
-                    </a>
-                  );
-                }
                 return (
-                  <Button
-                    onClick={handleInstallClick}
-                    disabled={isInstalling}
+                  <button
+                    onClick={() => setLocation("/ios-chrome-install-guide")}
                     className="w-full h-14 bg-black hover:bg-gray-900 active:bg-gray-800 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
                   >
-                    {isInstalling ? (
-                      <Loader2 className="w-6 h-6 animate-spin" />
-                    ) : (
-                      <AppleLogo />
-                    )}
-                    <span>{isInstalling ? '설치 중...' : `${settings?.pwa_app_title || '성지수행'} 앱 다운로드`}</span>
-                  </Button>
-                );
-              }
-
-              // 2-3. iOS 기타 브라우저 (Firefox, Edge, Opera, Whale 등: PWA 프롬프트 미지원)
-              // PWA설치 버튼을 누른다고 프롬프트가 뜨지 않으므로 PWA 미지원 경우 사이트 내 버튼도 표시하지 않는다.
-              // (단, 관리페이지에 앱스토어 링크가 등록되어 있다면 앱스토어에서 설치 버튼 표시)
-              if (appUrl) {
-                if (settings?.other_install_button_visible === false) return null;
-                return (
-                  <a
-                    href={appUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full h-14 bg-black hover:bg-gray-900 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-                  >
                     <AppleLogo />
-                    <span>App Store에서 설치</span>
-                  </a>
+                    <span>Chrome에서 홈 화면 추가</span>
+                  </button>
                 );
               }
 
-              // 앱스토어 링크 미등록 시 PWA 미지원이므로 사이트 내 버튼 미표시
-              return null;
+              // 그 외 PWA 미지원 브라우저 (Firefox, Opera, Whale, Edge 등):
+              // 설명 버튼만 표시해서 그냥 "홈 화면에 추가" 버튼을 찾으라는 식의 안내 제공
+              if (settings?.other_install_button_visible === false) return null;
+              return (
+                <button
+                  onClick={() => setShowIOSOtherGuideDialog(true)}
+                  className="w-full h-14 bg-black hover:bg-gray-900 active:bg-gray-800 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
+                >
+                  <AppleLogo />
+                  <span>홈 화면에 추가 (메뉴에서 추가)</span>
+                </button>
+              );
             }
 
             return null;
           })()}
         </div>
       )}
+
+      {/* iOS 기타 브라우저 홈 화면 추가 안내 다이얼로그 */}
+      <Dialog open={showIOSOtherGuideDialog} onOpenChange={setShowIOSOtherGuideDialog}>
+        <DialogContent className="max-w-md w-[90vw] rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+              <AppleLogo />
+              홈 화면에 바로가기 추가 안내
+            </DialogTitle>
+            <DialogDescription className="text-sm text-gray-500 pt-2 leading-relaxed">
+              현재 사용 중이신 브라우저에서는 자동 설치 프롬프트가 지원되지 않습니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="my-3 p-4 bg-gray-50 rounded-xl border border-gray-200 text-sm text-gray-700 space-y-2">
+            <p className="font-semibold text-gray-900">
+              📌 추가 방법 안내
+            </p>
+            <p className="text-xs text-gray-600 leading-relaxed">
+              브라우저 하단 또는 상단의 <strong>공유(아이콘)</strong> 또는 <strong>더보기 메뉴(···)</strong>를 눌러 <strong>&apos;홈 화면에 추가&apos;</strong> 항목을 찾아 선택해 주세요.
+            </p>
+            <p className="text-[11px] text-gray-400 mt-2">
+              ※ 일부 서드파티 브라우저에서는 iOS 정책상 독립 전체화면(PWA) 모드가 정상 작동하지 않고 브라우저 탭으로 열릴 수 있습니다.
+            </p>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button
+              onClick={() => setShowIOSOtherGuideDialog(false)}
+              className="bg-black hover:bg-gray-800 text-white rounded-xl px-5"
+            >
+              확인
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
 
       {/* 수행평가 목록 — 과목 타일 + 페이지 전환 */}

@@ -442,18 +442,22 @@ export function isPwaInstalled(): boolean {
 // ── 다운로드 유도 페이지 표시 여부 ───────────────────────────────────────────
 
 /**
- * shouldShowDownloadPage()
+ * shouldShowDownloadPage(settings?: any)
  * 표시 조건:
  *   1. 인앱 브라우저 아닐 것
  *   2. 앱으로 실행 중이 아닐 것 (PWA standalone / TWA / WebView)
  *      → 브라우저로 재접속 시 쿠키·설치 여부와 무관하게 표시함
  *   3. 사용자가 dismiss 하지 않았을 것
  *   4. 모바일 기기일 것 (데스크톱 제외)
- *   5. 다운로드 대상 브라우저:
- *      - Android: Chrome/Google, Samsung Internet 및 Opera 등 브라우저 전체
- *      - iOS: Safari 및 iOS Chrome 표시 (기타 브라우저는 PWA 프롬프트 미지원으로 사이트 직행)
+ *   5. 다운로드 대상 브라우저 및 링크 등록 여부:
+ *      - Android:
+ *        * Chrome/Google: PWA 설치 지원하므로 항상 표시
+ *        * 기타 브라우저: 관리페이지에 play_store_url 등록 시에만 표시 (미등록 시 사이트 직행)
+ *      - iOS:
+ *        * 관리페이지에 app_store_url 등록 시: 브라우저 무관 무조건 표시
+ *        * app_store_url 미등록 시: Safari 및 iOS Chrome만 PWA 가이드 유도 페이지 표시 (기타 브라우저는 사이트 직행)
  */
-export function shouldShowDownloadPage(): boolean {
+export function shouldShowDownloadPage(settings?: any): boolean {
   if (typeof window === "undefined") return false;
   const isDismissed =
     typeof localStorage !== "undefined" &&
@@ -461,16 +465,28 @@ export function shouldShowDownloadPage(): boolean {
   if (agent.isInAppBrowser || agent.isInstalledApp || isDismissed || !agent.isMobile) {
     return false;
   }
+
+  const hasAppStore = Boolean(settings?.app_store_url && settings.app_store_url.trim());
+  const hasPlayStore = Boolean(settings?.play_store_url && settings.play_store_url.trim());
+
   if (agent.isIOS) {
-    // iOS에서는 Safari와 Chrome에 다운로드 유도 페이지 표시
-    // 기타 브라우저는 PWA 프롬프트를 띄울 수 없으므로 유도 페이지 없이 사이트 직행
+    // 1. 앱스토어 링크가 있으면 브라우저에 관계없이 무조건 표시
+    if (hasAppStore) return true;
+    // 2. 링크 없으면: Safari와 Chrome에만 전용 PWA 가이드 유도 페이지 표시 (기타 브라우저는 사이트 직행)
     return agent.isIOSSafari || agent.isIOSChrome;
   }
+
   if (agent.isAndroid) {
-    // Android에서는 Chrome/Google, Samsung 및 Opera 등 브라우저 모두 표시
+    // 1. Chrome/Google 브라우저이면 PWA 설치 버튼 지원하므로 항상 표시
+    if (agent.browserKey === "chrome") return true;
+    // 2. 그 외 모든 Android 브라우저는 Play Store 링크가 등록되어 있을 때만 표시
+    if (settings) {
+      return hasPlayStore;
+    }
     return true;
   }
-  return true;
+
+  return false;
 }
 
 /** @internal UA 기반 인앱 브라우저 여부 (detect() 내부에서 사용) */

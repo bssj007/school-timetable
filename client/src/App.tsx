@@ -18,6 +18,7 @@ import Meal from "./pages/Meal";
 import TeacherPage from "./pages/TeacherPage";
 import TeacherAccount from "./pages/TeacherAccount";
 import IOSInstallGuide from "./pages/IOSInstallGuide";
+import IOSChromeInstallGuide from "./pages/IOSChromeInstallGuide";
 import AppDownloadPage from "./pages/AppDownloadPage";
 import { shouldShowDownloadPage } from "@/lib/browserDetect";
 
@@ -33,6 +34,7 @@ function Router() {
       <Route path={"/teacher"} component={TeacherPage} />
       <Route path={"/teachers"} component={TeacherPage} />
       <Route path={"/ios-install-guide"} component={IOSInstallGuide} />
+      <Route path={"/ios-chrome-install-guide"} component={IOSChromeInstallGuide} />
       <Route path={"/download"} component={AppDownloadPage} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
@@ -48,7 +50,7 @@ function AppContent() {
   const isAdminRoute = location.startsWith("/admin");
   const isMealRoute = location.startsWith("/meal");
   const isDownloadRoute = location === "/download";
-  const isIOSGuideRoute = location === "/ios-install-guide";
+  const isIOSGuideRoute = location === "/ios-install-guide" || location === "/ios-chrome-install-guide";
 
   // 사이트 디자인설정 동적 적용 (제목 + 파비콘 + PWA 아이콘)
   useEffect(() => {
@@ -93,9 +95,9 @@ function AppContent() {
       .catch(() => {}); // 실패 시 기본값 유지
   }, []);
 
-  // 모바일 브라우저(Android Chrome/Google/Samsung/기타, iOS Safari/Chrome) → 다운로드 유도 페이지로 리다이렉트
+  // 모바일 브라우저별 조건(Android Chrome/Google, PlayStore 등록 시 기타, iOS AppStore/Safari/Chrome) → 다운로드 유도 페이지로 리다이렉트
   // 이미 설치된 앱(standalone), dismiss된 경우, PC는 건너뜀
-  const _shouldDownload = shouldShowDownloadPage();
+  const _shouldDownload = shouldShowDownloadPage(publicSettings);
   useEffect(() => {
     if (_shouldDownload && location === "/") {
       setLocation("/download");

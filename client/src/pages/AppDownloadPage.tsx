@@ -82,24 +82,50 @@ export default function AppDownloadPage() {
 
     // Android 브라우저별 유효성 검사
     if (agent.isAndroid) {
-      if (browserType === "chrome" && settings.chrome_install_button_visible === false) {
-        setLocation("/");
-        return;
-      }
-      if (browserType === "samsung" && (settings.samsung_install_button_visible === false || !settings.play_store_url)) {
-        setLocation("/");
-        return;
-      }
-      if (browserType === "other" && (settings.other_install_button_visible === false || !settings.play_store_url)) {
-        setLocation("/");
-        return;
+      if (browserType === "chrome") {
+        if (settings.chrome_install_button_visible === false) {
+          setLocation("/");
+          return;
+        }
+      } else {
+        const isSamsung = browserType === "samsung";
+        const isHidden = isSamsung ? settings.samsung_install_button_visible === false : settings.other_install_button_visible === false;
+        if (!settings.play_store_url || isHidden) {
+          setLocation("/");
+          return;
+        }
       }
     }
 
-    // iOS 기타 브라우저(Firefox, Edge, Opera, Whale 등 PWA 프롬프트 미지원)는 앱스토어 링크 미등록 시 사이트로 직행
-    if (agent.isIOS && !agent.isIOSSafari && browserType !== "chrome" && !settings.app_store_url) {
-      setLocation("/");
-      return;
+    // iOS 브라우저별 유효성 검사
+    if (agent.isIOS) {
+      if (settings.app_store_url) {
+        const isHidden = agent.isIOSSafari
+          ? settings.safari_install_button_visible === false
+          : browserType === "chrome"
+            ? settings.chrome_install_button_visible === false
+            : settings.other_install_button_visible === false;
+        if (isHidden) {
+          setLocation("/");
+          return;
+        }
+      } else {
+        if (agent.isIOSSafari) {
+          if (settings.safari_install_button_visible === false) {
+            setLocation("/");
+            return;
+          }
+        } else if (browserType === "chrome") {
+          if (settings.chrome_install_button_visible === false) {
+            setLocation("/");
+            return;
+          }
+        } else {
+          // iOS 기타 브라우저(Firefox, Edge, Opera, Whale 등)는 앱스토어 링크 미등록 시 사이트로 직행
+          setLocation("/");
+          return;
+        }
+      }
     }
   }, [settings]);
 
@@ -129,7 +155,7 @@ export default function AppDownloadPage() {
           </a>
         );
       }
-      // 1-2. Safari인 경우만 홈 화면 추가 가이드 버튼 표시
+      // 1-2. Safari인 경우 Safari 전용 PWA 가이드 버튼 표시
       if (agent.isIOSSafari && settings?.safari_install_button_visible !== false) {
         return (
           <button onClick={() => setLocation("/ios-install-guide")}
@@ -139,13 +165,13 @@ export default function AppDownloadPage() {
           </button>
         );
       }
-      // 1-3. iOS Chrome인 경우 PWA 설치화면 허용 (검정 애플 로고 디자인)
+      // 1-3. iOS Chrome인 경우 Chrome 전용 PWA 가이드 버튼 표시
       if (browserType === "chrome" && settings?.chrome_install_button_visible !== false) {
         return (
-          <button onClick={handlePwaInstall}
+          <button onClick={() => setLocation("/ios-chrome-install-guide")}
             className="w-full h-14 bg-black text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg transition-transform active:scale-95">
             <AppleLogo />
-            <span>{appTitle} 앱 다운로드</span>
+            <span>홈 화면에 추가하기</span>
           </button>
         );
       }
@@ -154,11 +180,23 @@ export default function AppDownloadPage() {
 
     // 2. Android 환경
     if (agent.isAndroid) {
-      // 2-1. Play Store 링크가 등록되어 있는 경우
+      // 2-1. Chrome / Google 브라우저인 경우: 항상 PWA 설치 버튼 표시
+      if (browserType === "chrome") {
+        if (settings?.chrome_install_button_visible === false) return null;
+        return (
+          <button onClick={handlePwaInstall}
+            className="w-full h-14 bg-[#3DDC84] text-black font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg transition-transform active:scale-95">
+            <AndroidLogo />
+            <span>{appTitle} 앱 다운로드</span>
+          </button>
+        );
+      }
+
+      // 2-2. 그 외 모든 Android 브라우저: Play Store 링크가 등록되어 있을 때만 버튼 표시
       if (playStoreUrl && settings?.play_store_url) {
-        if (browserType === "chrome" && settings?.chrome_install_button_visible === false) return null;
-        if (browserType === "samsung" && settings?.samsung_install_button_visible === false) return null;
-        if (browserType === "other" && settings?.other_install_button_visible === false) return null;
+        const isSamsung = browserType === "samsung";
+        const isHidden = isSamsung ? settings?.samsung_install_button_visible === false : settings?.other_install_button_visible === false;
+        if (isHidden) return null;
 
         return (
           <a href={playStoreUrl} target="_blank" rel="noreferrer"
@@ -166,17 +204,6 @@ export default function AppDownloadPage() {
             <PlayStoreLogo />
             <span>Google Play에서 다운로드</span>
           </a>
-        );
-      }
-
-      // 2-2. Play Store 링크가 없을 때: Chrome / Google 브라우저인 경우 PWA 앱 다운로드 버튼
-      if (browserType === "chrome" && settings?.chrome_install_button_visible !== false) {
-        return (
-          <button onClick={handlePwaInstall}
-            className="w-full h-14 bg-[#3DDC84] text-black font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg transition-transform active:scale-95">
-            <AndroidLogo />
-            <span>{appTitle} 앱 다운로드</span>
-          </button>
         );
       }
 
