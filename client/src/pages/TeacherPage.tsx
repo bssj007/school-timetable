@@ -2523,14 +2523,12 @@ export default function TeacherPage() {
                     const p = periodIndex + 1;
                     const isCurrentPeriod = currentPeriod === p && weekOffset === 0;
                     return (
-                      <tr key={p} className="h-[50px] sm:min-h-[44px]" style={{ height: 50 }}>
+                      <tr key={p} className="sm:h-[50px]">
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[50px] sm:min-h-[44px] overflow-hidden"
+                          className="sm:h-[50px] sm:overflow-hidden"
                           style={{
                             width: 36,
-                            maxHeight: 50,
-                            overflow: 'hidden',
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
                             borderRight: isCurrentPeriod ? '2px solid #217346' : '1px solid #d0d0d0',
                             borderBottom: '1px solid #d0d0d0',
@@ -2581,11 +2579,8 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[52px] sm:min-h-[44px] overflow-hidden"
+                              className="group sm:h-[50px] sm:max-h-[50px] sm:overflow-hidden"
                               style={{
-                                height: 50,
-                                maxHeight: 50,
-                                overflow: 'hidden',
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
                                 borderBottom: '1px solid #d0d0d0',
@@ -2610,7 +2605,7 @@ export default function TeacherPage() {
                               }}
                             >
                               {cellData ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 42, gap: 2, overflow: 'hidden' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>
                                   {/* 학생 배지 — td의 position:relative 기준 우측 상단 */}
                                   {hasAssessment && cellAssessments.some(a => !a.isTeacherCreated) && (
                                     <span style={{
