@@ -110,29 +110,23 @@ function Guide26() {
         <StepBadge n={3} />
         <div className="flex-1">
           <p className="text-base font-bold text-gray-900">하단 액션 바 맨 오른쪽 <span className="font-black">더 보기</span>를 탭하세요</p>
-          <p className="text-sm text-gray-500 mt-0.5">공유 시트 아래 작은 아이콘 행의 맨 끝 버튼</p>
+          <p className="text-sm text-gray-500 mt-0.5">공유 시트 하단 버튼 바의 맨 오른쪽</p>
           {/* 액션 바 일러스트 */}
           <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-            {/* 상단 앱 아이콘 행 */}
+            {/* 상단 앱 아이콘 행 — 기본 색상 (하이라이트 없음) */}
             <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-100">
               {[
                 { label: "News",   bg: "bg-red-100",  content: <span className="text-red-500 text-xs font-black">N</span> },
                 { label: "미리 알림", bg: "bg-blue-50", content: <svg viewBox="0 0 24 24" className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> },
+                { label: "더 보기", bg: "bg-gray-100", content: <span className="text-gray-500 text-sm font-black">···</span> },
               ].map((app, i) => (
                 <div key={i} className="flex flex-col items-center gap-1 shrink-0">
                   <div className={`w-11 h-11 rounded-xl ${app.bg} flex items-center justify-center`}>{app.content}</div>
                   <span className="text-[10px] text-gray-500">{app.label}</span>
                 </div>
               ))}
-              {/* 더 보기 (하이라이트) */}
-              <div className="flex flex-col items-center gap-1 shrink-0">
-                <div className="w-11 h-11 rounded-xl bg-blue-500 flex items-center justify-center ring-2 ring-blue-300 shadow-md">
-                  <span className="text-white text-sm font-black">···</span>
-                </div>
-                <span className="text-[10px] text-blue-600 font-bold">더 보기</span>
-              </div>
             </div>
-            {/* 하단 액션 바 */}
+            {/* 하단 액션 바 — 더 보기만 빨간 원으로 가리킴 */}
             <div className="flex items-center gap-0 divide-x divide-gray-100 bg-white">
               {[
                 { icon: <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>, label: "복사" },
@@ -144,16 +138,19 @@ function Guide26() {
                   <span className="text-[9px] text-gray-400">{action.label}</span>
                 </div>
               ))}
-              {/* 더 보기 (하이라이트) */}
-              <div className="flex-1 flex flex-col items-center gap-0.5 py-2 bg-blue-50">
-                <svg viewBox="0 0 24 24" className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2">
+              {/* 더 보기 — 빨간 원 포인터로만 표시 */}
+              <div className="flex-1 flex flex-col items-center gap-0.5 py-2 relative">
+                <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2">
                   <polyline points="6 9 12 15 18 9"/>
                 </svg>
-                <span className="text-[9px] text-blue-600 font-bold">더 보기</span>
+                <span className="text-[9px] text-gray-400">더 보기</span>
+                {/* 빨간 원 포인터 */}
+                <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 border-2 border-white shadow-md flex items-center justify-center">
+                  <span className="text-white text-[9px] font-black leading-none">!</span>
+                </div>
               </div>
             </div>
           </div>
-          <p className="text-xs text-orange-500 font-semibold mt-2">⚠ 앱 아이콘 행의 ··· 또는 하단 바의 더 보기 중 하나를 탭하세요</p>
         </div>
       </div>
 
