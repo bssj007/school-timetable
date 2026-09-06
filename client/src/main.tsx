@@ -22,22 +22,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ── UA 기반 디바이스 클래스 주입 (React 마운트 전) ───────────────────────────
-// 모바일 UA → is-mobile, PC UA (데스크톱 모드 포함) → is-pc
-// Tailwind의 md: 브레이크포인트가 창 너비가 아닌 UA에 따라 동작하도록 함
-if (typeof window !== 'undefined') {
-  const ua = navigator.userAgent;
-  // 표준 모바일 UA 패턴 (데스크톱 모드 시 UA가 바뀌어 아래에 매칭되지 않음)
-  const mobileUA =
-    /Mobile|Android|iPhone|iPod|BlackBerry|Windows Phone|Opera Mini|IEMobile|SamsungBrowser/i.test(ua);
-  // iPadOS 13+: "MacIntel" + maxTouchPoints 로 감지 (UA에서 iPad 제거됨)
-  const isiPad =
-    /iPad/.test(ua) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const isMobileBrowser = mobileUA || isiPad;
-  document.documentElement.classList.add(isMobileBrowser ? 'is-mobile' : 'is-pc');
-}
-
+// Detect Android environment for specific behaviors if needed later
 if (typeof window !== 'undefined') {
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
 
