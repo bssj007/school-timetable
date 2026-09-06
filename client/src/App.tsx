@@ -17,6 +17,7 @@ import FactoryReset from "./pages/FactoryReset";
 import Meal from "./pages/Meal";
 import TeacherPage from "./pages/TeacherPage";
 import TeacherAccount from "./pages/TeacherAccount";
+import IOSInstallGuide from "./pages/IOSInstallGuide";
 
 function Router() {
   return (
@@ -29,6 +30,7 @@ function Router() {
       <Route path={"/teacher-account"} component={TeacherAccount} />
       <Route path={"/teacher"} component={TeacherPage} />
       <Route path={"/teachers"} component={TeacherPage} />
+      <Route path={"/ios-install-guide"} component={IOSInstallGuide} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -115,7 +117,7 @@ function AppContent() {
   return (
     <>
       <Toaster />
-      {!isAdminRoute && location !== "/admin/factory-reset" && location !== "/meal" && location !== "/teacher/account" && (
+      {!isAdminRoute && location !== "/admin/factory-reset" && location !== "/meal" && location !== "/teacher/account" && location !== "/ios-install-guide" && (
         <div className={location === "/" || isTeacherRoute ? "md:hidden" : ""}>
           <Navigation />
         </div>

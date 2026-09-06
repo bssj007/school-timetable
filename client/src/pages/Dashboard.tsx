@@ -124,6 +124,7 @@ const DEFAULT_PRINT_HEIGHT = "11";
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, studentName, refreshKakaoUser, instructionDismissedV2, refreshRole } = useUserConfig();
+  const [, setLocation] = useLocation();
 
   const handleGoToTeacher = (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
@@ -264,7 +265,6 @@ export default function Dashboard() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalling, setIsInstalling] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
-  const [showIOSInstallGuide, setShowIOSInstallGuide] = useState(false);
   const isIOS = typeof window !== 'undefined' ? /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) : false;
   // iOS 26+부터 Apple이 UA의 OS 버전을 동결(freeze)함 → "CPU iPhone OS 18_x" 처럼 구버전이 표시됨
   // 대신 Safari의 "Version/26.x" 헤더는 실제 메이저 버전을 노출하므로, 두 값 중 큰 것을 사용
@@ -3178,7 +3178,7 @@ export default function Dashboard() {
                   ) : (
                     // App Store 미설정 → iOS PWA 홈화면 추가 안내 버튼
                     <button
-                      onClick={() => setShowIOSInstallGuide(true)}
+                      onClick={() => setLocation("/ios-install-guide")}
                       className="w-full h-14 bg-black hover:bg-gray-900 active:bg-gray-800 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
                     >
                       {/* Apple 로고 */}
@@ -3212,227 +3212,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* iOS PWA 홈화면 추가 안내 다이얼로그 */}
-      <Dialog open={showIOSInstallGuide} onOpenChange={setShowIOSInstallGuide}>
-        <DialogContent className="sm:max-w-[340px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
-          {/* 헤더 */}
-          <div className="bg-black px-5 py-4 text-white">
-            <DialogHeader>
-              <DialogTitle className="text-base font-extrabold text-white flex items-center gap-2.5">
-                <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" fill="white">
-                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
-                </svg>
-                홈 화면에 앱 추가하기
-              </DialogTitle>
-            </DialogHeader>
-            <p className="text-gray-300 text-xs mt-1">Safari에서 아래 단계를 따라 설치하세요</p>
-          </div>
 
-          {/* 단계별 안내 */}
-          <div className="bg-white px-5 py-4 space-y-4">
-            {/* Step 1 — iOS 버전별 공유 버튼 위치 3단계 분기 */}
-            <div className="flex items-start gap-3">
-              <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</div>
-              <div className="flex-1">
-                {isIOS26Plus ? (
-                  // iOS 26+ (iPhone 17~): 하단 툴바 ··· 버튼 탭
-                  <>
-                    <p className="text-sm font-semibold text-gray-800">하단 오른쪽 <span className="font-black text-gray-900">···</span> 버튼을 누르세요</p>
-                    <p className="text-xs text-gray-500 mt-0.5">화면 아래 툴바 오른쪽 끝 점 세 개 아이콘</p>
-                    <div className="mt-2 bg-gray-900 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-md bg-gray-700 flex items-center justify-center">
-                          <span className="text-gray-400 text-[10px] font-bold">＜</span>
-                        </div>
-                        <div className="w-6 h-6 rounded-md bg-gray-700 flex items-center justify-center">
-                          <span className="text-gray-400 text-[10px] font-bold">＞</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-md bg-gray-700 flex items-center justify-center">
-                          <span className="text-gray-400 text-[10px]">↻</span>
-                        </div>
-                        <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center ring-2 ring-blue-300">
-                          <span className="text-white text-[11px] font-black leading-none">···</span>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                ) : isIOS15Plus ? (
-                  // iOS 15~25: 공유 버튼이 하단 중앙
-                  <>
-                    <p className="text-sm font-semibold text-gray-800">하단 가운데 공유 버튼을 누르세요</p>
-                    <p className="text-xs text-gray-500 mt-0.5">화면 <span className="font-semibold text-gray-700">아래 가운데</span>의 공유(↑) 아이콘</p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="flex-1 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 flex flex-col items-center gap-1">
-                        <div className="text-[10px] text-blue-400 font-medium">화면 아래쪽</div>
-                        <div className="flex items-center gap-1.5">
-                          <svg viewBox="0 0 24 24" className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-                            <polyline points="16 6 12 2 8 6"/>
-                            <line x1="12" y1="2" x2="12" y2="15"/>
-                          </svg>
-                          <span className="text-blue-600 font-bold text-sm">공유</span>
-                        </div>
-                        <div className="text-[10px] text-blue-400">↑ 중앙</div>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  // iOS 14 이하: 공유 버튼이 상단 우측
-                  <>
-                    <p className="text-sm font-semibold text-gray-800">오른쪽 상단 공유 버튼을 누르세요</p>
-                    <p className="text-xs text-gray-500 mt-0.5">화면 <span className="font-semibold text-gray-700">오른쪽 위</span>의 공유(↑) 아이콘</p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="flex-1 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 flex flex-col items-center gap-1">
-                        <div className="text-[10px] text-blue-400">↑ 오른쪽</div>
-                        <div className="flex items-center gap-1.5">
-                          <svg viewBox="0 0 24 24" className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-                            <polyline points="16 6 12 2 8 6"/>
-                            <line x1="12" y1="2" x2="12" y2="15"/>
-                          </svg>
-                          <span className="text-blue-600 font-bold text-sm">공유</span>
-                        </div>
-                        <div className="text-[10px] text-blue-400 font-medium">화면 위쪽</div>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div className="border-t border-gray-100" />
-
-            {/* Step 2 — iOS 26+: 팝업에서 '공유' 선택 / 구버전: 스크롤 후 홈 화면에 추가 */}
-            {isIOS26Plus ? (
-              <div className="flex items-start gap-3">
-                <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-800">팝업 메뉴에서 <span className="font-black text-gray-900">공유</span>를 탭하세요</p>
-                  <p className="text-xs text-gray-500 mt-0.5">···를 누르면 나타나는 작은 메뉴에서 공유 선택</p>
-                  <div className="mt-2 bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                    <div className="flex items-center gap-2.5 px-3 py-2 bg-blue-50">
-                      <svg viewBox="0 0 24 24" className="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-                        <polyline points="16 6 12 2 8 6"/>
-                        <line x1="12" y1="2" x2="12" y2="15"/>
-                      </svg>
-                      <span className="text-xs font-bold text-blue-600">공유</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 px-3 py-2 border-t border-gray-100">
-                      <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                      </svg>
-                      <span className="text-xs text-gray-400">북마크에 추가</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-start gap-3">
-                <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-800">스크롤 후 '홈 화면에 추가' 탭</p>
-                  <p className="text-xs text-gray-500 mt-0.5">공유 메뉴를 아래로 스크롤하면 나타납니다</p>
-                  <div className="mt-2 flex items-center justify-center">
-                    <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-gray-200 flex items-center justify-center">
-                        <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="3" y="3" width="7" height="7" rx="1"/>
-                          <rect x="14" y="3" width="7" height="7" rx="1"/>
-                          <rect x="3" y="14" width="7" height="7" rx="1"/>
-                          <path d="M14 17h7M17.5 14v7"/>
-                        </svg>
-                      </div>
-                      <span className="text-gray-700 font-semibold text-sm">홈 화면에 추가</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Divider */}
-            <div className="border-t border-gray-100" />
-
-            {/* Step 3 — iOS 26+: 목록 스크롤 후 홈 화면에 추가 / 구버전: 추가 버튼 */}
-            {isIOS26Plus ? (
-              <div className="flex items-start gap-3">
-                <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">3</div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-800">목록 스크롤 후 '홈 화면에 추가' 탭</p>
-                  <p className="text-xs text-gray-500 mt-0.5">공유 시트 하단 목록을 아래로 스크롤하세요</p>
-                  <div className="mt-2 bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                    {[
-                      { label: '즐겨찾기에 추가', highlight: false },
-                      { label: '홈 화면에 추가', highlight: true },
-                      { label: '마크업', highlight: false },
-                    ].map((item, i) => (
-                      <div key={i} className={`flex items-center gap-2.5 px-3 py-2 ${item.highlight ? 'bg-blue-50' : ''} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                        <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${item.highlight ? 'bg-blue-100' : 'bg-gray-100'}`}>
-                          {item.highlight ? (
-                            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <rect x="3" y="3" width="7" height="7" rx="1"/>
-                              <rect x="14" y="3" width="7" height="7" rx="1"/>
-                              <rect x="3" y="14" width="7" height="7" rx="1"/>
-                              <path d="M14 17h7M17.5 14v7"/>
-                            </svg>
-                          ) : (
-                            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2">
-                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                            </svg>
-                          )}
-                        </div>
-                        <span className={`text-xs font-medium ${item.highlight ? 'text-blue-600 font-bold' : 'text-gray-500'}`}>{item.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-start gap-3">
-                <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">3</div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-800">오른쪽 위 '추가'를 누르세요</p>
-                  <p className="text-xs text-gray-500 mt-0.5">홈 화면에 앱 아이콘이 추가됩니다!</p>
-                </div>
-              </div>
-            )}
-
-            {/* Step 4 — iOS 26+만: 'Web App으로 열기' 켜고 확인 */}
-            {isIOS26Plus && (
-              <>
-                <div className="border-t border-gray-100" />
-                <div className="flex items-start gap-3">
-                  <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">4</div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-gray-800">'Web App으로 열기' 켜고 <span className="font-black text-gray-900">추가</span> 탭</p>
-                    <p className="text-xs text-gray-500 mt-0.5">앱처럼 전체화면으로 실행하려면 반드시 켜세요</p>
-                    <div className="mt-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-gray-700">Web App으로 열기</span>
-                      <div className="w-10 h-6 bg-green-500 rounded-full flex items-center justify-end px-0.5 shadow-inner">
-                        <div className="w-5 h-5 bg-white rounded-full shadow"/>
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-gray-400 mt-1.5">▶ 토글 켠 뒤 오른쪽 위 <span className="font-semibold">추가</span> 탭</p>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* 닫기 버튼 */}
-          <div className="bg-gray-50 px-5 py-3">
-            <button
-              onClick={() => setShowIOSInstallGuide(false)}
-              className="w-full py-2.5 rounded-xl bg-black text-white text-sm font-bold hover:bg-gray-800 active:bg-gray-700 transition-colors"
-            >
-              확인
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
       {/* 수행평가 목록 — 과목 타일 + 페이지 전환 */}
       {!isRestricted && (
         <Card className="mt-8">
