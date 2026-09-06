@@ -3168,7 +3168,7 @@ export default function Dashboard() {
                       <span>홈 화면에 추가 (PWA)</span>
                     </button>
                   )
-                ) : isChromeBrowser && settings?.chrome_install_button_visible !== false ? (
+                ) : isChromeBrowser && isMobileDevice && settings?.chrome_install_button_visible !== false ? (
                   // Chrome / 기타 → 기존 PWA 버튼
                   <Button
                     onClick={handleInstallClick}
