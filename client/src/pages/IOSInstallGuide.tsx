@@ -170,23 +170,17 @@ function Guide26() {
                   {/* 강조 타원 — 셀 전체를 감쌈 */}
                   <ellipse cx="30" cy="21" rx="28" ry="19" stroke="#ef4444" strokeWidth="2.5"/>
 
-                  {/* 돼지꼬리 몸통:
-                      30,2 → 오른쪽 위로 스윙 (50,-14) →
-                      루프 정점 (54,-6) →
-                      루프 마감 (42,-10) */}
-                  <path
-                    d="M 30 2 C 32 -12, 56 -16, 54 -4 C 52 6, 38 4, 42 -8"
+                  {/* 직선 화살표 줄기 — 원 상단(30,2)에서 위로 */}
+                  <line
+                    x1="30" y1="-18"
+                    x2="30" y2="2"
                     stroke="#ef4444"
                     strokeWidth="2.5"
                     strokeLinecap="round"
-                    fill="none"
                   />
-
-                  {/* 화살촉 — 원 상단(30,2)으로 향하는 V
-                      왼쪽 날개: (25,-4)→(30,2)
-                      오른쪽 날개: (35,-4)→(30,2) */}
+                  {/* 화살촉 — V자 */}
                   <polyline
-                    points="24,-4 30,2 36,-4"
+                    points="24,-8 30,2 36,-8"
                     stroke="#ef4444"
                     strokeWidth="2.5"
                     strokeLinecap="round"
