@@ -1744,7 +1744,7 @@ export default function TeacherPage() {
             </div>
 
             {/* 주 선택기 */}
-            <div className="flex flex-col items-center gap-0.5 shrink-0 ml-auto">
+            <div className={`flex flex-col items-center gap-0.5 shrink-0 ml-auto ${mobileViewMode !== 'daily' ? 'invisible pointer-events-none' : ''}`}>
               <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400 shadow-md">
                 <Button
                   variant="ghost"
@@ -1775,7 +1775,7 @@ export default function TeacherPage() {
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
-              {isOutOfDateRange && (
+              {mobileViewMode === 'daily' && isOutOfDateRange && (
                 <span className="text-xs font-bold text-red-500 bg-red-50/80 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse whitespace-nowrap">
                   미확정 시간표
                 </span>
@@ -1876,8 +1876,8 @@ export default function TeacherPage() {
         {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
         <div className="w-full sm:flex-1 sm:max-w-[1000px] min-w-0 flex flex-col order-2 sm:order-1 sm:min-h-0">
 
-        {/* ===== 모바일 전용: 뷰 모드 선택기 (당일형 / 숙제형 / 달력) ===== */}
-        <div className="sm:hidden mb-2 shrink-0">
+        {/* ===== 뷰 모드 선택기 (당일형 / 숙제형 / 달력) ===== */}
+        <div className="mb-2 shrink-0">
           <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
             {([
               { key: 'daily',    label: '당일형 수행', Icon: Clock },
@@ -1890,24 +1890,24 @@ export default function TeacherPage() {
                 onClick={() => setMobileViewMode(key)}
                 style={{ WebkitTapHighlightColor: 'transparent' }}
                 className={[
-                  'flex-1 flex flex-col items-center gap-0.5 py-2 px-1 text-[11px] font-bold leading-tight transition-colors select-none',
+                  'flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-2 sm:py-2.5 px-1 sm:px-4 text-[11px] sm:text-xs md:text-sm font-bold leading-tight transition-all select-none cursor-pointer',
                   i > 0 ? 'border-l border-slate-200' : '',
                   mobileViewMode === key
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-white text-slate-500 active:bg-slate-100',
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:bg-slate-100',
                 ].join(' ')}
               >
-                <Icon className="w-4 h-4" />
-                {label}
+                <Icon className="w-4 h-4 shrink-0" />
+                <span>{label}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* ===== 모바일: 숙제형 패널 ===== */}
+        {/* ===== 숙제형 패널 ===== */}
         {mobileViewMode === 'homework' && (
           <div
-            className="sm:hidden w-full rounded-xl shadow-sm flex flex-col overflow-hidden"
+            className="w-full rounded-xl shadow-sm flex flex-col overflow-hidden sm:flex-1 sm:min-h-0"
             style={{
               minHeight: 'calc(7 * 50px + 44px)',
               ...(!isCurrentTeacherVerified ? {
@@ -1942,10 +1942,10 @@ export default function TeacherPage() {
                 </div>
 
                 {/* 콘텐츠 영역 */}
-                <div className="flex-1 overflow-y-auto px-4 py-4">
-
+                <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
+                  <div className="max-w-xl mx-auto w-full">
                   {hwPage === 1 ? (
-                    <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-3 sm:gap-4">
                       {/* 종류 선택 */}
                       <div
                         style={{
@@ -2043,7 +2043,7 @@ export default function TeacherPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-3 sm:gap-4">
                       {/* 활동 내용 */}
                       <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1">활동 내용</label>
@@ -2066,10 +2066,11 @@ export default function TeacherPage() {
                       </div>
                     </div>
                   )}
+                  </div>
                 </div>
 
                 {/* 하단 버튼 영역 */}
-                <div className="shrink-0 px-4 pb-4 pt-2 flex gap-2">
+                <div className="shrink-0 px-4 pb-4 pt-2 sm:px-6 sm:pb-6 flex gap-2 max-w-xl mx-auto w-full">
                   {hwPage === 1 ? (
                     <button
                       type="button"
@@ -2191,25 +2192,25 @@ export default function TeacherPage() {
           };
 
           return (
-            <div className="sm:hidden w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
+            <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col sm:flex-1 sm:min-h-0">
               {/* 달력 헤더 */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
+              <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-3.5 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
                 <button type="button"
                   onClick={() => setCalendarMonth(prev => {
                     const d = new Date(prev.year, prev.month - 1, 1);
                     return { year: d.getFullYear(), month: d.getMonth() };
                   })}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-200 active:bg-slate-100 text-slate-600">
-                  <ChevronLeft className="w-4 h-4" />
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-600 cursor-pointer shadow-sm">
+                  <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
-                <span className="font-extrabold text-slate-800 text-base">{year}년 {month + 1}월</span>
+                <span className="font-extrabold text-slate-800 text-base sm:text-lg">{year}년 {month + 1}월</span>
                 <button type="button"
                   onClick={() => setCalendarMonth(prev => {
                     const d = new Date(prev.year, prev.month + 1, 1);
                     return { year: d.getFullYear(), month: d.getMonth() };
                   })}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-200 active:bg-slate-100 text-slate-600">
-                  <ChevronRight className="w-4 h-4" />
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-600 cursor-pointer shadow-sm">
+                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               </div>
 
@@ -2453,7 +2454,7 @@ export default function TeacherPage() {
               </div>
 
               {/* 하단 안내 */}
-              <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50 flex items-center justify-center gap-4">
+              <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50 flex items-center justify-center gap-4 mt-auto">
                 <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
                   <span className="text-base leading-none">👆</span>
                   <span><b className="text-slate-600">클릭</b> — 당일형 이동</span>
@@ -2475,8 +2476,8 @@ export default function TeacherPage() {
 
 
       {/* Main Timetable — Card wrapper */}
-      {/* 모바일에서 당일형이 아니면 표 숨김 */}
-      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col sm:min-h-0 ${mobileViewMode !== 'daily' ? 'hidden sm:flex' : ''}`}>
+      {/* 당일형이 아니면 표 숨김 */}
+      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col sm:min-h-0 ${mobileViewMode !== 'daily' ? 'hidden' : ''}`}>
           {(isTimetableLoading || isGroupDataLoading) ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
