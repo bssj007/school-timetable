@@ -17,35 +17,29 @@ interface IPProfileViewerProps {
     adminPassword: string;
 }
 
-function parseUserAgent(ua: string) {
-    if (!ua) return { os: "Unknown OS", browser: "Unknown Browser", raw: "Unknown" };
+// ── 접속환경 표시용 헬퍼 ────────────────────────────────────────────────────
+const BROWSER_LABEL: Record<string, string> = {
+    chrome: 'Chrome', safari: 'Safari', samsung: '삼성 인터넷',
+    firefox: 'Firefox', other: '기타 브라우저',
+};
+const DEVICE_LABEL: Record<string, string> = {
+    mobile: '스마트폰', tablet: '태블릿', desktop: '데스크톱',
+};
+const OS_LABEL: Record<string, string> = {
+    ios: 'iOS', android: 'Android', windows: 'Windows',
+    macos: 'macOS', linux: 'Linux',
+};
 
-    const lowerUa = ua.toLowerCase();
-    let os = "Unknown OS";
-
-    // OS Matching
-    if (lowerUa.includes("windows")) os = "Windows";
-    else if (lowerUa.includes("mac os") || lowerUa.includes("macintosh")) os = "macOS";
-    else if (lowerUa.includes("android")) os = "Android";
-    else if (lowerUa.includes("iphone") || lowerUa.includes("ipad") || lowerUa.includes("ipod")) os = "iOS";
-    else if (lowerUa.includes("linux")) os = "Linux";
-
-    let browser = "Unknown Browser";
-
-    // Browser Matching (Precise Precedence)
-    if (lowerUa.includes("kakaotalk")) browser = "KakaoTalk";
-    else if (lowerUa.includes("whale")) browser = "Naver Whale";
-    else if (lowerUa.includes("samsungbrowser")) browser = "Samsung Browser";
-    else if (lowerUa.includes("edg") || lowerUa.includes("edge")) browser = "Edge";
-    else if (lowerUa.includes("opr") || lowerUa.includes("opera")) browser = "Opera";
-    else if (lowerUa.includes("firefox") || lowerUa.includes("fxios")) browser = "Firefox";
-    // Chrome must be checked before Safari, because Chrome includes 'Safari' in its UA string
-    else if (lowerUa.includes("chrome") || lowerUa.includes("crios")) browser = "Chrome";
-    else if (lowerUa.includes("safari")) browser = "Safari";
-    else if (lowerUa.includes("trident") || lowerUa.includes("msie")) browser = "Internet Explorer";
-
-    return { os, browser, raw: ua };
+function envIcon(deviceType: string | null) {
+    if (deviceType === 'mobile' || deviceType === 'tablet') return <Smartphone className="text-gray-500 w-5 h-5 shrink-0" />;
+    return <Monitor className="text-gray-500 w-5 h-5 shrink-0" />;
 }
+
+function fmtAccess(at: string | null) {
+    if (!at) return null;
+    try { return new Date(at + (at.endsWith('Z') ? '' : 'Z')).toLocaleString('ko-KR'); } catch { return at; }
+}
+
 
 export default function IPProfileViewer({ initialData, isOpen, onClose, adminPassword }: IPProfileViewerProps) {
     const [data, setData] = useState<IPProfile | null>(null);
@@ -284,27 +278,69 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                             <TabsContent value="devices" className="flex-1 min-h-0 border rounded mt-2 bg-white">
                                 <ScrollArea className="h-[300px] w-full">
                                     <div className="p-4">
-                                        {data.detailsLoaded ? (
-                                            data.recentUserAgents?.length > 0 ? (
-                                                <div className="flex flex-col gap-2">
-                                                    {data.recentUserAgents.map((ua: string, i: number) => {
-                                                        const { os, browser, raw } = parseUserAgent(ua);
-                                                        return (
-                                                            <div key={i} className="flex items-center gap-3 p-2 bg-gray-50 rounded border">
-                                                                {os.includes("Window") || os.includes("Mac") || os.includes("Linux") ?
-                                                                    <Monitor className="text-gray-500 w-5 h-5" /> :
-                                                                    <Smartphone className="text-gray-500 w-5 h-5" />
-                                                                }
-                                                                <div className="flex-1 overflow-hidden">
-                                                                    <div className="font-bold text-sm">{os} / {browser}</div>
-                                                                    <div className="text-[11px] text-gray-500 break-all leading-relaxed mt-1" title={raw}>{raw}</div>
+                                        {data.detailsLoaded ? (() => {
+                                            const envs: any[] = (data as any).recentEnvironments;
+                                            // recentEnvironments 있으면 사용, 없으면 recentUserAgents fallback
+                                            if (envs && envs.length > 0) {
+                                                return (
+                                                    <div className="flex flex-col gap-2">
+                                                        {envs.map((env: any, i: number) => (
+                                                            <div key={i} className="flex items-start gap-3 p-2.5 bg-gray-50 rounded border">
+                                                                {envIcon(env.deviceType)}
+                                                                <div className="flex-1 overflow-hidden min-w-0">
+                                                                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                                                        {env.deviceType && (
+                                                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-slate-50 text-slate-600">
+                                                                                {DEVICE_LABEL[env.deviceType] ?? env.deviceType}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {env.os && (
+                                                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-blue-50 text-blue-700 border-blue-200">
+                                                                                {OS_LABEL[env.os] ?? env.os}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {env.browserKey && (
+                                                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-emerald-50 text-emerald-700 border-emerald-200">
+                                                                                {BROWSER_LABEL[env.browserKey] ?? env.browserKey}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {env.isInApp && (
+                                                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-yellow-50 text-yellow-700 border-yellow-200">
+                                                                                인앱
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+                                                                    {env.accessedAt && (
+                                                                        <div className="text-[10px] text-gray-400 mb-0.5">{fmtAccess(env.accessedAt)}</div>
+                                                                    )}
+                                                                    {env.userAgent && (
+                                                                        <div className="text-[10px] text-gray-400 break-all leading-relaxed" title={env.userAgent}>
+                                                                            {env.userAgent}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            ) : <div className="text-center text-gray-400 py-8">기록된 환경 정보 없음</div>
-                                        ) : <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-300" /></div>}
+                                                        ))}
+                                                    </div>
+                                                );
+                                            }
+                                            // fallback: recentUserAgents (구버전 데이터)
+                                            if (data.recentUserAgents?.length > 0) {
+                                                return (
+                                                    <div className="flex flex-col gap-2">
+                                                        {data.recentUserAgents.map((ua: string, i: number) => (
+                                                            <div key={i} className="flex items-center gap-3 p-2 bg-gray-50 rounded border">
+                                                                {/windows|mac|linux/i.test(ua) ? <Monitor className="text-gray-500 w-5 h-5" /> : <Smartphone className="text-gray-500 w-5 h-5" />}
+                                                                <div className="flex-1 overflow-hidden">
+                                                                    <div className="text-[11px] text-gray-500 break-all leading-relaxed" title={ua}>{ua}</div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                );
+                                            }
+                                            return <div className="text-center text-gray-400 py-8">기록된 환경 정보 없음</div>;
+                                        })() : <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-300" /></div>}
                                     </div>
                                 </ScrollArea>
                             </TabsContent>

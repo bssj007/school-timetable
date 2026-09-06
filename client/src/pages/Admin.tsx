@@ -7275,8 +7275,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                     </Card>
                 </TabsContent>
 
-                <TabsContent value="users">
-                    <div className="grid gap-6">
+                <TabsContent value="users" className="min-w-0 overflow-hidden">
+                    <div className="grid gap-6 min-w-0">
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-50/50 p-4 rounded-lg border">
                             <div className="relative w-full md:max-w-md">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -7301,14 +7301,14 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                 </Select>
                             </div>
                         </div>
-                        <Card>
+                        <Card className="min-w-0 overflow-hidden">
                             <CardHeader>
                                 <CardTitle>활성 사용자 ({timeRange === '24h' ? '최근 24시간' : timeRange === '7d' ? '최근 1주일' : '전체 사용자'})</CardTitle>
                                 <CardDescription>
                                     최근 접속한 IP 및 카카오 계정 목록입니다. 같은 학번의 여러 IP는 하나의 항목으로 묶입니다.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="min-w-0 overflow-hidden p-0 sm:p-6">
                                 {(() => {
                                     const isKnownUser = (user: IPProfile) => {
                                         // 신규 row: browserKey 컬럼으로 판별

@@ -57,11 +57,41 @@ export const onRequest = async (context: any) => {
             "SELECT * FROM access_logs WHERE ip = ? ORDER BY accessedAt DESC"
         ).bind(targetIp).all();
 
-        // G. Recent User Agents (Distinct)
-        const { results: uas } = await env.DB.prepare(
-            "SELECT DISTINCT userAgent FROM access_logs WHERE ip = ? AND userAgent IS NOT NULL ORDER BY accessedAt DESC LIMIT 10"
-        ).bind(targetIp).all();
-        const recentUserAgents = uas?.map((r: any) => r.userAgent) || [];
+        // G. Recent Environments — 최신순, ua parse 컬럼 포함 (최대 15개)
+        let recentEnvironments: any[] = [];
+        let recentUserAgents: string[] = [];
+        try {
+            const { results: envRows } = await env.DB.prepare(
+                `SELECT userAgent, browserKey, deviceType, os, isInApp, accessedAt
+                 FROM access_logs
+                 WHERE ip = ? AND userAgent IS NOT NULL
+                 ORDER BY accessedAt DESC
+                 LIMIT 15`
+            ).bind(targetIp).all();
+
+            recentEnvironments = (envRows || []).map((r: any) => ({
+                userAgent:   r.userAgent   || null,
+                browserKey:  r.browserKey  || 'other',
+                deviceType:  r.deviceType  || 'desktop',
+                os:          r.os          || null,
+                isInApp:     r.isInApp     === 1 || r.isInApp === true,
+                accessedAt:  r.accessedAt  || null,
+            }));
+
+            // backward compat: distinct UAs
+            const seen = new Set<string>();
+            recentEnvironments.forEach(e => { if (e.userAgent) seen.add(e.userAgent); });
+            recentUserAgents = Array.from(seen).slice(0, 10);
+        } catch {
+            // access_logs에 browserKey 컬럼 없으면 구버전 쿼리 fallback
+            try {
+                const { results: uas } = await env.DB.prepare(
+                    "SELECT DISTINCT userAgent FROM access_logs WHERE ip = ? AND userAgent IS NOT NULL ORDER BY accessedAt DESC LIMIT 10"
+                ).bind(targetIp).all();
+                recentUserAgents = uas?.map((r: any) => r.userAgent) || [];
+                recentEnvironments = recentUserAgents.map(ua => ({ userAgent: ua, browserKey: null, deviceType: null, os: null, isInApp: false, accessedAt: null }));
+            } catch {}
+        }
 
         // H. Grade/Class/Name Info & Electives (via student_profile_id or access_logs fallback)
         let studentName: string | null = null;
@@ -167,6 +197,7 @@ export const onRequest = async (context: any) => {
             isStandalone: isStandalone === 1,
             lastAccess,
             recentUserAgents,
+            recentEnvironments,
 
             assessments: recentAssessments || [],
             logs: recentLogs || [],
