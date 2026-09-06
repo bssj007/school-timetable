@@ -1890,7 +1890,7 @@ export default function TeacherPage() {
                 onClick={() => setMobileViewMode(key)}
                 style={{ WebkitTapHighlightColor: 'transparent' }}
                 className={[
-                  'flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 sm:py-2 px-1 sm:px-3 text-[10px] sm:text-xs md:text-sm font-bold leading-tight transition-all select-none cursor-pointer',
+                  'flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-2 sm:py-2.5 px-2 sm:px-3 text-xs sm:text-sm font-bold leading-tight transition-all select-none cursor-pointer',
                   i > 0 ? 'border-l border-slate-200' : '',
                   mobileViewMode === key
                     ? 'bg-indigo-600 text-white shadow-sm'
@@ -1963,11 +1963,11 @@ export default function TeacherPage() {
                             onClick={() => setHwForm(f => ({ ...f, activityType: type }))}
                             style={{
                               flex: 1,
-                              padding: '6px 0',
+                              padding: '8px 0',
                               borderRadius: 8,
                               border: 'none',
                               fontWeight: 700,
-                              fontSize: 12.5,
+                              fontSize: 14,
                               cursor: 'pointer',
                               transition: 'all 0.18s',
                               background: hwForm.activityType === type
@@ -2504,7 +2504,7 @@ export default function TeacherPage() {
                             borderBottom: isToday ? '2px solid #217346' : '1px solid #d0d0d0',
                             color: isToday ? '#1a5c30' : '#595959',
                             fontWeight: 700,
-                            fontSize: 10.5,
+                            fontSize: 12,
                             textAlign: 'center',
                             userSelect: 'none',
                             position: 'sticky',
@@ -2538,9 +2538,9 @@ export default function TeacherPage() {
                           }}
                         >
                           <div className="h-full min-h-[52px] sm:min-h-0 flex flex-col items-center justify-center py-0.5">
-                            <div style={{ fontWeight: 700, fontSize: 10.5, color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
+                            <div style={{ fontWeight: 700, fontSize: 12, color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
                             {PERIOD_TIMES[p] && (
-                              <div style={{ fontSize: 7.5, color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
+                              <div style={{ fontSize: 8.5, color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
                             )}
                           </div>
                         </td>
@@ -2612,11 +2612,11 @@ export default function TeacherPage() {
                                       position: 'absolute',
                                       top: 2,
                                       right: 2,
-                                      fontSize: 8,
+                                      fontSize: 9.5,
                                       fontWeight: 800,
                                       border: '1px solid #94a3b8',
                                       color: '#475569',
-                                      padding: '1px 3px',
+                                      padding: '1px 3.5px',
                                       borderRadius: 2.5,
                                       background: '#f1f5f9',
                                       whiteSpace: 'nowrap',
@@ -2629,14 +2629,14 @@ export default function TeacherPage() {
                                   {/* Class label */}
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                                     <span style={{
-                                      fontSize: 9,
+                                      fontSize: 10,
                                       fontWeight: 700,
-                                      padding: '1px 3px',
+                                      padding: '1px 3.5px',
                                       borderRadius: 2,
                                       background: '#217346',
                                       color: '#ffffff',
                                       display: 'inline-block',
-                                      lineHeight: 1.25,
+                                      lineHeight: 1.3,
                                       width: 'fit-content',
                                     }}>
                                       {(() => {
@@ -2650,8 +2650,8 @@ export default function TeacherPage() {
                                     <span style={{
                                       fontWeight: 700,
                                       color: '#1a1a1a',
-                                      lineHeight: 1.2,
-                                      fontSize: (cellData.subjectName || '').length > 6 ? 8.5 : (cellData.subjectName || '').length > 4 ? 9.5 : 10.5,
+                                      lineHeight: 1.25,
+                                      fontSize: (cellData.subjectName || '').length > 6 ? 11 : (cellData.subjectName || '').length > 4 ? 12.5 : 14,
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
                                       whiteSpace: 'nowrap',
@@ -2670,9 +2670,9 @@ export default function TeacherPage() {
                                         <div
                                           key={a.id}
                                           style={{
-                                            fontSize: 7.5,
+                                            fontSize: 9,
                                             fontWeight: 700,
-                                            padding: '1px 3px',
+                                            padding: '1.5px 3.5px',
                                             borderRadius: 2.5,
                                             background: '#ffffff',
                                             border: '1px solid #ec4899',
@@ -2686,7 +2686,7 @@ export default function TeacherPage() {
                                           title={`[${a.description || '수행'}] ${a.title}`}
                                         >
                                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.title}</span>
-                                          <span className="hidden sm:inline" style={{ fontSize: 7, border: '1px solid #f472b6', color: '#be185d', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap', background: '#fdf2f8' }}>
+                                          <span className="hidden sm:inline" style={{ fontSize: 8, border: '1px solid #f472b6', color: '#be185d', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap', background: '#fdf2f8' }}>
                                             {a.description && a.description.includes('차') ? a.description : '평가'}
                                           </span>
                                         </div>
@@ -2694,8 +2694,8 @@ export default function TeacherPage() {
                                     </div>
                                   ) : (
                                     <div className="opacity-0 group-hover:opacity-100" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 'auto', transition: 'opacity 0.12s' }}>
-                                      <span style={{ fontSize: 8.5, fontWeight: 700, color: '#217346', display: 'flex', alignItems: 'center', gap: 2 }}>
-                                        <Plus style={{ width: 9, height: 9 }} /> 등록
+                                      <span style={{ fontSize: 9.5, fontWeight: 700, color: '#217346', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        <Plus style={{ width: 10, height: 10 }} /> 등록
                                       </span>
                                     </div>
                                   )}
@@ -2703,7 +2703,7 @@ export default function TeacherPage() {
                                 ) : (
                                   /* 빈 칸: 함몰 방지 및 깔끔한 시각적 균형 유지 */
                                   <div className="w-full h-full flex items-center justify-center pointer-events-none select-none">
-                                    <span className="text-slate-200 text-[10px] sm:hidden">-</span>
+                                    <span className="text-slate-200 text-xs sm:hidden">-</span>
                                   </div>
                                 )}
                               </div>{/* /wrapper minHeight div */}
@@ -2839,7 +2839,7 @@ export default function TeacherPage() {
               {/* 학생공지 (모바일 - 인증 시) */}
               {isCurrentTeacherVerified && (
                 <button type="button" onClick={() => {}} style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className="sm:hidden ml-auto flex items-center gap-1 px-2 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
+                  className="sm:hidden ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs sm:text-sm shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
                   title="학생공지">
                   <Bell className="w-3.5 h-3.5" /><span>학생공지</span>
                 </button>
@@ -2853,7 +2853,7 @@ export default function TeacherPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
-                    <span className="text-[11px] font-bold leading-tight whitespace-nowrap text-gray-800">
+                    <span className="text-xs font-bold leading-tight whitespace-nowrap text-gray-800">
                       보기 전용
                     </span>
                   </div>
@@ -2869,7 +2869,7 @@ export default function TeacherPage() {
                       type="button"
                       onClick={() => setShowAuthDialog(true)}
                       style={{ WebkitTapHighlightColor: 'transparent' }}
-                      className={`shrink-0 px-2.5 py-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs font-bold transition-all cursor-pointer shadow-md whitespace-nowrap ${
+                      className={`shrink-0 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-md whitespace-nowrap ${
                         mobileViewMode === 'homework' ? 'ring-2 ring-red-500 ring-offset-1 shadow-red-200' : ''
                       }`}
                     >
@@ -2917,7 +2917,7 @@ export default function TeacherPage() {
                             setSelectedSubjectFilter(subject);
                           }
                         }}
-                        className="relative flex-1 py-2 px-1 text-xs font-bold leading-tight text-center overflow-hidden"
+                        className="relative flex-1 py-2 sm:py-2.5 px-1.5 text-xs sm:text-sm font-bold leading-tight text-center overflow-hidden"
                         style={{
                           color: isActive ? '#fff' : color.activeBg,
                           backgroundColor: isActive ? `${color.activeBg}BF` : `${color.bg}20`,
@@ -3020,7 +3020,7 @@ export default function TeacherPage() {
                           return next;
                         });
                       }}
-                      className={`shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full border transition-all duration-150 flex items-center gap-0.5 relative
+                      className={`shrink-0 text-xs sm:text-[13px] font-bold px-3 py-1.5 rounded-full border transition-all duration-150 flex items-center gap-0.5 relative
                         ${selectedTabId === tab.id
                           ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                           : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'
@@ -3124,11 +3124,11 @@ export default function TeacherPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
                             {/* 반 배지 — 표와 동일한 초록 배지, "반" 글자 제거 */}
-                            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 3px', borderRadius: 2, background: '#217346', color: '#ffffff', display: 'inline-block', lineHeight: 1.25 }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 3.5px', borderRadius: 2, background: '#217346', color: '#ffffff', display: 'inline-block', lineHeight: 1.3 }}>
                               {panelClassLabel}
                             </span>
                             {/* 과목명 — 그룹코드(무지개 워드아트) + 과목명, 표와 동일한 서식 */}
-                            <span style={{ fontWeight: 700, color: '#1a1a1a', lineHeight: 1.25, fontSize: (a.subject || '').length > 6 ? 10.5 : (a.subject || '').length > 4 ? 11.5 : 12.5 }}>
+                            <span style={{ fontWeight: 700, color: '#1a1a1a', lineHeight: 1.25, fontSize: (a.subject || '').length > 6 ? 11.5 : (a.subject || '').length > 4 ? 12.5 : 14 }}>
                               {panelCodes.map((code: string, i: number) =>
                                 renderGroupCode(code, i < panelCodes.length - 1 ? 2 : 3)
                               )}
@@ -3138,11 +3138,11 @@ export default function TeacherPage() {
                               <span className="text-[10px] text-slate-400 font-medium">{a.classTime}교시</span>
                             )}
                           </div>
-                          <p className="text-xs font-bold text-slate-800 leading-tight truncate" title={a.title}>
+                          <p className="text-xs sm:text-sm font-bold text-slate-800 leading-tight truncate" title={a.title}>
                             {a.title}
                           </p>
                           {a.teacher && (
-                            <p className="hidden sm:block text-[10px] text-slate-400 mt-0.5">{a.teacher} 선생님</p>
+                            <p className="hidden sm:block text-[11px] text-slate-400 mt-0.5">{a.teacher} 선생님</p>
                           )}
                         </div>
                         <div className="shrink-0 text-right">
@@ -3154,8 +3154,8 @@ export default function TeacherPage() {
                                 {helpfulCount}
                               </span>
                             )}
-                            <span className="text-[11px] font-extrabold text-indigo-600">{mmdd}</span>
-                            <span className="text-[11px] font-semibold text-slate-400">({wd})</span>
+                            <span className="text-xs font-extrabold text-indigo-600">{mmdd}</span>
+                            <span className="text-xs font-semibold text-slate-400">({wd})</span>
                           </div>
                           {/* Desktop: mmdd + thumbs-up 동일선상 */}
                           <div className="hidden sm:block">
@@ -3166,13 +3166,13 @@ export default function TeacherPage() {
                                   {helpfulCount}
                                 </span>
                               )}
-                              <span className="text-[11px] font-extrabold text-indigo-600">{mmdd}</span>
+                              <span className="text-xs sm:text-[13px] font-extrabold text-indigo-600">{mmdd}</span>
                             </div>
-                            <div className="text-[9px] text-slate-400 text-right">{wd}요일</div>
+                            <div className="text-[10px] text-slate-400 text-right">{wd}요일</div>
                           </div>
                           {a.description && (
                             <div className="mt-1 flex justify-end">
-                              <span className="text-[10px] bg-indigo-600 text-white rounded-md px-1.5 py-0.5 font-extrabold whitespace-nowrap shadow-xs">
+                              <span className="text-[11px] bg-indigo-600 text-white rounded-md px-1.5 py-0.5 font-extrabold whitespace-nowrap shadow-xs">
                                 {a.description}
                               </span>
                             </div>
@@ -3224,11 +3224,11 @@ export default function TeacherPage() {
                   onClick={() => setFormData({ ...formData, activityType: type })}
                   style={{
                     flex: 1,
-                    padding: '6px 0',
+                    padding: '8px 0',
                     borderRadius: 8,
                     border: 'none',
                     fontWeight: 700,
-                    fontSize: 12.5,
+                    fontSize: 14,
                     cursor: 'pointer',
                     transition: 'all 0.18s',
                     background: formData.activityType === type
@@ -3370,11 +3370,11 @@ export default function TeacherPage() {
                   onClick={() => setFormData({ ...formData, activityType: type })}
                   style={{
                     flex: 1,
-                    padding: '6px 0',
+                    padding: '8px 0',
                     borderRadius: 8,
                     border: 'none',
                     fontWeight: 700,
-                    fontSize: 12.5,
+                    fontSize: 14,
                     cursor: 'pointer',
                     transition: 'all 0.18s',
                     background: formData.activityType === type
