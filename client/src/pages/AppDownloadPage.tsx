@@ -59,15 +59,15 @@ export default function AppDownloadPage() {
   // browserDetect 통일 기준 사용
   const browserType = agent.browserKey;
 
-  const { grade, classNum, studentNumber, studentName } = useUserConfig();
+  const { grade, classNum, studentNumber, studentName, publicSettings } = useUserConfig();
   const [showBugReportDialog, setShowBugReportDialog] = useState(false);
   const [bugReportMessage, setBugReportMessage] = useState("");
   const [isBugReportSending, setIsBugReportSending] = useState(false);
 
+  const activeSettings = settings || publicSettings;
   const isBugReportEnabled =
-    settings?.bug_report_enabled !== false &&
-    settings?.bug_report_enabled !== "false" &&
-    Boolean(settings?.bug_report_enabled);
+    activeSettings?.bug_report_enabled !== false &&
+    activeSettings?.bug_report_enabled !== "false";
 
   const handleBugReportSubmit = async () => {
     if (!bugReportMessage.trim()) return;
@@ -298,25 +298,26 @@ export default function AppDownloadPage() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col justify-between"
+    <div className="fixed inset-0 z-10 bg-white flex flex-col justify-between"
       style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
       {/* 상단 유틸리티 바: 우측 오류신고 버튼 */}
-      <div className="flex-shrink-0 flex items-center justify-between px-6 pt-4 min-h-[44px]">
+      <div className="relative z-20 flex-shrink-0 flex items-center justify-between px-6 pt-4 min-h-[44px]">
         <div />
         {isBugReportEnabled && (
           <button
             type="button"
             onClick={() => setShowBugReportDialog(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 rounded-full transition-all active:scale-95 shadow-2xs"
+            style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-red-500 hover:bg-red-600 active:bg-red-700 rounded-full transition-all active:scale-95 shadow-sm cursor-pointer select-none"
           >
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <AlertTriangle className="w-3.5 h-3.5 text-white shrink-0" />
             <span>오류신고</span>
           </button>
         )}
       </div>
 
       {/* 로고 + 앱 이름 */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8 text-center -mt-6">
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8 text-center">
         <img src={appIconUrl} alt={appTitle}
           className="w-24 h-24 rounded-3xl shadow-xl object-cover"
           onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }} />
@@ -342,10 +343,10 @@ export default function AppDownloadPage() {
 
       {/* 오류신고 다이얼로그 */}
       <Dialog open={showBugReportDialog} onOpenChange={setShowBugReportDialog}>
-        <DialogContent className="sm:max-w-[425px] w-[90vw] rounded-2xl p-6">
+        <DialogContent className="sm:max-w-[425px] w-[90vw] rounded-2xl p-6 z-[100]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-900">
-              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+              <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
               <span>오류신고</span>
             </DialogTitle>
           </DialogHeader>
@@ -358,18 +359,20 @@ export default function AppDownloadPage() {
               value={bugReportMessage}
               onChange={(e) => setBugReportMessage(e.target.value)}
               rows={4}
-              className="resize-none text-sm rounded-xl focus:ring-2 focus:ring-amber-500"
+              className="resize-none text-sm rounded-xl focus:ring-2 focus:ring-red-500"
             />
             <div className="flex gap-2 justify-end pt-1">
               <Button
                 variant="outline"
+                type="button"
                 onClick={() => setShowBugReportDialog(false)}
                 className="rounded-xl text-sm"
               >
                 취소
               </Button>
               <Button
-                className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-xl text-sm font-bold shadow-sm"
+                type="button"
+                className="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white rounded-xl text-sm font-bold shadow-sm"
                 onClick={handleBugReportSubmit}
                 disabled={isBugReportSending || !bugReportMessage.trim()}
               >
