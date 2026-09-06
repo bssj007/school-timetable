@@ -168,19 +168,19 @@ function Guide26() {
                   fill="none"
                 >
                   {/* 강조 타원 — 셀 전체를 감쌈 */}
-                  <ellipse cx="30" cy="21" rx="28" ry="19" stroke="#ef4444" strokeWidth="2.5"/>
+                  <ellipse cx="30" cy="15" rx="28" ry="19" stroke="#ef4444" strokeWidth="2.5"/>
 
                   {/* 직선 화살표 줄기 — 원 상단(30,2)에서 위로 */}
                   <line
-                    x1="30" y1="-18"
-                    x2="30" y2="2"
+                    x1="30" y1="-24"
+                    x2="30" y2="-4"
                     stroke="#ef4444"
                     strokeWidth="2.5"
                     strokeLinecap="round"
                   />
                   {/* 화살촉 — V자 */}
                   <polyline
-                    points="24,-8 30,2 36,-8"
+                    points="24,-14 30,-4 36,-14"
                     stroke="#ef4444"
                     strokeWidth="2.5"
                     strokeLinecap="round"
