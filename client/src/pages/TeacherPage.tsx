@@ -2603,37 +2603,41 @@ export default function TeacherPage() {
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                   {/* 학생 배지 — td의 position:relative 기준 우측 상단 */}
                                   {hasAssessment && cellAssessments.some(a => !a.isTeacherCreated) && (
-                                    <span style={{
-                                      position: 'absolute',
-                                      top: 2,
-                                      right: 2,
-                                      fontSize: '0.79em',
-                                      fontWeight: 800,
-                                      border: '1px solid #94a3b8',
-                                      color: '#475569',
-                                      padding: '1px 3.5px',
-                                      borderRadius: 2.5,
-                                      background: '#f1f5f9',
-                                      whiteSpace: 'nowrap',
-                                      lineHeight: 1.1,
-                                      zIndex: 1,
-                                    }}>
+                                    <span
+                                      className="teacher-cell-student-badge"
+                                      style={{
+                                        position: 'absolute',
+                                        top: 2,
+                                        right: 2,
+                                        fontWeight: 800,
+                                        border: '1px solid #94a3b8',
+                                        color: '#475569',
+                                        padding: '1px 3.5px',
+                                        borderRadius: 2.5,
+                                        background: '#f1f5f9',
+                                        whiteSpace: 'nowrap',
+                                        lineHeight: 1.1,
+                                        zIndex: 1,
+                                      }}
+                                    >
                                       학생
                                     </span>
                                   )}
                                   {/* Class label */}
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                                    <span style={{
-                                      fontSize: '0.83em',
-                                      fontWeight: 700,
-                                      padding: '1px 3.5px',
-                                      borderRadius: 2,
-                                      background: '#217346',
-                                      color: '#ffffff',
-                                      display: 'inline-block',
-                                      lineHeight: 1.3,
-                                      width: 'fit-content',
-                                    }}>
+                                    <span
+                                      className="teacher-cell-class-badge"
+                                      style={{
+                                        fontWeight: 700,
+                                        padding: '1px 3.5px',
+                                        borderRadius: 2,
+                                        background: '#217346',
+                                        color: '#ffffff',
+                                        display: 'inline-block',
+                                        lineHeight: 1.3,
+                                        width: 'fit-content',
+                                      }}
+                                    >
                                       {(() => {
                                         if (!cellGroup) return `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
                                         // 이동수업: 관리페이지 강의실 이름 조회
@@ -2642,16 +2646,18 @@ export default function TeacherPage() {
                                         return configName ? configName : `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
                                       })()}
                                     </span>
-                                    <span style={{
-                                      fontWeight: 700,
-                                      color: '#1a1a1a',
-                                      lineHeight: 1.25,
-                                      fontSize: `${Math.max(0.82, 1.17 - Math.max(0, (cellData.subjectName || '').length - 4) * 0.045)}em`,
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap',
-                                      maxWidth: '100%',
-                                    }}
+                                    <span
+                                      className="teacher-cell-subject-name"
+                                      style={{
+                                        fontWeight: 700,
+                                        color: '#1a1a1a',
+                                        lineHeight: 1.25,
+                                        ['--base-subject-font' as any]: `${Math.max(0.82, 1.17 - Math.max(0, (cellData.subjectName || '').length - 4) * 0.045)}em`,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        maxWidth: '100%',
+                                      }}
                                       title={cellData.subjectName}
                                     >
                                       {cellGroup && renderGroupCode(cellGroup)}{cellData.subjectName}

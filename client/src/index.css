@@ -737,3 +737,34 @@ body.capturing #timetable-container[data-print-font-size="large"] td .md\:text-b
     color: inherit !important;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* /teacher 시간표 셀 내부 텍스트 (과목명, 반명 등) — 좁은화면 7% 확대             */
+/* (테두리 제외, 수행평가 내용 제외)                                            */
+/* -------------------------------------------------------------------------- */
+.teacher-cell-class-badge {
+  font-size: calc(0.83em * 1.07);
+}
+@media (min-aspect-ratio: 1/1) {
+  .teacher-cell-class-badge {
+    font-size: 0.83em;
+  }
+}
+
+.teacher-cell-subject-name {
+  font-size: calc(var(--base-subject-font, 1em) * 1.07);
+}
+@media (min-aspect-ratio: 1/1) {
+  .teacher-cell-subject-name {
+    font-size: var(--base-subject-font, 1em);
+  }
+}
+
+.teacher-cell-student-badge {
+  font-size: calc(0.79em * 1.07);
+}
+@media (min-aspect-ratio: 1/1) {
+  .teacher-cell-student-badge {
+    font-size: 0.79em;
+  }
+}
