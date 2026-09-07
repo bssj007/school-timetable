@@ -363,13 +363,15 @@ export function getInstalledAppType(): "pwa" | "webview" | null {
   const isAndroidAppReferrer = typeof document !== "undefined" && Boolean(document.referrer && document.referrer.startsWith("android-app://"));
   // - Android Native Bridge 인터페이스 주입 확인
   const hasAndroidBridge = Boolean((window as any).AndroidBridge || (window as any).Android || (window as any).schoolTimetableApp || (window as any).ReactNativeWebView || (window as any).flutter_inappwebview);
+  // - 전용 Android 앱 식별자 (MainActivity.kt 커스텀 UA: SeongjisuhaengApp/1.0)
+  const isSeongjisuhaengApp = /SeongjisuhaengApp/i.test(ua);
 
   // 3. iOS 정식 앱 (WKWebView) 감지
   // - iOS 기기이면서 일반 인앱(카카오/네이버/인스타)이 아니고, 일반 브라우저(Safari, CriOS, FxiOS) 토큰이 없거나 WKWebView 메시지 핸들러가 있는 경우
   const isIOSDevice = /iPhone|iPad|iPod/i.test(ua) || (typeof navigator !== "undefined" && navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const isIOSApp = isIOSDevice && !inApp && !/CriOS/i.test(ua) && !/FxiOS/i.test(ua) && (!/Safari\//i.test(ua) || Boolean((window as any).webkit?.messageHandlers));
 
-  const isWebView = !inApp && (hasAndroidWvToken || isAndroidWebViewUA || isAndroidAppReferrer || hasAndroidBridge || isIOSApp);
+  const isWebView = !inApp && (hasAndroidWvToken || isAndroidWebViewUA || isAndroidAppReferrer || hasAndroidBridge || isIOSApp || isSeongjisuhaengApp);
 
   if (isWebView) return "webview";
   if (isPwaStandalone) return "pwa";
