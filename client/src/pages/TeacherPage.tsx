@@ -1720,7 +1720,7 @@ export default function TeacherPage() {
         <div className="hidden sm:flex flex-row gap-3 md:gap-4 xl:gap-6 items-center mb-3 flex-shrink-0">
 
           {/* ── 좌: 제목 + 주선택기 (콘텐츠 테이블 열과 동일 비율 flex:65) ── */}
-          <div className="min-w-0 flex items-center gap-3" style={{ flex: '65 1 0' }}>
+          <div className="min-w-0 overflow-hidden flex items-center gap-3" style={{ flexGrow: 65, flexShrink: 1 }}>
 
             {/* 뱃지형 제목 */}
             <h1 className="text-xl md:text-2xl font-extrabold text-gray-900 tracking-tight shrink-0 truncate leading-tight">
@@ -1770,7 +1770,7 @@ export default function TeacherPage() {
           </div>
 
           {/* ── 우: 네비게이션 버튼 (콘텐츠 패널 열과 동일 비율 flex:35) ── */}
-          <div className="hidden sm:flex shrink-0 items-center justify-end gap-1.5 sm:gap-2" style={{ flex: '35 1 0' }}>
+          <div className="hidden sm:flex shrink-0 items-center justify-end gap-1.5 sm:gap-2" style={{ flexGrow: 35, flexShrink: 0 }}>
             <Button variant="outline" size="sm"
               className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
               onClick={handleReturnToStudentPage}
@@ -2454,7 +2454,7 @@ export default function TeacherPage() {
 
       {/* Main Timetable — Card wrapper */}
       {/* 당일형이 아니면 표 숨김 */}
-      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex-1 flex flex-col sm:min-h-0 ${mobileViewMode !== 'daily' ? 'hidden' : ''}`}>
+      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col sm:min-h-0 ${mobileViewMode !== 'daily' ? 'hidden' : ''}`}>
           {(isTimetableLoading || isGroupDataLoading) ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
@@ -2468,7 +2468,7 @@ export default function TeacherPage() {
               <p className="text-sm text-red-400">네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.</p>
             </div>
           ) : timetableData && selectedSchedule ? (
-            <div className="w-full overflow-x-auto flex-1 flex flex-col min-h-0 sm:h-full">
+            <div className="w-full flex-1 flex flex-col min-h-0 sm:h-full">
               <table className="w-full table-fixed min-w-[420px] sm:h-full sm:flex-1" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: 'clamp(10px, 1.5vw, 13px)' }}>
                 <thead>
                   <tr>
