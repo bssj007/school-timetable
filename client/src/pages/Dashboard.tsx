@@ -3603,6 +3603,52 @@ export default function Dashboard() {
           })()}
         </Card>
       )}
+
+      {/* ===== 선생님 직접게시 섹션 ===== */}
+      {!isRestricted && (() => {
+        const activeTeacherList: string[] = Array.isArray(settings?.active_teachers) ? settings.active_teachers : [];
+        if (activeTeacherList.length === 0) return null;
+
+        // 이용중인 교사별로 등록된 수행평가에서 과목 추출
+        const teacherSubjects: { teacher: string; subjects: string[] }[] = activeTeacherList
+          .map((teacherName: string) => {
+            const subjects = Array.from(new Set(
+              (allAssessments as any[] || [])
+                .filter((a: any) => a.teacher === teacherName)
+                .map((a: any) => a.subject as string)
+                .filter(Boolean)
+            )) as string[];
+            return { teacher: teacherName, subjects };
+          })
+          .filter(t => t.subjects.length > 0);
+
+        if (teacherSubjects.length === 0) return null;
+
+        return (
+          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-emerald-700 font-extrabold text-sm flex items-center gap-1.5">
+                📋 선생님 직접게시
+              </span>
+              <span className="text-emerald-600/70 text-xs font-medium hidden sm:inline">이 과목은 선생님이 직접 등록·관리합니다</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {teacherSubjects.map(({ teacher, subjects }) =>
+                subjects.map(subject => (
+                  <span
+                    key={`${teacher}-${subject}`}
+                    className="inline-flex items-center gap-1.5 bg-white border border-emerald-300 text-emerald-900 rounded-full px-3 py-1 text-xs font-bold shadow-sm"
+                  >
+                    <span>{subject}</span>
+                    <span className="text-emerald-500 font-semibold text-[10px]">{teacher}</span>
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="mt-2 flex justify-end items-center gap-3">
         <Link href="/privacy">
           <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-transparent text-xs font-normal h-auto p-0">

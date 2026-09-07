@@ -12060,6 +12060,174 @@ function ExamScheduleManager({ adminPassword }: { adminPassword: string }) {
 
 
 
+
+
+// ======================================================================
+// TeacherDisplayManager - 학생에게 교사 지원표시 설정
+// ======================================================================
+function TeacherDisplayManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [activeTeachers, setActiveTeachers] = useState<string[]>([]);
+    const [newTeacherName, setNewTeacherName] = useState('');
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 조회 실패");
+            return res.json();
+        }
+    });
+
+    // teacher_passwords 키에서 교사 이름 목록 추출
+    const configuredTeachers = useMemo(() => {
+        if (!settingsQuery.data?.teacher_passwords) return [];
+        try {
+            const raw = settingsQuery.data.teacher_passwords;
+            const pwMap = typeof raw === "string" ? JSON.parse(raw) : raw;
+            return Object.keys(pwMap);
+        } catch { return []; }
+    }, [settingsQuery.data]);
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            try {
+                const raw = settingsQuery.data.active_teachers || "[]";
+                const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+                setActiveTeachers(Array.isArray(parsed) ? parsed : []);
+            } catch { setActiveTeachers([]); }
+        }
+    }, [settingsQuery.data]);
+
+    const save = useMutation({
+        mutationFn: async (teachers: string[]) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ active_teachers: JSON.stringify(teachers) })
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            toast.success("저장되었습니다.");
+        },
+        onError: (err: any) => toast.error(err.message)
+    });
+
+    const toggleTeacher = (name: string) => {
+        setActiveTeachers(prev =>
+            prev.includes(name) ? prev.filter(t => t !== name) : [...prev, name]
+        );
+    };
+
+    const handleAddCustom = () => {
+        const name = newTeacherName.trim();
+        if (!name) return;
+        if (!activeTeachers.includes(name)) setActiveTeachers(prev => [...prev, name]);
+        setNewTeacherName('');
+    };
+
+    const handleRemoveCustom = (name: string) => {
+        setActiveTeachers(prev => prev.filter(t => t !== name));
+    };
+
+    // 표시할 전체 목록: 비밀번호 설정된 교사 + active에만 있는 커스텀 추가 교사
+    const allTeachers = Array.from(new Set([
+        ...configuredTeachers,
+        ...activeTeachers.filter(t => !configuredTeachers.includes(t))
+    ]));
+    const customOnlyTeachers = activeTeachers.filter(t => !configuredTeachers.includes(t));
+
+    if (settingsQuery.isLoading) return <div className="p-4 text-sm text-gray-500">설정을 불러오는 중...</div>;
+
+    return (
+        <Card className="w-full max-w-lg border-emerald-100 shadow-sm">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base font-bold text-gray-700 flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-emerald-600" />
+                    학생에게 교사 지원표시
+                </CardTitle>
+                <CardDescription className="text-xs text-gray-500">
+                    체크된 선생님은 학생 메인페이지 하단에 <strong>'선생님 직접게시'</strong> 섹션으로 표시됩니다.<br />
+                    교사별 비밀번호 탭에서 설정된 선생님 목록이 자동으로 불러와집니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {/* 비밀번호 설정된 교사 목록 */}
+                {configuredTeachers.length > 0 ? (
+                    <div className="space-y-1.5">
+                        <p className="text-xs font-semibold text-slate-500 mb-2">비밀번호 설정된 선생님</p>
+                        {configuredTeachers.map(name => (
+                            <label key={name} className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-100 hover:bg-emerald-50/50 cursor-pointer transition-colors select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={activeTeachers.includes(name)}
+                                    onChange={() => toggleTeacher(name)}
+                                    className="w-4 h-4 accent-emerald-600 shrink-0"
+                                />
+                                <span className="text-sm font-medium text-gray-800 flex-1">{name} 선생님</span>
+                                {activeTeachers.includes(name) && (
+                                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 shrink-0">이용중</span>
+                                )}
+                            </label>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-sm text-gray-400 py-3 text-center bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                        교사별 비밀번호 탭에서 선생님을 먼저 추가하세요.
+                    </div>
+                )}
+
+                {/* 직접 추가된 교사 */}
+                {customOnlyTeachers.length > 0 && (
+                    <div className="space-y-1.5">
+                        <p className="text-xs font-semibold text-slate-500 mb-2">직접 추가된 선생님</p>
+                        {customOnlyTeachers.map(name => (
+                            <div key={name} className="flex items-center gap-3 p-2.5 rounded-lg border border-emerald-100 bg-emerald-50/40">
+                                <span className="text-sm font-medium text-gray-800 flex-1">{name} 선생님</span>
+                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">이용중</span>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-50"
+                                    onClick={() => handleRemoveCustom(name)}
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* 이름 직접 추가 */}
+                <div className="border-t pt-3 flex gap-2">
+                    <Input
+                        value={newTeacherName}
+                        onChange={e => setNewTeacherName(e.target.value)}
+                        placeholder="선생님 이름 직접 추가"
+                        className="flex-1 h-9 text-sm"
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddCustom(); }}
+                    />
+                    <Button size="sm" variant="outline" onClick={handleAddCustom} className="h-9 shrink-0">추가</Button>
+                </div>
+
+                <Button
+                    onClick={() => save.mutate(activeTeachers)}
+                    disabled={save.isPending}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                >
+                    {save.isPending ? "저장 중..." : "저장"}
+                </Button>
+            </CardContent>
+        </Card>
+    );
+}
+
 // ======================================================================
 // TeacherMgmtManager - 교사용 성지수행 관리 (사이드바 레이아웃)
 // ======================================================================
@@ -12106,6 +12274,18 @@ function TeacherMgmtManager({ adminPassword }: { adminPassword: string }) {
                     <Users className="w-4 h-4 mr-2" />
                     교사별 비밀번호
                 </Button>
+                <Button
+                    variant="ghost"
+                    className={`justify-start whitespace-nowrap text-left transition-colors ${
+                        selectedMenu === "teacher-display"
+                            ? "bg-emerald-100 text-emerald-900 font-bold hover:bg-emerald-200/80 border border-emerald-300 shadow-xs"
+                            : "text-slate-600 hover:text-emerald-800 hover:bg-emerald-50/70 font-medium"
+                    }`}
+                    onClick={() => setSelectedMenu("teacher-display")}
+                >
+                    <UserCheck className="w-4 h-4 mr-2" />
+                    학생에게 교사 지원표시
+                </Button>
             </div>
 
             {/* Main Content */}
@@ -12146,6 +12326,19 @@ function TeacherMgmtManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <TeacherPerPasswordManager adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+                {selectedMenu === "teacher-display" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-emerald-700 flex items-center gap-2">
+                                <UserCheck className="w-5 h-5" />
+                                학생에게 교사 지원표시
+                            </h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <TeacherDisplayManager adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
