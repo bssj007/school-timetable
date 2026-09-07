@@ -1,5 +1,6 @@
 import { useState, createContext, useContext, ReactNode, useEffect } from "react";
 import { getRoleCookie, getTeacherNameCookie, clearRoleCookie } from "@/components/RoleSelectDialog";
+import { isMaintenanceBypassed } from "@/lib/browserDetect";
 
 export interface UserConfig {
     schoolName: string;
@@ -151,16 +152,13 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
             .then((settings: any) => {
                 const serverKey: string = settings?.semester_key ?? '1';
 
-                // 서버 점검 중 감지 (화이트리스트 아닌 경우)
+                // 서버 점검 중 감지 (화이트리스트 및 접속환경별 점검 우회 확인)
                 const maintenanceActive = Boolean(
-                    settings?.maintenance_mode?.active && !settings?.is_whitelisted
+                    settings?.maintenance_mode?.active &&
+                    !settings?.is_whitelisted &&
+                    !isMaintenanceBypassed(settings)
                 );
                 setIsMaintenanceMode(maintenanceActive);
-                
-                if (maintenanceActive && !window.location.pathname.startsWith('/admin')) {
-                    window.location.reload();
-                    return;
-                }
                 
                 // 설정 상태 저장 (방문제한 등은 캐싱하지 않음)
                 setPublicSettings(settings);
