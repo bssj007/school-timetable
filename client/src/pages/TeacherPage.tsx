@@ -1906,7 +1906,7 @@ export default function TeacherPage() {
           <div
             className="w-full rounded-xl shadow-sm flex flex-col overflow-hidden sm:flex-1 sm:min-h-0"
             style={{
-              minHeight: 'calc(7 * 50px + 44px)',
+              minHeight: 'calc(7 * 57px + 44px)',
               ...(!isCurrentTeacherVerified ? {
                 background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
                 border: '1px solid rgba(255,255,255,0.6)',
@@ -2521,11 +2521,11 @@ export default function TeacherPage() {
                     return (
                       <tr
                         key={p}
-                        className="h-[52px] sm:h-[calc(100%/7)]"
+                        className="h-[57px] sm:h-[calc(100%/7)]"
                       >
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[52px] sm:h-auto select-none text-center align-middle p-0"
+                          className="h-[57px] sm:h-auto select-none text-center align-middle p-0"
                           style={{
                             width: 36,
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
@@ -2533,7 +2533,7 @@ export default function TeacherPage() {
                             borderBottom: '1px solid #d0d0d0',
                           }}
                         >
-                          <div className="h-full min-h-[52px] sm:min-h-0 flex flex-col items-center justify-center py-0.5 sm:py-1">
+                          <div className="h-full min-h-[57px] sm:min-h-0 flex flex-col items-center justify-center py-0.5 sm:py-1">
                             <div style={{ fontWeight: 700, fontSize: 'inherit', color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
                             {PERIOD_TIMES[p] && (
                               <div style={{ fontSize: '0.71em', color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
@@ -2576,7 +2576,7 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[52px] sm:h-auto align-top relative overflow-hidden"
+                              className="group h-[57px] sm:h-auto align-top relative overflow-hidden"
                               style={{
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
@@ -2598,8 +2598,8 @@ export default function TeacherPage() {
                                 (e.currentTarget as HTMLElement).style.zIndex = 'auto';
                               }}
                             >
-                              {/* minHeight: 52로 빈 칸 함몰 완벽 방지 — 모바일은 52px 고정(3px 4px 유지), PC는 teachershub 기준 4px 5px 패딩으로 확장 */}
-                              <div className="h-full min-h-[52px] sm:min-h-0 flex flex-col p-[3px_4px] sm:p-[4px_5px]" style={{ justifyContent: cellData ? 'flex-start' : 'center' }}>
+                              {/* minHeight: 57로 빈 칸 함몰 완벽 방지 — 좁은화면은 57px 고정(3px 4px 유지), 넓은화면은 4px 5px 패딩으로 확장 */}
+                              <div className="h-full min-h-[57px] sm:min-h-0 flex flex-col p-[3px_4px] sm:p-[4px_5px]" style={{ justifyContent: cellData ? 'flex-start' : 'center' }}>
                               {cellData ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                   {/* 학생 배지 — td의 position:relative 기준 우측 상단 */}
