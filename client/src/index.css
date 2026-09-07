@@ -768,3 +768,44 @@ body.capturing #timetable-container[data-print-font-size="large"] td .md\:text-b
     font-size: 0.79em;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* /teacher 좁은화면(태블릿/Pad 포함) 시간표 비율 유지: 가로 대비 세로 비율 비례 조절  */
+/* (Pad 등 넓은 가로폭에서도 사진의 황금비율(H_row / W_col ≈ 0.865) 최대한 유지)       */
+/* -------------------------------------------------------------------------- */
+@media not (min-aspect-ratio: 1/1) {
+  .teacher-timetable-card {
+    /* Fallback using vw */
+    --period-col-w: clamp(36px, 9.5vw, 50px);
+    --day-col-w: calc((100vw - 32px - var(--period-col-w)) / 5);
+    --narrow-cell-h: clamp(57px, calc(var(--day-col-w) * 0.865), 145px);
+
+    container-type: inline-size;
+  }
+
+  @supports (container-type: inline-size) {
+    .teacher-timetable-card {
+      --period-col-w: clamp(36px, 9.5cqw, 50px);
+      --day-col-w: calc((100cqw - var(--period-col-w)) / 5);
+      --narrow-cell-h: clamp(57px, calc(var(--day-col-w) * 0.865), 145px);
+    }
+  }
+
+  .teacher-timetable-row {
+    height: var(--narrow-cell-h, 57px);
+  }
+
+  .teacher-timetable-cell-wrapper {
+    min-height: var(--narrow-cell-h, 57px);
+    padding: clamp(3px, 0.7cqw, 6px) clamp(4px, 0.9cqw, 8px);
+  }
+
+  .teacher-period-col {
+    width: var(--period-col-w, 36px) !important;
+    min-width: var(--period-col-w, 36px) !important;
+  }
+
+  .teacher-table-th {
+    height: clamp(30px, 4.8cqw, 42px) !important;
+  }
+}

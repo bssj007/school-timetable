@@ -420,6 +420,34 @@ export default function TeacherPage() {
     localStorage.setItem("teacher-page-selected-teacher", selectedTeacherId);
   }, [selectedTeacherId]);
 
+  // 좁은화면(Pad 등 넓은 화면 포함)에서 시간표가 가로폭에 맞춰 0.865 비율로 세로 높이를 자동 조절하도록 dynamic CSS 변수 동기화
+  const timetableContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = timetableContainerRef.current;
+    if (!el) return;
+
+    const updateRatio = () => {
+      // 넓은화면(가로:세로 >= 1/1)에서는 flex/h-full 뷰포트 맞춤 사용하므로 생략
+      if (window.innerWidth >= window.innerHeight) return;
+      const w = el.clientWidth;
+      if (!w) return;
+      const periodW = Math.max(36, Math.min(50, w * 0.095));
+      const dayW = (w - periodW) / 5;
+      const cellH = Math.max(57, Math.min(145, dayW * 0.865));
+      el.style.setProperty('--period-col-w', `${periodW}px`);
+      el.style.setProperty('--narrow-cell-h', `${cellH}px`);
+    };
+
+    updateRatio();
+    const ro = new ResizeObserver(updateRatio);
+    ro.observe(el);
+    window.addEventListener('resize', updateRatio);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateRatio);
+    };
+  }, []);
+
   // PC 하단 흰 공백 방지: body 배경을 TeacherPage 배경과 일치시킴
   // TeacherPage 최상위 div가 h-screen으로 잘릴 때 그 아래 body 영역이 노출되기 때문
   useEffect(() => {
@@ -1962,7 +1990,7 @@ export default function TeacherPage() {
           <div
             className="w-full rounded-xl shadow-sm flex flex-col overflow-hidden wide:flex-1 wide:min-h-0"
             style={{
-              minHeight: 'calc(7 * 57px + 44px)',
+              minHeight: 'calc(7 * var(--narrow-cell-h, 57px) + 44px)',
               ...(!isCurrentTeacherVerified ? {
                 background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
                 border: '1px solid rgba(255,255,255,0.6)',
@@ -2521,7 +2549,10 @@ export default function TeacherPage() {
 
       {/* Main Timetable — Card wrapper */}
       {/* 당일형이 아니면 표 숨김 */}
-      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden wide:overflow-x-auto flex-1 flex flex-col wide:min-h-0 ${viewMode !== 'daily' ? 'hidden' : ''}`}>
+      <div
+        ref={timetableContainerRef}
+        className={`teacher-timetable-card w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden wide:overflow-x-auto flex-1 flex flex-col wide:min-h-0 ${viewMode !== 'daily' ? 'hidden' : ''}`}
+      >
           {(isTimetableLoading || isGroupDataLoading) ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
@@ -2540,7 +2571,7 @@ export default function TeacherPage() {
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
-                    <th style={{ width: 36, height: 30, background: '#f2f2f2', borderRight: '1px solid #d0d0d0', borderBottom: '1px solid #d0d0d0', position: 'sticky', top: 0, zIndex: 2 }} />
+                    <th className="teacher-period-col teacher-table-th" style={{ width: 'var(--period-col-w, 36px)', height: 30, background: '#f2f2f2', borderRight: '1px solid #d0d0d0', borderBottom: '1px solid #d0d0d0', position: 'sticky', top: 0, zIndex: 2 }} />
                     {weekdays.map((day, idx) => {
                       const dDate = weekDates[idx];
                       const todayStr = toDateString(new Date());
@@ -2549,6 +2580,7 @@ export default function TeacherPage() {
                       return (
                         <th
                           key={day}
+                          className="teacher-table-th"
                           style={{
                             height: 30,
                             background: isToday ? '#cee8d0' : '#f2f2f2',
@@ -2577,19 +2609,19 @@ export default function TeacherPage() {
                     return (
                       <tr
                         key={p}
-                        className="h-[57px] wide:h-[calc(100%/7)]"
+                        className="teacher-timetable-row wide:h-[calc(100%/7)]"
                       >
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[57px] wide:h-auto select-none text-center align-middle p-0"
+                          className="teacher-period-col teacher-timetable-row wide:h-auto select-none text-center align-middle p-0"
                           style={{
-                            width: 36,
+                            width: 'var(--period-col-w, 36px)',
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
                             borderRight: isCurrentPeriod ? '2px solid #217346' : '1px solid #d0d0d0',
                             borderBottom: '1px solid #d0d0d0',
                           }}
                         >
-                          <div className="h-full min-h-[57px] wide:min-h-0 flex flex-col items-center justify-center py-0.5 wide:py-1">
+                          <div className="teacher-timetable-cell-wrapper h-full wide:min-h-0 flex flex-col items-center justify-center py-0.5 wide:py-1">
                             <div style={{ fontWeight: 700, fontSize: 'inherit', color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
                             {PERIOD_TIMES[p] && (
                               <div style={{ fontSize: '0.71em', color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
@@ -2632,7 +2664,7 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[57px] wide:h-auto align-top relative overflow-hidden"
+                              className="group teacher-timetable-row wide:h-auto align-top relative overflow-hidden"
                               style={{
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
@@ -2654,8 +2686,8 @@ export default function TeacherPage() {
                                 (e.currentTarget as HTMLElement).style.zIndex = 'auto';
                               }}
                             >
-                              {/* minHeight: 57로 빈 칸 함몰 완벽 방지 — 좁은화면은 57px 고정(3px 4px 유지), 넓은화면은 4px 5px 패딩으로 확장 */}
-                              <div className="h-full min-h-[57px] wide:min-h-0 flex flex-col p-[3px_4px] wide:p-[4px_5px]" style={{ justifyContent: cellData ? 'flex-start' : 'center' }}>
+                              {/* minHeight: 좁은화면에서 가로폭에 맞춰 0.865 비율로 자동 조절 (최소 57px), 넓은화면은 4px 5px 패딩으로 확장 */}
+                              <div className="teacher-timetable-cell-wrapper h-full wide:min-h-0 flex flex-col wide:p-[4px_5px]" style={{ justifyContent: cellData ? 'flex-start' : 'center' }}>
                               {cellData ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                   {/* 학생 배지 — td의 position:relative 기준 우측 상단 */}
