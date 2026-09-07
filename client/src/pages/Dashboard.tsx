@@ -1,5 +1,5 @@
 
-import { agent, isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
+import { agent, isMaintenanceBypassed, getMaintenanceBypassCookie, checkIsInstalledApp } from "@/lib/browserDetect";
 
 // ── detect() 결과 직접 참조 (단일 진실원천: agent 싱글턴) ───────────────────
 const isSamsungBrowser = agent.browserKey === "samsung";
@@ -3123,8 +3123,8 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog >
 
-      {/* 모바일 전용 앱 다운로드 버튼 (기기/브라우저 환경별 분기) */}
-      {(!isInAppBrowser || isKakaoTalk) && !agent.isInstalledApp && isMobileDevice && settings?.pwa_install_button_visible !== false && (
+      {/* 모바일 전용 앱 다운로드 버튼 (기기/브라우저 환경별 분기) — PWA 및 WebView 정식 앱 실행 시 완전 숨김 */}
+      {(!isInAppBrowser || isKakaoTalk) && !agent.isInstalledApp && !checkIsInstalledApp() && isMobileDevice && settings?.pwa_install_button_visible !== false && (
         <div className="mt-6 mb-2 space-y-2">
           {(() => {
             const playUrl = settings?.play_store_url && !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(settings.play_store_url)

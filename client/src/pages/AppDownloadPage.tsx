@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { agent, shouldShowDownloadPage } from "@/lib/browserDetect";
+import { agent, shouldShowDownloadPage, checkIsInstalledApp } from "@/lib/browserDetect";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -117,9 +117,9 @@ export default function AppDownloadPage() {
     setLocation("/");
   };
 
-  // Desktop 또는 이미 설치됨, 또는 다운로드 액션 미지원/비활성화 시 → 메인으로 직행 (단일 진실원천: shouldShowDownloadPage)
+  // Desktop 또는 이미 설치됨(PWA/WebView), 또는 다운로드 액션 미지원/비활성화 시 → 메인으로 직행 (단일 진실원천: shouldShowDownloadPage)
   useEffect(() => {
-    if (isDesktop || agent.isInstalledApp) { setLocation("/"); return; }
+    if (isDesktop || agent.isInstalledApp || checkIsInstalledApp()) { setLocation("/"); return; }
     if (!settings) return;
     if (!shouldShowDownloadPage(settings)) {
       setLocation("/");

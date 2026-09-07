@@ -3,7 +3,7 @@ import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
-import { agent } from "@/lib/browserDetect";
+import { agent, checkIsInstalledApp } from "@/lib/browserDetect";
 import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
@@ -53,10 +53,11 @@ if (typeof window !== 'undefined') {
     document.documentElement.classList.add('is-firefox');
   }
 
-  // agent.isInstalledApp — browserDetect.ts (standalone + TWA 통합 감지)
+  // agent.isInstalledApp — browserDetect.ts (standalone + TWA/WebView 통합 감지)
   // Track PWA Installation Status (모바일 전용)
-  if (agent.isInstalledApp && agent.isMobile) {
+  if ((agent.isInstalledApp || checkIsInstalledApp()) && agent.isMobile) {
     document.cookie = "pwa_standalone=1; max-age=31536000; path=/";
+    try { sessionStorage.setItem("is_pwa_standalone", "1"); } catch {}
   }
 
   // Register beforeinstallprompt as early as possible, BEFORE React renders.
