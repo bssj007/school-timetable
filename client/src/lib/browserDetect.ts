@@ -384,10 +384,10 @@ export function getInstalledAppType(): "pwa" | "webview" | null {
     if (mode === "pwa" || searchParams.get("standalone") === "1" || searchParams.get("utm_source") === "homescreen") return "pwa";
   } catch {}
 
-  // 5. 세션 스토리지 / 쿠키에 기록된 standalone 상태 (단, 인앱 브라우저 내부가 아닌 경우)
+  // 5. 세션 스토리지에 기록된 standalone 상태 (단, 인앱 브라우저 내부가 아닌 경우)
   if (!inApp) {
     try {
-      if (sessionStorage.getItem("is_pwa_standalone") === "1" || document.cookie.includes("pwa_standalone=1")) {
+      if (sessionStorage.getItem("is_pwa_standalone") === "1") {
         return "pwa";
       }
     } catch {}
@@ -599,13 +599,18 @@ export function shouldShowDownloadPage(settings?: any): boolean {
     } catch {}
   }
 
-  // 전체 서킷브레이커 OFF 시 유도 페이지 미표시
-  if (resolvedSettings?.pwa_install_button_visible === false) {
+  // 설정이 아직 로드되지 않은 상태에서는 리다이렉트 판단을 보류(false)하여 무한 루프 방지
+  if (!resolvedSettings) {
     return false;
   }
 
-  const hasAppStore = Boolean(resolvedSettings?.app_store_url && resolvedSettings.app_store_url.trim());
-  const hasPlayStore = Boolean(resolvedSettings?.play_store_url && resolvedSettings.play_store_url.trim());
+  // 전체 서킷브레이커 OFF 시 유도 페이지 미표시
+  if (resolvedSettings.pwa_install_button_visible === false) {
+    return false;
+  }
+
+  const hasAppStore = Boolean(resolvedSettings.app_store_url && resolvedSettings.app_store_url.trim());
+  const hasPlayStore = Boolean(resolvedSettings.play_store_url && resolvedSettings.play_store_url.trim());
   // 일반 인앱 브라우저(네이버, 인스타그램 등)는 유도 페이지 미표시 (카카오톡은 기타 브라우저로 취급하여 통과)
   if (agent.isInAppBrowser && !agent.isKakaoTalk) {
     return false;
@@ -615,35 +620,32 @@ export function shouldShowDownloadPage(settings?: any): boolean {
     // 1. 앱스토어 링크가 있는 경우: 해당 브라우저의 스위치 확인 후 표시
     if (hasAppStore) {
       const isHidden = agent.isIOSSafari
-        ? resolvedSettings?.safari_install_button_visible === false
+        ? resolvedSettings.safari_install_button_visible === false
         : agent.browserKey === "chrome"
-          ? resolvedSettings?.chrome_install_button_visible === false
-          : resolvedSettings?.other_install_button_visible === false;
+          ? resolvedSettings.chrome_install_button_visible === false
+          : resolvedSettings.other_install_button_visible === false;
       if (isHidden) return false;
       return true;
     }
     // 2. 앱스토어 링크 없는 경우: Safari와 Chrome만 PWA 가이드 유도 (기타 브라우저는 사이트 직행)
-    if (agent.isIOSSafari) return resolvedSettings?.safari_install_button_visible !== false;
-    if (agent.isIOSChrome) return resolvedSettings?.chrome_install_button_visible !== false;
+    if (agent.isIOSSafari) return resolvedSettings.safari_install_button_visible !== false;
+    if (agent.isIOSChrome) return resolvedSettings.chrome_install_button_visible !== false;
     return false;
   }
 
   if (agent.isAndroid) {
     // 1. Chrome/Google 브라우저이면 PWA 설치 버튼 지원하므로 스위치 확인 후 표시
     if (agent.browserKey === "chrome") {
-      return resolvedSettings?.chrome_install_button_visible !== false;
+      return resolvedSettings.chrome_install_button_visible !== false;
     }
     // 2. 삼성 브라우저 및 기타 Android 브라우저(카카오 포함): Play Store 링크 등록 + 스위치 활성 시 표시
     const isSamsung = agent.browserKey === "samsung";
     const isHidden = isSamsung
-      ? resolvedSettings?.samsung_install_button_visible === false
-      : resolvedSettings?.other_install_button_visible === false;
+      ? resolvedSettings.samsung_install_button_visible === false
+      : resolvedSettings.other_install_button_visible === false;
     if (isHidden) return false;
 
-    if (resolvedSettings) {
-      return hasPlayStore;
-    }
-    return true;
+    return hasPlayStore;
   }
 
   return false;
