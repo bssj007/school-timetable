@@ -324,22 +324,85 @@ function detectLayer3(): AgentInfo {
   };
 }
 
+// ── PWA 및 Native/WebView 정식 앱 감지 로직 ───────────────────────────────────
+
+/**
+ * PWA standalone 또는 WebView 정식 앱 실행 유형 판정
+ * - "pwa"     : 홈화면에 추가된 PWA 앱 (standalone, minimal-ui, fullscreen, iOS standalone 등)
+ * - "webview" : Google Play / App Store 정식 설치 앱 (Android WebView, TWA, iOS WKWebView 등)
+ * - null      : 일반 웹 브라우저 접속
+ */
+export function getInstalledAppType(): "pwa" | "webview" | null {
+  if (typeof window === "undefined") return null;
+
+  const ua = (typeof navigator !== "undefined" && navigator.userAgent) ? navigator.userAgent : "";
+  const isKakaoTalk = /KAKAOTALK/i.test(ua);
+  const inApp = isKakaoTalk || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(ua);
+
+  // 1. PWA Standalone 감지
+  // - display-mode: standalone
+  // - display-mode: minimal-ui (삼성 인터넷 PWA manifest 등)
+  // - display-mode: fullscreen
+  // - display-mode: window-controls-overlay
+  // - iOS Safari standalone: (navigator as any).standalone === true
+  const isPwaStandalone =
+    !inApp && (
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.matchMedia("(display-mode: minimal-ui)").matches ||
+      window.matchMedia("(display-mode: fullscreen)").matches ||
+      window.matchMedia("(display-mode: window-controls-overlay)").matches ||
+      (navigator as any).standalone === true
+    );
+
+  // 2. Android WebView / 정식 앱 감지
+  // - Android UA의 '; wv' 토큰 (세미콜론/괄호/공백 등 위치 무관 매칭)
+  const hasAndroidWvToken = !/GSA\//i.test(ua) && (/;\s*wv[;)]/i.test(ua) || /\bwv\b/i.test(ua));
+  // - Android WebView 기본 UA 특성: Version/X.X 와 Chrome/X.X, Mobile Safari 동시 포함 (일반 모바일 크롬 브라우저에는 Version/X.X가 없음)
+  const isAndroidWebViewUA = !/GSA\//i.test(ua) && /Version\/[0-9.]+/i.test(ua) && /Chrome\/[0-9.]+/i.test(ua) && /Mobile Safari\/[0-9.]+/i.test(ua);
+  // - Android TWA / 앱 레퍼러 (Google Play 정식 앱에서 웹 페이지 로드 시 레퍼러가 android-app:// 으로 설정됨)
+  const isAndroidAppReferrer = typeof document !== "undefined" && Boolean(document.referrer && document.referrer.startsWith("android-app://"));
+  // - Android Native Bridge 인터페이스 주입 확인
+  const hasAndroidBridge = Boolean((window as any).AndroidBridge || (window as any).Android || (window as any).schoolTimetableApp || (window as any).ReactNativeWebView || (window as any).flutter_inappwebview);
+
+  // 3. iOS 정식 앱 (WKWebView) 감지
+  // - iOS 기기이면서 일반 인앱(카카오/네이버/인스타)이 아니고, 일반 브라우저(Safari, CriOS, FxiOS) 토큰이 없거나 WKWebView 메시지 핸들러가 있는 경우
+  const isIOSDevice = /iPhone|iPad|iPod/i.test(ua) || (typeof navigator !== "undefined" && navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isIOSApp = isIOSDevice && !inApp && !/CriOS/i.test(ua) && !/FxiOS/i.test(ua) && (!/Safari\//i.test(ua) || Boolean((window as any).webkit?.messageHandlers));
+
+  const isWebView = !inApp && (hasAndroidWvToken || isAndroidWebViewUA || isAndroidAppReferrer || hasAndroidBridge || isIOSApp);
+
+  if (isWebView) return "webview";
+  if (isPwaStandalone) return "pwa";
+
+  // 4. URL 파라미터 기반 앱 실행 감지 (?mode=pwa, ?mode=app, ?standalone=1, ?utm_source=homescreen 등)
+  try {
+    const searchParams = new URLSearchParams(window.location.search);
+    const mode = searchParams.get("mode");
+    if (mode === "webview" || mode === "app") return "webview";
+    if (mode === "pwa" || searchParams.get("standalone") === "1" || searchParams.get("utm_source") === "homescreen") return "pwa";
+  } catch {}
+
+  // 5. 세션 스토리지 / 쿠키에 기록된 standalone 상태 (단, 인앱 브라우저 내부가 아닌 경우)
+  if (!inApp) {
+    try {
+      if (sessionStorage.getItem("is_pwa_standalone") === "1" || document.cookie.includes("pwa_standalone=1")) {
+        return "pwa";
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+/** PWA standalone 또는 WebView 정식 앱으로 실행 중인지 여부 (실시간 판정) */
+export function checkIsInstalledApp(): boolean {
+  return getInstalledAppType() !== null;
+}
+
 // ── 통합 감지 함수 ────────────────────────────────────────────────────────────
 
 /**
  * detect() — 3-Layer 우선순위로 기기/브라우저/버전을 감지하고 AgentInfo를 반환.
- *
- * Layer 1 (Client Hints) 가 사용 가능한 경우:
- *   - 모바일/플랫폼은 CH 값을 신뢰
- *   - 브라우저 키는 brands 를 우선 사용 (Samsung/Chrome 구분)
- *   - iOS 기기가 존재하지 않으므로 iosVersion = 0
- *
- * Layer 2 (UA 파싱):
- *   - Safari/Firefox/iOS 포함 전 브라우저 커버
- *   - iOS 버전 동결 대응 (Version/X.X vs os X)
- *
- * Layer 3 (기능 감지):
- *   - pointer: coarse + hover: none → 모바일 추정
  */
 export function detect(): AgentInfo {
   if (typeof window === "undefined") return defaultAgent();
@@ -347,24 +410,9 @@ export function detect(): AgentInfo {
   const isKakaoTalk = /KAKAOTALK/i.test(navigator.userAgent);
   const inApp = isKakaoTalk || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent);
 
-  // PWA standalone / Native 앱 실행 여부 (인앱 브라우저는 제외)
-  const isPwaStandalone =
-    !inApp && (
-      window.matchMedia("(display-mode: standalone)").matches ||
-      (navigator as any).standalone === true
-    );
-  const isWebView =
-    !inApp &&
-    /; wv\)/i.test(navigator.userAgent) &&
-    !/GSA\//i.test(navigator.userAgent);
-  const isInstalledApp = isPwaStandalone || isWebView;
-
-  // installedAppType: 설치된 앱 유형 구분
-  //   "pwa"     → display-mode: standalone 또는 iOS navigator.standalone
-  //   "webview" → Android TWA / WebView (UA에 "; wv)" 포함)
-  //   null      → 설치된 앱이 아님
-  const installedAppType: AgentInfo["installedAppType"] =
-    isWebView ? "webview" : isPwaStandalone ? "pwa" : null;
+  // PWA standalone / Native WebView 정식 앱 실행 여부 종합 판별
+  const installedAppType = getInstalledAppType();
+  const isInstalledApp = installedAppType !== null;
 
   // Layer 1: Client Hints (Chromium 전용)
   const ch = detectLayer1();
@@ -528,10 +576,16 @@ export function isPwaInstalled(): boolean {
  */
 export function shouldShowDownloadPage(settings?: any): boolean {
   if (typeof window === "undefined") return false;
+
+  // PWA 앱이나 WebView 정식 앱의 경우 다운로드 버튼이나 유도 페이지를 절대 표시하지 않음 (단일 진실원천)
+  if (agent.isInstalledApp || checkIsInstalledApp()) {
+    return false;
+  }
+
   const isDismissed =
     typeof localStorage !== "undefined" &&
     localStorage.getItem("download_page_dismissed") === "1";
-  if (agent.isInstalledApp || isDismissed || !agent.isMobile) {
+  if (isDismissed || !agent.isMobile) {
     return false;
   }
 
@@ -609,8 +663,10 @@ export type BypassEnvironmentKey = "chrome" | "samsung" | "safari" | "other" | "
  */
 export function getCurrentBypassEnvironment(customAgent?: AgentInfo): BypassEnvironmentKey {
   const a = customAgent || agent || detect();
-  if (a.isInstalledApp) {
-    return a.installedAppType === "webview" ? "webview_app" : "pwa_app";
+  const isInstalled = a.isInstalledApp || checkIsInstalledApp();
+  if (isInstalled) {
+    const appType = a.installedAppType || getInstalledAppType();
+    return appType === "webview" ? "webview_app" : "pwa_app";
   }
   if (a.browserKey === "samsung") return "samsung";
   if (a.browserKey === "safari")  return "safari";

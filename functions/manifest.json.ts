@@ -89,7 +89,7 @@ export const onRequest = async (context: any) => {
             "name": appTitle,
             "short_name": appTitle,
             "description": "부산성지고등학교 시간표 및 수행평가 관리 서비스",
-            "start_url": "/",
+            "start_url": "/?mode=pwa",
             "display": isSamsungBrowser ? "minimal-ui" : "standalone",
             // display_override lets Samsung Internet show both "Add to apps" and "Add to Home screen"
             ...(isSamsungBrowser ? { "display_override": ["standalone", "minimal-ui"] } : {}),
