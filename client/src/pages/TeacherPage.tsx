@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff, ArrowLeft, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Edit, AlertCircle, Home, Search, X, ChevronsUpDown, Check, Download, Eye, EyeOff, ArrowLeft, ArrowRight, User, BookOpen, FileText, CalendarDays, Link2, Clock, BookMarked, Bell, UtensilsCrossed, MousePointerClick, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 import { clearRoleCookie } from "@/components/RoleSelectDialog";
+import { getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 interface TeacherTimetableResponse {
   success: boolean;
@@ -36,6 +37,11 @@ interface AssessmentItem {
   classCode?: string;
   isTeacherCreated?: number;
   activityType?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  submissionLink?: string | null;
+  attachments?: string | null;
+  votes?: string | null;
 }
 
 // Helper: Download PC Desktop .url Shortcut
@@ -348,6 +354,39 @@ export default function TeacherPage() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedAssessment, setSelectedAssessment] = useState<AssessmentItem | null>(null);
 
+  // ── 모바일 뷰 모드 선택기 ──
+  type ViewMode = 'daily' | 'homework' | 'calendar';
+  const [viewMode, setViewMode] = useState<ViewMode>('daily');
+  // 달력에서 클릭한 날짜 (당일형 이동용)
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState<string | null>(null);
+  // 달력 표시 월 (기본: 이번 달)
+  const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number }>(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() }; // month: 0-indexed
+  });
+
+  // ── 숙제형 폼 상태 ──
+  const [hwForm, setHwForm] = useState({
+    subject: '',
+    classNum: '',
+    startDate: '',
+    dueDate: '',
+    title: '',
+    content: '',
+    link: '',
+    activityType: '수행평가',
+  });
+  // 숙제형 wizard 페이지 (1 | 2)
+  const [hwPage, setHwPage] = useState<1 | 2>(1);
+
+  // ── 달력 드래그 선택 상태 ──
+  const [calDragStart, setCalDragStart] = useState<string | null>(null);
+  const [calDragEnd, setCalDragEnd] = useState<string | null>(null);
+  const calIsDragging = calDragStart !== null;
+  // 달력 그리드 컨테이너 ref (좌표 기반 month-nav 감지용)
+  const calGridRef = useRef<HTMLDivElement>(null);
+  const lastMonthSwitchTimeRef = useRef<number>(0);
+
   const [formData, setFormData] = useState({
     assessmentDate: "",
     subject: "",
@@ -359,10 +398,96 @@ export default function TeacherPage() {
     activityType: "수행평가",
   });
 
-  // Keep teacher selection in localStorage
+
+  // 달력 탭 진입 시 항상 이번 달로 초기화
+  useEffect(() => {
+    if (viewMode === 'calendar') {
+      const now = new Date();
+      setCalendarMonth({ year: now.getFullYear(), month: now.getMonth() });
+    }
+    // 당일형이 아닌 탭으로 전환 시 weekOffset을 디폴트(오늘 기준)로 초기화
+    if (viewMode !== 'daily') {
+      const today = new Date();
+      const day = today.getDay();
+      setWeekOffset((day === 0 || day === 6) ? 1 : 0);
+    }
+    // 숙제형 탭 전환 시 wizard 페이지 리셋
+    if (viewMode === 'homework') setHwPage(1);
+  }, [viewMode]);
+
+
   useEffect(() => {
     localStorage.setItem("teacher-page-selected-teacher", selectedTeacherId);
   }, [selectedTeacherId]);
+
+  // 좁은화면(Pad 등 넓은 화면 포함)에서 시간표 비율 한계를 완화하여 적당히 넙적한 비율(0.72)로 자동 조절되도록 dynamic CSS 변수 동기화
+  const timetableContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = timetableContainerRef.current;
+    if (!el) return;
+
+    const updateRatio = () => {
+      // 넓은화면(가로:세로 >= 1/1)에서는 flex/h-full 뷰포트 맞춤 사용하므로 생략
+      if (window.innerWidth >= window.innerHeight) return;
+      const w = el.clientWidth;
+      if (!w) return;
+      const periodW = Math.max(36, Math.min(50, w * 0.095));
+      const dayW = (w - periodW) / 5;
+      const cellH = Math.max(57, Math.min(108, dayW * 0.72));
+      el.style.setProperty('--period-col-w', `${periodW}px`);
+      el.style.setProperty('--narrow-cell-h', `${cellH}px`);
+    };
+
+    updateRatio();
+    const ro = new ResizeObserver(updateRatio);
+    ro.observe(el);
+    window.addEventListener('resize', updateRatio);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateRatio);
+    };
+  }, []);
+
+  // 좁은화면 상단 제목("교사용 수행평가 등록 시스템")이 가용 공간 내에서 끊김 없이 최대한 크게 표시되도록 동적 스케일링
+  const titleContainerRef = useRef<HTMLHeadingElement>(null);
+  const titleSpanRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const container = titleContainerRef.current;
+    const span = titleSpanRef.current;
+    if (!container || !span) return;
+
+    let canvas: HTMLCanvasElement | null = null;
+
+    const updateTitleSize = () => {
+      if (window.innerWidth >= window.innerHeight) return;
+      const availableW = container.clientWidth;
+      if (!availableW) return;
+
+      if (!canvas) canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      let textWAt100 = 1250;
+      if (ctx) {
+        const computed = window.getComputedStyle(span);
+        ctx.font = `800 100px ${computed.fontFamily || '-apple-system, sans-serif'}`;
+        textWAt100 = ctx.measureText("교사용 수행평가 등록 시스템").width || 1250;
+      }
+
+      // availableW 공간 내에서 말줄임 없이 꽉 채울 수 있는 최대 폰트 크기 계산 (안전 여백 2px)
+      const maxFitSize = ((availableW - 2) / textWAt100) * 100;
+      // 최소 13px, 최대 24px (1.5rem)
+      const optimalSize = Math.max(13, Math.min(24, Math.floor(maxFitSize * 10) / 10));
+      container.style.setProperty('--title-font-size', `${optimalSize}px`);
+    };
+
+    updateTitleSize();
+    const ro = new ResizeObserver(updateTitleSize);
+    ro.observe(container);
+    window.addEventListener('resize', updateTitleSize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateTitleSize);
+    };
+  }, []);
 
   // PC 하단 흰 공백 방지: body 배경을 TeacherPage 배경과 일치시킴
   // TeacherPage 최상위 div가 h-screen으로 잘릴 때 그 아래 body 영역이 노출되기 때문
@@ -402,7 +527,7 @@ export default function TeacherPage() {
 
   // 점검 모드 감지 시 강제 새로고침 (Edge 차단 페이지로 전환 및 로드된 데이터 클리어)
   useEffect(() => {
-    if (settings?.maintenance_mode?.active && !settings?.is_whitelisted) {
+    if (settings?.maintenance_mode?.active && !settings?.is_whitelisted && !getMaintenanceBypassCookie()) {
       window.location.reload();
     }
   }, [settings?.maintenance_mode?.active, settings?.is_whitelisted]);
@@ -794,6 +919,18 @@ export default function TeacherPage() {
     return teacherSubjectsMap.get(tId) || [];
   }, [tId, teacherSubjectsMap]);
 
+  // 과목이 1개밖에 없는 경우 숙제형 폼의 과목 자동 선택
+  useEffect(() => {
+    if (taughtSubjects && taughtSubjects.length === 1) {
+      setHwForm(f => {
+        if (f.subject !== taughtSubjects[0]) {
+          return { ...f, subject: taughtSubjects[0], classNum: '' };
+        }
+        return f;
+      });
+    }
+  }, [taughtSubjects]);
+
   // Decode cell value
   const decodeCell = (val: any) => {
     if (!val) return null;
@@ -864,6 +1001,26 @@ export default function TeacherPage() {
     }
     return Array.from(classesMap.values());
   }, [selectedSchedule]);
+
+  // 숙제형 폼: 선택된 과목에 해당하는 반 목록 (시간표 기반)
+  const classesForHwSubject = useMemo(() => {
+    if (!selectedSchedule || !hwForm.subject) return [];
+    const result = new Map<string, { grade: number; classNum: number }>();
+    for (let d = 1; d <= 5; d++) {
+      const daySchedule = selectedSchedule[d];
+      if (!daySchedule) continue;
+      for (let p = 1; p < daySchedule.length; p++) {
+        const decoded = decodeCell(daySchedule[p]);
+        if (decoded && decoded.subjectName === hwForm.subject) {
+          const key = `${decoded.grade}-${decoded.classNum}`;
+          result.set(key, { grade: decoded.grade, classNum: decoded.classNum });
+        }
+      }
+    }
+    return Array.from(result.values()).sort((a, b) =>
+      a.grade !== b.grade ? a.grade - b.grade : a.classNum - b.classNum
+    );
+  }, [selectedSchedule, hwForm.subject]);
 
   // 2. Fetch Assessments for all taught classes concurrently
   const { data: allAssessments, isLoading: isAssessmentsLoading } = useQuery<AssessmentItem[]>({
@@ -1024,8 +1181,8 @@ export default function TeacherPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTeacherId]);
 
-  // Build class+group nav tabs for the right panel (filtered by effectiveSubjectFilter)
-  const classTabs = useMemo(() => {
+  // Build class+group nav tabs for a given subject filter
+  const buildClassTabsForSubject = useCallback((subjectFilter?: string) => {
     const tabs: { id: string; grade: number; classNum: number; group: string; label: string }[] = [];
     if (!selectedSchedule) return tabs;
 
@@ -1044,7 +1201,7 @@ export default function TeacherPage() {
             const val = daySchedule[p];
             const decoded = decodeCell(val);
             if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
-              if (!effectiveSubjectFilter || isSubjectMatch(decoded.subjectName, [effectiveSubjectFilter])) {
+              if (!subjectFilter || isSubjectMatch(decoded.subjectName, [subjectFilter])) {
                 hasMatchingCell = true;
                 const cellG = computedGroupsG2[`${d - 1}-${p}`];
                 if (cellG) {
@@ -1076,7 +1233,7 @@ export default function TeacherPage() {
             const val = daySchedule[p];
             const decoded = decodeCell(val);
             if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
-              if (!effectiveSubjectFilter || isSubjectMatch(decoded.subjectName, [effectiveSubjectFilter])) {
+              if (!subjectFilter || isSubjectMatch(decoded.subjectName, [subjectFilter])) {
                 hasMatchingCell = true;
                 const cellG = computedGroupsG3[`${d - 1}-${p}`];
                 if (cellG) {
@@ -1106,7 +1263,7 @@ export default function TeacherPage() {
       }
 
       // 매칭 셀이 없는 경우(=이 class에서 해당 과목을 안 가르침) → 탭 생성 안 함
-      if (!hasMatchingCell && effectiveSubjectFilter) return;
+      if (!hasMatchingCell && subjectFilter) return;
 
       if (groupsInAss.size > 0) {
         const sortedGroups = Array.from(groupsInAss).sort();
@@ -1141,7 +1298,64 @@ export default function TeacherPage() {
     });
 
     return tabs;
-  }, [taughtClasses, selectedSchedule, computedGroupsG2, computedGroupsG3, electiveConfigsG2, electiveConfigsG3, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
+  }, [taughtClasses, selectedSchedule, computedGroupsG2, computedGroupsG3, electiveConfigsG2, electiveConfigsG3, teacherName, rawTeacherName]);
+
+  // Build class+group nav tabs for the right panel (filtered by effectiveSubjectFilter)
+  const classTabs = useMemo(() => {
+    return buildClassTabsForSubject(effectiveSubjectFilter);
+  }, [buildClassTabsForSubject, effectiveSubjectFilter]);
+
+  // 모든 과목에 걸쳐 현재 교사가 담당하는 (과목, 반, 그룹) 탭 목록
+  const allTeacherClassTabs = useMemo(() => {
+    if (!selectedSchedule) return [];
+    const subjectsToScan = subjectTabs.length > 0 ? subjectTabs : (taughtSubjects || []);
+    const all: { id: string; grade: number; classNum: number; group: string; label: string; subject: string }[] = [];
+
+    subjectsToScan.forEach(subj => {
+      const tabsForSubj = buildClassTabsForSubject(subj);
+      tabsForSubj.forEach(tab => {
+        all.push({ ...tab, subject: subj });
+      });
+    });
+
+    if (all.length === 0) {
+      return buildClassTabsForSubject('').map(t => ({ ...t, subject: '' }));
+    }
+    return all;
+  }, [selectedSchedule, subjectTabs, taughtSubjects, buildClassTabsForSubject]);
+
+  // 평가 항목이 현재 선택된 선생님의 수업(과목/반/그룹)에 해당하는지 판별
+  // 아래 과목별/반-그룹별 수행 리스트(panelAssessments)의 데이터 구조 및 필터링 규칙과 일치
+  const isAssessmentForTeacher = useCallback((a: AssessmentItem): boolean => {
+    if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
+
+    return allTeacherClassTabs.some(tab => {
+      if (tab.subject && a.subject && !isSubjectMatch(a.subject, [tab.subject])) return false;
+      if (a.grade !== tab.grade) return false;
+
+      // classNum=0은 "전체반"(이동수업 그룹 수업) — classCode(그룹)가 있어야 유효
+      if (a.classNum === 0) {
+        const aGroups = parseClassCode(a.classCode);
+        if (aGroups.length === 0) return false;
+        if (!aGroups.includes(tab.group || '')) return false;
+      } else {
+        // 일반 반 수행평가: 탭의 classNum과 일치해야 함
+        if (a.classNum !== tab.classNum) return false;
+        // 그룹 탭인 경우 classCode도 확인
+        if (tab.group && a.classCode && a.classCode.trim()) {
+          const allowedGroups = parseClassCode(a.classCode);
+          if (!allowedGroups.includes(tab.group)) return false;
+        }
+      }
+      return true;
+    });
+  }, [teacherName, rawTeacherName, taughtSubjects, allTeacherClassTabs]);
+
+  // 현재 선생님이 담당하는 전체 수행평가 (달력 뷰용 — 이동수업 ABCD 및 담당 과목/반 필터 적용)
+  const teacherCalendarAssessments = useMemo(() => {
+    if (!allAssessments) return [];
+    return allAssessments.filter(isAssessmentForTeacher);
+  }, [allAssessments, isAssessmentForTeacher]);
 
   // Auto-select first tab (based on full classTabs — will be refined after filteredClassTabs is computed)
   useEffect(() => {
@@ -1246,7 +1460,7 @@ export default function TeacherPage() {
 
       if (effectiveSubjectFilter && a.subject !== effectiveSubjectFilter) return false;
       return true;
-    }).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    }).sort((a, b) => (a.startDate || a.dueDate).localeCompare(b.startDate || b.dueDate));
   }, [selectedTab, allAssessments, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
 
   // 탭별 수행평가 수 계산 (반 선택 버튼 배지용)
@@ -1314,14 +1528,14 @@ export default function TeacherPage() {
     const counts = new Map<string, number>();
     subjectTabs.forEach(subject => {
       const count = (allAssessments || []).filter(a => {
-        if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
+        if (!isAssessmentForTeacher(a)) return false;
         if (a.subject !== subject) return false;
         return true;
       }).length;
       counts.set(subject, count);
     });
     return counts;
-  }, [subjectTabs, allAssessments, teacherName, rawTeacherName, taughtSubjects]);
+  }, [subjectTabs, allAssessments, isAssessmentForTeacher]);
 
   // 이동수업 수행평가의 강의반명(관리페이지 입력값) 조회 맵
   const lectureClassNameMap = useMemo(() => {
@@ -1568,7 +1782,7 @@ export default function TeacherPage() {
 
   return (
     <div 
-      className="w-full min-h-screen md:h-screen md:overflow-hidden px-2 md:px-4 py-2 md:py-4 flex flex-col"
+      className="w-full min-h-screen wide:h-dvh overflow-x-hidden wide:overflow-hidden px-2 wide:px-6 md:px-8 lg:px-10 pt-2 wide:pt-4 pb-0 wide:pb-5 flex flex-col"
       style={{
         backgroundColor: '#f6e7c9',
         backgroundImage: `
@@ -1624,83 +1838,59 @@ export default function TeacherPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ===== 보기전용 배너 (미인증 시) — 모바일 전용 fixed ===== */}
-      {settings !== undefined && !isCurrentTeacherVerified && (
-        <div
-          className="md:hidden fixed bottom-4 left-4 right-4 z-40 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl backdrop-blur-sm"
-          style={{
-            background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
-            border: '1px solid rgba(255,255,255,0.6)',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.7)',
-          }}
-        >
-          <svg className="w-4 h-4 shrink-0" style={{ color: '#4b5563' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
-          <span className="text-sm font-semibold leading-relaxed flex-1" style={{ color: '#1f2937' }}>
-            보기 전용<br />등록·수정하려면 인증하세요
-          </span>
-          <button
-            onClick={() => setShowAuthDialog(true)}
-            className="shrink-0 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-bold transition-colors"
-          >
-            인증하기
-          </button>
-        </div>
-      )}
+      {/* 보기전용 배너: 바 인라인으로 이동 (fixed 배너 제거) */}
 
-      <div className="max-w-[1240px] mx-auto w-full md:flex-1 flex flex-col md:min-h-0">
+      <div className="max-w-[1100px] mx-auto w-full wide:flex-1 flex flex-col wide:min-h-0">
 
-        {/* ===== TOP SECTION (PC only) — mirrors CONTENT AREA column layout for pixel-perfect alignment ===== */}
-        {/* [timetable-col: flex-1 max-w-[850px]] + [gap-4/xl:gap-6] + [panel-col: 320px/360px] */}
-        <div className="hidden md:flex flex-row gap-4 xl:gap-6 items-center mb-3 flex-shrink-0">
+        {/* ===== 넓은화면 전용 TOP SECTION ===== */}
+        <div className="hidden wide:flex flex-row gap-3 md:gap-4 xl:gap-6 items-center mb-3 flex-shrink-0">
 
-          {/* ── Left: timetable column header (same sizing as timetable column) ── */}
-          <div className="flex-1 md:max-w-[850px] min-w-0 flex items-center justify-between gap-3">
-            {/* Title — grows, truncates */}
-            <h1
-              className="font-extrabold text-gray-900 truncate leading-tight min-w-0"
-              style={{ fontSize: 'clamp(1.125rem, 2.5vw, 1.875rem)' }}
-            >
+          {/* ── 좌: 제목 + 주선택기 (콘텐츠 테이블 열과 동일 비율 flex:65) ── */}
+          <div className="min-w-0 overflow-hidden flex items-center gap-3" style={{ flexGrow: 65, flexShrink: 1, flexBasis: '0%' }}>
+
+            {/* 뱃지형 제목 */}
+            <h1 className="text-lg md:text-xl lg:text-2xl font-extrabold text-gray-900 tracking-tight shrink-0 whitespace-nowrap leading-tight">
               <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">
                 교사용 수행평가 등록 시스템
               </span>
             </h1>
 
-            {/* Week selector — right-aligned to timetable column right edge */}
-            <div className="flex flex-col items-center gap-0.5 shrink-0">
-              <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400 shadow-md">
+            {/* 주 선택기 — ml-auto로 표 열 오른쪽 끝에 정렬 */}
+            <div className={`flex flex-col items-center gap-0.5 shrink-0 ml-auto ${viewMode !== 'daily' ? 'invisible pointer-events-none' : ''}`}>
+              <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400 shadow-md"
+                style={{ fontSize: 'clamp(10px, 1.5vw, 14px)' }}
+              >
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-8 h-8 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
-                  style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                  className="p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
+                  style={{ width: '2.2em', height: '2.2em', WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
                   onClick={(e) => { setWeekOffset(prev => prev - 1); (e.currentTarget as HTMLElement).blur(); }}
                   disabled={weekOffset <= -2}
                   title="이전 주"
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft style={{ width: '1.2em', height: '1.2em' }} />
                 </Button>
-                <span className="flex flex-col items-center min-w-[90px] px-1 select-none">
-                  <span className={`text-sm font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-white' : 'text-yellow-300'}`}>
+                <span className="flex flex-col items-center min-w-[6em] px-1 select-none">
+                  <span className={`text-[1em] font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-white' : 'text-yellow-300'}`}>
                     {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
                   </span>
-                  <span className="text-[10px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
+                  <span className="text-[0.7em] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-8 h-8 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
-                  style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                  className="p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
+                  style={{ width: '2.2em', height: '2.2em', WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
                   onClick={(e) => { setWeekOffset(prev => prev + 1); (e.currentTarget as HTMLElement).blur(); }}
                   disabled={weekOffset >= 8}
                   title="다음 주"
                 >
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight style={{ width: '1.2em', height: '1.2em' }} />
                 </Button>
               </div>
-              {isOutOfDateRange && (
+
+              {viewMode === 'daily' && isOutOfDateRange && (
                 <span className="text-xs font-bold text-red-500 bg-red-50/80 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse whitespace-nowrap">
                   미확정 시간표
                 </span>
@@ -1708,45 +1898,66 @@ export default function TeacherPage() {
             </div>
           </div>
 
-          {/* ── Right: panel column header (same sizing as right panel) ── */}
-          <div className="md:w-[320px] xl:w-[360px] shrink-0 flex justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full shadow-sm gap-1.5 text-xs md:text-sm bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
+          {/* ── 우: 네비게이션 버튼 (콘텐츠 패널 열과 동일 비율 flex:35) ── */}
+          {/* font-size: clamp()로 viewport 너비에 비례해 버튼 전체가 자연스럽게 스케일 */}
+          <div className="hidden wide:flex items-center justify-end overflow-hidden"
+            style={{ flexGrow: 35, flexShrink: 1, flexBasis: '0%', fontSize: 'clamp(10px, 1.4vw, 13px)', gap: '0.5em' }}
+          >
+            <Button variant="outline" size="sm"
+              className="rounded-full shadow-sm bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold whitespace-nowrap shrink-0"
+              style={{ fontSize: '1em', padding: '0.35em 0.8em', height: 'auto', gap: '0.4em' }}
               onClick={handleReturnToStudentPage}
               title="학생용 페이지로 이동"
             >
-              <Home className="w-3.5 h-3.5 text-emerald-600" />
-              <span>학생용 페이지</span>
+              <ArrowLeft style={{ width: '1.3em', height: '1.3em' }} className="text-emerald-600" />
+              <span>학생용</span>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full shadow-sm gap-1.5 text-xs md:text-sm bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
+            <Link href="/meal">
+              <Button variant="outline" size="sm"
+                className="rounded-full shadow-sm bg-white hover:bg-orange-50 border-orange-200 text-orange-700 font-semibold whitespace-nowrap shrink-0"
+                style={{ fontSize: '1em', padding: '0.35em 0.8em', height: 'auto', gap: '0.4em' }}
+                title="급식 정보 보기"
+              >
+                <UtensilsCrossed style={{ width: '1.3em', height: '1.3em' }} className="text-orange-500" />
+                <span>급식정보</span>
+                <ArrowRight style={{ width: '1.3em', height: '1.3em' }} className="text-orange-500" />
+              </Button>
+            </Link>
+            <Button variant="outline" size="sm"
+              className="rounded-full shadow-sm bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold whitespace-nowrap shrink-0"
+              style={{ fontSize: '1em', padding: '0.35em 0.8em', height: 'auto', gap: '0.4em' }}
               onClick={() => {
                 downloadDesktopShortcut("교사용_수행평가_등록시스템");
-                toast.success("바탕화면 바로가기(.url) 파일이 다운로드되었습니다. 다운로드된 파일을 바탕화면으로 옮겨서 사용하세요.");
+                toast.success("바탕화면 바로가기(.url) 파일이 다운로드되었습니다.");
               }}
               title="PC 바탕화면에 바로가기 파일 다운로드"
             >
-              <Download className="w-3.5 h-3.5 text-blue-600" />
-              <span>바탕화면에 바로가기 추가</span>
+              <Download style={{ width: '1.3em', height: '1.3em' }} className="text-blue-600" />
+              <span>바로가기</span>
             </Button>
           </div>
+
         </div>
 
 
+        {/* ===== CONTENT AREA: flex-col on narrow screen, flex-row on wide screen ===== */}
+        <div className="flex flex-col wide:flex-row gap-2 wide:gap-2.5 md:gap-4 xl:gap-6 wide:items-stretch wide:flex-1 wide:min-h-0">
 
-        {/* ===== CONTENT AREA: flex-col on mobile (panel top, title+week, table bottom), flex-row on desktop ===== */}
-        <div className="flex flex-col md:flex-row gap-3 md:gap-4 xl:gap-6 items-start md:items-stretch md:flex-1 md:min-h-0">
-
-        {/* ===== MOBILE ONLY: Title + Week nav row — order-1 (above timetable) ===== */}
-        <div className="md:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 shrink-0">
-          <h2 className="text-lg font-extrabold truncate leading-tight">
-            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
+        {/* ===== 좁은화면 전용: Title row — wide:hidden으로 제어 ===== */}
+        <div className="wide:hidden w-full order-1 flex items-center justify-between gap-1.5 sm:gap-2 px-0.5 shrink-0 min-h-[44px]">
+          <h2
+            ref={titleContainerRef}
+            className="teacher-narrow-title min-w-0 flex-1 font-extrabold text-slate-900 leading-tight"
+          >
+            <span
+              ref={titleSpanRef}
+              className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent inline-block"
+            >
+              교사용 수행평가 등록 시스템
+            </span>
           </h2>
-          <div className="flex flex-col items-center gap-0.5 shrink-0">
+          {/* 주 선택기 — 레이아웃 공간 항상 유지, 당일형이 아닐 때 invisible */}
+          <div className={`flex flex-col items-center gap-0.5 shrink-0 ${viewMode !== 'daily' ? 'invisible pointer-events-none' : ''}`}>
             <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400">
               <Button
                 variant="ghost"
@@ -1762,7 +1973,7 @@ export default function TeacherPage() {
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="flex flex-col items-center min-w-[82px] px-1 select-none">
+              <span className="flex flex-col items-center px-1 select-none">
                 <span className={`text-sm font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-white' : 'text-yellow-300'}`}>
                   {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
                 </span>
@@ -1783,7 +1994,8 @@ export default function TeacherPage() {
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-            {isOutOfDateRange && (
+            {/* 미확정 뱃지 — 당일형 + 범위 초과 시에만 표시 */}
+            {viewMode === 'daily' && isOutOfDateRange && (
               <span className="text-xs font-bold text-red-500 bg-red-50/80 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse whitespace-nowrap">
                 미확정 시간표
               </span>
@@ -1791,12 +2003,605 @@ export default function TeacherPage() {
           </div>
         </div>
 
-        {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
-        <div className="w-full md:flex-1 md:max-w-[850px] min-w-0 flex flex-col order-2 md:order-1 shrink-0 md:min-h-0">
+        {/* ===== 시간표 열: 좁은화면 order-2 / 넓은화면 order-1 (가로:세로 비율 기준) ===== */}
+        <div className="w-full min-w-0 flex flex-col order-2 wide:order-1 wide:min-h-0" style={{ flex: '65 1 0', minWidth: 0 }}>
+
+        {/* ===== 뷰 모드 선택기 (당일형 / 숙제형 / 달력) ===== */}
+        <div className="mb-2 shrink-0">
+          <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+            {([
+              { key: 'daily',    label: '당일형 수행', Icon: Clock },
+              { key: 'homework', label: '숙제형 수행', Icon: BookOpen },
+              { key: 'calendar', label: '달력',        Icon: CalendarDays },
+            ] as { key: ViewMode; label: string; Icon: React.ElementType }[]).map(({ key, label, Icon }, i, arr) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setViewMode(key)}
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+                className={[
+                  'flex-1 flex flex-col wide:flex-row items-center justify-center gap-0.5 wide:gap-2 py-2 wide:py-2.5 px-2 wide:px-3 text-xs wide:text-sm font-bold leading-tight transition-all select-none cursor-pointer',
+                  i > 0 ? 'border-l border-slate-200' : '',
+                  viewMode === key
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:bg-slate-100',
+                ].join(' ')}
+              >
+                <Icon className="w-4 h-4 shrink-0" />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ===== 숙제형 패널 ===== */}
+        {viewMode === 'homework' && (
+          <div
+            className="w-full rounded-xl shadow-sm flex flex-col overflow-hidden wide:flex-1 wide:min-h-0"
+            style={{
+              minHeight: 'calc(7 * var(--narrow-cell-h, 57px) + 44px)',
+              ...(!isCurrentTeacherVerified ? {
+                background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
+                border: '1px solid rgba(255,255,255,0.6)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
+              } : {
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
+              })
+            }}
+          >
+            {!isCurrentTeacherVerified ? (
+              <div
+                onClick={() => setShowAuthDialog(true)}
+                className="flex-1 flex flex-col items-center justify-center p-6 text-center cursor-pointer select-none min-h-[350px]"
+              >
+                <div className="w-16 h-16 rounded-2xl bg-white/70 shadow-md border border-white/90 flex items-center justify-center mb-3">
+                  <svg className="w-8 h-8 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <h4 className="text-lg font-extrabold text-slate-800 tracking-tight">로그인이 필요합니다</h4>
+              </div>
+            ) : (
+              <>
+                {/* 헤더 */}
+                <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-slate-100 shrink-0">
+                  <BookOpen className="w-5 h-5 text-indigo-500" />
+                  <h3 className="text-base font-extrabold text-slate-800">숙제형 수행평가 등록</h3>
+                  <span className="ml-auto text-xs text-slate-400 font-bold">{hwPage} / 2</span>
+                </div>
+
+                {/* 콘텐츠 영역 */}
+                <div className="flex-1 overflow-y-auto px-4 py-4 wide:px-6 wide:py-6">
+                  <div className="max-w-xl mx-auto w-full">
+                  {hwPage === 1 ? (
+                    <div className="flex flex-col gap-3 wide:gap-4">
+                      {/* 종류 선택 */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          background: '#f1f5f9',
+                          borderRadius: 12,
+                          padding: 4,
+                          gap: 4,
+                        }}
+                      >
+                        {(['수행평가', '기타 활동'] as const).map((type) => (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => setHwForm(f => ({ ...f, activityType: type }))}
+                            style={{
+                              flex: 1,
+                              padding: '8px 0',
+                              borderRadius: 8,
+                              border: 'none',
+                              fontWeight: 700,
+                              fontSize: 14,
+                              cursor: 'pointer',
+                              transition: 'all 0.18s',
+                              background: hwForm.activityType === type
+                                ? (type === '수행평가' ? '#3b82f6' : '#7c3aed')
+                                : 'transparent',
+                              color: hwForm.activityType === type ? '#fff' : '#64748b',
+                              boxShadow: hwForm.activityType === type ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
+                            }}
+                          >
+                            {type === '수행평가' ? '📝 수행평가' : '✨ 기타 활동'}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* 평가 제목 */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">평가 제목</label>
+                        <Input
+                          placeholder="예: 독서록 작성, 탐구 보고서 제출"
+                          value={hwForm.title}
+                          onChange={e => setHwForm(f => ({ ...f, title: e.target.value }))}
+                          className="h-10 text-sm"
+                        />
+                      </div>
+
+                      {/* 과목 / 반 */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">과목</label>
+                          <select
+                            value={hwForm.subject}
+                            onChange={e => setHwForm(f => ({ ...f, subject: e.target.value, classNum: '' }))}
+                            className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                          >
+                            <option value="">과목 선택</option>
+                            {(taughtSubjects || []).map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">반</label>
+                          <select
+                            value={hwForm.classNum}
+                            onChange={e => setHwForm(f => ({ ...f, classNum: e.target.value }))}
+                            disabled={!hwForm.subject || classesForHwSubject.length === 0}
+                            className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+                          >
+                            <option value="">{!hwForm.subject ? '과목 먼저 선택' : '반 선택'}</option>
+                            {classesForHwSubject.map(({ grade, classNum }) => (
+                              <option key={`${grade}-${classNum}`} value={String(classNum)}>
+                                {grade}학년 {classNum}반
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* 시작일 / 마감일 */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">시작일</label>
+                          <Input type="date" value={hwForm.startDate}
+                            onChange={e => setHwForm(f => ({ ...f, startDate: e.target.value }))}
+                            className="h-10 text-sm px-2" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">마감일</label>
+                          <Input type="date" value={hwForm.dueDate}
+                            onChange={e => setHwForm(f => ({ ...f, dueDate: e.target.value }))}
+                            className="h-10 text-sm px-2" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3 wide:gap-4">
+                      {/* 활동 내용 */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">활동 내용</label>
+                        <Textarea
+                          placeholder="예: 준비물, 실습, 생기부 활동 등등"
+                          value={hwForm.content}
+                          onChange={e => setHwForm(f => ({ ...f, content: e.target.value }))}
+                          className="h-28 text-sm resize-none"
+                        />
+                      </div>
+                      {/* 제출 링크 */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
+                          <Link2 className="w-3 h-3" /> 제출 사이트 / 링크
+                        </label>
+                        <Input type="url" placeholder="예: https://school.go.kr/..."
+                          value={hwForm.link}
+                          onChange={e => setHwForm(f => ({ ...f, link: e.target.value }))}
+                          className="h-10 text-sm" />
+                      </div>
+                    </div>
+                  )}
+                  </div>
+                </div>
+
+                {/* 하단 버튼 영역 */}
+                <div className="shrink-0 px-4 pb-4 pt-2 wide:px-6 wide:pb-6 flex gap-2 max-w-xl mx-auto w-full">
+                  {hwPage === 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('daily')}
+                      className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition-colors flex items-center justify-center gap-1"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      취소
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setHwPage(1)}
+                      className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition-colors flex items-center justify-center gap-1"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      이전
+                    </button>
+                  )}
+                  {hwPage === 1 ? (() => {
+                    const page1Valid = !!(hwForm.title && hwForm.subject && hwForm.classNum && hwForm.startDate && hwForm.dueDate);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => { if (page1Valid) setHwPage(2); }}
+                        disabled={!page1Valid}
+                        className={[
+                          'flex-[2] h-11 rounded-xl font-extrabold text-sm transition-colors flex items-center justify-center gap-1',
+                          page1Valid
+                            ? 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white cursor-pointer'
+                            : 'bg-indigo-200 text-white cursor-not-allowed',
+                        ].join(' ')}
+                      >
+                        다음
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    );
+                  })() : (
+                    <button
+                      type="button"
+                      disabled={createMutation.isPending}
+                      onClick={() => {
+                        // 학년/반 파싱
+                        const selectedClass = classesForHwSubject.find(
+                          c => String(c.classNum) === hwForm.classNum
+                        );
+                        if (!selectedClass) { toast.error("반을 선택하세요."); return; }
+
+                        let resolvedDataset = 'COMCIGAN';
+                        if (selectedClass.grade === 1) resolvedDataset = g1DatasetType;
+                        else if (selectedClass.grade === 2) resolvedDataset = g2DatasetType;
+                        else if (selectedClass.grade === 3) resolvedDataset = g3DatasetType;
+
+                        createMutation.mutate({
+                          subject: hwForm.subject,
+                          title: hwForm.title,
+                          description: hwForm.content || '',
+                          dueDate: hwForm.dueDate,
+                          startDate: hwForm.startDate,
+                          endDate: hwForm.dueDate,
+                          grade: selectedClass.grade,
+                          classNum: selectedClass.classNum,
+                          classTime: null,
+                          dataset: resolvedDataset,
+                          teacher: teacherName,
+                          classCode: extractClassCode(hwForm.subject),
+                          isTeacherCreated: 1,
+                          activityType: hwForm.activityType || '수행평가',
+                          submissionLink: hwForm.link || null,
+                        }, {
+                          onSuccess: () => {
+                            setHwForm({ subject: '', classNum: '', startDate: '', dueDate: '', title: '', content: '', link: '', activityType: '수행평가' });
+                            setHwPage(1);
+                            setViewMode('daily');
+                          }
+                        });
+                      }}
+                      className={`flex-[2] h-11 rounded-xl font-extrabold text-sm transition-colors flex items-center justify-center gap-1 ${createMutation.isPending ? 'bg-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800'} text-white`}
+                    >
+                      <Plus className="w-4 h-4" />
+                      {createMutation.isPending ? '등록 중...' : '등록'}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+
+          </div>
+        )}
+
+
+        {/* ===== 모바일: 달력 패널 ===== */}
+        {viewMode === 'calendar' ? (() => {
+          const { year, month } = calendarMonth;
+          const firstDay = new Date(year, month, 1);
+          const totalDays = new Date(year, month + 1, 0).getDate();
+          const startDow = firstDay.getDay();
+          const todayStr = toDateString(new Date());
+          const DOW_LABELS = ['일','월','화','수','목','금','토'];
+
+          const totalCells = Math.ceil((startDow + totalDays) / 7) * 7;
+          const cells: (number | null)[] = [
+            ...Array(startDow).fill(null),
+            ...Array.from({ length: totalDays }, (_, i) => i + 1),
+            ...Array(totalCells - startDow - totalDays).fill(null),
+          ];
+
+          // 드래그 범위 체크 헬퍼
+          const dragMin = calDragStart && calDragEnd ? [calDragStart, calDragEnd].sort()[0] : null;
+          const dragMax = calDragStart && calDragEnd ? [calDragStart, calDragEnd].sort()[1] : null;
+          const isInDragRange = (ds: string) => !!dragMin && !!dragMax && ds >= dragMin && ds <= dragMax;
+          const isDragStartDate = (ds: string) => ds === dragMin;
+          const isDragEndDate   = (ds: string) => ds === dragMax;
+
+          // 좌표에서 data-date 속성 읽기
+          const dateFromPoint = (cx: number, cy: number): string | null => {
+            const el = document.elementFromPoint(cx, cy) as HTMLElement | null;
+            return el?.closest('[data-date]')?.getAttribute('data-date') ?? null;
+          };
+
+          return (
+            <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col wide:flex-1 wide:min-h-0">
+              {/* 달력 헤더 */}
+              <div className="flex items-center justify-between px-4 py-3 wide:px-6 wide:py-3.5 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
+                <button type="button"
+                  onClick={() => setCalendarMonth(prev => {
+                    const d = new Date(prev.year, prev.month - 1, 1);
+                    return { year: d.getFullYear(), month: d.getMonth() };
+                  })}
+                  className="w-8 h-8 wide:w-9 wide:h-9 rounded-lg flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-600 cursor-pointer shadow-sm">
+                  <ChevronLeft className="w-4 h-4 wide:w-5 wide:h-5" />
+                </button>
+                <span className="font-extrabold text-slate-800 text-base wide:text-lg">{year}년 {month + 1}월</span>
+                <button type="button"
+                  onClick={() => setCalendarMonth(prev => {
+                    const d = new Date(prev.year, prev.month + 1, 1);
+                    return { year: d.getFullYear(), month: d.getMonth() };
+                  })}
+                  className="w-8 h-8 wide:w-9 wide:h-9 rounded-lg flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-600 cursor-pointer shadow-sm">
+                  <ChevronRight className="w-4 h-4 wide:w-5 wide:h-5" />
+                </button>
+              </div>
+
+              {/* 단일 grid — 이벤트 위임 방식 */}
+              <div
+                className="relative grid grid-cols-7 px-1 pb-1 select-none"
+                style={{ touchAction: 'none' }}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  const ds = dateFromPoint(e.clientX, e.clientY);
+                  if (ds) { setCalDragStart(ds); setCalDragEnd(ds); }
+                }}
+                onPointerMove={(e) => {
+                  if (!calIsDragging) return;
+                  e.preventDefault();
+
+                  // 좌표 기반 month-nav 감지 (pointer-events-none 존을 우회)
+                  if (calGridRef.current) {
+                    const rect = calGridRef.current.getBoundingClientRect();
+                    const relX = e.clientX - rect.left;
+                    const relY = e.clientY - rect.top;
+                    const DOW_H = 32; // py-2 + text-[11px] 행 높이 근사
+                    const CELL_H = 44; // h-11
+                    const ZONE_W = 44; // 좌우 감지 너비
+                    const numRows = totalCells / 7;
+
+                    // 첫 행 왼쪽 경계
+                    if (relY >= DOW_H && relY < DOW_H + CELL_H && relX >= 0 && relX < ZONE_W) {
+                      const prevDate = new Date(year, month - 1, 1);
+                      const now = Date.now();
+                      if (now - lastMonthSwitchTimeRef.current > 600) {
+                        setCalendarMonth({ year: prevDate.getFullYear(), month: prevDate.getMonth() });
+                        lastMonthSwitchTimeRef.current = now;
+                      }
+                      setCalDragEnd(`${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-01`);
+                      return;
+                    }
+                    // 마지막 행 오른쪽 경계
+                    const lastRowTop = DOW_H + (numRows - 1) * CELL_H;
+                    if (relY >= lastRowTop && relY < lastRowTop + CELL_H && relX > rect.width - ZONE_W) {
+                      const lastDay = new Date(year, month + 2, 0).getDate();
+                      const nextDate = new Date(year, month + 1, lastDay);
+                      const now = Date.now();
+                      if (now - lastMonthSwitchTimeRef.current > 600) {
+                        setCalendarMonth({ year: nextDate.getFullYear(), month: nextDate.getMonth() });
+                        lastMonthSwitchTimeRef.current = now;
+                      }
+                      setCalDragEnd(`${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`);
+                      return;
+                    }
+                  }
+
+                  const ds = dateFromPoint(e.clientX, e.clientY);
+                  if (ds) setCalDragEnd(ds);
+                }}
+                onPointerUp={(e) => {
+                  if (!calIsDragging) return;
+                  const [ds, de] = [calDragStart, calDragEnd];
+                  setCalDragStart(null);
+                  setCalDragEnd(null);
+                  if (!ds || !de) return;
+
+                  if (ds === de) {
+                    // 단순 탭: 해당 날짜의 월요일 계산 -> weekOffset 계산 -> daily 뷰 전환
+                    const target = ds;
+                    const [ty, tm, td2] = target.split('-').map(Number);
+                    const clicked = new Date(ty, tm - 1, td2);
+                    const cdow = clicked.getDay();
+                    const clickedMon = new Date(clicked);
+                    clickedMon.setDate(clicked.getDate() - (cdow === 0 ? 6 : cdow - 1));
+                    const today2 = new Date();
+                    const tdow = today2.getDay();
+                    const curMon = new Date(today2);
+                    curMon.setDate(today2.getDate() - (tdow === 0 ? 6 : tdow - 1));
+                    const diffWeeks = Math.round((clickedMon.getTime() - curMon.getTime()) / (7 * 86400000));
+                    setWeekOffset(Math.max(-2, Math.min(8, diffWeeks)));
+                    setViewMode('daily');
+                  } else {
+                    // 드래그: 숙제형 탭으로 이동 + 날짜 자동 입력
+                    const [s, e2] = [ds, de].sort();
+                    setHwForm(f => ({ ...f, startDate: s, dueDate: e2 }));
+                    setViewMode('homework');
+                  }
+                }}
+                onPointerCancel={() => { setCalDragStart(null); setCalDragEnd(null); }}
+                ref={calGridRef}
+              >
+                {/* ── 드래그 중에만 표시: 지난 달 / 다음 달 시각 힌트 (pointer-events-none) ── */}
+                {calIsDragging && (
+                  <>
+                    {/* 지난 달: 첫째 행 왼쪽 테두리 — 시각 전용 */}
+                    <div
+                      className="absolute left-0 z-10 flex items-center justify-start pointer-events-none"
+                      style={{ top: 32, height: 44 }}
+                    >
+                      <div className="flex flex-col items-center justify-center w-9 h-9 rounded-r-xl bg-indigo-600/80 shadow-md">
+                        <ChevronLeft className="w-4 h-4 text-white animate-bounce" style={{ animationDuration: '0.5s' }} />
+                        <span className="text-[8px] text-white font-bold leading-none mt-0.5">지난달</span>
+                      </div>
+                    </div>
+
+                    {/* 다음 달: 마지막 행 오른쪽 테두리 — 시각 전용 */}
+                    <div
+                      className="absolute right-0 z-10 flex items-center justify-end pointer-events-none"
+                      style={{ bottom: 4, height: 44 }}
+                    >
+                      <div className="flex flex-col items-center justify-center w-9 h-9 rounded-l-xl bg-indigo-600/80 shadow-md">
+                        <ChevronRight className="w-4 h-4 text-white animate-bounce" style={{ animationDuration: '0.5s' }} />
+                        <span className="text-[8px] text-white font-bold leading-none mt-0.5">다음달</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {DOW_LABELS.map((dow, i) => (
+                  <div key={dow} className={[
+                    'h-[32px] flex items-center justify-center text-[11px] font-bold pointer-events-none',
+                    i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-500',
+                  ].join(' ')}>{dow}</div>
+                ))}
+
+                {cells.map((d, idx) => {
+                  const col = idx % 7;
+                  if (!d) return <div key={`empty-${idx}`} className="h-[44px]" />;
+                  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                  const isToday      = dateStr === todayStr;
+                  const isSun        = col === 0;
+                  const isSat        = col === 6;
+                  const inRange      = isInDragRange(dateStr);
+                  const isRangeStart = isDragStartDate(dateStr);
+                  const isRangeEnd   = isDragEndDate(dateStr);
+                  const hasDailyAssessment = teacherCalendarAssessments.some(a => !a.endDate && a.dueDate === dateStr);
+
+                  return (
+                    <div
+                      key={dateStr}
+                      data-date={dateStr}
+                      className={[
+                        'h-[44px] flex flex-col items-center justify-center text-[13px] font-bold transition-colors cursor-pointer relative z-10',
+                        isRangeStart || isRangeEnd     ? 'bg-indigo-500 text-white rounded-lg' : '',
+                        inRange && !isRangeStart && !isRangeEnd ? 'bg-indigo-100 text-indigo-700' : '',
+                        !inRange && !isRangeStart && !isRangeEnd && isToday  ? 'ring-2 ring-emerald-500 text-emerald-700 bg-emerald-50 rounded-lg' : '',
+                        !inRange && !isRangeStart && !isRangeEnd && !isToday && isSun  ? 'text-red-500' : '',
+                        !inRange && !isRangeStart && !isRangeEnd && !isToday && isSat  ? 'text-blue-500' : '',
+                        !inRange && !isRangeStart && !isRangeEnd && !isToday && !isSun && !isSat ? 'text-slate-700' : '',
+                      ].join(' ')}
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
+                    >
+                      <span>{d}</span>
+                      {hasDailyAssessment && (
+                        <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${
+                          isRangeStart || isRangeEnd ? 'bg-white' : isToday ? 'bg-emerald-500' : 'bg-pink-500'
+                        }`} />
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* ── 숙제형(기간형) 수행 오버레이 바 ── */}
+                {(() => {
+                  const hwAssessments = teacherCalendarAssessments.filter(a => !!a.endDate && !!a.startDate);
+                  if (hwAssessments.length === 0) return null;
+
+                  const numRows = Math.ceil((startDow + totalDays) / 7);
+                  const DOW_H = 32;  // 요일 헤더 높이
+                  const CELL_H = 44; // h-11
+                  const BAR_H = 34;  // 바 높이
+                  const BAR_TOP_OFFSET = 5; // (44 - 34) / 2
+                  const BAR_COLOR = '#ec4899'; // pink-500
+
+                  const bars: React.ReactNode[] = [];
+
+                  hwAssessments.forEach((a) => {
+                    const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+                    const monthEnd   = `${year}-${String(month + 1).padStart(2, '0')}-${String(totalDays).padStart(2, '0')}`;
+                    const clampedStart = a.startDate! > monthStart ? a.startDate! : monthStart;
+                    const clampedEnd   = a.endDate!   < monthEnd   ? a.endDate!   : monthEnd;
+                    if (clampedStart > clampedEnd) return;
+
+                    const toIdx = (ds: string) => {
+                      const day = parseInt(ds.split('-')[2]);
+                      return startDow + day - 1;
+                    };
+
+                    const startIdx = toIdx(clampedStart);
+                    const endIdx   = toIdx(clampedEnd);
+                    const startRow = Math.floor(startIdx / 7);
+                    const endRow   = Math.floor(endIdx   / 7);
+
+                    for (let row = startRow; row <= endRow; row++) {
+                      const rowStartCol = row === startRow ? (startIdx % 7) : 0;
+                      const rowEndCol   = row === endRow   ? (endIdx   % 7) : 6;
+                      const isFirstRow  = row === startRow;
+                      const isLastRow   = row === endRow;
+                      const isActualStart = a.startDate! >= monthStart && row === startRow;
+                      const isActualEnd   = a.endDate!   <= monthEnd   && row === endRow;
+
+                      const leftPct  = (rowStartCol / 7) * 100;
+                      const rightPct = ((6 - rowEndCol) / 7) * 100;
+                      const topPx = DOW_H + row * CELL_H + BAR_TOP_OFFSET;
+
+                      const borderRadius = [
+                        isActualStart && isFirstRow ? '999px' : '0',
+                        isActualEnd   && isLastRow  ? '999px' : '0',
+                        isActualEnd   && isLastRow  ? '999px' : '0',
+                        isActualStart && isFirstRow ? '999px' : '0',
+                      ].join(' ');
+
+                      bars.push(
+                        <div
+                          key={`hw-bar-${a.id}-row${row}`}
+                          className="absolute pointer-events-none z-[5]"
+                          style={{
+                            top: topPx,
+                            left: `calc(${leftPct}% + ${isActualStart && isFirstRow ? 4 : 0}px)`,
+                            right: `calc(${rightPct}% + ${isActualEnd && isLastRow ? 4 : 0}px)`,
+                            height: BAR_H,
+                            background: 'rgba(236, 72, 153, 0.12)',
+                            borderTop: `2px solid ${BAR_COLOR}`,
+                            borderBottom: `2px solid ${BAR_COLOR}`,
+                            borderLeft:  isActualStart && isFirstRow ? `2px solid ${BAR_COLOR}` : 'none',
+                            borderRight: isActualEnd   && isLastRow  ? `2px solid ${BAR_COLOR}` : 'none',
+                            borderRadius,
+                          }}
+                        />
+                      );
+                    }
+                  });
+
+                  return bars;
+                })()}
+              </div>
+
+              {/* 하단 안내 */}
+              <div className="px-3 py-2 border-t border-slate-100 bg-slate-50 flex items-center justify-center gap-3 mt-auto">
+                <span className="flex items-center gap-1 text-[10px] wide:text-[11px] text-slate-500">
+                  <span className="text-sm leading-none">👆</span>
+                  <span><b className="text-slate-600">클릭</b> — 당일형 이동</span>
+                </span>
+                <span className="w-px h-2.5 bg-slate-300 shrink-0" />
+                <span className="flex items-center gap-1 text-[10px] wide:text-[11px] text-slate-500">
+                  <span className="text-sm leading-none">↔️</span>
+                  <span><b className="text-slate-600">드래그</b> — 숙제 구간 선택</span>
+                </span>
+              </div>
+
+            </div>
+          );
+        })() : null}
+
+
+
+
 
 
       {/* Main Timetable — Card wrapper */}
-      <div className="w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col md:h-[calc(100vh-115px)] md:min-h-[600px]">
+      {/* 당일형이 아니면 표 숨김 */}
+      <div
+        ref={timetableContainerRef}
+        className={`teacher-timetable-card w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden wide:overflow-x-auto flex-1 flex flex-col wide:min-h-0 ${viewMode !== 'daily' ? 'hidden' : ''}`}
+      >
           {(isTimetableLoading || isGroupDataLoading) ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
@@ -1810,12 +2615,12 @@ export default function TeacherPage() {
               <p className="text-sm text-red-400">네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.</p>
             </div>
           ) : timetableData && selectedSchedule ? (
-            <div className="w-full overflow-x-auto flex-1 flex flex-col min-h-0">
-              <table className="w-full table-fixed min-w-[340px] flex-1 h-full" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
+            <div className="w-full flex-1 flex flex-col min-h-0 wide:h-full">
+              <table className="w-full table-fixed wide:min-w-[420px] wide:h-full wide:flex-1" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: 'clamp(10.5px, 1.575vw, 13px)' }}>
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
-                    <th style={{ width: 36, height: 30, background: '#f2f2f2', borderRight: '1px solid #d0d0d0', borderBottom: '1px solid #d0d0d0', position: 'sticky', top: 0, zIndex: 2 }} />
+                    <th className="teacher-period-col teacher-table-th" style={{ width: 'var(--period-col-w, 36px)', height: 30, background: '#f2f2f2', borderRight: '1px solid #d0d0d0', borderBottom: '1px solid #d0d0d0', position: 'sticky', top: 0, zIndex: 2 }} />
                     {weekdays.map((day, idx) => {
                       const dDate = weekDates[idx];
                       const todayStr = toDateString(new Date());
@@ -1824,6 +2629,7 @@ export default function TeacherPage() {
                       return (
                         <th
                           key={day}
+                          className="teacher-table-th"
                           style={{
                             height: 30,
                             background: isToday ? '#cee8d0' : '#f2f2f2',
@@ -1831,7 +2637,7 @@ export default function TeacherPage() {
                             borderBottom: isToday ? '2px solid #217346' : '1px solid #d0d0d0',
                             color: isToday ? '#1a5c30' : '#595959',
                             fontWeight: 700,
-                            fontSize: 12,
+                            fontSize: 'inherit',
                             textAlign: 'center',
                             userSelect: 'none',
                             position: 'sticky',
@@ -1845,30 +2651,31 @@ export default function TeacherPage() {
                     })}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="wide:h-full">
                   {Array.from({ length: maxPeriods }).map((_, periodIndex) => {
                     const p = periodIndex + 1;
                     const isCurrentPeriod = currentPeriod === p && weekOffset === 0;
                     return (
-                      <tr key={p} className="h-[50px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px]">
+                      <tr
+                        key={p}
+                        className="teacher-timetable-row wide:h-[calc(100%/7)]"
+                      >
                         {/* Row number cell — Excel row header */}
                         <td
-                          className="h-[50px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px] overflow-hidden"
+                          className="teacher-period-col teacher-timetable-row wide:h-auto select-none text-center align-middle p-0"
                           style={{
-                            width: 36,
+                            width: 'var(--period-col-w, 36px)',
                             background: isCurrentPeriod ? '#cee8d0' : '#f2f2f2',
                             borderRight: isCurrentPeriod ? '2px solid #217346' : '1px solid #d0d0d0',
                             borderBottom: '1px solid #d0d0d0',
-                            textAlign: 'center',
-                            verticalAlign: 'middle',
-                            userSelect: 'none',
-                            padding: '2px 0',
                           }}
                         >
-                          <div style={{ fontWeight: 700, fontSize: 12, color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
-                          {PERIOD_TIMES[p] && (
-                            <div style={{ fontSize: 8, color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
-                          )}
+                          <div className="teacher-timetable-cell-wrapper h-full wide:min-h-0 flex flex-col items-center justify-center py-0.5 wide:py-1">
+                            <div style={{ fontWeight: 700, fontSize: 'inherit', color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
+                            {PERIOD_TIMES[p] && (
+                              <div style={{ fontSize: '0.71em', color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
+                            )}
+                          </div>
                         </td>
                         {weekdays.map((_, dayIndex) => {
                           const d = dayIndex + 1;
@@ -1906,18 +2713,15 @@ export default function TeacherPage() {
                           return (
                             <td
                               key={d}
-                              className="group h-[52px] md:h-[calc((100vh-150px)/7)] md:min-h-[84px] overflow-hidden"
+                              className="group teacher-timetable-row wide:h-auto align-top relative overflow-hidden"
                               style={{
                                 background: cellBg,
                                 borderRight: '1px solid #d0d0d0',
                                 borderBottom: '1px solid #d0d0d0',
                                 borderLeft: hasAssessment ? '2px solid #ec4899' : '1px solid #d0d0d0',
-                                padding: '4px 5px',
-                                verticalAlign: 'top',
                                 cursor: cellData ? 'pointer' : 'default',
                                 transition: 'outline 0.08s',
                                 outline: 'none',
-                                position: 'relative',
                               }}
                               onClick={() => cellData && handleCellClick(dayIndex, p, val)}
                               onMouseEnter={e => {
@@ -1931,21 +2735,47 @@ export default function TeacherPage() {
                                 (e.currentTarget as HTMLElement).style.zIndex = 'auto';
                               }}
                             >
+                              {/* minHeight: 좁은화면에서 가로폭에 맞춰 0.72 완화 비율로 자동 조절 (최소 57px, 최대 108px), 넓은화면은 4px 5px 패딩으로 확장 */}
+                              <div className="teacher-timetable-cell-wrapper h-full wide:min-h-0 flex flex-col wide:p-[4px_5px]" style={{ justifyContent: cellData ? 'flex-start' : 'center' }}>
                               {cellData ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                  {/* 학생 배지 — td의 position:relative 기준 우측 상단 */}
+                                  {hasAssessment && cellAssessments.some(a => !a.isTeacherCreated) && (
+                                    <span
+                                      className="teacher-cell-student-badge"
+                                      style={{
+                                        position: 'absolute',
+                                        top: 2,
+                                        right: 2,
+                                        fontWeight: 800,
+                                        border: '1px solid #94a3b8',
+                                        color: '#475569',
+                                        padding: '1px 3.5px',
+                                        borderRadius: 2.5,
+                                        background: '#f1f5f9',
+                                        whiteSpace: 'nowrap',
+                                        lineHeight: 1.1,
+                                        zIndex: 1,
+                                      }}
+                                    >
+                                      학생
+                                    </span>
+                                  )}
                                   {/* Class label */}
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                    <span style={{
-                                      fontSize: 10,
-                                      fontWeight: 700,
-                                      padding: '1px 4px',
-                                      borderRadius: 2,
-                                      background: '#217346',
-                                      color: '#ffffff',
-                                      display: 'inline-block',
-                                      lineHeight: 1.4,
-                                      width: 'fit-content',
-                                    }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                                    <span
+                                      className="teacher-cell-class-badge"
+                                      style={{
+                                        fontWeight: 700,
+                                        padding: '1px 3.5px',
+                                        borderRadius: 2,
+                                        background: '#217346',
+                                        color: '#ffffff',
+                                        display: 'inline-block',
+                                        lineHeight: 1.3,
+                                        width: 'fit-content',
+                                      }}
+                                    >
                                       {(() => {
                                         if (!cellGroup) return `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
                                         // 이동수업: 관리페이지 강의실 이름 조회
@@ -1954,16 +2784,18 @@ export default function TeacherPage() {
                                         return configName ? configName : `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
                                       })()}
                                     </span>
-                                    <span style={{
-                                      fontWeight: 700,
-                                      color: '#1a1a1a',
-                                      lineHeight: 1.3,
-                                      fontSize: (cellData.subjectName || '').length > 6 ? 11 : (cellData.subjectName || '').length > 4 ? 12 : 14,
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap',
-                                      maxWidth: '100%',
-                                    }}
+                                    <span
+                                      className="teacher-cell-subject-name"
+                                      style={{
+                                        fontWeight: 700,
+                                        color: '#1a1a1a',
+                                        lineHeight: 1.25,
+                                        ['--base-subject-font' as any]: `${Math.max(0.82, 1.17 - Math.max(0, (cellData.subjectName || '').length - 4) * 0.045)}em`,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        maxWidth: '100%',
+                                      }}
                                       title={cellData.subjectName}
                                     >
                                       {cellGroup && renderGroupCode(cellGroup)}{cellData.subjectName}
@@ -1972,28 +2804,28 @@ export default function TeacherPage() {
 
                                   {/* Assessment badges — uncolored (white/transparent background) with pink border, positioned directly below subject name */}
                                   {hasAssessment ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 1 }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5, marginTop: 1 }}>
                                       {cellAssessments.map(a => (
                                         <div
                                           key={a.id}
                                           style={{
-                                            fontSize: 8,
+                                            fontSize: '0.714em',
                                             fontWeight: 700,
-                                            padding: '1px 4px',
-                                            borderRadius: 3,
+                                            padding: '1.5px 3.5px',
+                                            borderRadius: 2.5,
                                             background: '#ffffff',
                                             border: '1px solid #ec4899',
                                             color: '#db2777',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'space-between',
-                                            gap: 2,
-                                            lineHeight: 1.4,
+                                            gap: 1.5,
+                                            lineHeight: 1.2,
                                           }}
                                           title={`[${a.description || '수행'}] ${a.title}`}
                                         >
                                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.title}</span>
-                                          <span className="hidden md:inline" style={{ fontSize: 7, border: '1px solid #f472b6', color: '#be185d', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap', background: '#fdf2f8' }}>
+                                          <span className="hidden wide:inline" style={{ fontSize: '0.67em', border: '1px solid #f472b6', color: '#be185d', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap', background: '#fdf2f8' }}>
                                             {a.description && a.description.includes('차') ? a.description : '평가'}
                                           </span>
                                         </div>
@@ -2001,13 +2833,19 @@ export default function TeacherPage() {
                                     </div>
                                   ) : (
                                     <div className="opacity-0 group-hover:opacity-100" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 'auto', transition: 'opacity 0.12s' }}>
-                                      <span style={{ fontSize: 9, fontWeight: 700, color: '#217346', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                      <span style={{ fontSize: '0.79em', fontWeight: 700, color: '#217346', display: 'flex', alignItems: 'center', gap: 2 }}>
                                         <Plus style={{ width: 10, height: 10 }} /> 등록
                                       </span>
                                     </div>
                                   )}
                                 </div>
-                              ) : null}
+                                ) : (
+                                  /* 빈 칸: 함몰 방지 및 깔끔한 시각적 균형 유지 */
+                                  <div className="w-full h-full flex items-center justify-center pointer-events-none select-none">
+                                    <span className="text-slate-200 text-xs wide:hidden">-</span>
+                                  </div>
+                                )}
+                              </div>{/* /wrapper minHeight div */}
                             </td>
                           );
                         })}
@@ -2018,51 +2856,131 @@ export default function TeacherPage() {
               </table>
             </div>
           ) : null}
+
+
+
       </div>
+
+      {/* ===== 넓은화면 전용: 표 밑 설명 텍스트 ===== */}
+      <p className="hidden wide:flex items-center justify-center text-slate-500 text-sm mt-2 w-full">
+        <MousePointerClick className="w-4 h-4 mr-1.5" />
+        시간표 <strong className="text-slate-600 mx-1">클릭</strong>
+        <ArrowRight className="w-3.5 h-3.5 mx-1 text-slate-400" />
+        수행평가 <strong className="text-slate-600 ml-1">등록</strong>
+      </p>
 
       </div>{/* end timetable column */}
 
-      {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
-      <div className="w-full md:w-[320px] xl:w-[360px] shrink-0 flex flex-col order-3 md:order-2 md:sticky md:top-4 h-fit">
-        <div className="md:bg-white md:rounded-2xl md:border md:border-slate-200 md:shadow-md md:overflow-hidden flex flex-col h-fit md:max-h-[calc(100vh-2rem)]">
-          {/* Teacher Picker — 모바일에서 독립 카드, PC에서 패널 내부 바 */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-2 px-2 py-2 md:mb-0 md:rounded-none md:border-none md:shadow-none md:border-b md:border-slate-100 md:px-3 flex-shrink-0 flex items-center justify-start gap-2">
-            {timetableData ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setTeacherSearchQuery("");
-                  setShowTeacherSelectModal(true);
-                }}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-sm tracking-tight leading-tight transition-colors border border-indigo-200 focus:outline-none cursor-pointer group max-w-full"
-              >
-                <span className="truncate">
-                  {selectedTeacherId
-                    ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
-                    : "교사 선택"}
-                </span>
-                <ChevronsUpDown className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0 ml-0.5" />
-              </button>
-            ) : (
-              <span className="text-sm font-extrabold text-slate-700">
-                {teacherName ? `${teacherName} 선생님` : '선생님'}
-              </span>
-            )}
+      {/* ===== RIGHT PANEL: order-3 on narrow screen (below timetable), order-2 on wide screen (right, sticky) ===== */}
+      <div className="w-full wide:max-w-[400px] wide:min-w-[240px] shrink-0 flex flex-col order-3 wide:order-2 wide:sticky wide:top-4 h-fit" style={{ flex: '35 1 0' }}>
+        <div className="wide:bg-white wide:rounded-2xl wide:border wide:border-slate-200 wide:shadow-md flex flex-col h-fit wide:max-h-[calc(100vh-2rem)] wide:pb-3">
+          {/* Teacher Picker — 모바일 카드 / PC 패널 내부 바
+               미인증 시: relative + min-height → 실버 absolute inset-0으로 꽉 채움
+               선생님 선택기는 z-10으로 실버 위에 표시 */}
+          <div
+            className={`rounded-xl border shadow-sm mb-2 wide:mb-0 wide:rounded-t-2xl wide:rounded-b-none wide:border-none wide:shadow-none wide:border-b flex-shrink-0 flex flex-col justify-center ${
+              isCurrentTeacherVerified 
+                ? 'bg-white border-slate-200 wide:border-slate-100 p-2 wide:p-2.5 md:p-3' 
+                : 'p-2 wide:p-2.5 md:p-2.5'
+            }`}
+            style={!isCurrentTeacherVerified ? {
+              background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
+              borderTop: '1px solid rgba(255,255,255,0.6)',
+              borderLeft: '1px solid rgba(255,255,255,0.6)',
+              borderRight: '1px solid rgba(255,255,255,0.6)',
+              borderBottom: '1px solid rgba(200,200,200,0.5)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
+            } : undefined}
+          >
+            {/* 선생님 선택기 + (인증 시: 계정버튼 / 미인증 시: [보기 전용] [로그인]) 한 줄 배치 */}
+            <div className="flex items-center gap-2 justify-between w-full min-w-0">
+              {/* 융합된 선생님 선택기 + 계정 버튼 */}
+              <div className="flex items-stretch rounded-xl border border-indigo-200 overflow-hidden shadow-sm min-w-0 bg-indigo-50 shrink">
+                {/* 선생님 선택기 */}
+                {timetableData ? (
+                  <button
+                    type="button"
+                    onClick={() => { setTeacherSearchQuery(""); setShowTeacherSelectModal(true); }}
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                    className="flex items-center gap-1 pl-2.5 pr-1.5 py-1.5 wide:pl-2.5 wide:pr-1.5 wide:py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-xs wide:text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0 max-w-[140px] wide:max-w-[190px]"
+                  >
+                    <span className="truncate text-left min-w-0">
+                      {selectedTeacherId
+                        ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
+                        : "선생님 선택"}
+                    </span>
+                    <ChevronsUpDown className="w-3.5 h-3.5 wide:w-3.5 wide:h-3.5 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
+                  </button>
+                ) : (
+                  <span className="pl-2.5 pr-1.5 py-1.5 wide:pl-2.5 wide:pr-1.5 wide:py-1.5 text-xs wide:text-sm font-extrabold text-slate-700 flex items-center truncate flex-1 min-w-0">
+                    {teacherName ? `${teacherName} 선생님` : '선생님 선택'}
+                  </span>
+                )}
 
-            {/* 계정 관리 버튼 (선생님 선택기 바로 오른쪽) */}
-            <button
-              type="button"
-              onClick={() => setLocation("/teacher/account")}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-bold text-xs shrink-0 transition-colors border border-slate-200 cursor-pointer"
-              title="계정 관리"
-            >
-              <User className="w-3.5 h-3.5 text-slate-500" />
-              <span>계정</span>
-            </button>
+                {/* 계정 버튼: 인증 시에만 표시되며, 구분선을 주어 융합된 형태 유지 */}
+                {isCurrentTeacherVerified && (
+                  <Link href="/teacher/account" className="flex shrink-0">
+                    <button type="button" style={{ WebkitTapHighlightColor: 'transparent' }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 wide:px-2.5 wide:py-1.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-bold text-xs shrink-0 transition-colors border-l border-indigo-200 cursor-pointer"
+                      title="선생님 계정 관리">
+                      <User className="w-3.5 h-3.5" /><span>계정</span>
+                    </button>
+                  </Link>
+                )}
+              </div>
+
+              {/* 학생공지 (모바일 - 인증 시) */}
+              {isCurrentTeacherVerified && (
+                <button type="button" onClick={() => {}} style={{ WebkitTapHighlightColor: 'transparent' }}
+                  className="wide:hidden ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs wide:text-sm shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
+                  title="학생공지">
+                  <Bell className="w-3.5 h-3.5" /><span>학생공지</span>
+                </button>
+              )}
+
+              {/* 미인증 시 우측 묶음: [보기 전용] [로그인] */}
+              {!isCurrentTeacherVerified && (
+                <div className="flex items-center gap-1.5 wide:gap-2 shrink-0">
+                  <div className="flex items-center gap-1 text-gray-800 bg-black/5 rounded-xl px-2 py-1 wide:px-2 wide:py-1.5 border border-black/5 shrink-0">
+                    <svg className="w-3.5 h-3.5 shrink-0 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <span className="text-xs font-bold leading-tight whitespace-nowrap text-gray-800">
+                      보기 전용
+                    </span>
+                  </div>
+                  <div className="relative shrink-0">
+                    {viewMode === 'homework' && (
+                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none z-30 animate-bounce">
+                        <svg className="w-5 h-7.5 text-red-500 fill-red-500 filter drop-shadow-md" viewBox="0 0 24 32">
+                          <path d="M12 30l-8-10h5V2h6v18h5l-8 10z" />
+                        </svg>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowAuthDialog(true)}
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
+                      className={`shrink-0 px-2.5 py-1.5 wide:px-3 wide:py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs wide:text-sm font-bold transition-all cursor-pointer shadow-md whitespace-nowrap ${
+                        viewMode === 'homework' ? 'ring-2 ring-red-500 ring-offset-1 shadow-red-200' : ''
+                      }`}
+                    >
+                      로그인
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* ===== 모바일: 과목탭 + 반선택 + 평가목록 — 선생님선택과 분리된 별도 카드 ===== */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden md:bg-transparent md:rounded-none md:border-none md:shadow-none md:overflow-visible flex flex-col">
+
+
+
+
+
+          {/* ===== 좁은화면: 과목탭 + 반선택 + 평가목록 — 선생님선택과 분리된 별도 카드 / 넓은화면: 투명 플랫 배치 ===== */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden wide:bg-transparent wide:rounded-none wide:border-none wide:shadow-none wide:overflow-visible flex flex-col">
 
           {subjectTabs.length > 1 && (() => {
             const activeIdx = subjectTabs.indexOf(effectiveSubjectFilter);
@@ -2092,7 +3010,7 @@ export default function TeacherPage() {
                             setSelectedSubjectFilter(subject);
                           }
                         }}
-                        className="relative flex-1 py-2.5 px-1 text-[13px] font-bold leading-tight text-center overflow-hidden"
+                        className="relative flex-1 py-2 wide:py-2.5 px-1.5 text-xs wide:text-sm font-bold leading-tight text-center overflow-hidden"
                         style={{
                           color: isActive ? '#fff' : color.activeBg,
                           backgroundColor: isActive ? `${color.activeBg}BF` : `${color.bg}20`,
@@ -2120,7 +3038,7 @@ export default function TeacherPage() {
                                 top: '50%',
                                 left: '39%',
                                 transform: 'translate(-50%, -50%)',
-                                fontSize: subjectCount >= 10 ? '9px' : '11px',
+                                fontSize: `clamp(8px, ${11 - Math.min(2, Math.max(0, subjectCount - 7)) * 1}px, 11px)`,
                                 color: isActive
                                   ? 'rgba(255,255,255,0.95)'
                                   : color.activeBg,
@@ -2156,7 +3074,7 @@ export default function TeacherPage() {
                   onMouseLeave={handleTabMouseLeave}
                   onMouseUp={handleTabMouseUp}
                   onMouseMove={handleTabMouseMove}
-                  className="flex gap-1 overflow-x-auto px-1 md:px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
+                  className="flex gap-1 overflow-x-auto px-1 wide:px-2 md:px-3 py-2 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
                   style={{ scrollbarWidth: 'none' }}
                 >
                   {filteredClassTabs.map(tab => {
@@ -2195,7 +3113,7 @@ export default function TeacherPage() {
                           return next;
                         });
                       }}
-                      className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all duration-150 flex items-center gap-0.5 relative
+                      className={`shrink-0 text-xs wide:text-[13px] font-bold px-3 py-1.5 rounded-full border transition-all duration-150 flex items-center gap-0.5 relative
                         ${selectedTabId === tab.id
                           ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                           : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'
@@ -2235,7 +3153,7 @@ export default function TeacherPage() {
 
           {/* Assessment List */}
           <div
-            className="overflow-y-auto px-1 md:px-4 py-2.5 md:max-h-[calc(100vh-200px)]"
+            className="overflow-y-auto px-1 wide:px-3 md:px-4 pt-2.5 pb-4 wide:max-h-[calc(100vh-200px)]"
             style={(() => {
               const activeIdx = subjectTabs.indexOf(effectiveSubjectFilter);
               if (activeIdx < 0) return {};
@@ -2255,12 +3173,26 @@ export default function TeacherPage() {
                 <p className="text-xs font-medium">등록된 수행평가가 없습니다.</p>
               </div>
             ) : (
-              <div className="space-y-0 md:space-y-2">
+              <div className="space-y-0 wide:space-y-1.5 md:space-y-2">
                 {panelAssessments.map(a => {
-                  const dateObj = new Date(a.dueDate);
-                  const mmdd = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
-                  const weekdayNames = ['일','월','화','수','목','금','토'];
-                  const wd = weekdayNames[dateObj.getDay()];
+                  const isPeriod = !!(a.startDate && a.endDate);
+
+                  // 날짜 포맷 헬퍼
+                  const fmtMD = (ds: string) => {
+                    const d = new Date(ds);
+                    return `${d.getMonth() + 1}/${d.getDate()}`;
+                  };
+                  const fmtWd = (ds: string) => {
+                    const weekdayNames = ['일','월','화','수','목','금','토'];
+                    return weekdayNames[new Date(ds).getDay()];
+                  };
+
+                  const primaryDate = isPeriod ? a.startDate! : a.dueDate;
+                  const mmdd = fmtMD(primaryDate);
+                  const wd   = fmtWd(primaryDate);
+                  const endMmdd = isPeriod ? fmtMD(a.endDate!) : null;
+                  const endWd   = isPeriod ? fmtWd(a.endDate!) : null;
+
                   const panelCodes = parseClassCode(a.classCode);
                   const panelClassLabel = (() => {
                     if (a.classNum !== 0) return `${a.grade}-${String(a.classNum).replace(/반$/, '')}`;
@@ -2268,12 +3200,24 @@ export default function TeacherPage() {
                     const cn = lectureClassNameMap.get(`${a.grade}-${(a.subject || '').trim()}-${panelCodes[0]}`);
                     return cn || `${a.grade}-?`;
                   })();
+
+                  // 딥큐 카운터 계산
+                  let helpfulCount = 0;
+                  try {
+                    const votesArr: { v: string }[] = JSON.parse(a.votes || '[]');
+                    helpfulCount = votesArr.filter(x => x.v === 'helpful').length;
+                  } catch { helpfulCount = 0; }
+
                   return (
                     <div
                       key={a.id}
-                      className="border-b border-slate-100/80 last:border-b-0 md:border md:border-slate-100 py-2.5 px-1 md:p-3 md:rounded-xl md:bg-slate-50 hover:bg-indigo-50/60 md:hover:border-indigo-200 transition-all duration-150 cursor-pointer"
+                      className={`border-b border-slate-100/80 last:border-b-0 wide:border py-2.5 px-1 wide:p-2.5 md:p-3 wide:rounded-xl transition-all duration-150 cursor-pointer ${
+                        isPeriod
+                          ? 'wide:border-violet-100 wide:bg-violet-50/40 hover:bg-violet-50/80 wide:hover:border-violet-300'
+                          : 'wide:border-slate-100 wide:bg-slate-50 hover:bg-indigo-50/60 wide:hover:border-indigo-200'
+                      }`}
                       onClick={() => {
-                        if (!requireAuth()) return; // 미인증 시 인증 다이얼로그
+                        if (!requireAuth()) return;
                         setSelectedAssessment(a);
                         const roundNum = a.description ? a.description.replace('차', '').trim() : '1';
                         setFormData({
@@ -2292,39 +3236,78 @@ export default function TeacherPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                            {/* 반 배지 — 표와 동일한 초록 배지, "반" 글자 제거 */}
-                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 4px', borderRadius: 2, background: '#217346', color: '#ffffff', display: 'inline-block', lineHeight: 1.4 }}>
+                            {/* 반 배지 */}
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 3.5px', borderRadius: 2, background: '#217346', color: '#ffffff', display: 'inline-block', lineHeight: 1.3 }}>
                               {panelClassLabel}
                             </span>
-                            {/* 과목명 — 그룹코드(무지개 워드아트) + 과목명, 표와 동일한 서식 */}
-                            <span style={{ fontWeight: 700, color: '#1a1a1a', lineHeight: 1.3, fontSize: (a.subject || '').length > 6 ? 11 : (a.subject || '').length > 4 ? 12 : 14 }}>
+                            {/* 기간형 타입 배지 */}
+                            {isPeriod && (
+                              <span style={{ fontSize: 9.5, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#7c3aed', color: '#ffffff', display: 'inline-block', lineHeight: 1.4, letterSpacing: 0.2 }}>
+                                기간형
+                              </span>
+                            )}
+                            {/* 과목명 */}
+                            <span style={{ fontWeight: 700, color: '#1a1a1a', lineHeight: 1.25, fontSize: `${Math.max(11, 14 - Math.max(0, (a.subject || '').length - 4) * 0.4)}px` }}>
                               {panelCodes.map((code: string, i: number) =>
                                 renderGroupCode(code, i < panelCodes.length - 1 ? 2 : 3)
                               )}
                               {a.subject}
                             </span>
-                            {a.classTime && (
+                            {a.classTime && !isPeriod && (
                               <span className="text-[10px] text-slate-400 font-medium">{a.classTime}교시</span>
                             )}
                           </div>
-                          <p className="text-xs font-bold text-slate-800 leading-tight truncate" title={a.title}>
+                          <p className="text-xs wide:text-sm font-bold text-slate-800 leading-tight truncate" title={a.title}>
                             {a.title}
                           </p>
                           {a.teacher && (
-                            <p className="hidden md:block text-[10px] text-slate-400 mt-0.5">{a.teacher} 선생님</p>
+                            <p className="hidden wide:block text-[11px] text-slate-400 mt-0.5">{a.teacher} 선생님</p>
                           )}
                         </div>
                         <div className="shrink-0 text-right">
-                          {/* Mobile: date + day on one line */}
-                          <div className="md:hidden text-[11px] font-extrabold text-indigo-600 whitespace-nowrap">
-                            {mmdd} <span className="font-semibold text-slate-400">({wd})</span>
+                          {/* 좁은화면: wide:hidden */}
+                          <div className="wide:hidden flex items-center justify-end gap-1.5 whitespace-nowrap">
+                            {helpfulCount > 0 && (
+                              <span className="flex items-center gap-0.5 text-[10px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-1.5 py-0.5" title={`땡큐 ${helpfulCount}개`}>
+                                <ThumbsUp className="w-2.5 h-2.5" />
+                                {helpfulCount}
+                              </span>
+                            )}
+                            {isPeriod ? (
+                              <span className="text-xs font-extrabold text-violet-600">{mmdd}~{endMmdd}</span>
+                            ) : (
+                              <>
+                                <span className="text-xs font-extrabold text-indigo-600">{mmdd}</span>
+                                <span className="text-xs font-semibold text-slate-400">({wd})</span>
+                              </>
+                            )}
                           </div>
-                          {/* Desktop: stacked */}
-                          <div className="hidden md:block text-[11px] font-extrabold text-indigo-600">{mmdd}</div>
-                          <div className="hidden md:block text-[9px] text-slate-400">{wd}요일</div>
+                          {/* 넓은화면: hidden wide:block */}
+                          <div className="hidden wide:block">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {helpfulCount > 0 && (
+                                <span className="flex items-center gap-0.5 text-[10px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-1.5 py-0.5" title={`땡큐 ${helpfulCount}개`}>
+                                  <ThumbsUp className="w-2.5 h-2.5" />
+                                  {helpfulCount}
+                                </span>
+                              )}
+                              {isPeriod ? (
+                                <span className="text-[12px] font-extrabold text-violet-600 whitespace-nowrap">
+                                  {mmdd}<span className="text-slate-300 mx-0.5">~</span>{endMmdd}
+                                </span>
+                              ) : (
+                                <span className="text-xs wide:text-[13px] font-extrabold text-indigo-600">{mmdd}</span>
+                              )}
+                            </div>
+                            {isPeriod ? (
+                              <div className="text-[10px] text-slate-400 text-right">{wd}~{endWd}요일</div>
+                            ) : (
+                              <div className="text-[10px] text-slate-400 text-right">{wd}요일</div>
+                            )}
+                          </div>
                           {a.description && (
                             <div className="mt-1 flex justify-end">
-                              <span className="text-[10px] bg-indigo-600 text-white rounded-md px-1.5 py-0.5 font-extrabold whitespace-nowrap shadow-xs">
+                              <span className="text-[11px] bg-indigo-600 text-white rounded-md px-1.5 py-0.5 font-extrabold whitespace-nowrap shadow-xs">
                                 {a.description}
                               </span>
                             </div>
@@ -2342,36 +3325,8 @@ export default function TeacherPage() {
 
         </div>{/* end inner card */}
 
-        {/* ===== PC 전용: 보기전용 배너 (우측 패널 하단) ===== */}
-        {settings !== undefined && !isCurrentTeacherVerified && (
-          <div
-            className="hidden md:flex items-center gap-3 mt-2 px-4 py-3 rounded-2xl backdrop-blur-sm"
-            style={{
-              background: 'linear-gradient(135deg, #e8e8e8 0%, #c8c8c8 40%, #a8a8a8 100%)',
-              border: '1px solid rgba(255,255,255,0.6)',
-              boxShadow: '0 2px 12px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.7)',
-            }}
-          >
-            <svg className="w-4 h-4 shrink-0" style={{ color: '#4b5563' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-            <span className="text-sm font-semibold leading-tight flex-1" style={{ color: '#1f2937' }}>
-              보기 전용<br />등록·수정하려면 인증하세요
-            </span>
-            <button
-              onClick={() => setShowAuthDialog(true)}
-              className="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold transition-colors"
-            >
-              인증하기
-            </button>
-          </div>
-        )}
-        {/* ===== PC 전용: 설명 텍스트 (패널 컨럼 하단) ===== */}
-        <p className="hidden md:block text-gray-400 text-xs mt-2 leading-relaxed">
-          시간표에서 수업이 들어있는 칸을 클릭하여<br />
-          수행평가를 간편하게 등록하고 관리할 수 있습니다.
-        </p>
+
+
 
         </div>{/* end right panel */}
         </div>{/* end content area */}
@@ -2649,6 +3604,7 @@ export default function TeacherPage() {
         </DialogContent>
       </Dialog>
 
+
       {/* Clean Teacher Selection Popup Dialog */}
       <Dialog open={showTeacherSelectModal} onOpenChange={setShowTeacherSelectModal}>
         <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
@@ -2741,3 +3697,5 @@ export default function TeacherPage() {
     </div>
   );
 }
+
+

@@ -7,7 +7,7 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'elective_input_mode_grade2', 'elective_input_mode_grade3', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'chrome_install_button_visible', 'safari_install_button_visible', 'other_install_button_visible', 'play_store_url', 'app_store_url', 'show_target_class_main_menu', 'promotion_popup_enabled', 'promotion_reset_days', 'assessment_distrust_threshold', 'assessment_positive_color', 'assessment_positive_ratio', 'assessment_negative_color', 'assessment_negative_ratio', 'assessment_timetable_color', 'changed_class_tint_color', 'changed_class_tint_opacity', 'comcigan_debug_overlay_enabled', 'comcigan_debug_whitelist', 'special_schedules', 'special_schedules_enabled', 'meal_lunch_cutoff_hour', 'meal_rating_enabled', 'meal_emphasis_enabled', 'teacher_ignore_keywords', 'semester_key', 'assessment_allow_student_grade1', 'assessment_allow_student_grade2', 'assessment_allow_student_grade3', 'assessment_allow_teacher_grade1', 'assessment_allow_teacher_grade2', 'assessment_allow_teacher_grade3', 'assessment_disallow_msg_student', 'assessment_disallow_msg_teacher', 'teacher_default_password', 'teacher_auth_expire_days', 'teacher_passwords')").all();
+        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'elective_input_mode_grade2', 'elective_input_mode_grade3', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'chrome_install_button_visible', 'safari_install_button_visible', 'other_install_button_visible', 'play_store_url', 'app_store_url', 'show_target_class_main_menu', 'promotion_popup_enabled', 'promotion_reset_days', 'assessment_distrust_threshold', 'assessment_positive_color', 'assessment_positive_ratio', 'assessment_negative_color', 'assessment_negative_ratio', 'assessment_timetable_color', 'changed_class_tint_color', 'changed_class_tint_opacity', 'comcigan_debug_overlay_enabled', 'comcigan_debug_whitelist', 'access_debug_mode_enabled', 'access_debug_ip_list', 'special_schedules', 'special_schedules_enabled', 'meal_lunch_cutoff_hour', 'meal_rating_enabled', 'meal_emphasis_enabled', 'teacher_ignore_keywords', 'semester_key', 'assessment_allow_student_grade1', 'assessment_allow_student_grade2', 'assessment_allow_student_grade3', 'assessment_allow_teacher_grade1', 'assessment_allow_teacher_grade2', 'assessment_allow_teacher_grade3', 'assessment_disallow_msg_student', 'assessment_disallow_msg_teacher', 'teacher_default_password', 'teacher_auth_expire_days', 'teacher_passwords', 'active_teachers')").all();
 
         const settings: any = {};
         if (rows && rows.results) {
@@ -26,13 +26,37 @@ export const onRequest = async (context: any) => {
         const maintenanceMode = settings['maintenance_mode'] ? JSON.parse(settings['maintenance_mode']) : { active: false, endTime: null, message: "서버 안정화 작업" };
 
         // Check IP whitelist (general)
-        const clientIp = context.request.headers.get('CF-Connecting-IP') || 'unknown';
+        const clientIp = context.request.headers.get('CF-Connecting-IP') || 
+                         context.request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
+                         'unknown';
         const isWhitelisted = ipWhitelist.includes(clientIp);
 
         // Check debug overlay whitelist (separate from general ip_whitelist)
         const debugWhitelist = settings['comcigan_debug_whitelist'] ? JSON.parse(settings['comcigan_debug_whitelist']) : [];
         // Empty list = allow all; non-empty list = only whitelisted IPs
         const comciganDebugWhitelistHit = debugWhitelist.length === 0 || debugWhitelist.includes(clientIp);
+
+        // Check access debug mode (IP list for iOS guide debug)
+        const accessDebugEnabled = settings['access_debug_mode_enabled'] === 'true';
+        let accessDebugIpList: any[] = [];
+        if (settings['access_debug_ip_list']) {
+            try {
+                accessDebugIpList = JSON.parse(settings['access_debug_ip_list']);
+            } catch (e) {
+                accessDebugIpList = [];
+            }
+        }
+
+        const matchedDebugItem = accessDebugEnabled
+            ? accessDebugIpList.find((item: any) => {
+                const targetIp = typeof item === 'string' ? item : item?.ip;
+                if (!targetIp) return false;
+                return targetIp === clientIp || targetIp === '*' || (clientIp !== 'unknown' && clientIp.startsWith(targetIp));
+            })
+            : null;
+
+        const accessDebugModeHit = !!matchedDebugItem;
+        const accessDebugDefaultMode = (typeof matchedDebugItem === 'object' && matchedDebugItem?.mode) ? matchedDebugItem.mode : 'manual';
 
         return new Response(JSON.stringify({
             hide_past_assessments: hidePastValue === 'true',
@@ -45,6 +69,8 @@ export const onRequest = async (context: any) => {
             is_whitelisted: isWhitelisted,
             client_ip: clientIp,
             comcigan_debug_whitelist_hit: comciganDebugWhitelistHit,
+            access_debug_mode_hit: accessDebugModeHit,
+            access_debug_default_mode: accessDebugDefaultMode,
             elective_input_mode: settings['elective_input_mode'] || 'auto',
             elective_input_mode_grade2: settings['elective_input_mode_grade2'] || settings['elective_input_mode'] || 'auto',
             elective_input_mode_grade3: settings['elective_input_mode_grade3'] || settings['elective_input_mode'] || 'auto',
@@ -99,6 +125,8 @@ export const onRequest = async (context: any) => {
             teacher_auth_expire_days: parseInt(settings['teacher_auth_expire_days'] || '0', 10),
             // 선생님별 개별 비밀번호 (JSON: {"홍길동": "pw1", ...}, 미설정이면 디폴트 사용)
             teacher_passwords: settings['teacher_passwords'] || '{}',
+            // 학생에게 교사 지원표시 — 이용중인 교사 이름 배열
+            active_teachers: (() => { try { return settings['active_teachers'] ? JSON.parse(settings['active_teachers']) : []; } catch { return []; } })(),
         }), {
             headers: {
                 'Content-Type': 'application/json',

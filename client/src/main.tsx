@@ -3,6 +3,7 @@ import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
+import { agent } from "@/lib/browserDetect";
 import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
@@ -13,21 +14,48 @@ import "./index.css";
 initGlobalErrorHandlers();
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then(registration => {
-      console.log('SW registered: ', registration);
-    }).catch(registrationError => {
-      console.log('SW registration failed: ', registrationError);
+  if (agent.isMobile) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').then(registration => {
+        console.log('SW registered: ', registration);
+      }).catch(registrationError => {
+        console.log('SW registration failed: ', registrationError);
+      });
     });
-  });
+  } else {
+    // 데스크톱: PWA 설치 자격 및 캐시를 비활성화하고, 기존 등록된 서비스 워커가 있다면 정리(해제)
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      for (const registration of registrations) {
+        registration.unregister();
+      }
+    }).catch(() => {});
+
+    // 혹시 남아있는 manifest 태그도 완벽히 제거
+    const manifestLink = document.querySelector("link[rel='manifest']");
+    if (manifestLink) {
+      manifestLink.remove();
+    }
+  }
 }
 
-// Detect Android environment for specific behaviors if needed later
+// 모바일/데스크톱 환경별 분기 처리
 if (typeof window !== 'undefined') {
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
+  // 데스크톱 환경에서는 manifest 태그를 선제적으로 제거 (주소창 설치 유도 아이콘 방지)
+  if (agent.isDesktop) {
+    const manifestLink = document.querySelector("link[rel='manifest']");
+    if (manifestLink) {
+      manifestLink.remove();
+    }
+  }
 
-  // Track PWA Installation Status
-  if (isStandalone) {
+  // Firefox 브라우저 감지 시 html 태그에 클래스 주입 (전용 비대증 방지 CSS 룰 연동)
+  if (agent.isFirefox) {
+    document.documentElement.classList.add('is-firefox');
+  }
+
+  // agent.isInstalledApp — browserDetect.ts (standalone + TWA 통합 감지)
+  // Track PWA Installation Status (모바일 전용)
+  if (agent.isInstalledApp && agent.isMobile) {
     document.cookie = "pwa_standalone=1; max-age=31536000; path=/";
   }
 
@@ -37,8 +65,8 @@ if (typeof window !== 'undefined') {
   // React mounts. Storing it globally guarantees Dashboard can always access it.
   window.addEventListener('beforeinstallprompt', (e: any) => {
     e.preventDefault();
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|SamsungBrowser/i.test(navigator.userAgent);
-    if (isMobile) {
+    // isMobileDevice — browserDetect.ts agent.isMobile 사용 (모바일에서만 프롬프트 캡처)
+    if (agent.isMobile) {
       (window as any).__deferredPwaPrompt = e;
     }
   });

@@ -1,4 +1,17 @@
 
+import { agent, getMaintenanceBypassCookie } from "@/lib/browserDetect";
+
+// ── detect() 결과 직접 참조 (단일 진실원천: agent 싱글턴) ───────────────────
+const isSamsungBrowser = agent.browserKey === "samsung";
+const isIOS            = agent.isIOS;
+const isAndroid        = agent.isAndroid;
+const isIOSSafari      = agent.isIOSSafari;
+const isChromeBrowser  = agent.browserKey === "chrome";
+const isOtherBrowser   = agent.browserKey === "other";
+const isInAppBrowser   = agent.isInAppBrowser;
+const isKakaoTalk      = agent.isKakaoTalk;
+const isMobileDevice   = agent.isMobile;
+const { iosVersion, isIOS26Plus, isIOS15Plus } = agent;
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +35,25 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import ElectiveSelectionDialog from "@/components/ElectiveSelectionDialog";
+
+function PlayStoreLogo() {
+  return (
+    <svg viewBox="0 0 28.99 31.99" className="w-6 h-6 shrink-0" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M13.54 15.28.12 29.34a3.66 3.66 0 0 0 5.33 2.16l15.1-8.6Z" fill="#EA4335" />
+      <path d="m27.11 12.89-6.53-3.74-7.35 6.45 7.38 7.28 6.48-3.7a3.54 3.54 0 0 0 1.5-4.79 3.62 3.62 0 0 0-1.5-1.5z" fill="#FBBC04" />
+      <path d="M.12 2.66a3.57 3.57 0 0 0-.12.92v24.84a3.57 3.57 0 0 0 .12.92L14 15.64Z" fill="#4285F4" />
+      <path d="m13.64 16 6.94-6.85L5.5.51A3.73 3.73 0 0 0 3.63 0 3.64 3.64 0 0 0 .12 2.65Z" fill="#34A853" />
+    </svg>
+  );
+}
+
+function AppleLogo() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="white">
+      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
+    </svg>
+  );
+}
 
 // 타입 정의
 interface TimetableItem {
@@ -56,6 +88,10 @@ interface AssessmentItem {
   classCode?: string;
   isTeacherCreated?: number;
   activityType?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  submissionLink?: string | null;
+  attachments?: string | null;
 }
 
 // 주의 시작일 계산 (월요일 기준)
@@ -120,6 +156,7 @@ const DEFAULT_PRINT_HEIGHT = "11";
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, studentName, refreshKakaoUser, instructionDismissedV2, refreshRole } = useUserConfig();
+  const [, setLocation] = useLocation();
 
   const handleGoToTeacher = (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
@@ -162,6 +199,8 @@ export default function Dashboard() {
   const [viewingAssessments, setViewingAssessments] = useState<AssessmentItem[]>([]);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<AssessmentItem | null>(null);
+  // 수행평가 목록: 과목 선택 뷰 (null = 타일, string = 해당 과목 상세)
+  const [assessmentSubjectView, setAssessmentSubjectView] = useState<string | null>(null);
   
   // Custom Orphan Relocation State
   const [relocatingAssessment, setRelocatingAssessment] = useState<AssessmentItem | null>(null);
@@ -197,6 +236,7 @@ export default function Dashboard() {
   const [showBugReportDialog, setShowBugReportDialog] = useState(false);
   const [bugReportMessage, setBugReportMessage] = useState("");
   const [isBugReportSending, setIsBugReportSending] = useState(false);
+  const [showIOSOtherGuideDialog, setShowIOSOtherGuideDialog] = useState(false);
 
   // ── 학번/이름 변경 다이얼로그 ────────────────────────────────────────
   const [showChangeDialog, setShowChangeDialog] = useState(false);
@@ -257,24 +297,16 @@ export default function Dashboard() {
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalling, setIsInstalling] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
-  const isIOS = typeof window !== 'undefined' ? /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) : false;
-  const isSamsungBrowser = typeof window !== 'undefined' ?
-    /SamsungBrowser/i.test(navigator.userAgent) ||
-    (/Android/i.test(navigator.userAgent) && /SM-|SAMSUNG/i.test(navigator.userAgent) && !/Chrome\/[.0-9]* Mobile/i.test(navigator.userAgent)) // Catch edge cases where it's a Samsung device but not standard Chrome
-    : false;
-  const isInAppBrowser = typeof window !== 'undefined' ? /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent) : false;
-  const isAndroid = typeof window !== 'undefined' ? /Android/i.test(navigator.userAgent) : false;
-  // 그외 브라우저: 삼성/iOS/Chrome 이외 환경
-  const isOtherBrowser = typeof window !== 'undefined' ? (
-    !isSamsungBrowser && !isIOS &&
-    !/Chrome/i.test(navigator.userAgent)
-  ) : false;
-  const [hasPwaCookie, setHasPwaCookie] = useState(typeof document !== 'undefined' && document.cookie.includes('pwa_standalone=1'));
+  // isStandalone 제거됨 — agent.isInstalledApp 사용 (PWA standalone + TWA 통합 감지)
+  // 브라우저 감지 — @/lib/browserDetect (관리페이지 미해결문제 패널 기준)
+  // isSamsungBrowser, isIOS(=isIOSSafari), isInAppBrowser, isOtherBrowser: 상단 import에서 주입
+  // iosVersion, isIOS26Plus, isIOS15Plus — @/lib/browserDetect (agent.iosVersion) 에서 직접 import
+  // isAndroid 제거됨 — agent.isMobile (browserDetect.ts) 사용
+  // hasPwaCookie 제거됨 — 브라우저 재접속 시 설치 여부 무관하게 버튼 표시
 
   useEffect(() => {
-    const standsAlone = window.matchMedia('(display-mode: standalone)').matches || ('standalone' in navigator && (navigator as any).standalone) === true;
-    setIsStandalone(standsAlone);
+    // standsAlone 제거됨 — agent.isInstalledApp (browserDetect.ts) 사용
+    // setIsStandalone 제거됨
 
     // Immediately pick up the prompt if it was already captured in main.tsx
     // (Samsung Internet fires beforeinstallprompt very early, before React mounts)
@@ -284,8 +316,8 @@ export default function Dashboard() {
 
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|SamsungBrowser/i.test(navigator.userAgent);
-      if (isMobile) {
+      // isMobileDevice — agent.isMobile (browserDetect.ts 3-Layer 감지 결과 사용)
+      if (isMobileDevice) {
         (window as any).__deferredPwaPrompt = e;
         setDeferredPrompt(e);
       }
@@ -1479,7 +1511,7 @@ export default function Dashboard() {
 
   // 점검 모드 감지 시 강제 새로고침 (Edge 차단 페이지로 전환 및 로드된 데이터 클리어)
   useEffect(() => {
-    if (settings?.maintenance_mode?.active && !settings?.is_whitelisted) {
+    if (settings?.maintenance_mode?.active && !settings?.is_whitelisted && !getMaintenanceBypassCookie()) {
       window.location.reload();
     }
   }, [settings?.maintenance_mode?.active, settings?.is_whitelisted]);
@@ -1494,7 +1526,11 @@ export default function Dashboard() {
   }
 
   // Check Maintenance Mode First
-  const isMaintenanceActive = Boolean(settings?.maintenance_mode?.active && !settings?.is_whitelisted);
+  const isMaintenanceActive = Boolean(
+    settings?.maintenance_mode?.active &&
+    !settings?.is_whitelisted &&
+    !getMaintenanceBypassCookie()
+  );
 
   if (isMaintenanceActive) {
     return (
@@ -1585,7 +1621,7 @@ export default function Dashboard() {
       )}
 
       {/* New Top Bar (Replaces Navigation on Desktop) */}
-      <div className="hidden md:flex justify-between items-center mb-4">
+      <div className="hidden sm:flex justify-between items-center mb-4">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-xl md:text-2xl font-bold flex items-center gap-2">
             <span
@@ -1625,7 +1661,7 @@ export default function Dashboard() {
             <Button
               variant="outline"
               size="sm"
-              className="hidden md:flex h-9 rounded-full px-4 font-bold text-xs gap-2 border-gray-200 hover:bg-gray-50 shadow-sm"
+              className="hidden sm:flex h-9 rounded-full px-4 font-bold text-xs gap-2 border-gray-200 hover:bg-gray-50 shadow-sm"
               onClick={() => setShowPrintOptions(true)}
             >
               <Printer className="w-4 h-4" />
@@ -1827,7 +1863,7 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-center justify-between gap-2 md:hidden mb-1.5">
+      <div className="flex items-center justify-between gap-2 sm:hidden mb-1.5">
         {/* Left column: toggle */}
         <div className="flex items-center gap-1 w-[136px] shrink-0">
           <div className="flex-1 flex items-center justify-center gap-0.5 px-[9px] py-[5px] text-[12.5px] font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap">
@@ -1867,7 +1903,7 @@ export default function Dashboard() {
         {isRestricted ? (
           <div className="w-full flex flex-col pt-2 md:pt-4">
             {/* Student info + change button during restriction */}
-            <div className="hidden md:flex items-center gap-3 justify-center mb-6">
+            <div className="hidden sm:flex items-center gap-3 justify-center mb-6">
               <div className="flex flex-col items-end leading-tight">
                 <span className="text-[12px] text-slate-400 font-medium">학번 <span className="text-slate-700 font-bold text-base">{grade || "?"}{classNum || "?"}{studentNumber?.padStart(2,"0") || "??"}</span></span>
                 <span className="text-[12px] text-slate-400 font-medium">이름 <span className="text-slate-700 font-semibold text-base">{studentName || "-"}</span></span>
@@ -1896,7 +1932,7 @@ export default function Dashboard() {
           <Card className="py-1 gap-1 md:py-2 md:gap-2">
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
               {/* Desktop Actions */}
-              <div className="hidden md:flex items-center gap-2 flex-1 min-w-0">
+              <div className="hidden sm:flex items-center gap-2 flex-1 min-w-0">
                 {(grade === "2" || grade === "3") && (
                   <div className="relative inline-block">
                     <Button
@@ -1919,7 +1955,7 @@ export default function Dashboard() {
 
               {/* Mobile Elective Edit Button */}
               {(grade === "2" || grade === "3") && (
-                <div className="absolute left-0 -translate-x-[10px] top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-center md:hidden z-20 pointer-events-none">
+                <div className="absolute left-3 top-0 bottom-0 flex items-center justify-start sm:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative">
                     <Button
                       size="sm"
@@ -1940,7 +1976,7 @@ export default function Dashboard() {
 
               {/* Mobile Print Button */}
               {shouldShowPrintButton && (
-                <div className="absolute right-0 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-end md:hidden z-20 pointer-events-none">
+                <div className="absolute right-0 top-0 bottom-0 w-[calc(50%-75px)] flex items-center justify-end sm:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative mr-1 md:mr-0">
                     <Button
                       variant="ghost"
@@ -1957,8 +1993,8 @@ export default function Dashboard() {
               )}
 
               {/* Week Navigation */}
-              <div className="flex flex-col items-center justify-center gap-1 w-full -translate-x-1 md:translate-x-0 md:w-auto shrink-0 z-10 relative">
-                <div className="flex items-center gap-0 md:gap-1">
+              <div className="flex flex-col items-center justify-center gap-1 w-full -translate-x-1 sm:translate-x-0 sm:w-auto shrink-0 z-10 relative">
+                <div className="flex items-center gap-0 sm:gap-1">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1968,7 +2004,7 @@ export default function Dashboard() {
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <span className="text-sm md:text-sm font-normal text-gray-600 min-w-[80px] md:min-w-[90px] text-center px-1">
+                  <span className="text-sm md:text-sm font-normal text-gray-600 min-w-[80px] sm:min-w-[90px] text-center px-1">
                     {weekRangeText}
                   </span>
                   <Button
@@ -1993,15 +2029,15 @@ export default function Dashboard() {
               </div>
 
               {/* Desktop: student info + change button */}
-              <div className="hidden md:flex items-center gap-3 flex-1 justify-end min-w-0 md:ml-[3px]">
+              <div className="hidden sm:flex items-center gap-2 sm:gap-3 flex-1 justify-end min-w-0 sm:ml-[3px]">
                 <div className="flex flex-col items-end leading-tight">
-                  <span className="text-[11px] text-slate-400 font-medium">학번 <span className="text-slate-900 font-bold text-base">{grade || "?"}{classNum || "?"}{studentNumber?.padStart(2,"0") || "??"}</span></span>
-                  <span className="text-[11px] text-slate-400 font-medium">이름 <span className="text-slate-700 font-semibold text-sm">{studentName || "-"}</span></span>
+                  <span className="text-[11px] text-slate-400 font-medium whitespace-nowrap">학번 <span className="text-slate-900 font-bold text-sm sm:text-base">{grade || "?"}{classNum || "?"}{studentNumber?.padStart(2,"0") || "??"}</span></span>
+                  <span className="text-[11px] text-slate-400 font-medium whitespace-nowrap">이름 <span className="text-slate-700 font-semibold text-xs sm:text-sm">{studentName || "-"}</span></span>
                 </div>
                 <button
                   type="button"
                   onClick={() => { setChangeStudentName(""); setChangeStudentId(""); setShowChangeDialog(true); }}
-                  className="shrink-0 text-sm font-bold px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
+                  className="shrink-0 text-xs sm:text-sm font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors shadow-sm whitespace-nowrap"
                 >
                   변경
                 </button>
@@ -2072,7 +2108,7 @@ export default function Dashboard() {
                         {/* 소스: 하나만 표시 */}
                         {sourceBadge}
                         {/* 관리자 설정 */}
-                        <span className="hidden md:inline text-slate-300">|</span>
+                        <span className="hidden sm:inline text-slate-300">|</span>
                         <span>1학년: {dt?.override1 && dt.override1 !== '_auto_' ? <span className="text-orange-500 font-bold font-mono">{dt.override1}</span> : <span className="text-slate-400">auto</span>}</span>
                         <span>2,3학년: {dt?.override23 && dt.override23 !== '_auto_' ? <span className="text-orange-500 font-bold font-mono">{dt.override23}</span> : <span className="text-slate-400">auto</span>}</span>
                         {/* 폴백 / IP 오버라이드 */}
@@ -2397,7 +2433,7 @@ export default function Dashboard() {
                                 >
                                   {isElectiveActive && group && (
                                     <div className={`absolute top-0 right-0 px-1 rounded-bl-md text-[9px] md:text-[10px] font-bold ${isPast ? "bg-gray-100 text-gray-400 print:!bg-orange-100 print:!text-orange-800 capturing:!bg-orange-100 capturing:!text-orange-800" : "bg-orange-100 text-orange-800"}`}>
-                                      <span>{group}</span><span className="hidden md:inline">그룹</span>
+                                      <span>{group}</span><span className="hidden sm:inline">그룹</span>
                                     </div>
                                   )}
                                   {includeAssessments && cellAssessments.length > 0 && (() => {
@@ -2430,13 +2466,13 @@ export default function Dashboard() {
                                             {isCancelledByFreePeriod ? (
                                               <span className="print:flex print:flex-col print:items-center">
                                                 <span className="line-through opacity-60 flex-shrink-0 whitespace-nowrap">{displaySubject}</span>
-                                                <span className={`block md:inline mt-0.5 md:mt-0 md:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400 print:!text-blue-500 capturing:!text-blue-500" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
+                                                <span className={`block sm:inline mt-0.5 sm:mt-0 sm:ml-1 print:ml-0 text-xs font-normal ${isPast ? "text-gray-400 print:!text-blue-500 capturing:!text-blue-500" : "text-blue-500"} print:block print:mt-0.5 print:!text-[2.3cqh]`}>(공강)</span>
                                               </span>
                                             ) : (
                                               displaySubject?.includes("공강") && displaySubject !== "공강" ? (
-                                                <span className="flex flex-col md:inline md:flex-row items-center">
+                                                <span className="flex flex-col sm:inline sm:flex-row items-center">
                                                   <span>{displaySubject.replace("공강", "")}</span>
-                                                  <span className="block md:inline md:ml-1">공강</span>
+                                                  <span className="block sm:inline sm:ml-1">공강</span>
                                                 </span>
                                               ) : (
                                                 <span>{displaySubject}</span>
@@ -2526,6 +2562,56 @@ export default function Dashboard() {
                 </div>
               </div>
             </CardContent>
+
+            {/* ── 기간형 수행평가 하단 바 ── */}
+            {(() => {
+              if (!allAssessments || !Array.isArray(allAssessments)) return null;
+              const now = new Date();
+              const twoWeeksLater = new Date(now);
+              twoWeeksLater.setDate(twoWeeksLater.getDate() + 14);
+              const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+              const limitStr = `${twoWeeksLater.getFullYear()}-${String(twoWeeksLater.getMonth()+1).padStart(2,'0')}-${String(twoWeeksLater.getDate()).padStart(2,'0')}`;
+
+              const periodAssessments = (allAssessments as AssessmentItem[]).filter(a =>
+                a.endDate && a.startDate &&
+                a.startDate <= limitStr && a.endDate >= todayStr
+              );
+              if (periodAssessments.length === 0) return null;
+
+              const fmtShort = (d: string) => {
+                const p = d.split('-');
+                return `${parseInt(p[1])}/${parseInt(p[2])}`;
+              };
+
+              return (
+                <div className="px-3 pb-2 space-y-1">
+                  {periodAssessments.map(a => {
+                    const isPast = a.endDate! < todayStr;
+                    return (
+                      <div
+                        key={a.id}
+                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-sm font-semibold ${
+                          isPast
+                            ? 'bg-gray-100 border-gray-300 text-gray-400'
+                            : 'bg-blue-50 border-blue-300 text-gray-800'
+                        }`}
+                      >
+                        <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                          isPast ? 'bg-gray-400 text-white' : 'bg-blue-600 text-white'
+                        }`}>
+                          숙제
+                        </span>
+                        <span className="truncate font-bold">{a.subject}</span>
+                        <span className="truncate opacity-70">{a.title}</span>
+                        <span className={`ml-auto shrink-0 text-[11px] font-bold whitespace-nowrap ${isPast ? 'text-gray-400' : 'text-blue-700'}`}>
+                          {fmtShort(a.startDate!)} ~ {fmtShort(a.endDate!)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </Card>
         )}
       </div>
@@ -3044,86 +3130,21 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog >
 
-      {/* 모바일 전용 PWA 앱 다운로드 버튼 (설치 상태 및 환경에 따라 상태 변경) */}
-      {!isInAppBrowser && settings?.pwa_install_button_visible !== false && (
-        <div className="md:hidden mt-6 mb-2 space-y-2">
-          {/* App Download for Normal Browsers (Chrome, etc.) vs Add to Home Screen for Samsung/In-App */}
-          {isSamsungBrowser ? (
-            // For Samsung browsers: play_store_url 있을 때만 Play Store 버튼 표시
-            !hasPwaCookie && settings?.samsung_install_button_visible !== false && settings?.play_store_url && (
-              <a
-                href={settings.play_store_url}
-                target="_blank"
-                rel="noreferrer"
-                className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-              >
-                {/* Play Store 로고 SVG */}
-                <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
-                  <path d="M3.18 23.76c.33.18.7.2 1.04.08L14.76 12 4.22.16A1.25 1.25 0 0 0 3.18.4C2.6.74 2.25 1.35 2.25 2v20c0 .65.35 1.26.93 1.76Z" fill="#EA4335"/>
-                  <path d="M21.25 10.3 17.98 8.5l-3.69 3.5 3.69 3.5 3.27-1.8c.93-.51.93-1.89 0-2.4Z" fill="#FBBC04"/>
-                  <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
-                  <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
-                </svg>
-                <span>Google Play에서 다운로드</span>
-              </a>
-            )
-          ) : isOtherBrowser ? (
-            // 그외 브라우저: play_store_url이 있으면 Play Store 버튼, 없으면 숙짔
-            !hasPwaCookie && settings?.other_install_button_visible !== false && settings?.play_store_url && (
-              <a
-                href={settings.play_store_url}
-                target="_blank"
-                rel="noreferrer"
-                className="w-full h-14 bg-[#01875f] hover:bg-[#016b4c] text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-              >
-                <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
-                  <path d="M3.18 23.76c.33.18.7.2 1.04.08L14.76 12 4.22.16A1.25 1.25 0 0 0 3.18.4C2.6.74 2.25 1.35 2.25 2v20c0 .65.35 1.26.93 1.76Z" fill="#EA4335"/>
-                  <path d="M21.25 10.3 17.98 8.5l-3.69 3.5 3.69 3.5 3.27-1.8c.93-.51.93-1.89 0-2.4Z" fill="#FBBC04"/>
-                  <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
-                  <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
-                </svg>
-                <span>Google Play에서 다운로드</span>
-              </a>
-            )
-          ) : (
-            // Normal PWA Prompt — iOS Safari → App Store, Chrome → PWA
-            !hasPwaCookie && !isStandalone && (
-              <>
-                {isIOS && settings?.safari_install_button_visible !== false ? (
-                  // iOS Safari
-                  settings?.app_store_url ? (
-                    // App Store 링크 설정됨 → App Store 버튼
-                    <a
-                      href={settings.app_store_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="w-full h-14 bg-black hover:bg-gray-900 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
-                    >
-                      {/* Apple 로고 */}
-                      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="white">
-                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
-                      </svg>
-                      <span>App Store에서 다운로드</span>
-                    </a>
-                  ) : (
-                    // App Store 미설정 → 기존 PWA 프롬프트
-                    <Button
-                      onClick={handleInstallClick}
-                      disabled={isInstalling}
-                      className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
-                    >
-                      {isInstalling ? (
-                        <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
-                      ) : (
-                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
-                          <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
-                        </svg>
-                      )}
-                      <span>{isInstalling ? '설치 중...' : '성지수행 앱 다운로드'}</span>
-                    </Button>
-                  )
-                ) : settings?.chrome_install_button_visible !== false ? (
-                  // Chrome / 기타 → 기존 PWA 버튼
+      {/* 모바일 전용 앱 다운로드 버튼 (기기/브라우저 환경별 분기) */}
+      {(!isInAppBrowser || isKakaoTalk) && !agent.isInstalledApp && isMobileDevice && settings?.pwa_install_button_visible !== false && (
+        <div className="mt-6 mb-2 space-y-2">
+          {(() => {
+            const playUrl = settings?.play_store_url && !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(settings.play_store_url)
+              ? `https://${settings.play_store_url}` : (settings?.play_store_url || "");
+            const appUrl = settings?.app_store_url && !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(settings.app_store_url)
+              ? `https://${settings.app_store_url}` : (settings?.app_store_url || "");
+
+            // ── 1. Android 환경 ───────────────────────────────────────────
+            if (isAndroid) {
+              // 1-1. Chrome / Google 브라우저인 경우: 항상 PWA 설치 버튼
+              if (isChromeBrowser) {
+                if (settings?.chrome_install_button_visible === false) return null;
+                return (
                   <Button
                     onClick={handleInstallClick}
                     disabled={isInstalling}
@@ -3136,223 +3157,505 @@ export default function Dashboard() {
                         <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
                       </svg>
                     )}
-                    <span>{isInstalling ? '설치 중...' : '성지수행 앱 다운로드'}</span>
+                    <span>{isInstalling ? '설치 중...' : `${settings?.pwa_app_title || '성지수행'} 앱 다운로드`}</span>
                   </Button>
-                ) : null}
-              </>
-            )
-          )}
+                );
+              }
 
+              // 1-2. 그 외 모든 Android 브라우저 (Samsung, 카카오 포함 기타 브라우저): Play Store 링크 등록 시 표시
+              if (playUrl && settings?.play_store_url) {
+                const isHidden = isSamsungBrowser
+                  ? settings?.samsung_install_button_visible === false
+                  : settings?.other_install_button_visible === false;
+                if (isHidden) return null;
+                return (
+                  <a
+                    href={playUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full h-14 bg-[#3DDC84] hover:bg-[#35c073] text-black font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+                  >
+                    <PlayStoreLogo />
+                    <span>Google Play에서 다운로드</span>
+                  </a>
+                );
+              }
+
+              return null;
+            }
+
+            // ── 2. iOS 환경 ───────────────────────────────────────────────
+            if (isIOS) {
+              // 2-1. 앱스토어 링크가 등록되어 있다면 브라우저 무관 App Store 버튼 표시
+              if (appUrl && settings?.app_store_url) {
+                const isHidden = isIOSSafari
+                  ? settings?.safari_install_button_visible === false
+                  : isChromeBrowser
+                    ? settings?.chrome_install_button_visible === false
+                    : settings?.other_install_button_visible === false;
+                if (isHidden) return null;
+                return (
+                  <a
+                    href={appUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full h-14 bg-black hover:bg-gray-900 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95 no-underline"
+                  >
+                    <AppleLogo />
+                    <span>App Store에서 다운로드</span>
+                  </a>
+                );
+              }
+
+              // 2-2. 앱스토어 링크가 없을 때:
+              // Safari: PWA 설치 가이드로 이동
+              if (isIOSSafari) {
+                if (settings?.safari_install_button_visible === false) return null;
+                return (
+                  <button
+                    onClick={() => setLocation("/ios-install-guide")}
+                    className="w-full h-14 bg-black hover:bg-gray-900 active:bg-gray-800 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
+                  >
+                    <AppleLogo />
+                    <span>홈 화면에 추가 (PWA)</span>
+                  </button>
+                );
+              }
+
+              // iOS Chrome/Google: Chrome 전용 PWA 설치 가이드로 이동
+              if (isChromeBrowser) {
+                if (settings?.chrome_install_button_visible === false) return null;
+                return (
+                  <button
+                    onClick={() => setLocation("/ios-chrome-install-guide")}
+                    className="w-full h-14 bg-black hover:bg-gray-900 active:bg-gray-800 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
+                  >
+                    <AppleLogo />
+                    <span>Chrome에서 홈 화면 추가</span>
+                  </button>
+                );
+              }
+
+              // 그 외 PWA 미지원 브라우저 (Firefox, Opera, Whale, Edge 등):
+              // 설명 버튼만 표시해서 그냥 "홈 화면에 추가" 버튼을 찾으라는 식의 안내 제공
+              if (settings?.other_install_button_visible === false) return null;
+              return (
+                <button
+                  onClick={() => setShowIOSOtherGuideDialog(true)}
+                  className="w-full h-14 bg-black hover:bg-gray-900 active:bg-gray-800 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
+                >
+                  <AppleLogo />
+                  <span>홈 화면에 추가 (메뉴에서 추가)</span>
+                </button>
+              );
+            }
+
+            return null;
+          })()}
         </div>
       )}
-      {/* 수행평가 목록 */}
+
+      {/* iOS 기타 브라우저 홈 화면 추가 안내 다이얼로그 */}
+      <Dialog open={showIOSOtherGuideDialog} onOpenChange={setShowIOSOtherGuideDialog}>
+        <DialogContent className="max-w-md w-[90vw] rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+              <AppleLogo />
+              홈 화면에 바로가기 추가 안내
+            </DialogTitle>
+            <DialogDescription className="text-sm text-gray-500 pt-2 leading-relaxed">
+              현재 사용 중이신 브라우저에서는 자동 설치 프롬프트가 지원되지 않습니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="my-3 p-4 bg-gray-50 rounded-xl border border-gray-200 text-sm text-gray-700 space-y-2">
+            <p className="font-semibold text-gray-900">
+              📌 추가 방법 안내
+            </p>
+            <p className="text-xs text-gray-600 leading-relaxed">
+              브라우저 하단 또는 상단의 <strong>공유(아이콘)</strong> 또는 <strong>더보기 메뉴(···)</strong>를 눌러 <strong>&apos;홈 화면에 추가&apos;</strong> 항목을 찾아 선택해 주세요.
+            </p>
+            <p className="text-[11px] text-gray-400 mt-2">
+              ※ 일부 서드파티 브라우저에서는 iOS 정책상 독립 전체화면(PWA) 모드가 정상 작동하지 않고 브라우저 탭으로 열릴 수 있습니다.
+            </p>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button
+              onClick={() => setShowIOSOtherGuideDialog(false)}
+              className="bg-black hover:bg-gray-800 text-white rounded-xl px-5"
+            >
+              확인
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+
+      {/* 수행평가 목록 — 과목 타일 + 페이지 전환 */}
       {!isRestricted && (
         <Card className="mt-8">
-          <CardHeader>
-          <CardTitle className="flex items-center gap-2 flex-wrap">
-            <span>{weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : `${weekOffset}주 후`}</span> 수행평가 ({weekRangeText})
-            {isOutOfDateRange && (
-              <span className="text-xs font-bold text-red-500 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse">
-                미확정 시간표
-              </span>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {(() => {
+            // 전체 수행평가에서 과거 제외 (당일형: dueDate >= today, 숙제형: endDate >= today)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStr = toDateString(today);
+            const allFiltered = (allAssessments || []).filter(a => {
+              if (a.endDate) {
+                return a.endDate >= todayStr;
+              }
+              const effDate = a.tempDueDate || a.dueDate;
+              return effDate >= todayStr;
+            });
 
-            {assessments && assessments.filter(assessment => {
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              const effDate = assessment.tempDueDate || assessment.dueDate;
-              return new Date(effDate) >= today;
-            }).length > 0 ? (
-              assessments
-                .filter(assessment => {
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  const effDate = assessment.tempDueDate || assessment.dueDate;
-                  return new Date(effDate) >= today;
+            // 2/3학년 과목 필터링 적용
+            const studentFiltered = (grade === "2" || grade === "3")
+              ? allFiltered.filter(a => {
+                  const baseSubject = a.subject.replace(/\s*\(.*$/, '').trim();
+                  return myActualSubjects.has(baseSubject);
                 })
-                .map((assessment) => {
-                  const effDate = assessment.tempDueDate || assessment.dueDate;
-                  const diffDate = Math.ceil((new Date(effDate).getTime() - new Date(toDateString(new Date())).getTime()) / (1000 * 60 * 60 * 24));
-                  const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
-                  const isToday = diffDate === 0;
+              : allFiltered;
 
-                  // Compute card background based on vote reliability
-                  const voteInfo = votesData?.votes?.[String(assessment.id)];
-                  let cardBg = isToday ? '#fef2f2' : '#ffffff'; // default: red-50 or white
-                  if (voteInfo && !isToday) {
-                    const net = (voteInfo.helpful || 0) - (voteInfo.distrust || 0);
-                    if (net > 0) {
-                      // Positive: blend bg-white with positive color
-                      const mixColor = settings?.assessment_positive_color || '#22c55e';
-                      const ratio = Math.min(100, parseInt(settings?.assessment_positive_ratio || '30')) / 100;
-                      const scaled = Math.min(1, (voteInfo.helpful || 0) / 10) * ratio;
-                      const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
-                      const b = p('#ffffff'), m = p(mixColor);
-                      cardBg = '#' + b.map((c, i) => Math.round(c*(1-scaled)+m[i]*scaled).toString(16).padStart(2,'0')).join('');
-                    } else if (net < 0) {
-                      // Negative: blend bg-white with negative color
-                      const mixColor = settings?.assessment_negative_color || '#9ca3af';
-                      const ratio = Math.min(100, parseInt(settings?.assessment_negative_ratio || '40')) / 100;
-                      const scaled = Math.min(1, (voteInfo.distrust || 0) / 10) * ratio;
-                      const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
-                      const b = p('#ffffff'), m = p(mixColor);
-                      cardBg = '#' + b.map((c, i) => Math.round(c*(1-scaled)+m[i]*scaled).toString(16).padStart(2,'0')).join('');
-                    }
-                  }
+            // 고유 과목명 추출
+            const uniqueSubjects = Array.from(new Set(studentFiltered.map(a => a.subject)));
 
-                  return (
-                    <div
-                      key={assessment.id}
-                      className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col h-full ${isToday ? 'border-red-200' : ''}`}
-                      style={{ 
-                        backgroundColor: cardBg,
-                        backgroundImage: assessment.isPostponed ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.05) 10px, rgba(239, 68, 68, 0.05) 20px)' : 'none'
-                      }}
-                      onClick={() => {
-                        // Find the cell logic
-                        const targetDate = new Date(assessment.tempDueDate || assessment.dueDate); // This might be string 'YYYY-MM-DD'
-                        // We need to find which column (weekday) and row (classTime) this corresponds to.
-                        // However, viewingAssessments are "this week's" assessments, so they should be on the screen.
-                        // But wait, the assessments list is "This Week's".
+            // BOOKMARK_COLORS (TeacherPage에서 차용)
+            const TILE_COLORS = [
+              { bg: '#dbeafe', activeBg: '#2563eb', text: '#1e40af', activeText: '#ffffff' },
+              { bg: '#fce7f3', activeBg: '#be185d', text: '#9d174d', activeText: '#ffffff' },
+              { bg: '#d1fae5', activeBg: '#059669', text: '#065f46', activeText: '#ffffff' },
+              { bg: '#fef3c7', activeBg: '#d97706', text: '#92400e', activeText: '#ffffff' },
+              { bg: '#e0e7ff', activeBg: '#4f46e5', text: '#3730a3', activeText: '#ffffff' },
+              { bg: '#fce4ec', activeBg: '#c62828', text: '#b71c1c', activeText: '#ffffff' },
+              { bg: '#e0f2f1', activeBg: '#00897b', text: '#004d40', activeText: '#ffffff' },
+              { bg: '#fff3e0', activeBg: '#ef6c00', text: '#e65100', activeText: '#ffffff' },
+              { bg: '#ede7f6', activeBg: '#5e35b1', text: '#4527a0', activeText: '#ffffff' },
+              { bg: '#e8f5e9', activeBg: '#2e7d32', text: '#1b5e20', activeText: '#ffffff' },
+            ];
 
-                        // Let's find the weekday index.
-                        // assessment.weekday might be available if we joined it, but currently AssessmentItem has weekday optional.
-                        // Actually, we can calculate weekday from date.
-                        const aDate = new Date(assessment.dueDate);
-                        const day = aDate.getDay(); // 0(Sun) - 6(Sat). 
-                        const weekdayIdx = day === 0 ? 6 : day - 1; // 0(Mon) - 4(Fri). Adjust for Sunday (0) and Saturday (6) if needed, assuming Mon-Fri.
-
-                        // Check if weekday is valid (Mon-Fri) and classTime exists
-                        if (weekdayIdx >= 0 && weekdayIdx <= 4 && assessment.classTime) {
-                          const cellId = `cell-${weekdayIdx}-${assessment.classTime}`;
-                          const element = document.getElementById(cellId);
-                          if (element) {
-                            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            element.classList.add('highlight-cell');
-                            setTimeout(() => {
-                              element.classList.remove('highlight-cell');
-                            }, 2000);
-                          }
-                        }
-                      }}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-1 flex-wrap mb-1">
-                            <span className="font-bold text-lg text-blue-600">
-                              {assessment.subject}
-                            </span>
-                            {assessment.isTeacherCreated === 1 && (
-                              <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold border border-emerald-200 whitespace-nowrap">
-                                선생님 직접 등록
-                              </span>
-                            )}
-                            <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-                              {assessment.description}
-                            </span>
-                            {!assessment.isPostponed && (
-                              <span className={`text-base font-bold ${isToday ? 'text-red-600' : 'text-gray-500'} ml-1`}>
-                                {dDay}
-                              </span>
-                            )}
-                          </div>
-                          {assessment.isPostponed && Boolean(assessment.isAutoPredicted) && (
-                            <div className="text-red-500 text-sm font-bold mt-0.5">
-                              시간표 변경
-                            </div>
-                          )}
-                        </div>
-                        {grade && classNum && studentNumber && (
-                          <div className="flex items-center gap-2 flex-shrink-0 ml-2" onClick={e => e.stopPropagation()}>
-                            <button
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                                votesData?.myVotes?.[String(assessment.id)] === 'helpful'
-                                  ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
-                                  : 'bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-green-600'
-                              }`}
-                              onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'helpful' }); e.currentTarget.blur(); }}
-                              disabled={voteMutation.isPending}
-                            >
-                              <ThumbsUp className="w-4 h-4" />
-                              <span>땡큐</span>
-                              <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.helpful || 0}</span>
-                            </button>
-                            <button
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                                votesData?.myVotes?.[String(assessment.id)] === 'distrust'
-                                  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
-                                  : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600'
-                              }`}
-                              onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' }); e.currentTarget.blur(); }}
-                              disabled={voteMutation.isPending}
-                            >
-                              <X className="w-4 h-4" />
-                              <span>가짜</span>
-                              <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.distrust || 0}</span>
-                            </button>
-                          </div>
-                        )}
+            if (assessmentSubjectView === null) {
+              // ===== PAGE 1: 과목 타일 선택 =====
+              return (
+                <>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      수행평가
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="min-h-[200px]">
+                    {uniqueSubjects.length === 0 ? (
+                      <div className="text-center py-12 text-gray-500">
+                        등록된 수행평가가 없습니다.
                       </div>
-                      <p className="text-gray-700 mb-2">{assessment.title}</p>
-                      <div className="flex items-end justify-between mt-auto">
-                        <div className={`flex text-sm text-gray-500 ${assessment.isPostponed ? 'flex-col items-start gap-1' : 'items-center'}`}>
-                          {assessment.isPostponed ? (
-                            <>
-                              <div className="flex items-center">
-                                <span className="line-through text-gray-400">{formatShortDateText(assessment.originalDueDate || assessment.dueDate)} {(assessment.originalClassTime || assessment.classTime)}교시</span>
-                                <span className="mx-1 font-bold text-red-500">➔</span>
-                              </div>
-                              <div className="flex items-center">
-                                <span className="font-bold text-red-600">{formatShortDateText(assessment.tempDueDate || assessment.dueDate)} {assessment.tempClassTime || assessment.classTime}교시</span>
-                                {Boolean(assessment.isAutoPredicted) && (
-                                  <span className="ml-1 text-xs text-orange-500 font-bold whitespace-nowrap">(자동예측)</span>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        {uniqueSubjects.map((subject, idx) => {
+                          const color = TILE_COLORS[idx % TILE_COLORS.length];
+                          const count = studentFiltered.filter(a => a.subject === subject).length;
+                          return (
+                            <button
+                              key={subject}
+                              type="button"
+                              onClick={() => setAssessmentSubjectView(subject)}
+                              className="flex flex-col items-center justify-center gap-1 p-4 rounded-xl border-2 transition-all hover:scale-[1.03] active:scale-[0.97] cursor-pointer shadow-sm hover:shadow-md"
+                              style={{
+                                background: color.bg,
+                                borderColor: color.activeBg + '40',
+                                color: color.text,
+                              }}
+                            >
+                              <span className="font-extrabold text-base leading-tight">{subject}</span>
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: color.activeBg + '20' }}>
+                                {count}건
+                              </span>
+                            </button>
+                          );
+                        })}
+                        {/* 전체 보기 타일 */}
+                        <button
+                          type="button"
+                          onClick={() => setAssessmentSubjectView('__ALL__')}
+                          className="flex flex-col items-center justify-center gap-1 p-4 rounded-xl border-2 border-slate-200 bg-slate-50 text-slate-600 transition-all hover:scale-[1.03] active:scale-[0.97] cursor-pointer shadow-sm hover:shadow-md hover:bg-slate-100"
+                        >
+                          <span className="font-extrabold text-base leading-tight">전체</span>
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-200">
+                            {studentFiltered.length}건
+                          </span>
+                        </button>
+                      </div>
+                    )}
+                  </CardContent>
+                </>
+              );
+            } else {
+              // ===== PAGE 2: 과목 상세 카드 목록 =====
+              const isAll = assessmentSubjectView === '__ALL__';
+              const filtered = isAll
+                ? studentFiltered
+                : studentFiltered.filter(a => a.subject === assessmentSubjectView);
+              const subjectLabel = isAll ? '전체' : assessmentSubjectView;
+
+              const fmtShort = (d: string) => {
+                const p = d.split('-');
+                return `${parseInt(p[1])}/${parseInt(p[2])}`;
+              };
+
+              return (
+                <>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2">
+                        {subjectLabel} 수행평가
+                        <span className="text-sm font-medium text-gray-400">({filtered.length}건)</span>
+                      </CardTitle>
+                      <button
+                        type="button"
+                        onClick={() => setAssessmentSubjectView(null)}
+                        className="flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-blue-50"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        돌아가기
+                      </button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {filtered.length > 0 ? (
+                        filtered.map((assessment) => {
+                          const isHomework = !!assessment.endDate;
+                          const effDate = assessment.tempDueDate || assessment.dueDate;
+                          const diffDate = Math.ceil((new Date(effDate).getTime() - new Date(todayStr).getTime()) / (1000 * 60 * 60 * 24));
+                          const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
+                          const isToday = diffDate === 0;
+
+                          const voteInfo = votesData?.votes?.[String(assessment.id)];
+                          let cardBg = isToday ? '#fef2f2' : '#ffffff';
+                          if (voteInfo && !isToday && !isHomework) {
+                            const net = (voteInfo.helpful || 0) - (voteInfo.distrust || 0);
+                            if (net > 0) {
+                              const mixColor = settings?.assessment_positive_color || '#22c55e';
+                              const ratio = Math.min(100, parseInt(settings?.assessment_positive_ratio || '30')) / 100;
+                              const scaled = Math.min(1, (voteInfo.helpful || 0) / 10) * ratio;
+                              const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
+                              const b = p('#ffffff'), m = p(mixColor);
+                              cardBg = '#' + b.map((c, i) => Math.round(c*(1-scaled)+m[i]*scaled).toString(16).padStart(2,'0')).join('');
+                            } else if (net < 0) {
+                              const mixColor = settings?.assessment_negative_color || '#9ca3af';
+                              const ratio = Math.min(100, parseInt(settings?.assessment_negative_ratio || '40')) / 100;
+                              const scaled = Math.min(1, (voteInfo.distrust || 0) / 10) * ratio;
+                              const p = (h: string) => { const x = h.replace('#',''); return [parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]; };
+                              const b = p('#ffffff'), m = p(mixColor);
+                              cardBg = '#' + b.map((c, i) => Math.round(c*(1-scaled)+m[i]*scaled).toString(16).padStart(2,'0')).join('');
+                            }
+                          }
+
+                          return (
+                            <div
+                              key={assessment.id}
+                              className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col h-full ${isToday ? 'border-red-200' : ''}`}
+                              style={{
+                                backgroundColor: cardBg,
+                                backgroundImage: assessment.isPostponed ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.05) 10px, rgba(239, 68, 68, 0.05) 20px)' : 'none'
+                              }}
+                              onClick={() => {
+                                if (isHomework) return;
+                                const aDate = new Date(assessment.dueDate);
+                                const day = aDate.getDay();
+                                const weekdayIdx = day === 0 ? 6 : day - 1;
+                                if (weekdayIdx >= 0 && weekdayIdx <= 4 && assessment.classTime) {
+                                  const cellId = `cell-${weekdayIdx}-${assessment.classTime}`;
+                                  const element = document.getElementById(cellId);
+                                  if (element) {
+                                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    element.classList.add('highlight-cell');
+                                    setTimeout(() => element.classList.remove('highlight-cell'), 2000);
+                                  }
+                                }
+                              }}
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-1 flex-wrap mb-1">
+                                    <span className="font-bold text-lg text-blue-600">
+                                      {assessment.subject}
+                                    </span>
+                                    {assessment.isTeacherCreated === 1 && (
+                                      <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold border border-emerald-200 whitespace-nowrap">
+                                        선생님 직접 등록
+                                      </span>
+                                    )}
+                                    {isHomework ? (
+                                      <span className="text-sm px-2 py-0.5 rounded-full bg-blue-600 text-white font-bold">
+                                        숙제
+                                      </span>
+                                    ) : assessment.description ? (
+                                      <span className="text-sm px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                                        {assessment.description}
+                                      </span>
+                                    ) : null}
+                                    {!assessment.isPostponed && (
+                                      <span className={`text-base font-bold ${isToday ? 'text-red-600' : 'text-gray-500'} ml-1`}>
+                                        {dDay}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {assessment.isPostponed && Boolean(assessment.isAutoPredicted) && (
+                                    <div className="text-red-500 text-sm font-bold mt-0.5">
+                                      시간표 변경
+                                    </div>
+                                  )}
+                                </div>
+                                {grade && classNum && studentNumber && (
+                                  <div className="flex items-center gap-2 flex-shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+                                    {/* 땡큐 버튼: 항상 표시 (당일형/숙제형/선생님등록 모두) */}
+                                    <button
+                                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                        votesData?.myVotes?.[String(assessment.id)] === 'helpful'
+                                          ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
+                                          : 'bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-green-600'
+                                      }`}
+                                      onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'helpful' }); e.currentTarget.blur(); }}
+                                      disabled={voteMutation.isPending}
+                                    >
+                                      <ThumbsUp className="w-4 h-4" />
+                                      <span>땡큐</span>
+                                      <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.helpful || 0}</span>
+                                    </button>
+                                    {/* 가짜 버튼: 학생 등록(isTeacherCreated !== 1)이고 숙제형이 아닌 경우에만 표시 */}
+                                    {!isHomework && assessment.isTeacherCreated !== 1 && (
+                                      <button
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                          votesData?.myVotes?.[String(assessment.id)] === 'distrust'
+                                            ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
+                                            : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600'
+                                        }`}
+                                        onClick={(e) => { voteMutation.mutate({ assessmentId: assessment.id, vote: 'distrust' }); e.currentTarget.blur(); }}
+                                        disabled={voteMutation.isPending}
+                                      >
+                                        <X className="w-4 h-4" />
+                                        <span>가짜</span>
+                                        <span className="font-bold">{votesData?.votes?.[String(assessment.id)]?.distrust || 0}</span>
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </div>
-                            </>
-                          ) : (
-                            <>
-                              <span>{assessment.dueDate}</span>
-                              <span className="mx-2">|</span>
-                              <span>{assessment.classTime}교시</span>
-                            </>
-                          )}
+                              <p className="text-gray-700 mb-2">{assessment.title}</p>
+                              <div className="flex items-end justify-between mt-auto">
+                                <div className={`flex text-sm text-gray-500 ${assessment.isPostponed ? 'flex-col items-start gap-1' : 'items-center'}`}>
+                                  {isHomework ? (
+                                    <span className="font-bold text-blue-700">
+                                      {fmtShort(assessment.startDate!)} ~ {fmtShort(assessment.endDate!)}
+                                    </span>
+                                  ) : assessment.isPostponed ? (
+                                    <>
+                                      <div className="flex items-center">
+                                        <span className="line-through text-gray-400">{formatShortDateText(assessment.originalDueDate || assessment.dueDate)} {(assessment.originalClassTime || assessment.classTime)}교시</span>
+                                        <span className="mx-1 font-bold text-red-500">➔</span>
+                                      </div>
+                                      <div className="flex items-center">
+                                        <span className="font-bold text-red-600">{formatShortDateText(assessment.tempDueDate || assessment.dueDate)} {assessment.tempClassTime || assessment.classTime}교시</span>
+                                        {Boolean(assessment.isAutoPredicted) && (
+                                          <span className="ml-1 text-xs text-orange-500 font-bold whitespace-nowrap">(자동예측)</span>
+                                        )}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span>{assessment.dueDate}</span>
+                                      <span className="mx-2">|</span>
+                                      <span>{assessment.classTime}교시</span>
+                                    </>
+                                  )}
+                                </div>
+                                {!isHomework && assessment.isPostponed && assessment.isTeacherCreated !== 1 && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-600 border-red-200 hover:bg-red-50 h-7 text-xs px-2 shadow-sm ml-2 shrink-0 pointer-events-auto"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (!checkStudentPermission(assessment.grade)) return;
+                                      setRelocatingAssessment(assessment);
+                                      setPendingRelocation(null);
+                                      window.scrollTo({ top: 0, behavior: "smooth" });
+                                    }}
+                                  >
+                                    날짜 바꾸기
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="col-span-full text-center py-12 text-gray-500">
+                          등록된 수행평가가 없습니다.
+                          <br />
+                          <span className="text-sm">시간표에서 과목을 클릭하여 추가하세요.</span>
                         </div>
-                        {assessment.isPostponed && assessment.isTeacherCreated !== 1 && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="text-red-600 border-red-200 hover:bg-red-50 h-7 text-xs px-2 shadow-sm ml-2 shrink-0 pointer-events-auto"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!checkStudentPermission(assessment.grade)) return;
-                              setRelocatingAssessment(assessment);
-                              setPendingRelocation(null);
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
-                          >
-                            날짜 바꾸기
-                          </Button>
-                        )}
-                      </div>
+                      )}
                     </div>
-                  );
-                })
-            ) : (
-              <div className="col-span-full text-center py-12 text-gray-500">
-                이번 주 등록된 수행평가가 없습니다.
-                <br />
-                <span className="text-sm">시간표에서 과목을 클릭하여 추가하세요.</span>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                  </CardContent>
+                </>
+              );
+            }
+          })()}
+        </Card>
       )}
-      <div className="mt-2 flex justify-end">
+
+      {/* ===== 선생님 직접게시 섹션 ===== */}
+      {!isRestricted && (() => {
+        const activeTeacherList: string[] = Array.isArray(settings?.active_teachers) ? settings.active_teachers : [];
+        if (activeTeacherList.length === 0) return null;
+
+        // 이용중인 교사별로 등록된 수행평가에서 과목 추출
+        const teacherSubjects: { teacher: string; subjects: string[] }[] = activeTeacherList
+          .map((teacherName: string) => {
+            const subjects = Array.from(new Set(
+              (allAssessments as any[] || [])
+                .filter((a: any) => a.teacher === teacherName)
+                .map((a: any) => a.subject as string)
+                .filter(Boolean)
+            )) as string[];
+            return { teacher: teacherName, subjects };
+          })
+          .filter(t => t.subjects.length > 0);
+
+        if (teacherSubjects.length === 0) return null;
+
+        return (
+          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-emerald-700 font-extrabold text-sm flex items-center gap-1.5">
+                📋 선생님 직접게시
+              </span>
+              <span className="text-emerald-600/70 text-xs font-medium hidden sm:inline">이 과목은 선생님이 직접 등록·관리합니다</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {teacherSubjects.map(({ teacher, subjects }) =>
+                subjects.map(subject => (
+                  <span
+                    key={`${teacher}-${subject}`}
+                    className="inline-flex items-center gap-1.5 bg-white border border-emerald-300 text-emerald-900 rounded-full px-3 py-1 text-xs font-bold shadow-sm"
+                  >
+                    <span>{subject}</span>
+                    <span className="text-emerald-500 font-semibold text-[10px]">{teacher}</span>
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      <div className="mt-2 flex justify-end items-center gap-3">
+        <Link href="/privacy">
+          <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-transparent text-xs font-normal h-auto p-0">
+            개인정보처리방침
+          </Button>
+        </Link>
+        <span className="text-gray-300 text-xs select-none">·</span>
         <Link href="/admin">
           <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 hover:bg-transparent text-xs font-normal h-auto p-0">
             관리사무소
@@ -3390,7 +3693,7 @@ export default function Dashboard() {
       {/* Custom Relocation Action Bar */}
       {relocatingAssessment && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-red-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] p-4 z-[9999] animate-in slide-in-from-bottom-2 duration-300">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5 text-red-600" />
@@ -3406,10 +3709,10 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 w-full md:w-auto">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <Button 
                 variant="outline" 
-                className="flex-1 md:flex-none hover:bg-gray-50"
+                className="flex-1 sm:flex-none hover:bg-gray-50"
                 onClick={() => {
                   setRelocatingAssessment(null);
                   setPendingRelocation(null);
@@ -3419,7 +3722,7 @@ export default function Dashboard() {
                 취소
               </Button>
               <Button 
-                className="flex-1 md:flex-none bg-red-600 hover:bg-red-700 text-white transition-colors"
+                className="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white transition-colors"
                 disabled={!pendingRelocation || isRelocatingUpdating || updateMutation.isPending}
                 onClick={handleRelocationSubmit}
               >

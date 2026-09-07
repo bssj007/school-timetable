@@ -3,6 +3,13 @@ import { useLocation } from "wouter";
 import { getTeacherNameCookie } from "@/components/RoleSelectDialog";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 
+// 비영어(한글 등 조합 문자) 제거 필터
+// type="text" + WebkitTextSecurity 방식 사용 시에도 IME 확정 후 한글이 남을 수 있으므로
+// onChange 에서 직접 제거한다
+function stripKorean(val: string): string {
+  return val.replace(/[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F\uFFA0-\uFFDC]/g, "");
+}
+
 export default function TeacherAccount() {
   const [, setLocation] = useLocation();
   const { teacherName: ctxTeacherName } = useUserConfig();
@@ -12,12 +19,37 @@ export default function TeacherAccount() {
   });
 
   const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [isChanging, setIsChanging] = useState(false);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+
+  // 현재 비밀번호 표시 관련
+  const [currentPw, setCurrentPw] = useState<string | null>(null);
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [isLoadingPw, setIsLoadingPw] = useState(false);
+  const [currentPwError, setCurrentPwError] = useState("");
+
+  const handleShowCurrentPassword = async () => {
+    if (!teacherName) { setCurrentPwError("선생님 계정명을 확인할 수 없습니다."); return; }
+    setIsLoadingPw(true);
+    setCurrentPwError("");
+    setCurrentPw(null);
+    try {
+      const res = await fetch(`/api/teacher-password?name=${encodeURIComponent(teacherName)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "조회 실패");
+      setCurrentPw(data.password);
+      setShowCurrentPw(true);
+    } catch (err: any) {
+      setCurrentPwError(err.message || "오류가 발생했습니다.");
+    } finally {
+      setIsLoadingPw(false);
+    }
+  };
 
   // body 배경을 강제로 순수 흰색(#ffffff)으로 리셋
   useEffect(() => {
@@ -91,7 +123,6 @@ export default function TeacherAccount() {
         },
         body: JSON.stringify({
           teacherName,
-          currentPassword,
           newPassword,
         }),
       });
@@ -102,7 +133,6 @@ export default function TeacherAccount() {
       }
 
       setMessage(data.message || "비밀번호가 성공적으로 변경되었습니다.");
-      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setShowPasswordForm(false);
@@ -115,10 +145,27 @@ export default function TeacherAccount() {
     }
   };
 
+  // 비밀번호 입력용 style 헬퍼 — type=text + WebkitTextSecurity 방식으로 한글 IME 우회
+  const pwInputStyle = (show: boolean): React.CSSProperties => ({
+    WebkitTextSecurity: show ? "none" : "disc",
+    fontFamily: "sans-serif",
+    fontSize: 14,
+    padding: "6px 10px",
+    border: "1px solid #ccc",
+    borderRadius: 4,
+    outline: "none",
+    flex: 1,
+    boxSizing: "border-box",
+  } as React.CSSProperties);
+
   return (
     <div style={{ backgroundColor: "#ffffff", minHeight: "100vh", padding: "20px", color: "#000000", fontFamily: "sans-serif" }}>
       <div>
-        <button type="button" onClick={handleBack}>
+        <button
+          type="button"
+          onClick={handleBack}
+          style={{ border: "1px solid #888", borderRadius: 4, padding: "4px 12px", cursor: "pointer", background: "#fff" }}
+        >
           돌아가기
         </button>
       </div>
@@ -136,65 +183,138 @@ export default function TeacherAccount() {
 
       {!showPasswordForm ? (
         <div>
-          <button
-            type="button"
-            onClick={() => {
-              setShowPasswordForm(true);
-              setMessage("");
-              setErrorMessage("");
-            }}
-          >
-            비밀번호 변경
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setShowPasswordForm(true);
+                setMessage("");
+                setErrorMessage("");
+                setCurrentPw(null);
+                setCurrentPwError("");
+              }}
+              style={{ border: "1px solid #888", borderRadius: 4, padding: "4px 12px", cursor: "pointer", background: "#fff" }}
+            >
+              비밀번호 변경
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (currentPw !== null) {
+                  // 이미 조회됨 → 표시/숨기기 토글
+                  setShowCurrentPw(v => !v);
+                } else {
+                  handleShowCurrentPassword();
+                }
+              }}
+              disabled={isLoadingPw}
+              style={{ border: "1px solid #888", borderRadius: 4, padding: "4px 12px", cursor: isLoadingPw ? "not-allowed" : "pointer", background: "#fff" }}
+            >
+              {isLoadingPw ? "조회 중..." : currentPw !== null ? (showCurrentPw ? "비밀번호 숨기기" : "비밀번호 표시") : "현재 비밀번호 표시"}
+            </button>
+          </div>
+
+          {/* 현재 비밀번호 표시 영역 */}
+          {currentPwError && (
+            <p style={{ color: "red", marginTop: 8, fontSize: 13 }}>{currentPwError}</p>
+          )}
+          {currentPw !== null && showCurrentPw && (
+            <div style={{ marginTop: 10, padding: "8px 12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 13, color: "#374151" }}>현재 비밀번호:</span>
+              <code style={{ fontSize: 15, fontWeight: 700, letterSpacing: 1, color: "#111827", background: "#e5e7eb", padding: "2px 8px", borderRadius: 4 }}>
+                {currentPw}
+              </code>
+            </div>
+          )}
         </div>
       ) : (
         <div>
           <form onSubmit={handleChangePassword}>
-            <div>
-              <label htmlFor="current-password">현재 비밀번호: </label>
-              <input
-                id="current-password"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="현재 비밀번호 (기본: 관리)"
-              />
+            {/* 새 비밀번호 */}
+            <div style={{ marginBottom: 12 }}>
+              <label htmlFor="new-password" style={{ display: "block", marginBottom: 4 }}>새 비밀번호: </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input
+                  id="new-password"
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(stripKorean(e.target.value))}
+                  placeholder="새 비밀번호"
+                  autoComplete="new-password"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  style={pwInputStyle(showNewPw)}
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowNewPw(v => !v)}
+                  style={{ border: "1px solid #ccc", borderRadius: 4, padding: "4px 8px", cursor: "pointer", background: "#f5f5f5", whiteSpace: "nowrap", fontSize: 12 }}
+                >
+                  {showNewPw ? "숨기기" : "표시"}
+                </button>
+              </div>
             </div>
-            <br />
-            <div>
-              <label htmlFor="new-password">새 비밀번호: </label>
-              <input
-                id="new-password"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="새 비밀번호"
-              />
+
+            {/* 새 비밀번호 확인 */}
+            <div style={{ marginBottom: 16 }}>
+              <label htmlFor="confirm-password" style={{ display: "block", marginBottom: 4 }}>새 비밀번호 확인: </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input
+                  id="confirm-password"
+                  type="text"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(stripKorean(e.target.value))}
+                  placeholder="새 비밀번호 확인"
+                  autoComplete="new-password"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  style={pwInputStyle(showConfirmPw)}
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowConfirmPw(v => !v)}
+                  style={{ border: "1px solid #ccc", borderRadius: 4, padding: "4px 8px", cursor: "pointer", background: "#f5f5f5", whiteSpace: "nowrap", fontSize: 12 }}
+                >
+                  {showConfirmPw ? "숨기기" : "표시"}
+                </button>
+              </div>
             </div>
-            <br />
-            <div>
-              <label htmlFor="confirm-password">새 비밀번호 확인: </label>
-              <input
-                id="confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="새 비밀번호 확인"
-              />
-            </div>
-            <br />
+
             <div style={{ display: "flex", gap: "8px" }}>
-              <button type="submit" disabled={isChanging}>
+              <button
+                type="submit"
+                disabled={isChanging}
+                style={{
+                  border: "1px solid #1a56db",
+                  borderRadius: 4,
+                  padding: "6px 16px",
+                  cursor: isChanging ? "not-allowed" : "pointer",
+                  background: isChanging ? "#c7d2fe" : "#1a56db",
+                  color: "#fff",
+                  fontWeight: 600,
+                }}
+              >
                 {isChanging ? "변경 중..." : "확인 (변경 완료)"}
               </button>
               <button
                 type="button"
                 onClick={() => {
                   setShowPasswordForm(false);
-                  setCurrentPassword("");
                   setNewPassword("");
                   setConfirmPassword("");
                   setErrorMessage("");
+                }}
+                style={{
+                  border: "1px solid #888",
+                  borderRadius: 4,
+                  padding: "6px 16px",
+                  cursor: "pointer",
+                  background: "#fff",
+                  color: "#333",
                 }}
               >
                 취소

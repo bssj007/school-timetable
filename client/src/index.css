@@ -3,6 +3,8 @@
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant capturing (&:is(body.capturing *));
+@custom-variant wide (@media (min-aspect-ratio: 1/1));
+@custom-variant narrow (@media (max-aspect-ratio: 1/1));
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -115,16 +117,44 @@
 }
 
 @layer base {
-  * {
+  *,
+  *::before,
+  *::after {
     @apply border-border outline-ring/50;
+    -webkit-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: none !important;
+    -ms-text-size-adjust: 100% !important;
+    text-size-adjust: none !important;
   }
 
   body {
     @apply bg-background text-foreground;
+    max-height: 999999px; /* Gecko & WebKit font inflation killer */
+    -webkit-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: none !important;
+    -ms-text-size-adjust: 100% !important;
+    text-size-adjust: none !important;
   }
 
   html, body, #root {
     height: 100%;
+  }
+
+  /* 모바일 브라우저 자동 폰트 크기 조정 방지 (Chrome, Samsung Internet, Whale, Safari, Firefox 전 브라우저 공통) */
+  html {
+    max-height: 999999px;
+    -webkit-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: none !important;
+    -ms-text-size-adjust: 100% !important;
+    text-size-adjust: none !important;
+  }
+
+  /* 테이블 및 셀 내에서 모든 브라우저 엔진의 폰트 비대화/부스팅 방지 */
+  table, thead, tbody, tfoot, tr, th, td {
+    -webkit-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: none !important;
+    -ms-text-size-adjust: 100% !important;
+    text-size-adjust: none !important;
   }
 
   button:not(:disabled),
@@ -164,10 +194,9 @@
     padding-right: 1rem;
   }
 
-  .flex {
-    min-height: 0;
-    min-width: 0;
-  }
+  /* .flex 전역 min-height/min-width 오버라이드 제거:
+   * Firefox의 Flexbox 계산과 충돌하여 모바일 Firefox에서 레이아웃 깨짐 유발.
+   * 필요한 경우 개별 컴포넌트에 직접 min-h-0 / min-w-0 클래스를 추가할 것. */
 
   @media (min-width: 640px) {
     .container {
@@ -227,10 +256,45 @@
   }
 }
 
+/* PC 전용 UI 크기 90% 축소:
+ * 비표준 zoom 대신 표준 font-size를 :root에 적용 — Firefox/Chrome/Safari 모두 동일하게 동작.
+ * Tailwind의 rem 기반 크기 전체가 이 기준을 따르므로, UI 전체가 균일하게 90%로 적용됨. */
 @media (min-width: 1024px) {
-  body {
-    zoom: 0.9;
-    /* Site scale set to 90% for PC */
+  :root {
+    font-size: 90%;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Firefox 전용 모바일 UI 비대증 방지 및 정밀 보정
+ * ─────────────────────────────────────────────────────────────────────────────
+ * - Chrome, Safari, Samsung Internet, Whale 등 WebKit/Blink 일반 브라우저:
+ *   브라우저 표준 16px(1rem = 16px)를 100% 그대로 유지하여 일체 축소되지 않음.
+ * - Firefox (Gecko 엔진):
+ *   Android OS의 '글자 크기 크게' 설정 상속 및 Gecko 폰트 인플레이션으로 인해
+ *   발생하는 비정상적인 UI 비대증을 CSS 엔진 레벨에서 원천 억제하여
+ *   일반 브라우저와 완벽하게 동일한 쾌적한 비례감 제공.
+ */
+@supports (-moz-appearance: none) {
+  @media (max-width: 639px) {
+    :root {
+      font-size: 14px !important;
+    }
+  }
+  @media (min-width: 640px) and (max-width: 1023px) {
+    :root {
+      font-size: 15px !important;
+    }
+  }
+}
+
+/* JS 브라우저 감지 폴백 (동일 보정 적용) */
+html.is-firefox {
+  @media (max-width: 639px) {
+    font-size: 14px !important;
+  }
+  @media (min-width: 640px) and (max-width: 1023px) {
+    font-size: 15px !important;
   }
 }
 
@@ -366,7 +430,6 @@
   #timetable-container[data-print-theme="pink"] * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    color-adjust: exact !important;
   }
 
 
@@ -674,3 +737,86 @@ body.capturing #timetable-container[data-print-font-size="large"] td .md\:text-b
     color: inherit !important;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* /teacher 시간표 셀 내부 텍스트 (과목명, 반명 등) — 좁은화면 7% 확대             */
+/* (테두리 제외, 수행평가 내용 제외)                                            */
+/* -------------------------------------------------------------------------- */
+.teacher-cell-class-badge {
+  font-size: calc(0.83em * 1.07);
+}
+@media (min-aspect-ratio: 1/1) {
+  .teacher-cell-class-badge {
+    font-size: 0.83em;
+  }
+}
+
+.teacher-cell-subject-name {
+  font-size: calc(var(--base-subject-font, 1em) * 1.07);
+}
+@media (min-aspect-ratio: 1/1) {
+  .teacher-cell-subject-name {
+    font-size: var(--base-subject-font, 1em);
+  }
+}
+
+.teacher-cell-student-badge {
+  font-size: calc(0.79em * 1.07);
+}
+@media (min-aspect-ratio: 1/1) {
+  .teacher-cell-student-badge {
+    font-size: 0.79em;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* /teacher 좁은화면(태블릿/Pad 포함) 시간표 비율 조절: 가로 대비 세로 비율 완화    */
+/* (Pad 등 넓은 가로폭에서 과도하게 길어지지 않도록 비율을 완화하여 적당한 넙적함 허용)   */
+/* -------------------------------------------------------------------------- */
+@media not (min-aspect-ratio: 1/1) {
+  .teacher-timetable-card {
+    /* Fallback using vw */
+    --period-col-w: clamp(36px, 9.5vw, 50px);
+    --day-col-w: calc((100vw - 32px - var(--period-col-w)) / 5);
+    --narrow-cell-h: clamp(57px, calc(var(--day-col-w) * 0.72), 108px);
+
+    container-type: inline-size;
+  }
+
+  @supports (container-type: inline-size) {
+    .teacher-timetable-card {
+      --period-col-w: clamp(36px, 9.5cqw, 50px);
+      --day-col-w: calc((100cqw - var(--period-col-w)) / 5);
+      --narrow-cell-h: clamp(57px, calc(var(--day-col-w) * 0.72), 108px);
+    }
+  }
+
+  .teacher-timetable-row {
+    height: var(--narrow-cell-h, 57px);
+  }
+
+  .teacher-timetable-cell-wrapper {
+    min-height: var(--narrow-cell-h, 57px);
+    padding: clamp(3px, 0.7cqw, 6px) clamp(4px, 0.9cqw, 8px);
+  }
+
+  .teacher-period-col {
+    width: var(--period-col-w, 36px) !important;
+    min-width: var(--period-col-w, 36px) !important;
+  }
+
+  .teacher-table-th {
+    height: clamp(30px, 4.8cqw, 42px) !important;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* /teacher 좁은화면 상단 제목 ("교사용 수행평가 등록 시스템") 유연한 크기 조절       */
+/* (가용 공간 내에서 끊김 없이 꽉 차도록 최대 크기로 자동 스케일링)                  */
+/* -------------------------------------------------------------------------- */
+.teacher-narrow-title {
+  font-size: var(--title-font-size, clamp(15px, calc(7.5vw - 10px), 1.5rem));
+  letter-spacing: -0.025em;
+  white-space: nowrap;
+  line-height: 1.25;
+}

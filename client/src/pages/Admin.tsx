@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import { agent, shouldShowDownloadPage } from "@/lib/browserDetect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,22 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+
+declare const __BUILD_INFO__: {
+    commitSha: string;
+    commitShort: string;
+    branch: string;
+    buildTime: string;
+    buildTimeFormatted: string;
+} | undefined;
+
+const BUILD_INFO = typeof __BUILD_INFO__ !== 'undefined' ? __BUILD_INFO__ : {
+    commitSha: '',
+    commitShort: '',
+    branch: '',
+    buildTime: '',
+    buildTimeFormatted: '',
+};
 
 // Helper to resolve the semantic dataset mode globally
 export const getDatasetMode = (overrideVal?: string) => {
@@ -4553,10 +4570,10 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <div className="flex flex-col h-full gap-4">
                         <div className="flex gap-2 items-center pb-4 border-b">
                             <h3 className="text-lg font-bold flex-1 text-orange-600">⚠️ 미해결 문제</h3>
+                            <span className="text-xs text-slate-400">접속환경 · PWA 설정은 🌐 접속환경 탭으로 이전됨</span>
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <TargetClassDisplaySettings adminPassword={adminPassword} />
-                            <InstallButtonSettings adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}
@@ -6020,8 +6037,11 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
             if (!res.ok) throw new Error(data.error || "갱신 실패");
             return data;
         },
-        onSuccess: () => {
-            toast.success("식단 캐시가 갱신되었습니다.");
+        onSuccess: (data) => {
+            toast.success(data.message || "식단 캐시가 갱신되었습니다.");
+            if (data.errors && data.errors.length > 0) {
+                toast.warning(`스크래핑 오류 발생: ${data.errors.join(', ')}`);
+            }
             queryClient.invalidateQueries({ queryKey: ["meal"] });
         },
         onError: (err: Error) => {
@@ -6840,6 +6860,13 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         <CardDescription className="text-center">
                             관리자 암호를 입력하세요
                         </CardDescription>
+                        {(BUILD_INFO.commitShort || BUILD_INFO.branch || BUILD_INFO.buildTimeFormatted) && (
+                            <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 font-mono">
+                                <span className="font-semibold text-slate-600">{BUILD_INFO.commitShort || 'dev'}</span>
+                                {BUILD_INFO.branch && <span className="text-blue-600 font-medium">({BUILD_INFO.branch})</span>}
+                                {BUILD_INFO.buildTimeFormatted && <span className="text-slate-400">· {BUILD_INFO.buildTimeFormatted}</span>}
+                            </div>
+                        )}
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleLogin} className="space-y-4">
@@ -6913,12 +6940,35 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         <span className="md:hidden">초기화</span>
                     </Button>
                 </div>
-                {userIp && (
-                    <div className="self-end md:self-auto flex items-center gap-2 text-xs md:text-sm text-gray-500 font-mono bg-gray-50 px-3 py-1.5 md:px-4 md:py-2 rounded-lg border border-gray-200">
-                        <span className="text-gray-400">현재 IP:</span>
-                        <span className="font-bold text-gray-700">{userIp}</span>
-                    </div>
-                )}
+                <div className="self-end md:self-auto flex flex-wrap items-center gap-2">
+                    {/* Cloudflare Build Info */}
+                    {(BUILD_INFO.commitShort || BUILD_INFO.branch || BUILD_INFO.buildTimeFormatted) && (
+                        <div className="flex items-center gap-1.5 text-[11px] md:text-xs text-slate-500 font-mono bg-slate-50 px-2.5 py-1 md:px-3 md:py-1.5 rounded-lg border border-slate-200" title={`Build Time: ${BUILD_INFO.buildTimeFormatted}\nCommit: ${BUILD_INFO.commitSha}`}>
+                            <span className="text-slate-400 font-sans font-medium">빌드</span>
+                            {BUILD_INFO.commitShort && (
+                                <span className="font-bold text-slate-700">{BUILD_INFO.commitShort}</span>
+                            )}
+                            {BUILD_INFO.branch && (
+                                <>
+                                    <span className="text-slate-300">/</span>
+                                    <span className="text-blue-600 font-semibold">{BUILD_INFO.branch}</span>
+                                </>
+                            )}
+                            {BUILD_INFO.buildTimeFormatted && (
+                                <>
+                                    <span className="text-slate-300">·</span>
+                                    <span className="text-slate-500">{BUILD_INFO.buildTimeFormatted}</span>
+                                </>
+                            )}
+                        </div>
+                    )}
+                    {userIp && (
+                        <div className="flex items-center gap-2 text-xs md:text-sm text-gray-500 font-mono bg-gray-50 px-3 py-1.5 md:px-4 md:py-2 rounded-lg border border-gray-200">
+                            <span className="text-gray-400">현재 IP:</span>
+                            <span className="font-bold text-gray-700">{userIp}</span>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <Tabs defaultValue="assessments" className="w-full">
@@ -6962,6 +7012,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         기타
                     </TabsTrigger>
                     <TabsTrigger
+                        value="access-environment"
+                        className="data-[state=active]:bg-sky-100 data-[state=active]:text-sky-800 font-medium"
+                    >
+                        🌐 접속환경
+                    </TabsTrigger>
+                    <TabsTrigger
                         value="meal"
                         className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800"
                     >
@@ -6972,6 +7028,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-800 font-medium"
                     >
                         📋 교사용 성지수행
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="exam-schedule"
+                        className="data-[state=active]:bg-indigo-100 data-[state=active]:text-indigo-800 font-medium"
+                    >
+                        📅 시험일정
                     </TabsTrigger>
                 </TabsList>
 
@@ -7213,8 +7275,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                     </Card>
                 </TabsContent>
 
-                <TabsContent value="users">
-                    <div className="grid gap-6">
+                <TabsContent value="users" className="min-w-0 overflow-hidden">
+                    <div className="grid gap-6 min-w-0">
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-50/50 p-4 rounded-lg border">
                             <div className="relative w-full md:max-w-md">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -7239,16 +7301,23 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                 </Select>
                             </div>
                         </div>
-                        <Card>
+                        <Card className="min-w-0 overflow-hidden">
                             <CardHeader>
                                 <CardTitle>활성 사용자 ({timeRange === '24h' ? '최근 24시간' : timeRange === '7d' ? '최근 1주일' : '전체 사용자'})</CardTitle>
                                 <CardDescription>
                                     최근 접속한 IP 및 카카오 계정 목록입니다. 같은 학번의 여러 IP는 하나의 항목으로 묶입니다.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="min-w-0 overflow-hidden p-0 sm:p-6">
                                 {(() => {
                                     const isKnownUser = (user: IPProfile) => {
+                                        // 신규 row: browserKey 컬럼으로 판별
+                                        const bk = (user as any).browserKey;
+                                        if (bk !== undefined && bk !== null) {
+                                            const hasInfo = !!(user.grade && user.classNum);
+                                            return bk !== 'other' && hasInfo;
+                                        }
+                                        // 구버전 row fallback: recentUserAgents UA 키워드 검사
                                         if (!user.recentUserAgents || user.recentUserAgents.length === 0) return false;
                                         const knownKeywords = ['Mozilla', 'Chrome', 'Safari', 'Firefox', 'Edge', 'Opera', 'Whale', 'Kakao', 'iPhone', 'Android'];
                                         const hasKnownUA = user.recentUserAgents.some(ua => knownKeywords.some(keyword => ua.includes(keyword)));
@@ -7282,7 +7351,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     // --- Group known users by (name + student ID) = composite identity ---
                                     type UserGroup = {
                                         key: string;
-                                        studentName: string | null;   // 복합 식별자의 이름 부분
+                                        studentName: string | null;
+                                        teacherName: string | null;
                                         grade: number | null;
                                         classNum: number | null;
                                         studentNumber: number | null;
@@ -7325,10 +7395,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                             if (user.isBlocked) existing.isBlocked = true;
                                             if (user.hasElectives) existing.hasElectives = true;
                                             if (user.instructionDismissed) existing.instructionDismissed = true;
+                                            if (!existing.teacherName && (user as any).teacherName) existing.teacherName = (user as any).teacherName;
                                         } else {
                                             groupMap.set(key, {
                                                 key,
                                                 studentName: user.studentName ?? null,
+                                                teacherName: (user as any).teacherName ?? null,
                                                 grade: user.grade ?? null,
                                                 classNum: user.classNum ?? null,
                                                 studentNumber: user.studentNumber ?? null,
@@ -7403,6 +7475,24 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         });
                                     };
 
+                                    // ── 앱 사용 여부 배지 헬퍼 ──────────────────────────────
+                                    // isStandalone = PWA standalone / TWA/WebView 실행 여부
+                                    // os = 플랫폼 (ios/android/windows/macos/linux)
+                                    const renderAppBadge = (isStandalone: boolean | undefined, os: string | null | undefined) => {
+                                        if (!isStandalone) return <span className="text-gray-300 text-xs">-</span>;
+                                        const platform =
+                                            os === 'ios'     ? { label: 'iOS',     cls: 'bg-slate-800 text-white border-slate-700' } :
+                                            os === 'android' ? { label: 'Android', cls: 'bg-green-600 text-white border-green-700' } :
+                                            (os === 'windows' || os === 'macos' || os === 'linux')
+                                                             ? { label: 'PC',      cls: 'bg-blue-600 text-white border-blue-700' } :
+                                                               { label: 'PWA',     cls: 'bg-purple-600 text-white border-purple-700' };
+                                        return (
+                                            <Badge variant="secondary" className={`font-mono text-xs px-1.5 py-0 ${platform.cls}`}>
+                                                PWA·{platform.label}
+                                            </Badge>
+                                        );
+                                    };
+
                                     const IpSubRow = ({ user }: { user: IPProfile }) => (
                                         <TableRow className="bg-slate-50/80 text-xs">
                                             <TableCell className="pl-8 font-mono text-slate-500">
@@ -7414,7 +7504,25 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     ↳ {user.ip}
                                                 </Button>
                                             </TableCell>
-                                            <TableCell />
+                                            <TableCell>
+                                                {/* 선생님 이름 (해당 시) */}
+                                                {(user as any).teacherName ? (
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <div className="flex items-center gap-1">
+                                                            <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 px-1.5 py-0 h-4">
+                                                                선생님
+                                                            </Badge>
+                                                            <span className="font-bold text-sm text-slate-800">{(user as any).teacherName}</span>
+                                                        </div>
+                                                        {user.grade && user.classNum && (
+                                                            <div className="flex items-center gap-1">
+                                                                <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-500 border-slate-200 px-1.5 py-0 h-4">학생</Badge>
+                                                                <span className="text-xs text-slate-600">{user.studentName || '이름 없음'} · {user.grade}학년 {user.classNum}반</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : null}
+                                            </TableCell>
                                             <TableCell>
                                                 {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
                                                     user.kakaoAccounts.map((k, i) => (
@@ -7450,9 +7558,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     : <span className="text-gray-300">-</span>}
                                             </TableCell>
                                             <TableCell>
-                                                {user.isStandalone
-                                                    ? <Badge variant="secondary" className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200">설치됨</Badge>
-                                                    : <span className="text-gray-300">-</span>}
+                                                {renderAppBadge(user.isStandalone, (user as any).os)}
                                             </TableCell>
                                             <TableCell className="text-slate-400">
                                                 {user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}
@@ -7514,6 +7620,13 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     <TableCell>
                                                         {group.grade && group.classNum ? (
                                                             <div className="flex flex-col gap-0.5">
+                                                                {/* 선생님 이름 (동시 접속 시) */}
+                                                                {group.teacherName && (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 px-1.5 py-0 h-4">선생님</Badge>
+                                                                        <span className="font-bold text-sm text-amber-800">{group.teacherName}</span>
+                                                                    </div>
+                                                                )}
                                                                 {/* 이름 */}
                                                                 <div className="flex items-center gap-1.5">
                                                                     <span className="font-bold text-sm text-slate-800">
@@ -7530,6 +7643,14 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                     <Badge variant="outline" className="font-mono text-green-700 border-green-200 bg-green-50 text-xs">
                                                                         {group.grade}학년 {group.classNum}반{group.studentNumber ? ` ${group.studentNumber}번` : ''}
                                                                     </Badge>
+                                                                </div>
+                                                            </div>
+                                                        ) : group.teacherName ? (
+                                                            // 선생님만 있는 경우 (학생 정보 없음)
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <div className="flex items-center gap-1">
+                                                                    <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 px-1.5 py-0 h-4">선생님</Badge>
+                                                                    <span className="font-bold text-sm text-slate-800">{group.teacherName}</span>
                                                                 </div>
                                                             </div>
                                                         ) : <span className="text-gray-300 text-xs">-</span>}
@@ -7571,9 +7692,13 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         ) : <span className="text-gray-400 text-xs">-</span>}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {group.ips.some(ip => ip.isStandalone) ? (
-                                                            <Badge variant="secondary" className="font-mono bg-purple-50 text-purple-700 border-purple-200">설치됨</Badge>
-                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                        {(() => {
+                                                            const standalonePeer = group.ips.find(ip => ip.isStandalone);
+                                                            return renderAppBadge(
+                                                                !!standalonePeer,
+                                                                standalonePeer ? (standalonePeer as any).os : null
+                                                            );
+                                                        })()}
                                                     </TableCell>
                                                     <TableCell>
                                                         {group.lastAccess ? new Date(group.lastAccess + 'Z').toLocaleString() : '-'}
@@ -7652,7 +7777,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     return (
                                         <div className="space-y-6">
                                             <div className="rounded-md border overflow-x-auto">
-                                                <Table className="min-w-[1000px]">
+                                                <Table className="min-w-[1280px]">
                                                     <TableHeader>
                                                         <TableRow>
                                                             <TableHead className="w-[120px] min-w-[120px]">IP 주소</TableHead>
@@ -7696,7 +7821,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     </div>
                                                     {isOthersExpanded && (
                                                         <div className="bg-gray-50 border-t overflow-x-auto">
-                                                            <Table className="min-w-[1000px]">
+                                                            <Table className="min-w-[1280px]">
                                                                 <TableBody>
                                                                     {unknownUsers.map((user: IPProfile, idx: number) => (
                                                                         <TableRow key={idx}>
@@ -7745,9 +7870,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                                 ) : <span className="text-gray-400 text-xs">-</span>}
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                {user.isStandalone ? (
-                                                                                    <Badge variant="secondary" className="font-mono bg-purple-50 text-purple-700 border-purple-200">설치됨</Badge>
-                                                                                ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                                {renderAppBadge(user.isStandalone, (user as any).os)}
                                                                             </TableCell>
                                                                             <TableCell>{user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}</TableCell>
                                                                             <TableCell>
@@ -7862,12 +7985,24 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                     <EtcManager adminPassword={password} />
                 </TabsContent>
 
+                <TabsContent value="access-environment" className="space-y-4">
+                    <div className="flex items-center gap-2 pb-4 border-b">
+                        <h3 className="text-lg font-bold flex-1 text-sky-700">🌐 접속환경 감지 &amp; PWA 설치 설정</h3>
+                        <span className="text-xs text-slate-400 font-mono">browserDetect.ts → agent 싱글턴 기반</span>
+                    </div>
+                    <InstallButtonSettings adminPassword={password} />
+                </TabsContent>
+
                 <TabsContent value="meal" className="space-y-6">
                     <MealManager adminPassword={password} />
                 </TabsContent>
 
                 <TabsContent value="teacher-mgmt" className="space-y-6">
                     <TeacherMgmtManager adminPassword={password} />
+                </TabsContent>
+
+                <TabsContent value="exam-schedule" className="space-y-6">
+                    <ExamScheduleManager adminPassword={password} />
                 </TabsContent>
 
             </Tabs >
@@ -10013,6 +10148,52 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
         }
     }, [settingsData?.play_store_url, settingsData?.app_store_url]);
 
+    // IP별 디버그 모드 설정 (admin settings)
+    const { data: adminSettingsData } = useQuery({
+        queryKey: ["admin", "accessDebugSettings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 불러오기 실패");
+            return res.json();
+        }
+    });
+
+    const isAccessDebugEnabled = adminSettingsData?.access_debug_mode_enabled === "true";
+
+    interface DebugIpItem {
+        ip: string;
+        memo?: string;
+        mode: "manual" | "auto";
+    }
+
+    const [debugIpList, setDebugIpList] = useState<DebugIpItem[]>([]);
+    const [newIpInput, setNewIpInput] = useState("");
+    const [newMemoInput, setNewMemoInput] = useState("");
+    const [newModeInput, setNewModeInput] = useState<"manual" | "auto">("manual");
+
+    useEffect(() => {
+        if (adminSettingsData?.access_debug_ip_list) {
+            try {
+                const parsed = JSON.parse(adminSettingsData.access_debug_ip_list);
+                if (Array.isArray(parsed)) {
+                    setDebugIpList(
+                        parsed.map((item: any) =>
+                            typeof item === "string"
+                                ? { ip: item, memo: "", mode: "manual" }
+                                : { ip: item.ip, memo: item.memo || "", mode: item.mode || "manual" }
+                        )
+                    );
+                }
+            } catch (e) {
+                setDebugIpList([]);
+            }
+        } else {
+            setDebugIpList([]);
+        }
+    }, [adminSettingsData?.access_debug_ip_list]);
+
     const saveSettingMutation = useMutation({
         mutationFn: async (payload: Record<string, string>) => {
             const res = await fetch("/api/admin/settings", {
@@ -10027,6 +10208,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin", "installButtonSettings"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "accessDebugSettings"] });
             queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
             toast.success("설정이 저장되었습니다.");
         },
@@ -10044,50 +10226,149 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
     const saveAppStoreUrl = () =>
         saveSettingMutation.mutate({ app_store_url: appStoreUrl.trim() });
 
+    const saveDebugIpList = (nextList: DebugIpItem[]) => {
+        setDebugIpList(nextList);
+        saveSettingMutation.mutate({
+            access_debug_ip_list: JSON.stringify(nextList)
+        });
+    };
+
+    const addDebugIp = (ipToAdd?: string) => {
+        const ip = (ipToAdd || newIpInput).trim();
+        if (!ip) {
+            toast.error("IP 주소를 입력해주세요.");
+            return;
+        }
+        if (debugIpList.some(item => item.ip === ip)) {
+            toast.error("이미 등록된 IP 주소입니다.");
+            return;
+        }
+        const nextList: DebugIpItem[] = [
+            ...debugIpList,
+            { ip, memo: (ipToAdd ? "현재 관리자 기기" : newMemoInput.trim()), mode: newModeInput }
+        ];
+        saveDebugIpList(nextList);
+        if (!ipToAdd) {
+            setNewIpInput("");
+            setNewMemoInput("");
+        }
+        toast.success(`IP ${ip}가 디버그 목록에 추가되었습니다.`);
+    };
+
+    const removeDebugIp = (ipToRemove: string) => {
+        const nextList = debugIpList.filter(item => item.ip !== ipToRemove);
+        saveDebugIpList(nextList);
+        toast.success("IP가 삭제되었습니다.");
+    };
+
+    const updateIpMode = (ipToUpdate: string, newMode: "manual" | "auto") => {
+        const nextList = debugIpList.map(item =>
+            item.ip === ipToUpdate ? { ...item, mode: newMode } : item
+        );
+        saveDebugIpList(nextList);
+    };
+
+    const currentClientIp = settingsData?.client_ip || "";
+
+    // ── 접속제한 우회 (maintenance bypass) localStorage 헬퍼 ──────────────────────────────
+    // localStorage: 만료 없음 — 명시적으로 비활성화하기 전까지 영구 유지
+    type BypassKey = "chrome" | "samsung" | "safari" | "other" | "pwa_app" | "webview_app";
+
+    const readBypassCookie = (key: BypassKey): boolean => {
+        if (typeof window === "undefined") return false;
+        // localStorage 우선, 구형 쿠키 fallback
+        return localStorage.getItem(`maintenance_bypass_${key}`) === "1" ||
+            document.cookie.split(";").some((c) => c.trim() === `maintenance_bypass_${key}=1`);
+    };
+    const writeBypassCookie = (key: BypassKey, enable: boolean) => {
+        if (enable) {
+            localStorage.setItem(`maintenance_bypass_${key}`, "1");
+        } else {
+            localStorage.removeItem(`maintenance_bypass_${key}`);
+        }
+        // 구형 쿠키가 남아 있으면 함께 삭제 (마이그레이션 정리)
+        document.cookie = `maintenance_bypass_${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax`;
+    };
+
+    // ⚠️ Rules of Hooks: early return 이전에 선언해야 함
+    const [bypassState, setBypassState] = React.useState<Record<BypassKey, boolean>>(() => ({
+        chrome:      readBypassCookie("chrome"),
+        samsung:     readBypassCookie("samsung"),
+        safari:      readBypassCookie("safari"),
+        other:       readBypassCookie("other"),
+        pwa_app:     readBypassCookie("pwa_app"),
+        webview_app: readBypassCookie("webview_app"),
+    }));
+
+    const [bypassConfirm, setBypassConfirm] = React.useState<{
+        key: BypassKey;
+        enable: boolean;
+        label: string;
+    } | null>(null);
+
+    const requestBypassToggle = (key: BypassKey, enable: boolean, label: string) => {
+        setBypassConfirm({ key, enable, label });
+    };
+    const confirmBypassToggle = () => {
+        if (!bypassConfirm) return;
+        writeBypassCookie(bypassConfirm.key, bypassConfirm.enable);
+        setBypassState((prev) => ({ ...prev, [bypassConfirm.key]: bypassConfirm.enable }));
+        toast.success(
+            bypassConfirm.enable
+                ? `[${bypassConfirm.label}] 접속제한 우회가 설정되었습니다.`
+                : `[${bypassConfirm.label}] 접속제한 우회가 해제되었습니다.`
+        );
+        setBypassConfirm(null);
+    };
+
     if (isLoading) {
         return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
     }
 
-    // 현재 접속 브라우저 감지
+    // 현재 접속 환경 감지 — agent 싱글턴 (browserDetect.ts 3-Layer 단일 진실원천)
+    // agent = detect() 결과: Layer1(ClientHints) → Layer2(UA) → Layer3(Feature)
     const currentBrowserKey = (() => {
-        const ua = navigator.userAgent;
-        if (/SamsungBrowser/i.test(ua)) return "samsung_install_button_visible";
-        if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) return "safari_install_button_visible";
-        if (/Chrome/i.test(ua)) return "chrome_install_button_visible";
+        if (agent.browserKey === "samsung") return "samsung_install_button_visible";
+        if (agent.browserKey === "safari")  return "safari_install_button_visible";
+        if (agent.browserKey === "chrome")  return "chrome_install_button_visible";
         return "other_install_button_visible";
     })();
-
-    // 브라우저 행 정의
+    const currentDesktopOS = agent.desktopOS;   // null = 모바일
+    const currentIsMobile  = agent.isMobile;
     const browsers = [
         {
-            key: "chrome_install_button_visible",
+            key: "chrome_install_button_visible" as const,
+            bypassKey: "chrome" as BypassKey,
             label: "Chrome",
             icon: "🌐",
-            desc: "Android Chrome / 크로미움 계열",
+            desc: "Android Chrome / iOS Chrome / Google (모바일)",
             value: isChrome,
         },
         {
-            key: "samsung_install_button_visible",
+            key: "samsung_install_button_visible" as const,
+            bypassKey: "samsung" as BypassKey,
             label: "Samsung",
             icon: "📱",
-            desc: "삼성 인터넷 브라우저",
+            desc: "삼성 인터넷 브라우저 (Play Store)",
             value: isSamsung,
         },
         {
-            key: "safari_install_button_visible",
+            key: "safari_install_button_visible" as const,
+            bypassKey: "safari" as BypassKey,
             label: "Safari",
             icon: "🧭",
-            desc: "iOS Safari (Add to Home Screen)",
+            desc: "iOS·iPadOS Safari 홈화면 추가 (macOS 데스크톱 제외)",
             value: isSafari,
         },
         {
-            key: "other_install_button_visible",
+            key: "other_install_button_visible" as const,
+            bypassKey: "other" as BypassKey,
             label: "그외",
             icon: "❓",
-            desc: "위 3가지에 해당하지 않는 브라우저",
+            desc: "카카오톡·Opera·Firefox·Whale·Edge 등 모바일 브라우저",
             value: isOther,
         },
-    ] as const;
+    ];
 
     return (
         <div className="space-y-5 p-1">
@@ -10120,10 +10401,163 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                 </CardContent>
             </Card>
 
-            {/* 브라우저별 표 */}
+            {/* ── 감지 결과 테스트 패널 ──────────────────────────────────────────── */}
+            <Card className="border-2 border-indigo-200 bg-indigo-50">
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <span className="text-lg">🔍</span>
+                        현재 접속 환경 감지 결과
+                        <span className="text-xs font-normal text-indigo-500 ml-1">browserDetect.ts — detect()</span>
+                    </CardTitle>
+                    <CardDescription>
+                        3-Layer 통합 감지 함수가 반환한 AgentInfo 값입니다.
+                        사이트 전체의 버튼 표시/숨김 로직이 이 값을 기준으로 동작합니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {/* 감지 계층 배지 */}
+                    <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
+                            agent.detectionLayer === 1 ? "bg-blue-100 text-blue-700 border border-blue-300" :
+                            agent.detectionLayer === 2 ? "bg-green-100 text-green-700 border border-green-300" :
+                            "bg-gray-100 text-gray-600 border border-gray-300"
+                        }`}>
+                            {agent.detectionLayer === 1 ? "Layer 1 — UA Client Hints (Chromium)" :
+                             agent.detectionLayer === 2 ? "Layer 2 — UA 문자열 파싱" :
+                             "Layer 3 — CSS/JS 기능 감지 (Fallback)"}
+                        </span>
+                    </div>
+
+                    {/* AgentInfo 그리드 */}
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                        {([
+                            { label: "browserKey",     value: agent.browserKey,     highlight: true },
+                            { label: "isMobile",       value: String(agent.isMobile) },
+                            { label: "isDesktop",      value: String(agent.isDesktop) },
+                            { label: "isAndroid",      value: String(agent.isAndroid), highlight: agent.isAndroid },
+                            { label: "isIOS",          value: String(agent.isIOS),     highlight: agent.isIOS },
+                            { label: "isIOSSafari",    value: String(agent.isIOSSafari), highlight: agent.isIOSSafari },
+                            { label: "isIOSChrome",    value: String(agent.isIOSChrome), highlight: agent.isIOSChrome },
+                            { label: "isIOSOther",     value: String(agent.isIOSOther), highlight: agent.isIOSOther },
+                            { label: "desktopOS",      value: agent.desktopOS ?? "(null — 모바일)" },
+                            { label: "isIPad",         value: String(agent.isIPad) },
+                            { label: "isIPhone",       value: String(agent.isIPhone) },
+                            { label: "isInAppBrowser", value: String(agent.isInAppBrowser) },
+                            { label: "isKakaoTalk",    value: String(agent.isKakaoTalk), highlight: agent.isKakaoTalk },
+                            { label: "isInstalledApp",  value: String(agent.isInstalledApp), highlight: agent.isInstalledApp },
+                            { label: "iosVersion",     value: agent.iosVersion > 0 ? `v${agent.iosVersion}` : "(0 — 해당없음)", highlight: agent.iosVersion > 0 },
+                            { label: "isIOS26Plus",    value: String(agent.isIOS26Plus) },
+                            { label: "isIOS15Plus",    value: String(agent.isIOS15Plus) },
+                            { label: "isIOS13Plus",    value: String(agent.isIOS13Plus) },
+                        ] as const).map(({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) => (
+                            <div key={label} className="flex flex-col gap-0.5">
+                                <span className="text-xs text-gray-500 font-mono">{label}</span>
+                                <span className={`font-mono font-semibold ${highlight ? "text-indigo-700" : value === "true" ? "text-emerald-600" : value === "false" ? "text-gray-400" : "text-gray-800"}`}>
+                                    {value}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* shouldShowDownloadPage 결과 */}
+                    <div className="border-t pt-3">
+                        <p className="text-xs text-gray-500 mb-1 font-mono">shouldShowDownloadPage()</p>
+                        {shouldShowDownloadPage()
+                            ? <span className="inline-flex items-center gap-1 text-sm font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-3 py-1 rounded-full">✅ 다운로드 유도 페이지 표시 대상</span>
+                            : <span className="inline-flex items-center gap-1 text-sm font-bold text-gray-500 bg-gray-100 border border-gray-200 px-3 py-1 rounded-full">— 표시 안함 (PC·이미설치 등)</span>
+                        }
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* ── PC 환경 섹션 ─────────────────────────────────────────────── */}
+            <Card>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <span className="text-lg">🖥️</span>
+                        PC 환경 <span className="text-sm font-normal text-gray-500 ml-1">— 버튼 항상 미표시</span>
+                    </CardTitle>
+                    <CardDescription>
+                        Windows·macOS·Linux 데스크톱/노트북 환경에서는 브라우저에 관계없이 앱 다운로드 버튼이 표시되지 않습니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b bg-gray-50">
+                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">운영체제</th>
+                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">다운로드 버튼</th>
+                                    <th className="text-center px-4 py-2.5 font-semibold text-gray-600">현재 환경</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {([
+                                    { os: "windows" as const, label: "Windows", icon: "🪟", desc: "Windows 10/11 PC·노트북" },
+                                    { os: "macos"   as const, label: "macOS",   icon: "🍏", desc: "Mac·MacBook (iPad 제외)" },
+                                    { os: "linux"   as const, label: "Linux",   icon: "🐧", desc: "Linux 데스크톱 (ChromeOS 제외)" },
+                                ] as const).map((row) => (
+                                    <tr key={row.os} className={`border-b last:border-b-0 transition-colors ${(currentDesktopOS === row.os && !agent.isInstalledApp) ? "bg-amber-50" : "hover:bg-gray-50"}`}>
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-base">{row.icon}</span>
+                                                <div>
+                                                    <p className="font-semibold text-gray-800">{row.label}</p>
+                                                    <p className="text-xs text-gray-500">{row.desc}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
+                                                🚫 항상 미표시
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {currentDesktopOS === row.os && !agent.isInstalledApp && (
+                                                <span className="inline-flex flex-col items-center gap-0.5 text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+                                                    🖥️ 현재
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {/* 설치된 앱 실행 (데스크톱 PWA) — agent.isInstalledApp */}
+                                <tr className={`border-b last:border-b-0 transition-colors ${agent.isInstalledApp && !agent.isMobile ? "bg-purple-50" : "hover:bg-gray-50"}`}>
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">📲</span>
+                                            <div>
+                                                <p className="font-semibold text-gray-800">설치된 앱 (데스크톱)</p>
+                                                <p className="text-xs text-gray-500">Chrome PWA 앱으로 실행 중 · display-mode: standalone</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
+                                            🚫 항상 미표시
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                        {agent.isInstalledApp && !agent.isMobile && (
+                                            <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100 border border-purple-300 px-2 py-0.5 rounded-full">
+                                                📲 현재 (앱)
+                                            </span>
+                                        )}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* ── 모바일 환경 섹션 ─────────────────────────────────────────── */}
             <Card className={!isPwaButtonVisible ? "opacity-40 pointer-events-none" : ""}>
                 <CardHeader className="pb-3">
-                    <CardTitle className="text-base">브라우저별 앱 다운로드 버튼 표시</CardTitle>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <span className="text-lg">📱</span>
+                        모바일 — 브라우저별 표시 설정
+                    </CardTitle>
                     <CardDescription>
                         각 모바일 브라우저 환경별로 버튼 표시 여부를 개별 제어합니다.
                         전체 서킷브레이커가 OFF이면 이 설정은 무시됩니다.
@@ -10134,17 +10568,20 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b bg-gray-50">
-                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">브라우저</th>
-                                    <th className="text-center px-4 py-2.5 font-semibold text-gray-600">표시</th>
-                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">상태</th>
-                                    <th className="text-center px-4 py-2.5 font-semibold text-gray-600">현재 환경</th>
+                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">브라우저 / 환경</th>
+                                    <th className="text-center px-3 py-2.5 font-semibold text-gray-600">표시</th>
+                                    <th className="text-left px-3 py-2.5 font-semibold text-gray-600">상태</th>
+                                    <th className="text-center px-3 py-2.5 font-semibold text-gray-600">현재 환경</th>
+                                    <th className="text-center px-3 py-2.5 font-semibold text-gray-600">
+                                        <span className="inline-flex items-center gap-1">🔓 접속제한 우회</span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {browsers.map((browser) => {
-                                    const isCurrent = browser.key === currentBrowserKey;
+                                    const isCurrent = browser.key === currentBrowserKey && currentIsMobile && !agent.isInstalledApp;
                                     return (
-                                    <tr key={browser.key} className={`border-b last:border-b-0 transition-colors ${isCurrent ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}>
+                                    <tr key={browser.key} className={`border-b last:border-b-0 transition-colors ${isCurrent ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-gray-50"}`}>
                                         <td className="px-4 py-3">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-base">{browser.icon}</span>
@@ -10154,7 +10591,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-center">
+                                        <td className="px-3 py-3 text-center">
                                             <Switch
                                                 id={`install-toggle-${browser.key}`}
                                                 checked={browser.value}
@@ -10162,22 +10599,133 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                                 disabled={saveSettingMutation.isPending}
                                             />
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-3 py-3">
                                             {browser.value
                                                 ? <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">✅ 표시</span>
                                                 : <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">숨김</span>
                                             }
                                         </td>
-                                        <td className="px-4 py-3 text-center">
+                                        <td className="px-3 py-3 text-center">
                                             {isCurrent && (
                                                 <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full">
                                                     📍 현재
                                                 </span>
                                             )}
                                         </td>
+                                        <td className="px-3 py-3 text-center">
+                                            {(() => {
+                                                const isBypassed = bypassState[browser.bypassKey];
+                                                return (
+                                                    <button
+                                                        id={`bypass-btn-${browser.bypassKey}`}
+                                                        type="button"
+                                                        onClick={() => requestBypassToggle(browser.bypassKey, !isBypassed, browser.label)}
+                                                        className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
+                                                            isBypassed
+                                                                ? "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200"
+                                                                : "bg-white text-rose-700 border-rose-300 hover:bg-rose-50"
+                                                        }`}
+                                                    >
+                                                        {isBypassed ? "✅ 우회 해제" : "🚫 접속 우회"}
+                                                    </button>
+                                                );
+                                            })()}
+                                        </td>
                                     </tr>
                                     );
                                 })}
+                                {/* ── 설치된 앱 행 1: PWA 홈화면 추가 */}
+                                <tr className={`border-b transition-colors ${agent.isInstalledApp && agent.installedAppType === "pwa" && agent.isMobile ? "bg-purple-50 hover:bg-purple-100" : "hover:bg-gray-50"}`}>
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">🏠</span>
+                                            <div>
+                                                <p className="font-semibold text-gray-800">PWA 홈화면 추가 앱</p>
+                                                <p className="text-xs text-gray-500">display-mode: standalone · iOS navigator.standalone</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-3 text-center">
+                                        <span className="text-xs text-gray-400 font-mono">—</span>
+                                    </td>
+                                    <td className="px-3 py-3">
+                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
+                                            🚫 항상 미표시
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-3 text-center">
+                                        {agent.isInstalledApp && agent.installedAppType === "pwa" && agent.isMobile && (
+                                            <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100 border border-purple-300 px-2 py-0.5 rounded-full">
+                                                🏠 현재 (PWA)
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-3 text-center">
+                                        {(() => {
+                                            const isBypassed = bypassState["pwa_app"];
+                                            return (
+                                                <button
+                                                    id="bypass-btn-pwa_app"
+                                                    type="button"
+                                                    onClick={() => requestBypassToggle("pwa_app", !isBypassed, "PWA 홈화면 추가 앱")}
+                                                    className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
+                                                        isBypassed
+                                                            ? "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200"
+                                                            : "bg-white text-rose-700 border-rose-300 hover:bg-rose-50"
+                                                    }`}
+                                                >
+                                                    {isBypassed ? "✅ 우회 해제" : "🚫 접속 우회"}
+                                                </button>
+                                            );
+                                        })()}
+                                    </td>
+                                </tr>
+                                {/* ── 설치된 앱 행 2: 정식 설치된 앱 / Android WebView */}
+                                <tr className={`border-b last:border-b-0 transition-colors ${agent.isInstalledApp && agent.installedAppType === "webview" && agent.isMobile ? "bg-orange-50 hover:bg-orange-100" : "hover:bg-gray-50"}`}>
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">📦</span>
+                                            <div>
+                                                <p className="font-semibold text-gray-800">정식 설치된 앱 (WebView)</p>
+                                                <p className="text-xs text-gray-500">Android TWA / WebView · UA에 "; wv)" 포함</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-3 text-center">
+                                        <span className="text-xs text-gray-400 font-mono">—</span>
+                                    </td>
+                                    <td className="px-3 py-3">
+                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
+                                            🚫 항상 미표시
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-3 text-center">
+                                        {agent.isInstalledApp && agent.installedAppType === "webview" && agent.isMobile && (
+                                            <span className="inline-flex items-center gap-1 text-xs font-bold text-orange-700 bg-orange-100 border border-orange-300 px-2 py-0.5 rounded-full">
+                                                📦 현재 (앱)
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-3 text-center">
+                                        {(() => {
+                                            const isBypassed = bypassState["webview_app"];
+                                            return (
+                                                <button
+                                                    id="bypass-btn-webview_app"
+                                                    type="button"
+                                                    onClick={() => requestBypassToggle("webview_app", !isBypassed, "정식 설치된 앱 (WebView)")}
+                                                    className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
+                                                        isBypassed
+                                                            ? "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200"
+                                                            : "bg-white text-rose-700 border-rose-300 hover:bg-rose-50"
+                                                    }`}
+                                                >
+                                                    {isBypassed ? "✅ 우회 해제" : "🚫 접속 우회"}
+                                                </button>
+                                            );
+                                        })()}
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -10188,14 +10736,64 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                 <p className="text-sm text-gray-400 text-center">저장 중...</p>
             )}
 
+            {/* ── 접속제한 우회 확인 다이얼로그 ──────────────────────────────── */}
+            {bypassConfirm && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+                    onClick={() => setBypassConfirm(null)}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 space-y-4"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-start gap-3">
+                            <span className="text-2xl">{bypassConfirm.enable ? "🔓" : "🔒"}</span>
+                            <div>
+                                <p className="font-bold text-gray-900 text-base">
+                                    {bypassConfirm.enable ? "접속제한 우회 설정" : "접속제한 우회 해제"}
+                                </p>
+                                <p className="text-sm text-gray-600 mt-1">
+                                    <span className="font-semibold text-indigo-700">[{bypassConfirm.label}]</span> 환경에서{" "}
+                                    {bypassConfirm.enable
+                                        ? "사이트 점검(maintenance) 접속제한을 무시합니다. 이 기기·브라우저에서만 적용됩니다. (30일)"
+                                        : "접속제한 우회를 해제합니다. 점검 중에는 다시 제한이 적용됩니다."
+                                    }
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                            <button
+                                type="button"
+                                onClick={() => setBypassConfirm(null)}
+                                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                                취소
+                            </button>
+                            <button
+                                id="bypass-confirm-btn"
+                                type="button"
+                                onClick={confirmBypassToggle}
+                                className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold text-white transition-colors ${
+                                    bypassConfirm.enable
+                                        ? "bg-rose-600 hover:bg-rose-700"
+                                        : "bg-gray-700 hover:bg-gray-800"
+                                }`}
+                            >
+                                {bypassConfirm.enable ? "우회 설정 확인" : "우회 해제 확인"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* 앱스토어 링크 설정 */}
             <Card>
                 <CardHeader className="pb-3">
                     <CardTitle className="text-base">앱스토어 링크 설정</CardTitle>
                     <CardDescription>
-                        Samsung Internet·그외 브라우저에는 <strong>Play Store</strong> 버튼을,
-                        iOS Safari에는 <strong>App Store</strong> 버튼을 표시합니다.
-                        비워두면 해당 환경에서 기존 PWA 프롬프트 방식을 사용합니다.
+                        Samsung Internet 및 Opera 등 Android 기타 브라우저에는 <strong>Play Store</strong> 버튼을,
+                        iOS(Safari 및 Chrome)에는 <strong>App Store</strong> 링크 등록 시 앱스토어 버튼(미등록 시 PWA)을 표시합니다.
+                        Firefox·Edge·Whale 등 기타 iOS 브라우저는 PWA 프롬프트 미지원으로 앱스토어 링크 등록 시에만 설치 버튼이 표시됩니다.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -10208,7 +10806,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                 <path d="m14.76 12-10.54 11.6c.17.06.35.1.54.1.21 0 .43-.06.62-.18l11.6-6.52L14.76 12Z" fill="#34A853"/>
                                 <path d="M4.22.16 14.76 12l2.42-2.58L5.58.34C5.39.22 5.18.16 4.96.16c-.2 0-.4.04-.57.1l-.17-.1Z" fill="#4285F4"/>
                             </svg>
-                            Google Play Store <span className="text-xs font-normal text-gray-500">(Samsung / 그외 브라우저)</span>
+                            Google Play Store <span className="text-xs font-normal text-gray-500">(등록 시 Android Chrome, Samsung, Opera 등 우선 연결)</span>
                         </div>
                         <div className="flex gap-2">
                             <Input
@@ -10243,7 +10841,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
                                 <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z" fill="#000"/>
                             </svg>
-                            Apple App Store <span className="text-xs font-normal text-gray-500">(iOS Safari)</span>
+                            Apple App Store <span className="text-xs font-normal text-gray-500">(iOS Safari / Chrome 등 iOS 기타 브라우저)</span>
                         </div>
                         <div className="flex gap-2">
                             <Input
@@ -10271,6 +10869,197 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                     </div>
                 </CardContent>
             </Card>
+
+            {/* ── IP별 디버그 모드 설정 ────────────────────────────────────────── */}
+            <Card className="border-2 border-amber-200 bg-amber-50/40">
+                <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="text-base flex items-center gap-2 text-amber-950">
+                            <span className="text-lg">🛠️</span>
+                            접속환경 디버그 모드 (IP 목록)
+                        </CardTitle>
+                        <div className="flex items-center gap-2">
+                            <a
+                                href="/guide/ios"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors"
+                            >
+                                <span>📱 iOS 설치 안내 새 창 열기</span>
+                                <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            </a>
+                        </div>
+                    </div>
+                    <CardDescription>
+                        지정된 IP로 접속 시 <strong>디버그 모드</strong>가 활성화되며, 모드 선택 시 숨겨진 <strong>수동 선택 버튼(iPhone/iPad 및 iOS 버전)</strong>을 표시하여 모든 버전을 테스트할 수 있습니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {/* 전체 디버그 모드 토글 */}
+                    <div className="flex items-center justify-between bg-white p-3.5 rounded-xl border border-amber-200 shadow-2xs">
+                        <div className="space-y-0.5">
+                            <Label htmlFor="access-debug-toggle" className="text-sm font-bold text-gray-800 cursor-pointer flex items-center gap-2">
+                                <span>IP별 디버그 모드 활성화</span>
+                                {isAccessDebugEnabled ? (
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold">작동 중</span>
+                                ) : (
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">비활성화됨</span>
+                                )}
+                            </Label>
+                            <p className="text-xs text-gray-500">
+                                켜져 있을 때만 아래 등록된 IP 목록의 기기에서 디버그 모드 및 수동 선택 기능이 제공됩니다.
+                            </p>
+                        </div>
+                        <Switch
+                            id="access-debug-toggle"
+                            checked={isAccessDebugEnabled}
+                            onCheckedChange={(checked) => toggle("access_debug_mode_enabled", checked)}
+                            disabled={saveSettingMutation.isPending}
+                        />
+                    </div>
+
+                    {/* 내 현재 IP & 빠른 추가 */}
+                    {currentClientIp && currentClientIp !== "unknown" && (
+                        <div className="flex items-center justify-between bg-white/80 p-2.5 px-3 rounded-lg border border-amber-100 text-xs text-gray-600">
+                            <span className="flex items-center gap-1.5 font-mono">
+                                <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+                                현재 내 접속 IP: <strong>{currentClientIp}</strong>
+                                {debugIpList.some(item => item.ip === currentClientIp) && (
+                                    <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[11px] font-bold">✓ 등록됨</span>
+                                )}
+                            </span>
+                            {!debugIpList.some(item => item.ip === currentClientIp) && (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => addDebugIp(currentClientIp)}
+                                    className="text-xs h-7 px-2.5 bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100"
+                                >
+                                    + 내 현재 IP 등록
+                                </Button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* 등록된 IP 목록 테이블 */}
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-2xs">
+                        <div className="p-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                            <span className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                                <span>등록된 디버그 IP 목록</span>
+                                <span className="text-gray-400 font-normal">({debugIpList.length}개)</span>
+                            </span>
+                        </div>
+
+                        {debugIpList.length === 0 ? (
+                            <div className="py-8 text-center text-xs text-gray-400">
+                                등록된 디버그 IP가 없습니다. 아래 폼을 통해 테스트할 기기의 IP를 등록하세요.
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                    <thead>
+                                        <tr className="border-b bg-gray-50/50 text-gray-500 text-left font-medium">
+                                            <th className="px-3 py-2">IP 주소</th>
+                                            <th className="px-3 py-2">메모 / 기기명</th>
+                                            <th className="px-3 py-2">기본 모드</th>
+                                            <th className="px-3 py-2 text-center">삭제</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {debugIpList.map((item) => {
+                                            const isCurrent = item.ip === currentClientIp;
+                                            return (
+                                                <tr key={item.ip} className={isCurrent ? "bg-amber-50/60" : "hover:bg-gray-50"}>
+                                                    <td className="px-3 py-2.5 font-mono font-bold text-gray-800">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span>{item.ip}</span>
+                                                            {isCurrent && (
+                                                                <span className="text-[10px] bg-amber-200 text-amber-900 px-1 rounded font-bold">현재 기기</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-2.5 text-gray-600">
+                                                        {item.memo || <span className="text-gray-300 italic">메모 없음</span>}
+                                                    </td>
+                                                    <td className="px-3 py-2.5">
+                                                        <select
+                                                            value={item.mode}
+                                                            onChange={(e) => updateIpMode(item.ip, e.target.value as "manual" | "auto")}
+                                                            className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-800 shadow-2xs focus:outline-none"
+                                                        >
+                                                            <option value="manual">🛠️ 수동선택 모드</option>
+                                                            <option value="auto">⚡ 자동감지 모드</option>
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-3 py-2.5 text-center">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeDebugIp(item.ip)}
+                                                            className="w-6 h-6 rounded text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors inline-flex items-center justify-center font-bold"
+                                                            title="삭제"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {/* 새 IP 추가 입력 폼 */}
+                        <div className="p-3 bg-gray-50/80 border-t border-gray-200">
+                            <p className="text-[11px] font-bold text-gray-600 mb-2">새 디버그 IP 추가</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Input
+                                    value={newIpInput}
+                                    onChange={(e) => setNewIpInput(e.target.value)}
+                                    placeholder="IP 주소 (예: 211.234.56.78)"
+                                    className="font-mono text-xs h-8 flex-1 min-w-[150px] bg-white"
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            addDebugIp();
+                                        }
+                                    }}
+                                />
+                                <Input
+                                    value={newMemoInput}
+                                    onChange={(e) => setNewMemoInput(e.target.value)}
+                                    placeholder="기기명/메모 (선택)"
+                                    className="text-xs h-8 flex-1 min-w-[120px] bg-white"
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            addDebugIp();
+                                        }
+                                    }}
+                                />
+                                <select
+                                    value={newModeInput}
+                                    onChange={(e) => setNewModeInput(e.target.value as "manual" | "auto")}
+                                    className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-800 shadow-2xs h-8 focus:outline-none shrink-0"
+                                >
+                                    <option value="manual">🛠️ 수동선택 모드</option>
+                                    <option value="auto">⚡ 자동감지 모드</option>
+                                </select>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => addDebugIp()}
+                                    disabled={!newIpInput.trim() || saveSettingMutation.isPending}
+                                    className="h-8 text-xs shrink-0"
+                                >
+                                    + 추가
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     );
 }
@@ -10293,6 +11082,9 @@ function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
             return res.json();
         }
     });
+
+    // 모든 useState는 useMutation보다 먼저 선언 (React Hook 순서 규칙)
+    const [previewData, setPreviewData] = useState<any[] | null>(null);
 
     const isPaused = settingsData?.auto_predict_paused === 'true';
     const lastTime = settingsData?.last_auto_predict_time;
@@ -10337,7 +11129,6 @@ function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
         }
     });
 
-    const [previewData, setPreviewData] = useState<any[] | null>(null);
     const previewMutation = useMutation({
         mutationFn: async () => {
             const res = await fetch("/api/assessment?action=preview", {
@@ -10800,6 +11591,644 @@ function AssessmentRolePermissionsSettings({ adminPassword }: { adminPassword: s
 
 
 // ======================================================================
+// ExamScheduleManager - 시험일정 관리 (2레이어 사이드바 레이아웃)
+// ======================================================================
+interface ExamItem {
+    id: number;
+    title: string;
+    exam_type: string;   // '' | 'single' | 'period'
+    start_date: string | null;
+    end_date: string | null;
+    display_order: number;
+    created_at: string;
+    updated_at: string;
+}
+
+// 시험 종류 정의
+const EXAM_TYPE_OPTIONS = [
+    { value: "single", label: "학력평가", dateMode: "single" as const },
+    { value: "period", label: "중간/기말", dateMode: "period" as const },
+];
+
+function ExamScheduleManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    // 1레이어 사이드바 선택 ('exam-dates' | 'exam-timetable')
+    const [layer1, setLayer1] = useState<"exam-dates" | "exam-timetable">("exam-dates");
+    // 2레이어: 선택된 시험 id
+    const [selectedExamId, setSelectedExamId] = useState<number | null>(null);
+
+    // 새 시험 추가 인라인 입력 상태
+    const [isAdding, setIsAdding] = useState(false);
+    const [newTitle, setNewTitle] = useState("");
+    const addInputRef = React.useRef<HTMLInputElement>(null);
+
+    // 콘텐츠 영역 편집 상태 (선택된 시험의 draft)
+    const [draftType, setDraftType] = useState<string>("");
+    const [draftStartDate, setDraftStartDate] = useState<string>("");
+    const [draftEndDate, setDraftEndDate] = useState<string>("");
+    const [confirmDelete, setConfirmDelete] = useState(false);
+
+    // ── Query: 시험 목록 ────────────────────────────────────────────────────
+    const examsQuery = useQuery<ExamItem[]>({
+        queryKey: ["admin", "exam-schedules"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/exam-schedules", {
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) throw new Error("시험 목록 조회 실패");
+            const json = await res.json();
+            return json.exams || [];
+        },
+    });
+
+    const exams: ExamItem[] = examsQuery.data || [];
+
+    // 선택된 시험 객체
+    const selectedExam = exams.find((e) => e.id === selectedExamId) ?? null;
+
+    // 선택된 시험이 바뀌면 draft 초기화
+    React.useEffect(() => {
+        if (selectedExam) {
+            setDraftType(selectedExam.exam_type || "");
+            setDraftStartDate(selectedExam.start_date || "");
+            setDraftEndDate(selectedExam.end_date || "");
+        } else {
+            setDraftType("");
+            setDraftStartDate("");
+            setDraftEndDate("");
+        }
+    }, [selectedExamId, selectedExam?.exam_type, selectedExam?.start_date, selectedExam?.end_date]);
+
+    // 시험이 바뀌면 삭제 확인 상태도 초기화
+    React.useEffect(() => { setConfirmDelete(false); }, [selectedExamId]);
+
+    // ── Mutation: 추가 ──────────────────────────────────────────────────────
+    const addMutation = useMutation({
+        mutationFn: async (title: string) => {
+            const res = await fetch("/api/admin/exam-schedules", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify({ title }),
+            });
+            if (!res.ok) throw new Error("추가 실패");
+            return res.json();
+        },
+        onSuccess: (data) => {
+            toast.success("시험이 추가되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "exam-schedules"] });
+            setIsAdding(false);
+            setNewTitle("");
+            if (data.id) setSelectedExamId(data.id);
+        },
+        onError: (e: any) => toast.error(e.message),
+    });
+
+    // ── Mutation: 수정 ──────────────────────────────────────────────────────
+    const saveMutation = useMutation({
+        mutationFn: async (payload: { id: number; title: string; exam_type: string; start_date: string | null; end_date: string | null }) => {
+            const res = await fetch("/api/admin/exam-schedules", {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "exam-schedules"] });
+        },
+        onError: (e: any) => toast.error(e.message),
+    });
+
+    // ── Mutation: 삭제 ──────────────────────────────────────────────────────
+    const deleteMutation = useMutation({
+        mutationFn: async (id: number) => {
+            const res = await fetch(`/api/admin/exam-schedules?id=${id}`, {
+                method: "DELETE",
+                headers: { "X-Admin-Password": adminPassword },
+            });
+            if (!res.ok) throw new Error("삭제 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("삭제되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "exam-schedules"] });
+            setSelectedExamId(null);
+        },
+        onError: (e: any) => toast.error(e.message),
+    });
+
+    // 인라인 입력 열릴 때 포커스
+    React.useEffect(() => {
+        if (isAdding) {
+            setTimeout(() => addInputRef.current?.focus(), 50);
+        }
+    }, [isAdding]);
+
+    const handleAddConfirm = () => {
+        const t = newTitle.trim();
+        if (!t) { toast.error("제목을 입력하세요."); return; }
+        addMutation.mutate(t);
+    };
+
+    const handleSave = () => {
+        if (!selectedExam) return;
+        if (!draftType) { toast.error("종류를 선택하세요."); return; }
+        const typeOption = EXAM_TYPE_OPTIONS.find(o => o.value === draftType);
+        if (!typeOption) return;
+
+        if (typeOption.dateMode === "single") {
+            if (!draftStartDate) { toast.error("날짜를 입력하세요."); return; }
+            saveMutation.mutate({
+                id: selectedExam.id,
+                title: selectedExam.title,
+                exam_type: draftType,
+                start_date: draftStartDate,
+                end_date: draftStartDate, // single은 end = start
+            });
+        } else {
+            if (!draftStartDate || !draftEndDate) { toast.error("시작일과 종료일을 모두 입력하세요."); return; }
+            if (draftEndDate < draftStartDate) { toast.error("종료일이 시작일보다 빠를 수 없습니다."); return; }
+            saveMutation.mutate({
+                id: selectedExam.id,
+                title: selectedExam.title,
+                exam_type: draftType,
+                start_date: draftStartDate,
+                end_date: draftEndDate,
+            });
+        }
+    };
+
+    const selectedTypeOption = EXAM_TYPE_OPTIONS.find(o => o.value === draftType) ?? null;
+
+    // 사이드바 버튼 공통 클래스
+    const sidebarBtnClass = (active: boolean) =>
+        `justify-start whitespace-nowrap text-left transition-colors w-full ${
+            active
+                ? "bg-indigo-100 text-indigo-900 font-bold hover:bg-indigo-200/80 border border-indigo-300 shadow-xs"
+                : "text-slate-600 hover:text-indigo-800 hover:bg-indigo-50/70 font-medium"
+        }`;
+
+    return (
+        <div className="flex flex-col md:flex-row gap-0 h-[calc(100vh-200px)] min-h-[600px] md:h-[640px] border rounded-xl overflow-hidden bg-white shadow-sm">
+
+            {/* ── 1레이어 사이드바 ─────────────────────────────────────── */}
+            <div className="w-full md:w-36 flex flex-row md:flex-col gap-1 p-2 bg-slate-50 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
+                <p className="hidden md:block text-[10px] font-semibold text-slate-400 uppercase tracking-widest px-2 pt-1 pb-0.5">카테고리</p>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className={sidebarBtnClass(layer1 === "exam-dates")}
+                    onClick={() => setLayer1("exam-dates")}
+                >
+                    <Calendar className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                    고사날짜
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`justify-start whitespace-nowrap text-left w-full font-medium text-slate-400 cursor-not-allowed`}
+                    disabled
+                    title="추후 구현 예정"
+                >
+                    <Clock className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                    시험 시간표
+                </Button>
+            </div>
+
+            {/* ── 2레이어 사이드바 (고사날짜 선택 시) ─────────────────── */}
+            {layer1 === "exam-dates" && (
+                <div className="w-full md:w-52 flex flex-col border-b md:border-b-0 md:border-r shrink-0 bg-white overflow-hidden">
+                    {/* 헤더 + 추가 버튼 */}
+                    <div className="flex items-center justify-between px-3 py-2.5 border-b bg-slate-50/60">
+                        <span className="text-xs font-semibold text-slate-500">시험 목록</span>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs text-indigo-600 hover:bg-indigo-50 hover:text-indigo-800 font-semibold"
+                            onClick={() => { setIsAdding(true); setNewTitle(""); }}
+                            disabled={isAdding}
+                        >
+                            <Plus className="w-3 h-3 mr-0.5" />
+                            추가하기
+                        </Button>
+                    </div>
+
+                    {/* 인라인 입력 */}
+                    {isAdding && (
+                        <div className="px-2 py-2 border-b bg-indigo-50/60 flex gap-1.5 items-center">
+                            <input
+                                ref={addInputRef}
+                                value={newTitle}
+                                onChange={(e) => setNewTitle(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleAddConfirm();
+                                    if (e.key === "Escape") { setIsAdding(false); setNewTitle(""); }
+                                }}
+                                placeholder="시험 제목"
+                                className="flex-1 text-sm border border-indigo-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
+                            />
+                            <button
+                                onClick={handleAddConfirm}
+                                disabled={addMutation.isPending}
+                                className="text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                                title="확인"
+                            >
+                                <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => { setIsAdding(false); setNewTitle(""); }}
+                                className="text-slate-400 hover:text-slate-600"
+                                title="취소"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                    )}
+
+                    {/* 시험 목록 */}
+                    <div className="flex-1 overflow-y-auto py-1">
+                        {examsQuery.isLoading && (
+                            <p className="text-xs text-slate-400 text-center py-4">불러오는 중...</p>
+                        )}
+                        {!examsQuery.isLoading && exams.length === 0 && !isAdding && (
+                            <p className="text-xs text-slate-400 text-center py-6 px-3">
+                                시험이 없습니다.<br />위의 추가하기를 눌러 등록하세요.
+                            </p>
+                        )}
+                        {exams.map((exam) => {
+                            const isSelected = exam.id === selectedExamId;
+                            const typeLabel = EXAM_TYPE_OPTIONS.find(o => o.value === exam.exam_type)?.label;
+                            return (
+                                <div
+                                    key={exam.id}
+                                    className={`flex items-center gap-1 px-2 py-2 mx-1 my-0.5 rounded-lg cursor-pointer transition-colors ${
+                                        isSelected
+                                            ? "bg-indigo-100 text-indigo-900"
+                                            : "hover:bg-slate-100 text-slate-700"
+                                    }`}
+                                    onClick={() => setSelectedExamId(exam.id)}
+                                >
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-sm font-medium truncate ${isSelected ? "text-indigo-900" : ""}`}>
+                                            {exam.title}
+                                        </p>
+                                        {typeLabel && (
+                                            <p className="text-[10px] text-slate-400 mt-0.5">{typeLabel}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* ── 콘텐츠 영역 ──────────────────────────────────────────── */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+                {!selectedExam ? (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-400 select-none">
+                        <Calendar className="w-10 h-10 opacity-30" />
+                        <p className="text-sm font-medium">시험을 선택하세요</p>
+                        <p className="text-xs opacity-70">좌측 목록에서 시험을 선택하거나 새 시험을 추가하세요.</p>
+                    </div>
+                ) : (
+                    <div className="flex-1 flex flex-col gap-0 overflow-y-auto">
+                        {/* 헤더 */}
+                        <div className="flex items-center gap-2 px-6 py-4 border-b bg-slate-50/60 shrink-0">
+                            <Calendar className="w-4 h-4 text-indigo-500" />
+                            <h3 className="text-base font-bold text-indigo-800 flex-1">{selectedExam.title}</h3>
+                        </div>
+
+                        <div className="px-6 py-6 space-y-6">
+                            {/* 종류 선택 */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-slate-700">시험 종류</label>
+                                <p className="text-xs text-slate-400">종류를 선택하면 날짜 입력 방식이 결정됩니다.</p>
+                                <div className="flex gap-3 mt-1">
+                                    {EXAM_TYPE_OPTIONS.map((opt) => (
+                                        <button
+                                            key={opt.value}
+                                            onClick={() => {
+                                                setDraftType(opt.value);
+                                                setDraftStartDate("");
+                                                setDraftEndDate("");
+                                            }}
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                                draftType === opt.value
+                                                    ? "border-indigo-500 bg-indigo-50 text-indigo-800"
+                                                    : "border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-indigo-50/40"
+                                            }`}
+                                        >
+                                            <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                                draftType === opt.value ? "border-indigo-500" : "border-slate-300"
+                                            }`}>
+                                                {draftType === opt.value && (
+                                                    <span className="w-2 h-2 rounded-full bg-indigo-500 block" />
+                                                )}
+                                            </span>
+                                            {opt.label}
+                                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-normal ${
+                                                opt.dateMode === "single"
+                                                    ? "bg-amber-100 text-amber-700"
+                                                    : "bg-blue-100 text-blue-700"
+                                            }`}>
+                                                {opt.dateMode === "single" ? "당일" : "기간"}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 날짜 입력 — 종류 선택 후에만 표시 */}
+                            {!selectedTypeOption && (
+                                <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border border-dashed border-slate-300 rounded-lg text-slate-400 text-sm">
+                                    <AlertCircle className="w-4 h-4 shrink-0" />
+                                    시험 종류를 먼저 선택하면 날짜 입력 항목이 나타납니다.
+                                </div>
+                            )}
+
+                            {selectedTypeOption?.dateMode === "single" && (
+                                <div className="space-y-2 animate-in fade-in duration-150">
+                                    <label className="text-sm font-semibold text-slate-700">시험 날짜</label>
+                                    <input
+                                        type="date"
+                                        value={draftStartDate}
+                                        onChange={(e) => setDraftStartDate(e.target.value)}
+                                        className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 w-52"
+                                    />
+                                </div>
+                            )}
+
+                            {selectedTypeOption?.dateMode === "period" && (
+                                <div className="space-y-2 animate-in fade-in duration-150">
+                                    <label className="text-sm font-semibold text-slate-700">시험 기간</label>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-xs text-slate-500">시작일</span>
+                                            <input
+                                                type="date"
+                                                value={draftStartDate}
+                                                onChange={(e) => setDraftStartDate(e.target.value)}
+                                                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 w-44"
+                                            />
+                                        </div>
+                                        <span className="text-slate-400 mt-5 font-bold">~</span>
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-xs text-slate-500">종료일</span>
+                                            <input
+                                                type="date"
+                                                value={draftEndDate}
+                                                min={draftStartDate}
+                                                onChange={(e) => setDraftEndDate(e.target.value)}
+                                                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 w-44"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 저장 버튼 — 종류 선택 후에만 표시 */}
+                            {selectedTypeOption && (
+                                <div className="pt-2">
+                                    <Button
+                                        onClick={handleSave}
+                                        disabled={saveMutation.isPending}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-6"
+                                    >
+                                        <Save className="w-4 h-4 mr-2" />
+                                        {saveMutation.isPending ? "저장 중..." : "저장"}
+                                    </Button>
+                                </div>
+                            )}
+
+                            {/* 삭제 영역 — 항상 표시, 우측 패널 하단 */}
+                            <div className="pt-4 mt-4 border-t border-slate-100">
+                                {!confirmDelete ? (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs px-3"
+                                        onClick={() => setConfirmDelete(true)}
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                                        이 시험 삭제
+                                    </Button>
+                                ) : (
+                                    <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                                        <span className="text-sm text-red-700 font-medium flex-1">
+                                            "{selectedExam.title}"를 삭제하시겠습니까?
+                                        </span>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-7 text-xs border-slate-300 text-slate-600"
+                                                onClick={() => setConfirmDelete(false)}
+                                            >
+                                                취소
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                className="h-7 text-xs bg-red-600 hover:bg-red-700 text-white"
+                                                onClick={() => deleteMutation.mutate(selectedExam.id)}
+                                                disabled={deleteMutation.isPending}
+                                            >
+                                                <Trash2 className="w-3 h-3 mr-1" />
+                                                {deleteMutation.isPending ? "삭제 중..." : "삭제"}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+
+
+
+
+// ======================================================================
+// TeacherDisplayManager - 학생에게 교사 지원표시 설정
+// ======================================================================
+function TeacherDisplayManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const [activeTeachers, setActiveTeachers] = useState<string[]>([]);
+    const [newTeacherName, setNewTeacherName] = useState('');
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 조회 실패");
+            return res.json();
+        }
+    });
+
+    // teacher_passwords 키에서 교사 이름 목록 추출
+    const configuredTeachers = useMemo(() => {
+        if (!settingsQuery.data?.teacher_passwords) return [];
+        try {
+            const raw = settingsQuery.data.teacher_passwords;
+            const pwMap = typeof raw === "string" ? JSON.parse(raw) : raw;
+            return Object.keys(pwMap);
+        } catch { return []; }
+    }, [settingsQuery.data]);
+
+    useEffect(() => {
+        if (settingsQuery.data) {
+            try {
+                const raw = settingsQuery.data.active_teachers || "[]";
+                const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+                setActiveTeachers(Array.isArray(parsed) ? parsed : []);
+            } catch { setActiveTeachers([]); }
+        }
+    }, [settingsQuery.data]);
+
+    const save = useMutation({
+        mutationFn: async (teachers: string[]) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ active_teachers: JSON.stringify(teachers) })
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            toast.success("저장되었습니다.");
+        },
+        onError: (err: any) => toast.error(err.message)
+    });
+
+    const toggleTeacher = (name: string) => {
+        setActiveTeachers(prev =>
+            prev.includes(name) ? prev.filter(t => t !== name) : [...prev, name]
+        );
+    };
+
+    const handleAddCustom = () => {
+        const name = newTeacherName.trim();
+        if (!name) return;
+        if (!activeTeachers.includes(name)) setActiveTeachers(prev => [...prev, name]);
+        setNewTeacherName('');
+    };
+
+    const handleRemoveCustom = (name: string) => {
+        setActiveTeachers(prev => prev.filter(t => t !== name));
+    };
+
+    // 표시할 전체 목록: 비밀번호 설정된 교사 + active에만 있는 커스텀 추가 교사
+    const allTeachers = Array.from(new Set([
+        ...configuredTeachers,
+        ...activeTeachers.filter(t => !configuredTeachers.includes(t))
+    ]));
+    const customOnlyTeachers = activeTeachers.filter(t => !configuredTeachers.includes(t));
+
+    if (settingsQuery.isLoading) return <div className="p-4 text-sm text-gray-500">설정을 불러오는 중...</div>;
+
+    return (
+        <Card className="w-full max-w-lg border-emerald-100 shadow-sm">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base font-bold text-gray-700 flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-emerald-600" />
+                    학생에게 교사 지원표시
+                </CardTitle>
+                <CardDescription className="text-xs text-gray-500">
+                    체크된 선생님은 학생 메인페이지 하단에 <strong>'선생님 직접게시'</strong> 섹션으로 표시됩니다.<br />
+                    교사별 비밀번호 탭에서 설정된 선생님 목록이 자동으로 불러와집니다.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {/* 비밀번호 설정된 교사 목록 */}
+                {configuredTeachers.length > 0 ? (
+                    <div className="space-y-1.5">
+                        <p className="text-xs font-semibold text-slate-500 mb-2">비밀번호 설정된 선생님</p>
+                        {configuredTeachers.map(name => (
+                            <label key={name} className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-100 hover:bg-emerald-50/50 cursor-pointer transition-colors select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={activeTeachers.includes(name)}
+                                    onChange={() => toggleTeacher(name)}
+                                    className="w-4 h-4 accent-emerald-600 shrink-0"
+                                />
+                                <span className="text-sm font-medium text-gray-800 flex-1">{name} 선생님</span>
+                                {activeTeachers.includes(name) && (
+                                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 shrink-0">이용중</span>
+                                )}
+                            </label>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-sm text-gray-400 py-3 text-center bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                        교사별 비밀번호 탭에서 선생님을 먼저 추가하세요.
+                    </div>
+                )}
+
+                {/* 직접 추가된 교사 */}
+                {customOnlyTeachers.length > 0 && (
+                    <div className="space-y-1.5">
+                        <p className="text-xs font-semibold text-slate-500 mb-2">직접 추가된 선생님</p>
+                        {customOnlyTeachers.map(name => (
+                            <div key={name} className="flex items-center gap-3 p-2.5 rounded-lg border border-emerald-100 bg-emerald-50/40">
+                                <span className="text-sm font-medium text-gray-800 flex-1">{name} 선생님</span>
+                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">이용중</span>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-50"
+                                    onClick={() => handleRemoveCustom(name)}
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* 이름 직접 추가 */}
+                <div className="border-t pt-3 flex gap-2">
+                    <Input
+                        value={newTeacherName}
+                        onChange={e => setNewTeacherName(e.target.value)}
+                        placeholder="선생님 이름 직접 추가"
+                        className="flex-1 h-9 text-sm"
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddCustom(); }}
+                    />
+                    <Button size="sm" variant="outline" onClick={handleAddCustom} className="h-9 shrink-0">추가</Button>
+                </div>
+
+                <Button
+                    onClick={() => save.mutate(activeTeachers)}
+                    disabled={save.isPending}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                >
+                    {save.isPending ? "저장 중..." : "저장"}
+                </Button>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ======================================================================
 // TeacherMgmtManager - 교사용 성지수행 관리 (사이드바 레이아웃)
 // ======================================================================
 function TeacherMgmtManager({ adminPassword }: { adminPassword: string }) {
@@ -10845,6 +12274,18 @@ function TeacherMgmtManager({ adminPassword }: { adminPassword: string }) {
                     <Users className="w-4 h-4 mr-2" />
                     교사별 비밀번호
                 </Button>
+                <Button
+                    variant="ghost"
+                    className={`justify-start whitespace-nowrap text-left transition-colors ${
+                        selectedMenu === "teacher-display"
+                            ? "bg-emerald-100 text-emerald-900 font-bold hover:bg-emerald-200/80 border border-emerald-300 shadow-xs"
+                            : "text-slate-600 hover:text-emerald-800 hover:bg-emerald-50/70 font-medium"
+                    }`}
+                    onClick={() => setSelectedMenu("teacher-display")}
+                >
+                    <UserCheck className="w-4 h-4 mr-2" />
+                    학생에게 교사 지원표시
+                </Button>
             </div>
 
             {/* Main Content */}
@@ -10885,6 +12326,19 @@ function TeacherMgmtManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <TeacherPerPasswordManager adminPassword={adminPassword} />
+                        </div>
+                    </div>
+                )}
+                {selectedMenu === "teacher-display" && (
+                    <div className="flex flex-col h-full gap-4">
+                        <div className="flex gap-2 items-center pb-4 border-b">
+                            <h3 className="text-lg font-bold flex-1 text-emerald-700 flex items-center gap-2">
+                                <UserCheck className="w-5 h-5" />
+                                학생에게 교사 지원표시
+                            </h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <TeacherDisplayManager adminPassword={adminPassword} />
                         </div>
                     </div>
                 )}

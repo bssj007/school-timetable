@@ -51,22 +51,12 @@ export async function performCleanup(db: any) {
 
         // 3. Cleanup "Other" Users
         // Rule: Delete ip_profiles older than retention period AND classified as "Other"
-        // "Other" = (No Student Info) OR (Unknown User Agent)
-        // With new schema: Student Info exists if `studentNumber` is NOT NULL (and points to valid profile, but FK ensures that usually).
-
-        // Define "Known User Agent" keywords
+        // "Other" = (No Student Info) OR (Unknown Browser)
+        //
+        // browserKey 컬럼이 있는 신규 행: browserKey = 'other' 로 판별 (parseUA 결과 그대로)
+        // browserKey 컬럼이 NULL인 구버전 행: 기존 UA 키워드 LIKE 로 fallback
         const uaKeywords = ['Mozilla', 'Chrome', 'Safari', 'Firefox', 'Edge', 'Opera', 'Whale', 'Kakao', 'iPhone', 'Android'];
-        // clause: userAgent NOT LIKE '%Key%' AND ...
-        const uaCheckClause = uaKeywords.map(k => `userAgent NOT LIKE '%${k}%'`).join(' AND ');
-
-        // Logic:
-        // Delete if:
-        // 1. Last access > retention
-        // 2. AND is "Other"
-        //    "Other" means:
-        //    (student_profile_id IS NULL)  <-- No Info
-        //    OR
-        //    (userAgent IS NULL OR (userAgent NOT LIKE ...)) <-- Unknown Browser
+        const uaFallbackClause = uaKeywords.map(k => `userAgent NOT LIKE '%${k}%'`).join(' AND ');
 
         const otherUserQueryCorrected = `
             DELETE FROM ip_profiles
@@ -75,11 +65,15 @@ export async function performCleanup(db: any) {
                 (studentNumber IS NULL)
                 OR
                 (
-                    userAgent IS NULL 
-                    OR (${uaCheckClause})
+                    -- 신규 행: browserKey 컬럼으로 판별
+                    (browserKey IS NOT NULL AND browserKey = 'other')
+                    OR
+                    -- 구버전 행(마이그레이션 전): UA 문자열 키워드 fallback
+                    (browserKey IS NULL AND (userAgent IS NULL OR (${uaFallbackClause})))
                 )
             )
         `;
+
 
         const otherResult = await db.prepare(otherUserQueryCorrected).run();
         deletedOthers = otherResult.meta.changes;

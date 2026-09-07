@@ -4,11 +4,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="google" content="notranslate" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-  <meta name="description" content="부산성지고등학교 시간표 및 수행평가 관리 서비스" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="부산성지고등학교 시간표 및 수행평가 관리 서비스" />
   <title></title>
-  <link rel="manifest" href="/manifest.json" />
+  <!-- 모바일 환경에서만 PWA 매니페스트 동적 주입 (데스크톱 주소창 설치 유도 방지) -->
+  <script>
+    (function() {
+      var ua = navigator.userAgent;
+      var isMobile = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(ua));
+      if (isMobile) {
+        var link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = '/manifest.json';
+        document.head.appendChild(link);
+      }
+    })();
+  </script>
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="성지수행" />
   <meta name="theme-color" content="#ffffff" />
   <!-- Dynamic Icons will be injected by App.tsx -->
   <!-- Add Google Fonts here, example:

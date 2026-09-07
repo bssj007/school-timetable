@@ -11,8 +11,8 @@ export const onRequest = async (context: any) => {
 
     // 0. 점검 모드(Maintenance) 원천 차단 (Edge 레벨)
     // HTML(페이지) 요청에 대해서만 점검 모드 차단을 수행하여 API/에셋을 보호합니다.
-    // 단, /admin 경로는 어떠한 접속제한도 적용하지 않습니다 (관리자 접근 완전 보장).
-    if (request.headers.get('accept')?.includes('text/html') && !url.pathname.startsWith('/admin')) {
+    // 단, /admin 및 /privacy 경로는 어떠한 접속제한도 적용하지 않습니다 (관리자 및 약관/방침 열람 보장).
+    if (request.headers.get('accept')?.includes('text/html') && !url.pathname.startsWith('/admin') && !url.pathname.startsWith('/privacy')) {
         try {
             if (env.DB) {
                 // 설정 DB 조회
@@ -103,6 +103,7 @@ ${logoOrIconHtml}
             let grade = null, classNum = null, studentNumber = null, studentName: string | null = null;
             let kakaoId = null, kakaoNickname = null;
             let isStandalone = 0;
+            let teacherName: string | null = null;
 
             if (cookies) {
                 const configMatch = cookies.match(new RegExp('(^| )school_timetable_config=([^;]+)'));
@@ -129,13 +130,19 @@ ${logoOrIconHtml}
                 if (pwaMatch && pwaMatch[2] === '1') {
                     isStandalone = 1;
                 }
+
+                // 선생님 이름 쿨키 (sj_teacher_name)
+                const teacherMatch = cookies.match(new RegExp('(^| )sj_teacher_name=([^;]+)'));
+                if (teacherMatch) {
+                    try { teacherName = decodeURIComponent(teacherMatch[2]).trim() || null; } catch { }
+                }
             }
 
             // 1. Insert Log (with Auto-Migration for Table Creation)
             const insertLog = async () => {
                 await env.DB.prepare(
-                    "INSERT INTO access_logs (ip, userAgent, method, endpoint, status, grade, classNum, studentNumber, kakaoId, kakaoNickname) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                ).bind(ip, userAgent, request.method, url.pathname, response.status, grade, classNum, studentNumber, kakaoId, kakaoNickname).run();
+                    "INSERT INTO access_logs (ip, userAgent, method, endpoint, status, grade, classNum, studentNumber, kakaoId, kakaoNickname, teacherName) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                ).bind(ip, userAgent, request.method, url.pathname, response.status, grade, classNum, studentNumber, kakaoId, kakaoNickname, teacherName).run();
             };
 
             try {
@@ -159,6 +166,7 @@ ${logoOrIconHtml}
                                 studentNumber INTEGER,
                                 kakaoId TEXT,
                                 kakaoNickname TEXT,
+                                teacherName TEXT,
                                 accessedAt TEXT DEFAULT (datetime('now'))
                             )
                         `).run();
@@ -167,8 +175,9 @@ ${logoOrIconHtml}
                         console.error("[Middleware] Create access_logs Failed:", createError);
                     }
                 } else if (e.message && e.message.includes("no such column")) {
-                    // Ignore column errors for now or handle specific migrations if needed
-                    console.warn("[Middleware] Column mismatch in access_logs", e);
+                    // teacherName 컨럼이 없는 구버전 테이블 자동 마이그레이션
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN teacherName TEXT").run(); } catch (_) {}
+                    try { await insertLog(); } catch (_) { console.warn("[Middleware] Column mismatch in access_logs after migration"); }
                 } else {
                     console.error("[Middleware] Log Insert Failed:", e);
                 }
@@ -250,14 +259,15 @@ ${logoOrIconHtml}
                 const isDownloadAction = url.pathname === '/api/action/download';
 
                 const query = `
-                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, addCount, deleteCount, userAgent, printCount, downloadCount, isStandalone)
-                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, addCount, deleteCount, userAgent, printCount, downloadCount, isStandalone, teacherName)
+                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(ip) DO UPDATE SET
                         lastAccess = datetime('now'),
                         userAgent = excluded.userAgent,
                         student_profile_id = excluded.student_profile_id,
                         kakaoId = COALESCE(excluded.kakaoId, ip_profiles.kakaoId),
                         kakaoNickname = COALESCE(excluded.kakaoNickname, ip_profiles.kakaoNickname),
+                        teacherName = COALESCE(excluded.teacherName, ip_profiles.teacherName),
                         modificationCount = ip_profiles.modificationCount + ?,
                         addCount = ip_profiles.addCount + ?,
                         deleteCount = ip_profiles.deleteCount + ?,
@@ -285,6 +295,7 @@ ${logoOrIconHtml}
                         printIncrement,
                         downloadIncrement,
                         isStandalone,
+                        teacherName,
                         increment, // modificationCount Update
                         addIncrement,
                         deleteIncrement,
@@ -339,6 +350,9 @@ ${logoOrIconHtml}
                     } catch (_) { /* already exists */ }
                     try {
                         await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN isStandalone INTEGER DEFAULT 0").run();
+                    } catch (_) { /* already exists */ }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN teacherName TEXT").run();
                     } catch (_) { /* already exists */ }
 
                     // Retry update after ALTER

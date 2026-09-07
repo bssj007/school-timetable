@@ -103,7 +103,15 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     const [isValidating, setIsValidating] = useState(initial.isValidating);
     const [kakaoUser, setKakaoUser] = useState<KakaoUser | null>(null);
     const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
-    const [publicSettings, setPublicSettings] = useState<any>(null);
+    const [publicSettings, setPublicSettings] = useState<any>(() => {
+        if (typeof window === "undefined") return null;
+        try {
+            const cached = localStorage.getItem("public_settings_cache");
+            return cached ? JSON.parse(cached) : null;
+        } catch {
+            return null;
+        }
+    });
 
     // ── 역할 상태: 쿠키에서 즉시 읽기 ──
     const [userRole, setUserRoleState] = useState<"student" | "teacher" | null>(() => {
@@ -156,6 +164,9 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
                 
                 // 설정 상태 저장 (방문제한 등은 캐싱하지 않음)
                 setPublicSettings(settings);
+                try {
+                    localStorage.setItem("public_settings_cache", JSON.stringify(settings));
+                } catch {}
 
                 // localStorage 캐시 갱신
                 localStorage.setItem(LS_SEMESTER_KEY, serverKey);

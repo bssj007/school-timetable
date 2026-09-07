@@ -14,6 +14,7 @@ import { mealRouter } from "../routes/meal";
 import { runMigrations } from "./migrate";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { sql } from "drizzle-orm";
+import { parseUA } from "../lib/uaDetect";
 
 async function startServer() {
   // Run migrations on startup (Local Dev)
@@ -32,6 +33,7 @@ async function startServer() {
 
       const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
       const userAgent = req.headers['user-agent'] || '';
+      const ua = parseUA(userAgent); // UA 파싱 (browserDetect.ts Layer 2 서버 포트)
 
       let grade: any = null, classNum: any = null, studentNumber: any = null;
       let kakaoId: any = null, kakaoNickname: any = null;
@@ -70,8 +72,13 @@ async function startServer() {
             classNum: classNum?.toString(),
             studentNumber: studentNumber?.toString(),
             kakaoId,
-            kakaoNickname
-          }).run();
+            kakaoNickname,
+            // UA 파싱 결과
+            deviceType: ua.deviceType,
+            browserKey: ua.browserKey,
+            os: ua.os ?? null,
+            isInApp: ua.isInApp ? 1 : 0,
+          } as any).run();
 
           let studentId: number | null = null;
           if (grade && classNum && studentNumber) {
@@ -100,13 +107,22 @@ async function startServer() {
             kakaoNickname,
             lastAccess: new Date(),
             modificationCount: isModification ? 1 : 0,
-            userAgent
-          }).onConflictDoUpdate({
+            userAgent,
+            // UA 파싱 결과
+            deviceType: ua.deviceType,
+            browserKey: ua.browserKey,
+            os: ua.os ?? null,
+            isInApp: ua.isInApp ? 1 : 0,
+          } as any).onConflictDoUpdate({
             target: ipProfiles.ip,
             set: {
               lastAccess: new Date(),
-              studentId: studentId ?? undefined, // Keep existing if null? Drizzle handles this
+              studentId: studentId ?? undefined,
               userAgent,
+              deviceType: ua.deviceType,
+              browserKey: ua.browserKey,
+              os: ua.os ?? null,
+              isInApp: ua.isInApp ? 1 : 0,
               kakaoId: kakaoId || sql`kakaoId`,
               kakaoNickname: kakaoNickname || sql`kakaoNickname`,
               modificationCount: isModification ? sql`modificationCount + 1` : sql`modificationCount`

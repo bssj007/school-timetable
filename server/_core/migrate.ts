@@ -94,6 +94,29 @@ export async function runMigrations() {
             )
         `);
 
+        // ── On-the-fly column migrations ──────────────────────────────────────────
+        // UA 파싱 결과 컬럼 추가 (deviceType / browserKey / os / isInApp)
+        // SQLite 는 ADD COLUMN IF NOT EXISTS 미지원 → 이미 존재하면 try/catch 로 무시
+        const addColumns: [string, string, string][] = [
+            // [table, column, type]
+            ["access_logs", "deviceType",  "TEXT"],          // mobile | tablet | desktop
+            ["access_logs", "browserKey",  "TEXT"],          // chrome | samsung | safari | firefox | other
+            ["access_logs", "os",          "TEXT"],          // ios | android | windows | macos | linux
+            ["access_logs", "isInApp",     "INTEGER DEFAULT 0"], // 0 | 1
+            ["ip_profiles", "deviceType",  "TEXT"],
+            ["ip_profiles", "browserKey",  "TEXT"],
+            ["ip_profiles", "os",          "TEXT"],
+            ["ip_profiles", "isInApp",     "INTEGER DEFAULT 0"],
+        ];
+        for (const [table, col, type] of addColumns) {
+            try {
+                await (db as any).run(sql.raw(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`));
+                console.log(`[Migration] Added column: ${table}.${col}`);
+            } catch {
+                // 이미 존재하는 컬럼이면 무시 (SQLite: "duplicate column name")
+            }
+        }
+
         console.log("[Migration] Schema setup completed.");
 
     } catch (error) {

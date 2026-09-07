@@ -24,6 +24,22 @@ export const onRequest = async (context: any) => {
         const iconType = isSvg ? 'image/svg+xml' : 'image/png';
 
         const userAgent = context.request.headers.get('user-agent') || context.request.headers.get('User-Agent') || '';
+        const secChUaMobile = context.request.headers.get('sec-ch-ua-mobile');
+        const isMobileUA = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(userAgent);
+        const isDesktop = secChUaMobile === '?0' || (!isMobileUA && /Windows NT|Macintosh|Linux/i.test(userAgent));
+
+        // 데스크톱 환경에서는 PWA 정보를 제공하지 않음 (브라우저 주소줄 설치 문구 및 아이콘 차단)
+        if (isDesktop) {
+            return new Response(JSON.stringify({ error: 'PWA manifest not available on desktop' }), {
+                status: 404,
+                headers: {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'Cache-Control': 'no-store',
+                    'Vary': 'User-Agent, Sec-CH-UA-Mobile'
+                }
+            });
+        }
+
         const isSamsungBrowser = /SamsungBrowser/i.test(userAgent);
 
         const icons = isSvg
