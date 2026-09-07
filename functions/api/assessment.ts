@@ -30,7 +30,8 @@ async function ensureSchema(db: any) {
           classCode TEXT,
           isTeacherCreated INTEGER DEFAULT 0,
           activityType TEXT DEFAULT '수행평가',
-          lastModifiedIp TEXT
+          lastModifiedIp TEXT,
+          isAutoPredicted INTEGER DEFAULT 0
         )
     `;
     await db.prepare(tableSql).run();
@@ -50,6 +51,7 @@ async function ensureSchema(db: any) {
         "ALTER TABLE performance_assessments ADD COLUMN endDate TEXT",
         "ALTER TABLE performance_assessments ADD COLUMN submissionLink TEXT",
         "ALTER TABLE performance_assessments ADD COLUMN attachments TEXT DEFAULT '[]'",
+        "ALTER TABLE performance_assessments ADD COLUMN isAutoPredicted INTEGER DEFAULT 0",
     ];
     for (const sql of migrations) {
         try { await db.prepare(sql).run(); } catch (_) { /* 이미 존재하면 무시 */ }
@@ -500,6 +502,9 @@ export const onRequest = async (context: any) => {
 
             if (!id) return new Response('Missing ID', { status: 400 });
 
+            // 모든 컬럼이 존재함을 보장한 뒤 UPDATE
+            try { await ensureSchema(env.DB); } catch (_) {}
+
             const isTeacher = body.role === 'teacher' || body.isTeacherCreated === 1;
             // 학생 권한 비활성화 시 수정 및 연기 차단
             if (!isTeacher) {
@@ -607,6 +612,18 @@ export const onRequest = async (context: any) => {
             } catch (updateError: any) {
                 const errorMsg = updateError.message || "";
 
+                // Auto-Heal: Missing Column 'isAutoPredicted'
+                if ((errorMsg.includes("no such column") || errorMsg.includes("no column")) && errorMsg.includes("isAutoPredicted")) {
+                    console.log("[Assessment API] 'isAutoPredicted' column missing in PATCH. Attempting to add it.");
+                    try { await env.DB.prepare("ALTER TABLE performance_assessments ADD COLUMN isAutoPredicted INTEGER DEFAULT 0").run(); } catch (_) {}
+
+                    const retryResult = await env.DB.prepare(query).bind(...values).run();
+                    try { const { applyAutoPredictions } = await import('../server/autoPredict'); const { results } = await env.DB.prepare("SELECT * FROM performance_assessments WHERE isDeleted = 0").all(); await applyAutoPredictions(results, env.DB); } catch(e) { console.error("[Assessment API/PATCH] Predict error:", e); }
+                    return new Response(JSON.stringify({ success: true, result: retryResult }), {
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
                 // Auto-Heal: Missing Column 'tempDueDate' / 'tempClassTime'
                 if ((errorMsg.includes("no such column") || errorMsg.includes("no column")) && (errorMsg.includes("tempDueDate") || errorMsg.includes("tempClassTime"))) {
                     console.log("[Assessment API] 'temp' columns missing in PATCH. Attempting to add them.");
@@ -635,11 +652,7 @@ export const onRequest = async (context: any) => {
                         // Fallback: Update without IP
                         const fallbackUpdates = updates.filter(u => !u.includes("lastModifiedIp"));
                         const fallbackValues = values.slice(0, -2).concat(values.slice(-1)); // Remove IP from values (second to last), keep ID (last)
-                        // Wait, values structure: [val1, val2, ..., IP, ID]
-                        // We need to remove IP. IP is at index (values.length - 2).
 
-                        // Safer way to verify fallback construction:
-                        // Reconstruct query/values omitting IP
                         const fbUpdates: string[] = [];
                         const fbValues: any[] = [];
 
@@ -677,6 +690,21 @@ export const onRequest = async (context: any) => {
                         headers: { 'Content-Type': 'application/json' }
                     });
                 }
+
+                // General Auto-Heal: Run full ensureSchema on any missing column and retry
+                if (errorMsg.includes("no such column") || errorMsg.includes("no column")) {
+                    console.log("[Assessment API] General missing column detected in PATCH. Running ensureSchema:", errorMsg);
+                    try {
+                        await ensureSchema(env.DB);
+                        const retryResult = await env.DB.prepare(query).bind(...values).run();
+                        try { const { applyAutoPredictions } = await import('../server/autoPredict'); const { results } = await env.DB.prepare("SELECT * FROM performance_assessments WHERE isDeleted = 0").all(); await applyAutoPredictions(results, env.DB); } catch(e) { console.error("[Assessment API/PATCH] Predict error:", e); }
+                        return new Response(JSON.stringify({ success: true, result: retryResult }), {
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    } catch (retryErr) {
+                        console.error("[Assessment API] General auto-heal failed:", retryErr);
+                    }
+                }
                 
                 throw updateError;
             }
@@ -688,6 +716,23 @@ export const onRequest = async (context: any) => {
         return new Response('Method not allowed', { status: 405 });
 
     } catch (err: any) {
+        // D1 / SQLite 오류 발생 시 bug_reports 테이블에 서버 측 자동 기록 시도
+        try {
+            const errMsg = err?.message || String(err);
+            const lower = errMsg.toLowerCase();
+            if (env.DB && (lower.includes("d1_error") || lower.includes("sqlite") || lower.includes("no such column") || lower.includes("no such table") || lower.includes("d1_"))) {
+                await env.DB.prepare(
+                    "INSERT INTO bug_reports (studentName, grade, classNum, studentNumber, message) VALUES (?, ?, ?, ?, ?)"
+                ).bind(
+                    "서버 자동제보",
+                    null,
+                    null,
+                    null,
+                    `[서버 D1 오류] /api/assessment (${request.method}): ${errMsg}`
+                ).run();
+            }
+        } catch (_) {}
+
         return new Response(JSON.stringify({ error: err.message }), { status: 500 });
     }
 }

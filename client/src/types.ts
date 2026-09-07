@@ -16,6 +16,12 @@ export interface IPProfile {
     downloadCount?: number;
     lastAccess: string | null; // ISO Date string
     recentUserAgents: string[];
+    userAgent?: string | null;
+    appType?: "webview" | "pwa" | null;
+    os?: string | null;
+    browserKey?: string | null;
+    deviceType?: string | null;
+    isInApp?: boolean;
     isStandalone?: boolean;
     studentName?: string | null;      // 복합 식별자 — 이름 부분
     teacherName?: string | null;      // 선생님 이름 (sj_teacher_name 쿠키)

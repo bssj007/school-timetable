@@ -294,6 +294,9 @@ export async function ensureAllTables(db: any) {
         try {
             await db.prepare("ALTER TABLE bug_reports ADD COLUMN studentName TEXT").run();
         } catch (_) {}
+        try {
+            await db.prepare("ALTER TABLE performance_assessments ADD COLUMN isAutoPredicted INTEGER DEFAULT 0").run();
+        } catch (_) {}
 
         console.log('[DB] All tables ensured.');
     } catch (e) {

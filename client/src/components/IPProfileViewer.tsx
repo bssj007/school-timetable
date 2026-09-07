@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Ban, User, Clock, FileText, Monitor, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { IPProfile } from "../types";
+import { parseAppTypeFromUserAgent } from "@/lib/browserDetect";
 
 interface IPProfileViewerProps {
     initialData: IPProfile | null;
@@ -205,12 +206,35 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                 <span className="text-xs text-gray-500 font-bold flex items-center gap-1"><Clock className="w-3 h-3" /> 마지막 접속</span>
                                 <span className="text-sm font-mono">{data.lastAccess ? new Date(data.lastAccess + 'Z').toLocaleString() : '-'}</span>
                             </div>
-                            <div className="bg-purple-50 p-4 rounded-lg flex flex-col gap-1 border border-purple-200">
-                                <span className="text-xs text-purple-600 font-bold flex items-center gap-1"><Smartphone className="w-3 h-3" /> PWA 앱 설치</span>
-                                <span className="text-2xl font-bold">
-                                    {data.isStandalone ? <span className="text-purple-600">설치됨</span> : <span className="text-gray-400 text-lg">미사용</span>}
-                                </span>
-                            </div>
+                            {(() => {
+                                const appType = data.appType || parseAppTypeFromUserAgent(data.recentUserAgents?.[0] || (data as any).userAgent, data.isStandalone);
+                                if (appType === 'webview') {
+                                    return (
+                                        <div className="bg-emerald-50 p-4 rounded-lg flex flex-col gap-1 border border-emerald-200">
+                                            <span className="text-xs text-emerald-700 font-bold flex items-center gap-1"><Smartphone className="w-3 h-3" /> 앱 설치 상태</span>
+                                            <span className="text-xl font-bold text-emerald-700">
+                                                정식 앱 <span className="text-xs font-normal text-emerald-600">(WebView)</span>
+                                            </span>
+                                        </div>
+                                    );
+                                }
+                                if (appType === 'pwa') {
+                                    return (
+                                        <div className="bg-purple-50 p-4 rounded-lg flex flex-col gap-1 border border-purple-200">
+                                            <span className="text-xs text-purple-600 font-bold flex items-center gap-1"><Smartphone className="w-3 h-3" /> 앱 설치 상태</span>
+                                            <span className="text-xl font-bold text-purple-600">
+                                                PWA <span className="text-xs font-normal text-purple-500">(홈화면 추가)</span>
+                                            </span>
+                                        </div>
+                                    );
+                                }
+                                return (
+                                    <div className="bg-gray-50 p-4 rounded-lg flex flex-col gap-1 border border-gray-200">
+                                        <span className="text-xs text-gray-500 font-bold flex items-center gap-1"><Smartphone className="w-3 h-3" /> 앱 설치 상태</span>
+                                        <span className="text-xl font-bold text-gray-400">미사용</span>
+                                    </div>
+                                );
+                            })()}
                             <div className="bg-yellow-50 p-4 rounded-lg flex flex-col gap-1 border border-yellow-100 md:col-span-4">
                                 <span className="text-xs text-yellow-700 font-bold flex items-center gap-1"><User className="w-3 h-3" /> 카카오 계정</span>
                                 <div className="flex flex-wrap gap-1 mt-1">

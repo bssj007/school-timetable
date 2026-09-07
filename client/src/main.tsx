@@ -3,11 +3,11 @@ import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
-import { agent, checkIsInstalledApp } from "@/lib/browserDetect";
+import { agent, checkIsInstalledApp, getInstalledAppType } from "@/lib/browserDetect";
 import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
-import { initGlobalErrorHandlers } from "./lib/autoErrorReporter";
+import { initGlobalErrorHandlers, checkAndReportD1Error } from "./lib/autoErrorReporter";
 import "./index.css";
 
 // 글로벌 오류 핸들러 등록 (앱 마운트 전)
@@ -54,10 +54,14 @@ if (typeof window !== 'undefined') {
   }
 
   // agent.isInstalledApp — browserDetect.ts (standalone + TWA/WebView 통합 감지)
-  // Track PWA Installation Status (모바일 전용)
-  if ((agent.isInstalledApp || checkIsInstalledApp()) && agent.isMobile) {
+  // Track PWA / WebView Installation Status (모바일 전용)
+  const installedAppType = getInstalledAppType();
+  if ((agent.isInstalledApp || checkIsInstalledApp() || installedAppType) && agent.isMobile) {
     document.cookie = "pwa_standalone=1; max-age=31536000; path=/";
     try { sessionStorage.setItem("is_pwa_standalone", "1"); } catch {}
+    if (installedAppType) {
+      document.cookie = `app_installed_type=${installedAppType}; max-age=31536000; path=/`;
+    }
   }
 
   // Register beforeinstallprompt as early as possible, BEFORE React renders.
@@ -90,6 +94,7 @@ queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.query.state.error;
     redirectToLoginIfUnauthorized(error);
+    checkAndReportD1Error(error, "React Query Cache");
     console.error("[API Query Error]", error);
   }
 });
@@ -98,6 +103,7 @@ queryClient.getMutationCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.mutation.state.error;
     redirectToLoginIfUnauthorized(error);
+    checkAndReportD1Error(error, "React Mutation Cache");
     console.error("[API Mutation Error]", error);
   }
 });

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { agent, shouldShowDownloadPage, getCurrentBypassEnvironment, type BypassEnvironmentKey } from "@/lib/browserDetect";
+import { agent, shouldShowDownloadPage, getCurrentBypassEnvironment, parseAppTypeFromUserAgent, type BypassEnvironmentKey } from "@/lib/browserDetect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7475,20 +7475,55 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         });
                                     };
 
-                                    // ── 앱 사용 여부 배지 헬퍼 ──────────────────────────────
-                                    // isStandalone = PWA standalone / TWA/WebView 실행 여부
-                                    // os = 플랫폼 (ios/android/windows/macos/linux)
-                                    const renderAppBadge = (isStandalone: boolean | undefined, os: string | null | undefined) => {
-                                        if (!isStandalone) return <span className="text-gray-300 text-xs">-</span>;
+                                    // ── 앱 사용 여부 판정 및 배지 헬퍼 ────────────────────────
+                                    const resolveUserAppType = (u: IPProfile | undefined | null): "webview" | "pwa" | null => {
+                                        if (!u) return null;
+                                        if (u.appType === "webview" || u.appType === "pwa") return u.appType;
+                                        const ua = u.userAgent || u.recentUserAgents?.[0] || "";
+                                        return parseAppTypeFromUserAgent(ua, !!u.isStandalone);
+                                    };
+
+                                    const renderAppBadge = (u: IPProfile | undefined | null) => {
+                                        if (!u) return <span className="text-gray-300 text-xs">-</span>;
+                                        const appType = resolveUserAppType(u);
+                                        if (!appType) return <span className="text-gray-300 text-xs">-</span>;
+
+                                        let os = u.os;
+                                        if (!os) {
+                                            const ua = u.userAgent || u.recentUserAgents?.[0] || "";
+                                            if (/iPhone|iPad|iPod/i.test(ua)) os = 'ios';
+                                            else if (/Android/i.test(ua)) os = 'android';
+                                            else if (/Windows NT/i.test(ua)) os = 'windows';
+                                            else if (/Macintosh/i.test(ua)) os = 'macos';
+                                            else if (/Linux/i.test(ua)) os = 'linux';
+                                        }
+
                                         const platform =
                                             os === 'ios'     ? { label: 'iOS',     cls: 'bg-slate-800 text-white border-slate-700' } :
                                             os === 'android' ? { label: 'Android', cls: 'bg-green-600 text-white border-green-700' } :
                                             (os === 'windows' || os === 'macos' || os === 'linux')
                                                              ? { label: 'PC',      cls: 'bg-blue-600 text-white border-blue-700' } :
-                                                               { label: 'PWA',     cls: 'bg-purple-600 text-white border-purple-700' };
+                                                               { label: '',        cls: 'bg-purple-600 text-white border-purple-700' };
+
+                                        if (appType === 'webview') {
+                                            return (
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="font-mono text-xs px-1.5 py-0 bg-emerald-600 text-white border-emerald-700 whitespace-nowrap shadow-sm hover:bg-emerald-700"
+                                                    title="정식 설치된 앱 (WebView)"
+                                                >
+                                                    WebView{platform.label ? `·${platform.label}` : ''}
+                                                </Badge>
+                                            );
+                                        }
+
                                         return (
-                                            <Badge variant="secondary" className={`font-mono text-xs px-1.5 py-0 ${platform.cls}`}>
-                                                PWA·{platform.label}
+                                            <Badge
+                                                variant="secondary"
+                                                className="font-mono text-xs px-1.5 py-0 bg-purple-600 text-white border-purple-700 whitespace-nowrap shadow-sm hover:bg-purple-700"
+                                                title="PWA (홈화면 추가)"
+                                            >
+                                                PWA{platform.label ? `·${platform.label}` : ''}
                                             </Badge>
                                         );
                                     };
@@ -7558,7 +7593,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     : <span className="text-gray-300">-</span>}
                                             </TableCell>
                                             <TableCell>
-                                                {renderAppBadge(user.isStandalone, (user as any).os)}
+                                                {renderAppBadge(user)}
                                             </TableCell>
                                             <TableCell className="text-slate-400">
                                                 {user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}
@@ -7693,11 +7728,11 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     </TableCell>
                                                     <TableCell>
                                                         {(() => {
-                                                            const standalonePeer = group.ips.find(ip => ip.isStandalone);
-                                                            return renderAppBadge(
-                                                                !!standalonePeer,
-                                                                standalonePeer ? (standalonePeer as any).os : null
-                                                            );
+                                                            const webviewPeer = group.ips.find(ip => resolveUserAppType(ip) === 'webview');
+                                                            if (webviewPeer) return renderAppBadge(webviewPeer);
+                                                            const pwaPeer = group.ips.find(ip => resolveUserAppType(ip) === 'pwa');
+                                                            if (pwaPeer) return renderAppBadge(pwaPeer);
+                                                            return <span className="text-gray-400 text-xs">-</span>;
                                                         })()}
                                                     </TableCell>
                                                     <TableCell>
@@ -7786,7 +7821,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                             <SortHeader col="modCount" label="수정/추가/삭제" className="w-[120px] min-w-[120px]" />
                                                             <TableHead className="w-[80px] min-w-[80px]">출력</TableHead>
                                                             <TableHead className="w-[80px] min-w-[80px]">다운로드</TableHead>
-                                                            <TableHead className="w-[80px] min-w-[80px]">앱설치</TableHead>
+                                                            <TableHead className="w-[105px] min-w-[105px]">앱설치</TableHead>
                                                             <SortHeader col="lastAccess" label="마지막 접속" className="w-[160px] min-w-[160px]" />
                                                             <TableHead className="w-[160px] min-w-[160px]">알림</TableHead>
                                                             <TableHead className="w-[160px] min-w-[160px]">관리</TableHead>
@@ -7870,7 +7905,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                                 ) : <span className="text-gray-400 text-xs">-</span>}
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                {renderAppBadge(user.isStandalone, (user as any).os)}
+                                                                                {renderAppBadge(user)}
                                                                             </TableCell>
                                                                             <TableCell>{user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}</TableCell>
                                                                             <TableCell>

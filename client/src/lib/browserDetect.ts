@@ -401,6 +401,44 @@ export function checkIsInstalledApp(): boolean {
   return getInstalledAppType() !== null;
 }
 
+/**
+ * parseAppTypeFromUserAgent(ua, isStandalone)
+ * 특정 User-Agent 문자열과 isStandalone 여부로부터 WebView 정식 앱 vs PWA 앱 여부를 판정한다.
+ * (어드민 사용자 관리 테이블 및 IP 프로필 상세 보기에서 공통 사용)
+ */
+export function parseAppTypeFromUserAgent(
+  ua: string | null | undefined,
+  isStandalone?: boolean
+): "webview" | "pwa" | null {
+  const str = (ua || "").trim();
+  if (!str && !isStandalone) return null;
+
+  if (str) {
+    const isKakaoTalk = /KAKAOTALK/i.test(str);
+    const inApp = isKakaoTalk || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(str);
+    if (inApp) return null;
+
+    // 1. Android WebView / 정식 앱 감지
+      const isSeongjisuhaengApp = /SeongjisuhaengApp/i.test(str);
+      const hasAndroidWvToken = !/GSA\//i.test(str) && (/;\s*wv[;)]/i.test(str) || /\bwv\b/i.test(str));
+      const isAndroidWebViewUA = !/GSA\//i.test(str) && /Version\/[0-9.]+/i.test(str) && /Chrome\/[0-9.]+/i.test(str) && /Mobile Safari\/[0-9.]+/i.test(str);
+
+      // 2. iOS 정식 앱 (WKWebView) 감지
+      const isIOSDevice = /iPhone|iPad|iPod/i.test(str) || (/Macintosh/i.test(str) && /Mobile/i.test(str));
+      const isIOSApp = isIOSDevice && !/CriOS/i.test(str) && !/FxiOS/i.test(str) && !/Safari\//i.test(str);
+
+      if (isSeongjisuhaengApp || hasAndroidWvToken || isAndroidWebViewUA || isIOSApp) {
+        return "webview";
+      }
+  }
+
+  if (isStandalone) {
+    return "pwa";
+  }
+
+  return null;
+}
+
 // ── 통합 감지 함수 ────────────────────────────────────────────────────────────
 
 /**

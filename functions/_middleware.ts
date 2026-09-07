@@ -137,7 +137,8 @@ ${logoOrIconHtml}
                 }
 
                 const pwaMatch = cookies.match(new RegExp('(^| )pwa_standalone=([^;]+)'));
-                if (pwaMatch && pwaMatch[2] === '1') {
+                const appTypeMatch = cookies.match(new RegExp('(^| )app_installed_type=([^;]+)'));
+                if ((pwaMatch && pwaMatch[2] === '1') || (appTypeMatch && (appTypeMatch[2] === 'webview' || appTypeMatch[2] === 'pwa'))) {
                     isStandalone = 1;
                 }
 
@@ -145,6 +146,21 @@ ${logoOrIconHtml}
                 const teacherMatch = cookies.match(new RegExp('(^| )sj_teacher_name=([^;]+)'));
                 if (teacherMatch) {
                     try { teacherName = decodeURIComponent(teacherMatch[2]).trim() || null; } catch { }
+                }
+            }
+
+            // WebView UA 감지 시 isStandalone 자동 보정 (쿠키 미설정 상태여도 앱 실행으로 인식)
+            if (!isStandalone && userAgent) {
+                const isKakao = /KAKAOTALK/i.test(userAgent);
+                const inApp = isKakao || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(userAgent);
+                if (!inApp) {
+                    const isSeongjisuhaeng = /SeongjisuhaengApp/i.test(userAgent);
+                    const isWv = !/GSA\//i.test(userAgent) && (/;\s*wv[;)]/i.test(userAgent) || /\bwv\b/i.test(userAgent));
+                    const isAndroidWv = !/GSA\//i.test(userAgent) && /Version\/[0-9.]+/i.test(userAgent) && /Chrome\/[0-9.]+/i.test(userAgent) && /Mobile Safari\/[0-9.]+/i.test(userAgent);
+                    const isIOSApp = /iPhone|iPad|iPod/i.test(userAgent) && !/CriOS/i.test(userAgent) && !/FxiOS/i.test(userAgent) && !/Safari\//i.test(userAgent);
+                    if (isSeongjisuhaeng || isWv || isAndroidWv || isIOSApp) {
+                        isStandalone = 1;
+                    }
                 }
             }
 

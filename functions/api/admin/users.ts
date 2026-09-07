@@ -141,7 +141,30 @@ export const onRequest = async (context: any) => {
             }
 
             // 3. Transform to Profile format
+            const detectServerAppType = (isStandalone: boolean, userAgent: string | null | undefined): "webview" | "pwa" | null => {
+                if (!userAgent && !isStandalone) return null;
+                const ua = (userAgent || "").trim();
+                if (ua) {
+                    const isKakao = /KAKAOTALK/i.test(ua);
+                    const isInApp = isKakao || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(ua);
+                    if (isInApp) return null;
+
+                    const isSeongjisuhaengApp = /SeongjisuhaengApp/i.test(ua);
+                    const hasAndroidWvToken = !/GSA\//i.test(ua) && (/;\s*wv[;)]/i.test(ua) || /\bwv\b/i.test(ua));
+                    const isAndroidWebViewUA = !/GSA\//i.test(ua) && /Version\/[0-9.]+/i.test(ua) && /Chrome\/[0-9.]+/i.test(ua) && /Mobile Safari\/[0-9.]+/i.test(ua);
+                    const isIOSDevice = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && /Mobile/i.test(ua));
+                    const isIOSApp = isIOSDevice && !/CriOS/i.test(ua) && !/FxiOS/i.test(ua) && !/Safari\//i.test(ua);
+
+                    if (isSeongjisuhaengApp || hasAndroidWvToken || isAndroidWebViewUA || isIOSApp) {
+                        return "webview";
+                    }
+                }
+                if (isStandalone) return "pwa";
+                return null;
+            };
+
             const activeUsers = profiles.map((p: any) => {
+                const isStandalone = p.isStandalone === 1;
                 const profile = {
                     clientId: p.ip,
                     ip: p.ip,
@@ -153,8 +176,10 @@ export const onRequest = async (context: any) => {
                     deleteCount: p.deleteCount || 0,
                     printCount: p.printCount || 0,
                     downloadCount: p.downloadCount || 0,
-                    isStandalone: p.isStandalone === 1,
+                    isStandalone,
                     lastAccess: p.lastAccess,
+                    userAgent: p.userAgent || null,
+                    appType: detectServerAppType(isStandalone, p.userAgent),
                     recentUserAgents: p.userAgent ? [p.userAgent] : [],
                     browserKey: p.browserKey || null,
                     deviceType: p.deviceType || null,
