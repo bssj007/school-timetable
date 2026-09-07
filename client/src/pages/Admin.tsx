@@ -10270,21 +10270,24 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
 
     const currentClientIp = settingsData?.client_ip || "";
 
-    // ── 접속제한 우회 (maintenance bypass) 쿠키 헬퍼 ──────────────────────────────
-    // 쿠키: maintenance_bypass_{key} — 30일 보관, 해당 기기/브라우저에서만 유효
+    // ── 접속제한 우회 (maintenance bypass) localStorage 헬퍼 ──────────────────────────────
+    // localStorage: 만료 없음 — 명시적으로 비활성화하기 전까지 영구 유지
     type BypassKey = "chrome" | "samsung" | "safari" | "other" | "pwa_app" | "webview_app";
 
     const readBypassCookie = (key: BypassKey): boolean => {
-        if (typeof document === "undefined") return false;
-        return document.cookie.split(";").some((c) => c.trim() === `maintenance_bypass_${key}=1`);
+        if (typeof window === "undefined") return false;
+        // localStorage 우선, 구형 쿠키 fallback
+        return localStorage.getItem(`maintenance_bypass_${key}`) === "1" ||
+            document.cookie.split(";").some((c) => c.trim() === `maintenance_bypass_${key}=1`);
     };
     const writeBypassCookie = (key: BypassKey, enable: boolean) => {
         if (enable) {
-            const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toUTCString();
-            document.cookie = `maintenance_bypass_${key}=1; path=/; expires=${expires}; SameSite=Lax`;
+            localStorage.setItem(`maintenance_bypass_${key}`, "1");
         } else {
-            document.cookie = `maintenance_bypass_${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax`;
+            localStorage.removeItem(`maintenance_bypass_${key}`);
         }
+        // 구형 쿠키가 남아 있으면 함께 삭제 (마이그레이션 정리)
+        document.cookie = `maintenance_bypass_${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax`;
     };
 
     // ⚠️ Rules of Hooks: early return 이전에 선언해야 함

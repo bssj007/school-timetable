@@ -355,8 +355,8 @@ export default function TeacherPage() {
   const [selectedAssessment, setSelectedAssessment] = useState<AssessmentItem | null>(null);
 
   // ── 모바일 뷰 모드 선택기 ──
-  type MobileViewMode = 'daily' | 'homework' | 'calendar';
-  const [mobileViewMode, setMobileViewMode] = useState<MobileViewMode>('daily');
+  type ViewMode = 'daily' | 'homework' | 'calendar';
+  const [viewMode, setViewMode] = useState<ViewMode>('daily');
   // 달력에서 클릭한 날짜 (당일형 이동용)
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<string | null>(null);
   // 달력 표시 월 (기본: 이번 달)
@@ -401,19 +401,19 @@ export default function TeacherPage() {
 
   // 달력 탭 진입 시 항상 이번 달로 초기화
   useEffect(() => {
-    if (mobileViewMode === 'calendar') {
+    if (viewMode === 'calendar') {
       const now = new Date();
       setCalendarMonth({ year: now.getFullYear(), month: now.getMonth() });
     }
     // 당일형이 아닌 탭으로 전환 시 weekOffset을 디폴트(오늘 기준)로 초기화
-    if (mobileViewMode !== 'daily') {
+    if (viewMode !== 'daily') {
       const today = new Date();
       const day = today.getDay();
       setWeekOffset((day === 0 || day === 6) ? 1 : 0);
     }
     // 숙제형 탭 전환 시 wizard 페이지 리셋
-    if (mobileViewMode === 'homework') setHwPage(1);
-  }, [mobileViewMode]);
+    if (viewMode === 'homework') setHwPage(1);
+  }, [viewMode]);
 
 
   useEffect(() => {
@@ -1656,7 +1656,7 @@ export default function TeacherPage() {
 
   return (
     <div 
-      className="w-full min-h-screen sm:h-dvh sm:overflow-hidden px-2 sm:px-6 md:px-8 lg:px-10 pt-2 sm:pt-4 pb-0 sm:pb-5 flex flex-col"
+      className="w-full min-h-screen sm:h-dvh overflow-x-hidden sm:overflow-hidden px-2 sm:px-6 md:px-8 lg:px-10 pt-2 sm:pt-4 pb-0 sm:pb-5 flex flex-col"
       style={{
         backgroundColor: '#f6e7c9',
         backgroundImage: `
@@ -1720,7 +1720,7 @@ export default function TeacherPage() {
         <div className="hidden sm:flex flex-row gap-3 md:gap-4 xl:gap-6 items-center mb-3 flex-shrink-0">
 
           {/* ── 좌: 제목 + 주선택기 (콘텐츠 테이블 열과 동일 비율 flex:65) ── */}
-          <div className="min-w-0 overflow-hidden flex items-center gap-3" style={{ flexGrow: 65, flexShrink: 1 }}>
+          <div className="min-w-0 overflow-hidden flex items-center gap-3" style={{ flexGrow: 65, flexShrink: 1, flexBasis: '0%' }}>
 
             {/* 뱃지형 제목 */}
             <h1 className="text-xl md:text-2xl font-extrabold text-gray-900 tracking-tight shrink-0 truncate leading-tight">
@@ -1730,21 +1730,23 @@ export default function TeacherPage() {
             </h1>
 
             {/* 주 선택기 — ml-auto로 표 열 오른쪽 끝에 정렬 */}
-            <div className={`flex flex-col items-center gap-0.5 shrink-0 ml-auto ${mobileViewMode !== 'daily' ? 'invisible pointer-events-none' : ''}`}>
-              <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400 shadow-md">
+            <div className={`flex flex-col items-center gap-0.5 shrink-0 ml-auto ${viewMode !== 'daily' ? 'invisible pointer-events-none' : ''}`}>
+              <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400 shadow-md"
+                style={{ fontSize: 'clamp(10px, 1.5vw, 14px)' }}
+              >
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-8 h-8 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
-                  style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                  className="p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
+                  style={{ width: '2.2em', height: '2.2em', WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
                   onClick={(e) => { setWeekOffset(prev => prev - 1); (e.currentTarget as HTMLElement).blur(); }}
                   disabled={weekOffset <= -2}
                   title="이전 주"
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft style={{ width: '1.2em', height: '1.2em' }} />
                 </Button>
-                <span className="flex flex-col items-center px-1 select-none">
-                  <span className={`text-sm font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-white' : 'text-yellow-300'}`}>
+                <span className="flex flex-col items-center min-w-[6em] px-1 select-none">
+                  <span className={`text-[1em] font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-white' : 'text-yellow-300'}`}>
                     {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
                   </span>
                   <span className="text-[0.7em] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
@@ -1752,16 +1754,17 @@ export default function TeacherPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-8 h-8 p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
-                  style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+                  className="p-0 rounded-full text-white hover:bg-white/25 active:bg-white/40 focus:bg-transparent focus:outline-none focus:ring-0 focus-visible:ring-0 disabled:opacity-40 select-none cursor-pointer"
+                  style={{ width: '2.2em', height: '2.2em', WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
                   onClick={(e) => { setWeekOffset(prev => prev + 1); (e.currentTarget as HTMLElement).blur(); }}
                   disabled={weekOffset >= 8}
                   title="다음 주"
                 >
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight style={{ width: '1.2em', height: '1.2em' }} />
                 </Button>
               </div>
-              {mobileViewMode === 'daily' && isOutOfDateRange && (
+
+              {viewMode === 'daily' && isOutOfDateRange && (
                 <span className="text-xs font-bold text-red-500 bg-red-50/80 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse whitespace-nowrap">
                   미확정 시간표
                 </span>
@@ -1770,50 +1773,58 @@ export default function TeacherPage() {
           </div>
 
           {/* ── 우: 네비게이션 버튼 (콘텐츠 패널 열과 동일 비율 flex:35) ── */}
-          <div className="hidden sm:flex shrink-0 items-center justify-end gap-1.5 sm:gap-2" style={{ flexGrow: 35, flexShrink: 0 }}>
+          {/* ── 우: 네비게이션 버튼 (콘텐츠 패널 열과 동일 비율 flex:35) ── */}
+          {/* font-size: clamp()로 viewport 너비에 비례해 버튼 전체가 자연스럽게 스케일 */}
+          <div className="hidden sm:flex items-center justify-end overflow-hidden"
+            style={{ flexGrow: 35, flexShrink: 1, flexBasis: '0%', fontSize: 'clamp(10px, 1.4vw, 13px)', gap: '0.5em' }}
+          >
             <Button variant="outline" size="sm"
-              className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
+              className="rounded-full shadow-sm bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold whitespace-nowrap shrink-0"
+              style={{ fontSize: '1em', padding: '0.35em 0.8em', height: 'auto', gap: '0.4em' }}
               onClick={handleReturnToStudentPage}
               title="학생용 페이지로 이동"
             >
-              <ArrowLeft className="w-3.5 h-3.5 text-emerald-600" />
+              <ArrowLeft style={{ width: '1.3em', height: '1.3em' }} className="text-emerald-600" />
               <span>학생용</span>
             </Button>
             <Link href="/meal">
               <Button variant="outline" size="sm"
-                className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-orange-50 border-orange-200 text-orange-700 font-semibold"
+                className="rounded-full shadow-sm bg-white hover:bg-orange-50 border-orange-200 text-orange-700 font-semibold whitespace-nowrap shrink-0"
+                style={{ fontSize: '1em', padding: '0.35em 0.8em', height: 'auto', gap: '0.4em' }}
                 title="급식 정보 보기"
               >
-                <UtensilsCrossed className="w-3.5 h-3.5 text-orange-500" />
+                <UtensilsCrossed style={{ width: '1.3em', height: '1.3em' }} className="text-orange-500" />
                 <span>급식정보</span>
-                <ArrowRight className="w-3.5 h-3.5 text-orange-500" />
+                <ArrowRight style={{ width: '1.3em', height: '1.3em' }} className="text-orange-500" />
               </Button>
             </Link>
             <Button variant="outline" size="sm"
-              className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
+              className="rounded-full shadow-sm bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold whitespace-nowrap shrink-0"
+              style={{ fontSize: '1em', padding: '0.35em 0.8em', height: 'auto', gap: '0.4em' }}
               onClick={() => {
                 downloadDesktopShortcut("교사용_수행평가_등록시스템");
                 toast.success("바탕화면 바로가기(.url) 파일이 다운로드되었습니다.");
               }}
               title="PC 바탕화면에 바로가기 파일 다운로드"
             >
-              <Download className="w-3.5 h-3.5 text-blue-600" />
+              <Download style={{ width: '1.3em', height: '1.3em' }} className="text-blue-600" />
               <span>바로가기</span>
             </Button>
           </div>
+
         </div>
 
 
-        {/* ===== CONTENT AREA: flex-col on mobile (panel top, title+week, table bottom), flex-row on desktop ===== */}
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 md:gap-4 xl:gap-6 items-start sm:items-stretch sm:flex-1 sm:min-h-0">
+        {/* ===== CONTENT AREA: flex-col on narrow screen (< sm), flex-row on wide screen (≥ sm) ===== */}
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 md:gap-4 xl:gap-6 sm:items-stretch sm:flex-1 sm:min-h-0">
 
-        {/* ===== MOBILE ONLY: Title row — 항상 표시 ===== */}
+        {/* ===== 좁은화면(< sm) 전용: Title row — sm:hidden으로 제어 ===== */}
         <div className="sm:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 shrink-0 min-h-[44px]">
           <h2 className="text-lg font-extrabold truncate leading-tight">
             <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h2>
           {/* 주 선택기 — 레이아웃 공간 항상 유지, 당일형이 아닐 때 invisible */}
-          <div className={`flex flex-col items-center gap-0.5 shrink-0 ${mobileViewMode !== 'daily' ? 'invisible pointer-events-none' : ''}`}>
+          <div className={`flex flex-col items-center gap-0.5 shrink-0 ${viewMode !== 'daily' ? 'invisible pointer-events-none' : ''}`}>
             <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400">
               <Button
                 variant="ghost"
@@ -1829,7 +1840,7 @@ export default function TeacherPage() {
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="flex flex-col items-center min-w-[82px] px-1 select-none">
+              <span className="flex flex-col items-center px-1 select-none">
                 <span className={`text-sm font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-white' : 'text-yellow-300'}`}>
                   {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
                 </span>
@@ -1851,7 +1862,7 @@ export default function TeacherPage() {
               </Button>
             </div>
             {/* 미확정 뱃지 — 당일형 + 범위 초과 시에만 표시 */}
-            {mobileViewMode === 'daily' && isOutOfDateRange && (
+            {viewMode === 'daily' && isOutOfDateRange && (
               <span className="text-xs font-bold text-red-500 bg-red-50/80 border border-red-200 rounded px-1.5 py-0.5 leading-tight animate-pulse whitespace-nowrap">
                 미확정 시간표
               </span>
@@ -1859,7 +1870,7 @@ export default function TeacherPage() {
           </div>
         </div>
 
-        {/* ===== TIMETABLE COLUMN: order-2 on mobile, order-1 on desktop ===== */}
+        {/* ===== 시간표 열: 좁은화면 order-2 / 넓은화면 order-1 (sm: 브레이크포인트 기준) ===== */}
         <div className="w-full min-w-0 flex flex-col order-2 sm:order-1 sm:min-h-0" style={{ flex: '65 1 0', minWidth: 0 }}>
 
         {/* ===== 뷰 모드 선택기 (당일형 / 숙제형 / 달력) ===== */}
@@ -1869,16 +1880,16 @@ export default function TeacherPage() {
               { key: 'daily',    label: '당일형 수행', Icon: Clock },
               { key: 'homework', label: '숙제형 수행', Icon: BookOpen },
               { key: 'calendar', label: '달력',        Icon: CalendarDays },
-            ] as { key: MobileViewMode; label: string; Icon: React.ElementType }[]).map(({ key, label, Icon }, i, arr) => (
+            ] as { key: ViewMode; label: string; Icon: React.ElementType }[]).map(({ key, label, Icon }, i, arr) => (
               <button
                 key={key}
                 type="button"
-                onClick={() => setMobileViewMode(key)}
+                onClick={() => setViewMode(key)}
                 style={{ WebkitTapHighlightColor: 'transparent' }}
                 className={[
                   'flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-2 sm:py-2.5 px-2 sm:px-3 text-xs sm:text-sm font-bold leading-tight transition-all select-none cursor-pointer',
                   i > 0 ? 'border-l border-slate-200' : '',
-                  mobileViewMode === key
+                  viewMode === key
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:bg-slate-100',
                 ].join(' ')}
@@ -1891,7 +1902,7 @@ export default function TeacherPage() {
         </div>
 
         {/* ===== 숙제형 패널 ===== */}
-        {mobileViewMode === 'homework' && (
+        {viewMode === 'homework' && (
           <div
             className="w-full rounded-xl shadow-sm flex flex-col overflow-hidden sm:flex-1 sm:min-h-0"
             style={{
@@ -2060,7 +2071,7 @@ export default function TeacherPage() {
                   {hwPage === 1 ? (
                     <button
                       type="button"
-                      onClick={() => setMobileViewMode('daily')}
+                      onClick={() => setViewMode('daily')}
                       className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition-colors flex items-center justify-center gap-1"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -2130,7 +2141,7 @@ export default function TeacherPage() {
                           onSuccess: () => {
                             setHwForm({ subject: '', classNum: '', startDate: '', dueDate: '', title: '', content: '', link: '', activityType: '수행평가' });
                             setHwPage(1);
-                            setMobileViewMode('daily');
+                            setViewMode('daily');
                           }
                         });
                       }}
@@ -2149,7 +2160,7 @@ export default function TeacherPage() {
 
 
         {/* ===== 모바일: 달력 패널 ===== */}
-        {mobileViewMode === 'calendar' ? (() => {
+        {viewMode === 'calendar' ? (() => {
           const { year, month } = calendarMonth;
           const firstDay = new Date(year, month, 1);
           const totalDays = new Date(year, month + 1, 0).getDate();
@@ -2273,12 +2284,12 @@ export default function TeacherPage() {
                     curMon.setDate(today2.getDate() - (tdow === 0 ? 6 : tdow - 1));
                     const diffWeeks = Math.round((clickedMon.getTime() - curMon.getTime()) / (7 * 86400000));
                     setWeekOffset(Math.max(-2, Math.min(8, diffWeeks)));
-                    setMobileViewMode('daily');
+                    setViewMode('daily');
                   } else {
                     // 드래그: 숙제형 탭으로 이동 + 날짜 자동 입력
                     const [s, e2] = [ds, de].sort();
                     setHwForm(f => ({ ...f, startDate: s, dueDate: e2 }));
-                    setMobileViewMode('homework');
+                    setViewMode('homework');
                   }
                 }}
                 onPointerCancel={() => { setCalDragStart(null); setCalDragEnd(null); }}
@@ -2454,7 +2465,7 @@ export default function TeacherPage() {
 
       {/* Main Timetable — Card wrapper */}
       {/* 당일형이 아니면 표 숨김 */}
-      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col sm:min-h-0 ${mobileViewMode !== 'daily' ? 'hidden' : ''}`}>
+      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden sm:overflow-x-auto flex-1 flex flex-col sm:min-h-0 ${viewMode !== 'daily' ? 'hidden' : ''}`}>
           {(isTimetableLoading || isGroupDataLoading) ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
@@ -2469,7 +2480,7 @@ export default function TeacherPage() {
             </div>
           ) : timetableData && selectedSchedule ? (
             <div className="w-full flex-1 flex flex-col min-h-0 sm:h-full">
-              <table className="w-full table-fixed min-w-[420px] sm:h-full sm:flex-1" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: 'clamp(10px, 1.5vw, 13px)' }}>
+              <table className="w-full table-fixed sm:min-w-[420px] sm:h-full sm:flex-1" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: 'clamp(10px, 1.5vw, 13px)' }}>
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
@@ -2719,7 +2730,7 @@ export default function TeacherPage() {
 
       {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
       <div className="w-full sm:max-w-[400px] sm:min-w-[240px] shrink-0 flex flex-col order-3 sm:order-2 sm:sticky sm:top-4 h-fit" style={{ flex: '35 1 0' }}>
-        <div className="sm:bg-white sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-md flex flex-col h-fit sm:max-h-[calc(100vh-2rem)]">
+        <div className="sm:bg-white sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-md flex flex-col h-fit sm:max-h-[calc(100vh-2rem)] sm:pb-3">
           {/* Teacher Picker — 모바일 카드 / PC 패널 내부 바
                미인증 시: relative + min-height → 실버 absolute inset-0으로 꽉 채움
                선생님 선택기는 z-10으로 실버 위에 표시 */}
@@ -2797,7 +2808,7 @@ export default function TeacherPage() {
                     </span>
                   </div>
                   <div className="relative shrink-0">
-                    {mobileViewMode === 'homework' && (
+                    {viewMode === 'homework' && (
                       <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none z-30 animate-bounce">
                         <svg className="w-5 h-7.5 text-red-500 fill-red-500 filter drop-shadow-md" viewBox="0 0 24 32">
                           <path d="M12 30l-8-10h5V2h6v18h5l-8 10z" />
@@ -2809,7 +2820,7 @@ export default function TeacherPage() {
                       onClick={() => setShowAuthDialog(true)}
                       style={{ WebkitTapHighlightColor: 'transparent' }}
                       className={`shrink-0 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-md whitespace-nowrap ${
-                        mobileViewMode === 'homework' ? 'ring-2 ring-red-500 ring-offset-1 shadow-red-200' : ''
+                        viewMode === 'homework' ? 'ring-2 ring-red-500 ring-offset-1 shadow-red-200' : ''
                       }`}
                     >
                       로그인
@@ -2999,7 +3010,7 @@ export default function TeacherPage() {
 
           {/* Assessment List */}
           <div
-            className="overflow-y-auto px-1 sm:px-3 md:px-4 py-2.5 sm:max-h-[calc(100vh-200px)]"
+            className="overflow-y-auto px-1 sm:px-3 md:px-4 pt-2.5 pb-4 sm:max-h-[calc(100vh-200px)]"
             style={(() => {
               const activeIdx = subjectTabs.indexOf(effectiveSubjectFilter);
               if (activeIdx < 0) return {};
@@ -3111,7 +3122,7 @@ export default function TeacherPage() {
                           )}
                         </div>
                         <div className="shrink-0 text-right">
-                          {/* Mobile */}
+                          {/* 좁은화면(< sm): sm:hidden */}
                           <div className="sm:hidden flex items-center justify-end gap-1.5 whitespace-nowrap">
                             {helpfulCount > 0 && (
                               <span className="flex items-center gap-0.5 text-[10px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-1.5 py-0.5" title={`땡큐 ${helpfulCount}개`}>
@@ -3128,7 +3139,7 @@ export default function TeacherPage() {
                               </>
                             )}
                           </div>
-                          {/* Desktop */}
+                          {/* 넓은화면(≥ sm): hidden sm:block */}
                           <div className="hidden sm:block">
                             <div className="flex items-center justify-end gap-1.5">
                               {helpfulCount > 0 && (
@@ -3543,3 +3554,5 @@ export default function TeacherPage() {
     </div>
   );
 }
+
+

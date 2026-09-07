@@ -610,12 +610,18 @@ export function isInAppBrowserUA(): boolean {
  * 반환값이 true이면 maintenance_mode.active=true 이더라도 접속제한을 우회합니다.
  */
 export function getMaintenanceBypassCookie(): boolean {
-  if (typeof document === "undefined") return false;
+  if (typeof window === "undefined") return false;
+
+  // localStorage 기반 (만료 없음 — 명시적 비활성화 전까지 영구 유지)
+  // 구형 쿠키 기반 설정도 함께 확인 (마이그레이션 호환)
+  const readStorage = (key: string): boolean =>
+    localStorage.getItem(`maintenance_bypass_${key}`) === "1" ||
+    document.cookie.split(";").some((c) => c.trim() === `maintenance_bypass_${key}=1`);
 
   // 설치된 앱인 경우: installedAppType으로 구분
   if (agent.isInstalledApp) {
     const key = agent.installedAppType === "webview" ? "webview_app" : "pwa_app";
-    return document.cookie.split(";").some((c) => c.trim() === `maintenance_bypass_${key}=1`);
+    return readStorage(key);
   }
 
   // 일반 브라우저: browserKey로 구분
@@ -625,5 +631,5 @@ export function getMaintenanceBypassCookie(): boolean {
     chrome:  "chrome",
   };
   const key = keyMap[agent.browserKey] ?? "other";
-  return document.cookie.split(";").some((c) => c.trim() === `maintenance_bypass_${key}=1`);
+  return readStorage(key);
 }
