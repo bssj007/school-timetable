@@ -1656,7 +1656,7 @@ export default function TeacherPage() {
 
   return (
     <div 
-      className="w-full min-h-screen sm:h-dvh sm:overflow-hidden px-2 sm:px-3 md:px-4 pt-2 pb-0 flex flex-col"
+      className="w-full min-h-screen sm:h-dvh sm:overflow-hidden px-2 sm:px-6 md:px-8 lg:px-10 pt-2 sm:pt-4 pb-0 sm:pb-5 flex flex-col"
       style={{
         backgroundColor: '#f6e7c9',
         backgroundImage: `
@@ -1714,7 +1714,7 @@ export default function TeacherPage() {
 
       {/* 보기전용 배너: 바 인라인으로 이동 (fixed 배너 제거) */}
 
-      <div className="max-w-[1440px] mx-auto w-full sm:flex-1 flex flex-col sm:min-h-0">
+      <div className="max-w-[1280px] mx-auto w-full sm:flex-1 flex flex-col sm:min-h-0">
 
         {/* ===== PC 전용 TOP SECTION ===== */}
         <div className="hidden sm:flex flex-row gap-3 md:gap-4 xl:gap-6 items-center mb-3 flex-shrink-0">

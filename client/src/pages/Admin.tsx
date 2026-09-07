@@ -10270,6 +10270,54 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
 
     const currentClientIp = settingsData?.client_ip || "";
 
+    // ── 접속제한 우회 (maintenance bypass) 쿠키 헬퍼 ──────────────────────────────
+    // 쿠키: maintenance_bypass_{key} — 30일 보관, 해당 기기/브라우저에서만 유효
+    type BypassKey = "chrome" | "samsung" | "safari" | "other" | "pwa_app" | "webview_app";
+
+    const readBypassCookie = (key: BypassKey): boolean => {
+        if (typeof document === "undefined") return false;
+        return document.cookie.split(";").some((c) => c.trim() === `maintenance_bypass_${key}=1`);
+    };
+    const writeBypassCookie = (key: BypassKey, enable: boolean) => {
+        if (enable) {
+            const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toUTCString();
+            document.cookie = `maintenance_bypass_${key}=1; path=/; expires=${expires}; SameSite=Lax`;
+        } else {
+            document.cookie = `maintenance_bypass_${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax`;
+        }
+    };
+
+    // ⚠️ Rules of Hooks: early return 이전에 선언해야 함
+    const [bypassState, setBypassState] = React.useState<Record<BypassKey, boolean>>(() => ({
+        chrome:      readBypassCookie("chrome"),
+        samsung:     readBypassCookie("samsung"),
+        safari:      readBypassCookie("safari"),
+        other:       readBypassCookie("other"),
+        pwa_app:     readBypassCookie("pwa_app"),
+        webview_app: readBypassCookie("webview_app"),
+    }));
+
+    const [bypassConfirm, setBypassConfirm] = React.useState<{
+        key: BypassKey;
+        enable: boolean;
+        label: string;
+    } | null>(null);
+
+    const requestBypassToggle = (key: BypassKey, enable: boolean, label: string) => {
+        setBypassConfirm({ key, enable, label });
+    };
+    const confirmBypassToggle = () => {
+        if (!bypassConfirm) return;
+        writeBypassCookie(bypassConfirm.key, bypassConfirm.enable);
+        setBypassState((prev) => ({ ...prev, [bypassConfirm.key]: bypassConfirm.enable }));
+        toast.success(
+            bypassConfirm.enable
+                ? `[${bypassConfirm.label}] 접속제한 우회가 설정되었습니다.`
+                : `[${bypassConfirm.label}] 접속제한 우회가 해제되었습니다.`
+        );
+        setBypassConfirm(null);
+    };
+
     if (isLoading) {
         return <div className="text-gray-400 p-4">설정을 불러오는 중...</div>;
     }
@@ -10318,55 +10366,6 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
             value: isOther,
         },
     ];
-
-    // ── 접속제한 우회 (maintenance bypass) 쿠키 헬퍼 ──────────────────────────
-    // 쿠키: maintenance_bypass_{key} — 30일 보관, 해당 기기/브라우저에서만 유효
-    type BypassKey = "chrome" | "samsung" | "safari" | "other" | "pwa_app" | "webview_app";
-
-    const readBypassCookie = (key: BypassKey): boolean => {
-        if (typeof document === "undefined") return false;
-        return document.cookie.split(";").some((c) => c.trim() === `maintenance_bypass_${key}=1`);
-    };
-    const writeBypassCookie = (key: BypassKey, enable: boolean) => {
-        if (enable) {
-            const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toUTCString();
-            document.cookie = `maintenance_bypass_${key}=1; path=/; expires=${expires}; SameSite=Lax`;
-        } else {
-            document.cookie = `maintenance_bypass_${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax`;
-        }
-    };
-
-    // bypass 상태 — useState로 관리 (쿠키에서 초기값 읽기)
-    const [bypassState, setBypassState] = React.useState<Record<BypassKey, boolean>>(() => ({
-        chrome:      readBypassCookie("chrome"),
-        samsung:     readBypassCookie("samsung"),
-        safari:      readBypassCookie("safari"),
-        other:       readBypassCookie("other"),
-        pwa_app:     readBypassCookie("pwa_app"),
-        webview_app: readBypassCookie("webview_app"),
-    }));
-
-    // 확인 다이얼로그 state
-    const [bypassConfirm, setBypassConfirm] = React.useState<{
-        key: BypassKey;
-        enable: boolean;
-        label: string;
-    } | null>(null);
-
-    const requestBypassToggle = (key: BypassKey, enable: boolean, label: string) => {
-        setBypassConfirm({ key, enable, label });
-    };
-    const confirmBypassToggle = () => {
-        if (!bypassConfirm) return;
-        writeBypassCookie(bypassConfirm.key, bypassConfirm.enable);
-        setBypassState((prev) => ({ ...prev, [bypassConfirm.key]: bypassConfirm.enable }));
-        toast.success(
-            bypassConfirm.enable
-                ? `[${bypassConfirm.label}] 접속제한 우회가 설정되었습니다.`
-                : `[${bypassConfirm.label}] 접속제한 우회가 해제되었습니다.`
-        );
-        setBypassConfirm(null);
-    };
 
     return (
         <div className="space-y-5 p-1">
@@ -11081,6 +11080,9 @@ function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
         }
     });
 
+    // 모든 useState는 useMutation보다 먼저 선언 (React Hook 순서 규칙)
+    const [previewData, setPreviewData] = useState<any[] | null>(null);
+
     const isPaused = settingsData?.auto_predict_paused === 'true';
     const lastTime = settingsData?.last_auto_predict_time;
 
@@ -11124,7 +11126,6 @@ function AutoPredictSettings({ adminPassword }: { adminPassword: string }) {
         }
     });
 
-    const [previewData, setPreviewData] = useState<any[] | null>(null);
     const previewMutation = useMutation({
         mutationFn: async () => {
             const res = await fetch("/api/assessment?action=preview", {
