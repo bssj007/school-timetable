@@ -1112,8 +1112,8 @@ export default function TeacherPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTeacherId]);
 
-  // Build class+group nav tabs for the right panel (filtered by effectiveSubjectFilter)
-  const classTabs = useMemo(() => {
+  // Build class+group nav tabs for a given subject filter
+  const buildClassTabsForSubject = useCallback((subjectFilter?: string) => {
     const tabs: { id: string; grade: number; classNum: number; group: string; label: string }[] = [];
     if (!selectedSchedule) return tabs;
 
@@ -1132,7 +1132,7 @@ export default function TeacherPage() {
             const val = daySchedule[p];
             const decoded = decodeCell(val);
             if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
-              if (!effectiveSubjectFilter || isSubjectMatch(decoded.subjectName, [effectiveSubjectFilter])) {
+              if (!subjectFilter || isSubjectMatch(decoded.subjectName, [subjectFilter])) {
                 hasMatchingCell = true;
                 const cellG = computedGroupsG2[`${d - 1}-${p}`];
                 if (cellG) {
@@ -1164,7 +1164,7 @@ export default function TeacherPage() {
             const val = daySchedule[p];
             const decoded = decodeCell(val);
             if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
-              if (!effectiveSubjectFilter || isSubjectMatch(decoded.subjectName, [effectiveSubjectFilter])) {
+              if (!subjectFilter || isSubjectMatch(decoded.subjectName, [subjectFilter])) {
                 hasMatchingCell = true;
                 const cellG = computedGroupsG3[`${d - 1}-${p}`];
                 if (cellG) {
@@ -1194,7 +1194,7 @@ export default function TeacherPage() {
       }
 
       // 매칭 셀이 없는 경우(=이 class에서 해당 과목을 안 가르침) → 탭 생성 안 함
-      if (!hasMatchingCell && effectiveSubjectFilter) return;
+      if (!hasMatchingCell && subjectFilter) return;
 
       if (groupsInAss.size > 0) {
         const sortedGroups = Array.from(groupsInAss).sort();
@@ -1229,7 +1229,64 @@ export default function TeacherPage() {
     });
 
     return tabs;
-  }, [taughtClasses, selectedSchedule, computedGroupsG2, computedGroupsG3, electiveConfigsG2, electiveConfigsG3, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
+  }, [taughtClasses, selectedSchedule, computedGroupsG2, computedGroupsG3, electiveConfigsG2, electiveConfigsG3, teacherName, rawTeacherName]);
+
+  // Build class+group nav tabs for the right panel (filtered by effectiveSubjectFilter)
+  const classTabs = useMemo(() => {
+    return buildClassTabsForSubject(effectiveSubjectFilter);
+  }, [buildClassTabsForSubject, effectiveSubjectFilter]);
+
+  // 모든 과목에 걸쳐 현재 교사가 담당하는 (과목, 반, 그룹) 탭 목록
+  const allTeacherClassTabs = useMemo(() => {
+    if (!selectedSchedule) return [];
+    const subjectsToScan = subjectTabs.length > 0 ? subjectTabs : (taughtSubjects || []);
+    const all: { id: string; grade: number; classNum: number; group: string; label: string; subject: string }[] = [];
+
+    subjectsToScan.forEach(subj => {
+      const tabsForSubj = buildClassTabsForSubject(subj);
+      tabsForSubj.forEach(tab => {
+        all.push({ ...tab, subject: subj });
+      });
+    });
+
+    if (all.length === 0) {
+      return buildClassTabsForSubject('').map(t => ({ ...t, subject: '' }));
+    }
+    return all;
+  }, [selectedSchedule, subjectTabs, taughtSubjects, buildClassTabsForSubject]);
+
+  // 평가 항목이 현재 선택된 선생님의 수업(과목/반/그룹)에 해당하는지 판별
+  // 아래 과목별/반-그룹별 수행 리스트(panelAssessments)의 데이터 구조 및 필터링 규칙과 일치
+  const isAssessmentForTeacher = useCallback((a: AssessmentItem): boolean => {
+    if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
+
+    return allTeacherClassTabs.some(tab => {
+      if (tab.subject && a.subject && !isSubjectMatch(a.subject, [tab.subject])) return false;
+      if (a.grade !== tab.grade) return false;
+
+      // classNum=0은 "전체반"(이동수업 그룹 수업) — classCode(그룹)가 있어야 유효
+      if (a.classNum === 0) {
+        const aGroups = parseClassCode(a.classCode);
+        if (aGroups.length === 0) return false;
+        if (!aGroups.includes(tab.group || '')) return false;
+      } else {
+        // 일반 반 수행평가: 탭의 classNum과 일치해야 함
+        if (a.classNum !== tab.classNum) return false;
+        // 그룹 탭인 경우 classCode도 확인
+        if (tab.group && a.classCode && a.classCode.trim()) {
+          const allowedGroups = parseClassCode(a.classCode);
+          if (!allowedGroups.includes(tab.group)) return false;
+        }
+      }
+      return true;
+    });
+  }, [teacherName, rawTeacherName, taughtSubjects, allTeacherClassTabs]);
+
+  // 현재 선생님이 담당하는 전체 수행평가 (달력 뷰용 — 이동수업 ABCD 및 담당 과목/반 필터 적용)
+  const teacherCalendarAssessments = useMemo(() => {
+    if (!allAssessments) return [];
+    return allAssessments.filter(isAssessmentForTeacher);
+  }, [allAssessments, isAssessmentForTeacher]);
 
   // Auto-select first tab (based on full classTabs — will be refined after filteredClassTabs is computed)
   useEffect(() => {
@@ -1402,14 +1459,14 @@ export default function TeacherPage() {
     const counts = new Map<string, number>();
     subjectTabs.forEach(subject => {
       const count = (allAssessments || []).filter(a => {
-        if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
+        if (!isAssessmentForTeacher(a)) return false;
         if (a.subject !== subject) return false;
         return true;
       }).length;
       counts.set(subject, count);
     });
     return counts;
-  }, [subjectTabs, allAssessments, teacherName, rawTeacherName, taughtSubjects]);
+  }, [subjectTabs, allAssessments, isAssessmentForTeacher]);
 
   // 이동수업 수행평가의 강의반명(관리페이지 입력값) 조회 맵
   const lectureClassNameMap = useMemo(() => {
@@ -2338,7 +2395,7 @@ export default function TeacherPage() {
                   const inRange      = isInDragRange(dateStr);
                   const isRangeStart = isDragStartDate(dateStr);
                   const isRangeEnd   = isDragEndDate(dateStr);
-                  const hasDailyAssessment = (allAssessments || []).some(a => !a.endDate && a.dueDate === dateStr);
+                  const hasDailyAssessment = teacherCalendarAssessments.some(a => !a.endDate && a.dueDate === dateStr);
 
                   return (
                     <div
@@ -2367,7 +2424,7 @@ export default function TeacherPage() {
 
                 {/* ── 숙제형(기간형) 수행 오버레이 바 ── */}
                 {(() => {
-                  const hwAssessments = (allAssessments || []).filter(a => !!a.endDate && !!a.startDate);
+                  const hwAssessments = teacherCalendarAssessments.filter(a => !!a.endDate && !!a.startDate);
                   if (hwAssessments.length === 0) return null;
 
                   const numRows = Math.ceil((startDow + totalDays) / 7);
