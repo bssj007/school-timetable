@@ -100,12 +100,24 @@ function AppContent() {
 
   // 모바일 브라우저별 조건(Android Chrome/Google, PlayStore 등록 시 기타, iOS AppStore/Safari/Chrome) → 다운로드 유도 페이지로 리다이렉트
   // 이미 설치된 앱(standalone), dismiss된 경우, PC는 건너뜀
-  const _shouldDownload = shouldShowDownloadPage(publicSettings);
+  const _shouldDownload = Boolean(publicSettings && shouldShowDownloadPage(publicSettings));
   useEffect(() => {
     if (_shouldDownload && location === "/") {
       setLocation("/download");
     }
-  }, [_shouldDownload]);
+  }, [_shouldDownload, location]);
+
+  // ── 교사 리다이렉트 ──────────────────────────────────────────────────────────
+  // Rules of Hooks: 모든 useEffect는 반드시 어떠한 conditional return보다도 앞에 선언되어야 함!
+  // 동작:
+  //   1) 아래 동기 블록에서 return null → Dashboard가 단 한 프레임도 렌더되지 않음
+  //   2) 이 useEffect가 실행 → setLocation("/teacher") → wouter 상태 업데이트
+  //   3) 다음 렌더에서 /teacher 경로로 TeacherPage 렌더
+  useEffect(() => {
+    if (!isValidating && userRole === "teacher" && !isTeacherRoute && !isAdminRoute && !isMealRoute && !isPrivacyRoute) {
+      setLocation("/teacher");
+    }
+  }, [isValidating, userRole, isTeacherRoute, isAdminRoute, isMealRoute, isPrivacyRoute]);
 
   // ── 점검 모드 확인 (Edge 통과 후 클라이언트 3-Layer detect() 판정) ─────────────
   const isMaintenanceActive = Boolean(
@@ -144,18 +156,6 @@ function AppContent() {
       </div>
     );
   }
-
-  // ── 교사 리다이렉트 ──────────────────────────────────────────────────────────
-  // Rules of Hooks: useEffect는 반드시 conditional return 앞에 선언해야 함.
-  // 동작:
-  //   1) 아래 동기 블록에서 return null → Dashboard가 단 한 프레임도 렌더되지 않음
-  //   2) 이 useEffect가 실행 → setLocation("/teacher") → wouter 상태 업데이트
-  //   3) 다음 렌더에서 /teacher 경로로 TeacherPage 렌더
-  useEffect(() => {
-    if (!isValidating && userRole === "teacher" && !isTeacherRoute && !isAdminRoute && !isMealRoute && !isPrivacyRoute) {
-      setLocation("/teacher");
-    }
-  }, [isValidating, userRole, isTeacherRoute, isAdminRoute, isMealRoute, isPrivacyRoute]);
 
   // 학기 키 검증 완료 전 — 아무 데이터도 렌더링하지 않음 (단, /privacy는 독립 접근 허용)
   if (isValidating && !isPrivacyRoute) {

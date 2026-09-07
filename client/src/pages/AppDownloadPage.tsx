@@ -117,15 +117,12 @@ export default function AppDownloadPage() {
     setLocation("/");
   };
 
-  // Desktop 또는 이미 설치됨(PWA/WebView), 또는 다운로드 액션 미지원/비활성화 시 → 메인으로 직행 (단일 진실원천: shouldShowDownloadPage)
+  // Desktop 또는 이미 설치된 앱(PWA/WebView)으로 접속한 경우에만 메인으로 즉시 직행 (무한 핑퐁 루프 방지)
   useEffect(() => {
-    if (isDesktop || agent.isInstalledApp || checkIsInstalledApp()) { setLocation("/"); return; }
-    if (!settings) return;
-    if (!shouldShowDownloadPage(settings)) {
+    if (isDesktop || agent.isInstalledApp || checkIsInstalledApp()) {
       setLocation("/");
-      return;
     }
-  }, [settings]);
+  }, [isDesktop]);
 
   function handleContinue() {
     localStorage.setItem("download_page_dismissed", "1");
