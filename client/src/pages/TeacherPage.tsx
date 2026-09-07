@@ -1334,7 +1334,7 @@ export default function TeacherPage() {
 
       if (effectiveSubjectFilter && a.subject !== effectiveSubjectFilter) return false;
       return true;
-    }).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    }).sort((a, b) => (a.startDate || a.dueDate).localeCompare(b.startDate || b.dueDate));
   }, [selectedTab, allAssessments, teacherName, rawTeacherName, taughtSubjects, effectiveSubjectFilter]);
 
   // 탭별 수행평가 수 계산 (반 선택 버튼 배지용)
@@ -1714,7 +1714,7 @@ export default function TeacherPage() {
 
       {/* 보기전용 배너: 바 인라인으로 이동 (fixed 배너 제거) */}
 
-      <div className="max-w-[1280px] mx-auto w-full sm:flex-1 flex flex-col sm:min-h-0">
+      <div className="max-w-[1100px] mx-auto w-full sm:flex-1 flex flex-col sm:min-h-0">
 
         {/* ===== PC 전용 TOP SECTION ===== */}
         <div className="hidden sm:flex flex-row gap-3 md:gap-4 xl:gap-6 items-center mb-3 flex-shrink-0">
@@ -2454,7 +2454,7 @@ export default function TeacherPage() {
 
       {/* Main Timetable — Card wrapper */}
       {/* 당일형이 아니면 표 숨김 */}
-      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto flex-1 flex flex-col sm:min-h-0 ${mobileViewMode !== 'daily' ? 'hidden' : ''}`}>
+      <div className={`w-full rounded-xl border border-slate-200 bg-white shadow-sm flex-1 flex flex-col sm:min-h-0 ${mobileViewMode !== 'daily' ? 'hidden' : ''}`}>
           {(isTimetableLoading || isGroupDataLoading) ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-[40px] w-full" />
@@ -2468,8 +2468,8 @@ export default function TeacherPage() {
               <p className="text-sm text-red-400">네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.</p>
             </div>
           ) : timetableData && selectedSchedule ? (
-            <div className="w-full overflow-x-auto flex-1 flex flex-col min-h-0 sm:h-full" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <table className="w-full table-fixed min-w-0 sm:min-w-[420px] md:min-w-[500px] xl:min-w-[600px] sm:h-full sm:flex-1" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
+            <div className="w-full overflow-x-auto flex-1 flex flex-col min-h-0 sm:h-full">
+              <table className="w-full table-fixed min-w-[420px] sm:h-full sm:flex-1" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
@@ -2764,7 +2764,7 @@ export default function TeacherPage() {
       </div>{/* end timetable column */}
 
       {/* ===== RIGHT PANEL: order-3 on mobile (below timetable), order-2 on desktop (right, sticky) ===== */}
-      <div className="w-full shrink-0 flex flex-col order-3 sm:order-2 sm:sticky sm:top-4 h-fit" style={{ flex: '35 1 0', minWidth: 240, maxWidth: 400 }}>
+      <div className="w-full sm:max-w-[400px] sm:min-w-[240px] shrink-0 flex flex-col order-3 sm:order-2 sm:sticky sm:top-4 h-fit" style={{ flex: '35 1 0' }}>
         <div className="sm:bg-white sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-md flex flex-col h-fit sm:max-h-[calc(100vh-2rem)]">
           {/* Teacher Picker — 모바일 카드 / PC 패널 내부 바
                미인증 시: relative + min-height → 실버 absolute inset-0으로 꽉 채움
@@ -3067,10 +3067,24 @@ export default function TeacherPage() {
             ) : (
               <div className="space-y-0 sm:space-y-1.5 md:space-y-2">
                 {panelAssessments.map(a => {
-                  const dateObj = new Date(a.dueDate);
-                  const mmdd = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
-                  const weekdayNames = ['일','월','화','수','목','금','토'];
-                  const wd = weekdayNames[dateObj.getDay()];
+                  const isPeriod = !!(a.startDate && a.endDate);
+
+                  // 날짜 포맷 헬퍼
+                  const fmtMD = (ds: string) => {
+                    const d = new Date(ds);
+                    return `${d.getMonth() + 1}/${d.getDate()}`;
+                  };
+                  const fmtWd = (ds: string) => {
+                    const weekdayNames = ['일','월','화','수','목','금','토'];
+                    return weekdayNames[new Date(ds).getDay()];
+                  };
+
+                  const primaryDate = isPeriod ? a.startDate! : a.dueDate;
+                  const mmdd = fmtMD(primaryDate);
+                  const wd   = fmtWd(primaryDate);
+                  const endMmdd = isPeriod ? fmtMD(a.endDate!) : null;
+                  const endWd   = isPeriod ? fmtWd(a.endDate!) : null;
+
                   const panelCodes = parseClassCode(a.classCode);
                   const panelClassLabel = (() => {
                     if (a.classNum !== 0) return `${a.grade}-${String(a.classNum).replace(/반$/, '')}`;
@@ -3078,18 +3092,24 @@ export default function TeacherPage() {
                     const cn = lectureClassNameMap.get(`${a.grade}-${(a.subject || '').trim()}-${panelCodes[0]}`);
                     return cn || `${a.grade}-?`;
                   })();
+
                   // 딥큐 카운터 계산
                   let helpfulCount = 0;
                   try {
                     const votesArr: { v: string }[] = JSON.parse(a.votes || '[]');
                     helpfulCount = votesArr.filter(x => x.v === 'helpful').length;
                   } catch { helpfulCount = 0; }
+
                   return (
                     <div
                       key={a.id}
-                      className="border-b border-slate-100/80 last:border-b-0 sm:border sm:border-slate-100 py-2.5 px-1 sm:p-2.5 md:p-3 sm:rounded-xl sm:bg-slate-50 hover:bg-indigo-50/60 sm:hover:border-indigo-200 transition-all duration-150 cursor-pointer"
+                      className={`border-b border-slate-100/80 last:border-b-0 sm:border py-2.5 px-1 sm:p-2.5 md:p-3 sm:rounded-xl transition-all duration-150 cursor-pointer ${
+                        isPeriod
+                          ? 'sm:border-violet-100 sm:bg-violet-50/40 hover:bg-violet-50/80 sm:hover:border-violet-300'
+                          : 'sm:border-slate-100 sm:bg-slate-50 hover:bg-indigo-50/60 sm:hover:border-indigo-200'
+                      }`}
                       onClick={() => {
-                        if (!requireAuth()) return; // 미인증 시 인증 다이얼로그
+                        if (!requireAuth()) return;
                         setSelectedAssessment(a);
                         const roundNum = a.description ? a.description.replace('차', '').trim() : '1';
                         setFormData({
@@ -3108,18 +3128,24 @@ export default function TeacherPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                            {/* 반 배지 — 표와 동일한 초록 배지, "반" 글자 제거 */}
+                            {/* 반 배지 */}
                             <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 3.5px', borderRadius: 2, background: '#217346', color: '#ffffff', display: 'inline-block', lineHeight: 1.3 }}>
                               {panelClassLabel}
                             </span>
-                            {/* 과목명 — 그룹코드(무지개 워드아트) + 과목명, 표와 동일한 서식 */}
+                            {/* 기간형 타입 배지 */}
+                            {isPeriod && (
+                              <span style={{ fontSize: 9.5, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#7c3aed', color: '#ffffff', display: 'inline-block', lineHeight: 1.4, letterSpacing: 0.2 }}>
+                                기간형
+                              </span>
+                            )}
+                            {/* 과목명 */}
                             <span style={{ fontWeight: 700, color: '#1a1a1a', lineHeight: 1.25, fontSize: (a.subject || '').length > 6 ? 11.5 : (a.subject || '').length > 4 ? 12.5 : 14 }}>
                               {panelCodes.map((code: string, i: number) =>
                                 renderGroupCode(code, i < panelCodes.length - 1 ? 2 : 3)
                               )}
                               {a.subject}
                             </span>
-                            {a.classTime && (
+                            {a.classTime && !isPeriod && (
                               <span className="text-[10px] text-slate-400 font-medium">{a.classTime}교시</span>
                             )}
                           </div>
@@ -3131,7 +3157,7 @@ export default function TeacherPage() {
                           )}
                         </div>
                         <div className="shrink-0 text-right">
-                          {/* Mobile: date + thumbs-up 동일선 */}
+                          {/* Mobile */}
                           <div className="sm:hidden flex items-center justify-end gap-1.5 whitespace-nowrap">
                             {helpfulCount > 0 && (
                               <span className="flex items-center gap-0.5 text-[10px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-1.5 py-0.5" title={`땡큐 ${helpfulCount}개`}>
@@ -3139,10 +3165,16 @@ export default function TeacherPage() {
                                 {helpfulCount}
                               </span>
                             )}
-                            <span className="text-xs font-extrabold text-indigo-600">{mmdd}</span>
-                            <span className="text-xs font-semibold text-slate-400">({wd})</span>
+                            {isPeriod ? (
+                              <span className="text-xs font-extrabold text-violet-600">{mmdd}~{endMmdd}</span>
+                            ) : (
+                              <>
+                                <span className="text-xs font-extrabold text-indigo-600">{mmdd}</span>
+                                <span className="text-xs font-semibold text-slate-400">({wd})</span>
+                              </>
+                            )}
                           </div>
-                          {/* Desktop: mmdd + thumbs-up 동일선상 */}
+                          {/* Desktop */}
                           <div className="hidden sm:block">
                             <div className="flex items-center justify-end gap-1.5">
                               {helpfulCount > 0 && (
@@ -3151,9 +3183,19 @@ export default function TeacherPage() {
                                   {helpfulCount}
                                 </span>
                               )}
-                              <span className="text-xs sm:text-[13px] font-extrabold text-indigo-600">{mmdd}</span>
+                              {isPeriod ? (
+                                <span className="text-[12px] font-extrabold text-violet-600 whitespace-nowrap">
+                                  {mmdd}<span className="text-slate-300 mx-0.5">~</span>{endMmdd}
+                                </span>
+                              ) : (
+                                <span className="text-xs sm:text-[13px] font-extrabold text-indigo-600">{mmdd}</span>
+                              )}
                             </div>
-                            <div className="text-[10px] text-slate-400 text-right">{wd}요일</div>
+                            {isPeriod ? (
+                              <div className="text-[10px] text-slate-400 text-right">{wd}~{endWd}요일</div>
+                            ) : (
+                              <div className="text-[10px] text-slate-400 text-right">{wd}요일</div>
+                            )}
                           </div>
                           {a.description && (
                             <div className="mt-1 flex justify-end">
