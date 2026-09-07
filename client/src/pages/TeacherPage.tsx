@@ -2469,7 +2469,7 @@ export default function TeacherPage() {
             </div>
           ) : timetableData && selectedSchedule ? (
             <div className="w-full overflow-x-auto flex-1 flex flex-col min-h-0 sm:h-full">
-              <table className="w-full table-fixed min-w-[420px] sm:h-full sm:flex-1" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: '12px' }}>
+              <table className="w-full table-fixed min-w-[420px] sm:h-full sm:flex-1" style={{ borderCollapse: 'collapse', background: '#ffffff', fontSize: 'clamp(10px, 1.5vw, 13px)' }}>
                 <thead>
                   <tr>
                     {/* Corner cell — empty (no 교시 label) */}
@@ -2489,7 +2489,7 @@ export default function TeacherPage() {
                             borderBottom: isToday ? '2px solid #217346' : '1px solid #d0d0d0',
                             color: isToday ? '#1a5c30' : '#595959',
                             fontWeight: 700,
-                            fontSize: 12,
+                            fontSize: 'inherit',
                             textAlign: 'center',
                             userSelect: 'none',
                             position: 'sticky',
@@ -2523,9 +2523,9 @@ export default function TeacherPage() {
                           }}
                         >
                           <div className="h-full min-h-[52px] sm:min-h-0 flex flex-col items-center justify-center py-0.5 sm:py-1">
-                            <div style={{ fontWeight: 700, fontSize: 12, color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
+                            <div style={{ fontWeight: 700, fontSize: 'inherit', color: isCurrentPeriod ? '#1a5c30' : '#595959', lineHeight: 1.2 }}>{p}</div>
                             {PERIOD_TIMES[p] && (
-                              <div style={{ fontSize: 8.5, color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
+                              <div style={{ fontSize: '0.71em', color: isCurrentPeriod ? '#1a5c30' : '#999', lineHeight: 1.2, marginTop: 1 }}>({PERIOD_TIMES[p]})</div>
                             )}
                           </div>
                         </td>
@@ -2597,7 +2597,7 @@ export default function TeacherPage() {
                                       position: 'absolute',
                                       top: 2,
                                       right: 2,
-                                      fontSize: 9.5,
+                                      fontSize: '0.79em',
                                       fontWeight: 800,
                                       border: '1px solid #94a3b8',
                                       color: '#475569',
@@ -2614,7 +2614,7 @@ export default function TeacherPage() {
                                   {/* Class label */}
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                                     <span style={{
-                                      fontSize: 10,
+                                      fontSize: '0.83em',
                                       fontWeight: 700,
                                       padding: '1px 3.5px',
                                       borderRadius: 2,
@@ -2636,7 +2636,7 @@ export default function TeacherPage() {
                                       fontWeight: 700,
                                       color: '#1a1a1a',
                                       lineHeight: 1.25,
-                                      fontSize: (cellData.subjectName || '').length > 6 ? 11 : (cellData.subjectName || '').length > 4 ? 12.5 : 14,
+                                      fontSize: `${Math.max(0.82, 1.17 - Math.max(0, (cellData.subjectName || '').length - 4) * 0.045)}em`,
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
                                       whiteSpace: 'nowrap',
@@ -2655,7 +2655,7 @@ export default function TeacherPage() {
                                         <div
                                           key={a.id}
                                           style={{
-                                            fontSize: 9,
+                                            fontSize: '0.75em',
                                             fontWeight: 700,
                                             padding: '1.5px 3.5px',
                                             borderRadius: 2.5,
@@ -2671,7 +2671,7 @@ export default function TeacherPage() {
                                           title={`[${a.description || '수행'}] ${a.title}`}
                                         >
                                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.title}</span>
-                                          <span className="hidden sm:inline" style={{ fontSize: 8, border: '1px solid #f472b6', color: '#be185d', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap', background: '#fdf2f8' }}>
+                                          <span className="hidden sm:inline" style={{ fontSize: '0.67em', border: '1px solid #f472b6', color: '#be185d', padding: '0 3px', borderRadius: 2, flexShrink: 0, whiteSpace: 'nowrap', background: '#fdf2f8' }}>
                                             {a.description && a.description.includes('차') ? a.description : '평가'}
                                           </span>
                                         </div>
@@ -2679,7 +2679,7 @@ export default function TeacherPage() {
                                     </div>
                                   ) : (
                                     <div className="opacity-0 group-hover:opacity-100" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 'auto', transition: 'opacity 0.12s' }}>
-                                      <span style={{ fontSize: 9.5, fontWeight: 700, color: '#217346', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                      <span style={{ fontSize: '0.79em', fontWeight: 700, color: '#217346', display: 'flex', alignItems: 'center', gap: 2 }}>
                                         <Plus style={{ width: 10, height: 10 }} /> 등록
                                       </span>
                                     </div>
@@ -2930,7 +2930,7 @@ export default function TeacherPage() {
                                 top: '50%',
                                 left: '39%',
                                 transform: 'translate(-50%, -50%)',
-                                fontSize: subjectCount >= 10 ? '9px' : '11px',
+                                fontSize: `clamp(8px, ${11 - Math.min(2, Math.max(0, subjectCount - 7)) * 1}px, 11px)`,
                                 color: isActive
                                   ? 'rgba(255,255,255,0.95)'
                                   : color.activeBg,
@@ -3139,7 +3139,7 @@ export default function TeacherPage() {
                               </span>
                             )}
                             {/* 과목명 */}
-                            <span style={{ fontWeight: 700, color: '#1a1a1a', lineHeight: 1.25, fontSize: (a.subject || '').length > 6 ? 11.5 : (a.subject || '').length > 4 ? 12.5 : 14 }}>
+                            <span style={{ fontWeight: 700, color: '#1a1a1a', lineHeight: 1.25, fontSize: `${Math.max(11, 14 - Math.max(0, (a.subject || '').length - 4) * 0.4)}px` }}>
                               {panelCodes.map((code: string, i: number) =>
                                 renderGroupCode(code, i < panelCodes.length - 1 ? 2 : 3)
                               )}
