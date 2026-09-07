@@ -1719,8 +1719,8 @@ export default function TeacherPage() {
         {/* ===== PC 전용 TOP SECTION ===== */}
         <div className="hidden sm:flex flex-row gap-3 md:gap-4 xl:gap-6 items-center mb-3 flex-shrink-0">
 
-          {/* ── 좌: 제목 + 주선택기 ── */}
-          <div className="flex-1 sm:max-w-[1000px] min-w-0 flex items-center gap-3">
+          {/* ── 좌: 제목 + 주선택기 (콘텐츠 테이블 열과 동일 비율 flex:65) ── */}
+          <div className="min-w-0 flex items-center gap-3" style={{ flex: '65 1 0' }}>
 
             {/* 뱃지형 제목 */}
             <h1 className="text-xl md:text-2xl font-extrabold text-gray-900 tracking-tight shrink-0 truncate leading-tight">
@@ -1729,7 +1729,7 @@ export default function TeacherPage() {
               </span>
             </h1>
 
-            {/* 주 선택기 */}
+            {/* 주 선택기 — ml-auto로 표 열 오른쪽 끝에 정렬 */}
             <div className={`flex flex-col items-center gap-0.5 shrink-0 ml-auto ${mobileViewMode !== 'daily' ? 'invisible pointer-events-none' : ''}`}>
               <div className="flex items-center bg-indigo-600 rounded-full p-1 border border-indigo-400 shadow-md">
                 <Button
@@ -1769,8 +1769,8 @@ export default function TeacherPage() {
             </div>
           </div>
 
-          {/* ── 우: 네비게이션 버튼 묶음 ── */}
-          <div className="hidden sm:flex shrink-0 items-center justify-end gap-1.5 sm:gap-2" style={{ flex: '35 1 0', minWidth: 240, maxWidth: 400 }}>
+          {/* ── 우: 네비게이션 버튼 (콘텐츠 패널 열과 동일 비율 flex:35) ── */}
+          <div className="hidden sm:flex sm:max-w-[400px] sm:min-w-[240px] shrink-0 items-center justify-end gap-1.5 sm:gap-2" style={{ flex: '35 1 0' }}>
             <Button variant="outline" size="sm"
               className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
               onClick={handleReturnToStudentPage}
