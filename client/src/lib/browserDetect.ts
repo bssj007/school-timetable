@@ -72,6 +72,13 @@ export interface AgentInfo {
    * → 이 경우 다운로드 버튼 미표시, 별도 카테고리로 처리
    */
   isInstalledApp: boolean;
+  /**
+   * 설치된 앱 실행 유형 (isInstalledApp === true 일 때만 의미 있음)
+   * - "pwa"     : display-mode:standalone 또는 navigator.standalone (PWA 홈화면 추가)
+   * - "webview" : Android TWA / WebView (UA에 "; wv)" 포함, 정식 설치된 앱)
+   * - null      : 설치된 앱이 아님
+   */
+  installedAppType: "pwa" | "webview" | null;
   /** 실제 사용된 감지 계층 (디버그용: 1=ClientHints, 2=UA, 3=Feature) */
   detectionLayer: 1 | 2 | 3;
 }
@@ -87,7 +94,7 @@ function defaultAgent(): AgentInfo {
     browserKey: "other", isInAppBrowser: false, isKakaoTalk: false,
     isFirefox: false,
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
-    isInstalledApp: false,
+    isInstalledApp: false, installedAppType: null,
     detectionLayer: 3,
   };
 }
@@ -173,6 +180,7 @@ function detectLayer1(): Partial<AgentInfo> | null {
     isFirefox: false,
     // iOS 버전: Chromium 환경이므로 항상 0
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
+    isInstalledApp: false, installedAppType: null,  // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 1,
   };
 }
@@ -277,7 +285,7 @@ function detectLayer2(): AgentInfo {
     browserKey, isInAppBrowser: isInApp, isKakaoTalk,
     isFirefox: /Firefox|FxiOS/i.test(ua),
     iosVersion, isIOS26Plus, isIOS15Plus, isIOS13Plus,
-    isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
+    isInstalledApp: false, installedAppType: null,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 2,
   };
 }
@@ -311,7 +319,7 @@ function detectLayer3(): AgentInfo {
     isKakaoTalk,
     isFirefox: typeof navigator !== "undefined" && /Firefox|FxiOS/i.test(navigator.userAgent),
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
-    isInstalledApp: false,   // detect() 에서 실제 값으로 덧쓰임
+    isInstalledApp: false, installedAppType: null,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 3,
   };
 }
@@ -340,36 +348,49 @@ export function detect(): AgentInfo {
   const inApp = isKakaoTalk || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent);
 
   // PWA standalone / Native 앱 실행 여부 (인앱 브라우저는 제외)
-  const isInstalledApp =
+  const isPwaStandalone =
     !inApp && (
       window.matchMedia("(display-mode: standalone)").matches ||
-      (navigator as any).standalone === true ||
-      (/; wv\)/i.test(navigator.userAgent) && !/GSA\//i.test(navigator.userAgent))
+      (navigator as any).standalone === true
     );
+  const isWebView =
+    !inApp &&
+    /; wv\)/i.test(navigator.userAgent) &&
+    !/GSA\//i.test(navigator.userAgent);
+  const isInstalledApp = isPwaStandalone || isWebView;
+
+  // installedAppType: 설치된 앱 유형 구분
+  //   "pwa"     → display-mode: standalone 또는 iOS navigator.standalone
+  //   "webview" → Android TWA / WebView (UA에 "; wv)" 포함)
+  //   null      → 설치된 앱이 아님
+  const installedAppType: AgentInfo["installedAppType"] =
+    isWebView ? "webview" : isPwaStandalone ? "pwa" : null;
 
   // Layer 1: Client Hints (Chromium 전용)
   const ch = detectLayer1();
   if (ch) {
     return {
-      isMobile:       ch.isMobile!,
-      isDesktop:      ch.isDesktop!,
-      desktopOS:      ch.desktopOS!,
-      isIPad:         false,
-      isIPhone:       false,
-      isIOS:          false,
-      isAndroid:      ch.isAndroid!,
-      isIOSSafari:    false,
-      isIOSChrome:    false,
-      isIOSOther:     false,
-      browserKey:     isKakaoTalk ? "other" : ch.browserKey!,
-      isInAppBrowser: inApp,
+      isMobile:         ch.isMobile!,
+      isDesktop:        ch.isDesktop!,
+      desktopOS:        ch.desktopOS!,
+      isIPad:           false,
+      isIPhone:         false,
+      isIOS:            false,
+      isAndroid:        ch.isAndroid!,
+      isIOSSafari:      false,
+      isIOSChrome:      false,
+      isIOSOther:       false,
+      browserKey:       isKakaoTalk ? "other" : ch.browserKey!,
+      isInAppBrowser:   inApp,
       isKakaoTalk,
-      iosVersion:     0,
-      isIOS26Plus:    false,
-      isIOS15Plus:    false,
-      isIOS13Plus:    false,
+      isFirefox:        false,
+      iosVersion:       0,
+      isIOS26Plus:      false,
+      isIOS15Plus:      false,
+      isIOS13Plus:      false,
       isInstalledApp,
-      detectionLayer: 1,
+      installedAppType,
+      detectionLayer:   1,
     };
   }
 
@@ -382,6 +403,7 @@ export function detect(): AgentInfo {
       isInAppBrowser: inApp,
       isKakaoTalk,
       isInstalledApp,
+      installedAppType,
     };
   }
 
@@ -392,6 +414,7 @@ export function detect(): AgentInfo {
     isInAppBrowser: inApp,
     isKakaoTalk,
     isInstalledApp,
+    installedAppType,
   };
 }
 
@@ -428,6 +451,8 @@ export const isOtherBrowser          = agent.browserKey === "other";
 export const isInAppBrowser          = agent.isInAppBrowser;
 /** 카카오톡 인앱 브라우저 여부 */
 export const isKakaoTalk             = agent.isKakaoTalk;
+/** Firefox 브라우저 여부 */
+export const isFirefox               = agent.isFirefox;
 /** @deprecated 카카오톡은 '기타 브라우저'로 통일 처리됨 */
 export const isKakaoBrowser          = agent.isKakaoTalk;
 /** @deprecated agent.isIPad 사용 */
@@ -572,4 +597,33 @@ export function shouldShowDownloadPage(settings?: any): boolean {
 export function isInAppBrowserUA(): boolean {
   if (typeof window === "undefined") return false;
   return /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent);
+}
+
+// ── 접속제한 우회 쿠키 ────────────────────────────────────────────────────────
+
+/**
+ * 현재 agent(접속환경)에 해당하는 maintenance bypass 쿠키가 설정되어 있는지 반환.
+ * - 브라우저 환경: chrome / samsung / safari / other 쿠키
+ * - PWA 홈화면 추가(standalone): pwa_app 쿠키
+ * - 정식 설치된 앱 WebView(TWA): webview_app 쿠키
+ *
+ * 반환값이 true이면 maintenance_mode.active=true 이더라도 접속제한을 우회합니다.
+ */
+export function getMaintenanceBypassCookie(): boolean {
+  if (typeof document === "undefined") return false;
+
+  // 설치된 앱인 경우: installedAppType으로 구분
+  if (agent.isInstalledApp) {
+    const key = agent.installedAppType === "webview" ? "webview_app" : "pwa_app";
+    return document.cookie.split(";").some((c) => c.trim() === `maintenance_bypass_${key}=1`);
+  }
+
+  // 일반 브라우저: browserKey로 구분
+  const keyMap: Record<string, string> = {
+    samsung: "samsung",
+    safari:  "safari",
+    chrome:  "chrome",
+  };
+  const key = keyMap[agent.browserKey] ?? "other";
+  return document.cookie.split(";").some((c) => c.trim() === `maintenance_bypass_${key}=1`);
 }

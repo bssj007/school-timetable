@@ -21,7 +21,7 @@ import IOSInstallGuide from "./pages/IOSInstallGuide";
 import IOSChromeInstallGuide from "./pages/IOSChromeInstallGuide";
 import AppDownloadPage from "./pages/AppDownloadPage";
 import Privacy from "./pages/Privacy";
-import { shouldShowDownloadPage } from "@/lib/browserDetect";
+import { shouldShowDownloadPage, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 function Router() {
   return (
@@ -110,7 +110,7 @@ function AppContent() {
   // ── 점검 모드 감지 시 강제 새로고침 (Edge 차단 페이지로 전환 및 메모리 클리어) ──────
   useEffect(() => {
     if (isAdminRoute || isPrivacyRoute) return;
-    if (publicSettings?.maintenance_mode?.active && !publicSettings?.is_whitelisted) {
+    if (publicSettings?.maintenance_mode?.active && !publicSettings?.is_whitelisted && !getMaintenanceBypassCookie()) {
       window.location.reload();
     }
   }, [publicSettings, isAdminRoute, isPrivacyRoute]);

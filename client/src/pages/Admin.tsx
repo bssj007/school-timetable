@@ -10286,34 +10286,87 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
     const currentIsMobile  = agent.isMobile;
     const browsers = [
         {
-            key: "chrome_install_button_visible",
+            key: "chrome_install_button_visible" as const,
+            bypassKey: "chrome" as BypassKey,
             label: "Chrome",
             icon: "🌐",
             desc: "Android Chrome / iOS Chrome / Google (모바일)",
             value: isChrome,
         },
         {
-            key: "samsung_install_button_visible",
+            key: "samsung_install_button_visible" as const,
+            bypassKey: "samsung" as BypassKey,
             label: "Samsung",
             icon: "📱",
             desc: "삼성 인터넷 브라우저 (Play Store)",
             value: isSamsung,
         },
         {
-            key: "safari_install_button_visible",
+            key: "safari_install_button_visible" as const,
+            bypassKey: "safari" as BypassKey,
             label: "Safari",
             icon: "🧭",
             desc: "iOS·iPadOS Safari 홈화면 추가 (macOS 데스크톱 제외)",
             value: isSafari,
         },
         {
-            key: "other_install_button_visible",
+            key: "other_install_button_visible" as const,
+            bypassKey: "other" as BypassKey,
             label: "그외",
             icon: "❓",
             desc: "카카오톡·Opera·Firefox·Whale·Edge 등 모바일 브라우저",
             value: isOther,
         },
-    ] as const;
+    ];
+
+    // ── 접속제한 우회 (maintenance bypass) 쿠키 헬퍼 ──────────────────────────
+    // 쿠키: maintenance_bypass_{key} — 30일 보관, 해당 기기/브라우저에서만 유효
+    type BypassKey = "chrome" | "samsung" | "safari" | "other" | "pwa_app" | "webview_app";
+
+    const readBypassCookie = (key: BypassKey): boolean => {
+        if (typeof document === "undefined") return false;
+        return document.cookie.split(";").some((c) => c.trim() === `maintenance_bypass_${key}=1`);
+    };
+    const writeBypassCookie = (key: BypassKey, enable: boolean) => {
+        if (enable) {
+            const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toUTCString();
+            document.cookie = `maintenance_bypass_${key}=1; path=/; expires=${expires}; SameSite=Lax`;
+        } else {
+            document.cookie = `maintenance_bypass_${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax`;
+        }
+    };
+
+    // bypass 상태 — useState로 관리 (쿠키에서 초기값 읽기)
+    const [bypassState, setBypassState] = React.useState<Record<BypassKey, boolean>>(() => ({
+        chrome:      readBypassCookie("chrome"),
+        samsung:     readBypassCookie("samsung"),
+        safari:      readBypassCookie("safari"),
+        other:       readBypassCookie("other"),
+        pwa_app:     readBypassCookie("pwa_app"),
+        webview_app: readBypassCookie("webview_app"),
+    }));
+
+    // 확인 다이얼로그 state
+    const [bypassConfirm, setBypassConfirm] = React.useState<{
+        key: BypassKey;
+        enable: boolean;
+        label: string;
+    } | null>(null);
+
+    const requestBypassToggle = (key: BypassKey, enable: boolean, label: string) => {
+        setBypassConfirm({ key, enable, label });
+    };
+    const confirmBypassToggle = () => {
+        if (!bypassConfirm) return;
+        writeBypassCookie(bypassConfirm.key, bypassConfirm.enable);
+        setBypassState((prev) => ({ ...prev, [bypassConfirm.key]: bypassConfirm.enable }));
+        toast.success(
+            bypassConfirm.enable
+                ? `[${bypassConfirm.label}] 접속제한 우회가 설정되었습니다.`
+                : `[${bypassConfirm.label}] 접속제한 우회가 해제되었습니다.`
+        );
+        setBypassConfirm(null);
+    };
 
     return (
         <div className="space-y-5 p-1">
@@ -10513,10 +10566,13 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b bg-gray-50">
-                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">브라우저</th>
-                                    <th className="text-center px-4 py-2.5 font-semibold text-gray-600">표시</th>
-                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">상태</th>
-                                    <th className="text-center px-4 py-2.5 font-semibold text-gray-600">현재 환경</th>
+                                    <th className="text-left px-4 py-2.5 font-semibold text-gray-600">브라우저 / 환경</th>
+                                    <th className="text-center px-3 py-2.5 font-semibold text-gray-600">표시</th>
+                                    <th className="text-left px-3 py-2.5 font-semibold text-gray-600">상태</th>
+                                    <th className="text-center px-3 py-2.5 font-semibold text-gray-600">현재 환경</th>
+                                    <th className="text-center px-3 py-2.5 font-semibold text-gray-600">
+                                        <span className="inline-flex items-center gap-1">🔓 접속제한 우회</span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -10533,7 +10589,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-center">
+                                        <td className="px-3 py-3 text-center">
                                             <Switch
                                                 id={`install-toggle-${browser.key}`}
                                                 checked={browser.value}
@@ -10541,47 +10597,131 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                                 disabled={saveSettingMutation.isPending}
                                             />
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-3 py-3">
                                             {browser.value
                                                 ? <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">✅ 표시</span>
                                                 : <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">숨김</span>
                                             }
                                         </td>
-                                        <td className="px-4 py-3 text-center">
+                                        <td className="px-3 py-3 text-center">
                                             {isCurrent && (
                                                 <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full">
                                                     📍 현재
                                                 </span>
                                             )}
                                         </td>
+                                        <td className="px-3 py-3 text-center">
+                                            {(() => {
+                                                const isBypassed = bypassState[browser.bypassKey];
+                                                return (
+                                                    <button
+                                                        id={`bypass-btn-${browser.bypassKey}`}
+                                                        type="button"
+                                                        onClick={() => requestBypassToggle(browser.bypassKey, !isBypassed, browser.label)}
+                                                        className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
+                                                            isBypassed
+                                                                ? "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200"
+                                                                : "bg-white text-rose-700 border-rose-300 hover:bg-rose-50"
+                                                        }`}
+                                                    >
+                                                        {isBypassed ? "✅ 우회 해제" : "🚫 접속 우회"}
+                                                    </button>
+                                                );
+                                            })()}
+                                        </td>
                                     </tr>
                                     );
                                 })}
-                                {/* 설치된 앱 실행 (PWA standalone·Android TWA) — agent.isInstalledApp */}
-                                <tr className={`border-b last:border-b-0 transition-colors ${agent.isInstalledApp && agent.isMobile ? "bg-purple-50 hover:bg-purple-100" : "hover:bg-gray-50"}`}>
+                                {/* ── 설치된 앱 행 1: PWA 홈화면 추가 */}
+                                <tr className={`border-b transition-colors ${agent.isInstalledApp && agent.installedAppType === "pwa" && agent.isMobile ? "bg-purple-50 hover:bg-purple-100" : "hover:bg-gray-50"}`}>
                                     <td className="px-4 py-3">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-base">📲</span>
+                                            <span className="text-base">🏠</span>
                                             <div>
-                                                <p className="font-semibold text-gray-800">설치된 앱</p>
-                                                <p className="text-xs text-gray-500">PWA standalone · Android TWA / WebView — agent.isInstalledApp</p>
+                                                <p className="font-semibold text-gray-800">PWA 홈화면 추가 앱</p>
+                                                <p className="text-xs text-gray-500">display-mode: standalone · iOS navigator.standalone</p>
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-4 py-3 text-center">
+                                    <td className="px-3 py-3 text-center">
                                         <span className="text-xs text-gray-400 font-mono">—</span>
                                     </td>
-                                    <td className="px-4 py-3">
+                                    <td className="px-3 py-3">
                                         <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
                                             🚫 항상 미표시
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3 text-center">
-                                        {agent.isInstalledApp && agent.isMobile && (
+                                    <td className="px-3 py-3 text-center">
+                                        {agent.isInstalledApp && agent.installedAppType === "pwa" && agent.isMobile && (
                                             <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100 border border-purple-300 px-2 py-0.5 rounded-full">
-                                                📲 현재 (앱)
+                                                🏠 현재 (PWA)
                                             </span>
                                         )}
+                                    </td>
+                                    <td className="px-3 py-3 text-center">
+                                        {(() => {
+                                            const isBypassed = bypassState["pwa_app"];
+                                            return (
+                                                <button
+                                                    id="bypass-btn-pwa_app"
+                                                    type="button"
+                                                    onClick={() => requestBypassToggle("pwa_app", !isBypassed, "PWA 홈화면 추가 앱")}
+                                                    className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
+                                                        isBypassed
+                                                            ? "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200"
+                                                            : "bg-white text-rose-700 border-rose-300 hover:bg-rose-50"
+                                                    }`}
+                                                >
+                                                    {isBypassed ? "✅ 우회 해제" : "🚫 접속 우회"}
+                                                </button>
+                                            );
+                                        })()}
+                                    </td>
+                                </tr>
+                                {/* ── 설치된 앱 행 2: 정식 설치된 앱 / Android WebView */}
+                                <tr className={`border-b last:border-b-0 transition-colors ${agent.isInstalledApp && agent.installedAppType === "webview" && agent.isMobile ? "bg-orange-50 hover:bg-orange-100" : "hover:bg-gray-50"}`}>
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">📦</span>
+                                            <div>
+                                                <p className="font-semibold text-gray-800">정식 설치된 앱 (WebView)</p>
+                                                <p className="text-xs text-gray-500">Android TWA / WebView · UA에 "; wv)" 포함</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-3 text-center">
+                                        <span className="text-xs text-gray-400 font-mono">—</span>
+                                    </td>
+                                    <td className="px-3 py-3">
+                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
+                                            🚫 항상 미표시
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-3 text-center">
+                                        {agent.isInstalledApp && agent.installedAppType === "webview" && agent.isMobile && (
+                                            <span className="inline-flex items-center gap-1 text-xs font-bold text-orange-700 bg-orange-100 border border-orange-300 px-2 py-0.5 rounded-full">
+                                                📦 현재 (앱)
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-3 text-center">
+                                        {(() => {
+                                            const isBypassed = bypassState["webview_app"];
+                                            return (
+                                                <button
+                                                    id="bypass-btn-webview_app"
+                                                    type="button"
+                                                    onClick={() => requestBypassToggle("webview_app", !isBypassed, "정식 설치된 앱 (WebView)")}
+                                                    className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
+                                                        isBypassed
+                                                            ? "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200"
+                                                            : "bg-white text-rose-700 border-rose-300 hover:bg-rose-50"
+                                                    }`}
+                                                >
+                                                    {isBypassed ? "✅ 우회 해제" : "🚫 접속 우회"}
+                                                </button>
+                                            );
+                                        })()}
                                     </td>
                                 </tr>
                             </tbody>
@@ -10592,6 +10732,56 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
 
             {saveSettingMutation.isPending && (
                 <p className="text-sm text-gray-400 text-center">저장 중...</p>
+            )}
+
+            {/* ── 접속제한 우회 확인 다이얼로그 ──────────────────────────────── */}
+            {bypassConfirm && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+                    onClick={() => setBypassConfirm(null)}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 space-y-4"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-start gap-3">
+                            <span className="text-2xl">{bypassConfirm.enable ? "🔓" : "🔒"}</span>
+                            <div>
+                                <p className="font-bold text-gray-900 text-base">
+                                    {bypassConfirm.enable ? "접속제한 우회 설정" : "접속제한 우회 해제"}
+                                </p>
+                                <p className="text-sm text-gray-600 mt-1">
+                                    <span className="font-semibold text-indigo-700">[{bypassConfirm.label}]</span> 환경에서{" "}
+                                    {bypassConfirm.enable
+                                        ? "사이트 점검(maintenance) 접속제한을 무시합니다. 이 기기·브라우저에서만 적용됩니다. (30일)"
+                                        : "접속제한 우회를 해제합니다. 점검 중에는 다시 제한이 적용됩니다."
+                                    }
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                            <button
+                                type="button"
+                                onClick={() => setBypassConfirm(null)}
+                                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                                취소
+                            </button>
+                            <button
+                                id="bypass-confirm-btn"
+                                type="button"
+                                onClick={confirmBypassToggle}
+                                className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold text-white transition-colors ${
+                                    bypassConfirm.enable
+                                        ? "bg-rose-600 hover:bg-rose-700"
+                                        : "bg-gray-700 hover:bg-gray-800"
+                                }`}
+                            >
+                                {bypassConfirm.enable ? "우회 설정 확인" : "우회 해제 확인"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* 앱스토어 링크 설정 */}

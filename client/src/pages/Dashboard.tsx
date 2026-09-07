@@ -1,5 +1,5 @@
 
-import { agent } from "@/lib/browserDetect";
+import { agent, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 // ── detect() 결과 직접 참조 (단일 진실원천: agent 싱글턴) ───────────────────
 const isSamsungBrowser = agent.browserKey === "samsung";
@@ -1511,7 +1511,7 @@ export default function Dashboard() {
 
   // 점검 모드 감지 시 강제 새로고침 (Edge 차단 페이지로 전환 및 로드된 데이터 클리어)
   useEffect(() => {
-    if (settings?.maintenance_mode?.active && !settings?.is_whitelisted) {
+    if (settings?.maintenance_mode?.active && !settings?.is_whitelisted && !getMaintenanceBypassCookie()) {
       window.location.reload();
     }
   }, [settings?.maintenance_mode?.active, settings?.is_whitelisted]);
@@ -1526,7 +1526,11 @@ export default function Dashboard() {
   }
 
   // Check Maintenance Mode First
-  const isMaintenanceActive = Boolean(settings?.maintenance_mode?.active && !settings?.is_whitelisted);
+  const isMaintenanceActive = Boolean(
+    settings?.maintenance_mode?.active &&
+    !settings?.is_whitelisted &&
+    !getMaintenanceBypassCookie()
+  );
 
   if (isMaintenanceActive) {
     return (
