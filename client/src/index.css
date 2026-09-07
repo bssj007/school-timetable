@@ -3,6 +3,8 @@
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant capturing (&:is(body.capturing *));
+@custom-variant wide (@media (min-aspect-ratio: 1/1));
+@custom-variant narrow (@media (max-aspect-ratio: 1/1));
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
