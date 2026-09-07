@@ -420,7 +420,7 @@ export default function TeacherPage() {
     localStorage.setItem("teacher-page-selected-teacher", selectedTeacherId);
   }, [selectedTeacherId]);
 
-  // 좁은화면(Pad 등 넓은 화면 포함)에서 시간표가 가로폭에 맞춰 0.865 비율로 세로 높이를 자동 조절하도록 dynamic CSS 변수 동기화
+  // 좁은화면(Pad 등 넓은 화면 포함)에서 시간표 비율 한계를 완화하여 적당히 넙적한 비율(0.72)로 자동 조절되도록 dynamic CSS 변수 동기화
   const timetableContainerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = timetableContainerRef.current;
@@ -433,7 +433,7 @@ export default function TeacherPage() {
       if (!w) return;
       const periodW = Math.max(36, Math.min(50, w * 0.095));
       const dayW = (w - periodW) / 5;
-      const cellH = Math.max(57, Math.min(145, dayW * 0.865));
+      const cellH = Math.max(57, Math.min(108, dayW * 0.72));
       el.style.setProperty('--period-col-w', `${periodW}px`);
       el.style.setProperty('--narrow-cell-h', `${cellH}px`);
     };
@@ -445,6 +445,47 @@ export default function TeacherPage() {
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', updateRatio);
+    };
+  }, []);
+
+  // 좁은화면 상단 제목("교사용 수행평가 등록 시스템")이 가용 공간 내에서 끊김 없이 최대한 크게 표시되도록 동적 스케일링
+  const titleContainerRef = useRef<HTMLHeadingElement>(null);
+  const titleSpanRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const container = titleContainerRef.current;
+    const span = titleSpanRef.current;
+    if (!container || !span) return;
+
+    let canvas: HTMLCanvasElement | null = null;
+
+    const updateTitleSize = () => {
+      if (window.innerWidth >= window.innerHeight) return;
+      const availableW = container.clientWidth;
+      if (!availableW) return;
+
+      if (!canvas) canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      let textWAt100 = 1250;
+      if (ctx) {
+        const computed = window.getComputedStyle(span);
+        ctx.font = `800 100px ${computed.fontFamily || '-apple-system, sans-serif'}`;
+        textWAt100 = ctx.measureText("교사용 수행평가 등록 시스템").width || 1250;
+      }
+
+      // availableW 공간 내에서 말줄임 없이 꽉 채울 수 있는 최대 폰트 크기 계산 (안전 여백 2px)
+      const maxFitSize = ((availableW - 2) / textWAt100) * 100;
+      // 최소 13px, 최대 24px (1.5rem)
+      const optimalSize = Math.max(13, Math.min(24, Math.floor(maxFitSize * 10) / 10));
+      container.style.setProperty('--title-font-size', `${optimalSize}px`);
+    };
+
+    updateTitleSize();
+    const ro = new ResizeObserver(updateTitleSize);
+    ro.observe(container);
+    window.addEventListener('resize', updateTitleSize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateTitleSize);
     };
   }, []);
 
@@ -1904,8 +1945,16 @@ export default function TeacherPage() {
 
         {/* ===== 좁은화면 전용: Title row — wide:hidden으로 제어 ===== */}
         <div className="wide:hidden w-full order-1 flex items-center justify-between gap-1.5 sm:gap-2 px-0.5 shrink-0 min-h-[44px]">
-          <h2 className="teacher-narrow-title min-w-0 flex-1 font-extrabold text-slate-900 leading-tight">
-            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
+          <h2
+            ref={titleContainerRef}
+            className="teacher-narrow-title min-w-0 flex-1 font-extrabold text-slate-900 leading-tight"
+          >
+            <span
+              ref={titleSpanRef}
+              className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent inline-block"
+            >
+              교사용 수행평가 등록 시스템
+            </span>
           </h2>
           {/* 주 선택기 — 레이아웃 공간 항상 유지, 당일형이 아닐 때 invisible */}
           <div className={`flex flex-col items-center gap-0.5 shrink-0 ${viewMode !== 'daily' ? 'invisible pointer-events-none' : ''}`}>
@@ -2686,7 +2735,7 @@ export default function TeacherPage() {
                                 (e.currentTarget as HTMLElement).style.zIndex = 'auto';
                               }}
                             >
-                              {/* minHeight: 좁은화면에서 가로폭에 맞춰 0.865 비율로 자동 조절 (최소 57px), 넓은화면은 4px 5px 패딩으로 확장 */}
+                              {/* minHeight: 좁은화면에서 가로폭에 맞춰 0.72 완화 비율로 자동 조절 (최소 57px, 최대 108px), 넓은화면은 4px 5px 패딩으로 확장 */}
                               <div className="teacher-timetable-cell-wrapper h-full wide:min-h-0 flex flex-col wide:p-[4px_5px]" style={{ justifyContent: cellData ? 'flex-start' : 'center' }}>
                               {cellData ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

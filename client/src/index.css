@@ -770,15 +770,15 @@ body.capturing #timetable-container[data-print-font-size="large"] td .md\:text-b
 }
 
 /* -------------------------------------------------------------------------- */
-/* /teacher 좁은화면(태블릿/Pad 포함) 시간표 비율 유지: 가로 대비 세로 비율 비례 조절  */
-/* (Pad 등 넓은 가로폭에서도 사진의 황금비율(H_row / W_col ≈ 0.865) 최대한 유지)       */
+/* /teacher 좁은화면(태블릿/Pad 포함) 시간표 비율 조절: 가로 대비 세로 비율 완화    */
+/* (Pad 등 넓은 가로폭에서 과도하게 길어지지 않도록 비율을 완화하여 적당한 넙적함 허용)   */
 /* -------------------------------------------------------------------------- */
 @media not (min-aspect-ratio: 1/1) {
   .teacher-timetable-card {
     /* Fallback using vw */
     --period-col-w: clamp(36px, 9.5vw, 50px);
     --day-col-w: calc((100vw - 32px - var(--period-col-w)) / 5);
-    --narrow-cell-h: clamp(57px, calc(var(--day-col-w) * 0.865), 145px);
+    --narrow-cell-h: clamp(57px, calc(var(--day-col-w) * 0.72), 108px);
 
     container-type: inline-size;
   }
@@ -787,7 +787,7 @@ body.capturing #timetable-container[data-print-font-size="large"] td .md\:text-b
     .teacher-timetable-card {
       --period-col-w: clamp(36px, 9.5cqw, 50px);
       --day-col-w: calc((100cqw - var(--period-col-w)) / 5);
-      --narrow-cell-h: clamp(57px, calc(var(--day-col-w) * 0.865), 145px);
+      --narrow-cell-h: clamp(57px, calc(var(--day-col-w) * 0.72), 108px);
     }
   }
 
@@ -812,11 +812,10 @@ body.capturing #timetable-container[data-print-font-size="large"] td .md\:text-b
 
 /* -------------------------------------------------------------------------- */
 /* /teacher 좁은화면 상단 제목 ("교사용 수행평가 등록 시스템") 유연한 크기 조절       */
-/* (작은 모바일에서도 '등록 시~' 말줄임표 끊김 없이 온전히 한 줄에 표시되며,         */
-/*  Pad 등 가로폭이 넓은 화면에서는 시원하게 확대되도록 유연한 반응형 스케일링)        */
+/* (가용 공간 내에서 끊김 없이 꽉 차도록 최대 크기로 자동 스케일링)                  */
 /* -------------------------------------------------------------------------- */
 .teacher-narrow-title {
-  font-size: clamp(11.5px, 3.8vw, 1.35rem);
+  font-size: var(--title-font-size, clamp(15px, calc(7.5vw - 10px), 1.5rem));
   letter-spacing: -0.025em;
   white-space: nowrap;
   line-height: 1.25;
