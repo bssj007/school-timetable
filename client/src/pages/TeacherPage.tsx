@@ -1743,11 +1743,11 @@ export default function TeacherPage() {
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="flex flex-col items-center min-w-[90px] px-1 select-none">
+                <span className="flex flex-col items-center px-1 select-none">
                   <span className={`text-sm font-bold leading-tight whitespace-nowrap ${weekOffset === 0 ? 'text-white' : 'text-yellow-300'}`}>
                     {weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset < 0 ? `${Math.abs(weekOffset)}주 전` : `${weekOffset}주 후`}
                   </span>
-                  <span className="text-[10px] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
+                  <span className="text-[0.7em] font-medium text-white/80 leading-tight whitespace-nowrap">{weekRangeText}</span>
                 </span>
                 <Button
                   variant="ghost"
@@ -1770,7 +1770,7 @@ export default function TeacherPage() {
           </div>
 
           {/* ── 우: 네비게이션 버튼 (콘텐츠 패널 열과 동일 비율 flex:35) ── */}
-          <div className="hidden sm:flex sm:max-w-[400px] sm:min-w-[240px] shrink-0 items-center justify-end gap-1.5 sm:gap-2" style={{ flex: '35 1 0' }}>
+          <div className="hidden sm:flex shrink-0 items-center justify-end gap-1.5 sm:gap-2" style={{ flex: '35 1 0' }}>
             <Button variant="outline" size="sm"
               className="rounded-full shadow-sm gap-1.5 text-xs bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold"
               onClick={handleReturnToStudentPage}
