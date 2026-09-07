@@ -1808,7 +1808,7 @@ export default function TeacherPage() {
           <div className="min-w-0 overflow-hidden flex items-center gap-3" style={{ flexGrow: 65, flexShrink: 1, flexBasis: '0%' }}>
 
             {/* 뱃지형 제목 */}
-            <h1 className="text-xl md:text-2xl font-extrabold text-gray-900 tracking-tight shrink-0 truncate leading-tight">
+            <h1 className="text-lg md:text-xl lg:text-2xl font-extrabold text-gray-900 tracking-tight shrink-0 whitespace-nowrap leading-tight">
               <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">
                 교사용 수행평가 등록 시스템
               </span>
@@ -1903,8 +1903,8 @@ export default function TeacherPage() {
         <div className="flex flex-col wide:flex-row gap-2 wide:gap-2.5 md:gap-4 xl:gap-6 wide:items-stretch wide:flex-1 wide:min-h-0">
 
         {/* ===== 좁은화면 전용: Title row — wide:hidden으로 제어 ===== */}
-        <div className="wide:hidden w-full order-1 flex items-center justify-between gap-2 px-0.5 shrink-0 min-h-[44px]">
-          <h2 className="text-lg font-extrabold truncate leading-tight">
+        <div className="wide:hidden w-full order-1 flex items-center justify-between gap-1.5 sm:gap-2 px-0.5 shrink-0 min-h-[44px]">
+          <h2 className="teacher-narrow-title min-w-0 flex-1 font-extrabold text-slate-900 leading-tight">
             <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 bg-clip-text text-transparent">교사용 수행평가 등록 시스템</span>
           </h2>
           {/* 주 선택기 — 레이아웃 공간 항상 유지, 당일형이 아닐 때 invisible */}

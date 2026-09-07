@@ -809,3 +809,15 @@ body.capturing #timetable-container[data-print-font-size="large"] td .md\:text-b
     height: clamp(30px, 4.8cqw, 42px) !important;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* /teacher 좁은화면 상단 제목 ("교사용 수행평가 등록 시스템") 유연한 크기 조절       */
+/* (작은 모바일에서도 '등록 시~' 말줄임표 끊김 없이 온전히 한 줄에 표시되며,         */
+/*  Pad 등 가로폭이 넓은 화면에서는 시원하게 확대되도록 유연한 반응형 스케일링)        */
+/* -------------------------------------------------------------------------- */
+.teacher-narrow-title {
+  font-size: clamp(11.5px, 3.8vw, 1.35rem);
+  letter-spacing: -0.025em;
+  white-space: nowrap;
+  line-height: 1.25;
+}
