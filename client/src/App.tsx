@@ -21,7 +21,7 @@ import IOSInstallGuide from "./pages/IOSInstallGuide";
 import IOSChromeInstallGuide from "./pages/IOSChromeInstallGuide";
 import AppDownloadPage from "./pages/AppDownloadPage";
 import Privacy from "./pages/Privacy";
-import { shouldShowDownloadPage, getMaintenanceBypassCookie } from "@/lib/browserDetect";
+import { shouldShowDownloadPage, isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 function Router() {
   return (
@@ -107,13 +107,43 @@ function AppContent() {
     }
   }, [_shouldDownload]);
 
-  // ── 점검 모드 감지 시 강제 새로고침 (Edge 차단 페이지로 전환 및 메모리 클리어) ──────
-  useEffect(() => {
-    if (isAdminRoute || isPrivacyRoute) return;
-    if (publicSettings?.maintenance_mode?.active && !publicSettings?.is_whitelisted && !getMaintenanceBypassCookie()) {
-      window.location.reload();
-    }
-  }, [publicSettings, isAdminRoute, isPrivacyRoute]);
+  // ── 점검 모드 확인 (Edge 통과 후 클라이언트 3-Layer detect() 판정) ─────────────
+  const isMaintenanceActive = Boolean(
+    !isAdminRoute &&
+    !isPrivacyRoute &&
+    publicSettings?.maintenance_mode?.active &&
+    !publicSettings?.is_whitelisted &&
+    !isMaintenanceBypassed(publicSettings)
+  );
+
+  if (isMaintenanceActive) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 text-center px-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-red-100 p-8 flex flex-col items-center">
+          {publicSettings?.site_favicon_url ? (
+            <img 
+              src={publicSettings.site_favicon_url} 
+              alt="Logo" 
+              className="w-16 h-16 object-contain mb-6"
+            />
+          ) : (
+            <div className="text-red-500 mb-6 flex items-center justify-center">
+              <ShieldAlert className="w-14 h-14" />
+            </div>
+          )}
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">사이트 점검 중</h1>
+          <p className="text-gray-600 mb-6 whitespace-pre-wrap">
+            {publicSettings?.maintenance_mode?.message || "서버 점검 중입니다. 잠시 후 다시 접속해주세요."}
+          </p>
+          {publicSettings?.maintenance_mode?.endTime && (
+            <p className="text-xs text-gray-400">
+              점검 종료 예정: {new Date(publicSettings.maintenance_mode.endTime).toLocaleString('ko-KR')}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ── 교사 리다이렉트 ──────────────────────────────────────────────────────────
   // Rules of Hooks: useEffect는 반드시 conditional return 앞에 선언해야 함.

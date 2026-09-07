@@ -16,7 +16,7 @@ export const onRequest = async (context: any) => {
         try {
             if (env.DB) {
                 // 설정 DB 조회
-                const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('maintenance_mode', 'ip_whitelist', 'site_favicon_url')").all();
+                const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('maintenance_mode', 'ip_whitelist', 'site_favicon_url', 'maintenance_bypass_chrome', 'maintenance_bypass_samsung', 'maintenance_bypass_safari', 'maintenance_bypass_other', 'maintenance_bypass_pwa_app', 'maintenance_bypass_webview_app')").all();
                 const settings: Record<string, string> = {};
                 if (rows && rows.results) {
                     rows.results.forEach((row: any) => { settings[row.key] = row.value; });
@@ -29,7 +29,17 @@ export const onRequest = async (context: any) => {
                     const ipWhitelist = settings['ip_whitelist'] ? JSON.parse(settings['ip_whitelist']) : [];
                     const isWhitelisted = ipWhitelist.includes(clientIp);
 
-                    if (!isWhitelisted) {
+                    // 환경별 점검 우회가 하나라도 활성화되어 있으면 클라이언트 detect()가 정밀 판별할 수 있도록 SPA 로드 허용
+                    const hasAnyEnvBypass = [
+                        settings['maintenance_bypass_chrome'],
+                        settings['maintenance_bypass_samsung'],
+                        settings['maintenance_bypass_safari'],
+                        settings['maintenance_bypass_other'],
+                        settings['maintenance_bypass_pwa_app'],
+                        settings['maintenance_bypass_webview_app'],
+                    ].some(v => v === 'true');
+
+                    if (!isWhitelisted && !hasAnyEnvBypass) {
                         const maintenanceMessage = maintenanceMode.message || "서버 안정화 작업이 진행 중입니다.\n잠시 후 다시 접속해 주세요.";
                         const siteFaviconUrl = settings['site_favicon_url'];
                         const logoOrIconHtml = siteFaviconUrl ? `
