@@ -1,5 +1,5 @@
 
-import { agent, getMaintenanceBypassCookie } from "@/lib/browserDetect";
+import { agent, isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 // ── detect() 결과 직접 참조 (단일 진실원천: agent 싱글턴) ───────────────────
 const isSamsungBrowser = agent.browserKey === "samsung";
@@ -1509,27 +1509,11 @@ export default function Dashboard() {
     }
   }, [isLoading, grade, classNum, studentNumber, timetableLoading, assessmentLoading]);
 
-  // 점검 모드 감지 시 강제 새로고침 (Edge 차단 페이지로 전환 및 로드된 데이터 클리어)
-  useEffect(() => {
-    if (settings?.maintenance_mode?.active && !settings?.is_whitelisted && !getMaintenanceBypassCookie()) {
-      window.location.reload();
-    }
-  }, [settings?.maintenance_mode?.active, settings?.is_whitelisted]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="animate-spin mr-2" />
-        로드 중...
-      </div>
-    );
-  }
-
-  // Check Maintenance Mode First
+  // Check Maintenance Mode First (detect() 기반 일원화 판정)
   const isMaintenanceActive = Boolean(
     settings?.maintenance_mode?.active &&
     !settings?.is_whitelisted &&
-    !getMaintenanceBypassCookie()
+    !isMaintenanceBypassed(settings)
   );
 
   if (isMaintenanceActive) {
@@ -1557,6 +1541,15 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="animate-spin mr-2" />
+        로드 중...
       </div>
     );
   }

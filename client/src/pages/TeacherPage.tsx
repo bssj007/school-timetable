@@ -14,7 +14,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 import { clearRoleCookie } from "@/components/RoleSelectDialog";
-import { getMaintenanceBypassCookie } from "@/lib/browserDetect";
+import { isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 interface TeacherTimetableResponse {
   success: boolean;
@@ -525,12 +525,41 @@ export default function TeacherPage() {
     refetchOnWindowFocus: true,
   });
 
-  // 점검 모드 감지 시 강제 새로고침 (Edge 차단 페이지로 전환 및 로드된 데이터 클리어)
-  useEffect(() => {
-    if (settings?.maintenance_mode?.active && !settings?.is_whitelisted && !getMaintenanceBypassCookie()) {
-      window.location.reload();
-    }
-  }, [settings?.maintenance_mode?.active, settings?.is_whitelisted]);
+  // Check Maintenance Mode First (detect() 기반 일원화 판정)
+  const isMaintenanceActive = Boolean(
+    settings?.maintenance_mode?.active &&
+    !settings?.is_whitelisted &&
+    !isMaintenanceBypassed(settings)
+  );
+
+  if (isMaintenanceActive) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 text-center px-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-red-100 p-8 flex flex-col items-center">
+          {settings?.site_favicon_url ? (
+            <img 
+              src={settings.site_favicon_url} 
+              alt="Logo" 
+              className="w-16 h-16 object-contain mb-6"
+            />
+          ) : (
+            <div className="text-red-500 mb-6 flex items-center justify-center">
+              <AlertCircle className="w-14 h-14" />
+            </div>
+          )}
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">사이트 점검 중</h2>
+          <p className="text-gray-600 mb-6 whitespace-pre-wrap">
+            {settings?.maintenance_mode?.message || "서버 점검 중입니다. 잠시 후 다시 접속해주세요."}
+          </p>
+          {settings?.maintenance_mode?.endTime && (
+            <p className="text-xs text-gray-400">
+              점검 종료 예정: {new Date(settings.maintenance_mode.endTime).toLocaleString('ko-KR')}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // settings/selectedTeacherId 변경 시 현재 선생님 인증 상태 재확인
   // rawTeacherName은 tId에 의존하므로 selectedTeacherId로 키 생성

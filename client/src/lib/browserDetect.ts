@@ -599,37 +599,64 @@ export function isInAppBrowserUA(): boolean {
   return /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(navigator.userAgent);
 }
 
-// ── 접속제한 우회 쿠키 ────────────────────────────────────────────────────────
+// ── 접속환경별 점검 우회 (detect() 기반 단일 진실원천 일원화) ─────────────────
+
+export type BypassEnvironmentKey = "chrome" | "samsung" | "safari" | "other" | "pwa_app" | "webview_app";
 
 /**
- * 현재 agent(접속환경)에 해당하는 maintenance bypass 쿠키가 설정되어 있는지 반환.
- * - 브라우저 환경: chrome / samsung / safari / other 쿠키
- * - PWA 홈화면 추가(standalone): pwa_app 쿠키
- * - 정식 설치된 앱 WebView(TWA): webview_app 쿠키
- *
- * 반환값이 true이면 maintenance_mode.active=true 이더라도 접속제한을 우회합니다.
+ * detect() 결과(agent)를 기반으로 현재 환경의 BypassEnvironmentKey 반환
+ * 단일 진실원천: 3-Layer 통합 감지(detect)로 일원화
  */
-export function getMaintenanceBypassCookie(): boolean {
+export function getCurrentBypassEnvironment(customAgent?: AgentInfo): BypassEnvironmentKey {
+  const a = customAgent || agent || detect();
+  if (a.isInstalledApp) {
+    return a.installedAppType === "webview" ? "webview_app" : "pwa_app";
+  }
+  if (a.browserKey === "samsung") return "samsung";
+  if (a.browserKey === "safari")  return "safari";
+  if (a.browserKey === "chrome")  return "chrome";
+  return "other";
+}
+
+/**
+ * 현재 접속환경(detect() 기반)이 서버 설정에 의해 점검 우회(maintenance bypass) 대상인지 판단.
+ * 기존의 불안정한 브라우저 로컬 쿠키 방식을 폐기하고, detect() 함수 기반의 단일 진실원천으로 일원화.
+ *
+ * @param settings public_settings (서버에서 내려온 시스템 설정)
+ * @returns true이면 maintenance_mode.active=true 이더라도 접속제한을 우회합니다.
+ */
+export function isMaintenanceBypassed(settings?: any): boolean {
   if (typeof window === "undefined") return false;
 
-  // localStorage 기반 (만료 없음 — 명시적 비활성화 전까지 영구 유지)
-  // 구형 쿠키 기반 설정도 함께 확인 (마이그레이션 호환)
-  const readStorage = (key: string): boolean =>
-    localStorage.getItem(`maintenance_bypass_${key}`) === "1" ||
-    document.cookie.split(";").some((c) => c.trim() === `maintenance_bypass_${key}=1`);
-
-  // 설치된 앱인 경우: installedAppType으로 구분
-  if (agent.isInstalledApp) {
-    const key = agent.installedAppType === "webview" ? "webview_app" : "pwa_app";
-    return readStorage(key);
+  let resolvedSettings = settings;
+  if (!resolvedSettings && typeof localStorage !== "undefined") {
+    try {
+      const cached = localStorage.getItem("public_settings_cache");
+      if (cached) resolvedSettings = JSON.parse(cached);
+    } catch {}
   }
 
-  // 일반 브라우저: browserKey로 구분
-  const keyMap: Record<string, string> = {
-    samsung: "samsung",
-    safari:  "safari",
-    chrome:  "chrome",
-  };
-  const key = keyMap[agent.browserKey] ?? "other";
-  return readStorage(key);
+  // detect() 기반 현재 환경 판별
+  const envKey = getCurrentBypassEnvironment();
+  const settingKey = `maintenance_bypass_${envKey}`;
+
+  // 1. 서버 설정 (D1 DB system_settings) 기반 우회 판별
+  if (resolvedSettings?.[settingKey] === true || resolvedSettings?.[settingKey] === "true") {
+    return true;
+  }
+  if (resolvedSettings?.maintenance_bypass?.[envKey] === true) {
+    return true;
+  }
+
+  // 2. 관리자 디버그/로컬 오버라이드 (호환성 보장)
+  try {
+    if (localStorage.getItem("maintenance_bypass_all") === "1" || localStorage.getItem(settingKey) === "1") {
+      return true;
+    }
+  } catch {}
+
+  return false;
 }
+
+/** 하위 호환성 유지용 alias (기존 getMaintenanceBypassCookie 호출 코드와 100% 호환) */
+export const getMaintenanceBypassCookie = isMaintenanceBypassed;

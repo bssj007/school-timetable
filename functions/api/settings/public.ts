@@ -7,7 +7,7 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'elective_input_mode_grade2', 'elective_input_mode_grade3', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'chrome_install_button_visible', 'safari_install_button_visible', 'other_install_button_visible', 'play_store_url', 'app_store_url', 'show_target_class_main_menu', 'promotion_popup_enabled', 'promotion_reset_days', 'assessment_distrust_threshold', 'assessment_positive_color', 'assessment_positive_ratio', 'assessment_negative_color', 'assessment_negative_ratio', 'assessment_timetable_color', 'changed_class_tint_color', 'changed_class_tint_opacity', 'comcigan_debug_overlay_enabled', 'comcigan_debug_whitelist', 'access_debug_mode_enabled', 'access_debug_ip_list', 'special_schedules', 'special_schedules_enabled', 'meal_lunch_cutoff_hour', 'meal_rating_enabled', 'meal_emphasis_enabled', 'teacher_ignore_keywords', 'semester_key', 'assessment_allow_student_grade1', 'assessment_allow_student_grade2', 'assessment_allow_student_grade3', 'assessment_allow_teacher_grade1', 'assessment_allow_teacher_grade2', 'assessment_allow_teacher_grade3', 'assessment_disallow_msg_student', 'assessment_disallow_msg_teacher', 'teacher_default_password', 'teacher_auth_expire_days', 'teacher_passwords', 'active_teachers')").all();
+        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'elective_input_mode_grade2', 'elective_input_mode_grade3', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'chrome_install_button_visible', 'safari_install_button_visible', 'other_install_button_visible', 'play_store_url', 'app_store_url', 'show_target_class_main_menu', 'promotion_popup_enabled', 'promotion_reset_days', 'assessment_distrust_threshold', 'assessment_positive_color', 'assessment_positive_ratio', 'assessment_negative_color', 'assessment_negative_ratio', 'assessment_timetable_color', 'changed_class_tint_color', 'changed_class_tint_opacity', 'comcigan_debug_overlay_enabled', 'comcigan_debug_whitelist', 'access_debug_mode_enabled', 'access_debug_ip_list', 'special_schedules', 'special_schedules_enabled', 'meal_lunch_cutoff_hour', 'meal_rating_enabled', 'meal_emphasis_enabled', 'teacher_ignore_keywords', 'semester_key', 'assessment_allow_student_grade1', 'assessment_allow_student_grade2', 'assessment_allow_student_grade3', 'assessment_allow_teacher_grade1', 'assessment_allow_teacher_grade2', 'assessment_allow_teacher_grade3', 'assessment_disallow_msg_student', 'assessment_disallow_msg_teacher', 'teacher_default_password', 'teacher_auth_expire_days', 'teacher_passwords', 'active_teachers', 'maintenance_bypass_chrome', 'maintenance_bypass_samsung', 'maintenance_bypass_safari', 'maintenance_bypass_other', 'maintenance_bypass_pwa_app', 'maintenance_bypass_webview_app')").all();
 
         const settings: any = {};
         if (rows && rows.results) {
@@ -88,6 +88,21 @@ export const onRequest = async (context: any) => {
             chrome_install_button_visible: settings['chrome_install_button_visible'] !== 'false', // default true
             safari_install_button_visible: settings['safari_install_button_visible'] !== 'false', // default true
             other_install_button_visible: settings['other_install_button_visible'] !== 'false', // default true
+            // 접속환경별 점검 우회 (maintenance_bypass — detect() 기반 일원화)
+            maintenance_bypass_chrome: settings['maintenance_bypass_chrome'] === 'true',
+            maintenance_bypass_samsung: settings['maintenance_bypass_samsung'] === 'true',
+            maintenance_bypass_safari: settings['maintenance_bypass_safari'] === 'true',
+            maintenance_bypass_other: settings['maintenance_bypass_other'] === 'true',
+            maintenance_bypass_pwa_app: settings['maintenance_bypass_pwa_app'] === 'true',
+            maintenance_bypass_webview_app: settings['maintenance_bypass_webview_app'] === 'true',
+            maintenance_bypass: {
+                chrome: settings['maintenance_bypass_chrome'] === 'true',
+                samsung: settings['maintenance_bypass_samsung'] === 'true',
+                safari: settings['maintenance_bypass_safari'] === 'true',
+                other: settings['maintenance_bypass_other'] === 'true',
+                pwa_app: settings['maintenance_bypass_pwa_app'] === 'true',
+                webview_app: settings['maintenance_bypass_webview_app'] === 'true',
+            },
             play_store_url: settings['play_store_url'] || '', // external Play Store / app store link
             app_store_url: settings['app_store_url'] || '', // iOS App Store link
             show_target_class_main_menu: settings['show_target_class_main_menu'] !== 'false', // default true
