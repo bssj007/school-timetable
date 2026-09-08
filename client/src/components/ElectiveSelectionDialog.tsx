@@ -38,6 +38,8 @@ interface ElectiveSelectionDialogProps {
     studentName: string;        // 복합 식별자 구성 (이름 + 학번)
     datasetId?: string;
     forceManualMode?: boolean;
+    configuredMode?: 'auto' | 'manual';
+    isSettingsLoading?: boolean;
     onSaveSuccess: () => void;
     onBack?: () => void;
 }
@@ -141,16 +143,38 @@ export default function ElectiveSelectionDialog({
     studentName,
     datasetId,
     forceManualMode = false,
+    configuredMode,
+    isSettingsLoading = false,
     onSaveSuccess,
     onBack
 }: ElectiveSelectionDialogProps) {
     // 이름을 props에서 직접 받음 (Dashboard가 UserConfig에서 전달)
     const queryClient = useQueryClient();
 
-    // UI mode: "smart" = subject-name picker, "manual" = group dropdown fallback
-    // Default: grade 2 → smart (auto), grade 3 → manual
-    const defaultMode = forceManualMode || grade === "3" ? "manual" : "smart";
-    const [mode, setMode] = useState<"smart" | "manual">(defaultMode);
+    // UI mode: "smart" = 과목명 선택(자동 탐색), "manual" = 그룹별 드롭다운(수동 입력)
+    const resolvedMode = configuredMode
+        ? (configuredMode === 'manual' ? 'manual' : 'smart')
+        : (forceManualMode || grade === '3' ? 'manual' : 'smart');
+    const [mode, setMode] = useState<"smart" | "manual">(resolvedMode);
+
+    // 관리자가 수동 모드를 명시적으로 지정했는지 여부
+    const isManualByAdmin = configuredMode === 'manual' || forceManualMode || (grade === '3' && configuredMode !== 'auto');
+
+    // 관리자 설정이 완전히 로드될 때까지 대기하며, 5초 이상 걸리면 팝업을 닫고 안내 메시지 출력
+    useEffect(() => {
+        if (!isOpen) return;
+
+        if (isSettingsLoading) {
+            const timer = setTimeout(() => {
+                toast.error("조금 뒤 다시 시도하세요");
+                onBack?.();
+            }, 5000);
+
+            return () => clearTimeout(timer);
+        } else {
+            setMode(resolvedMode);
+        }
+    }, [isOpen, isSettingsLoading, resolvedMode, onBack]);
 
     // Smart mode: list of selected subject strings
     const [smartSelected, setSmartSelected] = useState<string[]>([]);
@@ -274,10 +298,10 @@ export default function ElectiveSelectionDialog({
             setManualSelections({});
             setSelectedSolution(null);
             setSearchQuery("");
-            setMode(defaultMode);
+            setMode(resolvedMode);
             initializedRef.current = false;
         }
-    }, [existingProfile, isOpen]);
+    }, [existingProfile, isOpen, resolvedMode]);
 
     // ── Handlers ───────────────────────────────────────────────────────
 
@@ -357,7 +381,7 @@ export default function ElectiveSelectionDialog({
 
     // datasetId가 없으면 시간표 로딩 전이므로 로딩 중으로 처리
     // (쿼리가 disabled 상태라 isLoading=false지만, 실제로는 데이터 준비 안 된 상태)
-    const isLoading = configLoading || profileLoading || !datasetId;
+    const isLoading = configLoading || profileLoading || !datasetId || isSettingsLoading;
 
     return (
         <Dialog open={isOpen} onOpenChange={() => { }}>
@@ -372,16 +396,23 @@ export default function ElectiveSelectionDialog({
                         <span className="text-red-500 font-mono">{grade}{classNum}{studentNumber.padStart(2, '0')}</span>
                     </DialogTitle>
                     <p className="text-xs text-slate-500">
-                        {mode === "smart"
-                            ? `이동수업 그룹: ${groupCount}개 | 선택: ${smartSelected.length}/${groupCount}`
-                            : "그룹별로 직접 과목을 선택합니다."
+                        {isSettingsLoading
+                            ? "관리자 설정을 확인하는 중입니다..."
+                            : mode === "smart"
+                                ? `이동수업 그룹: ${groupCount}개 | 선택: ${smartSelected.length}/${groupCount}`
+                                : "그룹별로 직접 과목을 선택합니다."
                         }
                     </p>
                 </DialogHeader>
 
                 <div className="flex-1 overflow-y-auto min-h-0 space-y-4 py-2">
                     {isLoading ? (
-                        <div className="flex justify-center py-12"><Loader2 className="animate-spin w-8 h-8 text-slate-400" /></div>
+                        <div className="flex flex-col items-center justify-center py-12 gap-3">
+                            <Loader2 className="animate-spin w-8 h-8 text-slate-400" />
+                            {isSettingsLoading && (
+                                <p className="text-sm text-slate-500 font-medium">관리자 설정을 확인하는 중입니다...</p>
+                            )}
+                        </div>
                     ) : (
                         <>
                             {/* ── Mandatory (non-moving) subjects ── */}
@@ -569,7 +600,7 @@ export default function ElectiveSelectionDialog({
                             {mode === "manual" && (
                                 <div className="space-y-3">
                                     {/* Only show the fallback warning when the user was forced into manual mode automatically, not when admin set it as default */}
-                                    {!forceManualMode && (
+                                    {!isManualByAdmin && (
                                         <div className="flex items-center gap-2 px-1 py-1.5 rounded-md bg-amber-50 border border-amber-200">
                                             <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
                                             <p className="text-xs text-amber-700">자동 배정이 불가능하여 수동 입력 모드로 전환했습니다.</p>
@@ -613,7 +644,7 @@ export default function ElectiveSelectionDialog({
                                         );
                                     })}
                                     {/* Mobile-only: 자동 탐색으로 전환 below dropdowns */}
-                                    {!forceManualMode && (
+                                    {!isManualByAdmin && (
                                         <div className="flex justify-center sm:hidden pt-2">
                                             <Button variant="outline" size="sm" onClick={() => setMode("smart")}>
                                                 자동 탐색으로 전환
@@ -650,7 +681,7 @@ export default function ElectiveSelectionDialog({
                             </Button>
                         )}
                         {/* 자동 탐색으로 전환 — desktop only; mobile version shown inline above */}
-                        {mode === "manual" && !forceManualMode && (
+                        {mode === "manual" && !isManualByAdmin && (
                             <Button variant="ghost" size="sm" onClick={() => setMode("smart")} className="hidden sm:flex">
                                 자동 탐색으로 전환
                             </Button>

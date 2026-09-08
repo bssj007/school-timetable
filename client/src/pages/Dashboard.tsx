@@ -164,7 +164,7 @@ export default function Dashboard() {
   };
 
   // 0. 설정 조회 (Public)
-  const { data: settings } = useQuery({
+  const { data: settings, isLoading: isSettingsLoading } = useQuery({
     queryKey: ['publicSettings'],
     queryFn: async () => {
       const res = await fetch('/api/settings/public');
@@ -175,6 +175,13 @@ export default function Dashboard() {
     refetchInterval: 30000,
     refetchOnWindowFocus: true,
   });
+
+  const isSettingsReady = !isSettingsLoading && !!settings;
+  const configuredElectiveMode: 'auto' | 'manual' | undefined = isSettingsReady
+    ? ((grade === '2'
+        ? (settings?.elective_input_mode_grade2 ?? settings?.elective_input_mode)
+        : (settings?.elective_input_mode_grade3 ?? settings?.elective_input_mode)) === 'manual' ? 'manual' : 'auto')
+    : undefined;
 
   const handleLogout = async () => {
     try {
@@ -3735,11 +3742,9 @@ export default function Dashboard() {
         studentNumber={studentNumber}
         studentName={studentName}
         datasetId={(rawTimetableData as any)?.datasetId || ''}
-        forceManualMode={
-          grade === '2'
-            ? (settings?.elective_input_mode_grade2 ?? settings?.elective_input_mode) === 'manual'
-            : (settings?.elective_input_mode_grade3 ?? settings?.elective_input_mode) === 'manual'
-        }
+        forceManualMode={configuredElectiveMode === 'manual'}
+        configuredMode={configuredElectiveMode}
+        isSettingsLoading={!isSettingsReady}
         onSaveSuccess={() => {
           setShowElectiveDialog(false);
           setIsElectiveEntered(true);

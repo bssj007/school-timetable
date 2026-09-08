@@ -1803,6 +1803,7 @@ function ElectiveInputModeSettings({ adminPassword }: { adminPassword: string })
         onSuccess: () => {
             toast.success("설정이 저장되었습니다.");
             queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
         },
         onError: (err: Error) => toast.error(`저장 실패: ${err.message}`),
     });
