@@ -1,5 +1,14 @@
 import { verifyTeacherPassword } from "./_teacherAuth";
 
+function decodeHeader(val: string | null | undefined): string {
+    if (!val) return '';
+    try {
+        return decodeURIComponent(val);
+    } catch {
+        return val;
+    }
+}
+
 /**
  * POST 처리 전 스키마 마이그레이션을 한 번에 보장한다.
  * 컬럼이 이미 존재하는 경우 ALTER TABLE은 조용히 무시된다.
@@ -312,8 +321,8 @@ export const onRequest = async (context: any) => {
 
             // 교사 권한으로 등록 시: 서버측 비밀번호 검증 필수
             if (isTeacher) {
-                const headerPassword = request.headers.get('X-Teacher-Password');
-                const headerName = request.headers.get('X-Teacher-Name');
+                const headerPassword = decodeHeader(request.headers.get('X-Teacher-Password'));
+                const headerName = decodeHeader(request.headers.get('X-Teacher-Name'));
                 const authTeacherName = headerName || teacher || body.teacherName || '';
                 const presentedPassword = headerPassword || body.teacherPassword || '';
 
@@ -468,8 +477,8 @@ export const onRequest = async (context: any) => {
 
                 // 교사 권한으로 삭제하거나 교사 등록 수행평가를 삭제하는 경우 비밀번호 검증 필수
                 if (isTeacher || isTeacherCreated === 1) {
-                    const headerPassword = request.headers.get('X-Teacher-Password') || url.searchParams.get('teacherPassword');
-                    const headerName = request.headers.get('X-Teacher-Name') || url.searchParams.get('teacherName') || existing?.teacher;
+                    const headerPassword = decodeHeader(request.headers.get('X-Teacher-Password')) || url.searchParams.get('teacherPassword');
+                    const headerName = decodeHeader(request.headers.get('X-Teacher-Name')) || url.searchParams.get('teacherName') || existing?.teacher;
                     const { valid } = await verifyTeacherPassword(env, headerName, headerPassword);
                     if (!valid) {
                         return new Response(JSON.stringify({
@@ -540,8 +549,8 @@ export const onRequest = async (context: any) => {
 
             // 교사 권한으로 수정 시: 서버측 비밀번호 검증 필수
             if (isTeacher) {
-                const headerPassword = request.headers.get('X-Teacher-Password');
-                const headerName = request.headers.get('X-Teacher-Name');
+                const headerPassword = decodeHeader(request.headers.get('X-Teacher-Password'));
+                const headerName = decodeHeader(request.headers.get('X-Teacher-Name'));
                 const authTeacherName = headerName || teacher || body.teacherName || '';
                 const presentedPassword = headerPassword || body.teacherPassword || '';
 

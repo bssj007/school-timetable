@@ -43,6 +43,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { normalizeTeacherName } from "@/components/RoleSelectDialog";
 
 declare const __BUILD_INFO__: {
     commitSha: string;
@@ -12137,13 +12138,18 @@ function TeacherDisplayManager({ adminPassword }: { adminPassword: string }) {
         }
     });
 
-    // teacher_passwords 키에서 교사 이름 목록 추출
+    // teacher_passwords 키에서 교사 이름 목록 추출 (정규화 및 중복 제거)
     const configuredTeachers = useMemo(() => {
         if (!settingsQuery.data?.teacher_passwords) return [];
         try {
             const raw = settingsQuery.data.teacher_passwords;
             const pwMap = typeof raw === "string" ? JSON.parse(raw) : raw;
-            return Object.keys(pwMap);
+            const set = new Set<string>();
+            Object.keys(pwMap).forEach(k => {
+                const clean = normalizeTeacherName(k);
+                if (clean) set.add(clean);
+            });
+            return Array.from(set);
         } catch { return []; }
     }, [settingsQuery.data]);
 
@@ -12725,7 +12731,15 @@ function TeacherPerPasswordManager({ adminPassword }: { adminPassword: string })
         if (settingsQuery.data) {
             try {
                 const raw = settingsQuery.data.teacher_passwords || "{}";
-                setPwMap(typeof raw === "string" ? JSON.parse(raw) : raw);
+                const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+                const normalized: Record<string, string> = {};
+                for (const [k, v] of Object.entries(parsed)) {
+                    const clean = normalizeTeacherName(k);
+                    if (clean && typeof v === 'string') {
+                        normalized[clean] = v;
+                    }
+                }
+                setPwMap(normalized);
             } catch { setPwMap({}); }
         }
     }, [settingsQuery.data]);
@@ -12750,25 +12764,44 @@ function TeacherPerPasswordManager({ adminPassword }: { adminPassword: string })
 
     const handleAdd = (e: React.FormEvent) => {
         e.preventDefault();
-        const name = newTeacherName.trim();
+        const cleanName = normalizeTeacherName(newTeacherName);
         const pw = newTeacherPw.trim();
-        if (!name || !pw) { toast.error("이름과 비밀번호를 모두 입력하세요."); return; }
-        const next = { ...pwMap, [name]: pw };
+        if (!cleanName || !pw) { toast.error("이름과 비밀번호를 모두 입력하세요."); return; }
+        const next: Record<string, string> = {};
+        for (const [k, v] of Object.entries(pwMap)) {
+            if (normalizeTeacherName(k) !== cleanName) {
+                next[k] = v;
+            }
+        }
+        next[cleanName] = pw;
         save.mutate(next);
         setNewTeacherName(""); setNewTeacherPw("");
     };
 
     const handleDelete = (name: string) => {
         if (!confirm(`"${name}" 선생님의 개별 비밀번호를 삭제하시겠습니까?\n(삭제 시 초기 비밀번호가 적용됩니다)`)) return;
-        const next = { ...pwMap };
-        delete next[name];
+        const cleanName = normalizeTeacherName(name);
+        const next: Record<string, string> = {};
+        for (const [k, v] of Object.entries(pwMap)) {
+            if (normalizeTeacherName(k) !== cleanName) {
+                next[k] = v;
+            }
+        }
         save.mutate(next);
     };
 
     const handleEdit = (name: string) => {
         const trimmed = editValue.trim();
         if (!trimmed) { toast.error("비밀번호를 입력하세요."); return; }
-        save.mutate({ ...pwMap, [name]: trimmed });
+        const cleanName = normalizeTeacherName(name);
+        const next: Record<string, string> = {};
+        for (const [k, v] of Object.entries(pwMap)) {
+            if (normalizeTeacherName(k) !== cleanName) {
+                next[k] = v;
+            }
+        }
+        next[cleanName] = trimmed;
+        save.mutate(next);
         setEditingTeacher(null);
         setEditValue("");
     };

@@ -6,6 +6,7 @@ import {
   setStoredTeacherPassword,
   clearStoredTeacherPassword,
   getAuthenticatedTeacher,
+  normalizeTeacherName,
 } from "@/components/RoleSelectDialog";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 import { ArrowLeft, Eye, EyeOff, Lock, KeyRound, Check, AlertCircle } from "lucide-react";
@@ -15,7 +16,8 @@ export default function TeacherAccount() {
   const { teacherName: ctxTeacherName } = useUserConfig();
 
   const [teacherName, setTeacherName] = useState<string>(() => {
-    return getAuthenticatedTeacher() || ctxTeacherName || getTeacherNameCookie() || "";
+    const raw = getAuthenticatedTeacher() || ctxTeacherName || getTeacherNameCookie() || "";
+    return normalizeTeacherName(raw);
   });
 
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -91,7 +93,7 @@ export default function TeacherAccount() {
     try {
       const res = await fetch(`/api/teacher-password?name=${encodeURIComponent(teacherName)}`, {
         headers: {
-          'X-Teacher-Password': stored
+          'X-Teacher-Password': encodeURIComponent(stored || '')
         }
       });
       const data = await res.json();

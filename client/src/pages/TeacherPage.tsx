@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { useUserConfig } from "@/contexts/UserConfigContext";
-import { clearRoleCookie, getTeacherNameCookie, setTeacherNameCookie, getStoredTeacherPassword, setStoredTeacherPassword, clearStoredTeacherPassword, getAuthenticatedTeacher } from "@/components/RoleSelectDialog";
+import { clearRoleCookie, getTeacherNameCookie, setTeacherNameCookie, getStoredTeacherPassword, setStoredTeacherPassword, clearStoredTeacherPassword, getAuthenticatedTeacher, normalizeTeacherName } from "@/components/RoleSelectDialog";
 import { isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 interface TeacherTimetableResponse {
@@ -957,7 +957,10 @@ export default function TeacherPage() {
     const expireDays = settings?.teacher_auth_expire_days ?? 0;
     if (expireDays > 0) {
       try {
-        const raw = localStorage.getItem(`teacher-pw-${rawTeacherName}`);
+        const cleanTeacher = normalizeTeacherName(rawTeacherName);
+        const raw = localStorage.getItem(`teacher-pw-${cleanTeacher}`) ??
+                    localStorage.getItem(`teacher-pw-${rawTeacherName}`) ??
+                    localStorage.getItem(`teacher-pw-${cleanTeacher}*`);
         if (raw) {
           const parsed = JSON.parse(raw);
           const expireMs = expireDays * 24 * 60 * 60 * 1000;
@@ -1755,8 +1758,8 @@ export default function TeacherPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Teacher-Password': storedPw || '',
-          'X-Teacher-Name': rawTeacherName || '',
+          'X-Teacher-Password': encodeURIComponent(storedPw || ''),
+          'X-Teacher-Name': encodeURIComponent(rawTeacherName || ''),
         },
         body: JSON.stringify({
           ...payload,
@@ -1793,8 +1796,8 @@ export default function TeacherPage() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-Teacher-Password': storedPw || '',
-          'X-Teacher-Name': rawTeacherName || '',
+          'X-Teacher-Password': encodeURIComponent(storedPw || ''),
+          'X-Teacher-Name': encodeURIComponent(rawTeacherName || ''),
         },
         body: JSON.stringify({
           ...payload,
@@ -1828,11 +1831,13 @@ export default function TeacherPage() {
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const storedPw = getStoredTeacherPassword(rawTeacherName);
-      const res = await fetch(`/api/assessment?id=${id}&role=teacher`, {
+      const encTeacher = encodeURIComponent(rawTeacherName || '');
+      const encPw = encodeURIComponent(storedPw || '');
+      const res = await fetch(`/api/assessment?id=${id}&role=teacher&teacherName=${encTeacher}&teacherPassword=${encPw}`, {
         method: 'DELETE',
         headers: {
-          'X-Teacher-Password': storedPw || '',
-          'X-Teacher-Name': rawTeacherName || '',
+          'X-Teacher-Password': encPw,
+          'X-Teacher-Name': encTeacher,
         },
       });
       if (!res.ok) {

@@ -1,17 +1,26 @@
 /**
+ * Helper to normalize teacher name by stripping '선생님' suffix, trailing asterisks ('*'), and whitespace.
+ */
+export function normalizeTeacherName(name: string | null | undefined): string {
+    if (!name) return '';
+    return name.trim().replace(/선생님$/, '').replace(/\*+$/, '').trim();
+}
+
+/**
  * Helper to verify a teacher's password against system_settings in Cloudflare D1.
  */
 export async function verifyTeacherPassword(
     env: any,
     teacherName: string | null | undefined,
     presentedPassword: string | null | undefined
-): Promise<{ valid: boolean; trimmedName: string; expectedPassword?: string }> {
+): Promise<{ valid: boolean; trimmedName: string; cleanName: string; expectedPassword?: string }> {
     if (!env?.DB || !teacherName || !presentedPassword) {
-        return { valid: false, trimmedName: '' };
+        return { valid: false, trimmedName: '', cleanName: '' };
     }
     const trimmedName = teacherName.trim().replace(/선생님$/, '').trim();
-    if (!trimmedName || !presentedPassword.trim()) {
-        return { valid: false, trimmedName };
+    const cleanName = normalizeTeacherName(teacherName);
+    if (!cleanName || !presentedPassword.trim()) {
+        return { valid: false, trimmedName, cleanName };
     }
 
     try {
@@ -45,14 +54,27 @@ export async function verifyTeacherPassword(
             }
         }
 
-        const expected = pwMap[trimmedName] ?? defaultPassword;
+        // Fuzzy matching to handle differences like "김교사" vs "김교사*"
+        let matchedPassword: string | undefined = pwMap[cleanName] ?? pwMap[trimmedName] ?? pwMap[cleanName + "*"];
+        if (matchedPassword === undefined) {
+            for (const [k, v] of Object.entries(pwMap)) {
+                if (normalizeTeacherName(k) === cleanName) {
+                    matchedPassword = v;
+                    break;
+                }
+            }
+        }
+
+        const expected = matchedPassword ?? defaultPassword;
         return {
             valid: presentedPassword.trim() === expected,
             trimmedName,
+            cleanName,
             expectedPassword: expected
         };
     } catch (e) {
         console.error("[verifyTeacherPassword] DB error:", e);
-        return { valid: false, trimmedName };
+        return { valid: false, trimmedName, cleanName };
     }
 }
+

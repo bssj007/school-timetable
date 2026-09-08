@@ -25,7 +25,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
-import { clearRoleCookie } from "@/components/RoleSelectDialog";
+import { clearRoleCookie, normalizeTeacherName } from "@/components/RoleSelectDialog";
 import {
   Select,
   SelectContent,
@@ -3606,13 +3606,14 @@ export default function Dashboard() {
         // 이용중인 교사별로 등록된 수행평가에서 과목 추출
         const teacherSubjects: { teacher: string; subjects: string[] }[] = activeTeacherList
           .map((teacherName: string) => {
+            const cleanTarget = normalizeTeacherName(teacherName);
             const subjects = Array.from(new Set(
               (allAssessments as any[] || [])
-                .filter((a: any) => a.teacher === teacherName)
+                .filter((a: any) => normalizeTeacherName(a.teacher) === cleanTarget)
                 .map((a: any) => a.subject as string)
                 .filter(Boolean)
             )) as string[];
-            return { teacher: teacherName, subjects };
+            return { teacher: cleanTarget || teacherName, subjects };
           })
           .filter(t => t.subjects.length > 0);
 

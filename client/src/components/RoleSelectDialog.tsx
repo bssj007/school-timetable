@@ -39,23 +39,33 @@ export function clearRoleCookie() {
     // 역할/쿠키 전환 시 저장된 교사 비밀번호는 삭제하지 않고 보존함
 }
 
+export function normalizeTeacherName(name: string | null | undefined): string {
+    if (!name) return '';
+    return name.trim().replace(/선생님$/, '').replace(/\*+$/, '').trim();
+}
+
 /** 현재 클라이언트에 비밀번호 인증이 완료된 단일 선생님 이름 반환 */
 export function getAuthenticatedTeacher(): string | null {
     if (typeof localStorage === "undefined") return null;
     const auth = localStorage.getItem(AUTH_TEACHER_KEY);
-    return auth ? auth.trim() : null;
+    return auth ? normalizeTeacherName(auth) : null;
 }
 
 export function getStoredTeacherPassword(teacherName?: string): string | null {
     if (typeof localStorage === "undefined") return null;
-    const authTeacher = getAuthenticatedTeacher();
+    const authTeacher = localStorage.getItem(AUTH_TEACHER_KEY);
     if (!authTeacher) return null;
+    const cleanAuth = normalizeTeacherName(authTeacher);
+
     if (teacherName) {
-        const clean = teacherName.trim().replace(/선생님$/, '').trim();
-        if (clean !== authTeacher) return null;
+        const cleanRequested = normalizeTeacherName(teacherName);
+        if (cleanRequested !== cleanAuth) return null;
     }
+
     try {
-        const raw = localStorage.getItem(`teacher-pw-${authTeacher}`);
+        const raw = localStorage.getItem(`teacher-pw-${cleanAuth}`) ??
+                    localStorage.getItem(`teacher-pw-${authTeacher}`) ??
+                    localStorage.getItem(`teacher-pw-${cleanAuth}*`);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         return typeof parsed?.password === 'string' ? parsed.password : null;
@@ -66,26 +76,36 @@ export function getStoredTeacherPassword(teacherName?: string): string | null {
 
 export function setStoredTeacherPassword(teacherName: string, password: string): void {
     if (typeof localStorage === "undefined" || !teacherName) return;
-    const clean = teacherName.trim().replace(/선생님$/, '').trim();
+    const clean = normalizeTeacherName(teacherName);
+    const rawTrimmed = teacherName.trim().replace(/선생님$/, '').trim();
 
     // 단일 교사 인증 보장: 이전의 모든 교사 인증정보 삭제
     clearStoredTeacherPassword();
 
     localStorage.setItem(AUTH_TEACHER_KEY, clean);
-    localStorage.setItem(`teacher-pw-${clean}`, JSON.stringify({
+    const payload = JSON.stringify({
         password: password.trim(),
         savedAt: Date.now(),
-    }));
+    });
+    localStorage.setItem(`teacher-pw-${clean}`, payload);
+    if (rawTrimmed && rawTrimmed !== clean) {
+        localStorage.setItem(`teacher-pw-${rawTrimmed}`, payload);
+    }
+    localStorage.setItem(`teacher-pw-${clean}*`, payload);
 }
 
 export function clearStoredTeacherPassword(teacherName?: string): void {
     if (typeof localStorage === "undefined") return;
     if (teacherName) {
-        const clean = teacherName.trim().replace(/선생님$/, '').trim();
-        if (getAuthenticatedTeacher() === clean) {
+        const clean = normalizeTeacherName(teacherName);
+        const rawTrimmed = teacherName.trim().replace(/선생님$/, '').trim();
+        const currentAuth = localStorage.getItem(AUTH_TEACHER_KEY);
+        if (currentAuth && normalizeTeacherName(currentAuth) === clean) {
             localStorage.removeItem(AUTH_TEACHER_KEY);
         }
         localStorage.removeItem(`teacher-pw-${clean}`);
+        localStorage.removeItem(`teacher-pw-${rawTrimmed}`);
+        localStorage.removeItem(`teacher-pw-${clean}*`);
     } else {
         localStorage.removeItem(AUTH_TEACHER_KEY);
         const keysToRemove: string[] = [];
