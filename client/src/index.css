@@ -6,6 +6,15 @@
 @custom-variant wide (@media (min-aspect-ratio: 1/1));
 @custom-variant narrow (@media (max-aspect-ratio: 1/1));
 
+/*
+ * Redefine the built-in `hover:` variant so it is ONLY active on devices that
+ * genuinely support hover (mouse / trackpad).  On touch-only screens
+ * (hover: none, pointer: coarse) no hover style is ever applied, which
+ * eliminates the well-known "sticky hover after tap" problem without any
+ * !important hacks.  This is the recommended Tailwind v4 approach.
+ */
+@custom-variant hover (&:hover:where(@media (hover: hover)));
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -716,71 +725,11 @@ body.capturing #timetable-container[data-print-font-size="large"] td .md\:text-b
 }
 
 /* -------------------------------------------------------------------------- */
-/* Disable sticky hover on touch-only devices (mobile)                        */
-/* Finger lifted → snap ALL hover styles back instantly                       */
-/* :active is excluded so pressing still gives visual feedback                */
+/* Touch tap highlight — remove default blue flash on all tappable elements   */
 /* -------------------------------------------------------------------------- */
 @media (hover: none) {
-  /* Remove tap highlight glow globally */
   * {
     -webkit-tap-highlight-color: transparent;
-  }
-
-  /*
-   * Core fix: when the user is NOT actively holding a touch, undo every hover
-   * style that Tailwind or component libraries may have applied.
-   * We target every interactive surface that can accumulate sticky state.
-   */
-  button:not(:active):hover,
-  a:not(:active):hover,
-  [role="button"]:not(:active):hover,
-  [role="tab"]:not(:active):hover,
-  [role="option"]:not(:active):hover,
-  [role="menuitem"]:not(:active):hover,
-  [role="listbox"]:not(:active):hover,
-  label:not(:active):hover,
-  div[tabindex]:not(:active):hover,
-  span[tabindex]:not(:active):hover {
-    /* Reset every visual property that Tailwind hover utilities touch */
-    background-color: revert !important;
-    background-image: revert !important;
-    color: revert !important;
-    /* border-color: inherit keeps the component's own border; revert would erase it */
-    border-color: inherit !important;
-    /* outline: none — revert would restore the UA browser focus box (the visible rectangle) */
-    outline: none !important;
-    box-shadow: revert !important;
-    opacity: revert !important;
-    text-decoration: revert !important;
-    text-decoration-color: revert !important;
-    fill: revert !important;
-    stroke: revert !important;
-    /* Suppress transform-based hover effects (scale, translate) */
-    transform: revert !important;
-    /* Remove any transition so the reset is instant, not animated */
-    transition: none !important;
-  }
-
-  /*
-   * group-hover: Tailwind applies hover styles to children via .group:hover .group-hover\:*
-   * On touch, the parent stays "hovered" so children keep the applied class.
-   * Force-reset child styles when the group's root is not :active.
-   */
-  .group:not(:active):hover > *,
-  .group:not(:active):hover * {
-    --tw-bg-opacity: 1 !important;
-    color: revert !important;
-    opacity: revert !important;
-    transform: revert !important;
-    transition: none !important;
-  }
-
-  /* Timetable cells: kill transition to prevent lingering highlight */
-  #timetable-container td {
-    -webkit-tap-highlight-color: transparent;
-  }
-  #timetable-container td:not(:active) {
-    transition: none !important;
   }
 }
 
