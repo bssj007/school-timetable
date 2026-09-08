@@ -166,13 +166,13 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
 
     const switchToRole = (targetRole: "student" | "teacher") => {
         if (targetRole === "student") {
-            setRoleCookie("student");
-            setUserRoleState("student");
-            toast.success("학생용 페이지로 이동합니다.");
-            if (typeof window !== "undefined") {
-                if (window.location.pathname !== "/") {
-                    window.location.href = "/";
-                }
+            // 교사→학생 전환: 역할 선택 화면(role step)부터 다시 시작
+            // 저장된 학생 정보는 다이얼로그 내 handleSelectStudent에서 이미 채워진 상태로 유지됨
+            clearRoleCookie();
+            setUserRoleState(null);
+            openRoleSelect("role");
+            if (typeof window !== "undefined" && window.location.pathname !== "/") {
+                window.location.href = "/";
             }
         } else if (targetRole === "teacher") {
             setRoleCookie("teacher");
@@ -194,6 +194,7 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
             }
         }
     };
+
 
     const refreshKakaoUser = async () => {
         try {
