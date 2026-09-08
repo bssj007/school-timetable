@@ -652,15 +652,6 @@ export default function TeacherPage() {
     return (rawDatasetId === 'MANUAL_PLAN' || rawDatasetId === 'SEMESTER_PLAN') ? rawDatasetId : 'COMCIGAN';
   }, [grade3Timetable]);
 
-  // 날짜 범위 밖 여부 — 교사 시간표 또는 3개 학년 중 하나라도 COMCIGAN+isOutOfRange이면 미확정
-  // 아카이브 데이터가 있는 경우 미확정 표시 안 함
-  const isOutOfDateRange = (
-    (!timetableData?.isArchivedData && !!timetableData?.isOutOfRange) ||
-    (g1DatasetType === 'COMCIGAN' && !!grade1Timetable?.isOutOfRange && !grade1Timetable?.isArchivedData) ||
-    (g2DatasetType === 'COMCIGAN' && !!grade2Timetable?.isOutOfRange && !grade2Timetable?.isArchivedData) ||
-    (g3DatasetType === 'COMCIGAN' && !!grade3Timetable?.isOutOfRange && !grade3Timetable?.isArchivedData)
-  );
-
   // Fetch current-week timetables to resolve fixed panel datasets
   const { data: grade1TimetableNow } = useQuery({
     queryKey: ['timetable-all-now', '1', currentWeekDate],
@@ -752,6 +743,15 @@ export default function TeacherPage() {
     retryDelay: 3000,
     refetchInterval: 2 * 60 * 1000,
   });
+
+  // 날짜 범위 밖 여부 — 교사 시간표 또는 3개 학년 중 하나라도 COMCIGAN+isOutOfRange이면 미확정
+  // 아카이브 데이터가 있는 경우 미확정 표시 안 함
+  const isOutOfDateRange = (
+    (!timetableData?.isArchivedData && !!timetableData?.isOutOfRange) ||
+    (g1DatasetType === 'COMCIGAN' && !!grade1Timetable?.isOutOfRange && !grade1Timetable?.isArchivedData) ||
+    (g2DatasetType === 'COMCIGAN' && !!grade2Timetable?.isOutOfRange && !grade2Timetable?.isArchivedData) ||
+    (g3DatasetType === 'COMCIGAN' && !!grade3Timetable?.isOutOfRange && !grade3Timetable?.isArchivedData)
+  );
 
   // ── 선생님 동기화: 초기 진입 시 인증된 선생님 우선, 없으면 쿠키 선생님 ──
   const initialResolvedRef = useRef(false);
