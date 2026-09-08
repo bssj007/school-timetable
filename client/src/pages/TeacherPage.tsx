@@ -2128,9 +2128,10 @@ export default function TeacherPage() {
         <DialogContent
           className="sm:max-w-[360px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl"
           style={{
-            // 모바일에서 키보드가 올라오면 다이얼로그를 위로 밀어올림
+            // 모바일 키보드 등장 시: 키보드 높이의 55%만큼 올리되 최대 160px 제한
+            // (너무 위로 올라가지 않으면서 키보드에 가리지 않는 균형)
             transform: authDialogKeyboardOffset > 0
-              ? `translateY(calc(-50% - ${authDialogKeyboardOffset / 2}px))`
+              ? `translateY(calc(-50% - ${Math.min(Math.round(authDialogKeyboardOffset * 0.55), 160)}px))`
               : undefined,
             transition: 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)',
           }}
