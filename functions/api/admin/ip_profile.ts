@@ -220,8 +220,10 @@ export const onRequest = async (context: any) => {
             modificationCount,
             printCount,
             downloadCount,
-            isStandalone: false,
-            appType: detectServerAppType(latestUA),
+            isStandalone: Boolean(isStandalone === 1 || (recentEnvironments || []).some((e: any) => e.isApp)),
+            appType: (isStandalone === 1 || (recentEnvironments || []).some((e: any) => e.isApp))
+                ? ((recentEnvironments || []).some((e: any) => e.isApp) ? 'webview' : 'pwa')
+                : detectServerAppType(latestUA),
             userAgent: latestUA || null,
             lastAccess,
             recentUserAgents,

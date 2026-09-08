@@ -7384,6 +7384,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         isBlocked: boolean;
                                         hasElectives?: boolean;
                                         instructionDismissed: boolean;
+                                        isStandalone?: boolean;
                                     };
 
                                     const groupMap = new Map<string, UserGroup>();
@@ -7412,6 +7413,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                             if (user.isBlocked) existing.isBlocked = true;
                                             if (user.hasElectives) existing.hasElectives = true;
                                             if (user.instructionDismissed) existing.instructionDismissed = true;
+                                            if (user.isStandalone) existing.isStandalone = true;
                                             if (!existing.teacherName && (user as any).teacherName) existing.teacherName = (user as any).teacherName;
                                         } else {
                                             groupMap.set(key, {
@@ -7432,6 +7434,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                 isBlocked: !!user.isBlocked,
                                                 hasElectives: !!user.hasElectives,
                                                 instructionDismissed: !!user.instructionDismissed,
+                                                isStandalone: !!user.isStandalone,
                                             });
                                         }
                                     }
@@ -7521,10 +7524,11 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         );
                                     };
 
-                                    // ── 앱 설치 이력 배지 (historicalEnvironments에서 WebView/인앱 환경만 표시) ────────
+                                    // ── 앱 설치 이력 배지 (과거 전체 로그 및 프로필 통틀어 앱 접속 기록 여부 판별) ────────
                                     const renderAppHistoryBadges = (
                                         envs: { os: string; deviceType: string; browserKey: string; isInApp: boolean; isApp?: boolean }[] | undefined,
-                                        userFallback?: IPProfile
+                                        userFallback?: IPProfile,
+                                        groupHasStandalone?: boolean
                                     ) => {
                                         let effectiveEnvs = envs && envs.length > 0 ? [...envs] : [];
 
@@ -7545,14 +7549,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                             }
                                         }
 
-                                        if (effectiveEnvs.length === 0) return <span className="text-gray-300 text-xs">-</span>;
-
-                                        // 정식 앱(WebView) 접속만 필터링
+                                        // 앱 접속 기록 필터링 (1. isApp 정식 앱, 2. PWA 모드, 3. 일반 모바일 브라우저 제외)
                                         const appEnvs = effectiveEnvs.filter(e => {
                                             // 인앱 브라우저(카카오/네이버 등)는 제외
                                             if (e.isInApp) return false;
-                                            // 정식 앱(WebView)으로 식별된 경우 포함
-                                            if (e.isApp) return true;
+                                            // 정식 앱(WebView) 또는 PWA로 식별된 경우 포함
+                                            if (e.isApp || e.browserKey === 'pwa') return true;
                                             // 데스크톱은 제외
                                             if (e.deviceType === 'desktop') return false;
                                             // 일반 브라우저 접속은 제외 (chrome, safari, samsung, firefox)
@@ -7561,12 +7563,31 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                             return true;
                                         });
 
-                                        if (appEnvs.length === 0) return <span className="text-gray-300 text-xs">-</span>;
+                                        const hasStandaloneFlag = Boolean(groupHasStandalone || userFallback?.isStandalone);
+                                        const hasAppType = userFallback?.appType === 'webview' || userFallback?.appType === 'pwa';
 
-                                        // 중복 제거 (os 및 deviceType 기준)
+                                        // 전체 로그 및 프로필 통틀어 앱 접속 기록이 전혀 없는 경우
+                                        if (appEnvs.length === 0 && !hasStandaloneFlag && !hasAppType) {
+                                            return <span className="text-gray-300 text-xs">-</span>;
+                                        }
+
+                                        // appEnvs 목록에 누락되었으나 isStandalone/appType 플래그로 과거 앱 사용이 확인된 경우 보정
+                                        if (appEnvs.length === 0 && (hasStandaloneFlag || hasAppType)) {
+                                            const fallbackOs = userFallback?.os || (userFallback?.userAgent ? parseUA(userFallback.userAgent).os : '') || '';
+                                            appEnvs.push({
+                                                os: fallbackOs,
+                                                deviceType: userFallback?.deviceType || 'mobile',
+                                                browserKey: userFallback?.appType === 'pwa' ? 'pwa' : 'webview',
+                                                isInApp: false,
+                                                isApp: true
+                                            });
+                                        }
+
+                                        // 중복 제거 (os 및 browserKey 기준)
                                         const seen = new Set<string>();
                                         const unique = appEnvs.filter(e => {
-                                            const key = `${e.os}-${e.deviceType}`;
+                                            const isPwa = e.browserKey === 'pwa';
+                                            const key = `${e.os}-${isPwa ? 'pwa' : 'webview'}`;
                                             if (seen.has(key)) return false;
                                             seen.add(key);
                                             return true;
@@ -7576,14 +7597,19 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                             <div className="flex flex-wrap gap-1">
                                                 {unique.map((e, i) => {
                                                     const os = osLabel(e.os);
+                                                    const isPwa = e.browserKey === 'pwa';
                                                     return (
                                                         <Badge
                                                             key={i}
                                                             variant="secondary"
-                                                            className="font-mono text-[10px] px-1.5 py-0 bg-emerald-600 text-white border-emerald-700 whitespace-nowrap shadow-sm"
-                                                            title="WebView 앱 접속 기록"
+                                                            className={`font-mono text-[10px] px-1.5 py-0 text-white whitespace-nowrap shadow-sm ${
+                                                                isPwa
+                                                                    ? "bg-purple-600 border-purple-700 hover:bg-purple-700"
+                                                                    : "bg-emerald-600 border-emerald-700 hover:bg-emerald-700"
+                                                            }`}
+                                                            title={isPwa ? "로그 통틀어 PWA(홈화면 추가) 앱 접속 이력 있음" : "로그 통틀어 정식 앱(WebView) 접속 이력 있음"}
                                                         >
-                                                            앱·{os || e.deviceType}
+                                                            {isPwa ? `PWA·${os || '모바일'}` : `앱·${os || e.deviceType || '모바일'}`}
                                                         </Badge>
                                                     );
                                                 })}
@@ -7659,7 +7685,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                 {renderEnvBadge(user)}
                                             </TableCell>
                                             <TableCell>
-                                                {renderAppHistoryBadges(user.historicalEnvironments, user)}
+                                                {renderAppHistoryBadges(user.historicalEnvironments, user, user.isStandalone)}
                                             </TableCell>
                                             <TableCell className="text-slate-400">
                                                 {user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}
@@ -7799,7 +7825,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         {(() => {
                                                             // 모든 IP의 historicalEnvironments를 병합
                                                             const allEnvs = group.ips.flatMap(ip => ip.historicalEnvironments || []);
-                                                            return renderAppHistoryBadges(allEnvs, representativeUser);
+                                                            const hasGroupStandalone = Boolean(group.isStandalone || group.ips.some(ip => ip.isStandalone)); return renderAppHistoryBadges(allEnvs, representativeUser, hasGroupStandalone);
                                                         })()}
                                                     </TableCell>
                                                     <TableCell>
@@ -7888,8 +7914,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                             <SortHeader col="modCount" label="수정/추가/삭제" className="w-[120px] min-w-[120px]" />
                                                             <TableHead className="w-[80px] min-w-[80px]">출력</TableHead>
                                                             <TableHead className="w-[80px] min-w-[80px]">다운로드</TableHead>
-                                                            <TableHead className="w-[120px] min-w-[120px]">접속환경</TableHead>
-                                                            <TableHead className="w-[105px] min-w-[105px]">앱설치</TableHead>
+                                                            <TableHead className="w-[120px] min-w-[120px]" title="실시간 최신 접속 브라우저 및 OS 환경">접속환경</TableHead>
+                                                            <TableHead className="w-[105px] min-w-[105px]" title="현재 접속 여부 무관, 과거 전체 로그 기준 앱(WebView/PWA) 접속 이력 여부">앱설치</TableHead>
                                                             <SortHeader col="lastAccess" label="마지막 접속" className="w-[160px] min-w-[160px]" />
                                                             <TableHead className="w-[160px] min-w-[160px]">알림</TableHead>
                                                             <TableHead className="w-[160px] min-w-[160px]">관리</TableHead>
@@ -7976,7 +8002,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                                 {renderEnvBadge(user)}
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                {renderAppHistoryBadges(user.historicalEnvironments, user)}
+                                                                                {renderAppHistoryBadges(user.historicalEnvironments, user, user.isStandalone)}
                                                                             </TableCell>
                                                                             <TableCell>{user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}</TableCell>
                                                                             <TableCell>

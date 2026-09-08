@@ -162,27 +162,33 @@ export const onRequest = async (context: any) => {
                 }
                 return null;
             };
-            // 4. IP별 과거 접속환경 조회 (access_logs에서 distinct userAgent 조회하여 파싱)
+            // 4. IP별 과거 접속환경 조회 (access_logs에서 distinct userAgent 및 PWA 엔드포인트 조회하여 파싱)
             let envMap: Record<string, { os: string; deviceType: string; browserKey: string; isInApp: boolean; isApp: boolean }[]> = {};
             try {
                 const envQuery = `
-                    SELECT ip, userAgent
+                    SELECT ip, userAgent, endpoint
                     FROM access_logs
-                    WHERE userAgent IS NOT NULL AND TRIM(userAgent) != ''
-                    GROUP BY ip, userAgent
+                    WHERE (userAgent IS NOT NULL AND TRIM(userAgent) != '')
+                       OR (endpoint LIKE '%mode=pwa%' OR endpoint LIKE '%standalone%')
+                    GROUP BY ip, userAgent, endpoint
                 `;
                 const { results: envResults } = await env.DB.prepare(envQuery).all();
                 for (const row of envResults as any[]) {
-                    if (!row.ip || !row.userAgent) continue;
-                    const parsed = parseUA(row.userAgent);
-                    if (!parsed.os && !parsed.deviceType && !parsed.browserKey) continue;
+                    if (!row.ip) continue;
+                    const ep = (row.endpoint || '').toLowerCase();
+                    const isPwaEndpoint = ep.includes('mode=pwa') || ep.includes('standalone=1') || ep.includes('utm_source=homescreen');
+                    const parsed = row.userAgent ? parseUA(row.userAgent) : { os: '', deviceType: 'mobile', browserKey: 'pwa', isInApp: false, isApp: true };
+                    if (isPwaEndpoint) {
+                        parsed.isApp = true;
+                    }
+                    if (!parsed.os && !parsed.deviceType && !parsed.browserKey && !isPwaEndpoint) continue;
                     if (!envMap[row.ip]) envMap[row.ip] = [];
                     envMap[row.ip].push({
                         os: parsed.os || '',
-                        deviceType: parsed.deviceType || '',
-                        browserKey: parsed.browserKey || 'other',
+                        deviceType: parsed.deviceType || (isPwaEndpoint ? 'mobile' : ''),
+                        browserKey: isPwaEndpoint ? 'pwa' : (parsed.browserKey || 'other'),
                         isInApp: parsed.isInApp,
-                        isApp: parsed.isApp,
+                        isApp: parsed.isApp || isPwaEndpoint,
                     });
                 }
             } catch (e: any) {
@@ -195,7 +201,6 @@ export const onRequest = async (context: any) => {
                 const browserKey = p.browserKey || parsedLatestUA.browserKey || null;
                 const deviceType = p.deviceType || parsedLatestUA.deviceType || null;
                 const isInApp = p.isInApp === 1 || parsedLatestUA.isInApp;
-                const appType = detectServerAppType(p.userAgent) || (parsedLatestUA.isApp ? "webview" : null);
 
                 // envMap[p.ip]가 비어있고 최신 UA가 있으면 최신 환경 추가
                 let userEnvs = envMap[p.ip] || [];
@@ -209,6 +214,26 @@ export const onRequest = async (context: any) => {
                     }];
                 }
 
+                // 과거 로그 및 ip_profiles 누적값을 통틀어 앱 접속 기록 확인
+                const isDbStandalone = p.isStandalone === 1;
+                const hasAppInLogs = userEnvs.some(e => e.isApp);
+                const hasAppEver = isDbStandalone || hasAppInLogs;
+
+                // p.isStandalone이 1인데 userEnvs에 app 엔트리가 없다면 앱 환경 추가
+                if (hasAppEver && !userEnvs.some(e => e.isApp)) {
+                    userEnvs.push({
+                        os: os || '',
+                        deviceType: deviceType || 'mobile',
+                        browserKey: 'pwa',
+                        isInApp: false,
+                        isApp: true,
+                    });
+                }
+
+                const appType = (userEnvs.some(e => e.isApp && e.browserKey !== 'pwa') || detectServerAppType(p.userAgent))
+                    ? "webview"
+                    : (hasAppEver ? "pwa" : null);
+
                 const profile = {
                     clientId: p.ip,
                     ip: p.ip,
@@ -220,7 +245,7 @@ export const onRequest = async (context: any) => {
                     deleteCount: p.deleteCount || 0,
                     printCount: p.printCount || 0,
                     downloadCount: p.downloadCount || 0,
-                    isStandalone: false,
+                    isStandalone: hasAppEver,
                     lastAccess: p.lastAccess,
                     userAgent: p.userAgent || null,
                     appType,

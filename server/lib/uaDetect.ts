@@ -1,10 +1,7 @@
 /**
- * uaDetect.ts — 서버 전용 UA 파싱 모듈
+ * server/lib/uaDetect.ts — 서버 전용 UA 파싱 모듈
  * ─────────────────────────────────────────────────────────────────────────────
- * 클라이언트 browserDetect.ts 의 Layer 2 (UA 문자열 파싱) 로직을 Node.js 환경에서
- * 동일하게 재현한다. window / navigator 가 없는 서버 환경에서 동작하도록 설계됨.
- *
- * 반환 타입 UAProfile 은 access_logs / ip_profiles 테이블에 직접 저장된다.
+ * access_logs 및 ip_profiles에 기기/브라우저/OS/앱 여부를 일관되게 추출하여 제공.
  */
 
 export type ServerBrowserKey = "samsung" | "safari" | "chrome" | "firefox" | "other";
@@ -20,14 +17,12 @@ export interface UAProfile {
   isMobile: boolean;
   /** OS */
   os: ServerOS;
-  /** 인앱브라우저 여부 */
+  /** 인앱브라우저 (카카오/네이버 등) 여부 */
   isInApp: boolean;
+  /** 정식 WebView 앱 여부 */
+  isApp: boolean;
 }
 
-/**
- * parseUA(userAgent) — UA 문자열에서 기기/브라우저/OS 정보를 추출한다.
- * 빈 문자열이나 null 이 들어오면 unknown 값을 반환한다.
- */
 export function parseUA(ua: string | null | undefined): UAProfile {
   const str = (ua || "").trim();
 
@@ -38,6 +33,7 @@ export function parseUA(ua: string | null | undefined): UAProfile {
       isMobile: false,
       os: null,
       isInApp: false,
+      isApp: false,
     };
   }
 
@@ -51,7 +47,6 @@ export function parseUA(ua: string | null | undefined): UAProfile {
   const isIOS    = isIPad || isIPhone;
   const isAndroid = !isIOS && /Android/i.test(str);
 
-  // 모바일 = 폰 / 태블릿 = iPad 또는 Android 태블릿
   let deviceType: ServerDeviceType = "desktop";
   if (isIPhone || (isAndroid && /Mobile/i.test(str))) {
     deviceType = "mobile";
@@ -74,7 +69,14 @@ export function parseUA(ua: string | null | undefined): UAProfile {
     os = "linux";
   }
 
-  // ── 브라우저 판별 (클라이언트 browserDetect.ts Layer 2 와 동일한 우선순위) ──
+  // ── 정식 WebView 앱 판별 ────────────────────────────────────────────────────
+  const isSeongjisuhaengApp = /SeongjisuhaengApp/i.test(str);
+  const hasAndroidWvToken = !/GSA\//i.test(str) && (/;\s*wv[;)]/i.test(str) || /\bwv\b/i.test(str));
+  const isAndroidWebViewUA = !/GSA\//i.test(str) && /Version\/[0-9.]+/i.test(str) && /Chrome\/[0-9.]+/i.test(str) && /Mobile Safari\/[0-9.]+/i.test(str);
+  const isIOSApp = isIOS && !/CriOS/i.test(str) && !/FxiOS/i.test(str) && !/Safari\//i.test(str);
+  const isApp = !isInApp && (isSeongjisuhaengApp || hasAndroidWvToken || isAndroidWebViewUA || isIOSApp);
+
+  // ── 브라우저 판별 ───────────────────────────────────────────────────────────
   let browserKey: ServerBrowserKey = "other";
 
   if (isKakao) {
@@ -93,8 +95,7 @@ export function parseUA(ua: string | null | undefined): UAProfile {
     browserKey = "other";
   } else if (/Brave\//i.test(str)) {
     browserKey = "other";
-  } else if (/CriOS|GSA\//i.test(str)) {
-    // iOS Chrome / Google 앱
+  } else if (/CriOS/i.test(str)) {
     browserKey = "chrome";
   } else if (isIOS) {
     if (/Safari/i.test(str) && !/Chrome/i.test(str)) {
@@ -102,11 +103,11 @@ export function parseUA(ua: string | null | undefined): UAProfile {
     } else {
       browserKey = "other";
     }
-  } else if (/Chrome/i.test(str) || /GSA\//i.test(str)) {
+  } else if (/Chrome/i.test(str)) {
     browserKey = "chrome";
-  } else if (/Safari/i.test(str) && !/Chrome/i.test(str)) {
+  } else if (/Safari/i.test(str)) {
     browserKey = "safari";
   }
 
-  return { deviceType, browserKey, isMobile, os, isInApp };
+  return { deviceType, browserKey, isMobile, os, isInApp, isApp };
 }

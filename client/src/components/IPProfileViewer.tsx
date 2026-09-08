@@ -207,7 +207,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                 <span className="text-sm font-mono">{data.lastAccess ? new Date(data.lastAccess + 'Z').toLocaleString() : '-'}</span>
                             </div>
                             {(() => {
-                                const appType = data.appType || parseAppTypeFromUserAgent(data.recentUserAgents?.[0] || (data as any).userAgent);
+                                const appType = data.appType || (data.isStandalone ? 'pwa' : null) || parseAppTypeFromUserAgent(data.recentUserAgents?.[0] || (data as any).userAgent);
                                 if (appType === 'webview') {
                                     return (
                                         <div className="bg-emerald-50 p-4 rounded-lg flex flex-col gap-1 border border-emerald-200">

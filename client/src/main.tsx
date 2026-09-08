@@ -53,6 +53,11 @@ if (typeof window !== 'undefined') {
     document.documentElement.classList.add('is-firefox');
   }
 
+  // 앱(PWA standalone 또는 WebView)으로 실행 중인 경우 세션 쿠키 설정 (서버 로그 및 ip_profiles에 앱 접속 이력 기록)
+  if (agent.isInstalledApp) {
+    document.cookie = "sj_app_mode=1; path=/; SameSite=Lax";
+  }
+
 
   // Register beforeinstallprompt as early as possible, BEFORE React renders.
   // Samsung Internet fires this event very early on page load.

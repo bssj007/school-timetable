@@ -145,11 +145,20 @@ ${logoOrIconHtml}
 
             const uaProfile = parseUA(userAgent);
 
+            // 앱(WebView 또는 PWA) 접속 여부 감지
+            const modeParam = url.searchParams.get('mode');
+            const standaloneParam = url.searchParams.get('standalone');
+            const isPwaUrl = modeParam === 'pwa' || modeParam === 'app' || standaloneParam === '1' || url.searchParams.get('utm_source') === 'homescreen';
+            const hasAppCookie = cookies.includes('sj_app_mode=1') || cookies.includes('pwa_standalone=1');
+            const isAppHeader = request.headers.get('X-App-Execution') === '1';
+            const isCurrentAppAccess = Boolean(isPwaUrl || uaProfile.isApp || hasAppCookie || isAppHeader);
+
             // 1. Insert Log (with Auto-Migration for Table Creation)
             const insertLog = async () => {
+                const fullEndpoint = url.pathname + (url.search ? url.search : '');
                 await env.DB.prepare(
                     "INSERT INTO access_logs (ip, userAgent, method, endpoint, status, grade, classNum, studentNumber, kakaoId, kakaoNickname, teacherName, browserKey, deviceType, os, isInApp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                ).bind(ip, userAgent, request.method, url.pathname, response.status, grade, classNum, studentNumber, kakaoId, kakaoNickname, teacherName, uaProfile.browserKey, uaProfile.deviceType, uaProfile.os, uaProfile.isInApp ? 1 : 0).run();
+                ).bind(ip, userAgent, request.method, fullEndpoint, response.status, grade, classNum, studentNumber, kakaoId, kakaoNickname, teacherName, uaProfile.browserKey, uaProfile.deviceType, uaProfile.os, uaProfile.isInApp ? 1 : 0).run();
             };
 
             try {
@@ -317,7 +326,7 @@ ${logoOrIconHtml}
                         userAgent,
                         printIncrement,
                         downloadIncrement,
-                        0, // isStandalone
+                        isCurrentAppAccess ? 1 : 0, // isStandalone (한 번이라도 1이 되면 영구 유지)
                         teacherName,
                         uaProfile.browserKey,
                         uaProfile.deviceType,
