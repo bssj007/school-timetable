@@ -299,7 +299,6 @@ function renderGroupCode(code: string, marginRight: number = 3): React.ReactElem
       color: gc,
       fontWeight: 900,
       marginRight,
-      WebkitTextStroke: '0.4px rgba(255,255,255,0.9)',
       textShadow: `0 1px 3px ${gc}70`,
       letterSpacing: '-0.01em',
     } as React.CSSProperties}>
