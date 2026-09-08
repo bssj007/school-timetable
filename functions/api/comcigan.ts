@@ -116,6 +116,18 @@ async function getSchoolCode(prefix: string) {
     }
 }
 
+function isDateInRange(targetDateStr: string, rangeStr: any): boolean {
+    if (typeof rangeStr !== 'string') return false;
+    const targetShort = targetDateStr.length > 8 ? targetDateStr.substring(2) : targetDateStr;
+    const parts = rangeStr.split('~').map(s => s.trim());
+    if (parts.length < 2) return rangeStr.startsWith(targetShort);
+    const startDate = new Date(`20${parts[0]}`);
+    const endDate = new Date(`20${parts[1]}`);
+    const target = new Date(`20${targetShort}`);
+    endDate.setHours(23, 59, 59, 999);
+    return target >= startDate && target <= endDate;
+}
+
 export const onRequest = async (context: any) => {
     const url = new URL(context.request.url);
     const type = url.searchParams.get('type');
@@ -129,6 +141,7 @@ export const onRequest = async (context: any) => {
 
         // GET method: Return teacher timetable specifically
         if (type === 'teacher_timetable') {
+            const targetDate = url.searchParams.get('targetDate');
             let rawData;
             
             // Strictly fetch from the global raw_data cache instead of polling the live server
@@ -150,31 +163,95 @@ export const onRequest = async (context: any) => {
                 }), { status: 503, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
             }
 
-            // Sanitize rawData to clean string codes starting with '>' (indicating changed/subbed classes in Comcigan)
-            const sanitizeTimetable = (obj: any) => {
-                if (!obj || typeof obj !== 'object') return;
-                for (const key of Object.keys(obj)) {
-                    const val = obj[key];
-                    if (typeof val === 'string' && val.startsWith('>')) {
-                        obj[key] = parseInt(val.replace(/>/g, ''), 10) || 0;
-                    } else if (typeof val === 'object') {
-                        sanitizeTimetable(val);
+            // --- DATE BOUNDARY CHECK & ARCHIVE LOOKUP (학생 API와 동일) ---
+            let isFutureOutOfRange = false;
+            let isPastOutOfRange = false;
+            let isArchivedData = false;
+
+            if (targetDate) {
+                try {
+                    const dateArr = rawData['일자'];
+                    const dateArrNew = rawData['일자자료'];
+
+                    let firstRange: string | null = null;
+                    let lastRange: string | null = null;
+
+                    if (dateArr && Array.isArray(dateArr) && dateArr.length > 0) {
+                        firstRange = dateArr.find((r: any) => typeof r === 'string' && r.includes('~')) ?? null;
+                        lastRange  = [...dateArr].reverse().find((r: any) => typeof r === 'string' && r.includes('~')) ?? null;
+                    } else if (dateArrNew && Array.isArray(dateArrNew) && dateArrNew.length > 0) {
+                        const firstItem = dateArrNew[0];
+                        const lastItem = dateArrNew[dateArrNew.length - 1];
+                        firstRange = Array.isArray(firstItem) ? firstItem[1] : firstItem;
+                        lastRange = Array.isArray(lastItem) ? lastItem[1] : lastItem;
                     }
+
+                    const targetShort = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
+                    const targetDateObj = new Date(`20${targetShort}`);
+
+                    if (lastRange && typeof lastRange === 'string') {
+                        const parts = lastRange.split('~').map(s => s.trim());
+                        if (parts.length >= 2) {
+                            const endDate = new Date(`20${parts[1]}`);
+                            endDate.setHours(23, 59, 59, 999);
+                            if (targetDateObj > endDate) {
+                                isFutureOutOfRange = true;
+                            }
+                        }
+                    }
+
+                    if (!isFutureOutOfRange && firstRange && typeof firstRange === 'string') {
+                        const parts = firstRange.split('~').map(s => s.trim());
+                        if (parts.length >= 1) {
+                            const startDate = new Date(`20${parts[0]}`);
+                            startDate.setHours(0, 0, 0, 0);
+                            if (targetDateObj < startDate) {
+                                isPastOutOfRange = true;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[Teacher Timetable] Failed to evaluate raw_data date boundary', e);
                 }
-            };
+            }
+
+            // 과거 범위 밖인 경우 timetable_archive 조회
+            if (isPastOutOfRange && targetDate && context.env?.DB) {
+                const targetShortForArchive = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
+                const targetDateObjForArchive = new Date(`20${targetShortForArchive}`);
+                try {
+                    const archiveRows = await context.env.DB.prepare("SELECT date_range, response_json FROM timetable_archive").all();
+                    for (const row of (archiveRows.results || [])) {
+                        const rangeStr = row.date_range as string;
+                        const parts = rangeStr.split('~').map((s: string) => s.trim());
+                        if (parts.length < 2) continue;
+                        const start = new Date(`20${parts[0]}`);
+                        const end = new Date(`20${parts[1]}`);
+                        end.setHours(23, 59, 59, 999);
+                        if (targetDateObjForArchive >= start && targetDateObjForArchive <= end) {
+                            rawData = JSON.parse(row.response_json as string);
+                            isPastOutOfRange = false;
+                            isArchivedData = true;
+                            break;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[Teacher Timetable] Failed to query timetable_archive:', e);
+                }
+            }
+
+            const isOutOfRange = isFutureOutOfRange || isPastOutOfRange;
 
             // ── 교사/과목/시간표 키를 동적으로 탐지 ──────────────────────────────────────────
-            // 컴시간은 매 학기/갱신마다 자료번호가 바뀜(예: 자료446→자료512).
-            // 따라서 특정 번호를 하드코딩하지 않고, 각 배열의 구조적 특징으로 탐지함.
             const rawKeys = Object.keys(rawData);
 
-            // 교사 배열: 원소 중 '*'로 끝나는 문자열 포함 → 담임 교사 표시 컨벤션
+            // 교사 배열
             const detectedTeacherProp = rawKeys.find(k =>
                 Array.isArray(rawData[k]) && rawData[k].some((s: any) => typeof s === 'string' && s.endsWith('*'))
             ) ?? null;
 
-            // 과목 배열: 교과목 키워드 2개 이상 포함
-            const subjectKeywords = ["국어", "수학", "영어", "한국사", "체육", "음악", "미술", "진로", "문학", "정보", "화학", "생물", "물리", "지리", "역사", "경제", "정치", "사회", "과학"];
+            // 과목 배열
+            const subjectKeywords = ["국어", "수학", "영어", "한국사", "체육", "음악", "미술", "진로", "문학", "정보", "화학", "생물", "물리", "지리", "역사", "경제", "정치", "사회", "과학", "통합사회", "통합과학"];
             const detectedSubjectProp = rawKeys.find(k => {
                 if (k === detectedTeacherProp) return false;
                 const val = rawData[k];
@@ -188,67 +265,178 @@ export const onRequest = async (context: any) => {
                 return false;
             }) ?? null;
 
-            // 시간표 배열: val[grade][class][weekday]가 Array 구조인 키 탐지
-            // 번호가 가장 큰 것 = baseline(통합) 데이터셋으로 간주
-            // key.replace('자료','')는 특정 번호 하드코딩이 아닌 컴시간 네이밍 컨벤션 패턴
-            const detectedTimetableProps = rawKeys.filter(k => {
+            // 4D 학급 시간표 배열: val[grade][class][weekday][period] (Array 4차원)
+            const timetableProps = rawKeys.filter(k => {
                 const val = rawData[k];
-                return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+                return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]) && Array.isArray(val[1][1][1]);
             });
-            // 시간표 키 탐지: 번호 가장 큰 것 = baseline(통합 데이터셋), 번호 가장 작은 것 = 현재 주차(live)
-            const detectedBaseline = detectedTimetableProps.length > 0
-                ? detectedTimetableProps.reduce((max, key) => {
-                    const num = parseInt(key.replace('자료', '')) || 0;
-                    return num > max.num ? { key, num } : max;
-                }, { key: detectedTimetableProps[0], num: -1 }).key
-                : null;
-            const detectedLive = detectedTimetableProps.length > 0
-                ? detectedTimetableProps.reduce((min, key) => {
-                    const num = parseInt(key.replace('자료', '')) || 0;
-                    return num < min.num ? { key, num } : min;
-                }, { key: detectedTimetableProps[0], num: Infinity }).key
-                : null;
 
-            if (!detectedTeacherProp || !detectedSubjectProp || !detectedBaseline) {
-                console.warn('[Teacher Timetable] Detection failed:', { detectedTeacherProp, detectedSubjectProp, detectedBaseline });
+            // 주차별 날짜 범위 매핑
+            const datasetDateRanges: Record<string, string> = {};
+            if (rawData['일자'] && Array.isArray(rawData['일자'])) {
+                timetableProps.forEach((key, idx) => {
+                    if (idx + 1 < rawData['일자'].length) {
+                        datasetDateRanges[key] = rawData['일자'][idx + 1];
+                    }
+                });
+            } else if (rawData['일자자료'] && Array.isArray(rawData['일자자료'])) {
+                rawData['일자자료'].forEach((dt: any) => {
+                    if (!Array.isArray(dt) || dt.length < 2) return;
+                    const [directIdx, range] = dt;
+                    if (typeof directIdx === 'number' && timetableProps[directIdx]) {
+                        datasetDateRanges[timetableProps[directIdx]] = range;
+                    }
+                });
             }
 
-            // baseline 데이터를 sanitize 전에 먼저 복사
-            const rawBaselineData = detectedBaseline ? (rawData[detectedBaseline] || []) : [];
+            // 기준 표준 데이터셋(targetBaseId) 탐색: 날짜 범위 없는 가장 큰 번호이면서 데이터가 있는 데이터셋
+            let baselineDatasetId = "";
+            const unboundedDatasets = timetableProps.filter(key => {
+                if (datasetDateRanges[key]) return false;
+                const d = rawData[key];
+                if (!d) return false;
+                for (let g = 1; g <= 3; g++) {
+                    if (!d[g]) continue;
+                    for (const cls of Object.keys(d[g])) {
+                        if (parseInt(cls, 10) <= 0) continue;
+                        for (let w = 1; w <= 5; w++) {
+                            const dayData = d[g][cls]?.[w];
+                            if (Array.isArray(dayData) && dayData.some((v: any) => v !== 0)) return true;
+                        }
+                    }
+                }
+                return false;
+            });
+            const baselineCandidates = unboundedDatasets.length > 0 ? unboundedDatasets : timetableProps;
+            if (baselineCandidates.length > 0) {
+                const maxKeyItem = baselineCandidates.reduce((max, key) => {
+                    const num = parseInt(key.replace('자료', ''), 10) || 0;
+                    return num > max.num ? { key, num } : max;
+                }, { key: baselineCandidates[0], num: -1 });
+                baselineDatasetId = maxKeyItem.key;
+            }
+            const targetBaseId = baselineDatasetId || timetableProps[0] || "";
 
-            // ── 서버사이드 isChanged 계산 ────────────────────────────────────────────────────
-            // 컴시간은 변경된 셀 값에 '>' 접두사를 붙여 표시함 (예: ">12345")
-            // 이 마커는 단일 데이터셋 내에 존재하므로 두 데이터셋 비교가 필요없음
-            // sanitize 전에 rawBaselineData를 스캔하여 > 마커를 changedCells로 추출
-            const changedCellKeys: string[] = [];
+            // 대상 주차 데이터셋(timedataProp) 결정
+            const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+            const dayOfWeek = koreanTime.getUTCDay();
+            if (!targetDate && (dayOfWeek === 6 || dayOfWeek === 0)) {
+                const daysToAdd = dayOfWeek === 6 ? 2 : 1;
+                koreanTime.setUTCDate(koreanTime.getUTCDate() + daysToAdd);
+            }
+            const todayShort = koreanTime.toISOString().split('T')[0].substring(2);
+            const targetShort = targetDate ? (targetDate.length > 8 ? targetDate.substring(2) : targetDate) : todayShort;
 
-            for (let ti = 0; ti < rawBaselineData.length; ti++) {
-                const teacherData = rawBaselineData[ti];
-                if (!teacherData) continue;
-                for (let d = 1; d <= 5; d++) {
-                    const dayArr = teacherData[d];
-                    if (!Array.isArray(dayArr)) continue;
-                    for (let p = 1; p < dayArr.length; p++) {
-                        const v = dayArr[p];
-                        if (typeof v === 'string' && v.startsWith('>')) {
-                            changedCellKeys.push(`${ti}:${d}:${p}`);
+            let timedataProp = targetBaseId;
+            if (!isOutOfRange && targetShort) {
+                for (const [key, rangeStr] of Object.entries(datasetDateRanges)) {
+                    if (isDateInRange(targetShort, rangeStr)) {
+                        timedataProp = key;
+                        break;
+                    }
+                }
+            }
+
+            // 교사 및 과목 목록
+            const teachers = detectedTeacherProp ? (rawData[detectedTeacherProp] || []) : [];
+            const subjects = detectedSubjectProp ? (rawData[detectedSubjectProp] || []) : [];
+            const bunri = rawData['분리'] !== undefined ? rawData['분리'] : 100;
+
+            // 4D 학급 시간표로부터 교사 3D 시간표 재구성 헬퍼
+            const buildTeacherTimetable = (classData: any, numTeachers: number) => {
+                const grid: any[] = [];
+                for (let t = 0; t <= numTeachers; t++) {
+                    grid.push([5, [0], [0], [0], [0], [0]]);
+                }
+                const changedFromPrefix = new Set<string>();
+                let hasAnyData = false;
+                if (!classData) return { grid, changedFromPrefix, hasAnyData };
+
+                for (let g = 1; g <= 3; g++) {
+                    const gData = classData[g];
+                    if (!gData) continue;
+                    for (const cls of Object.keys(gData)) {
+                        const cNum = parseInt(cls, 10);
+                        if (!cNum || cNum <= 0) continue;
+                        for (let w = 1; w <= 5; w++) {
+                            const dayArr = gData[cNum][w];
+                            if (!Array.isArray(dayArr)) continue;
+                            for (let p = 1; p < dayArr.length; p++) {
+                                const v = dayArr[p];
+                                if (!v) continue;
+                                const isPrefixed = typeof v === 'string' && v.startsWith('>');
+                                const code = typeof v === 'string' ? parseInt(v.replace(/>/g, ''), 10) : (v || 0);
+                                if (!code) continue;
+                                hasAnyData = true;
+
+                                let tIdx = 0, sIdx = 0;
+                                if (bunri === 100) {
+                                    tIdx = Math.floor(code / bunri);
+                                    sIdx = code % bunri;
+                                } else {
+                                    tIdx = code % bunri;
+                                    sIdx = Math.floor(code / bunri);
+                                }
+
+                                if (tIdx > 0 && tIdx <= numTeachers) {
+                                    while (grid[tIdx][w].length <= p) grid[tIdx][w].push(0);
+                                    grid[tIdx][w][0] = Math.max(grid[tIdx][w][0] || 0, p);
+                                    const teacherCode = sIdx * 1000 + g * 100 + cNum;
+                                    grid[tIdx][w][p] = teacherCode;
+                                    if (isPrefixed) {
+                                        changedFromPrefix.add(`${tIdx}:${w}:${p}`);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                return { grid, changedFromPrefix, hasAnyData };
+            };
+
+            const baseRecon = buildTeacherTimetable(rawData[targetBaseId], teachers.length);
+            const targetRecon = buildTeacherTimetable(rawData[timedataProp], teachers.length);
+
+            // 해당 주차 데이터셋이 비어있으면 (예: 아직 발행 전 미래 주차) 표준 기준 시간표로 폴백
+            const effectiveTargetGrid = targetRecon.hasAnyData ? targetRecon.grid : baseRecon.grid;
+            const changedCellSet = new Set<string>();
+
+            // 대상 주차와 기준 시간표 비교하여 변경 셀 계산
+            if (targetRecon.hasAnyData && timedataProp !== targetBaseId) {
+                // 1. 컴시간 자체 '>' 접두사 마커 반영
+                for (const k of targetRecon.changedFromPrefix) {
+                    changedCellSet.add(k);
+                }
+                // 2. 기준 시간표와 코드 비교 (대강, 교환, 취소, 이동 자동 감지)
+                const maxT = Math.max(baseRecon.grid.length, targetRecon.grid.length);
+                for (let t = 1; t < maxT; t++) {
+                    for (let w = 1; w <= 5; w++) {
+                        const liveDay = targetRecon.grid[t]?.[w] || [];
+                        const baseDay = baseRecon.grid[t]?.[w] || [];
+                        const maxP = Math.max(liveDay.length, baseDay.length);
+                        for (let p = 1; p < maxP; p++) {
+                            const liveCode = liveDay[p] || 0;
+                            const baseCode = baseDay[p] || 0;
+                            if (liveCode !== baseCode) {
+                                changedCellSet.add(`${t}:${w}:${p}`);
+                            }
                         }
                     }
                 }
             }
 
-            // sanitize: > 마커 제거 후 정수로 변환
-            const baselineData = JSON.parse(JSON.stringify(rawBaselineData));
-            sanitizeTimetable(baselineData);
-
             return new Response(JSON.stringify({
-                success: !!(detectedTeacherProp && detectedSubjectProp && detectedBaseline),
-                teachers: detectedTeacherProp ? (rawData[detectedTeacherProp] || []) : [],
-                subjects:  detectedSubjectProp ? (rawData[detectedSubjectProp] || []) : [],
-                timetable: baselineData,           // sanitize된 baseline
-                changedCells: changedCellKeys,     // 변경된 셀 좌표 목록 ["tId:d:p", ...]
-                hasLiveData: changedCellKeys.length > 0 || (detectedLive !== detectedBaseline),
-                _detectedKeys: { teacher: detectedTeacherProp, subject: detectedSubjectProp, timetable: detectedBaseline, live: detectedLive }
+                success: !!(detectedTeacherProp && detectedSubjectProp && targetBaseId),
+                teachers,
+                subjects,
+                timetable: effectiveTargetGrid,
+                baseTimetable: baseRecon.grid,
+                changedCells: Array.from(changedCellSet),
+                datasetId: timedataProp,
+                targetBaseId,
+                isOutOfRange,
+                isArchivedData,
+                _detectedKeys: { teacher: detectedTeacherProp, subject: detectedSubjectProp, timetable: timedataProp, base: targetBaseId }
             }), {
                 status: 200,
                 headers: {
@@ -628,20 +816,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         }
     }
 
-    // ----------------------------------------------------
-    // STRICT BOUNDARY FALLBACK CASCADE (Temp User Request)
-    // ----------------------------------------------------
-    const isDateInRange = (targetDateStr: string, rangeStr: any): boolean => {
-        if (typeof rangeStr !== 'string') return false;
-        const targetShort = targetDateStr.length > 8 ? targetDateStr.substring(2) : targetDateStr;
-        const parts = rangeStr.split('~').map(s => s.trim());
-        if (parts.length < 2) return rangeStr.startsWith(targetShort);
-        const startDate = new Date(`20${parts[0]}`);
-        const endDate = new Date(`20${parts[1]}`);
-        const target = new Date(`20${targetShort}`);
-        endDate.setHours(23, 59, 59, 999);
-        return target >= startDate && target <= endDate;
-    };
+
 
     const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
     // When no targetDate is provided and today is a weekend (Sat=6, Sun=0),

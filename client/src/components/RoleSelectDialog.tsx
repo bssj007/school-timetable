@@ -22,6 +22,8 @@ export function getTeacherNameCookie(): string | null {
     return m ? decodeURIComponent(m[2]) : null;
 }
 
+export const AUTH_TEACHER_KEY = "sj_authenticated_teacher";
+
 function setRoleCookie(role: "student" | "teacher") {
     document.cookie = `${ROLE_COOKIE}=${role}; max-age=${COOKIE_MAX_AGE}; path=/`;
 }
@@ -34,14 +36,26 @@ export function clearRoleCookie() {
     if (typeof document === "undefined") return;
     document.cookie = `${ROLE_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
     document.cookie = `${TEACHER_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
-    clearStoredTeacherPassword();
+    // 역할/쿠키 전환 시 저장된 교사 비밀번호는 삭제하지 않고 보존함
 }
 
-export function getStoredTeacherPassword(teacherName: string): string | null {
-    if (typeof localStorage === "undefined" || !teacherName) return null;
-    const clean = teacherName.trim().replace(/선생님$/, '').trim();
+/** 현재 클라이언트에 비밀번호 인증이 완료된 단일 선생님 이름 반환 */
+export function getAuthenticatedTeacher(): string | null {
+    if (typeof localStorage === "undefined") return null;
+    const auth = localStorage.getItem(AUTH_TEACHER_KEY);
+    return auth ? auth.trim() : null;
+}
+
+export function getStoredTeacherPassword(teacherName?: string): string | null {
+    if (typeof localStorage === "undefined") return null;
+    const authTeacher = getAuthenticatedTeacher();
+    if (!authTeacher) return null;
+    if (teacherName) {
+        const clean = teacherName.trim().replace(/선생님$/, '').trim();
+        if (clean !== authTeacher) return null;
+    }
     try {
-        const raw = localStorage.getItem(`teacher-pw-${clean}`);
+        const raw = localStorage.getItem(`teacher-pw-${authTeacher}`);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         return typeof parsed?.password === 'string' ? parsed.password : null;
@@ -53,6 +67,11 @@ export function getStoredTeacherPassword(teacherName: string): string | null {
 export function setStoredTeacherPassword(teacherName: string, password: string): void {
     if (typeof localStorage === "undefined" || !teacherName) return;
     const clean = teacherName.trim().replace(/선생님$/, '').trim();
+
+    // 단일 교사 인증 보장: 이전의 모든 교사 인증정보 삭제
+    clearStoredTeacherPassword();
+
+    localStorage.setItem(AUTH_TEACHER_KEY, clean);
     localStorage.setItem(`teacher-pw-${clean}`, JSON.stringify({
         password: password.trim(),
         savedAt: Date.now(),
@@ -63,8 +82,12 @@ export function clearStoredTeacherPassword(teacherName?: string): void {
     if (typeof localStorage === "undefined") return;
     if (teacherName) {
         const clean = teacherName.trim().replace(/선생님$/, '').trim();
+        if (getAuthenticatedTeacher() === clean) {
+            localStorage.removeItem(AUTH_TEACHER_KEY);
+        }
         localStorage.removeItem(`teacher-pw-${clean}`);
     } else {
+        localStorage.removeItem(AUTH_TEACHER_KEY);
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
@@ -203,7 +226,13 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
             const res = await fetch("/api/comcigan?type=teacher_timetable");
             if (res.ok) {
                 const data = await res.json();
-                setTeacherOptions(buildTeacherOptions(data.teachers || [], data.subjects || [], data.timetable || []));
+                const opts = buildTeacherOptions(data.teachers || [], data.subjects || [], data.timetable || []);
+                setTeacherOptions(opts);
+                const authTeacher = getAuthenticatedTeacher();
+                if (authTeacher) {
+                    const match = opts.find(o => o.rawName.replace(/선생님$/, '').trim() === authTeacher);
+                    if (match) setSelectedOption(match);
+                }
             }
         } catch { /* 오프라인 fallback */ }
         finally { setIsLoadingTeachers(false); }

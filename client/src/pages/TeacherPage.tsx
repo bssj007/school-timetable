@@ -13,15 +13,20 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { useUserConfig } from "@/contexts/UserConfigContext";
-import { clearRoleCookie, getTeacherNameCookie, setTeacherNameCookie, getStoredTeacherPassword, setStoredTeacherPassword, clearStoredTeacherPassword } from "@/components/RoleSelectDialog";
+import { clearRoleCookie, getTeacherNameCookie, setTeacherNameCookie, getStoredTeacherPassword, setStoredTeacherPassword, clearStoredTeacherPassword, getAuthenticatedTeacher } from "@/components/RoleSelectDialog";
 import { isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 interface TeacherTimetableResponse {
   success: boolean;
   teachers: string[];
   subjects: string[];
-  timetable: any[];          // sanitise된 baseline
+  timetable: any[];          // 해당 주차 교사 시간표
+  baseTimetable?: any[];     // 표준 기준 교사 시간표
   changedCells?: string[];   // 변경된 셀 좌표 목록: "teacherId:weekday:period"
+  datasetId?: string;
+  targetBaseId?: string;
+  isOutOfRange?: boolean;
+  isArchivedData?: boolean;
   hasLiveData?: boolean;
   timetableLive?: any[];     // (legacy, unused)
   timetableBase?: any[];     // (legacy, unused)
@@ -325,13 +330,19 @@ export default function TeacherPage() {
   
   // States
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(() => {
+    // 1순위: 현재 인증된 선생님
+    const authTeacher = getAuthenticatedTeacher();
+    const allCached = queryClient.getQueriesData<TeacherTimetableResponse>({ queryKey: ['teacher-timetable'] });
+    const cached = allCached[0]?.[1];
+    if (authTeacher && cached?.teachers) {
+      const idx = cached.teachers.findIndex((name) => name === authTeacher || name.replace(/선생님$/, '').trim() === authTeacher);
+      if (idx > 0) return String(idx);
+    }
+    // 2순위: 쿠키 선생님
     const cookieName = getTeacherNameCookie();
-    if (cookieName) {
-      const cached = queryClient.getQueryData<TeacherTimetableResponse>(['teacher-timetable']);
-      if (cached?.teachers) {
-        const idx = cached.teachers.findIndex((name) => name === cookieName);
-        if (idx > 0) return String(idx);
-      }
+    if (cookieName && cached?.teachers) {
+      const idx = cached.teachers.findIndex((name) => name === cookieName);
+      if (idx > 0) return String(idx);
     }
     return localStorage.getItem("teacher-page-selected-teacher") || "1";
   });
@@ -727,11 +738,11 @@ export default function TeacherPage() {
     return getComputedGroupsForGrade('3', grade3TimetableNow?.data || [], electiveConfigsG3 || [], settings);
   }, [grade3TimetableNow?.data, electiveConfigsG3, settings]);
 
-  // 1. Fetch Teacher Timetable
+  // 1. Fetch Teacher Timetable (주차별 targetDate 연동)
   const { data: timetableData, isLoading: isTimetableLoading, isError: isTimetableError } = useQuery<TeacherTimetableResponse>({
-    queryKey: ['teacher-timetable'],
+    queryKey: ['teacher-timetable', targetDate],
     queryFn: async () => {
-      const res = await fetch('/api/comcigan?type=teacher_timetable');
+      const res = await fetch(`/api/comcigan?type=teacher_timetable&targetDate=${encodeURIComponent(targetDate)}`);
       if (!res.ok) throw new Error("Failed to fetch teacher timetable");
       return res.json();
     },
@@ -741,9 +752,27 @@ export default function TeacherPage() {
     refetchInterval: 2 * 60 * 1000,
   });
 
-  // ── sj_teacher_name 쿠키와 selectedTeacherId 동기화 (단일 진실원천: 쿠키) ──
+  // ── 선생님 동기화: 초기 진입 시 인증된 선생님 우선, 없으면 쿠키 선생님 ──
+  const initialResolvedRef = useRef(false);
   useEffect(() => {
-    if (!timetableData?.teachers) return;
+    if (!timetableData?.teachers || timetableData.teachers.length <= 1) return;
+
+    if (!initialResolvedRef.current) {
+      initialResolvedRef.current = true;
+      const authTeacher = getAuthenticatedTeacher();
+      if (authTeacher) {
+        const authIdx = timetableData.teachers.findIndex((name) =>
+          name === authTeacher || name.replace(/선생님$/, '').trim() === authTeacher
+        );
+        if (authIdx > 0) {
+          const authIdxStr = String(authIdx);
+          setSelectedTeacherId(authIdxStr);
+          setTeacherNameCookie(timetableData.teachers[authIdx]);
+          return;
+        }
+      }
+    }
+
     const cookieName = getTeacherNameCookie();
     if (cookieName) {
       const idx = timetableData.teachers.findIndex((name) => name === cookieName);
@@ -792,9 +821,10 @@ export default function TeacherPage() {
 
   const teacherSubjectsMap = useMemo(() => {
     const map = new Map<number, string[]>();
-    if (!timetableData?.timetable || !timetableData?.subjects) return map;
+    const schedules = timetableData?.baseTimetable || timetableData?.timetable;
+    if (!schedules || !timetableData?.subjects) return map;
     
-    timetableData.timetable.forEach((schedule: any, tId: number) => {
+    schedules.forEach((schedule: any, tId: number) => {
       if (!schedule) return;
       const subjects = new Set<string>();
       for (let d = 1; d <= 5; d++) {
@@ -1006,11 +1036,29 @@ export default function TeacherPage() {
     }
   };
 
-  // 서버에서 미리 계산된 변경 셀 Set — O(1) 조회
+  // 서버에서 미리 계산된 변경 셀 Set — O(1) 조회 + 학년별 시간표 교차 검증 병합
   const changedCellSet = useMemo(() => {
-    if (!timetableData?.changedCells) return new Set<string>();
-    return new Set<string>(timetableData.changedCells);
-  }, [timetableData?.changedCells]);
+    const set = new Set<string>();
+    if (timetableData?.changedCells && Array.isArray(timetableData.changedCells)) {
+      timetableData.changedCells.forEach((k: string) => set.add(k));
+    }
+    const teacherRawName = timetableData?.teachers?.[tId] || rawTeacherName;
+    const checkGradeItems = (result?: any) => {
+      const items = result?.data;
+      if (!Array.isArray(items)) return;
+      items.forEach((item: any) => {
+        if (item?.isChanged && item.weekday && item.classTime) {
+          if (teacherRawName && item.teacher === teacherRawName) {
+            set.add(`${tId}:${item.weekday}:${item.classTime}`);
+          }
+        }
+      });
+    };
+    checkGradeItems(grade1Timetable);
+    checkGradeItems(grade2Timetable);
+    checkGradeItems(grade3Timetable);
+    return set;
+  }, [timetableData?.changedCells, timetableData?.teachers, tId, rawTeacherName, grade1Timetable, grade2Timetable, grade3Timetable]);
 
   // Subjects taught by the selected teacher
   const taughtSubjects = useMemo(() => {
@@ -2887,7 +2935,7 @@ export default function TeacherPage() {
                           const cellData = decodeCell(val);
                           const cellDateStr = toDateString(weekDates[dayIndex]);
                           // 서버 사이드 isChanged Set에서 O(1) 조회
-                          const isCellChanged = changedCellSet.has(`${tId}:${d}:${p}`);
+                          const isCellChanged = changedCellSet.has(`${tId}:${d}:${p}`) || changedCellSet.has(`${tId}:${cellData?.grade}:${d}:${p}`);
 
                           // Resolve group
                           let cellGroup = "";
@@ -2915,7 +2963,7 @@ export default function TeacherPage() {
                           const baseBg = '#ffffff';
                           let classBg = hasAssessment ? '#fff5f7' : '#ffffff';
                           let cellInlineStyle: React.CSSProperties | undefined;
-                          if (isCellChanged && !hasAssessment) {
+                          if (cellData && isCellChanged && !hasAssessment) {
                             const tColor = settings?.changed_class_tint_color || '#fef08a';
                             const tOpacity = settings?.changed_class_tint_opacity !== undefined
                               ? parseFloat(settings.changed_class_tint_opacity) : 1.0;
@@ -2925,7 +2973,7 @@ export default function TeacherPage() {
                             const b2 = parseInt(h.length === 3 ? h.slice(2,3).repeat(2) : h.slice(4,6), 16);
                             cellInlineStyle = { backgroundColor: `rgba(${r}, ${g2}, ${b2}, ${tOpacity})` };
                           }
-                          const cellBg = cellData ? classBg : baseBg;
+                          const cellBg = cellData ? (cellInlineStyle?.backgroundColor ?? classBg) : baseBg;
 
                           return (
                             <td
@@ -2981,27 +3029,45 @@ export default function TeacherPage() {
                                   )}
                                   {/* Class label */}
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                                    <span
-                                      className="teacher-cell-class-badge"
-                                      style={{
-                                        fontWeight: 700,
-                                        padding: '1px 3.5px',
-                                        borderRadius: 2,
-                                        background: '#217346',
-                                        color: '#ffffff',
-                                        display: 'inline-block',
-                                        lineHeight: 1.3,
-                                        width: 'fit-content',
-                                      }}
-                                    >
-                                      {(() => {
-                                        if (!cellGroup) return `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
-                                        // 이동수업: 관리페이지 강의실 이름 조회
-                                        const configName = lectureClassNameMap.get(`${cellData.grade}-${(cellData.subjectName || '').trim()}-${cellGroup}`);
-                                        // 강의실 이름이 없으면 학년-반 표시, 있으면 강의실 이름만 표시 (그룹 기호는 과목명 뒤에 별도 표시)
-                                        return configName ? configName : `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
-                                      })()}
-                                    </span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
+                                      <span
+                                        className="teacher-cell-class-badge"
+                                        style={{
+                                          fontWeight: 700,
+                                          padding: '1px 3.5px',
+                                          borderRadius: 2,
+                                          background: '#217346',
+                                          color: '#ffffff',
+                                          display: 'inline-block',
+                                          lineHeight: 1.3,
+                                          width: 'fit-content',
+                                        }}
+                                      >
+                                        {(() => {
+                                          if (!cellGroup) return `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
+                                          // 이동수업: 관리페이지 강의실 이름 조회
+                                          const configName = lectureClassNameMap.get(`${cellData.grade}-${(cellData.subjectName || '').trim()}-${cellGroup}`);
+                                          // 강의실 이름이 없으면 학년-반 표시, 있으면 강의실 이름만 표시 (그룹 기호는 과목명 뒤에 별도 표시)
+                                          return configName ? configName : `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
+                                        })()}
+                                      </span>
+                                      {isCellChanged && (
+                                        <span
+                                          style={{
+                                            fontWeight: 700,
+                                            padding: '1px 3px',
+                                            borderRadius: 2,
+                                            background: '#eab308',
+                                            color: '#713f12',
+                                            fontSize: '0.65em',
+                                            lineHeight: 1.2,
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          변경
+                                        </span>
+                                      )}
+                                    </div>
                                     <span
                                       className="teacher-cell-subject-name"
                                       style={{

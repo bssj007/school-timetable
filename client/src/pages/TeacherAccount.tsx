@@ -4,7 +4,8 @@ import {
   getTeacherNameCookie,
   getStoredTeacherPassword,
   setStoredTeacherPassword,
-  clearStoredTeacherPassword
+  clearStoredTeacherPassword,
+  getAuthenticatedTeacher,
 } from "@/components/RoleSelectDialog";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 import { ArrowLeft, Eye, EyeOff, Lock, KeyRound, Check, AlertCircle } from "lucide-react";
@@ -14,7 +15,7 @@ export default function TeacherAccount() {
   const { teacherName: ctxTeacherName } = useUserConfig();
 
   const [teacherName, setTeacherName] = useState<string>(() => {
-    return ctxTeacherName || getTeacherNameCookie() || "";
+    return getAuthenticatedTeacher() || ctxTeacherName || getTeacherNameCookie() || "";
   });
 
   const [showPasswordForm, setShowPasswordForm] = useState(false);
