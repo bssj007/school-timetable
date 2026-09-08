@@ -195,23 +195,36 @@ export const onRequest = async (context: any) => {
                 const val = rawData[k];
                 return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
             });
+            // 시간표 키 탐지: 번호 가장 큰 것 = baseline(통합 데이터셋), 번호 가장 작은 것 = 현재 주차(live)
             const detectedBaseline = detectedTimetableProps.length > 0
                 ? detectedTimetableProps.reduce((max, key) => {
                     const num = parseInt(key.replace('자료', '')) || 0;
                     return num > max.num ? { key, num } : max;
                 }, { key: detectedTimetableProps[0], num: -1 }).key
                 : null;
+            const detectedLive = detectedTimetableProps.length > 0
+                ? detectedTimetableProps.reduce((min, key) => {
+                    const num = parseInt(key.replace('자료', '')) || 0;
+                    return num < min.num ? { key, num } : min;
+                }, { key: detectedTimetableProps[0], num: Infinity }).key
+                : null;
 
             if (!detectedTeacherProp || !detectedSubjectProp || !detectedBaseline) {
                 console.warn('[Teacher Timetable] Detection failed:', { detectedTeacherProp, detectedSubjectProp, detectedBaseline });
             }
 
+            // baseline 데이터만 sanitize (> 제거); live 데이터는 > 접두사 보존으로 isChanged 판단
+            const baselineData = detectedBaseline ? JSON.parse(JSON.stringify(rawData[detectedBaseline] || [])) : [];
+            sanitizeTimetable(baselineData);
+
             return new Response(JSON.stringify({
                 success: !!(detectedTeacherProp && detectedSubjectProp && detectedBaseline),
                 teachers: detectedTeacherProp ? (rawData[detectedTeacherProp] || []) : [],
                 subjects:  detectedSubjectProp ? (rawData[detectedSubjectProp] || []) : [],
-                timetable: detectedBaseline    ? (rawData[detectedBaseline] || [])    : [],
-                _detectedKeys: { teacher: detectedTeacherProp, subject: detectedSubjectProp, timetable: detectedBaseline }
+                timetable: baselineData,                                           // 새니타이즈된 baseline (하위 호환)
+                timetableLive: detectedLive    ? (rawData[detectedLive]     || []) : [],  // > 접두사 보존 (isChanged 판단용)
+                timetableBase: baselineData,                                        // sanitize된 baseline
+                _detectedKeys: { teacher: detectedTeacherProp, subject: detectedSubjectProp, timetable: detectedBaseline, live: detectedLive }
             }), {
                 status: 200,
                 headers: {

@@ -20,7 +20,9 @@ interface TeacherTimetableResponse {
   success: boolean;
   teachers: string[];
   subjects: string[];
-  timetable: any[];
+  timetable: any[];      // sanitised baseline (backward compat)
+  timetableLive?: any[]; // raw with > prefix preserved — used for isChanged detection
+  timetableBase?: any[]; // sanitised baseline (same as timetable)
 }
 
 interface AssessmentItem {
@@ -941,7 +943,8 @@ export default function TeacherPage() {
   const tId = parseInt(selectedTeacherId, 10);
   const rawTeacherName = timetableData?.teachers?.[tId] || "";
   const teacherName = getTeacherDisplayName(rawTeacherName, tId);
-  const selectedSchedule = timetableData?.timetable?.[tId];
+  const selectedSchedule = timetableData?.timetable?.[tId];          // baseline (sanitised)
+  const selectedScheduleLive = timetableData?.timetableLive?.[tId];  // live with > prefix preserved
 
   // Subjects taught by the selected teacher
   const taughtSubjects = useMemo(() => {
@@ -961,9 +964,13 @@ export default function TeacherPage() {
     }
   }, [taughtSubjects]);
 
-  // Decode cell value
-  const decodeCell = (val: any) => {
+  // Decode cell value — returns null for empty cells
+  // isChanged: live 셀 값에 '>' 접두사가 있으면 변경된 수업
+  const decodeCell = (val: any, liveVal?: any) => {
     if (!val) return null;
+    const isChanged = liveVal !== undefined
+      ? (typeof liveVal === 'string' && liveVal.startsWith('>'))
+      : (typeof val === 'string' && val.startsWith('>'));
     let numVal = typeof val === 'number' ? val : parseInt(String(val).replace(/>/g, ''), 10);
     if (!numVal || isNaN(numVal) || numVal === 0) return null;
     
@@ -971,7 +978,7 @@ export default function TeacherPage() {
     const grade = Math.floor(numVal / 100) % 10;
     const subjectId = Math.floor(numVal / 1000);
     const subjectName = timetableData?.subjects?.[subjectId] || "알 수 없음";
-    return { classNum, grade, subjectName };
+    return { classNum, grade, subjectName, isChanged };
   };
 
   // Find max periods dynamically
@@ -2749,8 +2756,10 @@ export default function TeacherPage() {
                         {weekdays.map((_, dayIndex) => {
                           const d = dayIndex + 1;
                           const val = selectedSchedule[d]?.[p];
-                          const cellData = decodeCell(val);
+                          const liveVal = selectedScheduleLive?.[d]?.[p];
+                          const cellData = decodeCell(val, liveVal);
                           const cellDateStr = toDateString(weekDates[dayIndex]);
+                          const isCellChanged = cellData?.isChanged ?? false;
 
                           // Resolve group
                           let cellGroup = "";
@@ -2774,9 +2783,20 @@ export default function TeacherPage() {
                           }) : [];
                           const hasAssessment = cellAssessments.length > 0;
 
-                          // Clean cell background (no today column background tint):
+                          // 셀 배경: 변경 수업이면 settings 틴트 적용 (Dashboard와 동일 로직)
                           const baseBg = '#ffffff';
-                          const classBg = hasAssessment ? '#fff5f7' : '#ffffff';
+                          let classBg = hasAssessment ? '#fff5f7' : '#ffffff';
+                          let cellInlineStyle: React.CSSProperties | undefined;
+                          if (isCellChanged && !hasAssessment) {
+                            const tColor = settings?.changed_class_tint_color || '#fef08a';
+                            const tOpacity = settings?.changed_class_tint_opacity !== undefined
+                              ? parseFloat(settings.changed_class_tint_opacity) : 1.0;
+                            const h = tColor.replace('#', '');
+                            const r = parseInt(h.length === 3 ? h.slice(0,1).repeat(2) : h.slice(0,2), 16);
+                            const g2 = parseInt(h.length === 3 ? h.slice(1,2).repeat(2) : h.slice(2,4), 16);
+                            const b2 = parseInt(h.length === 3 ? h.slice(2,3).repeat(2) : h.slice(4,6), 16);
+                            cellInlineStyle = { backgroundColor: `rgba(${r}, ${g2}, ${b2}, ${tOpacity})` };
+                          }
                           const cellBg = cellData ? classBg : baseBg;
 
                           return (
@@ -2784,7 +2804,8 @@ export default function TeacherPage() {
                               key={d}
                               className="group teacher-timetable-row wide:h-auto align-top relative overflow-hidden"
                               style={{
-                                background: cellBg,
+                                background: cellInlineStyle?.backgroundColor ?? cellBg,
+                                ...cellInlineStyle,
                                 borderRight: '1px solid #d0d0d0',
                                 borderBottom: '1px solid #d0d0d0',
                                 borderLeft: hasAssessment ? '2px solid #ec4899' : '1px solid #d0d0d0',
@@ -3005,7 +3026,7 @@ export default function TeacherPage() {
 
               {/* 학생공지 (모바일 - 인증 시) */}
               {isCurrentTeacherVerified && (
-                <button type="button" onClick={() => {}} style={{ WebkitTapHighlightColor: 'transparent' }}
+                <button type="button" onClick={() => toast('현재 기능을 준비하고 있습니다\n-성지수행 개발팀', { icon: '🔔' })} style={{ WebkitTapHighlightColor: 'transparent' }}
                   className="wide:hidden ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs wide:text-sm shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
                   title="학생공지">
                   <Bell className="w-3.5 h-3.5" /><span>학생공지</span>
