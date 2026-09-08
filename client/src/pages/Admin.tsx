@@ -7491,56 +7491,75 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         });
                                     };
 
-                                    // ── 앱 사용 여부 판정 및 배지 헬퍼 ────────────────────────
-                                    const resolveUserAppType = (u: IPProfile | undefined | null): "webview" | "pwa" | null => {
-                                        if (!u) return null;
-                                        if (u.appType === "webview" || u.appType === "pwa") return u.appType;
-                                        const ua = u.userAgent || u.recentUserAgents?.[0] || "";
-                                        return parseAppTypeFromUserAgent(ua, !!u.isStandalone);
+                                    // ── 현재 접속환경 배지 (OS·브라우저 + 라이브 점) ────────────
+                                    const osLabel = (os: string | null | undefined) =>
+                                        os === 'ios' ? 'iOS' : os === 'android' ? 'Android' : os === 'windows' ? 'Windows' : os === 'macos' ? 'macOS' : os === 'linux' ? 'Linux' : null;
+                                    const browserLabel = (bk: string | null | undefined) =>
+                                        bk === 'chrome' ? 'Chrome' : bk === 'safari' ? 'Safari' : bk === 'samsung' ? 'Samsung' : bk === 'firefox' ? 'Firefox' : bk === 'other' ? '기타' : null;
+
+                                    const renderEnvBadge = (u: IPProfile | undefined | null) => {
+                                        if (!u) return <span className="text-gray-300 text-xs">-</span>;
+                                        const os = osLabel(u.os);
+                                        const browser = browserLabel(u.browserKey);
+                                        if (!os && !browser) return <span className="text-gray-300 text-xs">-</span>;
+                                        return (
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="relative flex h-2 w-2 flex-shrink-0" title="현재 접속 중">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                                                </span>
+                                                <span className="text-xs text-slate-700 whitespace-nowrap">
+                                                    {[os, browser].filter(Boolean).join(' · ')}
+                                                </span>
+                                            </div>
+                                        );
                                     };
 
-                                    const renderAppBadge = (u: IPProfile | undefined | null) => {
-                                        if (!u) return <span className="text-gray-300 text-xs">-</span>;
-                                        const appType = resolveUserAppType(u);
-                                        if (!appType) return <span className="text-gray-300 text-xs">-</span>;
+                                    // ── 앱 설치 이력 배지 (historicalEnvironments에서 WebView/인앱 환경만 표시) ────────
+                                    const renderAppHistoryBadges = (envs: { os: string; deviceType: string; browserKey: string; isInApp: boolean }[] | undefined) => {
+                                        if (!envs || envs.length === 0) return <span className="text-gray-300 text-xs">-</span>;
 
-                                        let os = u.os;
-                                        if (!os) {
-                                            const ua = u.userAgent || u.recentUserAgents?.[0] || "";
-                                            if (/iPhone|iPad|iPod/i.test(ua)) os = 'ios';
-                                            else if (/Android/i.test(ua)) os = 'android';
-                                            else if (/Windows NT/i.test(ua)) os = 'windows';
-                                            else if (/Macintosh/i.test(ua)) os = 'macos';
-                                            else if (/Linux/i.test(ua)) os = 'linux';
-                                        }
+                                        // WebView UA 특성: browserKey가 other이면서 모바일 기기 → 대부분 WebView
+                                        // 또는 isInApp이 true인 경우는 인앱 브라우저 (카카오 등) → 제외
+                                        // 일반 브라우저(chrome, safari, samsung, firefox) 접속은 제외
+                                        const appEnvs = envs.filter(e => {
+                                            // 인앱 브라우저(카카오/네이버 등)는 제외
+                                            if (e.isInApp) return false;
+                                            // 데스크톱은 제외
+                                            if (e.deviceType === 'desktop') return false;
+                                            // 일반 브라우저 접속은 제외 (chrome, safari, samsung, firefox)
+                                            if (['chrome', 'safari', 'samsung', 'firefox'].includes(e.browserKey)) return false;
+                                            // 남은 것: browserKey가 other인 모바일/태블릿 → WebView 가능성 높음
+                                            return true;
+                                        });
 
-                                        const platform =
-                                            os === 'ios'     ? { label: 'iOS',     cls: 'bg-slate-800 text-white border-slate-700' } :
-                                            os === 'android' ? { label: 'Android', cls: 'bg-green-600 text-white border-green-700' } :
-                                            (os === 'windows' || os === 'macos' || os === 'linux')
-                                                             ? { label: 'PC',      cls: 'bg-blue-600 text-white border-blue-700' } :
-                                                               { label: '',        cls: 'bg-purple-600 text-white border-purple-700' };
+                                        if (appEnvs.length === 0) return <span className="text-gray-300 text-xs">-</span>;
 
-                                        if (appType === 'webview') {
-                                            return (
-                                                <Badge
-                                                    variant="secondary"
-                                                    className="font-mono text-xs px-1.5 py-0 bg-emerald-600 text-white border-emerald-700 whitespace-nowrap shadow-sm hover:bg-emerald-700"
-                                                    title="정식 설치된 앱 (WebView)"
-                                                >
-                                                    WebView{platform.label ? `·${platform.label}` : ''}
-                                                </Badge>
-                                            );
-                                        }
+                                        // 중복 제거 (os 기준으로)
+                                        const seen = new Set<string>();
+                                        const unique = appEnvs.filter(e => {
+                                            const key = `${e.os}-${e.deviceType}`;
+                                            if (seen.has(key)) return false;
+                                            seen.add(key);
+                                            return true;
+                                        });
 
                                         return (
-                                            <Badge
-                                                variant="secondary"
-                                                className="font-mono text-xs px-1.5 py-0 bg-purple-600 text-white border-purple-700 whitespace-nowrap shadow-sm hover:bg-purple-700"
-                                                title="PWA (홈화면 추가)"
-                                            >
-                                                PWA{platform.label ? `·${platform.label}` : ''}
-                                            </Badge>
+                                            <div className="flex flex-wrap gap-1">
+                                                {unique.map((e, i) => {
+                                                    const os = osLabel(e.os);
+                                                    return (
+                                                        <Badge
+                                                            key={i}
+                                                            variant="secondary"
+                                                            className="font-mono text-[10px] px-1.5 py-0 bg-emerald-600 text-white border-emerald-700 whitespace-nowrap shadow-sm"
+                                                            title="WebView 앱 접속 기록"
+                                                        >
+                                                            앱·{os || e.deviceType}
+                                                        </Badge>
+                                                    );
+                                                })}
+                                            </div>
                                         );
                                     };
 
@@ -7609,7 +7628,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     : <span className="text-gray-300">-</span>}
                                             </TableCell>
                                             <TableCell>
-                                                {renderAppBadge(user)}
+                                                {renderEnvBadge(user)}
+                                            </TableCell>
+                                            <TableCell>
+                                                {renderAppHistoryBadges(user.historicalEnvironments)}
                                             </TableCell>
                                             <TableCell className="text-slate-400">
                                                 {user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}
@@ -7743,12 +7765,13 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         ) : <span className="text-gray-400 text-xs">-</span>}
                                                     </TableCell>
                                                     <TableCell>
+                                                        {renderEnvBadge(representativeUser)}
+                                                    </TableCell>
+                                                    <TableCell>
                                                         {(() => {
-                                                            const webviewPeer = group.ips.find(ip => resolveUserAppType(ip) === 'webview');
-                                                            if (webviewPeer) return renderAppBadge(webviewPeer);
-                                                            const pwaPeer = group.ips.find(ip => resolveUserAppType(ip) === 'pwa');
-                                                            if (pwaPeer) return renderAppBadge(pwaPeer);
-                                                            return <span className="text-gray-400 text-xs">-</span>;
+                                                            // 모든 IP의 historicalEnvironments를 병합
+                                                            const allEnvs = group.ips.flatMap(ip => ip.historicalEnvironments || []);
+                                                            return renderAppHistoryBadges(allEnvs);
                                                         })()}
                                                     </TableCell>
                                                     <TableCell>
@@ -7837,6 +7860,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                             <SortHeader col="modCount" label="수정/추가/삭제" className="w-[120px] min-w-[120px]" />
                                                             <TableHead className="w-[80px] min-w-[80px]">출력</TableHead>
                                                             <TableHead className="w-[80px] min-w-[80px]">다운로드</TableHead>
+                                                            <TableHead className="w-[120px] min-w-[120px]">접속환경</TableHead>
                                                             <TableHead className="w-[105px] min-w-[105px]">앱설치</TableHead>
                                                             <SortHeader col="lastAccess" label="마지막 접속" className="w-[160px] min-w-[160px]" />
                                                             <TableHead className="w-[160px] min-w-[160px]">알림</TableHead>
@@ -7849,7 +7873,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         ))}
                                                         {groups.length === 0 && (
                                                             <TableRow>
-                                                                <TableCell colSpan={10} className="h-24 text-center text-gray-500">
+                                                                <TableCell colSpan={11} className="h-24 text-center text-gray-500">
                                                                     일반 접속 기록이 없습니다.
                                                                 </TableCell>
                                                             </TableRow>
@@ -7921,7 +7945,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                                 ) : <span className="text-gray-400 text-xs">-</span>}
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                {renderAppBadge(user)}
+                                                                                {renderEnvBadge(user)}
+                                                                            </TableCell>
+                                                                            <TableCell>
+                                                                                {renderAppHistoryBadges(user.historicalEnvironments)}
                                                                             </TableCell>
                                                                             <TableCell>{user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}</TableCell>
                                                                             <TableCell>

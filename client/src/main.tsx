@@ -3,7 +3,7 @@ import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
-import { agent, checkIsInstalledApp, getInstalledAppType } from "@/lib/browserDetect";
+import { agent } from "@/lib/browserDetect";
 import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
@@ -53,20 +53,6 @@ if (typeof window !== 'undefined') {
     document.documentElement.classList.add('is-firefox');
   }
 
-  // agent.isInstalledApp — browserDetect.ts (standalone + TWA/WebView 통합 감지)
-  // Track PWA / WebView Installation Status (모바일 전용)
-  const installedAppType = getInstalledAppType();
-  // WebView 정식 앱은 isMobile 체크 없이 항상 쿠키 설정 (일부 WebView에서 mobile=false 엣지케이스 방지)
-  // PWA/standalone은 기존대로 isMobile 조건 유지
-  const shouldSetCookie = installedAppType === 'webview'
-    || ((agent.isInstalledApp || checkIsInstalledApp() || installedAppType) && agent.isMobile);
-  if (shouldSetCookie) {
-    document.cookie = "pwa_standalone=1; max-age=31536000; path=/";
-    try { sessionStorage.setItem("is_pwa_standalone", "1"); } catch {}
-    if (installedAppType) {
-      document.cookie = `app_installed_type=${installedAppType}; max-age=31536000; path=/`;
-    }
-  }
 
   // Register beforeinstallprompt as early as possible, BEFORE React renders.
   // Samsung Internet fires this event very early on page load.

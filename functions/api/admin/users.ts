@@ -141,30 +141,51 @@ export const onRequest = async (context: any) => {
             }
 
             // 3. Transform to Profile format
-            const detectServerAppType = (isStandalone: boolean, userAgent: string | null | undefined): "webview" | "pwa" | null => {
-                if (!userAgent && !isStandalone) return null;
+            const detectServerAppType = (userAgent: string | null | undefined): "webview" | "pwa" | null => {
+                if (!userAgent) return null;
                 const ua = (userAgent || "").trim();
-                if (ua) {
-                    const isKakao = /KAKAOTALK/i.test(ua);
-                    const isInApp = isKakao || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(ua);
-                    if (isInApp) return null;
+                if (!ua) return null;
 
-                    const isSeongjisuhaengApp = /SeongjisuhaengApp/i.test(ua);
-                    const hasAndroidWvToken = !/GSA\//i.test(ua) && (/;\s*wv[;)]/i.test(ua) || /\bwv\b/i.test(ua));
-                    const isAndroidWebViewUA = !/GSA\//i.test(ua) && /Version\/[0-9.]+/i.test(ua) && /Chrome\/[0-9.]+/i.test(ua) && /Mobile Safari\/[0-9.]+/i.test(ua);
-                    const isIOSDevice = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && /Mobile/i.test(ua));
-                    const isIOSApp = isIOSDevice && !/CriOS/i.test(ua) && !/FxiOS/i.test(ua) && !/Safari\//i.test(ua);
+                const isKakao = /KAKAOTALK/i.test(ua);
+                const isInApp = isKakao || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(ua);
+                if (isInApp) return null;
 
-                    if (isSeongjisuhaengApp || hasAndroidWvToken || isAndroidWebViewUA || isIOSApp) {
-                        return "webview";
-                    }
+                const isSeongjisuhaengApp = /SeongjisuhaengApp/i.test(ua);
+                const hasAndroidWvToken = !/GSA\//i.test(ua) && (/;\s*wv[;)]/i.test(ua) || /\bwv\b/i.test(ua));
+                const isAndroidWebViewUA = !/GSA\//i.test(ua) && /Version\/[0-9.]+/i.test(ua) && /Chrome\/[0-9.]+/i.test(ua) && /Mobile Safari\/[0-9.]+/i.test(ua);
+                const isIOSDevice = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && /Mobile/i.test(ua));
+                const isIOSApp = isIOSDevice && !/CriOS/i.test(ua) && !/FxiOS/i.test(ua) && !/Safari\//i.test(ua);
+
+                if (isSeongjisuhaengApp || hasAndroidWvToken || isAndroidWebViewUA || isIOSApp) {
+                    return "webview";
                 }
-                if (isStandalone) return "pwa";
                 return null;
             };
+            // 4. IP별 과거 접속환경 조회 (access_logs에서 distinct 환경)
+            let envMap: Record<string, { os: string; deviceType: string; browserKey: string; isInApp: boolean }[]> = {};
+            try {
+                const envQuery = `
+                    SELECT ip, os, deviceType, browserKey, isInApp
+                    FROM access_logs
+                    WHERE os IS NOT NULL AND deviceType IS NOT NULL
+                    GROUP BY ip, os, deviceType, browserKey, isInApp
+                `;
+                const { results: envResults } = await env.DB.prepare(envQuery).all();
+                for (const row of envResults as any[]) {
+                    if (!envMap[row.ip]) envMap[row.ip] = [];
+                    envMap[row.ip].push({
+                        os: row.os,
+                        deviceType: row.deviceType,
+                        browserKey: row.browserKey || 'other',
+                        isInApp: row.isInApp === 1,
+                    });
+                }
+            } catch (e: any) {
+                // access_logs에 os/deviceType 컬럼이 없는 경우 무시
+                console.warn('[Admin Users] Historical environments query failed:', e.message);
+            }
 
             const activeUsers = profiles.map((p: any) => {
-                const isStandalone = p.isStandalone === 1;
                 const profile = {
                     clientId: p.ip,
                     ip: p.ip,
@@ -176,10 +197,10 @@ export const onRequest = async (context: any) => {
                     deleteCount: p.deleteCount || 0,
                     printCount: p.printCount || 0,
                     downloadCount: p.downloadCount || 0,
-                    isStandalone,
+                    isStandalone: false,
                     lastAccess: p.lastAccess,
                     userAgent: p.userAgent || null,
-                    appType: detectServerAppType(isStandalone, p.userAgent),
+                    appType: detectServerAppType(p.userAgent),
                     recentUserAgents: p.userAgent ? [p.userAgent] : [],
                     browserKey: p.browserKey || null,
                     deviceType: p.deviceType || null,
@@ -192,6 +213,7 @@ export const onRequest = async (context: any) => {
                     studentNumber: p.profileStudentNumber || null,
                     hasElectives: !!p.rawElectives && p.rawElectives !== '{}' && p.rawElectives !== 'null',
                     instructionDismissed: !!p.instructionDismissed,
+                    historicalEnvironments: envMap[p.ip] || [],
                     assessments: [],
                     logs: [],
                     detailsLoaded: false,

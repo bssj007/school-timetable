@@ -408,33 +408,27 @@ export function checkIsInstalledApp(): boolean {
  */
 export function parseAppTypeFromUserAgent(
   ua: string | null | undefined,
-  isStandalone?: boolean
+  _isStandalone?: boolean
 ): "webview" | "pwa" | null {
   const str = (ua || "").trim();
-  if (!str && !isStandalone) return null;
+  if (!str) return null;
 
-  if (str) {
-    const isKakaoTalk = /KAKAOTALK/i.test(str);
-    const inApp = isKakaoTalk || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(str);
-    if (inApp) return null;
+  const isKakaoTalk = /KAKAOTALK/i.test(str);
+  const inApp = isKakaoTalk || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(str);
+  if (inApp) return null;
 
-    // 1. Android WebView / 정식 앱 감지
-      const isSeongjisuhaengApp = /SeongjisuhaengApp/i.test(str);
-      const hasAndroidWvToken = !/GSA\//i.test(str) && (/;\s*wv[;)]/i.test(str) || /\bwv\b/i.test(str));
-      const isAndroidWebViewUA = !/GSA\//i.test(str) && /Version\/[0-9.]+/i.test(str) && /Chrome\/[0-9.]+/i.test(str) && /Mobile Safari\/[0-9.]+/i.test(str);
+  // 1. Android WebView / 정식 앱 감지
+    const isSeongjisuhaengApp = /SeongjisuhaengApp/i.test(str);
+    const hasAndroidWvToken = !/GSA\//i.test(str) && (/;\s*wv[;)]/i.test(str) || /\bwv\b/i.test(str));
+    const isAndroidWebViewUA = !/GSA\//i.test(str) && /Version\/[0-9.]+/i.test(str) && /Chrome\/[0-9.]+/i.test(str) && /Mobile Safari\/[0-9.]+/i.test(str);
 
-      // 2. iOS 정식 앱 (WKWebView) 감지
-      const isIOSDevice = /iPhone|iPad|iPod/i.test(str) || (/Macintosh/i.test(str) && /Mobile/i.test(str));
-      const isIOSApp = isIOSDevice && !/CriOS/i.test(str) && !/FxiOS/i.test(str) && !/Safari\//i.test(str);
+    // 2. iOS 정식 앱 (WKWebView) 감지
+    const isIOSDevice = /iPhone|iPad|iPod/i.test(str) || (/Macintosh/i.test(str) && /Mobile/i.test(str));
+    const isIOSApp = isIOSDevice && !/CriOS/i.test(str) && !/FxiOS/i.test(str) && !/Safari\//i.test(str);
 
-      if (isSeongjisuhaengApp || hasAndroidWvToken || isAndroidWebViewUA || isIOSApp) {
-        return "webview";
-      }
-  }
-
-  if (isStandalone) {
-    return "pwa";
-  }
+    if (isSeongjisuhaengApp || hasAndroidWvToken || isAndroidWebViewUA || isIOSApp) {
+      return "webview";
+    }
 
   return null;
 }
@@ -583,13 +577,12 @@ export function detectIOSVersion(): number { return agent.iosVersion; }
 
 // ── PWA 설치 상태 ─────────────────────────────────────────────────────────────
 
-/** PWA 설치 완료 여부 (standalone 모드 또는 쿠키) */
+/** PWA 설치 완료 여부 (standalone 모드) */
 export function isPwaInstalled(): boolean {
   if (typeof window === "undefined") return false;
   return (
     window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as any).standalone === true ||
-    document.cookie.includes("pwa_standalone=1")
+    (navigator as any).standalone === true
   );
 }
 

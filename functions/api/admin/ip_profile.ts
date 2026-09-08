@@ -178,24 +178,23 @@ export const onRequest = async (context: any) => {
 
         // 3. Construct Response (Matching IPProfile interface)
         const latestUA = recentEnvironments?.[0]?.userAgent || recentUserAgents?.[0] || "";
-        const detectServerAppType = (standalone: boolean, userAgent: string): "webview" | "pwa" | null => {
+        const detectServerAppType = (userAgent: string): "webview" | "pwa" | null => {
             const ua = (userAgent || "").trim();
-            if (ua) {
-                const isKakao = /KAKAOTALK/i.test(ua);
-                const isInApp = isKakao || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(ua);
-                if (isInApp) return null;
+            if (!ua) return null;
 
-                const isSeongjisuhaengApp = /SeongjisuhaengApp/i.test(ua);
-                const hasAndroidWvToken = !/GSA\//i.test(ua) && (/;\s*wv[;)]/i.test(ua) || /\bwv\b/i.test(ua));
-                const isAndroidWebViewUA = !/GSA\//i.test(ua) && /Version\/[0-9.]+/i.test(ua) && /Chrome\/[0-9.]+/i.test(ua) && /Mobile Safari\/[0-9.]+/i.test(ua);
-                const isIOSDevice = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && /Mobile/i.test(ua));
-                const isIOSApp = isIOSDevice && !/CriOS/i.test(ua) && !/FxiOS/i.test(ua) && !/Safari\//i.test(ua);
+            const isKakao = /KAKAOTALK/i.test(ua);
+            const isInApp = isKakao || /NAVER|Instagram|FBAN|FBAV|LINE/i.test(ua);
+            if (isInApp) return null;
 
-                if (isSeongjisuhaengApp || hasAndroidWvToken || isAndroidWebViewUA || isIOSApp) {
-                    return "webview";
-                }
+            const isSeongjisuhaengApp = /SeongjisuhaengApp/i.test(ua);
+            const hasAndroidWvToken = !/GSA\//i.test(ua) && (/;\s*wv[;)]/i.test(ua) || /\bwv\b/i.test(ua));
+            const isAndroidWebViewUA = !/GSA\//i.test(ua) && /Version\/[0-9.]+/i.test(ua) && /Chrome\/[0-9.]+/i.test(ua) && /Mobile Safari\/[0-9.]+/i.test(ua);
+            const isIOSDevice = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && /Mobile/i.test(ua));
+            const isIOSApp = isIOSDevice && !/CriOS/i.test(ua) && !/FxiOS/i.test(ua) && !/Safari\//i.test(ua);
+
+            if (isSeongjisuhaengApp || hasAndroidWvToken || isAndroidWebViewUA || isIOSApp) {
+                return "webview";
             }
-            if (standalone) return "pwa";
             return null;
         };
 
@@ -216,8 +215,8 @@ export const onRequest = async (context: any) => {
             modificationCount,
             printCount,
             downloadCount,
-            isStandalone: isStandalone === 1,
-            appType: detectServerAppType(isStandalone === 1, latestUA),
+            isStandalone: false,
+            appType: detectServerAppType(latestUA),
             userAgent: latestUA || null,
             lastAccess,
             recentUserAgents,

@@ -31,6 +31,7 @@ export interface IPProfile {
     hasElectives?: boolean;
     electives?: Record<string, any> | null;
     instructionDismissed?: boolean;
+    historicalEnvironments?: { os: string; deviceType: string; browserKey: string; isInApp: boolean }[];
 
     // --- Detailed History (Empty in List View, Populated in Detail View) ---
     assessments: { id: number, subject: string, title: string, createdAt: string, grade: number, classNum: number }[];
