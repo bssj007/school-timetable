@@ -119,8 +119,8 @@ function DialogContent({
   );
 
   // ── 모바일 키보드 보정 ──────────────────────────────────────────────────────
-  // 키보드가 올라오면 visualViewport.height가 줄어든다.
-  // fixed 요소는 viewport 기준 → 보이는 영역 중앙에 재배치.
+  // top:50%는 CSS에서 window.innerHeight 기준이라 키보드가 올라오면 일부가 가려짐.
+  // 해결: top은 건드리지 않고 translateY만 조정해 키보드 높이 절반만큼 위로 이동.
   const contentRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -131,20 +131,16 @@ function DialogContent({
       const el = contentRef.current;
       if (!el) return;
 
-      const vvH = vv.height;           // 현재 보이는 높이 (키보드 제외)
-      const winH = window.innerHeight; // 전체 윈도우 높이
+      const keyboardH = window.innerHeight - vv.height;
 
-      if (vvH < winH - 80) {
-        // 키보드가 올라온 상태
-        // fixed 요소는 viewport 기준이므로 top = vvH / 2 (보이는 영역 정중앙)
-        // transform: translate(-50%, -50%)가 자체 크기의 절반만큼 올려줌
-        el.style.top = `${vvH / 2}px`;
-        el.style.transform = 'translate(-50%, -50%)';
-        el.style.maxHeight = `${vvH - 24}px`;
+      if (keyboardH > 80) {
+        // 키보드가 올라온 상태 — translateY를 키보드 절반만큼 위로 추가 이동
+        const shift = keyboardH / 2;
+        el.style.transform = `translate(-50%, calc(-50% - ${shift}px))`;
+        el.style.maxHeight = `${vv.height - 24}px`;
         el.style.overflowY = 'auto';
       } else {
         // 키보드 없음 — CSS 기본값으로 복원
-        el.style.top = '';
         el.style.transform = '';
         el.style.maxHeight = '';
         el.style.overflowY = '';
@@ -152,9 +148,7 @@ function DialogContent({
     };
 
     vv.addEventListener('resize', reposition);
-    return () => {
-      vv.removeEventListener('resize', reposition);
-    };
+    return () => vv.removeEventListener('resize', reposition);
   }, []);
 
   return (
