@@ -1301,9 +1301,21 @@ export default function TeacherPage() {
           }
         }
       } else {
-        // 1학년 등 grade 2/3 외: 과목필터 무관하게 탭 허용
-        hasMatchingCell = true;
-        hasPlainCell = true;
+        // 1학년 등: 2/3학년과 동일하게 시간표를 스캔하여 과목 필터 적용
+        // (이동수업 그룹은 없으므로 그룹 로직은 생략)
+        for (let d = 1; d <= 5; d++) {
+          const daySchedule = selectedSchedule[d];
+          if (!daySchedule) continue;
+          for (let p = 1; p < daySchedule.length; p++) {
+            const decoded = decodeCell(daySchedule[p]);
+            if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
+              if (!subjectFilter || isSubjectMatch(decoded.subjectName, [subjectFilter])) {
+                hasMatchingCell = true;
+                hasPlainCell = true;
+              }
+            }
+          }
+        }
       }
 
       // 매칭 셀이 없는 경우(=이 class에서 해당 과목을 안 가르침) → 탭 생성 안 함
@@ -2852,10 +2864,15 @@ export default function TeacherPage() {
                                         textOverflow: 'ellipsis',
                                         whiteSpace: 'nowrap',
                                         maxWidth: '100%',
+                                        display: 'flex',
+                                        alignItems: 'baseline',
+                                        gap: 0,
                                       }}
                                       title={cellData.subjectName}
                                     >
-                                      {cellGroup && renderGroupCode(cellGroup)}{cellData.subjectName}
+                                      {/* 그룹코드는 shrink 없이 고정, 과목명만 truncate */}
+                                      {cellGroup && <span style={{ flexShrink: 0 }}>{renderGroupCode(cellGroup)}</span>}
+                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{cellData.subjectName}</span>
                                     </span>
                                   </div>
 
@@ -3180,10 +3197,11 @@ export default function TeacherPage() {
                         ? (() => {
                             const configName = lectureClassNameMap.get(`${tab.grade}-${(effectiveSubjectFilter || '').trim()}-${tab.group}`);
                             return (
-                              <>
-                                {renderGroupCode(tab.group, configName ? 3 : 0)}
-                                {configName && <span>{configName}</span>}
-                              </>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, whiteSpace: 'nowrap' }}>
+                                {renderGroupCode(tab.group, configName ? 3 : 2)}
+                                {/* configName 없으면 학년-반 번호 표시 (탭이 빈 것처럼 보이지 않도록) */}
+                                <span>{configName || `${tab.grade}-${tab.classNum}`}</span>
+                              </span>
                             );
                           })()
                         : String(tab.label).replace(/반$/, '')}
@@ -3303,12 +3321,20 @@ export default function TeacherPage() {
                                 기간형
                               </span>
                             )}
-                            {/* 과목명 */}
-                            <span style={{ fontWeight: 700, color: '#1a1a1a', lineHeight: 1.25, fontSize: `${Math.max(11, 14 - Math.max(0, (a.subject || '').length - 4) * 0.4)}px` }}>
-                              {panelCodes.map((code: string, i: number) =>
-                                renderGroupCode(code, i < panelCodes.length - 1 ? 2 : 3)
+                            {/* 과목명 (그룹코드 + 과목명을 하나의 nowrap 블록으로 묶어 좁은 화면 줄바꿈 방지) */}
+                            <span style={{
+                              fontWeight: 700, color: '#1a1a1a', lineHeight: 1.25,
+                              fontSize: `${Math.max(11, 14 - Math.max(0, (a.subject || '').length - 4) * 0.4)}px`,
+                              display: 'inline-flex', alignItems: 'baseline', gap: 0, whiteSpace: 'nowrap',
+                            }}>
+                              {panelCodes.length > 0 && (
+                                <span style={{ flexShrink: 0 }}>
+                                  {panelCodes.map((code: string, i: number) =>
+                                    renderGroupCode(code, i < panelCodes.length - 1 ? 2 : 2)
+                                  )}
+                                </span>
                               )}
-                              {a.subject}
+                              <span>{a.subject}</span>
                             </span>
                             {a.classTime && !isPeriod && (
                               <span className="text-[10px] text-slate-400 font-medium">{a.classTime}교시</span>
