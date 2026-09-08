@@ -827,6 +827,12 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 datasetSelected = finalDataset;
             }
 
+            // COMCIGAN 또는 레거시 "자료xxx" 고정값이 설정되어 있더라도, 날짜구간 기반 자동 선택(_auto_)으로 정규화하여
+            // 하드코딩된 특정 데이터셋 번호에 고정되지 않고 날짜구간(targetDate)에 따라 주차별 라이브 데이터셋이 동작하도록 보장
+            if (datasetSelected === 'COMCIGAN' || (datasetSelected && datasetSelected.startsWith('자료'))) {
+                datasetSelected = '_auto_';
+            }
+
             designatedDatasetId = datasetSelected;
         } catch (e) {
             console.warn("[Comcigan Debug] Failed to read system_settings", e);
