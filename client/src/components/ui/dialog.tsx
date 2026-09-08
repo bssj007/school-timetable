@@ -118,44 +118,10 @@ function DialogContent({
     [isComposing, onEscapeKeyDown]
   );
 
-  // ── 모바일 키보드 보정 ──────────────────────────────────────────────────────
-  // top:50%는 CSS에서 window.innerHeight 기준이라 키보드가 올라오면 일부가 가려짐.
-  // 해결: top은 건드리지 않고 translateY만 조정해 키보드 높이 절반만큼 위로 이동.
-  const contentRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    const reposition = () => {
-      const el = contentRef.current;
-      if (!el) return;
-
-      const keyboardH = window.innerHeight - vv.height;
-
-      if (keyboardH > 80) {
-        // 키보드가 올라온 상태 — translateY를 키보드 절반만큼 위로 추가 이동
-        const shift = keyboardH / 2;
-        el.style.transform = `translate(-50%, calc(-50% - ${shift}px))`;
-        el.style.maxHeight = `${vv.height - 24}px`;
-        el.style.overflowY = 'auto';
-      } else {
-        // 키보드 없음 — CSS 기본값으로 복원
-        el.style.transform = '';
-        el.style.maxHeight = '';
-        el.style.overflowY = '';
-      }
-    };
-
-    vv.addEventListener('resize', reposition);
-    return () => vv.removeEventListener('resize', reposition);
-  }, []);
-
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
       <DialogPrimitive.Content
-        ref={contentRef}
         data-slot="dialog-content"
         className={cn(
           "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
