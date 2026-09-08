@@ -1121,7 +1121,7 @@ export default function TeacherPage() {
         setShowAuthDialog(false);
         setAuthPassword("");
         setAuthError("");
-        toast.success(`${teacherName || targetName} 선생님 인증이 완료되었습니다.`);
+
       } else {
         const data = await res.json().catch(() => ({}));
         setAuthError(data.error || "비밀번호가 올바르지 않습니다.");
