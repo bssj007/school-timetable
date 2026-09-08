@@ -7322,18 +7322,23 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                             <CardContent className="min-w-0 overflow-hidden p-0 sm:p-6">
                                 {(() => {
                                     const isKnownUser = (user: IPProfile) => {
+                                        // 학생 정보 또는 교사 정보가 있으면 "알려진 사용자"
+                                        const hasStudentInfo = !!(user.grade && user.classNum);
+                                        const hasTeacherInfo = !!user.teacherName;
+                                        const hasAnyInfo = hasStudentInfo || hasTeacherInfo;
+
                                         // 신규 row: browserKey 컬럼으로 판별
                                         const bk = (user as any).browserKey;
                                         if (bk !== undefined && bk !== null) {
-                                            const hasInfo = !!(user.grade && user.classNum);
-                                            return bk !== 'other' && hasInfo;
+                                            // browserKey가 정상(other 아님)이면서 사용자 정보가 있거나,
+                                            // 사용자 정보만으로도 앱 사용자임이 확인되면 알려진 사용자
+                                            return (bk !== 'other' && hasAnyInfo) || hasAnyInfo;
                                         }
                                         // 구버전 row fallback: recentUserAgents UA 키워드 검사
-                                        if (!user.recentUserAgents || user.recentUserAgents.length === 0) return false;
+                                        if (!user.recentUserAgents || user.recentUserAgents.length === 0) return hasAnyInfo;
                                         const knownKeywords = ['Mozilla', 'Chrome', 'Safari', 'Firefox', 'Edge', 'Opera', 'Whale', 'Kakao', 'iPhone', 'Android'];
                                         const hasKnownUA = user.recentUserAgents.some(ua => knownKeywords.some(keyword => ua.includes(keyword)));
-                                        const hasInfo = !!(user.grade && user.classNum);
-                                        return hasKnownUA && hasInfo;
+                                        return (hasKnownUA && hasAnyInfo) || hasAnyInfo;
                                     };
 
                                     const activeUsers = userData?.activeUsers || [];
