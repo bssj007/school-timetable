@@ -384,6 +384,8 @@ export default function TeacherPage() {
   const [authError, setAuthError] = useState("");
   const [showAuthPassword, setShowAuthPassword] = useState(false);
   const [showNoticeDialog, setShowNoticeDialog] = useState(false);
+  // 모바일 키보드가 올라올 때 인증 다이얼로그를 키보드 위로 밀어올리는 오프셋
+  const [authDialogKeyboardOffset, setAuthDialogKeyboardOffset] = useState(0);
 
   const [weekOffset, setWeekOffset] = useState<number>(() => {
     const today = new Date();
@@ -467,7 +469,31 @@ export default function TeacherPage() {
     if (viewMode === 'homework') setHwPage(1);
   }, [viewMode]);
 
+  // 모바일 키보드가 올라올 때 인증 다이얼로그 위치 조정 (visualViewport API)
+  useEffect(() => {
+    if (!showAuthDialog) {
+      setAuthDialogKeyboardOffset(0);
+      return;
+    }
+    const vv = window.visualViewport;
+    if (!vv) return;
 
+    const handleViewportResize = () => {
+      // visualViewport.height가 줄어들면 키보드가 올라온 것
+      const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setAuthDialogKeyboardOffset(keyboardHeight);
+    };
+
+    vv.addEventListener('resize', handleViewportResize);
+    vv.addEventListener('scroll', handleViewportResize);
+    handleViewportResize();
+
+    return () => {
+      vv.removeEventListener('resize', handleViewportResize);
+      vv.removeEventListener('scroll', handleViewportResize);
+      setAuthDialogKeyboardOffset(0);
+    };
+  }, [showAuthDialog]);
 
   // 좁은화면(Pad 등 넓은 화면 포함)에서 시간표 비율 한계를 완화하여 적당히 넙적한 비율(0.72)로 자동 조절되도록 dynamic CSS 변수 동기화
   const timetableContainerRef = useRef<HTMLDivElement>(null);
@@ -2099,7 +2125,16 @@ export default function TeacherPage() {
 
       {/* ===== 선생님별 인증 다이얼로그 ===== */}
       <Dialog open={showAuthDialog} onOpenChange={(open) => { setShowAuthDialog(open); if (!open) { setAuthError(""); setAuthPassword(""); } }}>
-        <DialogContent className="sm:max-w-[360px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+        <DialogContent
+          className="sm:max-w-[360px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl"
+          style={{
+            // 모바일에서 키보드가 올라오면 다이얼로그를 위로 밀어올림
+            transform: authDialogKeyboardOffset > 0
+              ? `translateY(calc(-50% - ${authDialogKeyboardOffset / 2}px))`
+              : undefined,
+            transition: 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)',
+          }}
+        >
           <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-4 text-white">
             <DialogHeader>
               <DialogTitle className="text-base font-extrabold text-white flex items-center gap-2">
@@ -2122,6 +2157,12 @@ export default function TeacherPage() {
                 spellCheck={false}
                 style={{ WebkitTextSecurity: showAuthPassword ? 'none' : 'disc' } as React.CSSProperties}
                 className="w-full h-11 px-4 pr-11 rounded-xl border-2 border-amber-200 bg-white text-gray-800 text-sm font-medium placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
+                onFocus={(e) => {
+                  // 모바일 키보드가 올라올 때 input이 가려지지 않도록 스크롤
+                  setTimeout(() => {
+                    e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }, 300);
+                }}
               />
               <button type="button" tabIndex={-1} onClick={() => setShowAuthPassword(v => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1">
