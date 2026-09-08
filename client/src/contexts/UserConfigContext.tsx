@@ -1,6 +1,15 @@
 import { useState, createContext, useContext, ReactNode, useEffect } from "react";
-import { getRoleCookie, getTeacherNameCookie, clearRoleCookie } from "@/components/RoleSelectDialog";
+import {
+    getRoleCookie,
+    getTeacherNameCookie,
+    setRoleCookie,
+    setTeacherNameCookie,
+    clearRoleCookie,
+    getAuthenticatedTeacher,
+    getActiveTeacherName
+} from "@/lib/teacherUtils";
 import { isMaintenanceBypassed } from "@/lib/browserDetect";
+import { toast } from "sonner";
 
 export interface UserConfig {
     schoolName: string;
@@ -57,8 +66,18 @@ interface UserConfigContextType {
     teacherName: string | null;
     /** 역할 쿠키 갱신 (RoleSelectDialog에서 직접 쿠키 저장 후 상태 동기화용) */
     refreshRole: () => void;
-    /** 역할 쿠키 삭제 및 상태 초기화 (학생용 페이지로 돌아갈 때 사용) */
+    /** 역할 쿠키 삭제 및 상태 초기화 */
     clearRole: () => void;
+    /** 역할 전환 함수 (프로필 보존하며 학생/교사 간 전환) */
+    switchToRole: (targetRole: "student" | "teacher") => void;
+    /** RoleSelectDialog 열기 제어 */
+    openRoleSelect: (step?: "role" | "student-info" | "teacher-name") => void;
+    /** RoleSelectDialog 닫기 제어 */
+    closeRoleSelect: () => void;
+    /** RoleSelectDialog 열림 여부 */
+    isRoleSelectOpen: boolean;
+    /** RoleSelectDialog 현재 단계 */
+    roleSelectStep: "role" | "student-info" | "teacher-name";
     /** 서버 점검 중 여부 — true이면 역할 선택/온보딩 다이얼로그를 숨긴다 */
     isMaintenanceMode: boolean;
     /** 전역 public 설정 데이터 (캐시된 상태 포함) */
@@ -121,6 +140,19 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     });
     const [teacherName, setTeacherNameState] = useState<string | null>(() => getTeacherNameCookie());
 
+    // ── 역할 선택 다이얼로그 제어 ──
+    const [isRoleSelectOpen, setIsRoleSelectOpen] = useState(false);
+    const [roleSelectStep, setRoleSelectStep] = useState<"role" | "student-info" | "teacher-name">("role");
+
+    const openRoleSelect = (step: "role" | "student-info" | "teacher-name" = "role") => {
+        setRoleSelectStep(step);
+        setIsRoleSelectOpen(true);
+    };
+
+    const closeRoleSelect = () => {
+        setIsRoleSelectOpen(false);
+    };
+
     const refreshRole = () => {
         const r = getRoleCookie();
         setUserRoleState((r === "student" || r === "teacher") ? r : null);
@@ -130,7 +162,37 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     const clearRole = () => {
         clearRoleCookie();
         setUserRoleState(null);
-        setTeacherNameState(null);
+    };
+
+    const switchToRole = (targetRole: "student" | "teacher") => {
+        if (targetRole === "student") {
+            setRoleCookie("student");
+            setUserRoleState("student");
+            toast.success("학생용 페이지로 이동합니다.");
+            if (typeof window !== "undefined") {
+                if (window.location.pathname !== "/") {
+                    window.location.href = "/";
+                }
+            }
+        } else if (targetRole === "teacher") {
+            setRoleCookie("teacher");
+            setUserRoleState("teacher");
+            // 1순위: 로그인 된 교사 (가장 최근 선택 교사 무시)
+            // 2순위: 로그인 된 교사가 없을 때만 가장 최근 선택했던 교사
+            const activeTeacher = getActiveTeacherName();
+            if (activeTeacher) {
+                setTeacherNameCookie(activeTeacher);
+                setTeacherNameState(activeTeacher);
+                toast.success("교사용 페이지로 이동합니다.");
+                if (typeof window !== "undefined") {
+                    if (!window.location.pathname.startsWith("/teacher")) {
+                        window.location.href = "/teacher";
+                    }
+                }
+            } else {
+                openRoleSelect("teacher-name");
+            }
+        }
     };
 
     const refreshKakaoUser = async () => {
@@ -269,6 +331,11 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
             teacherName,
             refreshRole,
             clearRole,
+            switchToRole,
+            openRoleSelect,
+            closeRoleSelect,
+            isRoleSelectOpen,
+            roleSelectStep,
             isMaintenanceMode,
             publicSettings,
         }}>

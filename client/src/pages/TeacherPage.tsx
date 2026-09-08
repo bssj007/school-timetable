@@ -13,14 +13,23 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { useUserConfig } from "@/contexts/UserConfigContext";
-import { clearRoleCookie } from "@/components/RoleSelectDialog";
+import { getRoleCookie, setRoleCookie, getTeacherNameCookie, setTeacherNameCookie, getStoredTeacherPassword, setStoredTeacherPassword, clearStoredTeacherPassword, getAuthenticatedTeacher, getActiveTeacherName, normalizeTeacherName } from "@/lib/teacherUtils";
 import { isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 interface TeacherTimetableResponse {
   success: boolean;
   teachers: string[];
   subjects: string[];
-  timetable: any[];
+  timetable: any[];          // 해당 주차 교사 시간표
+  baseTimetable?: any[];     // 표준 기준 교사 시간표
+  changedCells?: string[];   // 변경된 셀 좌표 목록: "teacherId:weekday:period"
+  datasetId?: string;
+  targetBaseId?: string;
+  isOutOfRange?: boolean;
+  isArchivedData?: boolean;
+  hasLiveData?: boolean;
+  timetableLive?: any[];     // (legacy, unused)
+  timetableBase?: any[];     // (legacy, unused)
 }
 
 interface AssessmentItem {
@@ -297,7 +306,6 @@ function renderGroupCode(code: string, marginRight: number = 3): React.ReactElem
       color: gc,
       fontWeight: 900,
       marginRight,
-      WebkitTextStroke: '0.4px rgba(255,255,255,0.9)',
       textShadow: `0 1px 3px ${gc}70`,
       letterSpacing: '-0.01em',
     } as React.CSSProperties}>
@@ -307,22 +315,64 @@ function renderGroupCode(code: string, marginRight: number = 3): React.ReactElem
 }
 
 
+// F5 새로고침 등 초기 렌더 시 1프레임 즉시 교사명 매칭을 위한 캐시 조회
+function getCachedTeachers(): string[] | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("timetable_teachers_cache");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveTeacherId(nameToFind: string | null | undefined, teachersList?: string[]): string | null {
+  if (!nameToFind || !teachersList || teachersList.length <= 1) return null;
+  const cleanTarget = normalizeTeacherName(nameToFind);
+  const idx = teachersList.findIndex((n) => normalizeTeacherName(n) === cleanTarget);
+  return idx > 0 ? String(idx) : null;
+}
+
 export default function TeacherPage() {
   const queryClient = useQueryClient();
-  const { refreshRole } = useUserConfig();
+  const { refreshRole, switchToRole } = useUserConfig();
   const [, setLocation] = useLocation();
 
+  useEffect(() => {
+    if (getRoleCookie() !== "teacher") {
+      setRoleCookie("teacher");
+      refreshRole();
+    }
+  }, []);
+
   const handleReturnToStudentPage = () => {
-    // 자동 리다이렉션 쿠키만 삭제 (sj_user_role, sj_teacher_name)
-    clearRoleCookie();
-    refreshRole();
-    toast.success("학생용 페이지로 이동합니다.");
-    window.location.href = "/";
+    switchToRole("student");
   };
   
   // States
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(() => {
-    return localStorage.getItem("teacher-page-selected-teacher") || "1";
+    // 1순위: 로그인 된 교사가 있다면 무조건 그 교사명으로 자동 접속 (최근 선택 무시)
+    // 2순위: 로그인 된 교사가 없다면 가장 최근 선택했던 교사로 자동 접속
+    const activeTeacher = getActiveTeacherName();
+    const authTeacher = getAuthenticatedTeacher();
+
+    const allCached = queryClient.getQueriesData<TeacherTimetableResponse>({ queryKey: ['teacher-timetable'] });
+    const cachedTeachers = allCached[0]?.[1]?.teachers || getCachedTeachers();
+
+    if (activeTeacher && cachedTeachers) {
+      const resolved = resolveTeacherId(activeTeacher, cachedTeachers);
+      if (resolved) return resolved;
+    }
+
+    // 로그인 된 교사가 없을 때만 이전 인덱스 캐시 활용
+    if (!authTeacher && typeof localStorage !== "undefined") {
+      const saved = localStorage.getItem("teacher-page-selected-teacher");
+      if (saved) return saved;
+    }
+
+    return "1";
   });
   const [openCombobox, setOpenCombobox] = useState(false);
 
@@ -333,6 +383,7 @@ export default function TeacherPage() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [showAuthPassword, setShowAuthPassword] = useState(false);
+  const [showNoticeDialog, setShowNoticeDialog] = useState(false);
 
   const [weekOffset, setWeekOffset] = useState<number>(() => {
     const today = new Date();
@@ -368,7 +419,8 @@ export default function TeacherPage() {
   // ── 숙제형 폼 상태 ──
   const [hwForm, setHwForm] = useState({
     subject: '',
-    classNum: '',
+    classNum: '',   // "{grade}-{classNum}-{group}" 복합 키 (이동수업) 또는 classNum 문자열
+    classCode: '', // 이동수업 그룹 코드 (예: "A"), 일반반은 ''
     startDate: '',
     dueDate: '',
     title: '',
@@ -416,9 +468,6 @@ export default function TeacherPage() {
   }, [viewMode]);
 
 
-  useEffect(() => {
-    localStorage.setItem("teacher-page-selected-teacher", selectedTeacherId);
-  }, [selectedTeacherId]);
 
   // 좁은화면(Pad 등 넓은 화면 포함)에서 시간표 비율 한계를 완화하여 적당히 넙적한 비율(0.72)로 자동 조절되도록 dynamic CSS 변수 동기화
   const timetableContainerRef = useRef<HTMLDivElement>(null);
@@ -561,73 +610,6 @@ export default function TeacherPage() {
     );
   }
 
-  // settings/selectedTeacherId 변경 시 현재 선생님 인증 상태 재확인
-  // rawTeacherName은 tId에 의존하므로 selectedTeacherId로 키 생성
-  const teacherAuthStorageKey = `teacher-auth-${selectedTeacherId}`;
-
-  useEffect(() => {
-    if (!settings) return;
-    const expireDays = settings.teacher_auth_expire_days ?? 0;
-    const stored = localStorage.getItem(teacherAuthStorageKey);
-    if (!stored) { setIsCurrentTeacherVerified(false); return; }
-    if (expireDays === 0) { setIsCurrentTeacherVerified(true); return; }
-    const storedTime = parseInt(stored, 10);
-    if (isNaN(storedTime)) {
-      localStorage.removeItem(teacherAuthStorageKey);
-      setIsCurrentTeacherVerified(false);
-      return;
-    }
-    const expireMs = expireDays * 24 * 60 * 60 * 1000;
-    if (Date.now() - storedTime < expireMs) {
-      setIsCurrentTeacherVerified(true);
-    } else {
-      localStorage.removeItem(teacherAuthStorageKey);
-      setIsCurrentTeacherVerified(false);
-    }
-  }, [settings, teacherAuthStorageKey]);
-
-  // 선생님별 올바른 비밀번호 조회 (개별 설정 우선, 없으면 디폴트)
-  const getCorrectPassword = (): string => {
-    const defaultPw = settings?.teacher_default_password || '관리';
-    if (settings?.teacher_passwords) {
-      try {
-        const pwMap: Record<string, string> =
-          typeof settings.teacher_passwords === 'string'
-            ? JSON.parse(settings.teacher_passwords)
-            : settings.teacher_passwords;
-        // rawTeacherName은 이 시점에서 아직 미정이므로 선생님 ID로 fallback
-        // 실제 매칭은 rawTeacherName 기준
-        const keyByRaw = Object.keys(pwMap).find(k => k === (timetableData?.teachers?.[parseInt(selectedTeacherId, 10)] || ''));
-        if (keyByRaw) return pwMap[keyByRaw];
-      } catch {}
-    }
-    return defaultPw;
-  };
-
-  const handleTeacherAuth = (e: React.FormEvent) => {
-    e.preventDefault();
-    const correctPw = getCorrectPassword();
-    if (authPassword === correctPw) {
-      // 다른 선생님의 인증 세션 모두 취소
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('teacher-auth-') && key !== teacherAuthStorageKey) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach(k => localStorage.removeItem(k));
-
-      localStorage.setItem(teacherAuthStorageKey, String(Date.now()));
-      setIsCurrentTeacherVerified(true);
-      setShowAuthDialog(false);
-      setAuthError("");
-      setAuthPassword("");
-    } else {
-      setAuthError("비밀번호가 올바르지 않습니다.");
-    }
-  };
-
   // 쓰기 액션 전 인증 체크 (미인증 시 다이얼로그 표시)
   const requireAuth = (): boolean => {
     if (!isCurrentTeacherVerified) {
@@ -694,14 +676,6 @@ export default function TeacherPage() {
     const rawDatasetId = grade3Timetable?.originalDatasetId || grade3Timetable?.datasetId || '';
     return (rawDatasetId === 'MANUAL_PLAN' || rawDatasetId === 'SEMESTER_PLAN') ? rawDatasetId : 'COMCIGAN';
   }, [grade3Timetable]);
-
-  // 날짜 범위 밖 여부 — 3개 학년 중 하나라도 COMCIGAN+isOutOfRange이면 미확정
-  // 아카이브 데이터가 있는 경우 미확정 표시 안 함
-  const isOutOfDateRange = (
-    (g1DatasetType === 'COMCIGAN' && !!grade1Timetable?.isOutOfRange && !grade1Timetable?.isArchivedData) ||
-    (g2DatasetType === 'COMCIGAN' && !!grade2Timetable?.isOutOfRange && !grade2Timetable?.isArchivedData) ||
-    (g3DatasetType === 'COMCIGAN' && !!grade3Timetable?.isOutOfRange && !grade3Timetable?.isArchivedData)
-  );
 
   // Fetch current-week timetables to resolve fixed panel datasets
   const { data: grade1TimetableNow } = useQuery({
@@ -781,11 +755,11 @@ export default function TeacherPage() {
     return getComputedGroupsForGrade('3', grade3TimetableNow?.data || [], electiveConfigsG3 || [], settings);
   }, [grade3TimetableNow?.data, electiveConfigsG3, settings]);
 
-  // 1. Fetch Teacher Timetable
+  // 1. Fetch Teacher Timetable (주차별 targetDate 연동)
   const { data: timetableData, isLoading: isTimetableLoading, isError: isTimetableError } = useQuery<TeacherTimetableResponse>({
-    queryKey: ['teacher-timetable'],
+    queryKey: ['teacher-timetable', targetDate],
     queryFn: async () => {
-      const res = await fetch('/api/comcigan?type=teacher_timetable');
+      const res = await fetch(`/api/comcigan?type=teacher_timetable&targetDate=${encodeURIComponent(targetDate)}`);
       if (!res.ok) throw new Error("Failed to fetch teacher timetable");
       return res.json();
     },
@@ -794,6 +768,87 @@ export default function TeacherPage() {
     retryDelay: 3000,
     refetchInterval: 2 * 60 * 1000,
   });
+
+  // 로그인 된 교사가 없을 때만 '가장 최근 선택했던 교사'로 저장 (timetableData 선언 이후에 위치해야 TDZ 오류 방지)
+  useEffect(() => {
+    const authTeacher = getAuthenticatedTeacher();
+    if (!authTeacher) {
+      localStorage.setItem("teacher-page-selected-teacher", selectedTeacherId);
+      if (timetableData?.teachers?.[parseInt(selectedTeacherId, 10)]) {
+        localStorage.setItem("last_selected_teacher_name", timetableData.teachers[parseInt(selectedTeacherId, 10)]);
+      }
+    }
+  }, [selectedTeacherId, timetableData?.teachers]);
+
+  // 날짜 범위 밖 여부 — 교사 시간표 또는 3개 학년 중 하나라도 COMCIGAN+isOutOfRange이면 미확정
+  // 아카이브 데이터가 있는 경우 미확정 표시 안 함
+  const isOutOfDateRange = (
+    (!timetableData?.isArchivedData && !!timetableData?.isOutOfRange) ||
+    (g1DatasetType === 'COMCIGAN' && !!grade1Timetable?.isOutOfRange && !grade1Timetable?.isArchivedData) ||
+    (g2DatasetType === 'COMCIGAN' && !!grade2Timetable?.isOutOfRange && !grade2Timetable?.isArchivedData) ||
+    (g3DatasetType === 'COMCIGAN' && !!grade3Timetable?.isOutOfRange && !grade3Timetable?.isArchivedData)
+  );
+
+  // ── 선생님 동기화: 초기 진입/새로고침 시 로그인 된 교사 우선 (없으면 가장 최근 선택 교사) ──
+  const initialResolvedRef = useRef(false);
+  useEffect(() => {
+    if (!timetableData?.teachers || timetableData.teachers.length <= 1) return;
+
+    // F5 새로고침 시 1프레임 즉시 복원을 위해 교사 명단 캐싱
+    try {
+      localStorage.setItem("timetable_teachers_cache", JSON.stringify(timetableData.teachers));
+    } catch {}
+
+    const authTeacher = getAuthenticatedTeacher();
+
+    if (!initialResolvedRef.current) {
+      initialResolvedRef.current = true;
+
+      // 1순위: 로그인 된 교사가 있다면 무조건 그 교사명으로 자동 접속 (최근 선택 교사 무시)
+      if (authTeacher) {
+        const authIdx = resolveTeacherId(authTeacher, timetableData.teachers);
+        if (authIdx) {
+          setSelectedTeacherId(authIdx);
+          setTeacherNameCookie(timetableData.teachers[parseInt(authIdx, 10)]);
+          refreshRole();
+          return;
+        }
+      }
+
+      // 2순위: 로그인 된 교사가 없다면 가장 최근 선택했던 교사로 자동 접속
+      const recentTeacher = getTeacherNameCookie() || (typeof localStorage !== "undefined" ? localStorage.getItem("last_selected_teacher_name") : null);
+      if (recentTeacher) {
+        const recentIdx = resolveTeacherId(recentTeacher, timetableData.teachers);
+        if (recentIdx) {
+          setSelectedTeacherId(recentIdx);
+          setTeacherNameCookie(timetableData.teachers[parseInt(recentIdx, 10)]);
+          refreshRole();
+          return;
+        }
+      }
+
+      // 3순위: 기본 1번 교사
+      if (timetableData.teachers[1]) {
+        setSelectedTeacherId("1");
+        setTeacherNameCookie(timetableData.teachers[1]);
+        refreshRole();
+        return;
+      }
+    }
+
+    // 마운트 이후 로그인 된 교사가 있는 경우, 항상 쿠키는 로그인 교사로 유지
+    if (authTeacher) {
+      const currentCookie = getTeacherNameCookie();
+      if (!currentCookie || normalizeTeacherName(currentCookie) !== authTeacher) {
+        const authIdx = resolveTeacherId(authTeacher, timetableData.teachers);
+        if (authIdx) {
+          setTeacherNameCookie(timetableData.teachers[parseInt(authIdx, 10)]);
+          refreshRole();
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timetableData?.teachers]);
 
   const ignoreKeywords = useMemo(() => {
     if (!settings) return ['빈교', '공강', '학년', '채', '창'];
@@ -823,9 +878,10 @@ export default function TeacherPage() {
 
   const teacherSubjectsMap = useMemo(() => {
     const map = new Map<number, string[]>();
-    if (!timetableData?.timetable || !timetableData?.subjects) return map;
+    const schedules = timetableData?.baseTimetable || timetableData?.timetable;
+    if (!schedules || !timetableData?.subjects) return map;
     
-    timetableData.timetable.forEach((schedule: any, tId: number) => {
+    schedules.forEach((schedule: any, tId: number) => {
       if (!schedule) return;
       const subjects = new Set<string>();
       for (let d = 1; d <= 5; d++) {
@@ -942,6 +998,130 @@ export default function TeacherPage() {
   const teacherName = getTeacherDisplayName(rawTeacherName, tId);
   const selectedSchedule = timetableData?.timetable?.[tId];
 
+  // ── 서버 기반 교사 비밀번호 실시간 검증 (단일 진실원천: 서버 D1) ──────────────
+  // 마운트 시 또는 선생님 변경 시: 저장된 비밀번호가 있다면 서버에 제시하여 유효성 검증
+  // 서버 측에서 비밀번호가 변경되었으면 401을 반환하므로, 즉시 인증을 해제하고 재입력 요구
+  useEffect(() => {
+    if (!rawTeacherName) return;
+
+    const storedPw = getStoredTeacherPassword(rawTeacherName);
+    if (!storedPw) {
+      setIsCurrentTeacherVerified(false);
+      return;
+    }
+
+    const expireDays = settings?.teacher_auth_expire_days ?? 0;
+    if (expireDays > 0) {
+      try {
+        const cleanTeacher = normalizeTeacherName(rawTeacherName);
+        const raw = localStorage.getItem(`teacher-pw-${cleanTeacher}`) ??
+                    localStorage.getItem(`teacher-pw-${rawTeacherName}`) ??
+                    localStorage.getItem(`teacher-pw-${cleanTeacher}*`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const expireMs = expireDays * 24 * 60 * 60 * 1000;
+          if (Date.now() - (parsed.savedAt || 0) >= expireMs) {
+            clearStoredTeacherPassword(rawTeacherName);
+            setIsCurrentTeacherVerified(false);
+            return;
+          }
+        }
+      } catch {}
+    }
+
+    let isCancelled = false;
+    fetch('/api/teacher-password?action=verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        teacherName: rawTeacherName,
+        password: storedPw,
+      }),
+    })
+      .then(async (res) => {
+        if (isCancelled) return;
+        if (res.ok) {
+          setIsCurrentTeacherVerified(true);
+        } else {
+          // 서버 측에서 비밀번호가 변경되었거나 일치하지 않음!
+          clearStoredTeacherPassword(rawTeacherName);
+          setIsCurrentTeacherVerified(false);
+          toast.error("선생님 비밀번호가 변경되었습니다. 다시 인증해주세요.");
+        }
+      })
+      .catch(() => {
+        // 네트워크 오류 시 기존 상태 유지
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [rawTeacherName, settings?.teacher_auth_expire_days]);
+
+  const handleTeacherAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authPassword.trim()) {
+      setAuthError("비밀번호를 입력해주세요.");
+      return;
+    }
+    const targetName = rawTeacherName || (timetableData?.teachers?.[parseInt(selectedTeacherId, 10)] ?? "");
+    if (!targetName) {
+      setAuthError("선생님 정보를 확인할 수 없습니다.");
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/teacher-password?action=verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teacherName: targetName,
+          password: authPassword.trim(),
+        }),
+      });
+
+      if (res.ok) {
+        setStoredTeacherPassword(targetName, authPassword.trim());
+        setTeacherNameCookie(targetName);
+        refreshRole();
+        setIsCurrentTeacherVerified(true);
+        setShowAuthDialog(false);
+        setAuthPassword("");
+        setAuthError("");
+        toast.success(`${teacherName || targetName} 선생님 인증이 완료되었습니다.`);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setAuthError(data.error || "비밀번호가 올바르지 않습니다.");
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "인증 처리 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 서버에서 미리 계산된 변경 셀 Set — O(1) 조회 + 학년별 시간표 교차 검증 병합
+  const changedCellSet = useMemo(() => {
+    const set = new Set<string>();
+    if (timetableData?.changedCells && Array.isArray(timetableData.changedCells)) {
+      timetableData.changedCells.forEach((k: string) => set.add(k));
+    }
+    const teacherRawName = timetableData?.teachers?.[tId] || rawTeacherName;
+    const checkGradeItems = (result?: any) => {
+      const items = result?.data;
+      if (!Array.isArray(items)) return;
+      items.forEach((item: any) => {
+        if (item?.isChanged && typeof item.weekday === 'number' && item.classTime) {
+          if (teacherRawName && item.teacher === teacherRawName) {
+            set.add(`${tId}:${item.weekday + 1}:${item.classTime}`);
+          }
+        }
+      });
+    };
+    checkGradeItems(grade1Timetable);
+    checkGradeItems(grade2Timetable);
+    checkGradeItems(grade3Timetable);
+    return set;
+  }, [timetableData?.changedCells, timetableData?.teachers, tId, rawTeacherName, grade1Timetable, grade2Timetable, grade3Timetable]);
+
   // Subjects taught by the selected teacher
   const taughtSubjects = useMemo(() => {
     if (isNaN(tId) || !teacherSubjectsMap) return [];
@@ -960,12 +1140,11 @@ export default function TeacherPage() {
     }
   }, [taughtSubjects]);
 
-  // Decode cell value
+  // Decode cell value — returns null for empty cells
   const decodeCell = (val: any) => {
     if (!val) return null;
     let numVal = typeof val === 'number' ? val : parseInt(String(val).replace(/>/g, ''), 10);
     if (!numVal || isNaN(numVal) || numVal === 0) return null;
-    
     const classNum = numVal % 100;
     const grade = Math.floor(numVal / 100) % 10;
     const subjectId = Math.floor(numVal / 1000);
@@ -1031,25 +1210,39 @@ export default function TeacherPage() {
     return Array.from(classesMap.values());
   }, [selectedSchedule]);
 
-  // 숙제형 폼: 선택된 과목에 해당하는 반 목록 (시간표 기반)
+  // 숙제형 폼: 선택된 과목에 해당하는 반+그룹 목록 (시간표 기반, 당일형과 동일한 로직)
+  // 이동수업의 경우 그룹(A/B/C/D)별로 별도 항목을 생성한다.
   const classesForHwSubject = useMemo(() => {
     if (!selectedSchedule || !hwForm.subject) return [];
-    const result = new Map<string, { grade: number; classNum: number }>();
+    // key: "grade-classNum-group" → 중복 방지
+    const result = new Map<string, { grade: number; classNum: number; group: string; label: string }>();
     for (let d = 1; d <= 5; d++) {
       const daySchedule = selectedSchedule[d];
       if (!daySchedule) continue;
       for (let p = 1; p < daySchedule.length; p++) {
         const decoded = decodeCell(daySchedule[p]);
-        if (decoded && decoded.subjectName === hwForm.subject) {
-          const key = `${decoded.grade}-${decoded.classNum}`;
-          result.set(key, { grade: decoded.grade, classNum: decoded.classNum });
+        if (!decoded || decoded.subjectName !== hwForm.subject) continue;
+
+        // 당일형과 동일하게 computedGroupsG2/G3 에서 그룹 조회
+        let cellGroup = '';
+        if (decoded.grade === 2) cellGroup = computedGroupsG2[`${d - 1}-${p}`] || '';
+        else if (decoded.grade === 3) cellGroup = computedGroupsG3[`${d - 1}-${p}`] || '';
+
+        const key = `${decoded.grade}-${decoded.classNum}-${cellGroup}`;
+        if (!result.has(key)) {
+          const label = cellGroup
+            ? `${decoded.grade}학년 ${decoded.classNum}반 (${cellGroup}그룹)`
+            : `${decoded.grade}학년 ${decoded.classNum}반`;
+          result.set(key, { grade: decoded.grade, classNum: decoded.classNum, group: cellGroup, label });
         }
       }
     }
-    return Array.from(result.values()).sort((a, b) =>
-      a.grade !== b.grade ? a.grade - b.grade : a.classNum - b.classNum
-    );
-  }, [selectedSchedule, hwForm.subject]);
+    return Array.from(result.values()).sort((a, b) => {
+      if (a.grade !== b.grade) return a.grade - b.grade;
+      if (a.classNum !== b.classNum) return a.classNum - b.classNum;
+      return a.group.localeCompare(b.group);
+    });
+  }, [selectedSchedule, hwForm.subject, computedGroupsG2, computedGroupsG3]);
 
   // 2. Fetch Assessments for all taught classes concurrently
   const { data: allAssessments, isLoading: isAssessmentsLoading } = useQuery<AssessmentItem[]>({
@@ -1286,9 +1479,21 @@ export default function TeacherPage() {
           }
         }
       } else {
-        // 1학년 등 grade 2/3 외: 과목필터 무관하게 탭 허용
-        hasMatchingCell = true;
-        hasPlainCell = true;
+        // 1학년 등: 2/3학년과 동일하게 시간표를 스캔하여 과목 필터 적용
+        // (이동수업 그룹은 없으므로 그룹 로직은 생략)
+        for (let d = 1; d <= 5; d++) {
+          const daySchedule = selectedSchedule[d];
+          if (!daySchedule) continue;
+          for (let p = 1; p < daySchedule.length; p++) {
+            const decoded = decodeCell(daySchedule[p]);
+            if (decoded && decoded.grade === grade && decoded.classNum === classNum) {
+              if (!subjectFilter || isSubjectMatch(decoded.subjectName, [subjectFilter])) {
+                hasMatchingCell = true;
+                hasPlainCell = true;
+              }
+            }
+          }
+        }
       }
 
       // 매칭 셀이 없는 경우(=이 class에서 해당 과목을 안 가르침) → 탭 생성 안 함
@@ -1606,13 +1811,27 @@ export default function TeacherPage() {
   // Mutate: Create Assessment
   const createMutation = useMutation({
     mutationFn: async (payload: any) => {
+      const storedPw = getStoredTeacherPassword(rawTeacherName);
       const res = await fetch('/api/assessment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Teacher-Password': encodeURIComponent(storedPw || ''),
+          'X-Teacher-Name': encodeURIComponent(rawTeacherName || ''),
+        },
+        body: JSON.stringify({
+          ...payload,
+          teacherPassword: storedPw,
+          teacher: rawTeacherName,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        if (res.status === 401 || err.code === 'TEACHER_AUTH_REQUIRED') {
+          clearStoredTeacherPassword(rawTeacherName);
+          setIsCurrentTeacherVerified(false);
+          setShowAuthDialog(true);
+        }
         throw new Error(err.error || 'Failed to create assessment');
       }
       return res.json();
@@ -1630,13 +1849,27 @@ export default function TeacherPage() {
   // Mutate: Update Assessment
   const updateMutation = useMutation({
     mutationFn: async (payload: any) => {
+      const storedPw = getStoredTeacherPassword(rawTeacherName);
       const res = await fetch('/api/assessment', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Teacher-Password': encodeURIComponent(storedPw || ''),
+          'X-Teacher-Name': encodeURIComponent(rawTeacherName || ''),
+        },
+        body: JSON.stringify({
+          ...payload,
+          teacherPassword: storedPw,
+          teacher: rawTeacherName,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        if (res.status === 401 || err.code === 'TEACHER_AUTH_REQUIRED') {
+          clearStoredTeacherPassword(rawTeacherName);
+          setIsCurrentTeacherVerified(false);
+          setShowAuthDialog(true);
+        }
         throw new Error(err.error || 'Failed to update assessment');
       }
       return res.json();
@@ -1655,10 +1888,25 @@ export default function TeacherPage() {
   // Mutate: Delete Assessment
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/assessment?id=${id}&role=teacher`, {
+      const storedPw = getStoredTeacherPassword(rawTeacherName);
+      const encTeacher = encodeURIComponent(rawTeacherName || '');
+      const encPw = encodeURIComponent(storedPw || '');
+      const res = await fetch(`/api/assessment?id=${id}&role=teacher&teacherName=${encTeacher}&teacherPassword=${encPw}`, {
         method: 'DELETE',
+        headers: {
+          'X-Teacher-Password': encPw,
+          'X-Teacher-Name': encTeacher,
+        },
       });
-      if (!res.ok) throw new Error('Failed to delete');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (res.status === 401 || err.code === 'TEACHER_AUTH_REQUIRED') {
+          clearStoredTeacherPassword(rawTeacherName);
+          setIsCurrentTeacherVerified(false);
+          setShowAuthDialog(true);
+        }
+        throw new Error(err.error || 'Failed to delete');
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -1821,6 +2069,34 @@ export default function TeacherPage() {
         backgroundAttachment: 'fixed',
       }}
     >
+      {/* ===== 학생공지 다이얼로그 ===== */}
+      <Dialog open={showNoticeDialog} onOpenChange={setShowNoticeDialog}>
+        <DialogContent className="sm:max-w-[320px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+          <div className="bg-gradient-to-r from-yellow-400 to-amber-400 px-5 py-4">
+            <DialogHeader>
+              <DialogTitle className="text-base font-extrabold text-gray-900 flex items-center gap-2">
+                <Bell className="w-4 h-4" />
+                학생공지
+              </DialogTitle>
+            </DialogHeader>
+          </div>
+          <div className="px-5 py-5 flex flex-col items-center gap-3 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-yellow-50 border border-yellow-100 flex items-center justify-center text-2xl">
+              🔔
+            </div>
+            <p className="text-sm font-semibold text-gray-700">현재 기능을 준비 중입니다.</p>
+            <p className="text-xs text-gray-400">-성지수행 개발팀</p>
+            <button
+              type="button"
+              onClick={() => setShowNoticeDialog(false)}
+              className="mt-1 w-full py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-sm transition-colors cursor-pointer"
+            >
+              확인
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ===== 선생님별 인증 다이얼로그 ===== */}
       <Dialog open={showAuthDialog} onOpenChange={(open) => { setShowAuthDialog(open); if (!open) { setAuthError(""); setAuthPassword(""); } }}>
         <DialogContent className="sm:max-w-[360px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
@@ -1842,9 +2118,7 @@ export default function TeacherPage() {
                 value={authPassword}
                 onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
                 placeholder="비밀번호 입력"
-                autoComplete="current-password"
-                autoCorrect="off"
-                autoCapitalize="off"
+                autoComplete="off"
                 spellCheck={false}
                 style={{ WebkitTextSecurity: showAuthPassword ? 'none' : 'disc' } as React.CSSProperties}
                 className="w-full h-11 px-4 pr-11 rounded-xl border-2 border-amber-200 bg-white text-gray-800 text-sm font-medium placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
@@ -2158,7 +2432,7 @@ export default function TeacherPage() {
                           <label className="block text-xs font-bold text-slate-600 mb-1">과목</label>
                           <select
                             value={hwForm.subject}
-                            onChange={e => setHwForm(f => ({ ...f, subject: e.target.value, classNum: '' }))}
+                            onChange={e => setHwForm(f => ({ ...f, subject: e.target.value, classNum: '', classCode: '' }))}
                             className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
                           >
                             <option value="">과목 선택</option>
@@ -2171,14 +2445,24 @@ export default function TeacherPage() {
                           <label className="block text-xs font-bold text-slate-600 mb-1">반</label>
                           <select
                             value={hwForm.classNum}
-                            onChange={e => setHwForm(f => ({ ...f, classNum: e.target.value }))}
+                            onChange={e => {
+                              // classNum 값은 "grade-classNum-group" 복합키로 저장
+                              const selected = classesForHwSubject.find(
+                                c => `${c.grade}-${c.classNum}-${c.group}` === e.target.value
+                              );
+                              setHwForm(f => ({
+                                ...f,
+                                classNum: e.target.value,
+                                classCode: selected?.group || '',
+                              }));
+                            }}
                             disabled={!hwForm.subject || classesForHwSubject.length === 0}
                             className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
                           >
                             <option value="">{!hwForm.subject ? '과목 먼저 선택' : '반 선택'}</option>
-                            {classesForHwSubject.map(({ grade, classNum }) => (
-                              <option key={`${grade}-${classNum}`} value={String(classNum)}>
-                                {grade}학년 {classNum}반
+                            {classesForHwSubject.map(({ grade, classNum, group, label }) => (
+                              <option key={`${grade}-${classNum}-${group}`} value={`${grade}-${classNum}-${group}`}>
+                                {label}
                               </option>
                             ))}
                           </select>
@@ -2250,7 +2534,7 @@ export default function TeacherPage() {
                     </button>
                   )}
                   {hwPage === 1 ? (() => {
-                    const page1Valid = !!(hwForm.title && hwForm.subject && hwForm.classNum && hwForm.startDate && hwForm.dueDate);
+                    const page1Valid = !!(hwForm.title && hwForm.subject && hwForm.classNum && hwForm.classNum !== '' && hwForm.startDate && hwForm.dueDate);
                     return (
                       <button
                         type="button"
@@ -2272,9 +2556,9 @@ export default function TeacherPage() {
                       type="button"
                       disabled={createMutation.isPending}
                       onClick={() => {
-                        // 학년/반 파싱
+                        // classNum 값은 "grade-classNum-group" 복합키
                         const selectedClass = classesForHwSubject.find(
-                          c => String(c.classNum) === hwForm.classNum
+                          c => `${c.grade}-${c.classNum}-${c.group}` === hwForm.classNum
                         );
                         if (!selectedClass) { toast.error("반을 선택하세요."); return; }
 
@@ -2283,6 +2567,9 @@ export default function TeacherPage() {
                         else if (selectedClass.grade === 2) resolvedDataset = g2DatasetType;
                         else if (selectedClass.grade === 3) resolvedDataset = g3DatasetType;
 
+                        // 당일형과 동일한 구조:
+                        // - 이동수업(그룹 있음): classNum=실제반번호, classCode=그룹코드("A")
+                        // - 일반반: classNum=실제반번호, classCode=''
                         createMutation.mutate({
                           subject: hwForm.subject,
                           title: hwForm.title,
@@ -2295,13 +2582,13 @@ export default function TeacherPage() {
                           classTime: null,
                           dataset: resolvedDataset,
                           teacher: teacherName,
-                          classCode: extractClassCode(hwForm.subject),
+                          classCode: selectedClass.group || '',
                           isTeacherCreated: 1,
                           activityType: hwForm.activityType || '수행평가',
                           submissionLink: hwForm.link || null,
                         }, {
                           onSuccess: () => {
-                            setHwForm({ subject: '', classNum: '', startDate: '', dueDate: '', title: '', content: '', link: '', activityType: '수행평가' });
+                            setHwForm({ subject: '', classNum: '', classCode: '', startDate: '', dueDate: '', title: '', content: '', link: '', activityType: '수행평가' });
                             setHwPage(1);
                             setViewMode('daily');
                           }
@@ -2711,6 +2998,8 @@ export default function TeacherPage() {
                           const val = selectedSchedule[d]?.[p];
                           const cellData = decodeCell(val);
                           const cellDateStr = toDateString(weekDates[dayIndex]);
+                          // 서버 사이드 isChanged Set에서 O(1) 조회
+                          const isCellChanged = changedCellSet.has(`${tId}:${d}:${p}`) || changedCellSet.has(`${tId}:${cellData?.grade}:${d}:${p}`);
 
                           // Resolve group
                           let cellGroup = "";
@@ -2734,17 +3023,29 @@ export default function TeacherPage() {
                           }) : [];
                           const hasAssessment = cellAssessments.length > 0;
 
-                          // Clean cell background (no today column background tint):
+                          // 셀 배경: 변경 수업이면 settings 틴트 적용 (Dashboard와 동일 로직)
                           const baseBg = '#ffffff';
-                          const classBg = hasAssessment ? '#fff5f7' : '#ffffff';
-                          const cellBg = cellData ? classBg : baseBg;
+                          let classBg = hasAssessment ? '#fff5f7' : '#ffffff';
+                          let cellInlineStyle: React.CSSProperties | undefined;
+                          if (cellData && isCellChanged && !hasAssessment) {
+                            const tColor = settings?.changed_class_tint_color || '#fef08a';
+                            const tOpacity = settings?.changed_class_tint_opacity !== undefined
+                              ? parseFloat(settings.changed_class_tint_opacity) : 1.0;
+                            const h = tColor.replace('#', '');
+                            const r = parseInt(h.length === 3 ? h.slice(0,1).repeat(2) : h.slice(0,2), 16);
+                            const g2 = parseInt(h.length === 3 ? h.slice(1,2).repeat(2) : h.slice(2,4), 16);
+                            const b2 = parseInt(h.length === 3 ? h.slice(2,3).repeat(2) : h.slice(4,6), 16);
+                            cellInlineStyle = { backgroundColor: `rgba(${r}, ${g2}, ${b2}, ${tOpacity})` };
+                          }
+                          const cellBg = cellData ? (cellInlineStyle?.backgroundColor ?? classBg) : baseBg;
 
                           return (
                             <td
                               key={d}
                               className="group teacher-timetable-row wide:h-auto align-top relative overflow-hidden"
                               style={{
-                                background: cellBg,
+                                background: cellInlineStyle?.backgroundColor ?? cellBg,
+                                ...cellInlineStyle,
                                 borderRight: '1px solid #d0d0d0',
                                 borderBottom: '1px solid #d0d0d0',
                                 borderLeft: hasAssessment ? '2px solid #ec4899' : '1px solid #d0d0d0',
@@ -2792,27 +3093,45 @@ export default function TeacherPage() {
                                   )}
                                   {/* Class label */}
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                                    <span
-                                      className="teacher-cell-class-badge"
-                                      style={{
-                                        fontWeight: 700,
-                                        padding: '1px 3.5px',
-                                        borderRadius: 2,
-                                        background: '#217346',
-                                        color: '#ffffff',
-                                        display: 'inline-block',
-                                        lineHeight: 1.3,
-                                        width: 'fit-content',
-                                      }}
-                                    >
-                                      {(() => {
-                                        if (!cellGroup) return `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
-                                        // 이동수업: 관리페이지 강의실 이름 조회
-                                        const configName = lectureClassNameMap.get(`${cellData.grade}-${(cellData.subjectName || '').trim()}-${cellGroup}`);
-                                        // 강의실 이름이 없으면 학년-반 표시, 있으면 강의실 이름만 표시 (그룹 기호는 과목명 뒤에 별도 표시)
-                                        return configName ? configName : `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
-                                      })()}
-                                    </span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
+                                      <span
+                                        className="teacher-cell-class-badge"
+                                        style={{
+                                          fontWeight: 700,
+                                          padding: '1px 3.5px',
+                                          borderRadius: 2,
+                                          background: '#217346',
+                                          color: '#ffffff',
+                                          display: 'inline-block',
+                                          lineHeight: 1.3,
+                                          width: 'fit-content',
+                                        }}
+                                      >
+                                        {(() => {
+                                          if (!cellGroup) return `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
+                                          // 이동수업: 관리페이지 강의실 이름 조회
+                                          const configName = lectureClassNameMap.get(`${cellData.grade}-${(cellData.subjectName || '').trim()}-${cellGroup}`);
+                                          // 강의실 이름이 없으면 학년-반 표시, 있으면 강의실 이름만 표시 (그룹 기호는 과목명 뒤에 별도 표시)
+                                          return configName ? configName : `${cellData.grade}-${String(cellData.classNum).replace(/반$/, '')}`;
+                                        })()}
+                                      </span>
+                                      {isCellChanged && (
+                                        <span
+                                          style={{
+                                            fontWeight: 700,
+                                            padding: '1px 3px',
+                                            borderRadius: 2,
+                                            background: '#eab308',
+                                            color: '#713f12',
+                                            fontSize: '0.65em',
+                                            lineHeight: 1.2,
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          변경
+                                        </span>
+                                      )}
+                                    </div>
                                     <span
                                       className="teacher-cell-subject-name"
                                       style={{
@@ -2824,10 +3143,15 @@ export default function TeacherPage() {
                                         textOverflow: 'ellipsis',
                                         whiteSpace: 'nowrap',
                                         maxWidth: '100%',
+                                        display: 'flex',
+                                        alignItems: 'baseline',
+                                        gap: 0,
                                       }}
                                       title={cellData.subjectName}
                                     >
-                                      {cellGroup && renderGroupCode(cellGroup)}{cellData.subjectName}
+                                      {/* 그룹코드는 shrink 없이 고정, 과목명만 truncate */}
+                                      {cellGroup && <span style={{ flexShrink: 0 }}>{renderGroupCode(cellGroup)}</span>}
+                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{cellData.subjectName}</span>
                                     </span>
                                   </div>
 
@@ -2958,14 +3282,15 @@ export default function TeacherPage() {
                 )}
               </div>
 
-              {/* 학생공지 (모바일 - 인증 시) */}
+              {/* 학생공지 — 좁은화면/넓은화면 공통, ml-auto로 우측 정렬 */}
               {isCurrentTeacherVerified && (
-                <button type="button" onClick={() => {}} style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className="wide:hidden ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs wide:text-sm shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
+                <button type="button" onClick={() => setShowNoticeDialog(true)} style={{ WebkitTapHighlightColor: 'transparent' }}
+                  className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
                   title="학생공지">
                   <Bell className="w-3.5 h-3.5" /><span>학생공지</span>
                 </button>
               )}
+
 
               {/* 미인증 시 우측 묶음: [보기 전용] [로그인] */}
               {!isCurrentTeacherVerified && (
@@ -3152,10 +3477,11 @@ export default function TeacherPage() {
                         ? (() => {
                             const configName = lectureClassNameMap.get(`${tab.grade}-${(effectiveSubjectFilter || '').trim()}-${tab.group}`);
                             return (
-                              <>
-                                {renderGroupCode(tab.group, configName ? 3 : 0)}
-                                {configName && <span>{configName}</span>}
-                              </>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, whiteSpace: 'nowrap' }}>
+                                {renderGroupCode(tab.group, configName ? 3 : 2)}
+                                {/* configName 없으면 학년-반 번호 표시 (탭이 빈 것처럼 보이지 않도록) */}
+                                <span>{configName || `${tab.grade}-${tab.classNum}`}</span>
+                              </span>
                             );
                           })()
                         : String(tab.label).replace(/반$/, '')}
@@ -3275,12 +3601,20 @@ export default function TeacherPage() {
                                 기간형
                               </span>
                             )}
-                            {/* 과목명 */}
-                            <span style={{ fontWeight: 700, color: '#1a1a1a', lineHeight: 1.25, fontSize: `${Math.max(11, 14 - Math.max(0, (a.subject || '').length - 4) * 0.4)}px` }}>
-                              {panelCodes.map((code: string, i: number) =>
-                                renderGroupCode(code, i < panelCodes.length - 1 ? 2 : 3)
+                            {/* 과목명 (그룹코드 + 과목명을 하나의 nowrap 블록으로 묶어 좁은 화면 줄바꿈 방지) */}
+                            <span style={{
+                              fontWeight: 700, color: '#1a1a1a', lineHeight: 1.25,
+                              fontSize: `${Math.max(11, 14 - Math.max(0, (a.subject || '').length - 4) * 0.4)}px`,
+                              display: 'inline-flex', alignItems: 'baseline', gap: 0, whiteSpace: 'nowrap',
+                            }}>
+                              {panelCodes.length > 0 && (
+                                <span style={{ flexShrink: 0 }}>
+                                  {panelCodes.map((code: string, i: number) =>
+                                    renderGroupCode(code, i < panelCodes.length - 1 ? 2 : 2)
+                                  )}
+                                </span>
                               )}
-                              {a.subject}
+                              <span>{a.subject}</span>
                             </span>
                             {a.classTime && !isPeriod && (
                               <span className="text-[10px] text-slate-400 font-medium">{a.classTime}교시</span>
@@ -3686,10 +4020,19 @@ export default function TeacherPage() {
                     key={opt.idx}
                     type="button"
                     onClick={() => {
-                      setSelectedTeacherId(opt.idx.toString());
+                      const newId = opt.idx.toString();
+                      setSelectedTeacherId(newId);
+                      const authTeacher = getAuthenticatedTeacher();
+                      // 로그인 된 교사가 없을 때만 '가장 최근 선택했던 교사'로 쿠키/스토리지 갱신
+                      if (!authTeacher) {
+                        setTeacherNameCookie(opt.rawName);
+                        localStorage.setItem("last_selected_teacher_name", opt.rawName);
+                        localStorage.setItem("teacher-page-selected-teacher", newId);
+                        refreshRole();
+                      }
                       setShowTeacherSelectModal(false);
                       setTeacherSearchQuery("");
-                      toast.success(`${opt.displayName} 선생님이 선택되었습니다.`);
+                      toast.success(`${opt.displayName} 선생님 시간표로 이동했습니다.`);
                     }}
                     className={cn(
                       "w-full text-left px-3.5 py-3 rounded-xl flex items-center justify-between transition-all duration-150 gap-2 border",

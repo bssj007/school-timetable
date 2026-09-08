@@ -7,7 +7,6 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { clearRoleCookie } from "@/components/RoleSelectDialog";
 
 // Helper: Download PC Desktop .url Shortcut
 function downloadDesktopShortcut(title: string = "성지수행_시간표_수행평가") {
@@ -27,7 +26,7 @@ function downloadDesktopShortcut(title: string = "성지수행_시간표_수행�
 
 export default function Navigation() {
   const [location] = useLocation();
-  const { grade, classNum, studentNumber, studentName, refreshRole } = useUserConfig();
+  const { grade, classNum, studentNumber, studentName, refreshRole, switchToRole } = useUserConfig();
   const [showBugReportDialog, setShowBugReportDialog] = useState(false);
   const [bugReportMessage, setBugReportMessage] = useState('');
   const [isBugReportSending, setIsBugReportSending] = useState(false);
@@ -36,16 +35,12 @@ export default function Navigation() {
 
   const handleReturnToStudent = (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
-    clearRoleCookie();
-    refreshRole();
-    toast.success("학생용 페이지로 이동합니다.");
-    window.location.href = "/";
+    switchToRole("student");
   };
 
   const handleGoToTeacher = (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
-    clearRoleCookie();
-    refreshRole();
+    switchToRole("teacher");
   };
 
   // ── 알림 프레임워크 ──────────────────────────────────────────────────

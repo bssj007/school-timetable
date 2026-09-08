@@ -116,6 +116,226 @@ async function getSchoolCode(prefix: string) {
     }
 }
 
+function isDateInRange(targetDateStr: string, rangeStr: any): boolean {
+    if (typeof rangeStr !== 'string') return false;
+    const targetShort = targetDateStr.length > 8 ? targetDateStr.substring(2) : targetDateStr;
+    const parts = rangeStr.split('~').map(s => s.trim());
+    if (parts.length < 2) return rangeStr.startsWith(targetShort);
+    const startDate = new Date(`20${parts[0]}`);
+    const endDate = new Date(`20${parts[1]}`);
+    const target = new Date(`20${targetShort}`);
+    endDate.setHours(23, 59, 59, 999);
+    return target >= startDate && target <= endDate;
+}
+
+// 컴시간 주차별(r=1, r=2, ...) 원본 데이터 직접 조회 헬퍼
+async function fetchComciganRawData(r: number = 1): Promise<string> {
+    const prefix = await getPrefix();
+    const { code1, code2 } = await getSchoolCode(prefix);
+    const param = `${prefix}${code2}_0_${r}`;
+    const b64 = btoa(param);
+    const targetUrl = `${BASE_URL}/${code1}?${b64}`;
+    const jsonText = await fetchWithProxy(targetUrl, HEADERS, false);
+    return jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
+}
+
+interface ResolvedWeeklyData {
+    rawData: any;
+    rawJson: string;
+    isOutOfRange: boolean;
+    isPastOutOfRange: boolean;
+    isFutureOutOfRange: boolean;
+    isArchivedData: boolean;
+    matchedArchiveRange: string | null;
+}
+
+// 주차별/날짜별 raw_data 해석 통합 헬퍼 (teacher_timetable 및 getTimetable 공통 사용)
+async function resolveWeeklyRawData(
+    db: any,
+    targetDate: string | null | undefined,
+    cachedRawDataString?: string,
+    allowLiveFetch: boolean = false
+): Promise<ResolvedWeeklyData> {
+    const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+    const dayOfWeek = koreanTime.getUTCDay();
+    if (!targetDate && (dayOfWeek === 6 || dayOfWeek === 0)) {
+        const daysToAdd = dayOfWeek === 6 ? 2 : 1;
+        koreanTime.setUTCDate(koreanTime.getUTCDate() + daysToAdd);
+    }
+    const todayShort = koreanTime.toISOString().split('T')[0].substring(2);
+    const targetShort = targetDate ? (targetDate.length > 8 ? targetDate.substring(2) : targetDate) : todayShort;
+    const targetDateObj = new Date(`20${targetShort}`);
+
+    // 1. 기본 캐시(raw_data) 로드
+    let primaryJson = cachedRawDataString;
+    if (!primaryJson && db) {
+        try {
+            const row = await db.prepare("SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'").first();
+            if (row?.response_json) primaryJson = row.response_json as string;
+        } catch (_) {}
+    }
+    if (!primaryJson && allowLiveFetch) {
+        try {
+            primaryJson = await fetchComciganRawData(1);
+            if (db) {
+                try {
+                    await db.prepare("INSERT OR REPLACE INTO timetable_cache (cache_key, response_json, updated_at) VALUES ('raw_data', ?, datetime('now'))").bind(primaryJson).run();
+                } catch (_) {}
+            }
+        } catch (e) {
+            console.error('[resolveWeeklyRawData] Live fetch failed:', e);
+        }
+    }
+
+    if (!primaryJson) {
+        return {
+            rawData: null,
+            rawJson: '',
+            isOutOfRange: true,
+            isPastOutOfRange: false,
+            isFutureOutOfRange: false,
+            isArchivedData: false,
+            matchedArchiveRange: null
+        };
+    }
+
+    const primaryRaw = JSON.parse(primaryJson);
+
+    // 2. 전체 날짜 경계 계산
+    const dateArr = primaryRaw['일자'];
+    const dateArrNew = primaryRaw['일자자료'];
+    let firstRange: string | null = null;
+    let lastRange: string | null = null;
+
+    if (dateArr && Array.isArray(dateArr) && dateArr.length > 0) {
+        firstRange = dateArr.find((r: any) => typeof r === 'string' && r.includes('~')) ?? null;
+        lastRange  = [...dateArr].reverse().find((r: any) => typeof r === 'string' && r.includes('~')) ?? null;
+    } else if (dateArrNew && Array.isArray(dateArrNew) && dateArrNew.length > 0) {
+        const firstItem = dateArrNew[0];
+        const lastItem = dateArrNew[dateArrNew.length - 1];
+        firstRange = Array.isArray(firstItem) ? firstItem[1] : firstItem;
+        lastRange = Array.isArray(lastItem) ? lastItem[1] : lastItem;
+    }
+
+    let isFutureOutOfRange = false;
+    let isPastOutOfRange = false;
+    if (lastRange && typeof lastRange === 'string') {
+        const parts = lastRange.split('~').map(s => s.trim());
+        if (parts.length >= 2) {
+            const endDate = new Date(`20${parts[1]}`);
+            endDate.setHours(23, 59, 59, 999);
+            if (targetDateObj > endDate) isFutureOutOfRange = true;
+        }
+    }
+    if (!isFutureOutOfRange && firstRange && typeof firstRange === 'string') {
+        const parts = firstRange.split('~').map(s => s.trim());
+        if (parts.length >= 1) {
+            const startDate = new Date(`20${parts[0]}`);
+            startDate.setHours(0, 0, 0, 0);
+            if (targetDateObj < startDate) isPastOutOfRange = true;
+        }
+    }
+
+    // 3. timetable_archive 조회 (과거 주 및 저장된 주차 우선 매칭)
+    if (db) {
+        try {
+            await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_archive (
+                date_range TEXT PRIMARY KEY,
+                response_json TEXT NOT NULL,
+                saved_at TEXT DEFAULT (datetime('now'))
+            )`).run();
+
+            const archiveRows = await db.prepare("SELECT date_range, response_json FROM timetable_archive").all();
+            for (const row of (archiveRows.results || [])) {
+                const rangeStr = row.date_range as string;
+                if (isDateInRange(targetShort, rangeStr)) {
+                    try {
+                        const parsed = JSON.parse(row.response_json as string);
+                        const sDate = parsed['시작일'] ? parsed['시작일'].substring(2) : '';
+                        // 아카이브 시작일이 해당 날짜 구간과 일치하는 정상 데이터인지 검증
+                        if (sDate && isDateInRange(sDate, rangeStr)) {
+                            const isPast = isPastOutOfRange || (firstRange && targetDateObj < new Date(`20${firstRange.split('~')[0].trim()}`));
+                            return {
+                                rawData: parsed,
+                                rawJson: row.response_json as string,
+                                isOutOfRange: false,
+                                isPastOutOfRange: false,
+                                isFutureOutOfRange: false,
+                                isArchivedData: !!isPast,
+                                matchedArchiveRange: rangeStr
+                            };
+                        }
+                    } catch (_) {}
+                }
+            }
+        } catch (e) {
+            console.warn('[resolveWeeklyRawData] Error querying timetable_archive:', e);
+        }
+    }
+
+    // 4. 아카이브에 없거나 구형 데이터인 경우, 컴시간 일자자료에서 매칭되는 주차(r) 탐색
+    if (dateArrNew && Array.isArray(dateArrNew)) {
+        for (const item of dateArrNew) {
+            if (Array.isArray(item) && item.length >= 2 && typeof item[0] === 'number') {
+                const [rNum, rangeStr] = item;
+                if (isDateInRange(targetShort, rangeStr)) {
+                    if (rNum === 1) {
+                        // 현재 주차 r=1: primaryRaw가 바로 현재 주차
+                        if (db) {
+                            try {
+                                await db.prepare("INSERT OR REPLACE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))").bind(rangeStr, primaryJson).run();
+                            } catch (_) {}
+                        }
+                        return {
+                            rawData: primaryRaw,
+                            rawJson: primaryJson,
+                            isOutOfRange: false,
+                            isPastOutOfRange: false,
+                            isFutureOutOfRange: false,
+                            isArchivedData: false,
+                            matchedArchiveRange: rangeStr
+                        };
+                    } else {
+                        // 다음 주차 등 미래 유효 주차 (r=2 등): 컴시간에 해당 주차 데이터 직접 요청
+                        try {
+                            const rJson = await fetchComciganRawData(rNum);
+                            const rRaw = JSON.parse(rJson);
+                            if (db) {
+                                try {
+                                    await db.prepare("INSERT OR REPLACE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))").bind(rangeStr, rJson).run();
+                                } catch (_) {}
+                            }
+                            return {
+                                rawData: rRaw,
+                                rawJson: rJson,
+                                isOutOfRange: false,
+                                isPastOutOfRange: false,
+                                isFutureOutOfRange: false,
+                                isArchivedData: false,
+                                matchedArchiveRange: rangeStr
+                            };
+                        } catch (fetchErr) {
+                            console.warn(`[resolveWeeklyRawData] Failed to fetch r=${rNum} for ${rangeStr}:`, fetchErr);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. 아카이브와 컴시간 제공 범위 밖의 날짜 (미래 초과 또는 미보관 과거)
+    const isOutOfRange = isFutureOutOfRange || isPastOutOfRange;
+    return {
+        rawData: primaryRaw,
+        rawJson: primaryJson,
+        isOutOfRange,
+        isPastOutOfRange,
+        isFutureOutOfRange,
+        isArchivedData: false,
+        matchedArchiveRange: null
+    };
+}
+
 export const onRequest = async (context: any) => {
     const url = new URL(context.request.url);
     const type = url.searchParams.get('type');
@@ -129,19 +349,11 @@ export const onRequest = async (context: any) => {
 
         // GET method: Return teacher timetable specifically
         if (type === 'teacher_timetable') {
-            let rawData;
-            
-            // Strictly fetch from the global raw_data cache instead of polling the live server
-            if (context.env && context.env.DB) {
-                try {
-                    const rawDataRow = await context.env.DB.prepare("SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'").first();
-                    if (rawDataRow && rawDataRow.response_json) {
-                        rawData = JSON.parse(rawDataRow.response_json as string);
-                    }
-                } catch (e: any) {
-                    console.error("[Teacher Timetable] DB read error:", e);
-                }
-            }
+            const targetDate = url.searchParams.get('targetDate');
+            const resolved = await resolveWeeklyRawData(context.env?.DB, targetDate, undefined, true);
+            const rawData = resolved.rawData;
+            const isOutOfRange = resolved.isOutOfRange;
+            const isArchivedData = resolved.isArchivedData;
 
             if (!rawData) {
                 return new Response(JSON.stringify({ 
@@ -150,31 +362,16 @@ export const onRequest = async (context: any) => {
                 }), { status: 503, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
             }
 
-            // Sanitize rawData to clean string codes starting with '>' (indicating changed/subbed classes in Comcigan)
-            const sanitizeTimetable = (obj: any) => {
-                if (!obj || typeof obj !== 'object') return;
-                for (const key of Object.keys(obj)) {
-                    const val = obj[key];
-                    if (typeof val === 'string' && val.startsWith('>')) {
-                        obj[key] = parseInt(val.replace(/>/g, ''), 10) || 0;
-                    } else if (typeof val === 'object') {
-                        sanitizeTimetable(val);
-                    }
-                }
-            };
-
             // ── 교사/과목/시간표 키를 동적으로 탐지 ──────────────────────────────────────────
-            // 컴시간은 매 학기/갱신마다 자료번호가 바뀜(예: 자료446→자료512).
-            // 따라서 특정 번호를 하드코딩하지 않고, 각 배열의 구조적 특징으로 탐지함.
             const rawKeys = Object.keys(rawData);
 
-            // 교사 배열: 원소 중 '*'로 끝나는 문자열 포함 → 담임 교사 표시 컨벤션
+            // 교사 배열
             const detectedTeacherProp = rawKeys.find(k =>
                 Array.isArray(rawData[k]) && rawData[k].some((s: any) => typeof s === 'string' && s.endsWith('*'))
             ) ?? null;
 
-            // 과목 배열: 교과목 키워드 2개 이상 포함
-            const subjectKeywords = ["국어", "수학", "영어", "한국사", "체육", "음악", "미술", "진로", "문학", "정보", "화학", "생물", "물리", "지리", "역사", "경제", "정치", "사회", "과학"];
+            // 과목 배열
+            const subjectKeywords = ["국어", "수학", "영어", "한국사", "체육", "음악", "미술", "진로", "문학", "정보", "화학", "생물", "물리", "지리", "역사", "경제", "정치", "사회", "과학", "통합사회", "통합과학"];
             const detectedSubjectProp = rawKeys.find(k => {
                 if (k === detectedTeacherProp) return false;
                 const val = rawData[k];
@@ -188,30 +385,170 @@ export const onRequest = async (context: any) => {
                 return false;
             }) ?? null;
 
-            // 시간표 배열: val[grade][class][weekday]가 Array 구조인 키 탐지
-            // 번호가 가장 큰 것 = baseline(통합) 데이터셋으로 간주
-            // key.replace('자료','')는 특정 번호 하드코딩이 아닌 컴시간 네이밍 컨벤션 패턴
-            const detectedTimetableProps = rawKeys.filter(k => {
+            // 4D 학급 시간표 배열: val[grade][class][weekday][period] (Array 4차원만 정확히 필터)
+            const timetableProps = rawKeys.filter(k => {
                 const val = rawData[k];
-                return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]);
+                return Array.isArray(val) && val[1] && val[1][1] && Array.isArray(val[1][1]) && val[1][1][1] && Array.isArray(val[1][1][1]);
             });
-            const detectedBaseline = detectedTimetableProps.length > 0
-                ? detectedTimetableProps.reduce((max, key) => {
-                    const num = parseInt(key.replace('자료', '')) || 0;
-                    return num > max.num ? { key, num } : max;
-                }, { key: detectedTimetableProps[0], num: -1 }).key
-                : null;
 
-            if (!detectedTeacherProp || !detectedSubjectProp || !detectedBaseline) {
-                console.warn('[Teacher Timetable] Detection failed:', { detectedTeacherProp, detectedSubjectProp, detectedBaseline });
+            // 기준 표준 데이터셋(targetBaseId) 탐색: 번호가 가장 큰 4D 배열 (자료481)
+            let baselineDatasetId = "";
+            if (timetableProps.length > 0) {
+                const maxKeyItem = timetableProps.reduce((max, key) => {
+                    const num = parseInt(key.replace('자료', ''), 10) || 0;
+                    return num > max.num ? { key, num } : max;
+                }, { key: timetableProps[0], num: -1 });
+                baselineDatasetId = maxKeyItem.key;
+            }
+            const targetBaseId = baselineDatasetId || timetableProps[0] || "";
+
+            // 해당 주차의 실제 시간표 데이터셋(timedataProp):
+            // targetBaseId가 아니면서 실제 수업 데이터가 존재하는 4D 배열 (자료147)
+            let timedataProp = targetBaseId;
+            if (!isOutOfRange) {
+                const activeProp = timetableProps.find(k => {
+                    if (k === targetBaseId) return false;
+                    const d = rawData[k];
+                    if (!d) return false;
+                    for (let g = 1; g <= 3; g++) {
+                        if (!d[g]) continue;
+                        for (const cls of Object.keys(d[g])) {
+                            if (parseInt(cls, 10) <= 0) continue;
+                            for (let w = 1; w <= 5; w++) {
+                                const arr = d[g][cls]?.[w];
+                                if (Array.isArray(arr) && arr.some((v: any) => v !== 0)) return true;
+                            }
+                        }
+                    }
+                    return false;
+                });
+                if (activeProp) timedataProp = activeProp;
+            }
+
+            // 교사 및 과목 목록
+            const teachers = detectedTeacherProp ? (rawData[detectedTeacherProp] || []) : [];
+            const subjects = detectedSubjectProp ? (rawData[detectedSubjectProp] || []) : [];
+            const bunri = rawData['분리'] !== undefined ? rawData['분리'] : 100;
+
+            // 4D 학급 시간표로부터 교사 3D 시간표 재구성 헬퍼
+            const buildTeacherTimetable = (classData: any, numTeachers: number) => {
+                const grid: any[] = [];
+                for (let t = 0; t <= numTeachers; t++) {
+                    grid.push([5, [0], [0], [0], [0], [0]]);
+                }
+                const changedFromPrefix = new Set<string>();
+                let hasAnyData = false;
+                if (!classData) return { grid, changedFromPrefix, hasAnyData };
+
+                for (let g = 1; g <= 3; g++) {
+                    const gData = classData[g];
+                    if (!gData) continue;
+                    for (const cls of Object.keys(gData)) {
+                        const cNum = parseInt(cls, 10);
+                        if (!cNum || cNum <= 0) continue;
+                        for (let w = 1; w <= 5; w++) {
+                            const dayArr = gData[cNum][w];
+                            if (!Array.isArray(dayArr)) continue;
+                            for (let p = 1; p < dayArr.length; p++) {
+                                const v = dayArr[p];
+                                if (!v) continue;
+                                const isPrefixed = typeof v === 'string' && v.startsWith('>');
+                                const code = typeof v === 'string' ? parseInt(v.replace(/>/g, ''), 10) : (v || 0);
+                                if (!code) continue;
+                                hasAnyData = true;
+
+                                let tIdx = 0, sIdx = 0;
+                                if (bunri === 100) {
+                                    tIdx = Math.floor(code / bunri);
+                                    sIdx = code % bunri;
+                                } else {
+                                    tIdx = code % bunri;
+                                    sIdx = Math.floor(code / bunri);
+                                }
+
+                                if (tIdx > 0 && tIdx <= numTeachers) {
+                                    while (grid[tIdx][w].length <= p) grid[tIdx][w].push(0);
+                                    grid[tIdx][w][0] = Math.max(grid[tIdx][w][0] || 0, p);
+                                    const teacherCode = sIdx * 1000 + g * 100 + cNum;
+                                    grid[tIdx][w][p] = teacherCode;
+                                    if (isPrefixed) {
+                                        changedFromPrefix.add(`${tIdx}:${w}:${p}`);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                return { grid, changedFromPrefix, hasAnyData };
+            };
+
+            const baseRecon = buildTeacherTimetable(rawData[targetBaseId], teachers.length);
+            const targetRecon = buildTeacherTimetable(rawData[timedataProp], teachers.length);
+
+            // 해당 주차 3D 교사 시간표 (자료542 등)의 '>' 접두사 마커도 함께 통합
+            const teacherScheduleProp = rawKeys.find(k => {
+                if (k === detectedTeacherProp || k === detectedSubjectProp || timetableProps.includes(k)) return false;
+                const v = rawData[k];
+                return Array.isArray(v) && v.length >= teachers.length - 2 && v.length <= teachers.length + 2 && v[1] && Array.isArray(v[1]);
+            });
+            if (teacherScheduleProp && rawData[teacherScheduleProp]) {
+                const dTeacher = rawData[teacherScheduleProp];
+                for (let t = 1; t <= Math.min(teachers.length, dTeacher.length - 1); t++) {
+                    const teacherArr = dTeacher[t];
+                    if (!Array.isArray(teacherArr)) continue;
+                    for (let w = 1; w <= 5; w++) {
+                        const dayArr = teacherArr[w];
+                        if (!Array.isArray(dayArr)) continue;
+                        for (let p = 1; p < dayArr.length; p++) {
+                            const v = dayArr[p];
+                            if (typeof v === 'string' && v.startsWith('>')) {
+                                targetRecon.changedFromPrefix.add(`${t}:${w}:${p}`);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 해당 주차 데이터셋이 비어있거나 outOfRange이면 표준 기준 시간표로 폴백
+            const effectiveTargetGrid = (!isOutOfRange && targetRecon.hasAnyData) ? targetRecon.grid : baseRecon.grid;
+            const changedCellSet = new Set<string>();
+
+            // 대상 주차와 기준 시간표 비교하여 변경 셀 계산
+            if (!isOutOfRange && targetRecon.hasAnyData && timedataProp !== targetBaseId) {
+                // 1. 컴시간 자체 '>' 접두사 마커 반영
+                for (const k of targetRecon.changedFromPrefix) {
+                    changedCellSet.add(k);
+                }
+                // 2. 기준 시간표와 코드 비교 (대강, 교환, 취소, 이동 자동 감지)
+                const maxT = Math.max(baseRecon.grid.length, targetRecon.grid.length);
+                for (let t = 1; t < maxT; t++) {
+                    for (let w = 1; w <= 5; w++) {
+                        const liveDay = targetRecon.grid[t]?.[w] || [];
+                        const baseDay = baseRecon.grid[t]?.[w] || [];
+                        const maxP = Math.max(liveDay.length, baseDay.length);
+                        for (let p = 1; p < maxP; p++) {
+                            const liveCode = liveDay[p] || 0;
+                            const baseCode = baseDay[p] || 0;
+                            if (liveCode !== baseCode) {
+                                changedCellSet.add(`${t}:${w}:${p}`);
+                            }
+                        }
+                    }
+                }
             }
 
             return new Response(JSON.stringify({
-                success: !!(detectedTeacherProp && detectedSubjectProp && detectedBaseline),
-                teachers: detectedTeacherProp ? (rawData[detectedTeacherProp] || []) : [],
-                subjects:  detectedSubjectProp ? (rawData[detectedSubjectProp] || []) : [],
-                timetable: detectedBaseline    ? (rawData[detectedBaseline] || [])    : [],
-                _detectedKeys: { teacher: detectedTeacherProp, subject: detectedSubjectProp, timetable: detectedBaseline }
+                success: !!(detectedTeacherProp && detectedSubjectProp && targetBaseId),
+                teachers,
+                subjects,
+                timetable: effectiveTargetGrid,
+                baseTimetable: baseRecon.grid,
+                changedCells: Array.from(changedCellSet),
+                datasetId: timedataProp,
+                targetBaseId,
+                isOutOfRange,
+                isArchivedData,
+                _detectedKeys: { teacher: detectedTeacherProp, subject: detectedSubjectProp, timetable: timedataProp, base: targetBaseId }
             }), {
                 status: 200,
                 headers: {
@@ -261,8 +598,8 @@ export const onRequest = async (context: any) => {
                 } catch (e) { }
             }
 
-            // getTimetable with allowLiveFetch = false to strictly enforce Cache
-            const response = await getTimetable(grade, classNum, db, datasetOverride, clientIp, targetDate, cachedRawDataString, false);
+            // getTimetable with allowLiveFetch = true to resolve targetDate week
+            const response = await getTimetable(grade, classNum, db, datasetOverride, clientIp, targetDate, cachedRawDataString, true);
             
             if (response.status === 503 && db) {
                 // Completely empty cache + live fetching disabled
@@ -311,147 +648,57 @@ export const onRequest = async (context: any) => {
     }
 }
 
-async function getTimetable(grade: number, classNumInput: number | 'all', db?: any, datasetOverride?: string | null, clientIp: string = 'unknown', targetDate?: string | null, cachedRawDataString?: string, allowLiveFetch: boolean = false) {
+async function getTimetable(grade: number, classNumInput: number | 'all', db?: any, datasetOverride?: string | null, clientIp: string = 'unknown', targetDate?: string | null, cachedRawDataString?: string, allowLiveFetch: boolean = true) {
     let ipOverrideApplied: string | false = false;
-    let jsonString = cachedRawDataString;
 
-    // --- DATE BOUNDARY CHECK (PAST & FUTURE) ---
-    // 캐시된 raw_data의 날짜 범위와 targetDate를 비교해 경계 여부를 판단:
-    //   - isFutureOutOfRange: targetDate가 마지막 범위 종료일보다 미래
-    //     → 컴시간에 아직 미래 시간표가 없음. 아카이브에도 없으므로 조회 불필요
-    //   - isPastOutOfRange:   targetDate가 첫 번째 범위 시작일보다 과거
-    //     → timetable_archive에서 해당 날짜 구간 스냅샷 조회 가능
-    let isFutureOutOfRange = false;
-    let isPastOutOfRange = false;
-    if (jsonString && targetDate) {
-        try {
-            const tempRaw = JSON.parse(jsonString);
-            const dateArr = tempRaw['일자'];
-            const dateArrNew = tempRaw['일자자료'];
-
-            let firstRange: string | null = null;
-            let lastRange: string | null = null;
-
-            if (dateArr && Array.isArray(dateArr) && dateArr.length > 0) {
-                // 일자[0]은 항상 "" (빈 문자열) → 건너뛰고 실제 범위만 사용
-                firstRange = dateArr.find((r: any) => typeof r === 'string' && r.includes('~')) ?? null;
-                lastRange  = [...dateArr].reverse().find((r: any) => typeof r === 'string' && r.includes('~')) ?? null;
-            } else if (dateArrNew && Array.isArray(dateArrNew) && dateArrNew.length > 0) {
-                const firstItem = dateArrNew[0];
-                const lastItem = dateArrNew[dateArrNew.length - 1];
-                firstRange = Array.isArray(firstItem) ? firstItem[1] : firstItem;
-                lastRange = Array.isArray(lastItem) ? lastItem[1] : lastItem;
-            }
-
-            const targetShort = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
-            const targetDateObj = new Date(`20${targetShort}`);
-
-            // 미래 초과: targetDate가 마지막 범위의 종료일보다 이후
-            if (lastRange && typeof lastRange === 'string') {
-                const parts = lastRange.split('~').map(s => s.trim());
-                if (parts.length >= 2) {
-                    const endDate = new Date(`20${parts[1]}`);
-                    endDate.setHours(23, 59, 59, 999);
-                    if (targetDateObj > endDate) {
-                        console.log(`[Comcigan Debug] targetDate ${targetShort} exceeds cached max date ${parts[1]}. isFutureOutOfRange=true`);
-                        isFutureOutOfRange = true;
-                    }
-                }
-            }
-
-            // 과거 초과: targetDate가 첫 번째 범위의 시작일보다 이전
-            if (!isFutureOutOfRange && firstRange && typeof firstRange === 'string') {
-                const parts = firstRange.split('~').map(s => s.trim());
-                if (parts.length >= 1) {
-                    const startDate = new Date(`20${parts[0]}`);
-                    startDate.setHours(0, 0, 0, 0);
-                    if (targetDateObj < startDate) {
-                        console.log(`[Comcigan Debug] targetDate ${targetShort} is before cached min date ${parts[0]}. isPastOutOfRange=true`);
-                        isPastOutOfRange = true;
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn('[Comcigan Debug] Failed to evaluate raw_data date boundary', e);
-        }
-    }
-    // 프론트엔드/하위 로직에서 사용하는 통합 isOutOfRange
-    let isOutOfRange = isFutureOutOfRange || isPastOutOfRange;
-
-    // --- PAST OUT-OF-RANGE: timetable_archive 조회 ---
-    // 과거 날짜만 아카이브에 저장되어 있으므로, isPastOutOfRange인 경우에만 조회
-    // 미래 날짜(isFutureOutOfRange)는 아카이브에 데이터가 없으므로 조회 생략
-    let isArchivedData = false;
-    let matchedArchiveDateRange: string | null = null;
-    if (isPastOutOfRange && targetDate && db) {
-        const targetShortForArchive = targetDate.length > 8 ? targetDate.substring(2) : targetDate;
-        const targetDateObjForArchive = new Date(`20${targetShortForArchive}`);
-        try {
-            await db.prepare(`
-                CREATE TABLE IF NOT EXISTS timetable_archive (
-                    date_range TEXT PRIMARY KEY,
-                    response_json TEXT NOT NULL,
-                    saved_at TEXT DEFAULT (datetime('now'))
-                )
-            `).run();
-
-            const archiveRows = await db.prepare("SELECT date_range, response_json FROM timetable_archive").all();
-            let matchedArchive: string | null = null;
-            for (const row of (archiveRows.results || [])) {
-                const rangeStr = row.date_range as string;
-                const parts = rangeStr.split('~').map((s: string) => s.trim());
-                if (parts.length < 2) continue;
-                const start = new Date(`20${parts[0]}`);
-                const end = new Date(`20${parts[1]}`);
-                end.setHours(23, 59, 59, 999);
-                if (targetDateObjForArchive >= start && targetDateObjForArchive <= end) {
-                    matchedArchive = row.response_json as string;
-                    matchedArchiveDateRange = rangeStr; // ← 매칭된 구간 기록
-                    break;
-                }
-            }
-
-            if (matchedArchive) {
-                console.log(`[Archive] Found archived timetable for ${targetShortForArchive}. Serving from archive.`);
-                // 아카이브 JSON으로 jsonString 대체 → 이후 데이터셋 선택/파싱 로직이 이 데이터로 실행됨
-                jsonString = matchedArchive;
-                isOutOfRange = false;  // 아카이브로 해결됨 → 미확정 표시 안 함
-                isArchivedData = true;
-            } else {
-                console.log(`[Archive] No archive found for ${targetShortForArchive}. isOutOfRange remains true.`);
-            }
-        } catch (e) {
-            console.warn('[Archive] Failed to query timetable_archive:', e);
-        }
-    }
-
-    if (!jsonString) {
+    // 1. 주차별/날짜별 raw_data 해석 (선생님 페이지와 동일한 통합 함수 활용)
+    const resolved = await resolveWeeklyRawData(db, targetDate, cachedRawDataString, allowLiveFetch);
+    if (!resolved.rawData) {
         if (!allowLiveFetch) {
             console.warn(`[getTimetable] Cache MISS & live fetch disabled for targetDate=${targetDate}. Returning 503.`);
             return new Response(JSON.stringify({ 
                 success: false, 
-                error: "Cache miss and live Comcigan fetch is strictly disabled for user requests.", 
+                error: "Cache miss and live Comcigan fetch is disabled for user requests.", 
                 data: [] 
             }), { status: 503, headers: { 'Content-Type': 'application/json' } });
         }
-
-        const prefix = await getPrefix();
-        const { code1, code2 } = await getSchoolCode(prefix);
-
-        // Always fetch grade 1's parameter to avoid Comcigan server corruption where fetching grade 2 breaks the Thursday data
-        const param = `${prefix}${code2}_0_1`;
-        const b64 = btoa(param);
-        const targetUrl = `${BASE_URL}/${code1}?${b64}`;
-
-        const jsonText = await fetchWithProxy(targetUrl, HEADERS, false);
-        jsonString = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf("}") + 1);
+        throw new Error("Failed to load Comcigan timetable data");
     }
-    
-    // raw_data caching moved to the end of the function to ensure data integrity
-    
-    const rawData = JSON.parse(jsonString);
 
-    // Sanitize rawData to clean string codes starting with '>' (indicating changed/subbed classes in Comcigan)
+    const rawData = resolved.rawData;
+    const jsonString = resolved.rawJson;
+    let isOutOfRange = resolved.isOutOfRange;
+    let isPastOutOfRange = resolved.isPastOutOfRange;
+    let isFutureOutOfRange = resolved.isFutureOutOfRange;
+    let isArchivedData = resolved.isArchivedData;
+    let matchedArchiveDateRange = resolved.matchedArchiveRange;
+
+    // 2. '>' 접두사 사전 수집 (컴시간의 대강/시간표 변경 마커 보존)
+    const prefixedCells = new Set<string>();
+    for (const key of Object.keys(rawData)) {
+        if (key.startsWith('자료') && rawData[key]) {
+            const val = rawData[key];
+            if (Array.isArray(val) && val[grade] && typeof val[grade] === 'object') {
+                for (const cls of Object.keys(val[grade])) {
+                    const cNum = parseInt(cls);
+                    if (isNaN(cNum) || cNum <= 0) continue;
+                    const cData = val[grade][cNum];
+                    if (!cData || !Array.isArray(cData)) continue;
+                    for (let w = 1; w <= 5; w++) {
+                        const wData = cData[w];
+                        if (!wData || !Array.isArray(wData)) continue;
+                        for (let p = 1; p < wData.length; p++) {
+                            if (typeof wData[p] === 'string' && wData[p].startsWith('>')) {
+                                prefixedCells.add(`${grade}:${cNum}:${w}:${p}`);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. rawData sanitize
     const sanitizeTimetable = (obj: any) => {
         if (!obj || typeof obj !== 'object') return;
         for (const key of Object.keys(obj)) {
@@ -463,26 +710,26 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             }
         }
     };
-    
     for (const key of Object.keys(rawData)) {
         if (key.startsWith('자료') && rawData[key]) {
             sanitizeTimetable(rawData[key]);
         }
     }
 
+    // 4. 교사, 과목, 4D 학급 시간표 프로퍼티 탐색
     const keys = Object.keys(rawData);
     const teacherProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].some((s: any) => typeof s === 'string' && s.endsWith('*'))) || "";
 
     const keywords = ["국어", "수학", "영어", "한국사", "통합사회", "통합과학", "체육", "음악", "미술", "진로", "운동", "독서", "문학", "일본어", "중국어", "정보", "화학", "생물", "물리", "지리", "역사", "경제", "정치", "사회", "과학", "기술"];
     let subjectProp = keys.find(k => {
-        if (k === teacherProp) return false; // 교사 배열은 후보에서 제외
+        if (k === teacherProp) return false;
         const val = rawData[k];
         if (!Array.isArray(val)) return false;
         let matchCount = 0;
         for (let i = 0; i < Math.min(val.length, 100); i++) {
             if (typeof val[i] === 'string' && keywords.some(kw => val[i].includes(kw))) {
                 matchCount++;
-                if (matchCount >= 2) return true; // 2개 이상 키워드 매칭 시 확정
+                if (matchCount >= 2) return true;
             }
         }
         return false;
@@ -494,26 +741,33 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         if (stringArrays.length > 0) subjectProp = stringArrays[0];
     }
 
+    // 엄격한 4D 배열만 필터 (val[grade][classNum][weekday][period])
     const timetableProps = keys.filter(k => {
         const val = rawData[k];
-        // Just check if class 1 exists for the grade to find the timedata property
-        return Array.isArray(val) && val[grade] && val[grade][1] && Array.isArray(val[grade][1]);
+        return Array.isArray(val) && val[grade] && val[grade][1] && Array.isArray(val[grade][1]) && Array.isArray(val[grade][1][1]);
     });
-    // Comcigan usually returns original timetable first (e.g. 자료481) and changed daily timetable later. 
-    // Sometimes the last element is an empty matrix of zeros for future use.
-    // Pick the last one that actually has non-zero values in its class 1 timetable.
+
+    // 5. 기준 baseline 데이터셋 (4D 배열 중 최대 번호, 예: 자료481)
+    let targetBaseId = "";
+    if (timetableProps.length > 0) {
+        targetBaseId = timetableProps.reduce((max, k) => {
+            const num = parseInt(k.replace('자료', '')) || 0;
+            return num > max.num ? { key: k, num } : max;
+        }, { key: timetableProps[0], num: -1 }).key;
+    }
+
+    // 6. 시스템 설정(DB) 조회 (선택과목/수동 계획/IP 오버라이드 등)
     let timedataProp = "";
     let datasetSelected: string | null = null;
     let designatedDatasetId: string | null = null;
     let datasetSelectedGrade1: string | null = null;
     let finalDataset: string | null = null;
     let manualPlanData: any = null;
-    let fallbackDataset: string | null = null;       // comcigan_fallback_dataset (표준 데이터셋)
-    let fallbackDatasetGrade1: string | null = null; // comcigan_fallback_dataset_grade1
+    let fallbackDataset: string | null = null;
+    let fallbackDatasetGrade1: string | null = null;
 
     if (db) {
         try {
-            // Ensure table exists just in case
             await db.prepare(`
                 CREATE TABLE IF NOT EXISTS system_settings (
                     key TEXT PRIMARY KEY,
@@ -529,38 +783,29 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 results.forEach((row: any) => {
                     if (row.key === 'comcigan_dataset_selected') datasetSelected = row.value;
                     if (row.key === 'comcigan_dataset_selected_grade1') datasetSelectedGrade1 = row.value;
-                    if (row.key === 'comcigan_fallback_dataset') fallbackDataset = row.value;             // [FIX] 표준 데이터셋 파싱
-                    if (row.key === 'comcigan_fallback_dataset_grade1') fallbackDatasetGrade1 = row.value; // [FIX] 1학년 표준 데이터셋 파싱
+                    if (row.key === 'comcigan_fallback_dataset') fallbackDataset = row.value;
+                    if (row.key === 'comcigan_fallback_dataset_grade1') fallbackDatasetGrade1 = row.value;
                     if (row.key === 'dataset_ip_overrides') {
                         try {
                             ipOverridesFound = JSON.parse(row.value);
-                            console.log(`[Comcigan Debug] Loaded IP Overrides:`, !!ipOverridesFound);
-                        } catch (e) {
-                            console.error("Failed to parse dataset_ip_overrides", e);
-                        }
+                        } catch (e) {}
                     }
                     if (row.key === 'manual_semester_plan') {
                         try {
                             manualPlanData = JSON.parse(row.value);
-                        } catch (e) {
-                            console.error("Failed to parse manual_semester_plan", e);
-                        }
+                        } catch (e) {}
                     }
                 });
             }
 
-            // Determine what the effective dataset WOULD BE without IP overrides
             const effectiveDatasetNoOverride = grade === 1
                 ? (datasetSelectedGrade1 === null ? datasetSelected : datasetSelectedGrade1)
                 : datasetSelected;
 
             finalDataset = effectiveDatasetNoOverride;
 
-            // 1. Check IP Override first
             if (clientIp !== 'unknown' && ipOverridesFound[clientIp]) {
                 const overrideConfig = ipOverridesFound[clientIp];
-                console.log(`[Comcigan Debug] Applying IP Override for ${clientIp}:`, overrideConfig);
-                
                 if (grade === 1) {
                     if (overrideConfig.grade1 !== undefined && overrideConfig.grade1 !== null) {
                         finalDataset = overrideConfig.grade1;
@@ -572,234 +817,78 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 }
             }
 
-            // Check if the IP override actually changed the active dataset for the CURRENTLY REQUESTED grade
             if (clientIp !== 'unknown' && ipOverridesFound[clientIp] && finalDataset !== effectiveDatasetNoOverride) {
                 ipOverrideApplied = grade === 1 ? "1학년" : "2/3학년";
             }
 
             if (datasetOverride && datasetOverride !== '_auto_' && datasetOverride !== 'COMCIGAN') {
-                datasetSelected = datasetOverride; // From the dashboard manual selector
+                datasetSelected = datasetOverride;
             } else {
                 datasetSelected = finalDataset;
             }
 
-            designatedDatasetId = datasetSelected;
+            // COMCIGAN 또는 레거시 "자료xxx" 고정값이 설정되어 있더라도, 날짜구간 기반 자동 선택(_auto_)으로 정규화하여
+            // 하드코딩된 특정 데이터셋 번호에 고정되지 않고 날짜구간(targetDate)에 따라 주차별 라이브 데이터셋이 동작하도록 보장
+            if (datasetSelected === 'COMCIGAN' || (datasetSelected && datasetSelected.startsWith('자료'))) {
+                datasetSelected = '_auto_';
+            }
 
             designatedDatasetId = datasetSelected;
         } catch (e) {
-            console.warn("[Comcigan Debug] Failed to read system_settings for dataset selection", e);
+            console.warn("[Comcigan Debug] Failed to read system_settings", e);
         }
     }
 
-    // ----------------------------------------------------
-    // STRICT BOUNDARY FALLBACK CASCADE (Temp User Request)
-    // ----------------------------------------------------
-    const isDateInRange = (targetDateStr: string, rangeStr: any): boolean => {
-        if (typeof rangeStr !== 'string') return false;
-        const targetShort = targetDateStr.length > 8 ? targetDateStr.substring(2) : targetDateStr;
-        const parts = rangeStr.split('~').map(s => s.trim());
-        if (parts.length < 2) return rangeStr.startsWith(targetShort);
-        const startDate = new Date(`20${parts[0]}`);
-        const endDate = new Date(`20${parts[1]}`);
-        const target = new Date(`20${targetShort}`);
-        endDate.setHours(23, 59, 59, 999);
-        return target >= startDate && target <= endDate;
-    };
-
-    const koreanTime = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
-    // When no targetDate is provided and today is a weekend (Sat=6, Sun=0),
-    // advance to next Monday so we match the upcoming week's dataset range.
-    const dayOfWeek = koreanTime.getUTCDay(); // UTC day since koreanTime is already offset
-    if (!targetDate && (dayOfWeek === 6 || dayOfWeek === 0)) {
-        const daysToAdd = dayOfWeek === 6 ? 2 : 1; // Sat->Mon=+2, Sun->Mon=+1
-        koreanTime.setUTCDate(koreanTime.getUTCDate() + daysToAdd);
-        console.log(`[Comcigan Debug] Weekend detected (day=${dayOfWeek}), advancing target to Monday: ${koreanTime.toISOString().split('T')[0]}`);
-    }
-    const todayShort = koreanTime.toISOString().split('T')[0].substring(2); // "YY-MM-DD"
-    const targetShort = targetDate ? (targetDate.length > 8 ? targetDate.substring(2) : targetDate) : todayShort;
-
+    // 7. timedataProp 결정
     let isFallbackApplied = false;
-    let datasetDateRanges: Record<string, string> = {};
-    
-    // 날짜 범위 맵 구성 — 각 시간표 데이터셋의 유효 날짜 구간을 매핑
-    // 컴시간은 두 가지 형식으로 날짜 정보를 제공함:
-    //
-    //   형식 A - '일자' 배열 (구형):
-    //     ["", "26-08-25~26-08-29", "26-09-01~26-09-05", ...]
-    //     [0] = 공백(무시), [1] = 첫 번째 시간표 데이터셋 범위, [2] = 두 번째 ...
-    //     → timetableProps[idx]와 rawData['일자'][idx+1]을 순서대로 매핑
-    //     → allDatasetKeys(모든 자료~) 대신 timetableProps(실제 시간표만) 사용해야
-    //       교사배열(자료446), 과목배열(자료492) 등이 섞여 인덱스가 어긋나는 버그 방지
-    //
-    //   형식 B - '일자자료' 배열 (신형):
-    //     [[0, "26-08-25~26-08-29"], [1, "26-09-01~26-09-05"], ...]
-    //     → directIdx로 timetableProps[directIdx]를 직접 참조 → 더 정확
-    if (rawData['일자'] && Array.isArray(rawData['일자'])) {
-        // timetableProps만 사용 — 실제 시간표 데이터를 가진 키만으로 인덱스 매핑
-        timetableProps.forEach((key, idx) => {
-            if (idx + 1 < rawData['일자'].length) {
-                datasetDateRanges[key] = rawData['일자'][idx + 1];
-            }
-        });
-    } else if (rawData['일자자료'] && Array.isArray(rawData['일자자료'])) {
-        const dateList = rawData['일자자료'];
-        dateList.forEach((dt: any) => {
-            if (!Array.isArray(dt) || dt.length < 2) return;
-            const [directIdx, range] = dt;
-            if (typeof directIdx === 'number' && timetableProps[directIdx]) {
-                datasetDateRanges[timetableProps[directIdx]] = range;
-            }
-        });
-    }
-
-    // Infer the Comcigan standard baseline dataset dynamically.
-    // The baseline is typically the highest numbered dataset that does NOT have specific date bounds
-    // AND actually contains non-zero schedule data (to exclude empty future-reserved datasets like 자료542).
-    let baselineDatasetId = "";
-    const unboundedDatasets = timetableProps.filter(key => {
-        if (datasetDateRanges[key]) return false; // 날짜 범위 있는 것은 제외
-        // [FIX] 완전히 빈 데이터셋(자료542 등)을 baseline 후보에서 제외
-        const d = rawData[key];
-        if (!d || !d[grade]) return false;
-        for (const cls of Object.keys(d[grade])) {
-            if (parseInt(cls) <= 0) continue;
-            for (let w = 1; w <= 5; w++) {
-                const dayData = d[grade][cls]?.[w];
-                if (Array.isArray(dayData) && dayData.some((v: any) => v !== 0)) return true;
-            }
-        }
-        return false; // 데이터가 없으면 후보에서 제외
-    });
-    const baselineCandidates = unboundedDatasets.length > 0 ? unboundedDatasets : timetableProps;
-    
-    if (baselineCandidates.length > 0) {
-        const maxKeyItem = baselineCandidates.reduce((max, key) => {
-            const num = parseInt(key.replace('자료', ''));
-            return num > max.num ? { key, num } : max;
-        }, { key: baselineCandidates[0], num: -1 });
-        baselineDatasetId = maxKeyItem.key;
-    }
-    console.log(`[Comcigan Debug] baselineDatasetId inferred as: ${baselineDatasetId} (from unboundedDatasets: ${unboundedDatasets.join(', ')})`);
-
-    // Helper: 관리자가 설정한 표준 데이터셋 (grade별) 해석
-    const resolveAdminFallback = (): string | null => {
-        const candidateFb = grade === 1 ? (fallbackDatasetGrade1 ?? fallbackDataset) : fallbackDataset;
-        if (candidateFb && candidateFb !== '_auto_' && timetableProps.includes(candidateFb)) {
-            return candidateFb;
-        }
-        return null;
-    };
-
-    // ── 날짜 기반 데이터셋 탐색 헬퍼 ───────────────────────────────────────
-    // 컴시간 raw_data 내에서 targetShort를 커버하는 데이터셋을 탐색.
-    // 관리자 고정 데이터셋이 해당 날짜를 커버하지 못할 때 우선 적용됨.
-    // (예: 이번 주 데이터셋을 고정했을 때 다음 주를 조회하면,
-    //       컴시간에 다음 주 전용 데이터셋이 이미 있으면 그것을 사용)
-    const findDatasetByDate = (targetStr: string): string | null => {
-        for (const [key, rangeStr] of Object.entries(datasetDateRanges)) {
-            if (isDateInRange(targetStr, rangeStr)) {
-                console.log(`[Comcigan Debug] Date-match found dataset ${key} for ${targetStr}`);
-                return key;
-            }
-        }
-        return null;
-    };
-
-    // ── 데이터셋 최종 폴백 헬퍼 ─────────────────────────────────────────────
-    // 우선순위: adminFallback(표준 설정) → baselineDatasetId(통합) → 첫 번째 데이터셋
-    const applyUltimateFallback = (): string => {
-        const adminFallback = resolveAdminFallback();
-        return adminFallback || baselineDatasetId || timetableProps[0] || "";
-    };
-
-    // ── 데이터셋 선택 메인 로직 ──────────────────────────────────────────────
     if (isOutOfRange) {
-        // targetDate가 캐시 범위 완전 초과 (isFutureOutOfRange || isPastOutOfRange)
-        // 날짜 매칭이 불가능하므로 관리자 설정 데이터셋 또는 baseline 사용
-        console.log(`[Comcigan Debug] isOutOfRange=true. designatedDatasetId=${designatedDatasetId}, finalDataset=${finalDataset}, baselineDatasetId=${baselineDatasetId}`);
         if (designatedDatasetId && designatedDatasetId !== '_auto_' && (timetableProps.includes(designatedDatasetId) || designatedDatasetId === 'MANUAL_PLAN')) {
             timedataProp = designatedDatasetId;
         } else if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
             timedataProp = finalDataset;
         } else {
-            timedataProp = applyUltimateFallback();
+            timedataProp = targetBaseId || timetableProps[0] || "";
         }
         isFallbackApplied = true;
-        console.log(`[Comcigan Debug] Out-of-range resolved to: ${timedataProp}`);
-
     } else if (datasetSelected === 'MANUAL_PLAN') {
         timedataProp = 'MANUAL_PLAN';
-
-    } else if (datasetSelected && datasetSelected !== '_auto_') {
-        // 관리자가 특정 데이터셋을 고정한 경우
-        const rangeStr = datasetDateRanges[datasetSelected];
-        const covers = rangeStr ? isDateInRange(targetShort, rangeStr) : false;
-
-        if (covers) {
-            // 고정 데이터셋이 해당 날짜를 커버함 → 그대로 사용
-            timedataProp = datasetSelected;
-            console.log(`[Comcigan Debug] Fixed dataset ${datasetSelected} covers ${targetShort}`);
-        } else {
-            // 고정 데이터셋이 해당 날짜를 커버하지 못함
-            // 1순위: 컴시간 내 날짜 매칭 데이터셋 (미래 주차 전용 데이터셋 등)
-            // 2순위: finalDataset (관리자 설정)
-            // 3순위: adminFallback → baselineDatasetId (통합 데이터셋)
-            console.log(`[Comcigan Debug] Fixed dataset ${datasetSelected} does NOT cover ${targetShort}. Searching date-match...`);
-            const dateMatched = findDatasetByDate(targetShort);
-            if (dateMatched) {
-                timedataProp = dateMatched;
-                console.log(`[Comcigan Debug] Using date-matched dataset: ${dateMatched}`);
-            } else if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
-                timedataProp = finalDataset;
-            } else {
-                timedataProp = applyUltimateFallback();
-            }
-            isFallbackApplied = true;
-        }
-
+    } else if (datasetSelected && datasetSelected !== '_auto_' && timetableProps.includes(datasetSelected)) {
+        timedataProp = datasetSelected;
     } else {
-        // _auto_ 모드 또는 데이터셋 미설정 — 날짜 기반 자동 해결
-        console.log(`[Comcigan Debug] Auto mode. Searching date-match for ${targetShort}...`);
-        const dateMatched = findDatasetByDate(targetShort);
-        if (dateMatched) {
-            timedataProp = dateMatched;
-            console.log(`[Comcigan Debug] Auto-resolved to ${dateMatched} for date ${targetShort}`);
-        } else {
-            // 날짜 매칭 없음 → 통합(baseline) 데이터셋으로 폴백
-            console.log(`[Comcigan Debug] No date-match for ${targetShort}. Falling back to baseline.`);
-            if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
-                timedataProp = finalDataset;
-            } else {
-                timedataProp = applyUltimateFallback();
+        // 자동 선택: 실제 수업 데이터가 존재하는 4D 배열 중 targetBaseId가 아닌 주차별 데이터셋(예: 자료147)을 우선 선택
+        const liveProps = timetableProps.filter(k => {
+            if (k === targetBaseId) return false;
+            const d = rawData[k];
+            if (!d || !d[grade]) return false;
+            for (const cls of Object.keys(d[grade])) {
+                if (parseInt(cls) <= 0) continue;
+                for (let w = 1; w <= 5; w++) {
+                    const dw = d[grade][cls]?.[w];
+                    if (Array.isArray(dw) && dw.some((v: any) => v !== 0)) return true;
+                }
             }
+            return false;
+        });
+        if (liveProps.length > 0) {
+            timedataProp = liveProps[0];
+        } else {
+            timedataProp = targetBaseId || timetableProps[0] || "";
             isFallbackApplied = true;
         }
     }
 
-
-    // Anchor originalDatasetId explicitly
     let originalDatasetId = null;
     let explicitRef = typeof designatedDatasetId !== 'undefined' ? designatedDatasetId : datasetSelected;
-    
     if (explicitRef && explicitRef !== 'MANUAL_PLAN' && explicitRef !== '_auto_' && timetableProps.includes(explicitRef)) {
         originalDatasetId = explicitRef;
     } else if (explicitRef === 'MANUAL_PLAN') {
         originalDatasetId = 'MANUAL_PLAN';
     } else {
-        if (finalDataset && finalDataset !== '_auto_' && (timetableProps.includes(finalDataset) || finalDataset === 'MANUAL_PLAN')) {
-            originalDatasetId = finalDataset;
-        } else {
-            originalDatasetId = baselineDatasetId || timetableProps[0] || "";
-        }
+        originalDatasetId = targetBaseId || timetableProps[0] || "";
     }
 
-    console.log('[Comcigan Debug] keys:', keys.length, 'teacherProp:', teacherProp, 'subjectProp:', subjectProp);
-    console.log('[Comcigan Debug] timetableProps:', timetableProps, 'selected timedataProp:', timedataProp);
-
+    // 수동 시간표 처리
     if (timedataProp === 'MANUAL_PLAN') {
-        console.log(`[Comcigan Debug] Using MANUAL_PLAN dataset (resolved)`);
-
-        // Parse the manual plan for the requested grade and class
         const result: any[] = [];
         let classList: number[] = [];
         if (classNumInput === 'all') {
@@ -816,7 +905,6 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             const classPlan = manualPlanData?.timetables?.[`${grade}-${cls}`];
             if (classPlan) {
                 for (const [key, subjectStr] of Object.entries(classPlan)) {
-                    // key is "weekday-period", e.g. "0-2" (Monday 2nd period)
                     const [weekdayStr, periodStr] = key.split('-');
                     const weekday = parseInt(weekdayStr);
                     const period = parseInt(periodStr);
@@ -834,7 +922,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                         result.push({
                             grade,
                             class: cls,
-                            weekday, // already 0-indexed in our manual planner
+                            weekday,
                             classTime: period,
                             subject,
                             teacher
@@ -858,25 +946,10 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     const teachers = rawData[teacherProp] || [];
     const subjects = rawData[subjectProp] || [];
     const data = rawData[timedataProp];
-    
-    // Determine the true standard baseline dataset (Base Data for cell-level fill)
-    let targetBaseId = "";
-    if (baselineDatasetId) {
-        targetBaseId = baselineDatasetId;
-    } else if (timetableProps.length > 0) {
-        targetBaseId = timetableProps[0];
-    }
-
-    // Explicitly target the resolved baseline timetable for cell-level fallback calculations
     const baseData = targetBaseId ? rawData[targetBaseId] : null;
-    
-    const bunri = rawData['분리'] !== undefined ? rawData['분리'] : 100; // Get bunri value
+    const bunri = rawData['분리'] !== undefined ? rawData['분리'] : 100;
     const timeInfoProp = keys.find(k => Array.isArray(rawData[k]) && rawData[k].length === 8 && typeof rawData[k][1] === 'number');
-
-    console.log('[Comcigan Debug] data for grade', grade, 'is array?', Array.isArray(data[grade]));
     const timeInfo = timeInfoProp ? rawData[timeInfoProp] : null;
-
-    console.log('[Comcigan] 분리:', bunri, 'teachers:', teachers.length, 'subjects:', subjects.length);
 
     if (!data || !data[grade]) {
         throw new Error(`Data not found for G${grade}`);
@@ -885,19 +958,19 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     let isEmptyDataset = true;
     for (const cls of Object.keys(data[grade])) {
         if (parseInt(cls) > 0) {
-             for(let w=1; w<=5; w++){
-                 if(data[grade][cls][w]){
-                     for(let p=1; p<data[grade][cls][w].length; p++){
-                         if(data[grade][cls][w][p] !== 0) {
-                             isEmptyDataset = false;
-                             break;
-                         }
-                     }
-                 }
-                 if(!isEmptyDataset) break;
-             }
+            for (let w = 1; w <= 5; w++) {
+                if (data[grade][cls]?.[w]) {
+                    for (let p = 1; p < data[grade][cls][w].length; p++) {
+                        if (data[grade][cls][w][p] !== 0) {
+                            isEmptyDataset = false;
+                            break;
+                        }
+                    }
+                }
+                if (!isEmptyDataset) break;
+            }
         }
-        if(!isEmptyDataset) break;
+        if (!isEmptyDataset) break;
     }
 
     const classesToProcess = classNumInput === 'all'
@@ -917,7 +990,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             }
 
             let basePeriodLimit = 0;
-            if (baseData && baseData[grade] && baseData[grade][classNum] && baseData[grade][classNum][weekday]) {
+            if (baseData && baseData[grade]?.[classNum]?.[weekday]) {
                 const bWeekday = baseData[grade][classNum][weekday];
                 if (Array.isArray(bWeekday)) {
                     basePeriodLimit = Math.min(bWeekday[0] || 0, bWeekday.length - 1);
@@ -925,17 +998,6 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             }
 
             const loopLimit = Math.max(currentPeriodLimit, basePeriodLimit);
-
-            // Get explicitly declared daily loop limit (e.g. if Friday ends at 6th period, dayLimit is 6)
-            let dayLimit = 0;
-            if (timeInfo && timeInfo[weekday]) {
-                const dayLimitStr = timeInfo[weekday];
-                if (typeof dayLimitStr === 'string' && !isNaN(parseInt(dayLimitStr, 10))) {
-                    dayLimit = parseInt(dayLimitStr, 10);
-                } else if (typeof dayLimitStr === 'number') {
-                    dayLimit = dayLimitStr;
-                }
-            }
 
             let isDayEmpty = true;
             if (classData[weekday] && Array.isArray(classData[weekday])) {
@@ -949,25 +1011,19 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
             for (let period = 1; period <= loopLimit; period++) {
                 let code = (classData[weekday] && classData[weekday][period]) ? classData[weekday][period] : 0;
-
                 let isChanged = false;
-                if (baseData && baseData[grade] && baseData[grade][classNum] && baseData[grade][classNum][weekday]) {
+
+                if (baseData && baseData[grade]?.[classNum]?.[weekday]) {
                     const baseCode = baseData[grade][classNum][weekday][period] || 0;
-                    
-                    // Cell-level fallback: only apply base dataset fill-in when the entire weekly
-                    // dataset is all zeros (isEmptyDataset). In that case, the live comcigan data
-                    // hasn't been published yet and we use the baseline as a placeholder.
-                    // When the weekly dataset HAS real data (isEmptyDataset=false), code=0 means
-                    // the period is genuinely free/cancelled, so we must NOT overwrite it.
-                    // [FIX] If the current day is NOT completely empty (meaning other periods have classes),
-                    // we allow cell-level fallback to baseCode so elective slots or subbed classes aren't left blank.
                     if (code === 0 && baseCode !== 0) {
                         if (isEmptyDataset || !isDayEmpty) {
                             code = baseCode;
                         }
                     }
-                    
-                    if (baseCode !== code && timedataProp !== timetableProps[0]) {
+
+                    const cellKey = `${grade}:${classNum}:${weekday}:${period}`;
+                    const isPrefixed = prefixedCells.has(cellKey);
+                    if (((baseCode !== code && timedataProp !== targetBaseId) || isPrefixed) && timedataProp !== targetBaseId) {
                         isChanged = true;
                     }
                 }
@@ -976,7 +1032,6 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
 
                 let subject = "";
                 let teacher = "";
-
                 if (code) {
                     let teacherIdx = 0;
                     let subjectIdx = 0;
@@ -992,10 +1047,9 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
                 }
 
                 if (subject || isChanged) {
-                    // Decode the original (baseline) subject for standard print mode
                     let baseSubject = subject;
                     let baseTeacher = teacher;
-                    if (isChanged && baseData && baseData[grade]?.[classNum]?.[weekday]) {
+                    if (baseData && baseData[grade]?.[classNum]?.[weekday]) {
                         const baseCode = baseData[grade][classNum][weekday][period] || 0;
                         if (baseCode) {
                             let bTeacherIdx = 0, bSubjectIdx = 0;
@@ -1030,123 +1084,6 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         }
     }
 
-    const samples: any[] = [];
-    if (data && data[grade]) {
-        const cls = Object.keys(data[grade]).find(k => parseInt(k) > 0);
-        if (cls) {
-            for (let w = 1; w <= 5; w++) {
-                if (data[grade][cls][w]) {
-                    for (let p = 1; p <= 4; p++) {
-                        const code = data[grade][cls][w][p];
-                        if (code) samples.push(code);
-                    }
-                }
-                if (samples.length >= 5) break;
-            }
-        }
-    }
-
-    const parsedSamples = samples.map(code => {
-        let tIdx = 0, sIdx = 0;
-        if (bunri === 100) {
-            tIdx = Math.floor(code / bunri);
-            sIdx = code % bunri;
-        } else {
-            tIdx = code % bunri;
-            sIdx = Math.floor(code / bunri);
-        }
-        return {
-            code,
-            tIdx,
-            sIdx,
-            subj: subjects[sIdx] || "(none)",
-            teacher: teachers[tIdx] || "(none)",
-            alt_sIdx: code % bunri,
-            alt_tIdx: Math.floor(code / bunri),
-            alt_subj: subjects[code % bunri] || "(none)",
-            alt_teacher: teachers[Math.floor(code / bunri)] || "(none)"
-        };
-    });
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // 캐시 / 아카이브 저장 — 데이터 출처에 따라 3개 경로로 완전 분리
-    //
-    //   [A] isArchivedData=true
-    //       : timetable_archive에서 읽어온 과거 스냅샷
-    //       → raw_data 캐시 오염 방지를 위해 저장 완전 건너뜀
-    //
-    //   [B] isFreshLiveFetch=true  (크론 / 자동갱신 / 전체갱신 버튼 경로)
-    //       : allowLiveFetch=true + cachedRawDataString 없이 컴시간에서 직접 fetch한 최신 LIVE 데이터
-    //       → raw_data 캐시 갱신 (frozen 보호 CASE 유지)
-    //       → LIVE 범위 전체를 INSERT OR REPLACE로 아카이브 최신화
-    //       → isEmptyDataset / isFallbackApplied 여부와 완전 무관하게 항상 실행
-    //         (날짜 매칭 실패나 데이터셋 선택 상태가 저장을 막아서는 안 됨)
-    //
-    //   [C] 일반 사용자 요청 (캐시에서 읽어온 데이터)
-    //       → isFallbackApplied=true 이면 저장 건너뜀 (폴백 데이터로 캐시 오염 방지)
-    //       → isEmptyDataset=true 이면 저장 건너뜀
-    //       → raw_data 캐시 갱신 허용 (stale-while-revalidate 흐름)
-    //       → 아카이브는 INSERT OR IGNORE만 — 기존 항목 보호
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // isFreshLiveFetch: cachedRawDataString이 없었고(=캐시 미스 또는 refreshCache 호출)
-    //                   실제로 컴시간 서버에서 직접 fetch한 경우
-    const isFreshLiveFetch = allowLiveFetch && !cachedRawDataString && !isArchivedData;
-
-    // 날짜 범위 파싱 — 모듈 레벨 parseArchiveRanges() 사용
-
-    if (isArchivedData) {
-        // ── [A] 아카이브 서빙 경로 ─────────────────────────────────────────
-        console.log('[Cache] [A] Archived data — skipping all writes to prevent contamination.');
-
-    } else if (isFreshLiveFetch && db) {
-        // ── [B] LIVE fetch 경로 ────────────────────────────────────────────
-        // 크론 / 자동갱신 / 전체갱신 버튼: 컴시간에서 방금 받은 신선한 데이터
-        // raw_data 갱신 + 대기 중(LIVE 상태) 아카이브 범위를 모두 INSERT OR REPLACE로 최신화
-        // isEmptyDataset / isFallbackApplied와 완전 독립 실행
-        console.log(`[Cache] [B] Fresh live fetch — syncing raw_data + archive (isFallbackApplied=${isFallbackApplied}, isEmptyDataset=${isEmptyDataset})`);
-        try {
-            await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_archive (
-                date_range TEXT PRIMARY KEY,
-                response_json TEXT NOT NULL,
-                saved_at TEXT DEFAULT (datetime('now'))
-            )`).run();
-            await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_cache (cache_key TEXT PRIMARY KEY, response_json TEXT NOT NULL, dataset_id TEXT, updated_at TEXT DEFAULT (datetime('now')))`).run();
-
-            // 1) raw_data 캐시 갱신 (frozen 시 DB 내 CASE로 자동 보호)
-            await db.prepare(`
-                INSERT INTO timetable_cache (cache_key, response_json, updated_at)
-                VALUES ('raw_data', ?, datetime('now'))
-                ON CONFLICT(cache_key) DO UPDATE SET
-                    response_json = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.response_json ELSE excluded.response_json END,
-                    updated_at    = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.updated_at    ELSE datetime('now')            END
-            `).bind(jsonString).run();
-
-            // 2) LIVE 범위 아카이브 — INSERT OR REPLACE로 "대기 중" 항목 전부 최신화
-            const liveArchiveRanges = parseArchiveRanges(jsonString);
-            console.log(`[Cache] [B] Archive ranges to upsert: [${liveArchiveRanges.join(', ')}]`);
-            for (const range of liveArchiveRanges) {
-                try {
-                    await db.prepare(
-                        "INSERT OR REPLACE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))"
-                    ).bind(range, jsonString).run();
-                    console.log(`[Cache] [B] Archive upserted: ${range}`);
-                } catch (archErr) {
-                    console.warn(`[Cache] [B] Archive upsert failed for ${range}:`, archErr);
-                }
-            }
-        } catch (e) {
-            console.error('[Cache] [B] Failed to sync raw_data + archive:', e);
-        }
-
-    } else {
-        // ── [C] 캐시 읽기 경로 ─────────────────────────────────────────────
-        // cachedRawDataString을 그대로 응답 — DB 쓰기 없음.
-        // DB 쓰기(updated_at / saved_at 갱신)는 오직 [B] LIVE fetch 시에만 발생.
-        // 여기서 DB를 건드리면 타임스탬프가 오염되어 "탭 전환 시 현재 시간으로 리셋"되는 문제가 생김.
-    }
-
-
     return new Response(JSON.stringify({
         schoolName: "부산성지고등학교",
         datasetId: timedataProp,
@@ -1154,7 +1091,7 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
         ipOverrideApplied: typeof ipOverrideApplied !== 'undefined' ? ipOverrideApplied : false,
         isOutOfRange,
         isArchivedData,
-        matchedArchiveRange: matchedArchiveDateRange,  // 아카이브 서빙 시 매칭된 구간 (예: "26-08-25~26-08-29")
+        matchedArchiveRange: matchedArchiveDateRange,
         data: result,
         debugTokens: { 
             override1: datasetSelectedGrade1 || null, 
@@ -1168,14 +1105,11 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
             subjectProp,
             timetableProps,
             timedataProp,
+            targetBaseId,
             bunri,
-            timeInfoProp,
             hasData: !!(data && data[grade]),
-            bunriLogic: bunri === 100 ? "100" : "other",
             subjectsCount: subjects.length,
-            teachersCount: teachers.length,
-            parsedSamples,
-            datasetDateRanges   // 각 데이터셋의 날짜 구간 맵 (예: {"자료481": "26-08-25~26-08-29"})
+            teachersCount: teachers.length
         }
     }), {
         headers: {
@@ -1185,84 +1119,66 @@ async function getTimetable(grade: number, classNumInput: number | 'all', db?: a
     });
 }
 
-// --- 모듈 레벨 유틸리티 ---
-
-/**
- * 컴시간 raw_data JSON 문자열에서 날짜 구간 배열을 파싱.
- * '일자' 또는 '일자자료' 배열에서 'YY-MM-DD~YY-MM-DD' 형식 항목 추출.
- * getTimetable 내부와 refreshCache 양쪽에서 공통 사용.
- */
-function parseArchiveRanges(jsonStr: string): string[] {
-    try {
-        const parsed = JSON.parse(jsonStr);
-        const ranges: string[] = [];
-        const dateArr = parsed['일자'];
-        const dateArrNew = parsed['일자자료'];
-        if (dateArr && Array.isArray(dateArr)) {
-            for (const r of dateArr) {
-                if (typeof r === 'string' && r.includes('~')) ranges.push(r.trim());
-            }
-        } else if (dateArrNew && Array.isArray(dateArrNew)) {
-            for (const item of dateArrNew) {
-                const r = Array.isArray(item) ? item[1] : item;
-                if (typeof r === 'string' && r.includes('~')) ranges.push((r as string).trim());
-            }
-        }
-        return ranges;
-    } catch (_) { return []; }
-}
-
 // --- 캐시 헬퍼 함수 ---
 
 /**
- * 컴시간에서 최신 raw_data를 직접 fetch해 timetable_cache에 저장하고
- * 현재 LIVE 날짜 구간의 archive를 INSERT OR REPLACE로 동기화한다.
- *
- * cron(/api/cron/run)과 관리자 전체갱신(POST /api/admin/comcigan-cache) 양쪽에서
- * 동일하게 호출되어 두 경로의 동작을 통일한다.
+ * 컴시간에서 최신 raw_data(r=1, r=2 등 모든 주차)를 직접 fetch해
+ * timetable_cache 및 timetable_archive에 주차별로 동기화한다.
  */
 async function refreshCache(db: any, grade: number = 1, targetDate?: string | null) {
-    console.log(`[Cache] refreshCache: fetching live data from Comcigan ...`);
+    console.log(`[Cache] refreshCache: fetching live multi-week data from Comcigan ...`);
 
-    // 1. 컴시간 live fetch → raw_data 갱신 ([B] 경로)
-    //    allowLiveFetch=true, cachedRawDataString=undefined → 항상 컴시간 서버에서 fetch
-    await getTimetable(grade, 'all', db, null, 'cache-refresh', targetDate, undefined, true);
+    if (!db) return;
 
-    // 2. raw_data에서 현재 LIVE 날짜 구간을 읽어 archive를 명시적으로 동기화
-    //    — getTimetable 내부 [B] 경로에도 동일 로직이 있지만,
-    //      cron/전체갱신 경로에서 명시적으로 재실행해 누락 없이 보장
     try {
         await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_archive (
             date_range TEXT PRIMARY KEY,
             response_json TEXT NOT NULL,
             saved_at TEXT DEFAULT (datetime('now'))
         )`).run();
+        await db.prepare(`CREATE TABLE IF NOT EXISTS timetable_cache (cache_key TEXT PRIMARY KEY, response_json TEXT NOT NULL, dataset_id TEXT, updated_at TEXT DEFAULT (datetime('now')))`).run();
 
-        const rawRow = await db.prepare(
-            "SELECT response_json FROM timetable_cache WHERE cache_key = 'raw_data'"
-        ).first();
+        // 1. 이번 주 (r=1) fetch
+        const r1Json = await fetchComciganRawData(1);
+        const r1Raw = JSON.parse(r1Json);
 
-        if (rawRow?.response_json) {
-            const ranges = parseArchiveRanges(rawRow.response_json as string);
-            console.log(`[Cache] refreshCache: syncing archive ranges: [${ranges.join(', ')}]`);
-            for (const range of ranges) {
+        // 2. raw_data 캐시 갱신
+        await db.prepare(`
+            INSERT INTO timetable_cache (cache_key, response_json, updated_at)
+            VALUES ('raw_data', ?, datetime('now'))
+            ON CONFLICT(cache_key) DO UPDATE SET
+                response_json = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.response_json ELSE excluded.response_json END,
+                updated_at    = CASE WHEN timetable_cache.is_frozen = 1 THEN timetable_cache.updated_at    ELSE datetime('now')            END
+        `).bind(r1Json).run();
+
+        // 3. 일자자료 순회하며 모든 주차(r=1, r=2, ...)를 timetable_archive에 동기화
+        const dateList = r1Raw['일자자료'];
+        if (dateList && Array.isArray(dateList)) {
+            for (const item of dateList) {
+                if (!Array.isArray(item) || item.length < 2) continue;
+                const [rNum, rangeStr] = item;
+                if (typeof rNum !== 'number' || typeof rangeStr !== 'string') continue;
+
                 try {
+                    let weekJson = r1Json;
+                    if (rNum > 1) {
+                        weekJson = await fetchComciganRawData(rNum);
+                    }
                     await db.prepare(
                         "INSERT OR REPLACE INTO timetable_archive (date_range, response_json, saved_at) VALUES (?, ?, datetime('now'))"
-                    ).bind(range, rawRow.response_json).run();
-                    console.log(`[Cache] refreshCache: archive upserted: ${range}`);
-                } catch (archErr) {
-                    console.warn(`[Cache] refreshCache: archive upsert failed for ${range}:`, archErr);
+                    ).bind(rangeStr, weekJson).run();
+                    console.log(`[Cache] refreshCache: archive synced for r=${rNum} (${rangeStr})`);
+                } catch (rErr) {
+                    console.warn(`[Cache] refreshCache: failed for r=${rNum}:`, rErr);
                 }
             }
-        } else {
-            console.warn('[Cache] refreshCache: raw_data not found after fetch — archive sync skipped.');
         }
     } catch (e) {
-        console.error('[Cache] refreshCache: archive sync failed:', e);
+        console.error('[Cache] refreshCache failed:', e);
     }
 
-    console.log('[Cache] refreshCache: done (raw_data + archive synced).');
+    console.log('[Cache] refreshCache: multi-week sync done.');
 }
 
 export { refreshCache, getTimetable };
+

@@ -43,6 +43,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { normalizeTeacherName } from "@/lib/teacherUtils";
 
 declare const __BUILD_INFO__: {
     commitSha: string;
@@ -6563,8 +6564,9 @@ export default function Admin() {
     }, []);
 
 function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExpired, adminPassword }: any) {
-    const isOrphan = !!assessment.isOrphan;
-    const isPostponed = !!assessment.tempDueDate || !!assessment.tempClassTime;
+    const isHomework = Boolean(assessment.endDate || !assessment.classTime);
+    const isOrphan = !isHomework && !!assessment.isOrphan;
+    const isPostponed = !isHomework && (!!assessment.tempDueDate || !!assessment.tempClassTime);
 
     const subjectMatch = typeof assessment.subject === 'string' ? assessment.subject.match(/^(.*?)\s*\((.*?그룹.*?)\)$/) : null;
     const baseSubject = subjectMatch ? subjectMatch[1].trim() : assessment.subject;
@@ -6605,7 +6607,16 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
             </TableCell>
             <TableCell className="truncate max-w-[200px]">{assessment.title}</TableCell>
             <TableCell>
-                {isPostponed ? (
+                {isHomework ? (
+                    <div className="flex items-center flex-wrap gap-1">
+                        <span className="text-xs font-semibold text-blue-700">
+                            {assessment.startDate ? `${assessment.startDate} ~ ${assessment.endDate}` : (assessment.endDate || assessment.dueDate)}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold ml-1">
+                            숙제
+                        </span>
+                    </div>
+                ) : isPostponed ? (
                     <div className="flex items-center flex-wrap gap-1">
                         <span className={`text-xs ${isOrphan ? "line-through text-red-400" : "line-through text-gray-400"}`}>
                             {assessment.dueDate} {assessment.classTime}교시
@@ -12127,13 +12138,18 @@ function TeacherDisplayManager({ adminPassword }: { adminPassword: string }) {
         }
     });
 
-    // teacher_passwords 키에서 교사 이름 목록 추출
+    // teacher_passwords 키에서 교사 이름 목록 추출 (정규화 및 중복 제거)
     const configuredTeachers = useMemo(() => {
         if (!settingsQuery.data?.teacher_passwords) return [];
         try {
             const raw = settingsQuery.data.teacher_passwords;
             const pwMap = typeof raw === "string" ? JSON.parse(raw) : raw;
-            return Object.keys(pwMap);
+            const set = new Set<string>();
+            Object.keys(pwMap).forEach(k => {
+                const clean = normalizeTeacherName(k);
+                if (clean) set.add(clean);
+            });
+            return Array.from(set);
         } catch { return []; }
     }, [settingsQuery.data]);
 
@@ -12415,7 +12431,8 @@ function TeacherDefaultPasswordManager({ adminPassword }: { adminPassword: strin
 
     useEffect(() => {
         if (settingsQuery.data) {
-            setCurrentPw(settingsQuery.data.teacher_default_password ?? null);
+            const val = settingsQuery.data.teacher_default_password;
+            setCurrentPw(val === '관리' ? null : (val ?? null));
         }
     }, [settingsQuery.data]);
 
@@ -12449,8 +12466,8 @@ function TeacherDefaultPasswordManager({ adminPassword }: { adminPassword: strin
     };
 
     const handleReset = () => {
-        if (confirm('초기 비밀번호를 "관리"로 초기화하시겠습니까?')) {
-            saveMutation.mutate("관리");
+        if (confirm('초기 비밀번호를 "sj2026"로 초기화하시겠습니까?')) {
+            saveMutation.mutate("sj2026");
         }
     };
 
@@ -12473,8 +12490,8 @@ function TeacherDefaultPasswordManager({ adminPassword }: { adminPassword: strin
                     <div className="flex items-center gap-2 flex-1">
                         <span className="font-mono font-bold text-emerald-700 text-sm">
                             {showPw
-                                ? (currentPw ?? "관리 (기본값)")
-                                : (currentPw ? "•".repeat(currentPw.length) : "(기본값: 관리)")}
+                                ? (currentPw ? (currentPw === '관리' ? "sj2026 (기본값)" : currentPw) : "sj2026 (기본값)")
+                                : (currentPw && currentPw !== '관리' ? "•".repeat(currentPw.length) : "(기본값: sj2026)")}
                         </span>
                         <Button
                             variant="ghost"
@@ -12503,11 +12520,14 @@ function TeacherDefaultPasswordManager({ adminPassword }: { adminPassword: strin
                         <div className="flex gap-2">
                             <div className="relative flex-1">
                                 <Input
-                                    type={showPw ? "text" : "password"}
+                                    type="text"
                                     value={newPw}
                                     onChange={e => setNewPw(e.target.value)}
                                     placeholder="새 비밀번호 입력"
+                                    autoComplete="off"
+                                    spellCheck={false}
                                     className="pr-10 text-sm h-9"
+                                    style={{ WebkitTextSecurity: showPw ? 'none' : 'disc' } as React.CSSProperties}
                                 />
                                 <Button
                                     type="button"
@@ -12711,7 +12731,15 @@ function TeacherPerPasswordManager({ adminPassword }: { adminPassword: string })
         if (settingsQuery.data) {
             try {
                 const raw = settingsQuery.data.teacher_passwords || "{}";
-                setPwMap(typeof raw === "string" ? JSON.parse(raw) : raw);
+                const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+                const normalized: Record<string, string> = {};
+                for (const [k, v] of Object.entries(parsed)) {
+                    const clean = normalizeTeacherName(k);
+                    if (clean && typeof v === 'string') {
+                        normalized[clean] = v;
+                    }
+                }
+                setPwMap(normalized);
             } catch { setPwMap({}); }
         }
     }, [settingsQuery.data]);
@@ -12736,25 +12764,44 @@ function TeacherPerPasswordManager({ adminPassword }: { adminPassword: string })
 
     const handleAdd = (e: React.FormEvent) => {
         e.preventDefault();
-        const name = newTeacherName.trim();
+        const cleanName = normalizeTeacherName(newTeacherName);
         const pw = newTeacherPw.trim();
-        if (!name || !pw) { toast.error("이름과 비밀번호를 모두 입력하세요."); return; }
-        const next = { ...pwMap, [name]: pw };
+        if (!cleanName || !pw) { toast.error("이름과 비밀번호를 모두 입력하세요."); return; }
+        const next: Record<string, string> = {};
+        for (const [k, v] of Object.entries(pwMap)) {
+            if (normalizeTeacherName(k) !== cleanName) {
+                next[k] = v;
+            }
+        }
+        next[cleanName] = pw;
         save.mutate(next);
         setNewTeacherName(""); setNewTeacherPw("");
     };
 
     const handleDelete = (name: string) => {
         if (!confirm(`"${name}" 선생님의 개별 비밀번호를 삭제하시겠습니까?\n(삭제 시 초기 비밀번호가 적용됩니다)`)) return;
-        const next = { ...pwMap };
-        delete next[name];
+        const cleanName = normalizeTeacherName(name);
+        const next: Record<string, string> = {};
+        for (const [k, v] of Object.entries(pwMap)) {
+            if (normalizeTeacherName(k) !== cleanName) {
+                next[k] = v;
+            }
+        }
         save.mutate(next);
     };
 
     const handleEdit = (name: string) => {
         const trimmed = editValue.trim();
         if (!trimmed) { toast.error("비밀번호를 입력하세요."); return; }
-        save.mutate({ ...pwMap, [name]: trimmed });
+        const cleanName = normalizeTeacherName(name);
+        const next: Record<string, string> = {};
+        for (const [k, v] of Object.entries(pwMap)) {
+            if (normalizeTeacherName(k) !== cleanName) {
+                next[k] = v;
+            }
+        }
+        next[cleanName] = trimmed;
+        save.mutate(next);
         setEditingTeacher(null);
         setEditValue("");
     };
@@ -12783,11 +12830,14 @@ function TeacherPerPasswordManager({ adminPassword }: { adminPassword: string })
                                     <div className="flex gap-1.5 flex-1">
                                         <div className="relative flex-1">
                                             <Input
-                                                type={showPw[name] ? "text" : "password"}
+                                                type="text"
                                                 value={editValue}
                                                 onChange={e => setEditValue(e.target.value)}
                                                 onKeyDown={e => { if (e.key === 'Enter') handleEdit(name); if (e.key === 'Escape') { setEditingTeacher(null); setEditValue(""); } }}
+                                                autoComplete="off"
+                                                spellCheck={false}
                                                 className="h-7 text-xs pr-8"
+                                                style={{ WebkitTextSecurity: showPw[name] ? 'none' : 'disc' } as React.CSSProperties}
                                             />
                                             <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-2 hover:bg-transparent"
                                                 onClick={() => setShowPw(v => ({ ...v, [name]: !v[name] }))}>
@@ -12833,11 +12883,14 @@ function TeacherPerPasswordManager({ adminPassword }: { adminPassword: string })
                         />
                         <div className="relative">
                             <Input
-                                type={showNewPw ? "text" : "password"}
+                                type="text"
                                 value={newTeacherPw}
                                 onChange={e => setNewTeacherPw(e.target.value)}
                                 placeholder="비밀번호"
+                                autoComplete="off"
+                                spellCheck={false}
                                 className="text-xs h-9 pr-8 w-32"
+                                style={{ WebkitTextSecurity: showNewPw ? 'none' : 'disc' } as React.CSSProperties}
                             />
                             <Button type="button" variant="ghost" size="icon"
                                 className="absolute right-0 top-0 h-full px-2 hover:bg-transparent"

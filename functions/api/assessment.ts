@@ -1,8 +1,13 @@
+import { verifyTeacherPassword } from "./_teacherAuth";
 
-/**
- * Cloudflare Pages Function - 수행평가 관리 API (with D1)
- * Supports Class-Specific Data
- */
+function decodeHeader(val: string | null | undefined): string {
+    if (!val) return '';
+    try {
+        return decodeURIComponent(val);
+    } catch {
+        return val;
+    }
+}
 
 /**
  * POST 처리 전 스키마 마이그레이션을 한 번에 보장한다.
@@ -314,6 +319,25 @@ export const onRequest = async (context: any) => {
             const targetGrade = parseInt(grade, 10);
             const isTeacher = isTeacherCreated === 1 || body.role === 'teacher';
 
+            // 교사 권한으로 등록 시: 서버측 비밀번호 검증 필수
+            if (isTeacher) {
+                const headerPassword = decodeHeader(request.headers.get('X-Teacher-Password'));
+                const headerName = decodeHeader(request.headers.get('X-Teacher-Name'));
+                const authTeacherName = headerName || teacher || body.teacherName || '';
+                const presentedPassword = headerPassword || body.teacherPassword || '';
+
+                const { valid } = await verifyTeacherPassword(env, authTeacherName, presentedPassword);
+                if (!valid) {
+                    return new Response(JSON.stringify({
+                        error: "선생님 인증이 만료되었거나 비밀번호가 올바르지 않습니다. 다시 인증해주세요.",
+                        code: "TEACHER_AUTH_REQUIRED"
+                    }), {
+                        status: 401,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+            }
+
             try {
                 const permKey = isTeacher
                     ? `assessment_allow_teacher_grade${targetGrade}`
@@ -451,6 +475,22 @@ export const onRequest = async (context: any) => {
                     });
                 }
 
+                // 교사 권한으로 삭제하거나 교사 등록 수행평가를 삭제하는 경우 비밀번호 검증 필수
+                if (isTeacher || isTeacherCreated === 1) {
+                    const headerPassword = decodeHeader(request.headers.get('X-Teacher-Password')) || url.searchParams.get('teacherPassword');
+                    const headerName = decodeHeader(request.headers.get('X-Teacher-Name')) || url.searchParams.get('teacherName') || existing?.teacher;
+                    const { valid } = await verifyTeacherPassword(env, headerName, headerPassword);
+                    if (!valid) {
+                        return new Response(JSON.stringify({
+                            error: "선생님 인증이 만료되었거나 비밀번호가 올바르지 않습니다. 다시 인증해주세요.",
+                            code: "TEACHER_AUTH_REQUIRED"
+                        }), {
+                            status: 401,
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    }
+                }
+
                 // 학생 권한 비활성화 시 삭제 차단
                 if (!isTeacher && assessmentGrade) {
                     const targetGrade = parseInt(assessmentGrade, 10);
@@ -506,6 +546,25 @@ export const onRequest = async (context: any) => {
             try { await ensureSchema(env.DB); } catch (_) {}
 
             const isTeacher = body.role === 'teacher' || body.isTeacherCreated === 1;
+
+            // 교사 권한으로 수정 시: 서버측 비밀번호 검증 필수
+            if (isTeacher) {
+                const headerPassword = decodeHeader(request.headers.get('X-Teacher-Password'));
+                const headerName = decodeHeader(request.headers.get('X-Teacher-Name'));
+                const authTeacherName = headerName || teacher || body.teacherName || '';
+                const presentedPassword = headerPassword || body.teacherPassword || '';
+
+                const { valid } = await verifyTeacherPassword(env, authTeacherName, presentedPassword);
+                if (!valid) {
+                    return new Response(JSON.stringify({
+                        error: "선생님 인증이 만료되었거나 비밀번호가 올바르지 않습니다. 다시 인증해주세요.",
+                        code: "TEACHER_AUTH_REQUIRED"
+                    }), {
+                        status: 401,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+            }
             // 학생 권한 비활성화 시 수정 및 연기 차단
             if (!isTeacher) {
                 let targetGrade = body.grade ? parseInt(body.grade, 10) : null;

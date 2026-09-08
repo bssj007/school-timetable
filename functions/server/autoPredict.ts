@@ -20,6 +20,8 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
     // Group required queries by Grade, Dataset, and the Target Week
     for (const a of assessments) {
         if (a.isDone || a.isDeleted) continue;
+        // 숙제형/기간형 수행평가는 시간표 특정 교시에 맞출 필요가 없으므로 자동예측 컨텍스트 수집에서 제외
+        if (a.endDate || !a.classTime) continue;
         let ds = a.dataset || '';
         if (ds !== 'MANUAL_PLAN' && ds !== 'SEMESTER_PLAN') ds = 'COMCIGAN';
         
@@ -94,6 +96,27 @@ export async function applyAutoPredictions(assessments: any[], db: any, previewM
     // Evaluate orphans and collect Promises (since we added DB await)
     const resultPromises = Promise.all(assessments.map(async assessment => {
         if (assessment.isDone || assessment.isDeleted) return assessment;
+
+        // 숙제형/기간형 수행평가는 원래 표에 맞출 필요 없는 기간형이므로 (자동예측)에서 완전히 예외 처리
+        if (assessment.endDate || !assessment.classTime) {
+            assessment.isOrphan = false;
+            // 과거에 잘못 자동예측되어 DB에 tempDueDate, tempClassTime, isAutoPredicted가 기록되어 있다면 초기화
+            if (assessment.isAutoPredicted || assessment.tempDueDate || assessment.tempClassTime) {
+                assessment.isAutoPredicted = 0;
+                assessment.tempDueDate = null;
+                assessment.tempClassTime = null;
+                if (!previewMode) {
+                    try {
+                        await db.prepare(
+                            "UPDATE performance_assessments SET tempDueDate = NULL, tempClassTime = NULL, isAutoPredicted = 0 WHERE id = ?"
+                        ).bind(assessment.id).run();
+                    } catch (e) {
+                        console.error("[autoPredict] Failed to reset homework auto-prediction:", e);
+                    }
+                }
+            }
+            return assessment;
+        }
 
         let ds = assessment.dataset || '';
         if (ds !== 'MANUAL_PLAN' && ds !== 'SEMESTER_PLAN') ds = 'COMCIGAN';

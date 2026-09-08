@@ -135,11 +135,8 @@ export const onRequest = async (context: any) => {
             assessment_allow_teacher_grade3: settings['assessment_allow_teacher_grade3'] !== 'false',
             assessment_disallow_msg_student: settings['assessment_disallow_msg_student'] || '현재 학생의 수행평가 등록이 제한되어 있습니다.',
             assessment_disallow_msg_teacher: settings['assessment_disallow_msg_teacher'] || '현재 선생님의 수행평가 등록이 제한되어 있습니다.',
-            // 교사 페이지 인증 (장난방지 수준 — 클라이언트 직접 비교용)
-            teacher_default_password: settings['teacher_default_password'] || '관리',
+            // 교사 페이지 인증 만료 설정 (일수)
             teacher_auth_expire_days: parseInt(settings['teacher_auth_expire_days'] || '0', 10),
-            // 선생님별 개별 비밀번호 (JSON: {"홍길동": "pw1", ...}, 미설정이면 디폴트 사용)
-            teacher_passwords: settings['teacher_passwords'] || '{}',
             // 학생에게 교사 지원표시 — 이용중인 교사 이름 배열
             active_teachers: (() => { try { return settings['active_teachers'] ? JSON.parse(settings['active_teachers']) : []; } catch { return []; } })(),
         }), {
