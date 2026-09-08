@@ -745,9 +745,10 @@ body.capturing #timetable-container[data-print-font-size="large"] td .md\:text-b
     background-color: revert !important;
     background-image: revert !important;
     color: revert !important;
-    border-color: revert !important;
-    border-width: revert !important;
-    outline: revert !important;
+    /* border-color: inherit keeps the component's own border; revert would erase it */
+    border-color: inherit !important;
+    /* outline: none — revert would restore the UA browser focus box (the visible rectangle) */
+    outline: none !important;
     box-shadow: revert !important;
     opacity: revert !important;
     text-decoration: revert !important;
