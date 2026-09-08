@@ -7,7 +7,7 @@ import {
     clearRoleCookie,
     getAuthenticatedTeacher,
     getActiveTeacherName
-} from "@/components/RoleSelectDialog";
+} from "@/lib/teacherUtils";
 import { isMaintenanceBypassed } from "@/lib/browserDetect";
 import { toast } from "sonner";
 
