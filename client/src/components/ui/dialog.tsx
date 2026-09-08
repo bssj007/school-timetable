@@ -119,9 +119,8 @@ function DialogContent({
   );
 
   // ── 모바일 키보드 보정 ──────────────────────────────────────────────────────
-  // 키보드가 올라오면 visualViewport가 줄어든다.
-  // fixed + top:50% 는 window 기준이므로 키보드에 가려진다.
-  // visualViewport 이벤트로 실제 보이는 영역 내에 다이얼로그를 재배치한다.
+  // 키보드가 올라오면 visualViewport.height가 줄어든다.
+  // fixed 요소는 viewport 기준 → 보이는 영역 중앙에 재배치.
   const contentRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -132,16 +131,15 @@ function DialogContent({
       const el = contentRef.current;
       if (!el) return;
 
-      const vvTop = vv.offsetTop;         // 스크롤된 오프셋
-      const vvH = vv.height;              // 현재 보이는 높이
-      const winH = window.innerHeight;    // 전체 윈도우 높이
+      const vvH = vv.height;           // 현재 보이는 높이 (키보드 제외)
+      const winH = window.innerHeight; // 전체 윈도우 높이
 
-      if (vvH < winH - 50) {
-        // 키보드가 올라온 상태 — 보이는 영역 중앙에 배치 (최상단에 너무 붙지 않도록 최소 여백 12px)
-        const center = vvTop + vvH / 2;
-        el.style.top = `${center}px`;
+      if (vvH < winH - 80) {
+        // 키보드가 올라온 상태
+        // fixed 요소는 viewport 기준이므로 top = vvH / 2 (보이는 영역 정중앙)
+        // transform: translate(-50%, -50%)가 자체 크기의 절반만큼 올려줌
+        el.style.top = `${vvH / 2}px`;
         el.style.transform = 'translate(-50%, -50%)';
-        // 보이는 영역을 벗어나지 않도록 최대 높이 제한
         el.style.maxHeight = `${vvH - 24}px`;
         el.style.overflowY = 'auto';
       } else {
@@ -154,10 +152,8 @@ function DialogContent({
     };
 
     vv.addEventListener('resize', reposition);
-    vv.addEventListener('scroll', reposition);
     return () => {
       vv.removeEventListener('resize', reposition);
-      vv.removeEventListener('scroll', reposition);
     };
   }, []);
 
