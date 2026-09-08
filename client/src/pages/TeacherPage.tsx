@@ -368,7 +368,8 @@ export default function TeacherPage() {
   // ── 숙제형 폼 상태 ──
   const [hwForm, setHwForm] = useState({
     subject: '',
-    classNum: '',
+    classNum: '',   // "{grade}-{classNum}-{group}" 복합 키 (이동수업) 또는 classNum 문자열
+    classCode: '', // 이동수업 그룹 코드 (예: "A"), 일반반은 ''
     startDate: '',
     dueDate: '',
     title: '',
@@ -1031,25 +1032,39 @@ export default function TeacherPage() {
     return Array.from(classesMap.values());
   }, [selectedSchedule]);
 
-  // 숙제형 폼: 선택된 과목에 해당하는 반 목록 (시간표 기반)
+  // 숙제형 폼: 선택된 과목에 해당하는 반+그룹 목록 (시간표 기반, 당일형과 동일한 로직)
+  // 이동수업의 경우 그룹(A/B/C/D)별로 별도 항목을 생성한다.
   const classesForHwSubject = useMemo(() => {
     if (!selectedSchedule || !hwForm.subject) return [];
-    const result = new Map<string, { grade: number; classNum: number }>();
+    // key: "grade-classNum-group" → 중복 방지
+    const result = new Map<string, { grade: number; classNum: number; group: string; label: string }>();
     for (let d = 1; d <= 5; d++) {
       const daySchedule = selectedSchedule[d];
       if (!daySchedule) continue;
       for (let p = 1; p < daySchedule.length; p++) {
         const decoded = decodeCell(daySchedule[p]);
-        if (decoded && decoded.subjectName === hwForm.subject) {
-          const key = `${decoded.grade}-${decoded.classNum}`;
-          result.set(key, { grade: decoded.grade, classNum: decoded.classNum });
+        if (!decoded || decoded.subjectName !== hwForm.subject) continue;
+
+        // 당일형과 동일하게 computedGroupsG2/G3 에서 그룹 조회
+        let cellGroup = '';
+        if (decoded.grade === 2) cellGroup = computedGroupsG2[`${d - 1}-${p}`] || '';
+        else if (decoded.grade === 3) cellGroup = computedGroupsG3[`${d - 1}-${p}`] || '';
+
+        const key = `${decoded.grade}-${decoded.classNum}-${cellGroup}`;
+        if (!result.has(key)) {
+          const label = cellGroup
+            ? `${decoded.grade}학년 ${decoded.classNum}반 (${cellGroup}그룹)`
+            : `${decoded.grade}학년 ${decoded.classNum}반`;
+          result.set(key, { grade: decoded.grade, classNum: decoded.classNum, group: cellGroup, label });
         }
       }
     }
-    return Array.from(result.values()).sort((a, b) =>
-      a.grade !== b.grade ? a.grade - b.grade : a.classNum - b.classNum
-    );
-  }, [selectedSchedule, hwForm.subject]);
+    return Array.from(result.values()).sort((a, b) => {
+      if (a.grade !== b.grade) return a.grade - b.grade;
+      if (a.classNum !== b.classNum) return a.classNum - b.classNum;
+      return a.group.localeCompare(b.group);
+    });
+  }, [selectedSchedule, hwForm.subject, computedGroupsG2, computedGroupsG3]);
 
   // 2. Fetch Assessments for all taught classes concurrently
   const { data: allAssessments, isLoading: isAssessmentsLoading } = useQuery<AssessmentItem[]>({
@@ -2158,7 +2173,7 @@ export default function TeacherPage() {
                           <label className="block text-xs font-bold text-slate-600 mb-1">과목</label>
                           <select
                             value={hwForm.subject}
-                            onChange={e => setHwForm(f => ({ ...f, subject: e.target.value, classNum: '' }))}
+                            onChange={e => setHwForm(f => ({ ...f, subject: e.target.value, classNum: '', classCode: '' }))}
                             className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
                           >
                             <option value="">과목 선택</option>
@@ -2171,14 +2186,24 @@ export default function TeacherPage() {
                           <label className="block text-xs font-bold text-slate-600 mb-1">반</label>
                           <select
                             value={hwForm.classNum}
-                            onChange={e => setHwForm(f => ({ ...f, classNum: e.target.value }))}
+                            onChange={e => {
+                              // classNum 값은 "grade-classNum-group" 복합키로 저장
+                              const selected = classesForHwSubject.find(
+                                c => `${c.grade}-${c.classNum}-${c.group}` === e.target.value
+                              );
+                              setHwForm(f => ({
+                                ...f,
+                                classNum: e.target.value,
+                                classCode: selected?.group || '',
+                              }));
+                            }}
                             disabled={!hwForm.subject || classesForHwSubject.length === 0}
                             className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
                           >
                             <option value="">{!hwForm.subject ? '과목 먼저 선택' : '반 선택'}</option>
-                            {classesForHwSubject.map(({ grade, classNum }) => (
-                              <option key={`${grade}-${classNum}`} value={String(classNum)}>
-                                {grade}학년 {classNum}반
+                            {classesForHwSubject.map(({ grade, classNum, group, label }) => (
+                              <option key={`${grade}-${classNum}-${group}`} value={`${grade}-${classNum}-${group}`}>
+                                {label}
                               </option>
                             ))}
                           </select>
@@ -2250,7 +2275,7 @@ export default function TeacherPage() {
                     </button>
                   )}
                   {hwPage === 1 ? (() => {
-                    const page1Valid = !!(hwForm.title && hwForm.subject && hwForm.classNum && hwForm.startDate && hwForm.dueDate);
+                    const page1Valid = !!(hwForm.title && hwForm.subject && hwForm.classNum && hwForm.classNum !== '' && hwForm.startDate && hwForm.dueDate);
                     return (
                       <button
                         type="button"
@@ -2272,9 +2297,9 @@ export default function TeacherPage() {
                       type="button"
                       disabled={createMutation.isPending}
                       onClick={() => {
-                        // 학년/반 파싱
+                        // classNum 값은 "grade-classNum-group" 복합키
                         const selectedClass = classesForHwSubject.find(
-                          c => String(c.classNum) === hwForm.classNum
+                          c => `${c.grade}-${c.classNum}-${c.group}` === hwForm.classNum
                         );
                         if (!selectedClass) { toast.error("반을 선택하세요."); return; }
 
@@ -2283,6 +2308,9 @@ export default function TeacherPage() {
                         else if (selectedClass.grade === 2) resolvedDataset = g2DatasetType;
                         else if (selectedClass.grade === 3) resolvedDataset = g3DatasetType;
 
+                        // 당일형과 동일한 구조:
+                        // - 이동수업(그룹 있음): classNum=실제반번호, classCode=그룹코드("A")
+                        // - 일반반: classNum=실제반번호, classCode=''
                         createMutation.mutate({
                           subject: hwForm.subject,
                           title: hwForm.title,
@@ -2295,13 +2323,13 @@ export default function TeacherPage() {
                           classTime: null,
                           dataset: resolvedDataset,
                           teacher: teacherName,
-                          classCode: extractClassCode(hwForm.subject),
+                          classCode: selectedClass.group || '',
                           isTeacherCreated: 1,
                           activityType: hwForm.activityType || '수행평가',
                           submissionLink: hwForm.link || null,
                         }, {
                           onSuccess: () => {
-                            setHwForm({ subject: '', classNum: '', startDate: '', dueDate: '', title: '', content: '', link: '', activityType: '수행평가' });
+                            setHwForm({ subject: '', classNum: '', classCode: '', startDate: '', dueDate: '', title: '', content: '', link: '', activityType: '수행평가' });
                             setHwPage(1);
                             setViewMode('daily');
                           }
