@@ -1,5 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 import { createStudentProfilesTable, createIpProfilesTable } from "./db_schema";
+import { parseUA } from "./_uaDetect";
 
 interface Env {
     DB: D1Database;
@@ -142,11 +143,13 @@ ${logoOrIconHtml}
                 }
             }
 
+            const uaProfile = parseUA(userAgent);
+
             // 1. Insert Log (with Auto-Migration for Table Creation)
             const insertLog = async () => {
                 await env.DB.prepare(
-                    "INSERT INTO access_logs (ip, userAgent, method, endpoint, status, grade, classNum, studentNumber, kakaoId, kakaoNickname, teacherName) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                ).bind(ip, userAgent, request.method, url.pathname, response.status, grade, classNum, studentNumber, kakaoId, kakaoNickname, teacherName).run();
+                    "INSERT INTO access_logs (ip, userAgent, method, endpoint, status, grade, classNum, studentNumber, kakaoId, kakaoNickname, teacherName, browserKey, deviceType, os, isInApp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                ).bind(ip, userAgent, request.method, url.pathname, response.status, grade, classNum, studentNumber, kakaoId, kakaoNickname, teacherName, uaProfile.browserKey, uaProfile.deviceType, uaProfile.os, uaProfile.isInApp ? 1 : 0).run();
             };
 
             try {
@@ -171,6 +174,10 @@ ${logoOrIconHtml}
                                 kakaoId TEXT,
                                 kakaoNickname TEXT,
                                 teacherName TEXT,
+                                browserKey TEXT,
+                                deviceType TEXT,
+                                os TEXT,
+                                isInApp INTEGER DEFAULT 0,
                                 accessedAt TEXT DEFAULT (datetime('now'))
                             )
                         `).run();
@@ -179,8 +186,12 @@ ${logoOrIconHtml}
                         console.error("[Middleware] Create access_logs Failed:", createError);
                     }
                 } else if (e.message && e.message.includes("no such column")) {
-                    // teacherName 컨럼이 없는 구버전 테이블 자동 마이그레이션
+                    // 컨럼 누락 구버전 테이블 자동 마이그레이션
                     try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN teacherName TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN browserKey TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN deviceType TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN os TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN isInApp INTEGER DEFAULT 0").run(); } catch (_) {}
                     try { await insertLog(); } catch (_) { console.warn("[Middleware] Column mismatch in access_logs after migration"); }
                 } else {
                     console.error("[Middleware] Log Insert Failed:", e);
@@ -263,8 +274,12 @@ ${logoOrIconHtml}
                 const isDownloadAction = url.pathname === '/api/action/download';
 
                 const query = `
-                    INSERT INTO ip_profiles (ip, student_profile_id, kakaoId, kakaoNickname, lastAccess, modificationCount, addCount, deleteCount, userAgent, printCount, downloadCount, isStandalone, teacherName)
-                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO ip_profiles (
+                        ip, student_profile_id, kakaoId, kakaoNickname, lastAccess,
+                        modificationCount, addCount, deleteCount, userAgent, printCount, downloadCount,
+                        isStandalone, teacherName, browserKey, deviceType, os, isInApp
+                    )
+                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(ip) DO UPDATE SET
                         lastAccess = datetime('now'),
                         userAgent = excluded.userAgent,
@@ -272,6 +287,10 @@ ${logoOrIconHtml}
                         kakaoId = COALESCE(excluded.kakaoId, ip_profiles.kakaoId),
                         kakaoNickname = COALESCE(excluded.kakaoNickname, ip_profiles.kakaoNickname),
                         teacherName = COALESCE(excluded.teacherName, ip_profiles.teacherName),
+                        browserKey = excluded.browserKey,
+                        deviceType = excluded.deviceType,
+                        os = excluded.os,
+                        isInApp = excluded.isInApp,
                         modificationCount = ip_profiles.modificationCount + ?,
                         addCount = ip_profiles.addCount + ?,
                         deleteCount = ip_profiles.deleteCount + ?,
@@ -298,8 +317,12 @@ ${logoOrIconHtml}
                         userAgent,
                         printIncrement,
                         downloadIncrement,
-                        0, // isStandalone — 쿠키 기반 탐지 제거, UA 기반으로 일원화
+                        0, // isStandalone
                         teacherName,
+                        uaProfile.browserKey,
+                        uaProfile.deviceType,
+                        uaProfile.os,
+                        uaProfile.isInApp ? 1 : 0,
                         increment, // modificationCount Update
                         addIncrement,
                         deleteIncrement,
@@ -357,6 +380,18 @@ ${logoOrIconHtml}
                     } catch (_) { /* already exists */ }
                     try {
                         await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN teacherName TEXT").run();
+                    } catch (_) { /* already exists */ }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN browserKey TEXT").run();
+                    } catch (_) { /* already exists */ }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN deviceType TEXT").run();
+                    } catch (_) { /* already exists */ }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN os TEXT").run();
+                    } catch (_) { /* already exists */ }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN isInApp INTEGER DEFAULT 0").run();
                     } catch (_) { /* already exists */ }
 
                     // Retry update after ALTER

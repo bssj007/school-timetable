@@ -1,5 +1,6 @@
 import { adminPassword } from "../../../server/adminPW";
 import { ensureAllTables } from "../../db_schema";
+import { parseUA } from "../../_uaDetect";
 
 export const onRequest = async (context: any) => {
     const { request, env } = context;
@@ -161,31 +162,53 @@ export const onRequest = async (context: any) => {
                 }
                 return null;
             };
-            // 4. IP별 과거 접속환경 조회 (access_logs에서 distinct 환경)
-            let envMap: Record<string, { os: string; deviceType: string; browserKey: string; isInApp: boolean }[]> = {};
+            // 4. IP별 과거 접속환경 조회 (access_logs에서 distinct userAgent 조회하여 파싱)
+            let envMap: Record<string, { os: string; deviceType: string; browserKey: string; isInApp: boolean; isApp: boolean }[]> = {};
             try {
                 const envQuery = `
-                    SELECT ip, os, deviceType, browserKey, isInApp
+                    SELECT ip, userAgent
                     FROM access_logs
-                    WHERE os IS NOT NULL AND deviceType IS NOT NULL
-                    GROUP BY ip, os, deviceType, browserKey, isInApp
+                    WHERE userAgent IS NOT NULL AND TRIM(userAgent) != ''
+                    GROUP BY ip, userAgent
                 `;
                 const { results: envResults } = await env.DB.prepare(envQuery).all();
                 for (const row of envResults as any[]) {
+                    if (!row.ip || !row.userAgent) continue;
+                    const parsed = parseUA(row.userAgent);
+                    if (!parsed.os && !parsed.deviceType && !parsed.browserKey) continue;
                     if (!envMap[row.ip]) envMap[row.ip] = [];
                     envMap[row.ip].push({
-                        os: row.os,
-                        deviceType: row.deviceType,
-                        browserKey: row.browserKey || 'other',
-                        isInApp: row.isInApp === 1,
+                        os: parsed.os || '',
+                        deviceType: parsed.deviceType || '',
+                        browserKey: parsed.browserKey || 'other',
+                        isInApp: parsed.isInApp,
+                        isApp: parsed.isApp,
                     });
                 }
             } catch (e: any) {
-                // access_logs에 os/deviceType 컬럼이 없는 경우 무시
                 console.warn('[Admin Users] Historical environments query failed:', e.message);
             }
 
             const activeUsers = profiles.map((p: any) => {
+                const parsedLatestUA = parseUA(p.userAgent);
+                const os = p.os || parsedLatestUA.os || null;
+                const browserKey = p.browserKey || parsedLatestUA.browserKey || null;
+                const deviceType = p.deviceType || parsedLatestUA.deviceType || null;
+                const isInApp = p.isInApp === 1 || parsedLatestUA.isInApp;
+                const appType = detectServerAppType(p.userAgent) || (parsedLatestUA.isApp ? "webview" : null);
+
+                // envMap[p.ip]가 비어있고 최신 UA가 있으면 최신 환경 추가
+                let userEnvs = envMap[p.ip] || [];
+                if (userEnvs.length === 0 && (parsedLatestUA.os || parsedLatestUA.browserKey)) {
+                    userEnvs = [{
+                        os: parsedLatestUA.os || '',
+                        deviceType: parsedLatestUA.deviceType || '',
+                        browserKey: parsedLatestUA.browserKey || 'other',
+                        isInApp: parsedLatestUA.isInApp,
+                        isApp: parsedLatestUA.isApp,
+                    }];
+                }
+
                 const profile = {
                     clientId: p.ip,
                     ip: p.ip,
@@ -200,12 +223,12 @@ export const onRequest = async (context: any) => {
                     isStandalone: false,
                     lastAccess: p.lastAccess,
                     userAgent: p.userAgent || null,
-                    appType: detectServerAppType(p.userAgent),
+                    appType,
                     recentUserAgents: p.userAgent ? [p.userAgent] : [],
-                    browserKey: p.browserKey || null,
-                    deviceType: p.deviceType || null,
-                    os: p.os || null,
-                    isInApp: p.isInApp === 1,
+                    browserKey,
+                    deviceType,
+                    os,
+                    isInApp,
                     teacherName: p.teacherName || null,
                     studentName: p.profileName || null,
                     grade: p.profileGrade || null,
@@ -213,7 +236,7 @@ export const onRequest = async (context: any) => {
                     studentNumber: p.profileStudentNumber || null,
                     hasElectives: !!p.rawElectives && p.rawElectives !== '{}' && p.rawElectives !== 'null',
                     instructionDismissed: !!p.instructionDismissed,
-                    historicalEnvironments: envMap[p.ip] || [],
+                    historicalEnvironments: userEnvs,
                     assessments: [],
                     logs: [],
                     detailsLoaded: false,

@@ -1,5 +1,6 @@
 
 import { adminPassword } from "../../../server/adminPW";
+import { parseUA } from "../../_uaDetect";
 
 export const onRequest = async (context: any) => {
     const { request, env } = context;
@@ -69,14 +70,18 @@ export const onRequest = async (context: any) => {
                  LIMIT 15`
             ).bind(targetIp).all();
 
-            recentEnvironments = (envRows || []).map((r: any) => ({
-                userAgent:   r.userAgent   || null,
-                browserKey:  r.browserKey  || 'other',
-                deviceType:  r.deviceType  || 'desktop',
-                os:          r.os          || null,
-                isInApp:     r.isInApp     === 1 || r.isInApp === true,
-                accessedAt:  r.accessedAt  || null,
-            }));
+            recentEnvironments = (envRows || []).map((r: any) => {
+                const parsed = parseUA(r.userAgent);
+                return {
+                    userAgent:   r.userAgent   || null,
+                    browserKey:  r.browserKey  || parsed.browserKey || 'other',
+                    deviceType:  r.deviceType  || parsed.deviceType || 'desktop',
+                    os:          r.os          || parsed.os || null,
+                    isInApp:     r.isInApp     === 1 || r.isInApp === true || parsed.isInApp,
+                    isApp:       parsed.isApp,
+                    accessedAt:  r.accessedAt  || null,
+                };
+            });
 
             // backward compat: distinct UAs
             const seen = new Set<string>();
@@ -226,6 +231,7 @@ export const onRequest = async (context: any) => {
                 deviceType: e.deviceType || '',
                 browserKey: e.browserKey || 'other',
                 isInApp: !!e.isInApp,
+                isApp: !!e.isApp,
             })),
 
             assessments: recentAssessments || [],

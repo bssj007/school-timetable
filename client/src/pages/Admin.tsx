@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { agent, shouldShowDownloadPage, getCurrentBypassEnvironment, parseAppTypeFromUserAgent, type BypassEnvironmentKey } from "@/lib/browserDetect";
+import { parseUA } from "@/lib/uaDetect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7499,8 +7500,13 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
 
                                     const renderEnvBadge = (u: IPProfile | undefined | null) => {
                                         if (!u) return <span className="text-gray-300 text-xs">-</span>;
-                                        const os = osLabel(u.os);
-                                        const browser = browserLabel(u.browserKey);
+                                        let os = osLabel(u.os);
+                                        let browser = u.appType === 'webview' ? '앱' : browserLabel(u.browserKey);
+                                        if ((!os || !browser) && u.userAgent) {
+                                            const parsed = parseUA(u.userAgent);
+                                            if (!os) os = osLabel(parsed.os);
+                                            if (!browser) browser = (u.appType === 'webview' || parsed.isApp) ? '앱' : browserLabel(parsed.browserKey);
+                                        }
                                         if (!os && !browser) return <span className="text-gray-300 text-xs">-</span>;
                                         return (
                                             <div className="flex items-center gap-1.5">
@@ -7516,15 +7522,37 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     };
 
                                     // ── 앱 설치 이력 배지 (historicalEnvironments에서 WebView/인앱 환경만 표시) ────────
-                                    const renderAppHistoryBadges = (envs: { os: string; deviceType: string; browserKey: string; isInApp: boolean }[] | undefined) => {
-                                        if (!envs || envs.length === 0) return <span className="text-gray-300 text-xs">-</span>;
+                                    const renderAppHistoryBadges = (
+                                        envs: { os: string; deviceType: string; browserKey: string; isInApp: boolean; isApp?: boolean }[] | undefined,
+                                        userFallback?: IPProfile
+                                    ) => {
+                                        let effectiveEnvs = envs && envs.length > 0 ? [...envs] : [];
 
-                                        // WebView UA 특성: browserKey가 other이면서 모바일 기기 → 대부분 WebView
-                                        // 또는 isInApp이 true인 경우는 인앱 브라우저 (카카오 등) → 제외
-                                        // 일반 브라우저(chrome, safari, samsung, firefox) 접속은 제외
-                                        const appEnvs = envs.filter(e => {
+                                        // 폴백: historicalEnvironments가 비어있고 사용자 userAgent 정보가 있는 경우
+                                        if (effectiveEnvs.length === 0 && userFallback) {
+                                            const uas = [userFallback.userAgent, ...(userFallback.recentUserAgents || [])].filter(Boolean) as string[];
+                                            if (uas.length > 0) {
+                                                effectiveEnvs = uas.map(ua => {
+                                                    const p = parseUA(ua);
+                                                    return {
+                                                        os: p.os || '',
+                                                        deviceType: p.deviceType || '',
+                                                        browserKey: p.browserKey || 'other',
+                                                        isInApp: p.isInApp,
+                                                        isApp: p.isApp,
+                                                    };
+                                                });
+                                            }
+                                        }
+
+                                        if (effectiveEnvs.length === 0) return <span className="text-gray-300 text-xs">-</span>;
+
+                                        // 정식 앱(WebView) 접속만 필터링
+                                        const appEnvs = effectiveEnvs.filter(e => {
                                             // 인앱 브라우저(카카오/네이버 등)는 제외
                                             if (e.isInApp) return false;
+                                            // 정식 앱(WebView)으로 식별된 경우 포함
+                                            if (e.isApp) return true;
                                             // 데스크톱은 제외
                                             if (e.deviceType === 'desktop') return false;
                                             // 일반 브라우저 접속은 제외 (chrome, safari, samsung, firefox)
@@ -7535,7 +7563,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
 
                                         if (appEnvs.length === 0) return <span className="text-gray-300 text-xs">-</span>;
 
-                                        // 중복 제거 (os 기준으로)
+                                        // 중복 제거 (os 및 deviceType 기준)
                                         const seen = new Set<string>();
                                         const unique = appEnvs.filter(e => {
                                             const key = `${e.os}-${e.deviceType}`;
@@ -7631,7 +7659,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                 {renderEnvBadge(user)}
                                             </TableCell>
                                             <TableCell>
-                                                {renderAppHistoryBadges(user.historicalEnvironments)}
+                                                {renderAppHistoryBadges(user.historicalEnvironments, user)}
                                             </TableCell>
                                             <TableCell className="text-slate-400">
                                                 {user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}
@@ -7771,7 +7799,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         {(() => {
                                                             // 모든 IP의 historicalEnvironments를 병합
                                                             const allEnvs = group.ips.flatMap(ip => ip.historicalEnvironments || []);
-                                                            return renderAppHistoryBadges(allEnvs);
+                                                            return renderAppHistoryBadges(allEnvs, representativeUser);
                                                         })()}
                                                     </TableCell>
                                                     <TableCell>
@@ -7948,7 +7976,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                                 {renderEnvBadge(user)}
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                {renderAppHistoryBadges(user.historicalEnvironments)}
+                                                                                {renderAppHistoryBadges(user.historicalEnvironments, user)}
                                                                             </TableCell>
                                                                             <TableCell>{user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}</TableCell>
                                                                             <TableCell>
