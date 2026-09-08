@@ -213,17 +213,23 @@ export const onRequest = async (context: any) => {
                 console.warn('[Teacher Timetable] Detection failed:', { detectedTeacherProp, detectedSubjectProp, detectedBaseline });
             }
 
-            // baseline 데이터를 sanitize 전에 먼저 복사
+            // baseline 데이터를 sanitize 전에 먼저 복사 (> 마커 보존)
             const rawBaselineData = detectedBaseline ? (rawData[detectedBaseline] || []) : [];
+            // live 데이터 (낮은 번호, 현재 주차 — 학생 API의 timetableProps[0]에 해당)
+            const rawLiveData    = detectedLive     ? (rawData[detectedLive]     || []) : [];
 
-            // ── 서버사이드 isChanged 계산 ────────────────────────────────────────────────────
-            // 컴시간은 변경된 셀 값에 '>' 접두사를 붙여 표시함 (예: ">12345")
-            // 이 마커는 단일 데이터셋 내에 존재하므로 두 데이터셋 비교가 필요없음
-            // sanitize 전에 rawBaselineData를 스캔하여 > 마커를 changedCells로 추출
-            const changedCellKeys: string[] = [];
+            // ── 서버사이드 isChanged 계산 (학생 API와 동일한 이중 방식) ─────────────────────
+            // 방식 1: '>' 접두사 스캔 (Comcigan이 명시적으로 표시한 변경 마커)
+            // 방식 2: live vs baseline 숫자 비교 (시간표 이동, 담당 선생님 변경 등 → '>' 없을 수 있음)
+            // → 두 방식의 합집합을 changedCells로 반환
+            const changedCellSet = new Set<string>();
+            const hasTwoDatasets = detectedLive && detectedLive !== detectedBaseline;
 
-            for (let ti = 0; ti < rawBaselineData.length; ti++) {
-                const teacherData = rawBaselineData[ti];
+            // [방식 1] live raw data에서 '>' 접두사 스캔
+            // Comcigan은 > 마커를 현재 주차(live) 데이터셋에 붙임
+            // 단일 데이터셋인 경우 rawLiveData === rawBaselineData 이므로 결과 동일
+            for (let ti = 0; ti < rawLiveData.length; ti++) {
+                const teacherData = rawLiveData[ti];
                 if (!teacherData) continue;
                 for (let d = 1; d <= 5; d++) {
                     const dayArr = teacherData[d];
@@ -231,13 +237,77 @@ export const onRequest = async (context: any) => {
                     for (let p = 1; p < dayArr.length; p++) {
                         const v = dayArr[p];
                         if (typeof v === 'string' && v.startsWith('>')) {
-                            changedCellKeys.push(`${ti}:${d}:${p}`);
+                            changedCellSet.add(`${ti}:${d}:${p}`);
                         }
                     }
                 }
             }
 
-            // sanitize: > 마커 제거 후 정수로 변환
+            // [방식 2] live vs baseline 숫자 비교 (학생 API의 baseCode !== code 로직과 동일)
+            if (hasTwoDatasets) {
+                // isEmptyDataset: live 전체가 0이면 아직 발행 안 됨 → 변경 없음
+                let isEmptyDataset = true;
+                outer: for (let ti = 0; ti < rawLiveData.length; ti++) {
+                    const td = rawLiveData[ti];
+                    if (!td) continue;
+                    for (let d = 1; d <= 5; d++) {
+                        const da = td[d];
+                        if (!Array.isArray(da)) continue;
+                        for (let p = 1; p < da.length; p++) {
+                            const v = da[p];
+                            const n = typeof v === 'string' ? parseInt(v.replace(/>/g, ''), 10) : (v || 0);
+                            if (n !== 0) { isEmptyDataset = false; break outer; }
+                        }
+                    }
+                }
+
+                if (!isEmptyDataset) {
+                    for (let ti = 0; ti < rawLiveData.length; ti++) {
+                        const liveTeacher = rawLiveData[ti];
+                        const baseTeacher = rawBaselineData[ti];
+                        if (!liveTeacher) continue;
+
+                        for (let d = 1; d <= 5; d++) {
+                            const liveDayArr = liveTeacher[d];
+                            const baseDayArr = baseTeacher?.[d];
+                            if (!Array.isArray(liveDayArr)) continue;
+
+                            // isDayEmpty: 해당 요일 live가 전부 0이면 스킵
+                            let isDayEmpty = true;
+                            for (let p = 1; p < liveDayArr.length; p++) {
+                                const v = liveDayArr[p];
+                                const n = typeof v === 'string' ? parseInt(v.replace(/>/g, ''), 10) : (v || 0);
+                                if (n !== 0) { isDayEmpty = false; break; }
+                            }
+                            if (isDayEmpty) continue;
+
+                            const maxPeriod = Math.max(liveDayArr.length, baseDayArr?.length ?? 0);
+                            for (let p = 1; p < maxPeriod; p++) {
+                                const lv = liveDayArr[p];
+                                let liveCode = typeof lv === 'string' ? parseInt(lv.replace(/>/g, ''), 10) : (lv || 0);
+                                const bv = baseDayArr?.[p];
+                                const baseCode = typeof bv === 'string' ? parseInt(bv.replace(/>/g, ''), 10) : (bv || 0);
+
+                                // cell-level fallback (학생 API와 동일):
+                                // live=0 이지만 base가 있고 요일이 비어있지 않으면 → base로 채움
+                                if (liveCode === 0 && baseCode !== 0 && !isDayEmpty) {
+                                    liveCode = baseCode;
+                                }
+
+                                // 변경 감지: live와 base 숫자가 다르면 changed
+                                // (같은 과목이어도 teacherIdx가 다르면 코드값 자체가 다름 → 자동 감지)
+                                if (baseCode !== liveCode) {
+                                    changedCellSet.add(`${ti}:${d}:${p}`);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            const changedCellKeys = Array.from(changedCellSet);
+
+            // sanitize: > 마커 제거 후 정수로 변환 (timetable 반환용)
             const baselineData = JSON.parse(JSON.stringify(rawBaselineData));
             sanitizeTimetable(baselineData);
 
