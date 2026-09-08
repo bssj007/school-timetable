@@ -3050,25 +3050,17 @@ export default function TeacherPage() {
                     </button>
                   </Link>
                 )}
-                {/* 학생공지 (PC wide - 인증 시, 계정 버튼 오른쪽) */}
-                {isCurrentTeacherVerified && (
-                  <button type="button" onClick={() => setShowNoticeDialog(true)}
-                    style={{ WebkitTapHighlightColor: 'transparent' }}
-                    className="hidden wide:flex items-center gap-1 px-2.5 py-1.5 bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border-l border-yellow-300 cursor-pointer"
-                    title="학생공지">
-                    <Bell className="w-3.5 h-3.5" /><span>학생공지</span>
-                  </button>
-                )}
               </div>
 
-              {/* 학생공지 (모바일 - 인증 시) */}
+              {/* 학생공지 — 좁은화면/넓은화면 공통, ml-auto로 우측 정렬 */}
               {isCurrentTeacherVerified && (
                 <button type="button" onClick={() => setShowNoticeDialog(true)} style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className="wide:hidden ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs wide:text-sm shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
+                  className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
                   title="학생공지">
                   <Bell className="w-3.5 h-3.5" /><span>학생공지</span>
                 </button>
               )}
+
 
               {/* 미인증 시 우측 묶음: [보기 전용] [로그인] */}
               {!isCurrentTeacherVerified && (
