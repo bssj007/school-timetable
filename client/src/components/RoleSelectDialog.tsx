@@ -24,19 +24,25 @@ export function getTeacherNameCookie(): string | null {
 
 export const AUTH_TEACHER_KEY = "sj_authenticated_teacher";
 
-function setRoleCookie(role: "student" | "teacher") {
+export function setRoleCookie(role: "student" | "teacher") {
+    if (typeof document === "undefined") return;
     document.cookie = `${ROLE_COOKIE}=${role}; max-age=${COOKIE_MAX_AGE}; path=/`;
 }
 
 export function setTeacherNameCookie(name: string) {
+    if (typeof document === "undefined") return;
     document.cookie = `${TEACHER_COOKIE}=${encodeURIComponent(name)}; max-age=${COOKIE_MAX_AGE}; path=/`;
 }
 
 export function clearRoleCookie() {
     if (typeof document === "undefined") return;
     document.cookie = `${ROLE_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
+    // 학생/선생님 프로필(TEACHER_COOKIE, 교사 비밀번호, 학생 설정)은 절대 삭제하지 않고 공존/보존함
+}
+
+export function clearTeacherCookie() {
+    if (typeof document === "undefined") return;
     document.cookie = `${TEACHER_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
-    // 역할/쿠키 전환 시 저장된 교사 비밀번호는 삭제하지 않고 보존함
 }
 
 export function normalizeTeacherName(name: string | null | undefined): string {
@@ -49,6 +55,20 @@ export function getAuthenticatedTeacher(): string | null {
     if (typeof localStorage === "undefined") return null;
     const auth = localStorage.getItem(AUTH_TEACHER_KEY);
     return auth ? normalizeTeacherName(auth) : null;
+}
+
+/**
+ * 자동 접속 교사 결정 규칙:
+ * 1. 로그인 된 교사(getAuthenticatedTeacher)가 있다면 무조건 그 교사명 반환 (최근 선택 교사 무시)
+ * 2. 로그인 된 교사가 없다면 가장 최근 선택했던 교사(getTeacherNameCookie 또는 last_selected_teacher_name) 반환
+ */
+export function getActiveTeacherName(): string | null {
+    const authTeacher = getAuthenticatedTeacher();
+    if (authTeacher) {
+        return authTeacher;
+    }
+    const recent = getTeacherNameCookie() || (typeof localStorage !== "undefined" ? localStorage.getItem("last_selected_teacher_name") : null);
+    return recent ? normalizeTeacherName(recent) : null;
 }
 
 export function getStoredTeacherPassword(teacherName?: string): string | null {
@@ -209,9 +229,19 @@ interface RoleSelectDialogProps {
 
 export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogProps) {
     const [location, setLocation] = useLocation();
-    const { setConfig, grade: savedGrade, classNum: savedClassNum, studentNumber: savedStudentNum, studentName: savedName, userRole } = useUserConfig();
+    const {
+        setConfig,
+        grade: savedGrade,
+        classNum: savedClassNum,
+        studentNumber: savedStudentNum,
+        studentName: savedName,
+        userRole,
+        isRoleSelectOpen,
+        roleSelectStep,
+        openRoleSelect,
+        closeRoleSelect,
+    } = useUserConfig();
 
-    const [isOpen, setIsOpen] = useState(false);
     const [step, setStep] = useState<Step>("role");
 
     // ── 학생 정보 ──
@@ -234,10 +264,18 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
     useEffect(() => {
         if (shouldSkip) return;
         if (!getRoleCookie() || !userRole) {
-            setIsOpen(true);
-            setStep("role");
+            openRoleSelect("role");
         }
     }, [shouldSkip, userRole, location]);
+
+    useEffect(() => {
+        if (roleSelectStep) {
+            setStep(roleSelectStep);
+            if (roleSelectStep === "teacher-name") {
+                fetchTeacherOptions();
+            }
+        }
+    }, [roleSelectStep]);
 
     // 교사 목록 fetch
     const fetchTeacherOptions = async () => {
@@ -248,9 +286,9 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
                 const data = await res.json();
                 const opts = buildTeacherOptions(data.teachers || [], data.subjects || [], data.timetable || []);
                 setTeacherOptions(opts);
-                const authTeacher = getAuthenticatedTeacher();
-                if (authTeacher) {
-                    const match = opts.find(o => o.rawName.replace(/선생님$/, '').trim() === authTeacher);
+                const activeTeacher = getActiveTeacherName();
+                if (activeTeacher) {
+                    const match = opts.find(o => normalizeTeacherName(o.rawName) === activeTeacher);
                     if (match) setSelectedOption(match);
                 }
             }
@@ -268,12 +306,23 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
     // ── 핸들러 ──
 
     const handleBack = () => {
+        if (step === "teacher-name" && userRole === "student") {
+            closeRoleSelect();
+            return;
+        }
         setStep("role");
         setStudentName(""); setStudentId(""); setStudentError("");
         setQuery(""); setSelectedOption(null); setTeacherError("");
     };
 
     const handleSelectStudent = () => {
+        // 이미 저장된 학생 프로필이 있다면 번거로운 재입력 없이 즉시 학생 역할로 진입
+        if (savedName && savedGrade && savedClassNum && savedStudentNum) {
+            setRoleCookie("student");
+            closeRoleSelect();
+            onRoleSelected("student");
+            return;
+        }
         if (!studentName && savedName) {
             setStudentName(savedName);
         }
@@ -285,6 +334,17 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
     };
 
     const handleSelectTeacher = () => {
+        // 1순위: 로그인 된 교사가 있다면 그 교사명으로 자동 접속 (최근 선택 교사 무시)
+        // 2순위: 로그인 된 교사가 없다면 가장 최근 선택했던 교사로 자동 접속
+        const activeTeacher = getActiveTeacherName();
+        if (activeTeacher) {
+            setRoleCookie("teacher");
+            setTeacherNameCookie(activeTeacher);
+            closeRoleSelect();
+            onRoleSelected("teacher");
+            setLocation("/teacher");
+            return;
+        }
         setStep("teacher-name");
         fetchTeacherOptions();
     };
@@ -316,7 +376,7 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
         setRoleCookie("student");
         setConfig({ schoolName: "부산성지고등학교", grade, classNum, studentNumber, studentName: trimmedName, semesterKey });
 
-        setIsOpen(false);
+        closeRoleSelect();
         onRoleSelected("student");
     };
 
@@ -325,12 +385,12 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
         if (!selectedOption) { setTeacherError("목록에서 선생님을 선택해주세요."); return; }
         setRoleCookie("teacher");
         setTeacherNameCookie(selectedOption.rawName);
-        setIsOpen(false);
+        closeRoleSelect();
         onRoleSelected("teacher");
         setLocation("/teacher");
     };
 
-    if (!isOpen) return null;
+    if (!isRoleSelectOpen) return null;
 
     // ── 학번 입력 유효성 ──
     const isNameValid = studentName.trim().length > 0;
@@ -338,12 +398,15 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
     const canSubmitStudent = isNameValid && isIdValid;
 
     return (
-        <Dialog open={isOpen}>
+        <Dialog open={isRoleSelectOpen} onOpenChange={(open) => { if (!open && userRole) closeRoleSelect(); }}>
             <DialogContent
                 className="sm:max-w-[440px]"
-                onInteractOutside={(e: any) => e.preventDefault()}
+                onInteractOutside={(e: any) => {
+                    if (!userRole) e.preventDefault();
+                    else closeRoleSelect();
+                }}
                 onOpenAutoFocus={(e: any) => e.preventDefault()}
-                showCloseButton={false}
+                showCloseButton={!!userRole}
             >
                 {/* ── Step 1: 역할 선택 ── */}
                 {step === "role" && (

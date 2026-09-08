@@ -25,7 +25,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
-import { clearRoleCookie, normalizeTeacherName } from "@/components/RoleSelectDialog";
+import { normalizeTeacherName } from "@/components/RoleSelectDialog";
 import {
   Select,
   SelectContent,
@@ -155,13 +155,12 @@ const DEFAULT_PRINT_HEIGHT = "11";
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
-  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, studentName, refreshKakaoUser, instructionDismissedV2, refreshRole } = useUserConfig();
+  const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, studentName, refreshKakaoUser, instructionDismissedV2, refreshRole, switchToRole } = useUserConfig();
   const [, setLocation] = useLocation();
 
   const handleGoToTeacher = (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
-    clearRoleCookie();
-    refreshRole();
+    switchToRole("teacher");
   };
 
   // 0. 설정 조회 (Public)

@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { useUserConfig } from "@/contexts/UserConfigContext";
-import { clearRoleCookie, getTeacherNameCookie, setTeacherNameCookie, getStoredTeacherPassword, setStoredTeacherPassword, clearStoredTeacherPassword, getAuthenticatedTeacher, normalizeTeacherName } from "@/components/RoleSelectDialog";
+import { getRoleCookie, setRoleCookie, getTeacherNameCookie, setTeacherNameCookie, getStoredTeacherPassword, setStoredTeacherPassword, clearStoredTeacherPassword, getAuthenticatedTeacher, getActiveTeacherName, normalizeTeacherName } from "@/components/RoleSelectDialog";
 import { isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 interface TeacherTimetableResponse {
@@ -315,36 +315,64 @@ function renderGroupCode(code: string, marginRight: number = 3): React.ReactElem
 }
 
 
+// F5 새로고침 등 초기 렌더 시 1프레임 즉시 교사명 매칭을 위한 캐시 조회
+function getCachedTeachers(): string[] | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("timetable_teachers_cache");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveTeacherId(nameToFind: string | null | undefined, teachersList?: string[]): string | null {
+  if (!nameToFind || !teachersList || teachersList.length <= 1) return null;
+  const cleanTarget = normalizeTeacherName(nameToFind);
+  const idx = teachersList.findIndex((n) => normalizeTeacherName(n) === cleanTarget);
+  return idx > 0 ? String(idx) : null;
+}
+
 export default function TeacherPage() {
   const queryClient = useQueryClient();
-  const { refreshRole } = useUserConfig();
+  const { refreshRole, switchToRole } = useUserConfig();
   const [, setLocation] = useLocation();
 
+  useEffect(() => {
+    if (getRoleCookie() !== "teacher") {
+      setRoleCookie("teacher");
+      refreshRole();
+    }
+  }, []);
+
   const handleReturnToStudentPage = () => {
-    // 자동 리다이렉션 쿠키만 삭제 (sj_user_role, sj_teacher_name)
-    clearRoleCookie();
-    refreshRole();
-    toast.success("학생용 페이지로 이동합니다.");
-    window.location.href = "/";
+    switchToRole("student");
   };
   
   // States
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(() => {
-    // 1순위: 현재 인증된 선생님
+    // 1순위: 로그인 된 교사가 있다면 무조건 그 교사명으로 자동 접속 (최근 선택 무시)
+    // 2순위: 로그인 된 교사가 없다면 가장 최근 선택했던 교사로 자동 접속
+    const activeTeacher = getActiveTeacherName();
     const authTeacher = getAuthenticatedTeacher();
+
     const allCached = queryClient.getQueriesData<TeacherTimetableResponse>({ queryKey: ['teacher-timetable'] });
-    const cached = allCached[0]?.[1];
-    if (authTeacher && cached?.teachers) {
-      const idx = cached.teachers.findIndex((name) => name === authTeacher || name.replace(/선생님$/, '').trim() === authTeacher);
-      if (idx > 0) return String(idx);
+    const cachedTeachers = allCached[0]?.[1]?.teachers || getCachedTeachers();
+
+    if (activeTeacher && cachedTeachers) {
+      const resolved = resolveTeacherId(activeTeacher, cachedTeachers);
+      if (resolved) return resolved;
     }
-    // 2순위: 쿠키 선생님
-    const cookieName = getTeacherNameCookie();
-    if (cookieName && cached?.teachers) {
-      const idx = cached.teachers.findIndex((name) => name === cookieName);
-      if (idx > 0) return String(idx);
+
+    // 로그인 된 교사가 없을 때만 이전 인덱스 캐시 활용
+    if (!authTeacher && typeof localStorage !== "undefined") {
+      const saved = localStorage.getItem("teacher-page-selected-teacher");
+      if (saved) return saved;
     }
-    return localStorage.getItem("teacher-page-selected-teacher") || "1";
+
+    return "1";
   });
   const [openCombobox, setOpenCombobox] = useState(false);
 
@@ -441,8 +469,15 @@ export default function TeacherPage() {
 
 
   useEffect(() => {
-    localStorage.setItem("teacher-page-selected-teacher", selectedTeacherId);
-  }, [selectedTeacherId]);
+    const authTeacher = getAuthenticatedTeacher();
+    // 로그인 된 교사가 없을 때만 '가장 최근 선택했던 교사'로 저장
+    if (!authTeacher) {
+      localStorage.setItem("teacher-page-selected-teacher", selectedTeacherId);
+      if (timetableData?.teachers?.[parseInt(selectedTeacherId, 10)]) {
+        localStorage.setItem("last_selected_teacher_name", timetableData.teachers[parseInt(selectedTeacherId, 10)]);
+      }
+    }
+  }, [selectedTeacherId, timetableData?.teachers]);
 
   // 좁은화면(Pad 등 넓은 화면 포함)에서 시간표 비율 한계를 완화하여 적당히 넙적한 비율(0.72)로 자동 조절되도록 dynamic CSS 변수 동기화
   const timetableContainerRef = useRef<HTMLDivElement>(null);
@@ -753,42 +788,62 @@ export default function TeacherPage() {
     (g3DatasetType === 'COMCIGAN' && !!grade3Timetable?.isOutOfRange && !grade3Timetable?.isArchivedData)
   );
 
-  // ── 선생님 동기화: 초기 진입 시 인증된 선생님 우선, 없으면 쿠키 선생님 ──
+  // ── 선생님 동기화: 초기 진입/새로고침 시 로그인 된 교사 우선 (없으면 가장 최근 선택 교사) ──
   const initialResolvedRef = useRef(false);
   useEffect(() => {
     if (!timetableData?.teachers || timetableData.teachers.length <= 1) return;
 
+    // F5 새로고침 시 1프레임 즉시 복원을 위해 교사 명단 캐싱
+    try {
+      localStorage.setItem("timetable_teachers_cache", JSON.stringify(timetableData.teachers));
+    } catch {}
+
+    const authTeacher = getAuthenticatedTeacher();
+
     if (!initialResolvedRef.current) {
       initialResolvedRef.current = true;
-      const authTeacher = getAuthenticatedTeacher();
+
+      // 1순위: 로그인 된 교사가 있다면 무조건 그 교사명으로 자동 접속 (최근 선택 교사 무시)
       if (authTeacher) {
-        const authIdx = timetableData.teachers.findIndex((name) =>
-          name === authTeacher || name.replace(/선생님$/, '').trim() === authTeacher
-        );
-        if (authIdx > 0) {
-          const authIdxStr = String(authIdx);
-          setSelectedTeacherId(authIdxStr);
-          setTeacherNameCookie(timetableData.teachers[authIdx]);
+        const authIdx = resolveTeacherId(authTeacher, timetableData.teachers);
+        if (authIdx) {
+          setSelectedTeacherId(authIdx);
+          setTeacherNameCookie(timetableData.teachers[parseInt(authIdx, 10)]);
+          refreshRole();
           return;
         }
       }
-    }
 
-    const cookieName = getTeacherNameCookie();
-    if (cookieName) {
-      const idx = timetableData.teachers.findIndex((name) => name === cookieName);
-      if (idx > 0) {
-        const idxStr = String(idx);
-        if (idxStr !== selectedTeacherId) {
-          setSelectedTeacherId(idxStr);
+      // 2순위: 로그인 된 교사가 없다면 가장 최근 선택했던 교사로 자동 접속
+      const recentTeacher = getTeacherNameCookie() || (typeof localStorage !== "undefined" ? localStorage.getItem("last_selected_teacher_name") : null);
+      if (recentTeacher) {
+        const recentIdx = resolveTeacherId(recentTeacher, timetableData.teachers);
+        if (recentIdx) {
+          setSelectedTeacherId(recentIdx);
+          setTeacherNameCookie(timetableData.teachers[parseInt(recentIdx, 10)]);
+          refreshRole();
+          return;
         }
       }
-    } else if (selectedTeacherId && timetableData.teachers[parseInt(selectedTeacherId, 10)]) {
-      // 쿠키가 비어있고 selectedTeacherId가 있으면 쿠키로 동기화
-      const rawName = timetableData.teachers[parseInt(selectedTeacherId, 10)];
-      if (rawName) {
-        setTeacherNameCookie(rawName);
+
+      // 3순위: 기본 1번 교사
+      if (timetableData.teachers[1]) {
+        setSelectedTeacherId("1");
+        setTeacherNameCookie(timetableData.teachers[1]);
         refreshRole();
+        return;
+      }
+    }
+
+    // 마운트 이후 로그인 된 교사가 있는 경우, 항상 쿠키는 로그인 교사로 유지
+    if (authTeacher) {
+      const currentCookie = getTeacherNameCookie();
+      if (!currentCookie || normalizeTeacherName(currentCookie) !== authTeacher) {
+        const authIdx = resolveTeacherId(authTeacher, timetableData.teachers);
+        if (authIdx) {
+          setTeacherNameCookie(timetableData.teachers[parseInt(authIdx, 10)]);
+          refreshRole();
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1026,6 +1081,8 @@ export default function TeacherPage() {
 
       if (res.ok) {
         setStoredTeacherPassword(targetName, authPassword.trim());
+        setTeacherNameCookie(targetName);
+        refreshRole();
         setIsCurrentTeacherVerified(true);
         setShowAuthDialog(false);
         setAuthPassword("");
@@ -3962,12 +4019,19 @@ export default function TeacherPage() {
                     key={opt.idx}
                     type="button"
                     onClick={() => {
-                      setSelectedTeacherId(opt.idx.toString());
-                      setTeacherNameCookie(opt.rawName);
-                      refreshRole();
+                      const newId = opt.idx.toString();
+                      setSelectedTeacherId(newId);
+                      const authTeacher = getAuthenticatedTeacher();
+                      // 로그인 된 교사가 없을 때만 '가장 최근 선택했던 교사'로 쿠키/스토리지 갱신
+                      if (!authTeacher) {
+                        setTeacherNameCookie(opt.rawName);
+                        localStorage.setItem("last_selected_teacher_name", opt.rawName);
+                        localStorage.setItem("teacher-page-selected-teacher", newId);
+                        refreshRole();
+                      }
                       setShowTeacherSelectModal(false);
                       setTeacherSearchQuery("");
-                      toast.success(`${opt.displayName} 선생님이 선택되었습니다.`);
+                      toast.success(`${opt.displayName} 선생님 시간표로 이동했습니다.`);
                     }}
                     className={cn(
                       "w-full text-left px-3.5 py-3 rounded-xl flex items-center justify-between transition-all duration-150 gap-2 border",
