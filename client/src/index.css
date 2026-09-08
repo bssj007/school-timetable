@@ -717,24 +717,69 @@ body.capturing #timetable-container[data-print-font-size="large"] td .md\:text-b
 
 /* -------------------------------------------------------------------------- */
 /* Disable sticky hover on touch-only devices (mobile)                        */
-/* Only suppress hover when NOT actively pressing — holding still shows feedback */
+/* Finger lifted → snap ALL hover styles back instantly                       */
+/* :active is excluded so pressing still gives visual feedback                */
 /* -------------------------------------------------------------------------- */
 @media (hover: none) {
-  /* Timetable cells: remove transition so hover state doesn't visually linger */
-  #timetable-container td {
+  /* Remove tap highlight glow globally */
+  * {
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Suppress hover styles only when finger is NOT held down */
-  #timetable-container td:not(:active) {
+  /*
+   * Core fix: when the user is NOT actively holding a touch, undo every hover
+   * style that Tailwind or component libraries may have applied.
+   * We target every interactive surface that can accumulate sticky state.
+   */
+  button:not(:active):hover,
+  a:not(:active):hover,
+  [role="button"]:not(:active):hover,
+  [role="tab"]:not(:active):hover,
+  [role="option"]:not(:active):hover,
+  [role="menuitem"]:not(:active):hover,
+  [role="listbox"]:not(:active):hover,
+  label:not(:active):hover,
+  div[tabindex]:not(:active):hover,
+  span[tabindex]:not(:active):hover {
+    /* Reset every visual property that Tailwind hover utilities touch */
+    background-color: revert !important;
+    background-image: revert !important;
+    color: revert !important;
+    border-color: revert !important;
+    border-width: revert !important;
+    outline: revert !important;
+    box-shadow: revert !important;
+    opacity: revert !important;
+    text-decoration: revert !important;
+    text-decoration-color: revert !important;
+    fill: revert !important;
+    stroke: revert !important;
+    /* Suppress transform-based hover effects (scale, translate) */
+    transform: revert !important;
+    /* Remove any transition so the reset is instant, not animated */
     transition: none !important;
   }
 
-  /* Vote buttons and other interactive elements: suppress hover when not pressing */
-  button:not(:active):hover,
-  [role="button"]:not(:active):hover {
-    background-color: inherit !important;
-    color: inherit !important;
+  /*
+   * group-hover: Tailwind applies hover styles to children via .group:hover .group-hover\:*
+   * On touch, the parent stays "hovered" so children keep the applied class.
+   * Force-reset child styles when the group's root is not :active.
+   */
+  .group:not(:active):hover > *,
+  .group:not(:active):hover * {
+    --tw-bg-opacity: 1 !important;
+    color: revert !important;
+    opacity: revert !important;
+    transform: revert !important;
+    transition: none !important;
+  }
+
+  /* Timetable cells: kill transition to prevent lingering highlight */
+  #timetable-container td {
+    -webkit-tap-highlight-color: transparent;
+  }
+  #timetable-container td:not(:active) {
+    transition: none !important;
   }
 }
 
