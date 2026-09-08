@@ -20,9 +20,11 @@ interface TeacherTimetableResponse {
   success: boolean;
   teachers: string[];
   subjects: string[];
-  timetable: any[];      // sanitised baseline (backward compat)
-  timetableLive?: any[]; // raw with > prefix preserved — used for isChanged detection
-  timetableBase?: any[]; // sanitised baseline (same as timetable)
+  timetable: any[];          // sanitise된 baseline
+  changedCells?: string[];   // 변경된 셀 좌표 목록: "teacherId:weekday:period"
+  hasLiveData?: boolean;
+  timetableLive?: any[];     // (legacy, unused)
+  timetableBase?: any[];     // (legacy, unused)
 }
 
 interface AssessmentItem {
@@ -942,8 +944,13 @@ export default function TeacherPage() {
   const tId = parseInt(selectedTeacherId, 10);
   const rawTeacherName = timetableData?.teachers?.[tId] || "";
   const teacherName = getTeacherDisplayName(rawTeacherName, tId);
-  const selectedSchedule = timetableData?.timetable?.[tId];          // baseline (sanitised)
-  const selectedScheduleLive = timetableData?.timetableLive?.[tId];  // live with > prefix preserved
+  const selectedSchedule = timetableData?.timetable?.[tId];
+
+  // 서버에서 미리 계산된 변경 셀 Set — O(1) 조회
+  const changedCellSet = useMemo(() => {
+    if (!timetableData?.changedCells) return new Set<string>();
+    return new Set<string>(timetableData.changedCells);
+  }, [timetableData?.changedCells]);
 
   // Subjects taught by the selected teacher
   const taughtSubjects = useMemo(() => {
@@ -964,20 +971,15 @@ export default function TeacherPage() {
   }, [taughtSubjects]);
 
   // Decode cell value — returns null for empty cells
-  // isChanged: live 셀 값에 '>' 접두사가 있으면 변경된 수업
-  const decodeCell = (val: any, liveVal?: any) => {
+  const decodeCell = (val: any) => {
     if (!val) return null;
-    const isChanged = liveVal !== undefined
-      ? (typeof liveVal === 'string' && liveVal.startsWith('>'))
-      : (typeof val === 'string' && val.startsWith('>'));
     let numVal = typeof val === 'number' ? val : parseInt(String(val).replace(/>/g, ''), 10);
     if (!numVal || isNaN(numVal) || numVal === 0) return null;
-    
     const classNum = numVal % 100;
     const grade = Math.floor(numVal / 100) % 10;
     const subjectId = Math.floor(numVal / 1000);
     const subjectName = timetableData?.subjects?.[subjectId] || "알 수 없음";
-    return { classNum, grade, subjectName, isChanged };
+    return { classNum, grade, subjectName };
   };
 
   // Find max periods dynamically
@@ -2755,10 +2757,10 @@ export default function TeacherPage() {
                         {weekdays.map((_, dayIndex) => {
                           const d = dayIndex + 1;
                           const val = selectedSchedule[d]?.[p];
-                          const liveVal = selectedScheduleLive?.[d]?.[p];
-                          const cellData = decodeCell(val, liveVal);
+                          const cellData = decodeCell(val);
                           const cellDateStr = toDateString(weekDates[dayIndex]);
-                          const isCellChanged = cellData?.isChanged ?? false;
+                          // 서버 사이드 isChanged Set에서 O(1) 조회
+                          const isCellChanged = changedCellSet.has(`${tId}:${d}:${p}`);
 
                           // Resolve group
                           let cellGroup = "";

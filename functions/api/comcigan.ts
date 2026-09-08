@@ -213,17 +213,81 @@ export const onRequest = async (context: any) => {
                 console.warn('[Teacher Timetable] Detection failed:', { detectedTeacherProp, detectedSubjectProp, detectedBaseline });
             }
 
-            // baseline 데이터만 sanitize (> 제거); live 데이터는 > 접두사 보존으로 isChanged 판단
+            // baseline 데이터 sanitize (> 제거)
             const baselineData = detectedBaseline ? JSON.parse(JSON.stringify(rawData[detectedBaseline] || [])) : [];
             sanitizeTimetable(baselineData);
+
+            // ── 서버사이드 isChanged 계산 (student API와 동일 로직) ────────────────────────────
+            // changedCells: "teacherId:weekday:period" → true 형태의 Map
+            const changedCellKeys: string[] = [];
+
+            if (detectedLive && detectedLive !== detectedBaseline) {
+                const liveRaw = rawData[detectedLive] || [];
+
+                // isEmptyDataset: live 데이터 전체가 0이면 아직 발행 안 됨 → 변경 없음으로 처리
+                let liveHasAnyData = false;
+                outer: for (let ti = 0; ti < liveRaw.length; ti++) {
+                    const teacherData = liveRaw[ti];
+                    if (!teacherData) continue;
+                    for (let d = 1; d <= 5; d++) {
+                        const dayArr = teacherData[d];
+                        if (!dayArr) continue;
+                        for (let p = 1; p < dayArr.length; p++) {
+                            const v = dayArr[p];
+                            const n = typeof v === 'string' ? parseInt(v.replace(/>/g, ''), 10) : (v || 0);
+                            if (n !== 0) { liveHasAnyData = true; break outer; }
+                        }
+                    }
+                }
+
+                if (liveHasAnyData) {
+                    for (let ti = 0; ti < liveRaw.length; ti++) {
+                        const liveTeacher = liveRaw[ti];
+                        const baseTeacher = baselineData[ti];
+                        if (!liveTeacher) continue;
+
+                        for (let d = 1; d <= 5; d++) {
+                            const liveDayArr = liveTeacher[d];
+                            const baseDayArr = baseTeacher?.[d];
+                            if (!liveDayArr) continue;
+
+                            // isDayEmpty: 해당 요일 live 데이터가 전부 0이면 스킵
+                            let isDayEmpty = true;
+                            for (let p = 1; p < liveDayArr.length; p++) {
+                                const lv = liveDayArr[p];
+                                const ln = typeof lv === 'string' ? parseInt(lv.replace(/>/g, ''), 10) : (lv || 0);
+                                if (ln !== 0) { isDayEmpty = false; break; }
+                            }
+                            if (isDayEmpty) continue;
+
+                            for (let p = 1; p < liveDayArr.length; p++) {
+                                const lv = liveDayArr[p];
+                                let liveCode = typeof lv === 'string' ? parseInt(lv.replace(/>/g, ''), 10) : (lv || 0);
+                                const baseCode = (baseDayArr && baseDayArr[p]) ? (baseDayArr[p] as number) : 0;
+
+                                // cell-level fallback: live가 0이지만 base가 있고 day가 비어있지 않으면 base로 채움
+                                if (liveCode === 0 && baseCode !== 0) {
+                                    liveCode = baseCode;
+                                }
+
+                                // 변경 감지: base와 live 코드가 다르면 changed
+                                // 같은 과목이어도 teacherIdx가 다르면 code가 달라 자동으로 감지됨
+                                if (baseCode !== liveCode) {
+                                    changedCellKeys.push(`${ti}:${d}:${p}`);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             return new Response(JSON.stringify({
                 success: !!(detectedTeacherProp && detectedSubjectProp && detectedBaseline),
                 teachers: detectedTeacherProp ? (rawData[detectedTeacherProp] || []) : [],
                 subjects:  detectedSubjectProp ? (rawData[detectedSubjectProp] || []) : [],
-                timetable: baselineData,                                           // 새니타이즈된 baseline (하위 호환)
-                timetableLive: detectedLive    ? (rawData[detectedLive]     || []) : [],  // > 접두사 보존 (isChanged 판단용)
-                timetableBase: baselineData,                                        // sanitize된 baseline
+                timetable: baselineData,           // sanitize된 baseline
+                changedCells: changedCellKeys,     // 변경된 셀 좌표 목록 ["tId:d:p", ...]
+                hasLiveData: changedCellKeys.length > 0 || (detectedLive !== detectedBaseline),
                 _detectedKeys: { teacher: detectedTeacherProp, subject: detectedSubjectProp, timetable: detectedBaseline, live: detectedLive }
             }), {
                 status: 200,
