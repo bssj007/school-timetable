@@ -652,9 +652,10 @@ export default function TeacherPage() {
     return (rawDatasetId === 'MANUAL_PLAN' || rawDatasetId === 'SEMESTER_PLAN') ? rawDatasetId : 'COMCIGAN';
   }, [grade3Timetable]);
 
-  // 날짜 범위 밖 여부 — 3개 학년 중 하나라도 COMCIGAN+isOutOfRange이면 미확정
+  // 날짜 범위 밖 여부 — 교사 시간표 또는 3개 학년 중 하나라도 COMCIGAN+isOutOfRange이면 미확정
   // 아카이브 데이터가 있는 경우 미확정 표시 안 함
   const isOutOfDateRange = (
+    (!timetableData?.isArchivedData && !!timetableData?.isOutOfRange) ||
     (g1DatasetType === 'COMCIGAN' && !!grade1Timetable?.isOutOfRange && !grade1Timetable?.isArchivedData) ||
     (g2DatasetType === 'COMCIGAN' && !!grade2Timetable?.isOutOfRange && !grade2Timetable?.isArchivedData) ||
     (g3DatasetType === 'COMCIGAN' && !!grade3Timetable?.isOutOfRange && !grade3Timetable?.isArchivedData)
@@ -1047,9 +1048,9 @@ export default function TeacherPage() {
       const items = result?.data;
       if (!Array.isArray(items)) return;
       items.forEach((item: any) => {
-        if (item?.isChanged && item.weekday && item.classTime) {
+        if (item?.isChanged && typeof item.weekday === 'number' && item.classTime) {
           if (teacherRawName && item.teacher === teacherRawName) {
-            set.add(`${tId}:${item.weekday}:${item.classTime}`);
+            set.add(`${tId}:${item.weekday + 1}:${item.classTime}`);
           }
         }
       });
