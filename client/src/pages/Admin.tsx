@@ -6563,8 +6563,9 @@ export default function Admin() {
     }, []);
 
 function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExpired, adminPassword }: any) {
-    const isOrphan = !!assessment.isOrphan;
-    const isPostponed = !!assessment.tempDueDate || !!assessment.tempClassTime;
+    const isHomework = Boolean(assessment.endDate || !assessment.classTime);
+    const isOrphan = !isHomework && !!assessment.isOrphan;
+    const isPostponed = !isHomework && (!!assessment.tempDueDate || !!assessment.tempClassTime);
 
     const subjectMatch = typeof assessment.subject === 'string' ? assessment.subject.match(/^(.*?)\s*\((.*?그룹.*?)\)$/) : null;
     const baseSubject = subjectMatch ? subjectMatch[1].trim() : assessment.subject;
@@ -6605,7 +6606,16 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
             </TableCell>
             <TableCell className="truncate max-w-[200px]">{assessment.title}</TableCell>
             <TableCell>
-                {isPostponed ? (
+                {isHomework ? (
+                    <div className="flex items-center flex-wrap gap-1">
+                        <span className="text-xs font-semibold text-blue-700">
+                            {assessment.startDate ? `${assessment.startDate} ~ ${assessment.endDate}` : (assessment.endDate || assessment.dueDate)}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold ml-1">
+                            숙제
+                        </span>
+                    </div>
+                ) : isPostponed ? (
                     <div className="flex items-center flex-wrap gap-1">
                         <span className={`text-xs ${isOrphan ? "line-through text-red-400" : "line-through text-gray-400"}`}>
                             {assessment.dueDate} {assessment.classTime}교시
@@ -12415,7 +12425,8 @@ function TeacherDefaultPasswordManager({ adminPassword }: { adminPassword: strin
 
     useEffect(() => {
         if (settingsQuery.data) {
-            setCurrentPw(settingsQuery.data.teacher_default_password ?? null);
+            const val = settingsQuery.data.teacher_default_password;
+            setCurrentPw(val === '관리' ? null : (val ?? null));
         }
     }, [settingsQuery.data]);
 
@@ -12449,8 +12460,8 @@ function TeacherDefaultPasswordManager({ adminPassword }: { adminPassword: strin
     };
 
     const handleReset = () => {
-        if (confirm('초기 비밀번호를 "관리"로 초기화하시겠습니까?')) {
-            saveMutation.mutate("관리");
+        if (confirm('초기 비밀번호를 "sj2026"로 초기화하시겠습니까?')) {
+            saveMutation.mutate("sj2026");
         }
     };
 
@@ -12473,8 +12484,8 @@ function TeacherDefaultPasswordManager({ adminPassword }: { adminPassword: strin
                     <div className="flex items-center gap-2 flex-1">
                         <span className="font-mono font-bold text-emerald-700 text-sm">
                             {showPw
-                                ? (currentPw ?? "관리 (기본값)")
-                                : (currentPw ? "•".repeat(currentPw.length) : "(기본값: 관리)")}
+                                ? (currentPw ? (currentPw === '관리' ? "sj2026 (기본값)" : currentPw) : "sj2026 (기본값)")
+                                : (currentPw && currentPw !== '관리' ? "•".repeat(currentPw.length) : "(기본값: sj2026)")}
                         </span>
                         <Button
                             variant="ghost"

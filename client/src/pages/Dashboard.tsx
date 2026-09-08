@@ -999,8 +999,9 @@ export default function Dashboard() {
   const assessments = useMemo(() => {
     if (!allAssessments) return [];
 
-    // 1. Filter by Week
+    // 1. Filter by Week (숙제형/기간형은 시간표 셀(교시)에 매핑되지 않으므로 제외)
     let filtered = allAssessments.filter(a => {
+      if (a.endDate || !a.classTime) return false;
       const effectiveDate = a.tempDueDate ? a.tempDueDate : a.dueDate;
       return isDateInWeek(effectiveDate, weekDates);
     });
@@ -1070,8 +1071,8 @@ export default function Dashboard() {
       // 대시보드 UI에서는 (C그룹, 선생님) 등의 꼬리표를 제거하여 깔끔하게 표시
       const baseSubject = a.subject.replace(/\s*\(.*$/, '').trim();
 
-      // 서버에서 계산된 수동 연기 및 자동 연기(자동 예측) 수행평가 반영
-      if (a.tempDueDate && a.tempClassTime) {
+      // 서버에서 계산된 수동 연기 및 자동 연기(자동 예측) 수행평가 반영 (당일형만)
+      if (!a.endDate && a.classTime && a.tempDueDate && a.tempClassTime) {
         return {
            ...a,
            subject: baseSubject,
@@ -3415,7 +3416,7 @@ export default function Dashboard() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                       {filtered.length > 0 ? (
                         filtered.map((assessment) => {
-                          const isHomework = !!assessment.endDate;
+                          const isHomework = Boolean(assessment.endDate || !assessment.classTime);
                           const effDate = assessment.tempDueDate || assessment.dueDate;
                           const diffDate = Math.ceil((new Date(effDate).getTime() - new Date(todayStr).getTime()) / (1000 * 60 * 60 * 24));
                           const dDay = diffDate === 0 ? "D-0" : diffDate > 0 ? `D-${diffDate}` : `D+${Math.abs(diffDate)}`;
@@ -3448,7 +3449,7 @@ export default function Dashboard() {
                               className={`border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col h-full ${isToday ? 'border-red-200' : ''}`}
                               style={{
                                 backgroundColor: cardBg,
-                                backgroundImage: assessment.isPostponed ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.05) 10px, rgba(239, 68, 68, 0.05) 20px)' : 'none'
+                                backgroundImage: (!isHomework && assessment.isPostponed) ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.05) 10px, rgba(239, 68, 68, 0.05) 20px)' : 'none'
                               }}
                               onClick={() => {
                                 if (isHomework) return;
@@ -3492,7 +3493,7 @@ export default function Dashboard() {
                                       </span>
                                     )}
                                   </div>
-                                  {assessment.isPostponed && Boolean(assessment.isAutoPredicted) && (
+                                  {!isHomework && assessment.isPostponed && Boolean(assessment.isAutoPredicted) && (
                                     <div className="text-red-500 text-sm font-bold mt-0.5">
                                       시간표 변경
                                     </div>

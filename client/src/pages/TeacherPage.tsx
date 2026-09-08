@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { useUserConfig } from "@/contexts/UserConfigContext";
-import { clearRoleCookie } from "@/components/RoleSelectDialog";
+import { clearRoleCookie, getTeacherNameCookie, setTeacherNameCookie, getStoredTeacherPassword, setStoredTeacherPassword, clearStoredTeacherPassword } from "@/components/RoleSelectDialog";
 import { isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 interface TeacherTimetableResponse {
@@ -325,6 +325,14 @@ export default function TeacherPage() {
   
   // States
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(() => {
+    const cookieName = getTeacherNameCookie();
+    if (cookieName) {
+      const cached = queryClient.getQueryData<TeacherTimetableResponse>(['teacher-timetable']);
+      if (cached?.teachers) {
+        const idx = cached.teachers.findIndex((name) => name === cookieName);
+        if (idx > 0) return String(idx);
+      }
+    }
     return localStorage.getItem("teacher-page-selected-teacher") || "1";
   });
   const [openCombobox, setOpenCombobox] = useState(false);
@@ -566,73 +574,6 @@ export default function TeacherPage() {
     );
   }
 
-  // settings/selectedTeacherId 변경 시 현재 선생님 인증 상태 재확인
-  // rawTeacherName은 tId에 의존하므로 selectedTeacherId로 키 생성
-  const teacherAuthStorageKey = `teacher-auth-${selectedTeacherId}`;
-
-  useEffect(() => {
-    if (!settings) return;
-    const expireDays = settings.teacher_auth_expire_days ?? 0;
-    const stored = localStorage.getItem(teacherAuthStorageKey);
-    if (!stored) { setIsCurrentTeacherVerified(false); return; }
-    if (expireDays === 0) { setIsCurrentTeacherVerified(true); return; }
-    const storedTime = parseInt(stored, 10);
-    if (isNaN(storedTime)) {
-      localStorage.removeItem(teacherAuthStorageKey);
-      setIsCurrentTeacherVerified(false);
-      return;
-    }
-    const expireMs = expireDays * 24 * 60 * 60 * 1000;
-    if (Date.now() - storedTime < expireMs) {
-      setIsCurrentTeacherVerified(true);
-    } else {
-      localStorage.removeItem(teacherAuthStorageKey);
-      setIsCurrentTeacherVerified(false);
-    }
-  }, [settings, teacherAuthStorageKey]);
-
-  // 선생님별 올바른 비밀번호 조회 (개별 설정 우선, 없으면 디폴트)
-  const getCorrectPassword = (): string => {
-    const defaultPw = settings?.teacher_default_password || '관리';
-    if (settings?.teacher_passwords) {
-      try {
-        const pwMap: Record<string, string> =
-          typeof settings.teacher_passwords === 'string'
-            ? JSON.parse(settings.teacher_passwords)
-            : settings.teacher_passwords;
-        // rawTeacherName은 이 시점에서 아직 미정이므로 선생님 ID로 fallback
-        // 실제 매칭은 rawTeacherName 기준
-        const keyByRaw = Object.keys(pwMap).find(k => k === (timetableData?.teachers?.[parseInt(selectedTeacherId, 10)] || ''));
-        if (keyByRaw) return pwMap[keyByRaw];
-      } catch {}
-    }
-    return defaultPw;
-  };
-
-  const handleTeacherAuth = (e: React.FormEvent) => {
-    e.preventDefault();
-    const correctPw = getCorrectPassword();
-    if (authPassword === correctPw) {
-      // 다른 선생님의 인증 세션 모두 취소
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('teacher-auth-') && key !== teacherAuthStorageKey) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach(k => localStorage.removeItem(k));
-
-      localStorage.setItem(teacherAuthStorageKey, String(Date.now()));
-      setIsCurrentTeacherVerified(true);
-      setShowAuthDialog(false);
-      setAuthError("");
-      setAuthPassword("");
-    } else {
-      setAuthError("비밀번호가 올바르지 않습니다.");
-    }
-  };
-
   // 쓰기 액션 전 인증 체크 (미인증 시 다이얼로그 표시)
   const requireAuth = (): boolean => {
     if (!isCurrentTeacherVerified) {
@@ -800,6 +741,29 @@ export default function TeacherPage() {
     refetchInterval: 2 * 60 * 1000,
   });
 
+  // ── sj_teacher_name 쿠키와 selectedTeacherId 동기화 (단일 진실원천: 쿠키) ──
+  useEffect(() => {
+    if (!timetableData?.teachers) return;
+    const cookieName = getTeacherNameCookie();
+    if (cookieName) {
+      const idx = timetableData.teachers.findIndex((name) => name === cookieName);
+      if (idx > 0) {
+        const idxStr = String(idx);
+        if (idxStr !== selectedTeacherId) {
+          setSelectedTeacherId(idxStr);
+        }
+      }
+    } else if (selectedTeacherId && timetableData.teachers[parseInt(selectedTeacherId, 10)]) {
+      // 쿠키가 비어있고 selectedTeacherId가 있으면 쿠키로 동기화
+      const rawName = timetableData.teachers[parseInt(selectedTeacherId, 10)];
+      if (rawName) {
+        setTeacherNameCookie(rawName);
+        refreshRole();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timetableData?.teachers]);
+
   const ignoreKeywords = useMemo(() => {
     if (!settings) return ['빈교', '공강', '학년', '채', '창'];
     const rawVal = settings.teacher_ignore_keywords;
@@ -946,6 +910,101 @@ export default function TeacherPage() {
   const rawTeacherName = timetableData?.teachers?.[tId] || "";
   const teacherName = getTeacherDisplayName(rawTeacherName, tId);
   const selectedSchedule = timetableData?.timetable?.[tId];
+
+  // ── 서버 기반 교사 비밀번호 실시간 검증 (단일 진실원천: 서버 D1) ──────────────
+  // 마운트 시 또는 선생님 변경 시: 저장된 비밀번호가 있다면 서버에 제시하여 유효성 검증
+  // 서버 측에서 비밀번호가 변경되었으면 401을 반환하므로, 즉시 인증을 해제하고 재입력 요구
+  useEffect(() => {
+    if (!rawTeacherName) return;
+
+    const storedPw = getStoredTeacherPassword(rawTeacherName);
+    if (!storedPw) {
+      setIsCurrentTeacherVerified(false);
+      return;
+    }
+
+    const expireDays = settings?.teacher_auth_expire_days ?? 0;
+    if (expireDays > 0) {
+      try {
+        const raw = localStorage.getItem(`teacher-pw-${rawTeacherName}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const expireMs = expireDays * 24 * 60 * 60 * 1000;
+          if (Date.now() - (parsed.savedAt || 0) >= expireMs) {
+            clearStoredTeacherPassword(rawTeacherName);
+            setIsCurrentTeacherVerified(false);
+            return;
+          }
+        }
+      } catch {}
+    }
+
+    let isCancelled = false;
+    fetch('/api/teacher-password?action=verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        teacherName: rawTeacherName,
+        password: storedPw,
+      }),
+    })
+      .then(async (res) => {
+        if (isCancelled) return;
+        if (res.ok) {
+          setIsCurrentTeacherVerified(true);
+        } else {
+          // 서버 측에서 비밀번호가 변경되었거나 일치하지 않음!
+          clearStoredTeacherPassword(rawTeacherName);
+          setIsCurrentTeacherVerified(false);
+          toast.error("선생님 비밀번호가 변경되었습니다. 다시 인증해주세요.");
+        }
+      })
+      .catch(() => {
+        // 네트워크 오류 시 기존 상태 유지
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [rawTeacherName, settings?.teacher_auth_expire_days]);
+
+  const handleTeacherAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authPassword.trim()) {
+      setAuthError("비밀번호를 입력해주세요.");
+      return;
+    }
+    const targetName = rawTeacherName || (timetableData?.teachers?.[parseInt(selectedTeacherId, 10)] ?? "");
+    if (!targetName) {
+      setAuthError("선생님 정보를 확인할 수 없습니다.");
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/teacher-password?action=verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teacherName: targetName,
+          password: authPassword.trim(),
+        }),
+      });
+
+      if (res.ok) {
+        setStoredTeacherPassword(targetName, authPassword.trim());
+        setIsCurrentTeacherVerified(true);
+        setShowAuthDialog(false);
+        setAuthPassword("");
+        setAuthError("");
+        toast.success(`${teacherName || targetName} 선생님 인증이 완료되었습니다.`);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setAuthError(data.error || "비밀번호가 올바르지 않습니다.");
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "인증 처리 중 오류가 발생했습니다.");
+    }
+  };
 
   // 서버에서 미리 계산된 변경 셀 Set — O(1) 조회
   const changedCellSet = useMemo(() => {
@@ -1642,13 +1701,27 @@ export default function TeacherPage() {
   // Mutate: Create Assessment
   const createMutation = useMutation({
     mutationFn: async (payload: any) => {
+      const storedPw = getStoredTeacherPassword(rawTeacherName);
       const res = await fetch('/api/assessment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Teacher-Password': storedPw || '',
+          'X-Teacher-Name': rawTeacherName || '',
+        },
+        body: JSON.stringify({
+          ...payload,
+          teacherPassword: storedPw,
+          teacher: rawTeacherName,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        if (res.status === 401 || err.code === 'TEACHER_AUTH_REQUIRED') {
+          clearStoredTeacherPassword(rawTeacherName);
+          setIsCurrentTeacherVerified(false);
+          setShowAuthDialog(true);
+        }
         throw new Error(err.error || 'Failed to create assessment');
       }
       return res.json();
@@ -1666,13 +1739,27 @@ export default function TeacherPage() {
   // Mutate: Update Assessment
   const updateMutation = useMutation({
     mutationFn: async (payload: any) => {
+      const storedPw = getStoredTeacherPassword(rawTeacherName);
       const res = await fetch('/api/assessment', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Teacher-Password': storedPw || '',
+          'X-Teacher-Name': rawTeacherName || '',
+        },
+        body: JSON.stringify({
+          ...payload,
+          teacherPassword: storedPw,
+          teacher: rawTeacherName,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        if (res.status === 401 || err.code === 'TEACHER_AUTH_REQUIRED') {
+          clearStoredTeacherPassword(rawTeacherName);
+          setIsCurrentTeacherVerified(false);
+          setShowAuthDialog(true);
+        }
         throw new Error(err.error || 'Failed to update assessment');
       }
       return res.json();
@@ -1691,10 +1778,23 @@ export default function TeacherPage() {
   // Mutate: Delete Assessment
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      const storedPw = getStoredTeacherPassword(rawTeacherName);
       const res = await fetch(`/api/assessment?id=${id}&role=teacher`, {
         method: 'DELETE',
+        headers: {
+          'X-Teacher-Password': storedPw || '',
+          'X-Teacher-Name': rawTeacherName || '',
+        },
       });
-      if (!res.ok) throw new Error('Failed to delete');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (res.status === 401 || err.code === 'TEACHER_AUTH_REQUIRED') {
+          clearStoredTeacherPassword(rawTeacherName);
+          setIsCurrentTeacherVerified(false);
+          setShowAuthDialog(true);
+        }
+        throw new Error(err.error || 'Failed to delete');
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -3791,6 +3891,8 @@ export default function TeacherPage() {
                     type="button"
                     onClick={() => {
                       setSelectedTeacherId(opt.idx.toString());
+                      setTeacherNameCookie(opt.rawName);
+                      refreshRole();
                       setShowTeacherSelectModal(false);
                       setTeacherSearchQuery("");
                       toast.success(`${opt.displayName} 선생님이 선택되었습니다.`);

@@ -26,7 +26,7 @@ function setRoleCookie(role: "student" | "teacher") {
     document.cookie = `${ROLE_COOKIE}=${role}; max-age=${COOKIE_MAX_AGE}; path=/`;
 }
 
-function setTeacherNameCookie(name: string) {
+export function setTeacherNameCookie(name: string) {
     document.cookie = `${TEACHER_COOKIE}=${encodeURIComponent(name)}; max-age=${COOKIE_MAX_AGE}; path=/`;
 }
 
@@ -34,6 +34,44 @@ export function clearRoleCookie() {
     if (typeof document === "undefined") return;
     document.cookie = `${ROLE_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
     document.cookie = `${TEACHER_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
+    clearStoredTeacherPassword();
+}
+
+export function getStoredTeacherPassword(teacherName: string): string | null {
+    if (typeof localStorage === "undefined" || !teacherName) return null;
+    const clean = teacherName.trim().replace(/선생님$/, '').trim();
+    try {
+        const raw = localStorage.getItem(`teacher-pw-${clean}`);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return typeof parsed?.password === 'string' ? parsed.password : null;
+    } catch {
+        return null;
+    }
+}
+
+export function setStoredTeacherPassword(teacherName: string, password: string): void {
+    if (typeof localStorage === "undefined" || !teacherName) return;
+    const clean = teacherName.trim().replace(/선생님$/, '').trim();
+    localStorage.setItem(`teacher-pw-${clean}`, JSON.stringify({
+        password: password.trim(),
+        savedAt: Date.now(),
+    }));
+}
+
+export function clearStoredTeacherPassword(teacherName?: string): void {
+    if (typeof localStorage === "undefined") return;
+    if (teacherName) {
+        const clean = teacherName.trim().replace(/선생님$/, '').trim();
+        localStorage.removeItem(`teacher-pw-${clean}`);
+    } else {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('teacher-pw-')) keysToRemove.push(k);
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+    }
 }
 
 // ── 교사 옵션 타입 ───────────────────────────────────────────
