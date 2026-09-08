@@ -221,6 +221,12 @@ export const onRequest = async (context: any) => {
             lastAccess,
             recentUserAgents,
             recentEnvironments,
+            historicalEnvironments: (recentEnvironments || []).map((e: any) => ({
+                os: e.os || '',
+                deviceType: e.deviceType || '',
+                browserKey: e.browserKey || 'other',
+                isInApp: !!e.isInApp,
+            })),
 
             assessments: recentAssessments || [],
             logs: recentLogs || [],
