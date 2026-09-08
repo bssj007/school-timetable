@@ -118,10 +118,54 @@ function DialogContent({
     [isComposing, onEscapeKeyDown]
   );
 
+  // ── 모바일 키보드 보정 ──────────────────────────────────────────────────────
+  // 키보드가 올라오면 visualViewport가 줄어든다.
+  // fixed + top:50% 는 window 기준이므로 키보드에 가려진다.
+  // visualViewport 이벤트로 실제 보이는 영역 내에 다이얼로그를 재배치한다.
+  const contentRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const reposition = () => {
+      const el = contentRef.current;
+      if (!el) return;
+
+      const vvTop = vv.offsetTop;         // 스크롤된 오프셋
+      const vvH = vv.height;              // 현재 보이는 높이
+      const winH = window.innerHeight;    // 전체 윈도우 높이
+
+      if (vvH < winH - 50) {
+        // 키보드가 올라온 상태 — 보이는 영역 중앙에 배치 (최상단에 너무 붙지 않도록 최소 여백 12px)
+        const center = vvTop + vvH / 2;
+        el.style.top = `${center}px`;
+        el.style.transform = 'translate(-50%, -50%)';
+        // 보이는 영역을 벗어나지 않도록 최대 높이 제한
+        el.style.maxHeight = `${vvH - 24}px`;
+        el.style.overflowY = 'auto';
+      } else {
+        // 키보드 없음 — CSS 기본값으로 복원
+        el.style.top = '';
+        el.style.transform = '';
+        el.style.maxHeight = '';
+        el.style.overflowY = '';
+      }
+    };
+
+    vv.addEventListener('resize', reposition);
+    vv.addEventListener('scroll', reposition);
+    return () => {
+      vv.removeEventListener('resize', reposition);
+      vv.removeEventListener('scroll', reposition);
+    };
+  }, []);
+
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
       <DialogPrimitive.Content
+        ref={contentRef}
         data-slot="dialog-content"
         className={cn(
           "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
