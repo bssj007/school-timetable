@@ -25,7 +25,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
-import { normalizeTeacherName } from "@/components/RoleSelectDialog";
+import { normalizeTeacherName } from "@/lib/teacherUtils";
 import {
   Select,
   SelectContent,

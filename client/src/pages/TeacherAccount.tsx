@@ -7,7 +7,7 @@ import {
   clearStoredTeacherPassword,
   getAuthenticatedTeacher,
   normalizeTeacherName,
-} from "@/components/RoleSelectDialog";
+} from "@/lib/teacherUtils";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 import { ArrowLeft, Eye, EyeOff, Lock, KeyRound, Check, AlertCircle } from "lucide-react";
 

@@ -43,7 +43,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { normalizeTeacherName } from "@/components/RoleSelectDialog";
+import { normalizeTeacherName } from "@/lib/teacherUtils";
 
 declare const __BUILD_INFO__: {
     commitSha: string;

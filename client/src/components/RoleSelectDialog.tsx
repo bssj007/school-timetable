@@ -5,24 +5,9 @@ import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 
-// ── 교사 유틸 함수 re-export (순환 의존성 방지: 실제 구현은 @/lib/teacherUtils) ──
-export {
-    ROLE_COOKIE,
-    TEACHER_COOKIE,
-    AUTH_TEACHER_KEY,
-    getRoleCookie,
-    getTeacherNameCookie,
-    setRoleCookie,
-    setTeacherNameCookie,
-    clearRoleCookie,
-    clearTeacherCookie,
-    normalizeTeacherName,
-    getAuthenticatedTeacher,
-    getActiveTeacherName,
-    getStoredTeacherPassword,
-    setStoredTeacherPassword,
-    clearStoredTeacherPassword,
-} from "@/lib/teacherUtils";
+// 교사 유틸 함수는 @/lib/teacherUtils 에서 직접 import 하세요.
+// (RoleSelectDialog에서 re-export하면 순환 의존성으로 인한 TDZ 오류가 발생합니다)
+import { getActiveTeacherName, getAuthenticatedTeacher, getTeacherNameCookie, setRoleCookie, setTeacherNameCookie, normalizeTeacherName, getRoleCookie } from "@/lib/teacherUtils";
 
 // ── 교사 옵션 타입 ───────────────────────────────────────────
 interface TeacherOption {
