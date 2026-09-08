@@ -297,6 +297,8 @@ export default function TeacherAccount() {
                     onChange={(e) => { setNewPassword(e.target.value); setErrorMessage(""); }}
                     placeholder="새 비밀번호 입력"
                     autoComplete="off"
+                    autoCapitalize="none"
+                    autoCorrect="off"
                     spellCheck={false}
                     style={{ WebkitTextSecurity: showNewPw ? 'none' : 'disc' } as React.CSSProperties}
                     className="w-full h-11 px-4 pr-11 rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all"
@@ -324,6 +326,8 @@ export default function TeacherAccount() {
                     onChange={(e) => { setConfirmPassword(e.target.value); setErrorMessage(""); }}
                     placeholder="새 비밀번호 재입력"
                     autoComplete="off"
+                    autoCapitalize="none"
+                    autoCorrect="off"
                     spellCheck={false}
                     style={{ WebkitTextSecurity: showConfirmPw ? 'none' : 'disc' } as React.CSSProperties}
                     className="w-full h-11 px-4 pr-11 rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all"

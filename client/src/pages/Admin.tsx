@@ -12525,6 +12525,8 @@ function TeacherDefaultPasswordManager({ adminPassword }: { adminPassword: strin
                                     onChange={e => setNewPw(e.target.value)}
                                     placeholder="새 비밀번호 입력"
                                     autoComplete="off"
+                                    autoCapitalize="none"
+                                    autoCorrect="off"
                                     spellCheck={false}
                                     className="pr-10 text-sm h-9"
                                     style={{ WebkitTextSecurity: showPw ? 'none' : 'disc' } as React.CSSProperties}
@@ -12835,6 +12837,8 @@ function TeacherPerPasswordManager({ adminPassword }: { adminPassword: string })
                                                 onChange={e => setEditValue(e.target.value)}
                                                 onKeyDown={e => { if (e.key === 'Enter') handleEdit(name); if (e.key === 'Escape') { setEditingTeacher(null); setEditValue(""); } }}
                                                 autoComplete="off"
+                                                autoCapitalize="none"
+                                                autoCorrect="off"
                                                 spellCheck={false}
                                                 className="h-7 text-xs pr-8"
                                                 style={{ WebkitTextSecurity: showPw[name] ? 'none' : 'disc' } as React.CSSProperties}
@@ -12888,6 +12892,8 @@ function TeacherPerPasswordManager({ adminPassword }: { adminPassword: string })
                                 onChange={e => setNewTeacherPw(e.target.value)}
                                 placeholder="비밀번호"
                                 autoComplete="off"
+                                autoCapitalize="none"
+                                autoCorrect="off"
                                 spellCheck={false}
                                 className="text-xs h-9 pr-8 w-32"
                                 style={{ WebkitTextSecurity: showNewPw ? 'none' : 'disc' } as React.CSSProperties}

@@ -384,9 +384,9 @@ export default function TeacherPage() {
   const [authError, setAuthError] = useState("");
   const [showAuthPassword, setShowAuthPassword] = useState(false);
   const [showNoticeDialog, setShowNoticeDialog] = useState(false);
-  // 모바일 키보드 감지: window.innerHeight가 줄어들면 키보드가 열린 것
+  // 모바일 키보드 감지 (visualViewport 기반)
   const [authDialogCompact, setAuthDialogCompact] = useState(false);
-  const authDialogOpenHeightRef = useRef<number>(0);
+  const [authDialogShift, setAuthDialogShift] = useState(0);
 
   const [weekOffset, setWeekOffset] = useState<number>(() => {
     const today = new Date();
@@ -470,34 +470,49 @@ export default function TeacherPage() {
     if (viewMode === 'homework') setHwPage(1);
   }, [viewMode]);
 
-  // 모바일 키보드가 올라오면 다이얼로그를 컴팩트 모드로 전환
-  // (transform 이동 대신 헤더 숨김으로 높이를 줄여 자연스럽게 중앙 배치)
+  // 모바일 키보드 감지: visualViewport로 키보드 높이 계산 → 컴팩트 모드 + 위로 이동
   useEffect(() => {
     if (!showAuthDialog) {
       setAuthDialogCompact(false);
-      authDialogOpenHeightRef.current = 0;
+      setAuthDialogShift(0);
       return;
     }
-    // 다이얼로그가 열릴 때 기준 높이 기록
-    authDialogOpenHeightRef.current = window.innerHeight;
-    setAuthDialogCompact(false);
 
-    const handleResize = () => {
-      const current = window.innerHeight;
-      const base = authDialogOpenHeightRef.current;
-      // 기준 높이 대비 15% 이상 줄어들면 키보드 열림으로 판단
-      setAuthDialogCompact(base > 0 && current < base * 0.85);
+    const vv = window.visualViewport;
+    const baseHeight = window.innerHeight;
+
+    const update = () => {
+      // visualViewport가 있으면 정확한 키보드 높이 계산
+      const visibleHeight = vv ? vv.height : window.innerHeight;
+      const kbHeight = Math.max(0, baseHeight - visibleHeight);
+
+      if (kbHeight > 80) {
+        // 키보드가 열린 상태
+        setAuthDialogCompact(true);
+        // 키보드 높이의 30%만큼만 올림 (최대 120px) — 적당히 위로
+        setAuthDialogShift(Math.min(Math.round(kbHeight * 0.3), 120));
+      } else {
+        setAuthDialogCompact(false);
+        setAuthDialogShift(0);
+      }
     };
 
-    window.addEventListener('resize', handleResize);
-    // visualViewport도 함께 체크 (iOS 대응)
-    const vv = window.visualViewport;
-    if (vv) vv.addEventListener('resize', handleResize);
+    // visualViewport resize (가장 신뢰성 높음)
+    if (vv) {
+      vv.addEventListener('resize', update);
+      vv.addEventListener('scroll', update);
+    }
+    // fallback: window resize (일부 Android)
+    window.addEventListener('resize', update);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      if (vv) vv.removeEventListener('resize', handleResize);
+      if (vv) {
+        vv.removeEventListener('resize', update);
+        vv.removeEventListener('scroll', update);
+      }
+      window.removeEventListener('resize', update);
       setAuthDialogCompact(false);
+      setAuthDialogShift(0);
     };
   }, [showAuthDialog]);
 
@@ -2131,7 +2146,13 @@ export default function TeacherPage() {
 
       {/* ===== 선생님별 인증 다이얼로그 ===== */}
       <Dialog open={showAuthDialog} onOpenChange={(open) => { setShowAuthDialog(open); if (!open) { setAuthError(""); setAuthPassword(""); } }}>
-        <DialogContent className="sm:max-w-[360px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+        <DialogContent
+          className="sm:max-w-[360px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl"
+          style={{
+            transform: authDialogShift > 0 ? `translateY(-${authDialogShift}px)` : undefined,
+            transition: 'transform 0.25s ease-out',
+          }}
+        >
           {/* 키보드가 없을 때만 에메랄드 헤더 표시 — 키보드 열리면 숨겨 다이얼로그 높이 축소 */}
           {!authDialogCompact && (
             <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-4 text-white">
@@ -2154,6 +2175,8 @@ export default function TeacherPage() {
                 onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
                 placeholder="비밀번호 입력"
                 autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
                 spellCheck={false}
                 style={{ WebkitTextSecurity: showAuthPassword ? 'none' : 'disc' } as React.CSSProperties}
                 className="w-full h-11 px-4 pr-11 rounded-xl border-2 border-amber-200 bg-white text-gray-800 text-sm font-medium placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
