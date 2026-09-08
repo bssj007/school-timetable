@@ -336,6 +336,7 @@ export default function TeacherPage() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [showAuthPassword, setShowAuthPassword] = useState(false);
+  const [showNoticeDialog, setShowNoticeDialog] = useState(false);
 
   const [weekOffset, setWeekOffset] = useState<number>(() => {
     const today = new Date();
@@ -1856,6 +1857,34 @@ export default function TeacherPage() {
         backgroundAttachment: 'fixed',
       }}
     >
+      {/* ===== 학생공지 다이얼로그 ===== */}
+      <Dialog open={showNoticeDialog} onOpenChange={setShowNoticeDialog}>
+        <DialogContent className="sm:max-w-[320px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+          <div className="bg-gradient-to-r from-yellow-400 to-amber-400 px-5 py-4">
+            <DialogHeader>
+              <DialogTitle className="text-base font-extrabold text-gray-900 flex items-center gap-2">
+                <Bell className="w-4 h-4" />
+                학생공지
+              </DialogTitle>
+            </DialogHeader>
+          </div>
+          <div className="px-5 py-5 flex flex-col items-center gap-3 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-yellow-50 border border-yellow-100 flex items-center justify-center text-2xl">
+              🔔
+            </div>
+            <p className="text-sm font-semibold text-gray-700">현재 기능을 준비 중입니다.</p>
+            <p className="text-xs text-gray-400">-성지수행 개발팀</p>
+            <button
+              type="button"
+              onClick={() => setShowNoticeDialog(false)}
+              className="mt-1 w-full py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-sm transition-colors cursor-pointer"
+            >
+              확인
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ===== 선생님별 인증 다이얼로그 ===== */}
       <Dialog open={showAuthDialog} onOpenChange={(open) => { setShowAuthDialog(open); if (!open) { setAuthError(""); setAuthPassword(""); } }}>
         <DialogContent className="sm:max-w-[360px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
@@ -3021,11 +3050,20 @@ export default function TeacherPage() {
                     </button>
                   </Link>
                 )}
+                {/* 학생공지 (PC wide - 인증 시, 계정 버튼 오른쪽) */}
+                {isCurrentTeacherVerified && (
+                  <button type="button" onClick={() => setShowNoticeDialog(true)}
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                    className="hidden wide:flex items-center gap-1 px-2.5 py-1.5 bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border-l border-yellow-300 cursor-pointer"
+                    title="학생공지">
+                    <Bell className="w-3.5 h-3.5" /><span>학생공지</span>
+                  </button>
+                )}
               </div>
 
               {/* 학생공지 (모바일 - 인증 시) */}
               {isCurrentTeacherVerified && (
-                <button type="button" onClick={() => toast('현재 기능을 준비하고 있습니다\n-성지수행 개발팀', { icon: '🔔' })} style={{ WebkitTapHighlightColor: 'transparent' }}
+                <button type="button" onClick={() => setShowNoticeDialog(true)} style={{ WebkitTapHighlightColor: 'transparent' }}
                   className="wide:hidden ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs wide:text-sm shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
                   title="학생공지">
                   <Bell className="w-3.5 h-3.5" /><span>학생공지</span>

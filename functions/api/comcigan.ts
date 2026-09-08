@@ -213,73 +213,33 @@ export const onRequest = async (context: any) => {
                 console.warn('[Teacher Timetable] Detection failed:', { detectedTeacherProp, detectedSubjectProp, detectedBaseline });
             }
 
-            // baseline 데이터 sanitize (> 제거)
-            const baselineData = detectedBaseline ? JSON.parse(JSON.stringify(rawData[detectedBaseline] || [])) : [];
-            sanitizeTimetable(baselineData);
+            // baseline 데이터를 sanitize 전에 먼저 복사
+            const rawBaselineData = detectedBaseline ? (rawData[detectedBaseline] || []) : [];
 
-            // ── 서버사이드 isChanged 계산 (student API와 동일 로직) ────────────────────────────
-            // changedCells: "teacherId:weekday:period" → true 형태의 Map
+            // ── 서버사이드 isChanged 계산 ────────────────────────────────────────────────────
+            // 컴시간은 변경된 셀 값에 '>' 접두사를 붙여 표시함 (예: ">12345")
+            // 이 마커는 단일 데이터셋 내에 존재하므로 두 데이터셋 비교가 필요없음
+            // sanitize 전에 rawBaselineData를 스캔하여 > 마커를 changedCells로 추출
             const changedCellKeys: string[] = [];
 
-            if (detectedLive && detectedLive !== detectedBaseline) {
-                const liveRaw = rawData[detectedLive] || [];
-
-                // isEmptyDataset: live 데이터 전체가 0이면 아직 발행 안 됨 → 변경 없음으로 처리
-                let liveHasAnyData = false;
-                outer: for (let ti = 0; ti < liveRaw.length; ti++) {
-                    const teacherData = liveRaw[ti];
-                    if (!teacherData) continue;
-                    for (let d = 1; d <= 5; d++) {
-                        const dayArr = teacherData[d];
-                        if (!dayArr) continue;
-                        for (let p = 1; p < dayArr.length; p++) {
-                            const v = dayArr[p];
-                            const n = typeof v === 'string' ? parseInt(v.replace(/>/g, ''), 10) : (v || 0);
-                            if (n !== 0) { liveHasAnyData = true; break outer; }
-                        }
-                    }
-                }
-
-                if (liveHasAnyData) {
-                    for (let ti = 0; ti < liveRaw.length; ti++) {
-                        const liveTeacher = liveRaw[ti];
-                        const baseTeacher = baselineData[ti];
-                        if (!liveTeacher) continue;
-
-                        for (let d = 1; d <= 5; d++) {
-                            const liveDayArr = liveTeacher[d];
-                            const baseDayArr = baseTeacher?.[d];
-                            if (!liveDayArr) continue;
-
-                            // isDayEmpty: 해당 요일 live 데이터가 전부 0이면 스킵
-                            let isDayEmpty = true;
-                            for (let p = 1; p < liveDayArr.length; p++) {
-                                const lv = liveDayArr[p];
-                                const ln = typeof lv === 'string' ? parseInt(lv.replace(/>/g, ''), 10) : (lv || 0);
-                                if (ln !== 0) { isDayEmpty = false; break; }
-                            }
-                            if (isDayEmpty) continue;
-
-                            for (let p = 1; p < liveDayArr.length; p++) {
-                                const lv = liveDayArr[p];
-                                let liveCode = typeof lv === 'string' ? parseInt(lv.replace(/>/g, ''), 10) : (lv || 0);
-                                const baseCode = (baseDayArr && baseDayArr[p]) ? (baseDayArr[p] as number) : 0;
-
-                                // cell-level fallback: live가 0이지만 base가 있고 day가 비어있지 않으면 base로 채움
-                                if (liveCode === 0 && baseCode !== 0) {
-                                    liveCode = baseCode;
-                                }
-
-                                // 변경 감지: base와 live 코드가 다르면 changed
-                                // 같은 과목이어도 teacherIdx가 다르면 code가 달라 자동으로 감지됨
-                                if (baseCode !== liveCode) {
-                                    changedCellKeys.push(`${ti}:${d}:${p}`);
-                                }
-                            }
+            for (let ti = 0; ti < rawBaselineData.length; ti++) {
+                const teacherData = rawBaselineData[ti];
+                if (!teacherData) continue;
+                for (let d = 1; d <= 5; d++) {
+                    const dayArr = teacherData[d];
+                    if (!Array.isArray(dayArr)) continue;
+                    for (let p = 1; p < dayArr.length; p++) {
+                        const v = dayArr[p];
+                        if (typeof v === 'string' && v.startsWith('>')) {
+                            changedCellKeys.push(`${ti}:${d}:${p}`);
                         }
                     }
                 }
             }
+
+            // sanitize: > 마커 제거 후 정수로 변환
+            const baselineData = JSON.parse(JSON.stringify(rawBaselineData));
+            sanitizeTimetable(baselineData);
 
             return new Response(JSON.stringify({
                 success: !!(detectedTeacherProp && detectedSubjectProp && detectedBaseline),
