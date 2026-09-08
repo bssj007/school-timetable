@@ -384,8 +384,9 @@ export default function TeacherPage() {
   const [authError, setAuthError] = useState("");
   const [showAuthPassword, setShowAuthPassword] = useState(false);
   const [showNoticeDialog, setShowNoticeDialog] = useState(false);
-  // 모바일 키보드가 올라올 때 인증 다이얼로그를 키보드 위로 밀어올리는 오프셋
-  const [authDialogKeyboardOffset, setAuthDialogKeyboardOffset] = useState(0);
+  // 모바일 키보드 감지: window.innerHeight가 줄어들면 키보드가 열린 것
+  const [authDialogCompact, setAuthDialogCompact] = useState(false);
+  const authDialogOpenHeightRef = useRef<number>(0);
 
   const [weekOffset, setWeekOffset] = useState<number>(() => {
     const today = new Date();
@@ -469,29 +470,34 @@ export default function TeacherPage() {
     if (viewMode === 'homework') setHwPage(1);
   }, [viewMode]);
 
-  // 모바일 키보드가 올라올 때 인증 다이얼로그 위치 조정 (visualViewport API)
+  // 모바일 키보드가 올라오면 다이얼로그를 컴팩트 모드로 전환
+  // (transform 이동 대신 헤더 숨김으로 높이를 줄여 자연스럽게 중앙 배치)
   useEffect(() => {
     if (!showAuthDialog) {
-      setAuthDialogKeyboardOffset(0);
+      setAuthDialogCompact(false);
+      authDialogOpenHeightRef.current = 0;
       return;
     }
-    const vv = window.visualViewport;
-    if (!vv) return;
+    // 다이얼로그가 열릴 때 기준 높이 기록
+    authDialogOpenHeightRef.current = window.innerHeight;
+    setAuthDialogCompact(false);
 
-    const handleViewportResize = () => {
-      // visualViewport.height가 줄어들면 키보드가 올라온 것
-      const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      setAuthDialogKeyboardOffset(keyboardHeight);
+    const handleResize = () => {
+      const current = window.innerHeight;
+      const base = authDialogOpenHeightRef.current;
+      // 기준 높이 대비 15% 이상 줄어들면 키보드 열림으로 판단
+      setAuthDialogCompact(base > 0 && current < base * 0.85);
     };
 
-    vv.addEventListener('resize', handleViewportResize);
-    vv.addEventListener('scroll', handleViewportResize);
-    handleViewportResize();
+    window.addEventListener('resize', handleResize);
+    // visualViewport도 함께 체크 (iOS 대응)
+    const vv = window.visualViewport;
+    if (vv) vv.addEventListener('resize', handleResize);
 
     return () => {
-      vv.removeEventListener('resize', handleViewportResize);
-      vv.removeEventListener('scroll', handleViewportResize);
-      setAuthDialogKeyboardOffset(0);
+      window.removeEventListener('resize', handleResize);
+      if (vv) vv.removeEventListener('resize', handleResize);
+      setAuthDialogCompact(false);
     };
   }, [showAuthDialog]);
 
@@ -2125,29 +2131,22 @@ export default function TeacherPage() {
 
       {/* ===== 선생님별 인증 다이얼로그 ===== */}
       <Dialog open={showAuthDialog} onOpenChange={(open) => { setShowAuthDialog(open); if (!open) { setAuthError(""); setAuthPassword(""); } }}>
-        <DialogContent
-          className="sm:max-w-[360px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl"
-          style={{
-            // Radix UI 기본 transform(translate(-50%,-50%))을 오버라이드할 때
-            // translateX(-50%)도 반드시 포함해야 가로 중앙 정렬이 유지됨
-            transform: authDialogKeyboardOffset > 0
-              ? `translate(-50%, calc(-50% - ${Math.min(Math.round(authDialogKeyboardOffset * 0.55), 160)}px))`
-              : 'translate(-50%, -50%)',
-            transition: 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)',
-          }}
-        >
-          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-4 text-white">
-            <DialogHeader>
-              <DialogTitle className="text-base font-extrabold text-white flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                {teacherName} 선생님 인증
-              </DialogTitle>
-            </DialogHeader>
-            <p className="text-emerald-100 text-xs mt-1">수행평가 등록·수정 권한이 필요합니다</p>
-          </div>
-          <form onSubmit={handleTeacherAuth} className="p-5 space-y-4">
+        <DialogContent className="sm:max-w-[360px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+          {/* 키보드가 없을 때만 에메랄드 헤더 표시 — 키보드 열리면 숨겨 다이얼로그 높이 축소 */}
+          {!authDialogCompact && (
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-4 text-white">
+              <DialogHeader>
+                <DialogTitle className="text-base font-extrabold text-white flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  {teacherName} 선생님 인증
+                </DialogTitle>
+              </DialogHeader>
+              <p className="text-emerald-100 text-xs mt-1">수행평가 등록·수정 권한이 필요합니다</p>
+            </div>
+          )}
+          <form onSubmit={handleTeacherAuth} className={authDialogCompact ? "p-4 space-y-3" : "p-5 space-y-4"}>
             <div className="relative">
               <input
                 type="text"
@@ -2158,12 +2157,7 @@ export default function TeacherPage() {
                 spellCheck={false}
                 style={{ WebkitTextSecurity: showAuthPassword ? 'none' : 'disc' } as React.CSSProperties}
                 className="w-full h-11 px-4 pr-11 rounded-xl border-2 border-amber-200 bg-white text-gray-800 text-sm font-medium placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
-                onFocus={(e) => {
-                  // 모바일 키보드가 올라올 때 input이 가려지지 않도록 스크롤
-                  setTimeout(() => {
-                    e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }, 300);
-                }}
+
               />
               <button type="button" tabIndex={-1} onClick={() => setShowAuthPassword(v => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1">

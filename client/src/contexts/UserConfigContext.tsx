@@ -175,23 +175,11 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
                 window.location.href = "/";
             }
         } else if (targetRole === "teacher") {
-            setRoleCookie("teacher");
-            setUserRoleState("teacher");
-            // 1순위: 로그인 된 교사 (가장 최근 선택 교사 무시)
-            // 2순위: 로그인 된 교사가 없을 때만 가장 최근 선택했던 교사
-            const activeTeacher = getActiveTeacherName();
-            if (activeTeacher) {
-                setTeacherNameCookie(activeTeacher);
-                setTeacherNameState(activeTeacher);
-                toast.success("교사용 페이지로 이동합니다.");
-                if (typeof window !== "undefined") {
-                    if (!window.location.pathname.startsWith("/teacher")) {
-                        window.location.href = "/teacher";
-                    }
-                }
-            } else {
-                openRoleSelect("teacher-name");
-            }
+            // 학생→교사 전환: 동일하게 역할 선택 화면(role step)부터 다시 시작
+            // 저장된 교사 정보(로그인/최근 선택)는 handleSelectTeacher에서 자동 접속함
+            clearRoleCookie();
+            setUserRoleState(null);
+            openRoleSelect("role");
         }
     };
 
