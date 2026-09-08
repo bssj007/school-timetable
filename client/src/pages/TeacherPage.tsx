@@ -468,16 +468,6 @@ export default function TeacherPage() {
   }, [viewMode]);
 
 
-  useEffect(() => {
-    const authTeacher = getAuthenticatedTeacher();
-    // 로그인 된 교사가 없을 때만 '가장 최근 선택했던 교사'로 저장
-    if (!authTeacher) {
-      localStorage.setItem("teacher-page-selected-teacher", selectedTeacherId);
-      if (timetableData?.teachers?.[parseInt(selectedTeacherId, 10)]) {
-        localStorage.setItem("last_selected_teacher_name", timetableData.teachers[parseInt(selectedTeacherId, 10)]);
-      }
-    }
-  }, [selectedTeacherId, timetableData?.teachers]);
 
   // 좁은화면(Pad 등 넓은 화면 포함)에서 시간표 비율 한계를 완화하여 적당히 넙적한 비율(0.72)로 자동 조절되도록 dynamic CSS 변수 동기화
   const timetableContainerRef = useRef<HTMLDivElement>(null);
@@ -778,6 +768,17 @@ export default function TeacherPage() {
     retryDelay: 3000,
     refetchInterval: 2 * 60 * 1000,
   });
+
+  // 로그인 된 교사가 없을 때만 '가장 최근 선택했던 교사'로 저장 (timetableData 선언 이후에 위치해야 TDZ 오류 방지)
+  useEffect(() => {
+    const authTeacher = getAuthenticatedTeacher();
+    if (!authTeacher) {
+      localStorage.setItem("teacher-page-selected-teacher", selectedTeacherId);
+      if (timetableData?.teachers?.[parseInt(selectedTeacherId, 10)]) {
+        localStorage.setItem("last_selected_teacher_name", timetableData.teachers[parseInt(selectedTeacherId, 10)]);
+      }
+    }
+  }, [selectedTeacherId, timetableData?.teachers]);
 
   // 날짜 범위 밖 여부 — 교사 시간표 또는 3개 학년 중 하나라도 COMCIGAN+isOutOfRange이면 미확정
   // 아카이브 데이터가 있는 경우 미확정 표시 안 함
