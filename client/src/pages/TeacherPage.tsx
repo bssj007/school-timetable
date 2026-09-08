@@ -1877,9 +1877,7 @@ export default function TeacherPage() {
                 value={authPassword}
                 onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
                 placeholder="비밀번호 입력"
-                autoComplete="current-password"
-                autoCorrect="off"
-                autoCapitalize="off"
+                autoComplete="off"
                 spellCheck={false}
                 style={{ WebkitTextSecurity: showAuthPassword ? 'none' : 'disc' } as React.CSSProperties}
                 className="w-full h-11 px-4 pr-11 rounded-xl border-2 border-amber-200 bg-white text-gray-800 text-sm font-medium placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"

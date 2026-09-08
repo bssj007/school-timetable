@@ -12503,11 +12503,14 @@ function TeacherDefaultPasswordManager({ adminPassword }: { adminPassword: strin
                         <div className="flex gap-2">
                             <div className="relative flex-1">
                                 <Input
-                                    type={showPw ? "text" : "password"}
+                                    type="text"
                                     value={newPw}
                                     onChange={e => setNewPw(e.target.value)}
                                     placeholder="새 비밀번호 입력"
+                                    autoComplete="off"
+                                    spellCheck={false}
                                     className="pr-10 text-sm h-9"
+                                    style={{ WebkitTextSecurity: showPw ? 'none' : 'disc' } as React.CSSProperties}
                                 />
                                 <Button
                                     type="button"
@@ -12783,11 +12786,14 @@ function TeacherPerPasswordManager({ adminPassword }: { adminPassword: string })
                                     <div className="flex gap-1.5 flex-1">
                                         <div className="relative flex-1">
                                             <Input
-                                                type={showPw[name] ? "text" : "password"}
+                                                type="text"
                                                 value={editValue}
                                                 onChange={e => setEditValue(e.target.value)}
                                                 onKeyDown={e => { if (e.key === 'Enter') handleEdit(name); if (e.key === 'Escape') { setEditingTeacher(null); setEditValue(""); } }}
+                                                autoComplete="off"
+                                                spellCheck={false}
                                                 className="h-7 text-xs pr-8"
+                                                style={{ WebkitTextSecurity: showPw[name] ? 'none' : 'disc' } as React.CSSProperties}
                                             />
                                             <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-2 hover:bg-transparent"
                                                 onClick={() => setShowPw(v => ({ ...v, [name]: !v[name] }))}>
@@ -12833,11 +12839,14 @@ function TeacherPerPasswordManager({ adminPassword }: { adminPassword: string })
                         />
                         <div className="relative">
                             <Input
-                                type={showNewPw ? "text" : "password"}
+                                type="text"
                                 value={newTeacherPw}
                                 onChange={e => setNewTeacherPw(e.target.value)}
                                 placeholder="비밀번호"
+                                autoComplete="off"
+                                spellCheck={false}
                                 className="text-xs h-9 pr-8 w-32"
+                                style={{ WebkitTextSecurity: showNewPw ? 'none' : 'disc' } as React.CSSProperties}
                             />
                             <Button type="button" variant="ghost" size="icon"
                                 className="absolute right-0 top-0 h-full px-2 hover:bg-transparent"
