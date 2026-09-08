@@ -384,8 +384,7 @@ export default function TeacherPage() {
   const [authError, setAuthError] = useState("");
   const [showAuthPassword, setShowAuthPassword] = useState(false);
   const [showNoticeDialog, setShowNoticeDialog] = useState(false);
-  // 모바일 키보드 감지 (visualViewport 기반)
-  const [authDialogCompact, setAuthDialogCompact] = useState(false);
+  // 모바일 키보드 감지 (visualViewport 기반) — 위로 밀어올리기만 사용
   const [authDialogShift, setAuthDialogShift] = useState(0);
 
   const [weekOffset, setWeekOffset] = useState<number>(() => {
@@ -470,10 +469,9 @@ export default function TeacherPage() {
     if (viewMode === 'homework') setHwPage(1);
   }, [viewMode]);
 
-  // 모바일 키보드 감지: visualViewport로 키보드 높이 계산 → 컴팩트 모드 + 위로 이동
+  // 모바일 키보드 감지: visualViewport로 키보드 높이 계산 → 다이얼로그 위로 이동
   useEffect(() => {
     if (!showAuthDialog) {
-      setAuthDialogCompact(false);
       setAuthDialogShift(0);
       return;
     }
@@ -482,27 +480,16 @@ export default function TeacherPage() {
     const baseHeight = window.innerHeight;
 
     const update = () => {
-      // visualViewport가 있으면 정확한 키보드 높이 계산
       const visibleHeight = vv ? vv.height : window.innerHeight;
       const kbHeight = Math.max(0, baseHeight - visibleHeight);
-
-      if (kbHeight > 80) {
-        // 키보드가 열린 상태
-        setAuthDialogCompact(true);
-        // 키보드 높이의 30%만큼만 올림 (최대 120px) — 적당히 위로
-        setAuthDialogShift(Math.min(Math.round(kbHeight * 0.3), 120));
-      } else {
-        setAuthDialogCompact(false);
-        setAuthDialogShift(0);
-      }
+      // 키보드 높이의 30%만큼 올림 (최대 120px)
+      setAuthDialogShift(kbHeight > 80 ? Math.min(Math.round(kbHeight * 0.3), 120) : 0);
     };
 
-    // visualViewport resize (가장 신뢰성 높음)
     if (vv) {
       vv.addEventListener('resize', update);
       vv.addEventListener('scroll', update);
     }
-    // fallback: window resize (일부 Android)
     window.addEventListener('resize', update);
 
     return () => {
@@ -511,7 +498,6 @@ export default function TeacherPage() {
         vv.removeEventListener('scroll', update);
       }
       window.removeEventListener('resize', update);
-      setAuthDialogCompact(false);
       setAuthDialogShift(0);
     };
   }, [showAuthDialog]);
@@ -2153,21 +2139,18 @@ export default function TeacherPage() {
             transition: 'transform 0.25s ease-out',
           }}
         >
-          {/* 키보드가 없을 때만 에메랄드 헤더 표시 — 키보드 열리면 숨겨 다이얼로그 높이 축소 */}
-          {!authDialogCompact && (
-            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-4 text-white">
-              <DialogHeader>
-                <DialogTitle className="text-base font-extrabold text-white flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                  {teacherName} 선생님 인증
-                </DialogTitle>
-              </DialogHeader>
-              <p className="text-emerald-100 text-xs mt-1">수행평가 등록·수정 권한이 필요합니다</p>
-            </div>
-          )}
-          <form onSubmit={handleTeacherAuth} className={authDialogCompact ? "p-4 space-y-3" : "p-5 space-y-4"}>
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-4 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-base font-extrabold text-white flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                {teacherName} 선생님 인증
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-emerald-100 text-xs mt-1">수행평가 등록·수정 권한이 필요합니다</p>
+          </div>
+          <form onSubmit={handleTeacherAuth} className="p-5 space-y-4">
             <div className="relative">
               <input
                 type="text"
