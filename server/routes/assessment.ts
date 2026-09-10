@@ -100,4 +100,47 @@ router.delete("/", async (req, res) => {
     }
 });
 
+// PATCH /: Vote and update
+router.patch("/", async (req, res) => {
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: "DB Unavailable" });
+
+    if (req.query.action === 'vote') {
+        const { assessmentId, grade: vGrade, classNum: vClass, studentNumber: vStudent, vote } = req.body;
+        if (!assessmentId || !vGrade || !vClass || !vStudent) {
+            return res.status(400).json({ error: "Missing required fields" });
+        }
+
+        try {
+            const [rows]: any = await db.execute(sql`SELECT votes FROM performanceAssessments WHERE id = ${assessmentId}`);
+            if (!rows || rows.length === 0) {
+                return res.status(404).json({ error: "Assessment not found" });
+            }
+
+            let votesArr: { g: number; c: number; s: number; v: string }[] = [];
+            try { votesArr = JSON.parse(rows[0].votes || '[]'); } catch { votesArr = []; }
+
+            const idx = votesArr.findIndex(x => x.g === vGrade && x.c === vClass && x.s === vStudent);
+            if (!vote) {
+                if (idx >= 0) votesArr.splice(idx, 1);
+            } else if (vote === 'helpful' || vote === 'distrust') {
+                if (idx >= 0) {
+                    votesArr[idx].v = vote;
+                } else {
+                    votesArr.push({ g: vGrade, c: vClass, s: vStudent, v: vote });
+                }
+            } else {
+                return res.status(400).json({ error: "Invalid vote value" });
+            }
+
+            await db.execute(sql`UPDATE performanceAssessments SET votes = ${JSON.stringify(votesArr)} WHERE id = ${assessmentId}`);
+            return res.json({ success: true });
+        } catch (err: any) {
+            return res.status(500).json({ error: err.message });
+        }
+    }
+
+    res.status(400).json({ error: "Unknown action" });
+});
+
 export const assessmentRouter = router;

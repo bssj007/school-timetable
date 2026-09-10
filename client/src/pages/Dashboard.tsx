@@ -1111,12 +1111,13 @@ export default function Dashboard() {
     return processed;
   }, [allAssessments, weekDates, grade, myActualSubjects, timetableData, computedGroups, currentProfile]);
 
-  // 3.5 수행평가 투표 데이터 (인라인 votes 필드에서 계산)
+  // 3.5 수행평가 투표 데이터 (인라인 votes 필드에서 계산 - 모든 수행평가 대상)
   const votesData = useMemo(() => {
-    if (!assessments || assessments.length === 0) return { votes: {} as Record<string, { helpful: number; distrust: number }>, myVotes: {} as Record<string, string> };
+    const list = allAssessments || [];
+    if (list.length === 0) return { votes: {} as Record<string, { helpful: number; distrust: number }>, myVotes: {} as Record<string, string> };
     const votes: Record<string, { helpful: number; distrust: number }> = {};
     const myVotes: Record<string, string> = {};
-    for (const a of assessments) {
+    for (const a of list) {
       const aid = String(a.id);
       let votesArr: { g: number; c: number; s: number; v: string }[] = [];
       try { votesArr = JSON.parse(a.votes || '[]'); } catch { votesArr = []; }
@@ -1130,29 +1131,35 @@ export default function Dashboard() {
       }
     }
     return { votes, myVotes };
-  }, [assessments, grade, classNum, studentNumber]);
+  }, [allAssessments, grade, classNum, studentNumber]);
 
   const voteMutation = useMutation({
     mutationFn: async ({ assessmentId, vote }: { assessmentId: number; vote: 'helpful' | 'distrust' }) => {
       const myCurrentVote = votesData?.myVotes?.[String(assessmentId)];
-      if (myCurrentVote === vote) {
-        // Toggle off - send null vote
-        await fetch('/api/assessment?action=vote', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assessmentId, grade: parseInt(grade), classNum: parseInt(classNum), studentNumber: parseInt(studentNumber), vote: null }),
-        });
-      } else {
-        await fetch('/api/assessment?action=vote', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assessmentId, grade: parseInt(grade), classNum: parseInt(classNum), studentNumber: parseInt(studentNumber), vote }),
-        });
+      const targetVote = myCurrentVote === vote ? null : vote;
+      const res = await fetch('/api/assessment?action=vote', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assessmentId,
+          grade: parseInt(grade),
+          classNum: parseInt(classNum),
+          studentNumber: parseInt(studentNumber),
+          vote: targetVote,
+        }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || '투표 처리에 실패했습니다.');
       }
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assessments'] });
     },
+    onError: (error: any) => {
+      toast.error(error.message || '투표 실패');
+    }
   });
 
   // 4. 수행평가 추가
