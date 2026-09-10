@@ -1610,7 +1610,7 @@ export default function Dashboard() {
   const selectorStyle = currentGradeColor ? { borderColor: currentGradeColor, borderWidth: '2px' } : {};
 
   return (
-    <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-2">
+    <div className="container max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-2 pb-20 sm:pb-6">
       {/* Global Status Banners */}
       {(settings?.is_whitelisted || (rawTimetableData as any)?.ipOverrideApplied) && (
         <div className="flex flex-col gap-2 mb-4">

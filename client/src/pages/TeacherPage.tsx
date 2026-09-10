@@ -2092,7 +2092,7 @@ export default function TeacherPage() {
 
   return (
     <div 
-      className="w-full min-h-screen wide:h-dvh overflow-x-hidden wide:overflow-hidden px-2 wide:px-6 md:px-8 lg:px-10 pt-2 wide:pt-4 pb-0 wide:pb-5 flex flex-col"
+      className="w-full min-h-screen wide:h-dvh overflow-x-hidden wide:overflow-hidden px-2 wide:px-6 md:px-8 lg:px-10 pt-2 wide:pt-4 pb-20 sm:pb-6 wide:pb-5 flex flex-col"
       style={{
         backgroundColor: '#f6e7c9',
         backgroundImage: `

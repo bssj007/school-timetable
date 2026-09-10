@@ -7354,13 +7354,15 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         const ip = u.ip || '';
                                         const kakaoNames = (u.kakaoAccounts || []).map((k: any) => k.kakaoNickname).join(' ');
                                         const name = (u.studentName || '').toLowerCase();
+                                        const teacher = ((u as any).teacherName || '').toLowerCase();
                                         
                                         return ip.includes(query) || 
                                                gradeClassNum.includes(query) || 
                                                gradeClassNum2.includes(query) ||
                                                gradeClassNumHyphen.includes(query) ||
                                                kakaoNames.toLowerCase().includes(query) ||
-                                               name.includes(query);
+                                               name.includes(query) ||
+                                               teacher.includes(query);
                                     });
 
                                     const knownUsers = filteredActiveUsers.filter(isKnownUser);
