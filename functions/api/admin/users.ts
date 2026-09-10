@@ -162,34 +162,47 @@ export const onRequest = async (context: any) => {
                 }
                 return null;
             };
-            // 4. IP별 과거 접속환경 조회 (access_logs에서 distinct userAgent 및 PWA 엔드포인트 조회하여 파싱)
+            // 4. IP별 과거 접속환경 조회 (access_logs에서 distinct userAgent 조회하여 파싱)
+            //    - endpoint는 GROUP BY에서 제거 (endpoint 수 × ip 수만큼 행 폭발 방지)
+            //    - 90일 이내 + LIMIT 5000 으로 Worker CPU 한계 초과 방지
             let envMap: Record<string, { os: string; deviceType: string; browserKey: string; isInApp: boolean; isApp: boolean }[]> = {};
+            let pwaIpSet = new Set<string>(); // PWA 엔드포인트 접속 기록이 있는 IP 집합
             try {
                 const envQuery = `
-                    SELECT ip, userAgent, endpoint
+                    SELECT ip, userAgent
                     FROM access_logs
-                    WHERE (userAgent IS NOT NULL AND TRIM(userAgent) != '')
-                       OR (endpoint LIKE '%mode=pwa%' OR endpoint LIKE '%standalone%')
-                    GROUP BY ip, userAgent, endpoint
+                    WHERE accessedAt > datetime('now', '+9 hours', '-90 days')
+                      AND userAgent IS NOT NULL
+                      AND userAgent != ''
+                    GROUP BY ip, userAgent
+                    LIMIT 5000
                 `;
                 const { results: envResults } = await env.DB.prepare(envQuery).all();
                 for (const row of envResults as any[]) {
                     if (!row.ip) continue;
-                    const ep = (row.endpoint || '').toLowerCase();
-                    const isPwaEndpoint = ep.includes('mode=pwa') || ep.includes('standalone=1') || ep.includes('utm_source=homescreen');
-                    const parsed = row.userAgent ? parseUA(row.userAgent) : { os: '', deviceType: 'mobile', browserKey: 'pwa', isInApp: false, isApp: true };
-                    if (isPwaEndpoint) {
-                        parsed.isApp = true;
-                    }
-                    if (!parsed.os && !parsed.deviceType && !parsed.browserKey && !isPwaEndpoint) continue;
+                    const parsed = parseUA(row.userAgent);
+                    if (!parsed.os && !parsed.deviceType && !parsed.browserKey) continue;
                     if (!envMap[row.ip]) envMap[row.ip] = [];
                     envMap[row.ip].push({
                         os: parsed.os || '',
-                        deviceType: parsed.deviceType || (isPwaEndpoint ? 'mobile' : ''),
-                        browserKey: isPwaEndpoint ? 'pwa' : (parsed.browserKey || 'other'),
+                        deviceType: parsed.deviceType || '',
+                        browserKey: parsed.browserKey || 'other',
                         isInApp: parsed.isInApp,
-                        isApp: parsed.isApp || isPwaEndpoint,
+                        isApp: parsed.isApp,
                     });
+                }
+
+                // PWA 엔드포인트 접속 기록 IP 별도 조회 (간단하게 DISTINCT ip만)
+                const pwaQuery = `
+                    SELECT DISTINCT ip
+                    FROM access_logs
+                    WHERE accessedAt > datetime('now', '+9 hours', '-90 days')
+                      AND (endpoint LIKE '%mode=pwa%' OR endpoint LIKE '%standalone=1%' OR endpoint LIKE '%utm_source=homescreen%')
+                    LIMIT 2000
+                `;
+                const { results: pwaResults } = await env.DB.prepare(pwaQuery).all();
+                for (const row of pwaResults as any[]) {
+                    if (row.ip) pwaIpSet.add(row.ip);
                 }
             } catch (e: any) {
                 console.warn('[Admin Users] Historical environments query failed:', e.message);
@@ -212,6 +225,18 @@ export const onRequest = async (context: any) => {
                         isInApp: parsedLatestUA.isInApp,
                         isApp: parsedLatestUA.isApp,
                     }];
+                }
+
+                // PWA 엔드포인트 접속 이력 반영
+                const hasPwaAccess = pwaIpSet.has(p.ip);
+                if (hasPwaAccess && !userEnvs.some(e => e.browserKey === 'pwa')) {
+                    userEnvs.push({
+                        os: parsedLatestUA.os || '',
+                        deviceType: 'mobile',
+                        browserKey: 'pwa',
+                        isInApp: false,
+                        isApp: true,
+                    });
                 }
 
                 // 과거 로그 및 ip_profiles 누적값을 통틀어 앱 접속 기록 확인
