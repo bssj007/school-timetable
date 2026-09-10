@@ -80,6 +80,10 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
             });
             if (!res.ok) throw new Error("Failed to load profile");
             const json = await res.json();
+            // 진단 출력: 로그가 0건인 경우 IP 불일치 여부 확인
+            if (json._debug) {
+                console.warn('[IPProfileViewer] 로그 0건 진단:', json._debug);
+            }
             setData(json);
         } catch (error) {
             toast.error("상세 정보를 불러오는데 실패했습니다.");
@@ -266,14 +270,19 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                     )) : <span className="text-xs text-gray-400">-</span>}
                                 </div>
                             </div>
-                            <div className="col-span-1 md:col-span-4 flex justify-end">
+                            <div className="col-span-1 md:col-span-4 flex justify-end items-center gap-2">
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     onClick={() => setIsLogModalOpen(true)}
-                                    className="bg-white"
+                                    className="bg-white border-blue-200 hover:bg-blue-50/50"
                                 >
-                                    접속 로그 열람 ({(data as any).totalLogCount ?? data.logs?.length ?? 0}건)
+                                    접속 로그 열람 ({data.totalLogCount ?? data.logs?.length ?? 0}건)
+                                    {((data.totalLogCount ?? data.logs?.length ?? 0) === 0 && (data.relatedStudentLogsCount || 0) > 0) && (
+                                        <Badge variant="secondary" className="ml-2 text-[10px] bg-indigo-100 text-indigo-700 font-normal">
+                                            동일 사용자 전체 {data.relatedStudentLogsCount}건
+                                        </Badge>
+                                    )}
                                 </Button>
                             </div>
                         </div>
@@ -484,9 +493,94 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                             </details>
                                         ))}
                                     </div>
-                                ) : <div className="text-center text-gray-500 py-16">
-                                    {selectedLogDate === 'all' ? '접속 로그 데이터가 없습니다.' : '해당 날짜의 로깅 데이터가 존재하지 않습니다.'}
-                                </div>
+                                ) : (
+                                    <div className="py-12 px-4 max-w-xl mx-auto flex flex-col items-center text-center">
+                                        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-4">
+                                            <FileText className="w-6 h-6" />
+                                        </div>
+                                        <h4 className="text-base font-bold text-slate-800 mb-1">
+                                            {selectedLogDate === 'all' ? '이 IP의 접속 로그가 없습니다' : `${selectedLogDate} 날짜의 로깅 데이터가 없습니다`}
+                                        </h4>
+                                        <p className="text-xs text-slate-500 mb-6 font-mono">
+                                            조회 대상 IP: {data?.ip}
+                                        </p>
+
+                                        {/* 진단 카드 */}
+                                        {data?._debug && (
+                                            <div className="w-full bg-white border border-slate-200 rounded-xl p-4 text-left shadow-sm mb-4 space-y-3">
+                                                <div className="flex items-center justify-between border-b pb-2">
+                                                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                                        🔍 DB 로그 진단 상태
+                                                    </span>
+                                                    <Badge variant="outline" className="text-[10px] font-mono">
+                                                        DB 전체 로그: {data._debug.totalAccessLogsInDb}건
+                                                    </Badge>
+                                                </div>
+
+                                                {data._debug.totalAccessLogsInDb === 0 ? (
+                                                    <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                                                        ⚠️ 현재 데이터베이스의 <span className="font-mono font-bold">access_logs</span> 테이블이 비어 있습니다.
+                                                        <br />
+                                                        일반 사용자(또는 새 창에서 메인 페이지) 접속 시 로그가 자동 누적됩니다.
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-2 text-xs text-slate-600">
+                                                        <p>
+                                                            DB에 총 <span className="font-bold text-blue-600 font-mono">{data._debug.totalAccessLogsInDb}건</span>의 로그가 있으나, 현재 IP(<span className="font-mono font-bold text-slate-800">{data.ip}</span>)의 기록은 없습니다.
+                                                        </p>
+                                                        <p className="text-[11px] text-slate-500">
+                                                            💡 <strong>이유:</strong> 접속 로그 테이블이 최근 생성/초기화된 이후 해당 IP로 아직 페이지에 재접속하지 않았거나, 사용자가 모바일/Wi-Fi 등 다른 네트워크 IP로 접속했을 수 있습니다.
+                                                        </p>
+
+                                                        {data._debug.sampleIpsInAccessLogs && data._debug.sampleIpsInAccessLogs.length > 0 && (
+                                                            <div className="pt-2 border-t">
+                                                                <span className="text-[11px] font-semibold text-slate-500 block mb-1.5">
+                                                                    최근 DB에 기록된 접속 IP 목록:
+                                                                </span>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {data._debug.sampleIpsInAccessLogs.map((sampleIp, sIdx) => (
+                                                                        <Button
+                                                                            key={sIdx}
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            className="h-6 px-2 text-[11px] font-mono bg-slate-50 hover:bg-blue-50 hover:text-blue-700 border-slate-200"
+                                                                            onClick={() => fetchFullProfile(sampleIp)}
+                                                                            title={`${sampleIp} 프로필 및 로그로 전환`}
+                                                                        >
+                                                                            {sampleIp} →
+                                                                        </Button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* 동일 사용자 다른 IP 바로가기 */}
+                                        {data?.relatedOtherIps && data.relatedOtherIps.length > 0 && (
+                                            <div className="w-full bg-indigo-50/70 border border-indigo-200 rounded-xl p-3.5 text-left text-xs">
+                                                <span className="font-bold text-indigo-900 block mb-1">
+                                                    💡 동일 사용자({data.teacherName ? `${data.teacherName} 선생님` : `${data.grade}-${data.classNum}-${data.studentNumber}`})의 다른 접속 IP ({data.relatedStudentLogsCount}건)
+                                                </span>
+                                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                                    {data.relatedOtherIps.map((otherIp, oIdx) => (
+                                                        <Button
+                                                            key={oIdx}
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            className="h-6 px-2.5 text-[11px] font-mono bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
+                                                            onClick={() => fetchFullProfile(otherIp)}
+                                                        >
+                                                            {otherIp} 로그 확인 →
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )
                             ) : <div className="flex justify-center py-20"><Loader2 className="animate-spin text-gray-300 w-10 h-10" /></div>}
                         </div>
                     </div>

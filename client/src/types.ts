@@ -36,7 +36,21 @@ export interface IPProfile {
     // --- Detailed History (Empty in List View, Populated in Detail View) ---
     assessments: { id: number, subject: string, title: string, createdAt: string, grade: number, classNum: number }[];
     logs: { accessedAt: string, method: string, endpoint: string }[];
+    totalLogCount?: number;
+    relatedStudentLogsCount?: number;
+    relatedOtherIps?: string[];
+    _debug?: {
+        queriedIp: string;
+        normalizedIp: string;
+        totalAccessLogsInDb: number;
+        sampleIpsInAccessLogs: string[];
+        recentLogSamples?: { id: number; ip: string; endpoint: string; method: string; accessedAt: string }[];
+        matchedLogCount: number;
+        relatedStudentLogsCount?: number;
+        queryErrors?: Record<string, string>;
+    };
 
     // --- Meta ---
     detailsLoaded: boolean; // Flag to indicate if full details are present
 }
+

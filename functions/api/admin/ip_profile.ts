@@ -5,9 +5,11 @@ import { parseUA } from "../../_uaDetect";
 export const onRequest = async (context: any) => {
     const { request, env } = context;
     const url = new URL(request.url);
-    const targetIp = url.searchParams.get("ip");
+    const rawTargetIp = url.searchParams.get("ip") || "";
+    const targetIp = rawTargetIp.trim();
+    const lowerTargetIp = targetIp.toLowerCase();
+    const cleanIpv4 = targetIp.replace(/^::ffff:/i, '').toLowerCase();
 
-    // 1. Auth Check
     // 1. Auth Check
     const password = request.headers.get("X-Admin-Password");
     if (password !== adminPassword) {
@@ -22,69 +24,79 @@ export const onRequest = async (context: any) => {
         return new Response(JSON.stringify({ error: "Missing IP address" }), { status: 400 });
     }
 
+    // IP 매칭 SQL 조건문 & 바인드 파라미터
+    // 원본 IP, 소문자화 IP, IPv6-mapped IPv4 제거 IP, TRIM된 IP 등 모든 형태 커버
+    const ipMatchSql = "(ip = ? OR LOWER(TRIM(ip)) = ? OR LOWER(TRIM(ip)) = ?)";
+    const ipMatchBinds = [targetIp, lowerTargetIp, cleanIpv4];
+
+    const queryErrors: Record<string, string> = {};
+
     try {
         // 2. Fetch Data — each query independently fail-safe
         // A. Block Status
         let blockEntry: any = null;
         try {
             blockEntry = await env.DB.prepare(
-                "SELECT * FROM blocked_users WHERE identifier = ? AND type = 'IP'"
-            ).bind(targetIp).first();
-        } catch (_) {}
+                `SELECT * FROM blocked_users WHERE (identifier = ? OR LOWER(TRIM(identifier)) = ?) AND type = 'IP'`
+            ).bind(targetIp, lowerTargetIp).first();
+        } catch (e: any) { queryErrors.blockStatus = e?.message; }
 
         // B. Modification Count
         let modificationCount = 0;
         try {
             const r: any = await env.DB.prepare(
-                "SELECT COUNT(*) as count FROM performance_assessments WHERE lastModifiedIp = ?"
-            ).bind(targetIp).first();
+                `SELECT COUNT(*) as count FROM performance_assessments WHERE (lastModifiedIp = ? OR LOWER(TRIM(lastModifiedIp)) = ? OR LOWER(TRIM(lastModifiedIp)) = ?)`
+            ).bind(targetIp, lowerTargetIp, cleanIpv4).first();
             modificationCount = r?.count || 0;
-        } catch (_) {}
+        } catch (e: any) { queryErrors.modCount = e?.message; }
 
         // C. Last Access (MAX — cheap, indexed by value comparator)
         let lastAccess: string | null = null;
         try {
             const r: any = await env.DB.prepare(
-                "SELECT MAX(accessedAt) as lastAccess FROM access_logs WHERE ip = ?"
-            ).bind(targetIp).first();
+                `SELECT MAX(accessedAt) as lastAccess FROM access_logs WHERE ${ipMatchSql}`
+            ).bind(...ipMatchBinds).first();
             lastAccess = r?.lastAccess || null;
-        } catch (_) {}
+        } catch (e: any) { queryErrors.lastAccess = e?.message; }
 
         // D. Linked Kakao Accounts (Distinct)
         let kakaoAccounts: any[] = [];
         try {
             const { results } = await env.DB.prepare(
-                "SELECT DISTINCT kakaoId, kakaoNickname FROM access_logs WHERE ip = ? AND kakaoId IS NOT NULL"
-            ).bind(targetIp).all();
+                `SELECT DISTINCT kakaoId, kakaoNickname FROM access_logs WHERE ${ipMatchSql} AND kakaoId IS NOT NULL`
+            ).bind(...ipMatchBinds).all();
             kakaoAccounts = results || [];
-        } catch (_) {}
+        } catch (e: any) { queryErrors.kakaoAccounts = e?.message; }
 
         // E. Detailed Assessments (Top 50)
         let recentAssessments: any[] = [];
         try {
             const { results } = await env.DB.prepare(
-                "SELECT id, subject, title, grade, classNum, dueDate, createdAt FROM performance_assessments WHERE lastModifiedIp = ? ORDER BY id DESC LIMIT 50"
-            ).bind(targetIp).all();
+                `SELECT id, subject, title, grade, classNum, dueDate, createdAt FROM performance_assessments WHERE (lastModifiedIp = ? OR LOWER(TRIM(lastModifiedIp)) = ? OR LOWER(TRIM(lastModifiedIp)) = ?) ORDER BY id DESC LIMIT 50`
+            ).bind(targetIp, lowerTargetIp, cleanIpv4).all();
             recentAssessments = results || [];
-        } catch (_) {}
+        } catch (e: any) { queryErrors.assessments = e?.message; }
 
         // F. Detailed Logs (최근 500건으로 제한)
         let recentLogs: any[] = [];
         let totalLogCount = 0;
         try {
             const countResult: any = await env.DB.prepare(
-                "SELECT COUNT(*) as cnt FROM access_logs WHERE ip = ?"
-            ).bind(targetIp).first();
+                `SELECT COUNT(*) as cnt FROM access_logs WHERE ${ipMatchSql}`
+            ).bind(...ipMatchBinds).first();
             totalLogCount = countResult?.cnt || 0;
         } catch (e: any) {
+            queryErrors.logCount = e?.message;
             console.warn('[ip_profile] log count query failed:', e?.message);
         }
+
         try {
             const { results } = await env.DB.prepare(
-                "SELECT * FROM access_logs WHERE ip = ? ORDER BY accessedAt DESC LIMIT 500"
-            ).bind(targetIp).all();
+                `SELECT * FROM access_logs WHERE ${ipMatchSql} ORDER BY accessedAt DESC LIMIT 500`
+            ).bind(...ipMatchBinds).all();
             recentLogs = results || [];
         } catch (e: any) {
+            queryErrors.recentLogs = e?.message;
             console.warn('[ip_profile] recentLogs query failed:', e?.message);
         }
 
@@ -95,10 +107,10 @@ export const onRequest = async (context: any) => {
             const { results: envRows } = await env.DB.prepare(
                 `SELECT userAgent, browserKey, deviceType, os, isInApp, accessedAt
                  FROM access_logs
-                 WHERE ip = ? AND userAgent IS NOT NULL
+                 WHERE ${ipMatchSql} AND userAgent IS NOT NULL
                  ORDER BY accessedAt DESC
                  LIMIT 15`
-            ).bind(targetIp).all();
+            ).bind(...ipMatchBinds).all();
 
             recentEnvironments = (envRows || []).map((r: any) => {
                 const parsed = parseUA(r.userAgent);
@@ -121,11 +133,11 @@ export const onRequest = async (context: any) => {
             // access_logs에 browserKey 컬럼 없으면 구버전 쿼리 fallback
             try {
                 const { results: uas } = await env.DB.prepare(
-                    "SELECT DISTINCT userAgent FROM access_logs WHERE ip = ? AND userAgent IS NOT NULL ORDER BY accessedAt DESC LIMIT 10"
-                ).bind(targetIp).all();
+                    `SELECT DISTINCT userAgent FROM access_logs WHERE ${ipMatchSql} AND userAgent IS NOT NULL ORDER BY accessedAt DESC LIMIT 10`
+                ).bind(...ipMatchBinds).all();
                 recentUserAgents = uas?.map((r: any) => r.userAgent) || [];
                 recentEnvironments = recentUserAgents.map(ua => ({ userAgent: ua, browserKey: null, deviceType: null, os: null, isInApp: false, accessedAt: null }));
-            } catch {}
+            } catch (e: any) { queryErrors.environments = e?.message; }
         }
 
         // H. Grade/Class/Name Info & Electives (via student_profile_id or access_logs fallback)
@@ -139,8 +151,8 @@ export const onRequest = async (context: any) => {
             SELECT sp.name as studentName, sp.grade, sp.classNum, sp.studentNumber, sp.electives
             FROM ip_profiles ip
             JOIN student_profiles sp ON ip.student_profile_id = sp.id
-            WHERE ip.ip = ?
-        `).bind(targetIp).first().catch(() => null);
+            WHERE (ip.ip = ? OR LOWER(TRIM(ip.ip)) = ? OR LOWER(TRIM(ip.ip)) = ?)
+        `).bind(targetIp, lowerTargetIp, cleanIpv4).first().catch(() => null);
 
         if (linkedProfile) {
             studentName = linkedProfile.studentName || null;
@@ -160,8 +172,8 @@ export const onRequest = async (context: any) => {
         } else {
             // Fallback to access_logs if not directly linked
             const gradeClassResult: any = await env.DB.prepare(
-                "SELECT grade, classNum, studentNumber FROM access_logs WHERE ip = ? AND grade IS NOT NULL AND classNum IS NOT NULL ORDER BY accessedAt DESC LIMIT 1"
-            ).bind(targetIp).first().catch(() => null);
+                `SELECT grade, classNum, studentNumber FROM access_logs WHERE ${ipMatchSql} AND grade IS NOT NULL AND classNum IS NOT NULL ORDER BY accessedAt DESC LIMIT 1`
+            ).bind(...ipMatchBinds).first().catch(() => null);
             grade = gradeClassResult?.grade || null;
             classNum = gradeClassResult?.classNum || null;
             studentNumber = gradeClassResult?.studentNumber || null;
@@ -189,8 +201,8 @@ export const onRequest = async (context: any) => {
         let teacherName: string | null = null;
         try {
             const ipProfileRowResult: any = await env.DB.prepare(
-                "SELECT printCount, downloadCount, isStandalone, teacherName FROM ip_profiles WHERE ip = ?"
-            ).bind(targetIp).first();
+                `SELECT printCount, downloadCount, isStandalone, teacherName FROM ip_profiles WHERE (ip = ? OR LOWER(TRIM(ip)) = ? OR LOWER(TRIM(ip)) = ?)`
+            ).bind(targetIp, lowerTargetIp, cleanIpv4).first();
             printCount = ipProfileRowResult?.printCount || 0;
             downloadCount = ipProfileRowResult?.downloadCount || 0;
             isStandalone = ipProfileRowResult?.isStandalone || 0;
@@ -198,21 +210,12 @@ export const onRequest = async (context: any) => {
         } catch (e: any) {
             if (e.message && (e.message.includes("no such column") || e.message.includes("has no column named") || e.message.includes("no column named"))) {
                 console.log("[Admin API] Schema mismatch for printCount/downloadCount. Running safe ALTER TABLE...");
-                try {
-                    await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN printCount INTEGER DEFAULT 0").run();
-                } catch (_) { }
-                try {
-                    await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN downloadCount INTEGER DEFAULT 0").run();
-                } catch (_) { }
-                try {
-                    await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN isStandalone INTEGER DEFAULT 0").run();
-                } catch (_) { }
-                try {
-                    await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN teacherName TEXT").run();
-                } catch (_) { }
-                // Keep values as defaults for this request
+                try { await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN printCount INTEGER DEFAULT 0").run(); } catch (_) { }
+                try { await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN downloadCount INTEGER DEFAULT 0").run(); } catch (_) { }
+                try { await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN isStandalone INTEGER DEFAULT 0").run(); } catch (_) { }
+                try { await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN teacherName TEXT").run(); } catch (_) { }
             } else {
-                throw e;
+                queryErrors.ipProfiles = e?.message;
             }
         }
 
@@ -220,11 +223,65 @@ export const onRequest = async (context: any) => {
         if (!teacherName) {
             try {
                 const logTeacher: any = await env.DB.prepare(
-                    "SELECT teacherName FROM access_logs WHERE ip = ? AND teacherName IS NOT NULL AND teacherName != '' ORDER BY accessedAt DESC LIMIT 1"
-                ).bind(targetIp).first().catch(() => null);
+                    `SELECT teacherName FROM access_logs WHERE ${ipMatchSql} AND teacherName IS NOT NULL AND teacherName != '' ORDER BY accessedAt DESC LIMIT 1`
+                ).bind(...ipMatchBinds).first().catch(() => null);
                 if (logTeacher?.teacherName) teacherName = logTeacher.teacherName;
             } catch (_) {}
         }
+
+        // K. 연관 학생/선생님의 다른 IP 및 로그 현황 조회 (다중 기기 접속 지원)
+        let relatedStudentLogsCount = 0;
+        let relatedOtherIps: string[] = [];
+        try {
+            if (grade && classNum && studentNumber) {
+                // 동일 학번의 전체 로그 수
+                const relCnt: any = await env.DB.prepare(
+                    "SELECT COUNT(*) as cnt FROM access_logs WHERE grade = ? AND classNum = ? AND studentNumber = ?"
+                ).bind(String(grade), String(classNum), String(studentNumber)).first();
+                relatedStudentLogsCount = relCnt?.cnt || 0;
+
+                // 동일 학번으로 접속한 다른 IP 목록
+                const { results: relIps } = await env.DB.prepare(
+                    `SELECT DISTINCT ip FROM access_logs WHERE grade = ? AND classNum = ? AND studentNumber = ? AND NOT ${ipMatchSql} LIMIT 5`
+                ).bind(String(grade), String(classNum), String(studentNumber), ...ipMatchBinds).all();
+                relatedOtherIps = (relIps || []).map((r: any) => r.ip);
+            } else if (teacherName) {
+                const relCnt: any = await env.DB.prepare(
+                    "SELECT COUNT(*) as cnt FROM access_logs WHERE teacherName = ?"
+                ).bind(teacherName).first();
+                relatedStudentLogsCount = relCnt?.cnt || 0;
+
+                const { results: relIps } = await env.DB.prepare(
+                    `SELECT DISTINCT ip FROM access_logs WHERE teacherName = ? AND NOT ${ipMatchSql} LIMIT 5`
+                ).bind(teacherName, ...ipMatchBinds).all();
+                relatedOtherIps = (relIps || []).map((r: any) => r.ip);
+            }
+        } catch (e: any) {
+            queryErrors.relatedLogs = e?.message;
+        }
+
+        // L. 진단 정보 (전체 DB 내 access_logs 상태 확인)
+        let _totalAccessLogsCount = 0;
+        let _sampleIps: string[] = [];
+        let _recentLogSamples: any[] = [];
+        try {
+            const totalResult: any = await env.DB.prepare("SELECT COUNT(*) as cnt FROM access_logs").first();
+            _totalAccessLogsCount = totalResult?.cnt || 0;
+        } catch (e: any) { queryErrors.totalAccessLogs = e?.message; }
+
+        try {
+            const { results: sampleRows } = await env.DB.prepare(
+                "SELECT DISTINCT ip FROM access_logs ORDER BY id DESC LIMIT 10"
+            ).all();
+            _sampleIps = (sampleRows || []).map((r: any) => r.ip);
+        } catch (_) {}
+
+        try {
+            const { results: recentRows } = await env.DB.prepare(
+                "SELECT id, ip, endpoint, method, accessedAt FROM access_logs ORDER BY id DESC LIMIT 3"
+            ).all();
+            _recentLogSamples = recentRows || [];
+        } catch (_) {}
 
         // 3. Construct Response (Matching IPProfile interface)
         const latestUA = recentEnvironments?.[0]?.userAgent || recentUserAgents?.[0] || "";
@@ -286,6 +343,22 @@ export const onRequest = async (context: any) => {
             logs: recentLogs || [],
             totalLogCount, // total logs for this IP (may exceed the 500-record limit above)
 
+            // 연관 학생/선생님 접속 정보
+            relatedStudentLogsCount,
+            relatedOtherIps,
+
+            // 진단 필드 — 프론트엔드 및 디버깅용
+            _debug: {
+                queriedIp: targetIp,
+                normalizedIp: lowerTargetIp,
+                totalAccessLogsInDb: _totalAccessLogsCount,
+                sampleIpsInAccessLogs: _sampleIps,
+                recentLogSamples: _recentLogSamples,
+                matchedLogCount: totalLogCount,
+                relatedStudentLogsCount,
+                queryErrors: Object.keys(queryErrors).length > 0 ? queryErrors : undefined,
+            },
+
             detailsLoaded: true // Flag to indicate full data
         };
 
@@ -294,7 +367,7 @@ export const onRequest = async (context: any) => {
         });
 
     } catch (e: any) {
-        // Handle "no such table" gracefully if needed, but Admin page usually ensures they exist via middleware.
-        return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+        return new Response(JSON.stringify({ error: e.message, queryErrors }), { status: 500 });
     }
 }
+
