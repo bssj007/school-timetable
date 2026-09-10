@@ -36,22 +36,35 @@ function envIcon(deviceType: string | null) {
     return <Monitor className="text-gray-500 w-5 h-5 shrink-0" />;
 }
 
+// SQLite stores UTC as "YYYY-MM-DD HH:MM:SS" (space separator, no 'Z').
+// Browsers (especially Safari) require ISO 8601 with 'T' separator.
+// Convert before constructing Date to ensure cross-browser compatibility.
+function toUtcDate(at: string | null): Date | null {
+    if (!at) return null;
+    try {
+        // Replace space with 'T', add 'Z' if no timezone info
+        const iso = at.replace(' ', 'T') + (at.includes('+') || at.endsWith('Z') ? '' : 'Z');
+        const d = new Date(iso);
+        return isNaN(d.getTime()) ? null : d;
+    } catch { return null; }
+}
+
 function fmtAccess(at: string | null) {
     if (!at) return null;
-    try { return new Date(at + (at.endsWith('Z') ? '' : 'Z')).toLocaleString('ko-KR'); } catch { return at; }
+    try { return toUtcDate(at)?.toLocaleString('ko-KR') ?? at; } catch { return at; }
 }
 
 
 export default function IPProfileViewer({ initialData, isOpen, onClose, adminPassword }: IPProfileViewerProps) {
     const [data, setData] = useState<IPProfile | null>(null);
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-    const [selectedLogDate, setSelectedLogDate] = useState<string>(new Date().toLocaleDateString('ko-KR'));
+    const [selectedLogDate, setSelectedLogDate] = useState<string>('all');
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
 
     useEffect(() => {
         if (isOpen && initialData) {
             setData(initialData);
-            setSelectedLogDate(new Date().toLocaleDateString('ko-KR')); // Default to today
+            setSelectedLogDate('all'); // Default: show all logs (date filter starts open)
             setIsLogModalOpen(false); // Close log modal on re-open
             if (!initialData.detailsLoaded) {
                 fetchFullProfile(initialData.ip);
@@ -62,7 +75,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
     const fetchFullProfile = async (ip: string) => {
         setIsLoadingDetails(true);
         try {
-            const res = await fetch(`/api/admin/ip_profile?ip=${ip}`, {
+            const res = await fetch(`/api/admin/ip_profile?ip=${encodeURIComponent(ip)}`, {
                 headers: { "X-Admin-Password": adminPassword }
             });
             if (!res.ok) throw new Error("Failed to load profile");
@@ -119,19 +132,22 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
         }
     };
 
-    // 1. Extract Unique Dates for the Filter Dropdown
-    const uniqueLogDates = data?.logs ? Array.from(new Set(data.logs.map(l => new Date(l.accessedAt + 'Z').toLocaleDateString('ko-KR')))) : [];
-
-    // Ensure today's date exists in the dropdown options
-    const todayString = new Date().toLocaleDateString('ko-KR');
-    if (uniqueLogDates.length > 0 && !uniqueLogDates.includes(todayString)) {
-        uniqueLogDates.unshift(todayString);
-    }
+    // 1. Extract Unique Dates for the Filter Dropdown (newest first)
+    const uniqueLogDates: string[] = data?.logs
+        ? Array.from(new Set(
+            data.logs
+                .map(l => toUtcDate(l.accessedAt))
+                .filter((d): d is Date => d !== null)
+                .map(d => d.toLocaleDateString('ko-KR'))
+        ))
+        : [];
 
     // 2. Filter Logs by Date
     const filteredLogs = data?.logs ? data.logs.filter(l => {
-        if (selectedLogDate === "all") return true;
-        return new Date(l.accessedAt + 'Z').toLocaleDateString('ko-KR') === selectedLogDate;
+        if (selectedLogDate === 'all') return true;
+        const d = toUtcDate(l.accessedAt);
+        if (!d) return false;
+        return d.toLocaleDateString('ko-KR') === selectedLogDate;
     }) : [];
 
     // 3. Group Concurrent Access Logs (Bursts within 5 seconds)
@@ -146,8 +162,8 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
 
         for (let i = 1; i < filteredLogs.length; i++) {
             const log = filteredLogs[i];
-            const logTime = new Date(log.accessedAt + 'Z').getTime();
-            const groupStartTime = new Date(currentGroup.timeStart + 'Z').getTime();
+            const logTime = toUtcDate(log.accessedAt)?.getTime() ?? 0;
+            const groupStartTime = toUtcDate(currentGroup.timeStart)?.getTime() ?? 0;
 
             // If the log is within 5 seconds of the start of the current burst (remembering it's descending)
             // Note: logTime will be earlier (smaller) than groupStartTime
@@ -257,7 +273,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                     onClick={() => setIsLogModalOpen(true)}
                                     className="bg-white"
                                 >
-                                    접속 로그 열람 ({data.logs?.length || 0})
+                                    접속 로그 열람 ({(data as any).totalLogCount ?? data.logs?.length ?? 0}건)
                                 </Button>
                             </div>
                         </div>
@@ -436,9 +452,9 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                                         <div className="flex flex-col">
                                                             <span className="font-mono font-bold text-gray-800">
                                                                 {group.logs.length > 1 ? (
-                                                                    <>{new Date(group.timeStart + 'Z').toLocaleTimeString('ko-KR')} ~ <span className="text-gray-500">{new Date(group.timeEnd + 'Z').toLocaleTimeString('ko-KR')}</span></>
+                                                                    <>{toUtcDate(group.timeStart)?.toLocaleTimeString('ko-KR')} ~ <span className="text-gray-500">{toUtcDate(group.timeEnd)?.toLocaleTimeString('ko-KR')}</span></>
                                                                 ) : (
-                                                                    new Date(group.timeEnd + 'Z').toLocaleTimeString('ko-KR')
+                                                                    toUtcDate(group.timeEnd)?.toLocaleTimeString('ko-KR')
                                                                 )}
                                                             </span>
                                                             {group.logs.length > 1 && <span className="text-xs text-gray-500 mt-0.5">순간 접속 병합됨</span>}
@@ -460,7 +476,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                                                 }`}>{l.method}</Badge>
                                                             <div className="flex-1 font-mono text-[13px] text-gray-700 min-w-0 pr-4">{l.endpoint}</div>
                                                             {group.logs.length > 1 && (
-                                                                <span className="text-gray-400 font-mono text-[11px] shrink-0">{new Date(l.accessedAt + 'Z').toLocaleTimeString('ko-KR')}</span>
+                                                                <span className="text-gray-400 font-mono text-[11px] shrink-0">{toUtcDate(l.accessedAt)?.toLocaleTimeString('ko-KR')}</span>
                                                             )}
                                                         </div>
                                                     ))}
@@ -468,7 +484,9 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                             </details>
                                         ))}
                                     </div>
-                                ) : <div className="text-center text-gray-500 py-16">해당 날짜의 로깅 데이터가 존재하지 않습니다.</div>
+                                ) : <div className="text-center text-gray-500 py-16">
+                                    {selectedLogDate === 'all' ? '접속 로그 데이터가 없습니다.' : '해당 날짜의 로깅 데이터가 존재하지 않습니다.'}
+                                </div>
                             ) : <div className="flex justify-center py-20"><Loader2 className="animate-spin text-gray-300 w-10 h-10" /></div>}
                         </div>
                     </div>

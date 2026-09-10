@@ -23,40 +23,68 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        // 2. Fetch Data concurrently
+        // 2. Fetch Data — each query independently fail-safe
         // A. Block Status
-        const blockEntry = await env.DB.prepare(
-            "SELECT * FROM blocked_users WHERE identifier = ? AND type = 'IP'"
-        ).bind(targetIp).first();
+        let blockEntry: any = null;
+        try {
+            blockEntry = await env.DB.prepare(
+                "SELECT * FROM blocked_users WHERE identifier = ? AND type = 'IP'"
+            ).bind(targetIp).first();
+        } catch (_) {}
 
         // B. Modification Count
-        // Check if table exists first (self-healing might have created it, but good to be safe)
-        // We assume tables exist because admin page loaded.
-        const modCountResult = await env.DB.prepare(
-            "SELECT COUNT(*) as count FROM performance_assessments WHERE lastModifiedIp = ?"
-        ).bind(targetIp).first();
-        const modificationCount = modCountResult?.count || 0;
+        let modificationCount = 0;
+        try {
+            const r: any = await env.DB.prepare(
+                "SELECT COUNT(*) as count FROM performance_assessments WHERE lastModifiedIp = ?"
+            ).bind(targetIp).first();
+            modificationCount = r?.count || 0;
+        } catch (_) {}
 
-        // C. Last Access
-        const lastAccessResult = await env.DB.prepare(
-            "SELECT MAX(accessedAt) as lastAccess FROM access_logs WHERE ip = ?"
-        ).bind(targetIp).first();
-        const lastAccess = lastAccessResult?.lastAccess || null;
+        // C. Last Access (MAX — cheap, indexed by value comparator)
+        let lastAccess: string | null = null;
+        try {
+            const r: any = await env.DB.prepare(
+                "SELECT MAX(accessedAt) as lastAccess FROM access_logs WHERE ip = ?"
+            ).bind(targetIp).first();
+            lastAccess = r?.lastAccess || null;
+        } catch (_) {}
 
         // D. Linked Kakao Accounts (Distinct)
-        const { results: kakaoAccounts } = await env.DB.prepare(
-            "SELECT DISTINCT kakaoId, kakaoNickname FROM access_logs WHERE ip = ? AND kakaoId IS NOT NULL"
-        ).bind(targetIp).all();
+        let kakaoAccounts: any[] = [];
+        try {
+            const { results } = await env.DB.prepare(
+                "SELECT DISTINCT kakaoId, kakaoNickname FROM access_logs WHERE ip = ? AND kakaoId IS NOT NULL"
+            ).bind(targetIp).all();
+            kakaoAccounts = results || [];
+        } catch (_) {}
 
         // E. Detailed Assessments (Top 50)
-        const { results: recentAssessments } = await env.DB.prepare(
-            "SELECT id, subject, title, grade, classNum, dueDate, createdAt FROM performance_assessments WHERE lastModifiedIp = ? ORDER BY id DESC LIMIT 50"
-        ).bind(targetIp).all();
+        let recentAssessments: any[] = [];
+        try {
+            const { results } = await env.DB.prepare(
+                "SELECT id, subject, title, grade, classNum, dueDate, createdAt FROM performance_assessments WHERE lastModifiedIp = ? ORDER BY id DESC LIMIT 50"
+            ).bind(targetIp).all();
+            recentAssessments = results || [];
+        } catch (_) {}
 
-        // F. Detailed Logs (최근 500건으로 제한 - 무제한 조회 시 D1 응답 초과/타임아웃 방지)
-        const { results: recentLogs } = await env.DB.prepare(
-            "SELECT * FROM access_logs WHERE ip = ? ORDER BY accessedAt DESC LIMIT 500"
-        ).bind(targetIp).all();
+        // F. Detailed Logs (최근 500건으로 제한)
+        let recentLogs: any[] = [];
+        let totalLogCount = 0;
+        try {
+            const [logsResult, countResult] = await Promise.all([
+                env.DB.prepare(
+                    "SELECT id, method, endpoint, status, grade, classNum, accessedAt, browserKey, deviceType, os, isInApp FROM access_logs WHERE ip = ? ORDER BY accessedAt DESC LIMIT 500"
+                ).bind(targetIp).all(),
+                env.DB.prepare(
+                    "SELECT COUNT(*) as cnt FROM access_logs WHERE ip = ?"
+                ).bind(targetIp).first(),
+            ]);
+            recentLogs = logsResult.results || [];
+            totalLogCount = (countResult as any)?.cnt || 0;
+        } catch (e: any) {
+            console.warn('[ip_profile] recentLogs query failed:', e?.message);
+        }
 
         // G. Recent Environments — 최신순, ua parse 컬럼 포함 (최대 15개)
         let recentEnvironments: any[] = [];
@@ -254,6 +282,7 @@ export const onRequest = async (context: any) => {
 
             assessments: recentAssessments || [],
             logs: recentLogs || [],
+            totalLogCount, // total logs for this IP (may exceed the 500-record limit above)
 
             detailsLoaded: true // Flag to indicate full data
         };
