@@ -189,15 +189,23 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                             <div className="bg-green-50 p-4 rounded-lg flex flex-col gap-1 border border-green-200">
                                 <span className="text-xs text-green-600 font-bold flex items-center gap-1"><User className="w-3 h-3" /> 프로필 (이름 + 학번)</span>
                                 <span className="text-2xl font-bold">
-                                    {data.studentName
-                                        ? <span className="text-slate-900">{data.studentName}</span>
-                                        : <span className="text-gray-400 text-lg">이름 없음</span>
-                                    }
+                                    {data.teacherName ? (
+                                        <span className="flex items-center gap-2">
+                                            <span className="text-amber-700 text-base font-semibold px-2 py-0.5 bg-amber-50 border border-amber-200 rounded">선생님</span>
+                                            <span className="text-slate-900">{data.teacherName}</span>
+                                        </span>
+                                    ) : data.studentName ? (
+                                        <span className="text-slate-900">{data.studentName}</span>
+                                    ) : (
+                                        <span className="text-gray-400 text-lg">이름 없음</span>
+                                    )}
                                 </span>
                                 <span className="text-sm text-green-700 font-mono">
                                     {data.grade && data.classNum
                                         ? `${data.grade}학년 ${data.classNum}반 ${data.studentNumber ? data.studentNumber + '번' : ''}`
-                                        : <span className="text-gray-400">학번 미등록</span>
+                                        : data.teacherName
+                                            ? <span className="text-amber-600">교직원 계정</span>
+                                            : <span className="text-gray-400">학번 미등록</span>
                                     }
                                 </span>
                             </div>
@@ -256,7 +264,9 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
 
                         <Tabs defaultValue="assessments" className="flex-1 flex flex-col min-h-0">
                             <TabsList>
-                                <TabsTrigger value="assessments">수행평가 ({data.assessments?.length || 0})</TabsTrigger>
+                                <TabsTrigger value="assessments">
+                                    {data.teacherName ? '등록 내역' : '수행평가'} ({data.assessments?.length || 0})
+                                </TabsTrigger>
                                 <TabsTrigger value="electives">선택과목 현황</TabsTrigger>
                                 <TabsTrigger value="devices">접속 환경</TabsTrigger>
                             </TabsList>
@@ -393,7 +403,10 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                         <div className="flex justify-between items-start">
                             <div>
                                 <DialogTitle className="text-xl">접속 로그 상세 열람</DialogTitle>
-                                <DialogDescription>{data?.ip} - 총 {data?.logs?.length || 0}건의 기록</DialogDescription>
+                                <DialogDescription>
+                                    {data?.teacherName ? `👨‍🏫 ${data.teacherName} 선생님` : data?.ip} - 총 {data?.logs?.length || 0}건의 기록
+                                    {(data?.logs?.length || 0) >= 500 && <span className="ml-2 text-xs text-orange-500">(최근 500건)</span>}
+                                </DialogDescription>
                             </div>
                             <select
                                 className="text-sm border rounded p-1.5 px-3 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
