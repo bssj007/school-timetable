@@ -81,7 +81,7 @@ export const onRequest = async (context: any) => {
         }
         try {
             const { results } = await env.DB.prepare(
-                "SELECT id, method, endpoint, status, accessedAt, browserKey, deviceType, os, isInApp FROM access_logs WHERE ip = ? ORDER BY accessedAt DESC LIMIT 500"
+                "SELECT * FROM access_logs WHERE ip = ? ORDER BY accessedAt DESC LIMIT 500"
             ).bind(targetIp).all();
             recentLogs = results || [];
         } catch (e: any) {
