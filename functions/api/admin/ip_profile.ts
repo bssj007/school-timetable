@@ -53,9 +53,9 @@ export const onRequest = async (context: any) => {
             "SELECT id, subject, title, grade, classNum, dueDate, createdAt FROM performance_assessments WHERE lastModifiedIp = ? ORDER BY id DESC LIMIT 50"
         ).bind(targetIp).all();
 
-        // F. Detailed Logs (All)
+        // F. Detailed Logs (최근 500건으로 제한 - 무제한 조회 시 D1 응답 초과/타임아웃 방지)
         const { results: recentLogs } = await env.DB.prepare(
-            "SELECT * FROM access_logs WHERE ip = ? ORDER BY accessedAt DESC"
+            "SELECT * FROM access_logs WHERE ip = ? ORDER BY accessedAt DESC LIMIT 500"
         ).bind(targetIp).all();
 
         // G. Recent Environments — 최신순, ua parse 컬럼 포함 (최대 15개)

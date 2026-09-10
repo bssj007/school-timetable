@@ -120,7 +120,6 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
     };
 
     // 1. Extract Unique Dates for the Filter Dropdown
-    const availableDates = useState<string[]>([]);
     const uniqueLogDates = data?.logs ? Array.from(new Set(data.logs.map(l => new Date(l.accessedAt + 'Z').toLocaleDateString('ko-KR')))) : [];
 
     // Ensure today's date exists in the dropdown options

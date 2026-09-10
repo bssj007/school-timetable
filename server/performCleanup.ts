@@ -35,16 +35,12 @@ export async function performCleanup(db: any) {
         deletedAssessments = assessmentResult.meta.changes;
 
         // 2. Cleanup Logs
-        // Rule: Delete logs older than retention period, ONLY IF the user (IP) has not accessed recently.
-        // If a user has accessed within the retention period, keep ALL their logs (reset retention).
+        // Rule: Delete ALL logs older than retention period (all IPs, including active ones).
+        // 기존 로직(활성 IP 로그 무보존)은 활성 사용자 로그가 무한 축적되어
+        // ip_profile API 타임아웃 / D1 응답 초과 버그를 유발했음 → 단순 날짜 기반 삭제로 변경
         const logQuery = `
             DELETE FROM access_logs 
             WHERE accessedAt < datetime('now', '+9 hours', '-${retentionDaysLogs} days')
-            AND ip NOT IN (
-                SELECT DISTINCT ip 
-                FROM access_logs 
-                WHERE accessedAt >= datetime('now', '+9 hours', '-${retentionDaysLogs} days')
-            )
         `;
         const logResult = await db.prepare(logQuery).run();
         deletedLogs = logResult.meta.changes;
