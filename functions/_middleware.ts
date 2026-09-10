@@ -6,6 +6,9 @@ interface Env {
     DB: D1Database;
 }
 
+// Worker 인스턴스당 1회만 스키마 보장 (모듈 레벨 캐시)
+let accessLogsSchemaVerified = false;
+
 export const onRequest = async (context: any) => {
     const { request, env, next } = context;
     const url = new URL(request.url);
@@ -161,17 +164,20 @@ ${logoOrIconHtml}
                 ).bind(ip, userAgent, request.method, fullEndpoint, response.status, grade, classNum, studentNumber, kakaoId, kakaoNickname, teacherName, uaProfile.browserKey, uaProfile.deviceType, uaProfile.os, uaProfile.isInApp ? 1 : 0).run();
             };
 
-            // 테이블 & 컬럼 선제적 보장 (error-driven이 아닌 proactive)
-            try {
-                await env.DB.prepare(createAccessLogsTable).run();
-                // 구버전 컬럼 보장
-                try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN teacherName TEXT").run(); } catch (_) {}
-                try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN browserKey TEXT").run(); } catch (_) {}
-                try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN deviceType TEXT").run(); } catch (_) {}
-                try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN os TEXT").run(); } catch (_) {}
-                try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN isInApp INTEGER DEFAULT 0").run(); } catch (_) {}
-            } catch (schemaErr) {
-                console.warn('[Middleware] access_logs schema ensure failed:', schemaErr);
+            // 테이블 & 컬럼 선제적 보장 (Worker 인스턴스당 1회만 실행)
+            if (!accessLogsSchemaVerified) {
+                try {
+                    await env.DB.prepare(createAccessLogsTable).run();
+                    // 구버전 컬럼 보장
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN teacherName TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN browserKey TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN deviceType TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN os TEXT").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN isInApp INTEGER DEFAULT 0").run(); } catch (_) {}
+                    accessLogsSchemaVerified = true;
+                } catch (schemaErr) {
+                    console.warn('[Middleware] access_logs schema ensure failed:', schemaErr);
+                }
             }
 
             try {
