@@ -295,7 +295,7 @@ ${logoOrIconHtml}
                         student_profile_id = excluded.student_profile_id,
                         kakaoId = COALESCE(excluded.kakaoId, ip_profiles.kakaoId),
                         kakaoNickname = COALESCE(excluded.kakaoNickname, ip_profiles.kakaoNickname),
-                        teacherName = COALESCE(excluded.teacherName, ip_profiles.teacherName),
+                        teacherName = excluded.teacherName,
                         browserKey = excluded.browserKey,
                         deviceType = excluded.deviceType,
                         os = excluded.os,
