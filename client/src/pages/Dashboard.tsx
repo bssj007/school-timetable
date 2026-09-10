@@ -207,6 +207,8 @@ export default function Dashboard() {
   const [editingAssessment, setEditingAssessment] = useState<AssessmentItem | null>(null);
   // 수행평가 목록: 과목 선택 뷰 (null = 타일, string = 해당 과목 상세)
   const [assessmentSubjectView, setAssessmentSubjectView] = useState<string | null>(null);
+  // 수행평가 목록 범위 필터 ('week' = 한주, 'month' = 한달, 'all' = 전체, 디폴트: 'all')
+  const [assessmentRange, setAssessmentRange] = useState<'week' | 'month' | 'all'>('all');
   
   // Custom Orphan Relocation State
   const [relocatingAssessment, setRelocatingAssessment] = useState<AssessmentItem | null>(null);
@@ -3303,16 +3305,29 @@ export default function Dashboard() {
       {!isRestricted && (
         <Card className="mt-8">
           {(() => {
-            // 전체 수행평가에서 과거 제외 (당일형: dueDate >= today, 숙제형: endDate >= today)
+            // 전체 수행평가에서 과거 제외 및 범위 필터링 ('한주', '한달', '전체')
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const todayStr = toDateString(today);
+
+            const oneWeekLater = new Date(today);
+            oneWeekLater.setDate(oneWeekLater.getDate() + 7);
+            const oneWeekStr = toDateString(oneWeekLater);
+
+            const oneMonthLater = new Date(today);
+            oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+            const oneMonthStr = toDateString(oneMonthLater);
+
             const allFiltered = (allAssessments || []).filter(a => {
-              if (a.endDate) {
-                return a.endDate >= todayStr;
+              const effDate = a.endDate ? a.endDate : (a.tempDueDate || a.dueDate);
+              if (!effDate || effDate < todayStr) return false;
+
+              if (assessmentRange === 'week') {
+                return effDate <= oneWeekStr;
+              } else if (assessmentRange === 'month') {
+                return effDate <= oneMonthStr;
               }
-              const effDate = a.tempDueDate || a.dueDate;
-              return effDate >= todayStr;
+              return true;
             });
 
             // 2/3학년 과목 필터링 적용
@@ -3340,19 +3355,50 @@ export default function Dashboard() {
               { bg: '#e8f5e9', activeBg: '#2e7d32', text: '#1b5e20', activeText: '#ffffff' },
             ];
 
+            // 우측 상단 간단한 범위 선택기 ("한주", "한달", "전체")
+            const rangeSelector = (
+              <div className="inline-flex items-center bg-slate-100 p-0.5 sm:p-1 rounded-xl border border-slate-200/80 shadow-xs">
+                {(['week', 'month', 'all'] as const).map((rKey) => {
+                  const label = rKey === 'week' ? '한주' : rKey === 'month' ? '한달' : '전체';
+                  const isActive = assessmentRange === rKey;
+                  return (
+                    <button
+                      key={rKey}
+                      type="button"
+                      onClick={() => setAssessmentRange(rKey)}
+                      className={`px-2.5 sm:px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                        isActive
+                          ? 'bg-white text-blue-600 shadow-xs font-extrabold'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+
             if (assessmentSubjectView === null) {
               // ===== PAGE 1: 과목 타일 선택 =====
               return (
                 <>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      수행평가
-                    </CardTitle>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <CardTitle className="flex items-center gap-2">
+                        수행평가
+                      </CardTitle>
+                      {rangeSelector}
+                    </div>
                   </CardHeader>
                   <CardContent className="min-h-[200px]">
                     {uniqueSubjects.length === 0 ? (
                       <div className="text-center py-12 text-gray-500">
-                        등록된 수행평가가 없습니다.
+                        {assessmentRange === 'week'
+                          ? '이번 한 주 동안 예정된 수행평가가 없습니다.'
+                          : assessmentRange === 'month'
+                            ? '이번 한 달 동안 예정된 수행평가가 없습니다.'
+                            : '등록된 수행평가가 없습니다.'}
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -3409,20 +3455,23 @@ export default function Dashboard() {
 
               return (
                 <>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <CardTitle className="flex items-center gap-2">
                         {subjectLabel} 수행평가
                         <span className="text-sm font-medium text-gray-400">({filtered.length}건)</span>
                       </CardTitle>
-                      <button
-                        type="button"
-                        onClick={() => setAssessmentSubjectView(null)}
-                        className="flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-blue-50"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                        돌아가기
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {rangeSelector}
+                        <button
+                          type="button"
+                          onClick={() => setAssessmentSubjectView(null)}
+                          className="flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-blue-50"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                          돌아가기
+                        </button>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -3597,7 +3646,11 @@ export default function Dashboard() {
                         })
                       ) : (
                         <div className="col-span-full text-center py-12 text-gray-500">
-                          등록된 수행평가가 없습니다.
+                          {assessmentRange === 'week'
+                            ? '선택한 기간(한주) 내에 해당하는 수행평가가 없습니다.'
+                            : assessmentRange === 'month'
+                              ? '선택한 기간(한달) 내에 해당하는 수행평가가 없습니다.'
+                              : '등록된 수행평가가 없습니다.'}
                           <br />
                           <span className="text-sm">시간표에서 과목을 클릭하여 추가하세요.</span>
                         </div>
