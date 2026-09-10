@@ -72,16 +72,18 @@ export const onRequest = async (context: any) => {
         let recentLogs: any[] = [];
         let totalLogCount = 0;
         try {
-            const [logsResult, countResult] = await Promise.all([
-                env.DB.prepare(
-                    "SELECT id, method, endpoint, status, grade, classNum, accessedAt, browserKey, deviceType, os, isInApp FROM access_logs WHERE ip = ? ORDER BY accessedAt DESC LIMIT 500"
-                ).bind(targetIp).all(),
-                env.DB.prepare(
-                    "SELECT COUNT(*) as cnt FROM access_logs WHERE ip = ?"
-                ).bind(targetIp).first(),
-            ]);
-            recentLogs = logsResult.results || [];
-            totalLogCount = (countResult as any)?.cnt || 0;
+            const countResult: any = await env.DB.prepare(
+                "SELECT COUNT(*) as cnt FROM access_logs WHERE ip = ?"
+            ).bind(targetIp).first();
+            totalLogCount = countResult?.cnt || 0;
+        } catch (e: any) {
+            console.warn('[ip_profile] log count query failed:', e?.message);
+        }
+        try {
+            const { results } = await env.DB.prepare(
+                "SELECT id, method, endpoint, status, accessedAt, browserKey, deviceType, os, isInApp FROM access_logs WHERE ip = ? ORDER BY accessedAt DESC LIMIT 500"
+            ).bind(targetIp).all();
+            recentLogs = results || [];
         } catch (e: any) {
             console.warn('[ip_profile] recentLogs query failed:', e?.message);
         }
