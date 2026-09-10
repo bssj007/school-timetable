@@ -1,5 +1,5 @@
 /// <reference types="@cloudflare/workers-types" />
-import { createStudentProfilesTable, createIpProfilesTable } from "./db_schema";
+import { createStudentProfilesTable, createIpProfilesTable, createAccessLogsTable } from "./db_schema";
 import { parseUA } from "./_uaDetect";
 
 interface Env {
@@ -153,13 +153,26 @@ ${logoOrIconHtml}
             const isAppHeader = request.headers.get('X-App-Execution') === '1';
             const isCurrentAppAccess = Boolean(isPwaUrl || uaProfile.isApp || hasAppCookie || isAppHeader);
 
-            // 1. Insert Log (with Auto-Migration for Table Creation)
+            // 1. Insert Log — 테이블 먼저 보장 후 INSERT
             const insertLog = async () => {
                 const fullEndpoint = url.pathname + (url.search ? url.search : '');
                 await env.DB.prepare(
                     "INSERT INTO access_logs (ip, userAgent, method, endpoint, status, grade, classNum, studentNumber, kakaoId, kakaoNickname, teacherName, browserKey, deviceType, os, isInApp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 ).bind(ip, userAgent, request.method, fullEndpoint, response.status, grade, classNum, studentNumber, kakaoId, kakaoNickname, teacherName, uaProfile.browserKey, uaProfile.deviceType, uaProfile.os, uaProfile.isInApp ? 1 : 0).run();
             };
+
+            // 테이블 & 컬럼 선제적 보장 (error-driven이 아닌 proactive)
+            try {
+                await env.DB.prepare(createAccessLogsTable).run();
+                // 구버전 컬럼 보장
+                try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN teacherName TEXT").run(); } catch (_) {}
+                try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN browserKey TEXT").run(); } catch (_) {}
+                try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN deviceType TEXT").run(); } catch (_) {}
+                try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN os TEXT").run(); } catch (_) {}
+                try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN isInApp INTEGER DEFAULT 0").run(); } catch (_) {}
+            } catch (schemaErr) {
+                console.warn('[Middleware] access_logs schema ensure failed:', schemaErr);
+            }
 
             try {
                 await insertLog();

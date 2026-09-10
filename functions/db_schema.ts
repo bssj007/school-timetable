@@ -169,6 +169,28 @@ CREATE TABLE IF NOT EXISTS exam_schedules (
 );
 `;
 
+export const createAccessLogsTable = `
+CREATE TABLE IF NOT EXISTS access_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip TEXT NOT NULL,
+    userAgent TEXT,
+    method TEXT,
+    endpoint TEXT,
+    status INTEGER,
+    grade TEXT,
+    classNum TEXT,
+    studentNumber TEXT,
+    kakaoId TEXT,
+    kakaoNickname TEXT,
+    teacherName TEXT,
+    browserKey TEXT,
+    deviceType TEXT,
+    os TEXT,
+    isInApp INTEGER DEFAULT 0,
+    accessedAt TEXT DEFAULT (datetime('now'))
+);
+`;
+
 export const createMealRatingsTable = `
 CREATE TABLE IF NOT EXISTS meal_ratings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -289,14 +311,17 @@ export async function ensureAllTables(db: any) {
         await db.prepare(createMealSuggestionsTable).run();
         await db.prepare(createMealRatingsTable).run();
         await db.prepare(createExamSchedulesTable).run();
+        await db.prepare(createAccessLogsTable).run();
 
         // ── 컬럼 마이그레이션 ──────────────────────────────────────────────────
-        try {
-            await db.prepare("ALTER TABLE bug_reports ADD COLUMN studentName TEXT").run();
-        } catch (_) {}
-        try {
-            await db.prepare("ALTER TABLE performance_assessments ADD COLUMN isAutoPredicted INTEGER DEFAULT 0").run();
-        } catch (_) {}
+        try { await db.prepare("ALTER TABLE bug_reports ADD COLUMN studentName TEXT").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE performance_assessments ADD COLUMN isAutoPredicted INTEGER DEFAULT 0").run(); } catch (_) {}
+        // access_logs: 구버전에 없을 수 있는 컬럼 보장
+        try { await db.prepare("ALTER TABLE access_logs ADD COLUMN teacherName TEXT").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE access_logs ADD COLUMN browserKey TEXT").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE access_logs ADD COLUMN deviceType TEXT").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE access_logs ADD COLUMN os TEXT").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE access_logs ADD COLUMN isInApp INTEGER DEFAULT 0").run(); } catch (_) {}
 
         console.log('[DB] All tables ensured.');
     } catch (e) {
