@@ -4,10 +4,81 @@ import { parseUA } from "./_uaDetect";
 
 interface Env {
     DB: D1Database;
+    DB_NAME?: string;
 }
 
 // Worker 인스턴스당 1회만 스키마 보장 (모듈 레벨 캐시)
 let accessLogsSchemaVerified = false;
+
+/**
+ * Test DB Watermark Helper
+ * 테스트 DB 환경일 경우 사이트 최상단에 매우 작은 빨간색 글씨로 DB명을 워터마크처럼 고정 표시합니다.
+ * UI 흐름에 영향을 주지 않으며 클릭 관통(pointer-events: none) 처리됩니다.
+ */
+function getTestDbWatermarkHtml(dbName: string): string {
+    return `<style id="test-db-watermark-style">
+  #test-db-watermark {
+    position: fixed;
+    top: max(1px, env(safe-area-inset-top, 1px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999999;
+    pointer-events: none;
+    user-select: none;
+    font-size: 9px;
+    line-height: 1;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: #ef4444;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    opacity: 0.85;
+    text-shadow: 0 0 2px rgba(255, 255, 255, 0.95), 0 0 4px rgba(255, 255, 255, 0.8), 0 1px 2px rgba(0, 0, 0, 0.15);
+    white-space: nowrap;
+  }
+  @media print {
+    #test-db-watermark, #test-db-watermark-style { display: none !important; }
+  }
+</style>
+<div id="test-db-watermark">${dbName}</div>`;
+}
+
+async function resolveTestDbInfo(env: any, url: URL): Promise<{ isTestDb: boolean; dbName: string }> {
+    let dbName = '';
+    if (env.DB_NAME) {
+        dbName = String(env.DB_NAME);
+    }
+
+    if (!dbName && env.DB) {
+        try {
+            await env.DB.prepare("CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT)").run();
+            const row = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'db_name'").first();
+            if (row && row.value) {
+                dbName = String(row.value);
+            }
+        } catch (_) {}
+    }
+
+    const hostname = url.hostname.toLowerCase();
+    const isTestHostname = hostname.includes('test') || hostname.includes('localhost') || hostname === '127.0.0.1' || hostname.includes('preview');
+
+    if (!dbName && isTestHostname) {
+        dbName = 'school-timetable-testserver-db';
+        if (env.DB) {
+            try {
+                await env.DB.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('db_name', 'school-timetable-testserver-db')").run();
+            } catch (_) {}
+        }
+    }
+
+    const isTestDb = Boolean(
+        dbName && (
+            dbName.toLowerCase().includes('test') ||
+            isTestHostname
+        )
+    );
+
+    return { isTestDb, dbName: dbName || 'school-timetable-testserver-db' };
+}
 
 export const onRequest = async (context: any) => {
     const { request, env, next } = context;
@@ -51,6 +122,9 @@ export const onRequest = async (context: any) => {
         <div class="icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
         </div>`;
+                        const { isTestDb: isMaintTestDb, dbName: maintDbName } = await resolveTestDbInfo(env, url);
+                        const maintWatermarkHtml = (isMaintTestDb && maintDbName) ? getTestDbWatermarkHtml(maintDbName) : '';
+
                         const html = `
 <!DOCTYPE html>
 <html lang="ko">
@@ -76,6 +150,7 @@ ${logoOrIconHtml}
         <p>${maintenanceMessage.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
         ${maintenanceMode.endTime ? `<div class="footer">점검 종료 예정: ${new Date(maintenanceMode.endTime).toLocaleString('ko-KR')}</div>` : ''}
     </div>
+    ${maintWatermarkHtml}
 </body>
 </html>`;
                         return new Response(html, {
@@ -486,7 +561,7 @@ ${logoOrIconHtml}
 
     context.waitUntil(Promise.all([logTrace(), runBackgroundTasks()]));
 
-    // Edge HTML Rewriting for Dynamic Site Title
+    // Edge HTML Rewriting for Dynamic Site Title & Test DB Watermark
     const pathname = url.pathname;
     // Check if the route is an API, static asset, or file extension
     const isApiRoute = pathname.startsWith('/api/');
@@ -497,35 +572,64 @@ ${logoOrIconHtml}
     // If it's not an API and not a static asset, it's highly likely an HTML page (like index.html).
     const isHtmlRoute = !isApiRoute && !isAssetRoute && (contentType.includes("text/html") || pathname === "/" || !pathname.includes("."));
 
-    if (env.DB && isHtmlRoute) {
+    if (isHtmlRoute) {
         try {
-            const titleRow = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'site_title'").first();
-            const siteTitle = (titleRow && titleRow.value) ? (titleRow.value as string) : '수행 일정공유';
+            const { isTestDb, dbName } = await resolveTestDbInfo(env, url);
 
-            const htmlRow = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'site_title_html'").first();
-            const siteTitleHtml = (htmlRow && htmlRow.value) ? (htmlRow.value as string) : '';
+            let siteTitle = '수행 일정공유';
+            let siteTitleHtml = '';
 
-            // Transform the response stream first
-            const transformedResponse = new HTMLRewriter().on("title", {
-                element(element: any) {
-                    element.setInnerContent(siteTitle);
+            if (env.DB) {
+                try {
+                    const titleRow = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'site_title'").first();
+                    if (titleRow && titleRow.value) siteTitle = titleRow.value as string;
+
+                    const htmlRow = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'site_title_html'").first();
+                    if (htmlRow && htmlRow.value) siteTitleHtml = htmlRow.value as string;
+                } catch (e) {
+                    console.error("[Middleware] Title fetch failed:", e);
                 }
-            }).on("head", {
-                element(element: any) {
-                    if (siteTitleHtml) {
-                        element.append(`<script>window.__INITIAL_SITE_TITLE_HTML__ = ${JSON.stringify(siteTitleHtml)};</script>`, { html: true });
+            }
+
+            // Transform the response stream
+            const rewriter = new HTMLRewriter()
+                .on("title", {
+                    element(element: any) {
+                        element.setInnerContent(siteTitle);
                     }
-                }
-            }).transform(response);
+                })
+                .on("head", {
+                    element(element: any) {
+                        if (siteTitleHtml) {
+                            element.append(`<script>window.__INITIAL_SITE_TITLE_HTML__ = ${JSON.stringify(siteTitleHtml)};</script>`, { html: true });
+                        }
+                        if (isTestDb && dbName) {
+                            element.append(`<script>window.__TEST_DB_NAME__ = ${JSON.stringify(dbName)};</script>`, { html: true });
+                        }
+                    }
+                });
+
+            if (isTestDb && dbName) {
+                rewriter.on("body", {
+                    element(element: any) {
+                        element.append(getTestDbWatermarkHtml(dbName), { html: true });
+                    }
+                });
+            }
+
+            const transformedResponse = rewriter.transform(response);
 
             // Clone to modify headers safely
             const finalResponse = new Response(transformedResponse.body, transformedResponse);
             finalResponse.headers.set("X-Edge-Title-Injected", "true");
             finalResponse.headers.set("X-Edge-Title-Value", encodeURIComponent(siteTitle));
+            if (isTestDb && dbName) {
+                finalResponse.headers.set("X-Test-DB-Watermark", encodeURIComponent(dbName));
+            }
 
             return finalResponse;
         } catch (e) {
-            console.error("[Middleware] HTMLRewriter title injection failed:", e);
+            console.error("[Middleware] HTMLRewriter injection failed:", e);
         }
     }
 
