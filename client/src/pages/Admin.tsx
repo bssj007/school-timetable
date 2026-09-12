@@ -29,7 +29,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { EnvBindingInfo, getTestBadgeLabel, EnvMismatchWarningBar, TestServerBadge } from "@/components/TestServerBadge";
+import { EnvBindingInfo, getTestBadgeLabel, EnvMismatchWarningBar, TestServerBadge, RealDbResetWarning } from "@/components/TestServerBadge";
 import { Badge } from "@/components/ui/badge";
 import {
     Select,
@@ -7439,6 +7439,7 @@ export default function Admin() {
     const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
     const [resetConfirmation, setResetConfirmation] = useState("");
     const [resetPassword, setResetPassword] = useState("");
+    const [isResetPasswordReadOnly, setIsResetPasswordReadOnly] = useState(true);
     const [isResetting, setIsResetting] = useState(false);
     const TARGET_PHRASE = "햇빛이 선명하게 나뭇잎을 핥고 있었다";
 
@@ -7455,6 +7456,19 @@ export default function Admin() {
         if (!resetPassword.trim()) {
             toast.error("관리자 암호를 입력해주세요.");
             return;
+        }
+
+        // Additional warning if connected to real live DB
+        if (!envInfo.isTestDb) {
+            const confirmedRealDb = confirm(
+                `🚨 [중요 경고: 실제 운영 DB 초기화]\n\n` +
+                `현재 연결된 데이터베이스는 테스트용이 아닌 '실제 운영 DB(${envInfo.dbName || 'school-timetable-db'})'입니다.\n` +
+                `초기화 시 실제 학생 시간표, 수행평가 등 모든 실제 서비스 데이터가 영구 파괴됩니다.\n\n` +
+                `정말로 실제 운영 DB를 초기화하시겠습니까?`
+            );
+            if (!confirmedRealDb) {
+                return;
+            }
         }
 
         if (!confirm("정말로 모든 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
@@ -9521,6 +9535,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                 if (!open) {
                     setResetConfirmation("");
                     setResetPassword("");
+                } else {
+                    setIsResetPasswordReadOnly(true);
                 }
             }}>
                 <DialogContent>
@@ -9536,6 +9552,9 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         </DialogDescription>
                     </DialogHeader>
 
+                    {/* Real DB Warning Box */}
+                    <RealDbResetWarning envInfo={envInfo} />
+
                     <div className="space-y-4 py-4">
                         <div className="space-y-1.5">
                             <label className="text-xs font-semibold text-gray-700">확인 문구</label>
@@ -9546,14 +9565,32 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                 value={resetConfirmation}
                                 onChange={(e) => setResetConfirmation(e.target.value)}
                                 placeholder="위 문구를 입력하세요"
+                                autoComplete="off"
+                                spellCheck={false}
                                 className="text-center"
                             />
                         </div>
 
                         <div className="space-y-1.5">
                             <label className="text-xs font-semibold text-gray-700">관리자 암호</label>
+                            {/* Hidden decoy inputs to defeat browser autofill engines */}
+                            <input type="text" className="hidden" tabIndex={-1} aria-hidden="true" autoComplete="off" />
+                            <input type="password" className="hidden" tabIndex={-1} aria-hidden="true" autoComplete="off" />
                             <Input
                                 type="password"
+                                name="admin_reset_credential_disable_autofill"
+                                autoComplete="new-password"
+                                data-form-type="other"
+                                data-lpignore="true"
+                                data-1p-ignore="true"
+                                autoCorrect="off"
+                                autoCapitalize="off"
+                                spellCheck={false}
+                                readOnly={isResetPasswordReadOnly}
+                                onFocus={(e) => {
+                                    setIsResetPasswordReadOnly(false);
+                                    e.target.removeAttribute("readonly");
+                                }}
                                 value={resetPassword}
                                 onChange={(e) => setResetPassword(e.target.value)}
                                 placeholder="관리자 암호를 입력하세요"

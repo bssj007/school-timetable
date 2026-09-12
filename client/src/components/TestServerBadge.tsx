@@ -37,6 +37,31 @@ export function EnvMismatchWarningBar({ envInfo }: { envInfo: EnvBindingInfo }) 
     );
 }
 
+export function RealDbResetWarning({ envInfo, className = "" }: { envInfo: EnvBindingInfo; className?: string }) {
+    if (envInfo.isTestDb) return null;
+
+    return (
+        <div className={`w-full bg-red-50 border-2 border-red-500 text-red-950 p-3.5 rounded-lg text-xs leading-relaxed font-medium space-y-1.5 shadow-sm text-left ${className}`}>
+            <div className="flex items-center gap-1.5 font-bold text-red-700 text-sm">
+                <TriangleAlert className="h-4 w-4 text-red-600 shrink-0" />
+                <span>[위험: 실제 운영(Live) DB 연결됨]</span>
+            </div>
+            <p className="text-red-900 font-semibold">
+                현재 테스트용이 아닌 <span className="underline underline-offset-2 font-black text-red-950">실제 운영 데이터베이스({envInfo.dbName || 'school-timetable-db'})</span>에 연결되어 있습니다.
+            </p>
+            <p className="text-red-800">
+                초기화 시 실제 학생 시간표, 수행평가, 교사 설정 등 모든 실제 서비스 데이터가 영구히 파괴되며 절대 복원할 수 없습니다.
+            </p>
+            {envInfo.isTestServer && (
+                <div className="pt-1 text-[11px] font-bold text-amber-900 bg-amber-100/90 p-1.5 rounded border border-amber-300 flex items-center gap-1.5">
+                    <TriangleAlert className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+                    <span>주의: 테스트 서버에서 실제 운영 DB에 연결되어 있으므로 더욱 주의해야 합니다.</span>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export function TestServerBadge({ envInfo, className = "" }: { envInfo: EnvBindingInfo; className?: string }) {
     if (!envInfo.isTestServer && !envInfo.isTestDb) return null;
     const label = getTestBadgeLabel(envInfo);
@@ -58,3 +83,4 @@ export function TestServerBadge({ envInfo, className = "" }: { envInfo: EnvBindi
         </span>
     );
 }
+
