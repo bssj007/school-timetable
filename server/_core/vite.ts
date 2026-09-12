@@ -38,6 +38,31 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`
       );
+      const watermarkHtml = `<style id="test-db-watermark-style">
+  #test-db-watermark {
+    position: fixed;
+    top: max(1px, env(safe-area-inset-top, 1px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999999;
+    pointer-events: none;
+    user-select: none;
+    font-size: 9px;
+    line-height: 1;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: #ef4444;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    opacity: 0.85;
+    text-shadow: 0 0 2px rgba(255, 255, 255, 0.95), 0 0 4px rgba(255, 255, 255, 0.8), 0 1px 2px rgba(0, 0, 0, 0.15);
+    white-space: nowrap;
+  }
+  @media print {
+    #test-db-watermark, #test-db-watermark-style { display: none !important; }
+  }
+</style>
+<div id="test-db-watermark">school-timetable-testserver-db</div>`;
+      template = template.replace("</body>", `${watermarkHtml}</body>`);
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {

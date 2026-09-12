@@ -2,11 +2,11 @@ name = "school-timetable"
 compatibility_date = "2024-12-20"
 pages_build_output_dir = "dist/public"
 
-# D1 데이터베이스 바인딩
-[[d1_databases]]
-binding = "DB"
-database_name = "school-timetable-db"
-database_id = "b35d2ce4-8ba8-4b6f-92fc-b0c94b9519ce"
+# D1 데이터베이스 바인딩 (DB)
+# Cloudflare Pages 대시보드에서 환경별로 직접 관리합니다:
+# Settings > Functions > D1 Database Bindings (Variable name: DB)
+# - 프로덕션: school-timetable-db
+# - 테스트서버: school-timetable-testserver-db
 
 # NOTE: Cloudflare Pages does not support cron triggers in wrangler.toml
 # Cron must be configured in Cloudflare Dashboard:
