@@ -22,7 +22,7 @@ import IOSChromeInstallGuide from "./pages/IOSChromeInstallGuide";
 import AppDownloadPage from "./pages/AppDownloadPage";
 import Privacy from "./pages/Privacy";
 import BetaTesterPage from "./pages/BetaTesterPage";
-import { getPumasiCookie, setPumasiCookie } from "@/lib/pumasiCookie";
+import { getPumasiCookie, setPumasiCookie, hasPumasiRedirectCookie, clearPumasiRedirectCookie } from "@/lib/pumasiCookie";
 import { shouldShowDownloadPage, isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 function Router() {
@@ -55,7 +55,7 @@ function AppContent() {
         if (sessionStorage.getItem('pumasi_session_view') === 'timetable') return false;
       } catch {}
     }
-    return getPumasiCookie().isPumasi;
+    return hasPumasiRedirectCookie();
   });
 
   const isTeacherRoute = location.startsWith("/teacher");
@@ -214,9 +214,7 @@ function AppContent() {
         <Toaster />
         <BetaTesterPage
           onBack={() => {
-            if (typeof window !== 'undefined') {
-              try { sessionStorage.setItem('pumasi_session_view', 'timetable'); } catch {}
-            }
+            clearPumasiRedirectCookie();
             setIsBetaTester(false);
           }}
           hideBack={Boolean(publicSettings?.is_force_beta_tester)}
@@ -238,9 +236,7 @@ function AppContent() {
         <RoleSelectDialog
           onRoleSelected={() => refreshRole()}
           onBetaSelected={() => {
-            if (typeof window !== 'undefined') {
-              try { sessionStorage.removeItem('pumasi_session_view'); } catch {}
-            }
+            setPumasiCookie();
             setIsBetaTester(true);
           }}
         />

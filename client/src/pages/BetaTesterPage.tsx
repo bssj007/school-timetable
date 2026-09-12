@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, RotateCcw, Undo2 } from 'lucide-react';
-import { getPumasiCookie, PumasiStatus } from '@/lib/pumasiCookie';
+import { getPumasiCookie, clearPumasiRedirectCookie, PumasiStatus } from '@/lib/pumasiCookie';
 import { useUserConfig } from '@/contexts/UserConfigContext';
 
 interface BetaTesterPageProps {
@@ -52,6 +52,7 @@ export default function BetaTesterPage({ onBack, hideBack }: BetaTesterPageProps
     if (shouldHideBack) return;
     const confirmMessage = '시간표 페이지로 이동하시겠습니까?';
     if (window.confirm(confirmMessage)) {
+      clearPumasiRedirectCookie();
       onBack?.();
     }
   };

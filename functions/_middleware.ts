@@ -187,8 +187,8 @@ ${logoOrIconHtml}
                     try { teacherName = decodeURIComponent(teacherMatch[2]).trim() || null; } catch { }
                 }
 
-                // 오픈채팅 베타테스터 품앗이 쿠키 (sj_beta_pumasi)
-                const pumasiMatch = cookies.match(new RegExp('(^| )sj_beta_pumasi=([^;]+)'));
+                // 오픈채팅 베타테스터 품앗이 쿠키 (sj_beta_pumasi_time 또는 sj_beta_pumasi)
+                const pumasiMatch = cookies.match(new RegExp('(^| )sj_beta_pumasi_time=([^;]+)')) || cookies.match(new RegExp('(^| )sj_beta_pumasi=([^;]+)'));
                 if (pumasiMatch) {
                     isBetaTester = true;
                     try {

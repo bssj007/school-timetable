@@ -2,13 +2,18 @@
  * pumasiCookie.ts
  * Google Play Android 비공개 테스트(품앗이) 전용 순수 쿠키 유틸리티
  * 
- * 쿠키명: sj_beta_pumasi
- * 저장값: 최초 참여 ISO 문자열 또는 밀리초 타임스탬프
+ * 쿠키 분리 구조:
+ * 1. TIMER_COOKIE_NAME ('sj_beta_pumasi_time'): 최초 참여 타임스탬프 보관 (30일 유지, 시간표 복귀 시에도 영구 보존)
+ * 2. REDIRECT_COOKIE_NAME ('sj_beta_pumasi_redirect'): 사이트 접속 시 품앗이 화면 자동 진입 여부 플래그 (시간표 복귀 시 삭제)
+ * 3. COOKIE_NAME ('sj_beta_pumasi'): 하위 호환 쿠키명 (시간표 복귀 시 삭제)
+ * 
  * 기준: Google Play 비공개 테스트 14일 연속 참여 기준
  */
 
-const COOKIE_NAME = 'sj_beta_pumasi';
-const STORAGE_KEY = 'sj_beta_pumasi_time';
+export const TIMER_COOKIE_NAME = 'sj_beta_pumasi_time';
+export const REDIRECT_COOKIE_NAME = 'sj_beta_pumasi_redirect';
+export const COOKIE_NAME = 'sj_beta_pumasi';
+export const STORAGE_KEY = 'sj_beta_pumasi_time';
 export const REQUIRED_DAYS = 14;
 export const REQUIRED_MS = REQUIRED_DAYS * 24 * 60 * 60 * 1000; // 14일 (1,209,600,000 ms)
 export const PUMASI_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30일 (1달) 보관
@@ -51,6 +56,17 @@ export function formatDateTime(ms: number): string {
   return `${year}.${month}.${date} ${hours}:${minutes}:${seconds}`;
 }
 
+/** 타이머 정보만 안전하게 쿠키 및 localStorage에 보관 (리다이렉션 쿠키는 건드리지 않음) */
+function saveTimerCookieOnly(timeMs: number): void {
+  if (typeof document === 'undefined') return;
+  const maxAge = PUMASI_COOKIE_MAX_AGE;
+  const expires = new Date(Date.now() + maxAge * 1000).toUTCString();
+  document.cookie = `${TIMER_COOKIE_NAME}=${timeMs}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Lax`;
+  try {
+    localStorage.setItem(STORAGE_KEY, String(timeMs));
+  } catch {}
+}
+
 /**
  * 저장된 품앗이 최초 시작 타임스탬프 조회 (쿠키 및 localStorage 상호 백업)
  * 브라우저 세션 만료, 쿠키 휘발 등에도 최초 시작 시간이 절대로 리셋되지 않도록 보호
@@ -58,15 +74,28 @@ export function formatDateTime(ms: number): string {
 export function getStoredPumasiTime(): number | null {
   if (typeof document === 'undefined') return null;
 
-  // 1. 쿠키에서 읽기
+  // 1. 타이머 쿠키(sj_beta_pumasi_time)에서 읽기 우선, 없으면 레거시 sj_beta_pumasi 확인
   let timeFromCookie: number | null = null;
-  const match = document.cookie.match(new RegExp(`(?:^|; )${COOKIE_NAME}=([^;]*)`));
-  if (match) {
-    const rawVal = decodeURIComponent(match[1]);
+  const timerMatch = document.cookie.match(new RegExp(`(?:^|; )${TIMER_COOKIE_NAME}=([^;]*)`));
+  if (timerMatch) {
+    const rawVal = decodeURIComponent(timerMatch[1]);
     let parsed = parseInt(rawVal, 10);
     if (isNaN(parsed)) parsed = new Date(rawVal).getTime();
     if (!isNaN(parsed) && parsed > 0) {
       timeFromCookie = parsed;
+    }
+  }
+
+  // 레거시 쿠키 확인 (숫자 타임스탬프인 경우에만 승계)
+  if (!timeFromCookie) {
+    const legacyMatch = document.cookie.match(new RegExp(`(?:^|; )${COOKIE_NAME}=([^;]*)`));
+    if (legacyMatch) {
+      const rawVal = decodeURIComponent(legacyMatch[1]);
+      let parsed = parseInt(rawVal, 10);
+      if (isNaN(parsed)) parsed = new Date(rawVal).getTime();
+      if (!isNaN(parsed) && parsed > 100000000000) { // 1973년 이후 유효 타임스탬프
+        timeFromCookie = parsed;
+      }
     }
   }
 
@@ -77,7 +106,7 @@ export function getStoredPumasiTime(): number | null {
     if (rawStorage) {
       let parsed = parseInt(rawStorage, 10);
       if (isNaN(parsed)) parsed = new Date(rawStorage).getTime();
-      if (!isNaN(parsed) && parsed > 0) {
+      if (!isNaN(parsed) && parsed > 100000000000) {
         timeFromStorage = parsed;
       }
     }
@@ -86,26 +115,19 @@ export function getStoredPumasiTime(): number | null {
   // 3. 둘 다 존재하는 경우: 더 이른(과거) 시간을 보존하여 참여 진행률 손실 방지
   if (timeFromCookie && timeFromStorage) {
     const earliest = Math.min(timeFromCookie, timeFromStorage);
-    if (timeFromCookie !== earliest) {
-      setPumasiCookie(earliest);
-    }
+    saveTimerCookieOnly(earliest);
     return earliest;
   }
 
   // 4. 쿠키만 존재하는 경우: localStorage로 동기화 백업
   if (timeFromCookie) {
-    try {
-      localStorage.setItem(STORAGE_KEY, String(timeFromCookie));
-      localStorage.setItem(COOKIE_NAME, String(timeFromCookie));
-    } catch {}
+    saveTimerCookieOnly(timeFromCookie);
     return timeFromCookie;
   }
 
-  // 5. localStorage만 존재하는 경우: 쿠키 복원
+  // 5. localStorage만 존재하는 경우: 타이머 쿠키 복원
   if (timeFromStorage) {
-    const maxAge = PUMASI_COOKIE_MAX_AGE;
-    const expires = new Date(Date.now() + maxAge * 1000).toUTCString();
-    document.cookie = `${COOKIE_NAME}=${timeFromStorage}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Lax`;
+    saveTimerCookieOnly(timeFromStorage);
     return timeFromStorage;
   }
 
@@ -154,7 +176,50 @@ export function getPumasiCookie(now: number = Date.now()): PumasiStatus {
   };
 }
 
-/** 쿠키 생성 (1달 동안 보관, 기존 타임스탬프 존재 시 절대 리셋되지 않음) */
+/**
+ * 자동 리다이렉션 쿠키 존재 여부 확인
+ * - sj_beta_pumasi_redirect 가 존재하거나
+ * - 레거시 sj_beta_pumasi 쿠키가 활성 상태인 경우 true
+ * - 뒤로가기 클릭으로 쿠키가 제거된 경우에는 false 반환
+ */
+export function hasPumasiRedirectCookie(): boolean {
+  if (typeof document === 'undefined') return false;
+
+  const redirectMatch = document.cookie.match(new RegExp(`(?:^|; )${REDIRECT_COOKIE_NAME}=([^;]*)`));
+  if (redirectMatch && redirectMatch[1] && redirectMatch[1] !== '0') {
+    return true;
+  }
+
+  const legacyMatch = document.cookie.match(new RegExp(`(?:^|; )${COOKIE_NAME}=([^;]*)`));
+  if (legacyMatch && legacyMatch[1] && legacyMatch[1] !== '') {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * 자동 리다이렉션 쿠키만 제거 (시간표로 돌아가기 시 호출)
+ * - 타이머 쿠키(sj_beta_pumasi_time)와 localStorage의 시작 시간은 안전하게 보존됨
+ * - 자동 리다이렉션 쿠키(sj_beta_pumasi_redirect, sj_beta_pumasi)만 max-age=0으로 삭제
+ */
+export function clearPumasiRedirectCookie(): void {
+  if (typeof document === 'undefined') return;
+
+  const expired = 'path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+  document.cookie = `${REDIRECT_COOKIE_NAME}=; ${expired}`;
+  document.cookie = `${COOKIE_NAME}=; ${expired}`;
+
+  try {
+    sessionStorage.setItem('pumasi_session_view', 'timetable');
+  } catch {}
+}
+
+/**
+ * 쿠키 생성 (타이머 쿠키 보존 및 자동 리다이렉션 쿠키 발급)
+ * - 타이머 쿠키(sj_beta_pumasi_time)는 기존 타임스탬프가 있으면 절대 리셋되지 않음
+ * - 리다이렉션 쿠키(sj_beta_pumasi_redirect, sj_beta_pumasi)를 활성화
+ */
 export function setPumasiCookie(timestamp?: number): void {
   if (typeof document === 'undefined') return;
 
@@ -167,20 +232,29 @@ export function setPumasiCookie(timestamp?: number): void {
 
   const maxAge = PUMASI_COOKIE_MAX_AGE; // 30일 (1달)
   const expires = new Date(Date.now() + maxAge * 1000).toUTCString();
-  document.cookie = `${COOKIE_NAME}=${timeMs}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Lax`;
+
+  // 1. 타이머 쿠키 저장 (영구 보존 대상)
+  saveTimerCookieOnly(timeMs);
+
+  // 2. 자동 리다이렉션 쿠키 저장 (뒤로가기 시 삭제 대상)
+  document.cookie = `${REDIRECT_COOKIE_NAME}=1; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Lax`;
+  document.cookie = `${COOKIE_NAME}=1; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Lax`;
 
   try {
-    localStorage.setItem(STORAGE_KEY, String(timeMs));
-    localStorage.setItem(COOKIE_NAME, String(timeMs));
+    sessionStorage.removeItem('pumasi_session_view');
   } catch {}
 }
 
-/** 쿠키 및 로컬스토리지 삭제 (뒤로가기 시 일반 시간표로 복귀) */
+/** 전체 품앗이 쿠키 및 로컬스토리지 완전 초기화 (공장초기화 등에서 사용 가능) */
 export function clearPumasiCookie(): void {
   if (typeof document === 'undefined') return;
-  document.cookie = `${COOKIE_NAME}=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+  const expired = 'path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+  document.cookie = `${REDIRECT_COOKIE_NAME}=; ${expired}`;
+  document.cookie = `${COOKIE_NAME}=; ${expired}`;
+  document.cookie = `${TIMER_COOKIE_NAME}=; ${expired}`;
   try {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(COOKIE_NAME);
+    sessionStorage.removeItem('pumasi_session_view');
   } catch {}
 }

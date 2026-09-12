@@ -2802,7 +2802,7 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                         <ul className="list-disc list-inside space-y-1 text-xs text-slate-600 pl-1 leading-relaxed">
                             <li><strong>대상 사용자:</strong> Android Native 앱(WebView)으로 접속한 환경에 한해 최초 접속 역할 선택 화면에 회색 <strong>(오픈채팅 베타테스터용) Android 품앗이</strong> 버튼이 노출됩니다.</li>
-                            <li><strong>순수 쿠키 기반:</strong> 테스터가 버튼을 누르면 순수 쿠키(<code className="bg-slate-200 px-1 py-0.5 rounded text-violet-700 font-mono">sj_beta_pumasi</code>)가 1달(30일)간 보관되며, 시간표 페이지로 이동하더라도 쿠키가 삭제되지 않고 유지되어 14일 비공개 테스트 참여 카운터가 리셋 없이 지속 누적됩니다.</li>
+                            <li><strong>순수 쿠키 기반:</strong> 테스터가 버튼을 누르면 타이머 쿠키(<code className="bg-slate-200 px-1 py-0.5 rounded text-violet-700 font-mono">sj_beta_pumasi_time</code>)가 1달(30일)간 보관되며, 시간표 페이지로 이동하더라도 타이머 쿠키가 삭제되지 않고 유지되어 14일 비공개 테스트 참여 카운터가 리셋 없이 지속 누적됩니다. (시간표 이동 시 자동 리다이렉션 쿠키만 정리됩니다.)</li>
                             <li><strong>14일 연속 참여 기준:</strong> Google Play 비공개 테스트 요건(14일 연속 참여)에 따라 며칠째 접속 중인지, 남은 기간은 며칠인지 시각적 프로그레스 바로 표시되며 14일 달성 시 앱을 삭제하셔도 좋다는 안내가 제공됩니다.</li>
                             <li><strong>사용자 관리 탭 연동:</strong> 기능이 켜져 있는 동안 '사용자 관리' 탭에 <strong>🧪 품앗이 접속</strong> 접이식 단락이 표시되어 참여 테스터들의 IP, 접속 환경, 참여 경과를 한눈에 모니터링할 수 있습니다.</li>
                         </ul>
