@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound, Network
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound, Network, Smartphone
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -2130,6 +2130,28 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
         }
     });
 
+    const isPumasiButtonVisible = settingsQuery.data?.beta_pumasi_button_visible !== 'false';
+
+    const toggleButtonVisibleMutation = useMutation({
+        mutationFn: async (enabled: boolean) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ beta_pumasi_button_visible: enabled ? 'true' : 'false' })
+            });
+            if (!res.ok) throw new Error("Failed to update setting");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            toast.success("품앗이 버튼 노출 설정이 저장되었습니다.");
+        },
+        onError: () => {
+            toast.error("품앗이 버튼 노출 설정 변경 중 오류가 발생했습니다.");
+        }
+    });
+
     // ── 오픈 베타테스터 강제 지정 IP 목록 상태 및 로직 ──────────────────────
     const [forceIpsText, setForceIpsText] = useState<string>("");
     const [forceIpsInitialized, setForceIpsInitialized] = useState<boolean>(false);
@@ -2229,7 +2251,7 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
     // Local state for developer accounts
     const [devGrade, setDevGrade] = useState<string>("2");
     const [devClass, setDevClass] = useState<string>("1");
-    const [devElectives, setDevElectives] = useState<Record<string, { subject: string }>>({});
+    const [devElectives, setDevElectives] = useState<Record<string, { subject: string; teacher?: string; fullSubjectName?: string }>>({});
     const [devTeacherSource, setDevTeacherSource] = useState<string>("");
     const [devInitialized, setDevInitialized] = useState<boolean>(false);
 
@@ -2337,7 +2359,7 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
         enabled?: boolean;
         grade?: string;
         classNum?: string;
-        electives?: Record<string, { subject: string }>;
+        electives?: Record<string, { subject: string; teacher?: string; fullSubjectName?: string }>;
         teacher?: string;
     }) => {
         const nextEnabled = patch.enabled !== undefined ? patch.enabled : isDevAccountEnabled;
@@ -2362,19 +2384,21 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
 
     return (
         <div className="space-y-6">
-            <Card className="w-full">
-                <CardHeader>
+            <Card className={`w-full transition-all duration-200 ${!isBetaTestingEnabled ? "bg-slate-50/50" : ""}`}>
+                <CardHeader className={!isBetaTestingEnabled ? "py-4" : ""}>
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
                             <CardTitle className="text-xl flex items-center gap-2">
                                 <span>🧪</span>
                                 <span>Google Play 비공개 테스트 (품앗이) 기능</span>
                             </CardTitle>
-                            <CardDescription>
-                                Android Native 앱으로 접속한 오픈채팅 베타테스터 대상 전용 화면(AI 오목 게임 및 14일 참여 현황 배너) 활성화 여부를 제어합니다.
-                            </CardDescription>
+                            {isBetaTestingEnabled && (
+                                <CardDescription>
+                                    Android Native 앱으로 접속한 오픈채팅 베타테스터 대상 전용 화면(AI 오목 게임 및 14일 참여 현황 배너) 활성화 여부를 제어합니다.
+                                </CardDescription>
+                            )}
                         </div>
-                        <div className="flex items-center space-x-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                        <div className="flex items-center space-x-3 bg-white p-2.5 rounded-xl border border-slate-200 shrink-0">
                             <Switch
                                 id="beta-testing-switch"
                                 checked={isBetaTestingEnabled}
@@ -2391,15 +2415,58 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-600 space-y-2">
-                        <div className="font-semibold text-slate-800 flex items-center gap-1.5">
-                            <Info className="w-4 h-4 text-violet-600" />
-                            <span>기능 동작 안내</span>
+                {isBetaTestingEnabled && (
+                    <CardContent className="space-y-4">
+                        {/* 세부 설정: 품앗이 접속 버튼 활성화 (RoleSelectDialog 노출 여부) */}
+                        <div className="p-4 rounded-xl bg-violet-50/70 border border-violet-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="space-y-1">
+                                <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                    <Smartphone className="w-4 h-4 text-violet-600" />
+                                    <span>접속 버튼 활성화</span>
+                                    <Badge 
+                                        variant="outline" 
+                                        className={`text-xs px-2 py-0.5 ${
+                                            isPumasiButtonVisible 
+                                                ? "bg-violet-100 text-violet-700 border-violet-300 font-semibold" 
+                                                : "bg-slate-100 text-slate-500 border-slate-300"
+                                        }`}
+                                    >
+                                        {isPumasiButtonVisible ? "버튼 노출 중 (ON)" : "버튼 숨김 (OFF)"}
+                                    </Badge>
+                                </div>
+                                <p className="text-xs text-slate-600 leading-relaxed">
+                                    접속 유형 선택(학생/교사) 팝업에서 <strong>(오픈채팅 베타테스터용) Android 품앗이</strong> 버튼 노출 여부를 설정합니다.
+                                    <br />
+                                    <span className="text-slate-500 font-medium">
+                                        💡 OFF로 설정해도 기존 참여 테스터의 쿠키 접속, IP 강제 지정 테스터 및 품앗이 전용 페이지는 정상 유지됩니다.
+                                    </span>
+                                </p>
+                            </div>
+                            <div className="flex items-center space-x-2.5 bg-white px-3.5 py-2 rounded-xl border border-violet-200 self-start sm:self-center shrink-0 shadow-2xs">
+                                <Switch
+                                    id="pumasi-button-visible-switch"
+                                    checked={isPumasiButtonVisible}
+                                    onCheckedChange={(checked) => toggleButtonVisibleMutation.mutate(checked)}
+                                    disabled={toggleButtonVisibleMutation.isPending || settingsQuery.isLoading}
+                                />
+                                <Label htmlFor="pumasi-button-visible-switch" className="text-xs font-bold cursor-pointer select-none">
+                                    {isPumasiButtonVisible ? (
+                                        <span className="text-violet-600 font-bold">버튼 활성화 (ON)</span>
+                                    ) : (
+                                        <span className="text-slate-400">버튼 비활성화 (OFF)</span>
+                                    )}
+                                </Label>
+                            </div>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-600 space-y-2">
+                            <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                                <Info className="w-4 h-4 text-violet-600" />
+                                <span>기능 동작 안내</span>
                         </div>
                         <ul className="list-disc list-inside space-y-1 text-xs text-slate-600 pl-1 leading-relaxed">
                             <li><strong>대상 사용자:</strong> Android Native 앱(WebView)으로 접속한 환경에 한해 최초 접속 역할 선택 화면에 회색 <strong>(오픈채팅 베타테스터용) Android 품앗이</strong> 버튼이 노출됩니다.</li>
-                            <li><strong>순수 쿠키 기반:</strong> 테스터가 버튼을 누르면 순수 쿠키(<code className="bg-slate-200 px-1 py-0.5 rounded text-violet-700 font-mono">sj_beta_pumasi</code>)가 60일간 발급되며, 뒤로가기 버튼을 누르기 전까지 앱을 켤 때마다 시간표 대신 깔끔한 화이트 테마의 15x15 AI 오목 게임 페이지가 바로 열립니다.</li>
+                            <li><strong>순수 쿠키 기반:</strong> 테스터가 버튼을 누르면 순수 쿠키(<code className="bg-slate-200 px-1 py-0.5 rounded text-violet-700 font-mono">sj_beta_pumasi</code>)가 1달(30일)간 보관되며, 시간표 페이지로 이동하더라도 쿠키가 삭제되지 않고 유지되어 14일 비공개 테스트 참여 카운터가 리셋 없이 지속 누적됩니다.</li>
                             <li><strong>14일 연속 참여 기준:</strong> Google Play 비공개 테스트 요건(14일 연속 참여)에 따라 며칠째 접속 중인지, 남은 기간은 며칠인지 시각적 프로그레스 바로 표시되며 14일 달성 시 앱을 삭제하셔도 좋다는 안내가 제공됩니다.</li>
                             <li><strong>사용자 관리 탭 연동:</strong> 기능이 켜져 있는 동안 '사용자 관리' 탭에 <strong>🧪 품앗이 접속</strong> 접이식 단락이 표시되어 참여 테스터들의 IP, 접속 환경, 참여 경과를 한눈에 모니터링할 수 있습니다.</li>
                         </ul>
@@ -2500,25 +2567,28 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                     </div>
                 </CardContent>
+                )}
             </Card>
 
             {/* 개발자용 가상 계정 설정 카드 */}
-            <Card className="w-full border-slate-200 shadow-sm">
-                <CardHeader>
+            <Card className={`w-full border-slate-200 shadow-sm transition-all duration-200 ${!isDevAccountEnabled ? "bg-slate-50/50" : ""}`}>
+                <CardHeader className={!isDevAccountEnabled ? "py-4" : ""}>
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
                             <CardTitle className="text-xl flex items-center gap-2">
                                 <span className="p-1 rounded-lg bg-violet-100 text-violet-700 text-lg">💻</span>
                                 <span>개발자용 가상 계정 (시간표 및 기능 테스트)</span>
                             </CardTitle>
-                            <CardDescription className="flex flex-wrap items-center gap-2">
-                                <span>시간표 표출, 선택과목 변경, 교사용 기능 등을 실제 계정 간섭 없이 즉시 시뮬레이션할 수 있는 전용 계정을 설정합니다.</span>
-                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full shadow-xs">
-                                    ⚡ 실시간 자동 저장
-                                </span>
-                            </CardDescription>
+                            {isDevAccountEnabled && (
+                                <CardDescription className="flex flex-wrap items-center gap-2">
+                                    <span>시간표 표출, 선택과목 변경, 교사용 기능 등을 실제 계정 간섭 없이 즉시 시뮬레이션할 수 있는 전용 계정을 설정합니다.</span>
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full shadow-xs">
+                                        ⚡ 실시간 자동 저장
+                                    </span>
+                                </CardDescription>
+                            )}
                         </div>
-                        <div className="flex items-center space-x-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                        <div className="flex items-center space-x-3 bg-white p-2.5 rounded-xl border border-slate-200 shrink-0">
                             <Switch
                                 id="dev-account-switch"
                                 checked={isDevAccountEnabled}
@@ -2535,7 +2605,8 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="space-y-6">
+                {isDevAccountEnabled && (
+                    <CardContent className="space-y-6">
                     <div className="p-4 rounded-xl bg-violet-50/60 border border-violet-200 text-sm text-slate-700 space-y-2">
                         <div className="font-semibold text-violet-900 flex items-center gap-1.5">
                             <Info className="w-4 h-4 text-violet-600" />
@@ -2639,7 +2710,12 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
                                                             if (val === "_none_") {
                                                                 delete updated[groupCode];
                                                             } else {
-                                                                updated[groupCode] = { subject: val };
+                                                                const selectedObj = subjects.find(s => s.subject === val);
+                                                                updated[groupCode] = {
+                                                                    subject: val,
+                                                                    teacher: selectedObj?.teacher || "",
+                                                                    fullSubjectName: val
+                                                                };
                                                             }
                                                             updateDevSettings({ electives: updated });
                                                         }}
@@ -2746,6 +2822,7 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
                         </div>
                     </div>
                 </CardContent>
+                )}
             </Card>
         </div>
     );

@@ -7,7 +7,7 @@ import { useUserConfig } from "@/contexts/UserConfigContext";
 
 // 교사 유틸 함수는 @/lib/teacherUtils 에서 직접 import 하세요.
 // (RoleSelectDialog에서 re-export하면 순환 의존성으로 인한 TDZ 오류가 발생합니다)
-import { getActiveTeacherName, getAuthenticatedTeacher, getTeacherNameCookie, setRoleCookie, setTeacherNameCookie, normalizeTeacherName, getRoleCookie } from "@/lib/teacherUtils";
+import { getActiveTeacherName, getAuthenticatedTeacher, getTeacherNameCookie, setRoleCookie, setTeacherNameCookie, normalizeTeacherName, getRoleCookie, setStoredTeacherPassword, clearStoredTeacherPassword } from "@/lib/teacherUtils";
 import { detect } from "@/lib/browserDetect";
 import { setPumasiCookie } from "@/lib/pumasiCookie";
 
@@ -164,6 +164,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
 
     // ── 베타테스터 (Android 품앗이) & 개발자 계정 ──
     const [betaEnabled, setBetaEnabled] = useState(false);
+    const [betaButtonVisible, setBetaButtonVisible] = useState(true);
     const [devAccountEnabled, setDevAccountEnabled] = useState(false);
     const [isAndroidNative, setIsAndroidNative] = useState(false);
 
@@ -185,6 +186,9 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                 }
                 if (data?.beta_testing_enabled) {
                     setBetaEnabled(true);
+                }
+                if (data?.beta_pumasi_button_visible !== undefined) {
+                    setBetaButtonVisible(data.beta_pumasi_button_visible !== false);
                 }
                 if (data?.dev_account_enabled) {
                     setDevAccountEnabled(true);
@@ -344,6 +348,23 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         if (!selectedOption) { setTeacherError("목록에서 선생님을 선택해주세요."); return; }
         setRoleCookie("teacher");
         setTeacherNameCookie(selectedOption.rawName);
+        if (selectedOption.rawName === "김교사") {
+            setStoredTeacherPassword("김교사", "dev");
+            if (typeof localStorage !== "undefined") {
+                localStorage.setItem("last_selected_teacher_name", "김교사");
+                localStorage.setItem("teacher-page-selected-teacher", "9999");
+            }
+        } else {
+            if (getAuthenticatedTeacher() === "김교사") {
+                clearStoredTeacherPassword("김교사");
+            }
+            if (typeof localStorage !== "undefined") {
+                localStorage.setItem("last_selected_teacher_name", selectedOption.rawName);
+                if (selectedOption.idx) {
+                    localStorage.setItem("teacher-page-selected-teacher", String(selectedOption.idx));
+                }
+            }
+        }
         closeRoleSelect();
         onRoleSelected("teacher");
         setLocation("/teacher");
@@ -403,8 +424,8 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                                 <span className="ml-auto text-emerald-300 group-hover:text-emerald-500 text-xl">›</span>
                             </button>
 
-                            {/* Android Native 앱 + 관리자 베타테스팅 활성화 시 오픈채팅 품앗이 버튼 노출 */}
-                            {betaEnabled && isAndroidNative && (
+                            {/* Android Native 앱 + 관리자 베타테스팅 활성화 + 버튼 노출 활성화 시 오픈채팅 품앗이 버튼 노출 */}
+                            {betaEnabled && betaButtonVisible && isAndroidNative && (
                                 <button
                                     id="role-select-beta-tester"
                                     type="button"

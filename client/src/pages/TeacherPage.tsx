@@ -337,6 +337,16 @@ function resolveTeacherId(nameToFind: string | null | undefined, teachersList?: 
   return idx > 0 ? String(idx) : null;
 }
 
+function getTeacherNameFromId(id: string | null | undefined, teachersList?: string[]): string | null {
+  if (!id) return null;
+  if (id === "9999") return "김교사";
+  const num = parseInt(id, 10);
+  if (!isNaN(num) && teachersList && teachersList[num]) {
+    return teachersList[num];
+  }
+  return null;
+}
+
 export default function TeacherPage() {
   const queryClient = useQueryClient();
   const { refreshRole, switchToRole } = useUserConfig();
@@ -360,18 +370,24 @@ export default function TeacherPage() {
     const activeTeacher = getActiveTeacherName();
     const authTeacher = getAuthenticatedTeacher();
 
-    const allCached = queryClient.getQueriesData<TeacherTimetableResponse>({ queryKey: ['teacher-timetable'] });
-    const cachedTeachers = allCached[0]?.[1]?.teachers || getCachedTeachers();
-
-    if (activeTeacher && cachedTeachers) {
-      const resolved = resolveTeacherId(activeTeacher, cachedTeachers);
-      if (resolved) return resolved;
+    if (activeTeacher) {
+      if (normalizeTeacherName(activeTeacher) === "김교사") return "9999";
+      const allCached = queryClient.getQueriesData<TeacherTimetableResponse>({ queryKey: ['teacher-timetable'] });
+      const cachedTeachers = allCached[0]?.[1]?.teachers || getCachedTeachers();
+      if (cachedTeachers) {
+        const resolved = resolveTeacherId(activeTeacher, cachedTeachers);
+        if (resolved) return resolved;
+      }
     }
 
     // 로그인 된 교사가 없을 때만 이전 인덱스 캐시 활용
     if (!authTeacher && typeof localStorage !== "undefined") {
       const saved = localStorage.getItem("teacher-page-selected-teacher");
       if (saved) return saved;
+      const lastSelectedName = localStorage.getItem("last_selected_teacher_name");
+      if (lastSelectedName && normalizeTeacherName(lastSelectedName) === "김교사") {
+        return "9999";
+      }
     }
 
     return "1";
@@ -804,13 +820,15 @@ export default function TeacherPage() {
     refetchInterval: 2 * 60 * 1000,
   });
 
-  // 로그인 된 교사가 없을 때만 '가장 최근 선택했던 교사'로 저장 (timetableData 선언 이후에 위치해야 TDZ 오류 방지)
+  // 로그인 된 교사가 없을 때 또는 김교사일 때 '가장 최근 선택했던 교사'로 저장
   useEffect(() => {
     const authTeacher = getAuthenticatedTeacher();
-    if (!authTeacher) {
+    if (!authTeacher || authTeacher === "김교사") {
       localStorage.setItem("teacher-page-selected-teacher", selectedTeacherId);
-      if (timetableData?.teachers?.[parseInt(selectedTeacherId, 10)]) {
-        localStorage.setItem("last_selected_teacher_name", timetableData.teachers[parseInt(selectedTeacherId, 10)]);
+      const tName = getTeacherNameFromId(selectedTeacherId, timetableData?.teachers);
+      if (tName) {
+        localStorage.setItem("last_selected_teacher_name", tName);
+        setTeacherNameCookie(tName);
       }
     }
   }, [selectedTeacherId, timetableData?.teachers]);
@@ -844,7 +862,8 @@ export default function TeacherPage() {
         const authIdx = resolveTeacherId(authTeacher, timetableData.teachers);
         if (authIdx) {
           setSelectedTeacherId(authIdx);
-          setTeacherNameCookie(timetableData.teachers[parseInt(authIdx, 10)]);
+          const tName = getTeacherNameFromId(authIdx, timetableData.teachers);
+          if (tName) setTeacherNameCookie(tName);
           refreshRole();
           return;
         }
@@ -856,7 +875,8 @@ export default function TeacherPage() {
         const recentIdx = resolveTeacherId(recentTeacher, timetableData.teachers);
         if (recentIdx) {
           setSelectedTeacherId(recentIdx);
-          setTeacherNameCookie(timetableData.teachers[parseInt(recentIdx, 10)]);
+          const tName = getTeacherNameFromId(recentIdx, timetableData.teachers);
+          if (tName) setTeacherNameCookie(tName);
           refreshRole();
           return;
         }
@@ -877,7 +897,8 @@ export default function TeacherPage() {
       if (!currentCookie || normalizeTeacherName(currentCookie) !== authTeacher) {
         const authIdx = resolveTeacherId(authTeacher, timetableData.teachers);
         if (authIdx) {
-          setTeacherNameCookie(timetableData.teachers[parseInt(authIdx, 10)]);
+          const tName = getTeacherNameFromId(authIdx, timetableData.teachers);
+          if (tName) setTeacherNameCookie(tName);
           refreshRole();
         }
       }
@@ -1073,6 +1094,7 @@ export default function TeacherPage() {
     if (!rawTeacherName) return;
     if (isDevTeacher) {
       setIsCurrentTeacherVerified(true);
+      setStoredTeacherPassword("김교사", "dev");
       return;
     }
 
@@ -4111,13 +4133,28 @@ export default function TeacherPage() {
                     onClick={() => {
                       const newId = opt.idx.toString();
                       setSelectedTeacherId(newId);
-                      const authTeacher = getAuthenticatedTeacher();
-                      // 로그인 된 교사가 없을 때만 '가장 최근 선택했던 교사'로 쿠키/스토리지 갱신
-                      if (!authTeacher) {
-                        setTeacherNameCookie(opt.rawName);
-                        localStorage.setItem("last_selected_teacher_name", opt.rawName);
-                        localStorage.setItem("teacher-page-selected-teacher", newId);
+                      if (opt.rawName === "김교사" || newId === "9999") {
+                        setStoredTeacherPassword("김교사", "dev");
+                        setTeacherNameCookie("김교사");
+                        if (typeof localStorage !== "undefined") {
+                          localStorage.setItem("last_selected_teacher_name", "김교사");
+                          localStorage.setItem("teacher-page-selected-teacher", "9999");
+                        }
                         refreshRole();
+                      } else {
+                        const authTeacher = getAuthenticatedTeacher();
+                        // 기존에 김교사였거나 로그인 교사가 없으면 새로 선택한 교사로 갱신
+                        if (!authTeacher || authTeacher === "김교사") {
+                          if (authTeacher === "김교사") {
+                            clearStoredTeacherPassword("김교사");
+                          }
+                          setTeacherNameCookie(opt.rawName);
+                          if (typeof localStorage !== "undefined") {
+                            localStorage.setItem("last_selected_teacher_name", opt.rawName);
+                            localStorage.setItem("teacher-page-selected-teacher", newId);
+                          }
+                          refreshRole();
+                        }
                       }
                       setShowTeacherSelectModal(false);
                       setTeacherSearchQuery("");

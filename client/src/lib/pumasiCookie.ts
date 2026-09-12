@@ -11,6 +11,7 @@ const COOKIE_NAME = 'sj_beta_pumasi';
 const STORAGE_KEY = 'sj_beta_pumasi_time';
 export const REQUIRED_DAYS = 14;
 export const REQUIRED_MS = REQUIRED_DAYS * 24 * 60 * 60 * 1000; // 14일 (1,209,600,000 ms)
+export const PUMASI_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30일 (1달) 보관
 
 export interface PumasiStatus {
   isPumasi: boolean;
@@ -102,7 +103,7 @@ export function getStoredPumasiTime(): number | null {
 
   // 5. localStorage만 존재하는 경우: 쿠키 복원
   if (timeFromStorage) {
-    const maxAge = 60 * 24 * 60 * 60;
+    const maxAge = PUMASI_COOKIE_MAX_AGE;
     const expires = new Date(Date.now() + maxAge * 1000).toUTCString();
     document.cookie = `${COOKIE_NAME}=${timeFromStorage}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Lax`;
     return timeFromStorage;
@@ -153,7 +154,7 @@ export function getPumasiCookie(now: number = Date.now()): PumasiStatus {
   };
 }
 
-/** 쿠키 생성 (기본 60일 유지, 기존 타임스탬프 존재 시 절대 리셋되지 않음) */
+/** 쿠키 생성 (1달 동안 보관, 기존 타임스탬프 존재 시 절대 리셋되지 않음) */
 export function setPumasiCookie(timestamp?: number): void {
   if (typeof document === 'undefined') return;
 
@@ -164,7 +165,7 @@ export function setPumasiCookie(timestamp?: number): void {
     timeMs = existing || Date.now();
   }
 
-  const maxAge = 60 * 24 * 60 * 60; // 60일
+  const maxAge = PUMASI_COOKIE_MAX_AGE; // 30일 (1달)
   const expires = new Date(Date.now() + maxAge * 1000).toUTCString();
   document.cookie = `${COOKIE_NAME}=${timeMs}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Lax`;
 

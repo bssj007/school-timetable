@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
 import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon, ThumbsUp, X, Bell, ArrowRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -176,9 +176,13 @@ export default function Dashboard() {
     refetchOnWindowFocus: true,
   });
 
+  const isDevStudent = Boolean(studentName === "김학생" || grade === "9" || (studentNumber === "99" && studentName === "김학생"));
+  const effectiveGrade = isDevStudent ? (settings?.dev_student_grade || "2") : grade;
+  const effectiveClassNum = isDevStudent ? (settings?.dev_student_class || "1") : classNum;
+
   const isSettingsReady = !isSettingsLoading && !!settings;
   const configuredElectiveMode: 'auto' | 'manual' | undefined = isSettingsReady
-    ? ((grade === '2'
+    ? ((effectiveGrade === '2'
         ? (settings?.elective_input_mode_grade2 ?? settings?.elective_input_mode)
         : (settings?.elective_input_mode_grade3 ?? settings?.elective_input_mode)) === 'manual' ? 'manual' : 'auto')
     : undefined;
@@ -467,7 +471,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
-    const isSetupComplete = isConfigured && (grade === "1" || isElectiveEntered);
+    const isSetupComplete = isConfigured && (effectiveGrade === "1" || isElectiveEntered);
 
     if (isSetupComplete && isPromotionPopupEnabled && !instructionDismissedV2) {
       timeoutId = setTimeout(() => {
@@ -480,7 +484,7 @@ export default function Dashboard() {
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [isConfigured, grade, isElectiveEntered, isPromotionPopupEnabled, instructionDismissedV2]);
+  }, [isConfigured, effectiveGrade, isElectiveEntered, isPromotionPopupEnabled, instructionDismissedV2]);
 
   // Hide instruction tooltip while the elective dialog is open, restore on close
   useEffect(() => {
@@ -549,10 +553,6 @@ export default function Dashboard() {
   };
 
   // 1. 시간표 조회 (개발자 계정 9999 김학생인 경우 지정된 내부 시간표 반 및 선택과목 적용)
-  const isDevStudent = (studentName === "김학생" || grade === "9" || (studentNumber === "99" && studentName === "김학생"));
-  const effectiveGrade = isDevStudent ? (settings?.dev_student_grade || "2") : grade;
-  const effectiveClassNum = isDevStudent ? (settings?.dev_student_class || "1") : classNum;
-
   const { data: rawTimetableData, isLoading: timetableLoading, isFetching: isTimetableFetching, refetch: refetchTimetable } = useQuery({
     queryKey: ['timetable', schoolName, effectiveGrade, effectiveClassNum, weekDates[0].toISOString()],
     queryFn: async () => {
@@ -629,7 +629,11 @@ export default function Dashboard() {
     queryKey: ['studentProfile', effectiveGrade, effectiveClassNum, studentNumber, studentName, datasetType],
     queryFn: async () => {
       if (isDevStudent) {
-        return { electives: settings?.dev_student_electives || {} };
+        const rawDevElectives = settings?.dev_student_electives || {};
+        const parsedDevElectives = (typeof rawDevElectives === 'string')
+          ? (() => { try { return JSON.parse(rawDevElectives); } catch { return {}; } })()
+          : rawDevElectives;
+        return { electives: parsedDevElectives };
       }
       if ((effectiveGrade !== "2" && effectiveGrade !== "3") || !effectiveClassNum || !studentNumber || !studentName) return null;
       const res = await fetch(`/api/electives?type=student&grade=${effectiveGrade}&classNum=${effectiveClassNum}&studentNumber=${studentNumber}&studentName=${encodeURIComponent(studentName)}&dataset=${datasetType}`);
@@ -653,7 +657,11 @@ export default function Dashboard() {
   const lastValidProfileRef = React.useRef<any>(null);
   const currentProfile = React.useMemo(() => {
     if (isDevStudent) {
-      return { electives: settings?.dev_student_electives || {} };
+      const rawDevElectives = settings?.dev_student_electives || {};
+      const parsedDevElectives = (typeof rawDevElectives === 'string')
+        ? (() => { try { return JSON.parse(rawDevElectives); } catch { return {}; } })()
+        : rawDevElectives;
+      return { electives: parsedDevElectives };
     }
     if (effectiveGrade !== "2" && effectiveGrade !== "3") {
       lastValidProfileRef.current = null;
@@ -719,7 +727,7 @@ export default function Dashboard() {
 
   // 학년별 학생 등록/수정/연기/삭제 권한 검증 헬퍼
   const checkStudentPermission = (targetGrade?: number) => {
-    const g = targetGrade || parseInt(grade || "1", 10);
+    const g = targetGrade || parseInt(effectiveGrade || "1", 10);
     const isAllowed = g === 1
       ? settings?.assessment_allow_student_grade1 !== false
       : g === 2
@@ -950,7 +958,7 @@ export default function Dashboard() {
         throw e;
       }
     },
-    enabled: !!grade && !!classNum,
+    enabled: !!effectiveGrade && !!effectiveClassNum,
     refetchInterval: 2000,
   });
 
@@ -1000,7 +1008,7 @@ export default function Dashboard() {
     }
 
     // 2. 시간표에 없더라도 학생이 명시적으로 선택한 선택과목은 모두 포함
-    if (grade === "2" || grade === "3") {
+    if (effectiveGrade === "2" || effectiveGrade === "3") {
       if (currentProfile?.electives) {
         Object.values(currentProfile.electives).forEach((sel: any) => {
           if (sel && sel.subject) {
@@ -1015,7 +1023,83 @@ export default function Dashboard() {
     }
 
     return subjects;
-  }, [timetableData, computedGroups, currentProfile, electiveConfigs, grade]);
+  }, [timetableData, computedGroups, currentProfile, electiveConfigs, effectiveGrade]);
+
+  // 학생 맞춤 수행평가 매칭 검증 헬퍼 (시간표 셀, 기간형 하단 바, 상세 목록 및 교사 직접게시 섹션 공통)
+  const isAssessmentMatchingStudent = useCallback((a: AssessmentItem) => {
+    if (effectiveGrade !== "2" && effectiveGrade !== "3") return true;
+
+    // 1차 필터: 아예 듣지 않는 과목(이름)이면 100% 제외
+    const baseSubject = a.subject.replace(/\s*\(.*$/, '').trim();
+    if (!myActualSubjects.has(baseSubject)) return false;
+
+    // 2차 필터: a.classCode가 명시된 경우, 이 학생의 elective 그룹이 포함되는지 직접 검증
+    // 이동수업 수행평가는 subject 이름에 그룹이 없어도 classCode로만 구분됨
+    if (a.classCode && a.classCode.trim()) {
+      const allowedGroups = a.classCode.split(",").map((s: string) => s.trim()).filter(Boolean);
+      if (allowedGroups.length > 0) {
+        // 학생이 보유한 elective 그룹 목록 (currentProfile.electives의 키: "A", "B", ...)
+        const myGroups = new Set<string>(Object.keys(currentProfile?.electives || {}));
+        // 내 그룹 중 하나라도 allowedGroups에 포함되어야 함
+        const hasMatch = allowedGroups.some(g => myGroups.has(g));
+        if (!hasMatch) {
+          return false; // 이 학생의 그룹이 대상 그룹에 없음 → 표시 안 함
+        }
+        // 그룹은 맞지만, 해당 그룹에서 선택한 과목이 수행평가 과목과 다른지 추가 검증
+        const matchedGroup = allowedGroups.find(g => myGroups.has(g));
+        if (matchedGroup) {
+          const myElectiveObj = currentProfile?.electives?.[matchedGroup];
+          const mySubjectInGroup = myElectiveObj?.subject;
+          if (mySubjectInGroup) {
+            const cfgEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySubjectInGroup);
+            const fullSubj = cfgEntry?.fullSubjectName || mySubjectInGroup;
+            if (baseSubject !== mySubjectInGroup.trim() && baseSubject !== fullSubj.trim()) {
+              return false; // 그룹은 같지만 그 그룹에서 내가 선택한 과목과 다름
+            }
+          }
+        }
+      }
+    } else {
+      // classCode가 없는 경우: 과목명의 "(C그룹)" 텍스트로 폴백 검증
+      const groupMatch = a.subject.match(/\(([A-Z]그룹)/);
+      if (groupMatch && groupMatch[1]) {
+        const targetGroup = groupMatch[1];
+        const mySelectedSubjectForGroup = currentProfile?.electives?.[targetGroup]?.subject;
+        
+        if (!mySelectedSubjectForGroup) {
+          return false; // 해당 그룹에 아무 과목도 선택하지 않았다면 내 것이 아님
+        }
+
+        const configEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySelectedSubjectForGroup);
+        const fullSubj = configEntry?.fullSubjectName || mySelectedSubjectForGroup;
+
+        if (baseSubject !== mySelectedSubjectForGroup.trim() && baseSubject !== fullSubj.trim()) {
+          return false; // 내 프로필의 그룹 배정 과목과, 수행평가의 실제 과목이 일치하지 않음
+        }
+      }
+    }
+
+    // 3차 필터: 수행평가에 교사가 지정되어 있고, 학생의 선택과목 프로필에도 교사 정보가 있다면 교사 일치 여부 검증
+    if (a.teacher && currentProfile?.electives) {
+      const cleanTargetTeacher = normalizeTeacherName(a.teacher);
+      const matchedElectives = Object.values(currentProfile.electives).filter((sel: any) => {
+        if (!sel || !sel.subject) return false;
+        const cfgEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === sel.subject);
+        const fullSubj = cfgEntry?.fullSubjectName || sel.subject;
+        return baseSubject === sel.subject.trim() || baseSubject === fullSubj.trim();
+      });
+
+      const electivesWithTeacher = matchedElectives.filter((sel: any) => sel.teacher && sel.teacher.trim());
+      if (electivesWithTeacher.length > 0) {
+        const matchesAnyTeacher = electivesWithTeacher.some((sel: any) => normalizeTeacherName(sel.teacher) === cleanTargetTeacher);
+        if (!matchesAnyTeacher) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }, [effectiveGrade, myActualSubjects, currentProfile, electiveConfigs]);
 
   // 현재 주에 해당하는 수행평가만 필터링, 정렬 및 임시 연기(고아 처리)
   const assessments = useMemo(() => {
@@ -1029,59 +1113,8 @@ export default function Dashboard() {
     });
 
     // 2. 학생이 듣지 않는 과목의 고아상태 등 수행평가 필터링 (2, 3학년)
-    if (grade === "2" || grade === "3") {
-      filtered = filtered.filter(a => {
-        // 1차 필터: 아예 듣지 않는 과목(이름)이면 100% 탈락
-        const baseSubject = a.subject.replace(/\s*\(.*$/, '').trim();
-        if (!myActualSubjects.has(baseSubject)) return false;
-
-        // 2차 필터: a.classCode가 명시된 경우, 이 학생의 elective 그룹이 포함되는지 직접 검증
-        // 이동수업 수행평가는 subject 이름에 그룹이 없어도 classCode로만 구분됨
-        if (a.classCode && a.classCode.trim()) {
-          const allowedGroups = a.classCode.split(",").map((s: string) => s.trim()).filter(Boolean);
-          if (allowedGroups.length > 0) {
-            // 학생이 보유한 elective 그룹 목록 (currentProfile.electives의 키: "A", "B", ...)
-            const myGroups = new Set<string>(Object.keys(currentProfile?.electives || {}));
-            // 내 그룹 중 하나라도 allowedGroups에 포함되어야 함
-            const hasMatch = allowedGroups.some(g => myGroups.has(g));
-            if (!hasMatch) {
-              return false; // 이 학생의 그룹이 대상 그룹에 없음 → 표시 안 함
-            }
-            // 그룹은 맞지만, 해당 그룹에서 선택한 과목이 수행평가 과목과 다른지 추가 검증
-            const matchedGroup = allowedGroups.find(g => myGroups.has(g));
-            if (matchedGroup) {
-              const mySubjectInGroup = currentProfile?.electives?.[matchedGroup]?.subject;
-              if (mySubjectInGroup) {
-                const cfgEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySubjectInGroup);
-                const fullSubj = cfgEntry?.fullSubjectName || mySubjectInGroup;
-                if (baseSubject !== mySubjectInGroup.trim() && baseSubject !== fullSubj.trim()) {
-                  return false; // 그룹은 같지만 그 그룹에서 내가 선택한 과목과 다름
-                }
-              }
-            }
-          }
-        } else {
-          // classCode가 없는 경우: 과목명의 "(C그룹)" 텍스트로 폴백 검증
-          const groupMatch = a.subject.match(/\(([A-Z]그룹)/);
-          if (groupMatch && groupMatch[1]) {
-             const targetGroup = groupMatch[1];
-             const mySelectedSubjectForGroup = currentProfile?.electives?.[targetGroup]?.subject;
-             
-             if (!mySelectedSubjectForGroup) {
-                return false; // 해당 그룹에 아무 과목도 선택하지 않았다면 내 것이 아님
-             }
-
-             const configEntry = (electiveConfigs || []).find((cfg: any) => cfg.subject === mySelectedSubjectForGroup);
-             const fullSubj = configEntry?.fullSubjectName || mySelectedSubjectForGroup;
-
-             if (baseSubject !== mySelectedSubjectForGroup.trim() && baseSubject !== fullSubj.trim()) {
-                return false; // 내 프로필의 그룹 배정 과목과, 수행평가의 실제 과목이 일치하지 않음
-             }
-          }
-        }
-
-        return true;
-      });
+    if (effectiveGrade === "2" || effectiveGrade === "3") {
+      filtered = filtered.filter(isAssessmentMatchingStudent);
     }
 
 
@@ -1125,7 +1158,7 @@ export default function Dashboard() {
       processedAssessments: processed.length,
     });
     return processed;
-  }, [allAssessments, weekDates, grade, myActualSubjects, timetableData, computedGroups, currentProfile]);
+  }, [allAssessments, weekDates, effectiveGrade, myActualSubjects, timetableData, computedGroups, currentProfile, isAssessmentMatchingStudent]);
 
   // 3.5 수행평가 투표 데이터 (인라인 votes 필드에서 계산 - 모든 수행평가 대상)
   const votesData = useMemo(() => {
@@ -1141,13 +1174,13 @@ export default function Dashboard() {
       const distrust = votesArr.filter(x => x.v === 'distrust').length;
       if (helpful > 0 || distrust > 0) votes[aid] = { helpful, distrust };
       // Find my vote
-      if (grade && classNum && studentNumber) {
-        const myVote = votesArr.find(x => x.g === parseInt(grade) && x.c === parseInt(classNum) && x.s === parseInt(studentNumber));
+      if (effectiveGrade && effectiveClassNum && studentNumber) {
+        const myVote = votesArr.find(x => x.g === parseInt(effectiveGrade) && x.c === parseInt(effectiveClassNum) && x.s === parseInt(studentNumber));
         if (myVote) myVotes[aid] = myVote.v;
       }
     }
     return { votes, myVotes };
-  }, [allAssessments, grade, classNum, studentNumber]);
+  }, [allAssessments, effectiveGrade, effectiveClassNum, studentNumber]);
 
   const voteMutation = useMutation({
     mutationFn: async ({ assessmentId, vote }: { assessmentId: number; vote: 'helpful' | 'distrust' }) => {
@@ -1158,8 +1191,8 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           assessmentId,
-          grade: parseInt(grade),
-          classNum: parseInt(classNum),
+          grade: parseInt(effectiveGrade),
+          classNum: parseInt(effectiveClassNum),
           studentNumber: parseInt(studentNumber),
           vote: targetVote,
         }),
@@ -1189,8 +1222,8 @@ export default function Dashboard() {
           subject: data.subject,
           description: data.round ? `${data.round}차` : "",
           dueDate: data.assessmentDate,
-          grade: parseInt(grade),
-          classNum: parseInt(classNum),
+          grade: parseInt(effectiveGrade),
+          classNum: parseInt(effectiveClassNum),
           classTime: data.classTime ? parseInt(data.classTime) : null,
           dataset: datasetType || '',
           teacher: data.teacher,
@@ -1469,8 +1502,8 @@ export default function Dashboard() {
 
   // For print export (moved above early returns)
   const formattedStudentId = useMemo(() => {
-    return `${grade}${classNum}${studentNumber?.padStart(2, '0') || '00'}`;
-  }, [grade, classNum, studentNumber]);
+    return `${isDevStudent ? effectiveGrade : grade}${isDevStudent ? effectiveClassNum : classNum}${studentNumber?.padStart(2, '0') || '00'}`;
+  }, [grade, classNum, studentNumber, isDevStudent, effectiveGrade, effectiveClassNum]);
 
   const electiveSummary = useMemo(() => {
     if (!currentProfile?.electives) return "";
@@ -1610,17 +1643,17 @@ export default function Dashboard() {
 
   const weekRangeText = `${formatDate(weekDates[0])} ~ ${formatDate(weekDates[4])}`;
 
-  const isElectiveMissingImmediate = !isElectiveEntered && (grade === "2" || grade === "3") && !!classNum && !!studentNumber;
+  const isElectiveMissingImmediate = !isDevStudent && !isElectiveEntered && (effectiveGrade === "2" || effectiveGrade === "3") && !!effectiveClassNum && !!studentNumber;
   const isElectiveMissing = isElectiveMissingImmediate && showElectiveWarning;
-  const isGradeAllowedToPrint = settings?.allow_print_by_grade?.includes(Number(grade)) ?? true;
-  const shouldShowPrintButton = !((grade === "2" || grade === "3") && !isElectiveEntered) && isGradeAllowedToPrint;
+  const isGradeAllowedToPrint = settings?.allow_print_by_grade?.includes(Number(effectiveGrade)) ?? true;
+  const shouldShowPrintButton = !((effectiveGrade === "2" || effectiveGrade === "3") && !isElectiveEntered) && isGradeAllowedToPrint;
 
   const gradeColors: Record<string, string> = {
     "1": "#a6ff00",
     "2": "#00ffcc",
     "3": "#fa32f0",
   };
-  const currentGradeColor = grade ? gradeColors[grade] : undefined;
+  const currentGradeColor = effectiveGrade ? gradeColors[effectiveGrade] : undefined;
   const selectorStyle = currentGradeColor ? { borderColor: currentGradeColor, borderWidth: '2px' } : {};
 
   return (
@@ -1956,7 +1989,7 @@ export default function Dashboard() {
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 md:py-4 md:px-3 relative">
               {/* Desktop Actions */}
               <div className="hidden sm:flex items-center gap-2 flex-1 min-w-0">
-                {(grade === "2" || grade === "3") && (
+                {(effectiveGrade === "2" || effectiveGrade === "3") && (
                   <div className="relative inline-block">
                     <Button
                       size="sm"
@@ -1977,7 +2010,7 @@ export default function Dashboard() {
               </div>
 
               {/* Mobile Elective Edit Button */}
-              {(grade === "2" || grade === "3") && (
+              {(effectiveGrade === "2" || effectiveGrade === "3") && (
                 <div className="absolute left-3 top-0 bottom-0 flex items-center justify-start sm:hidden z-20 pointer-events-none">
                   <div className="pointer-events-auto relative">
                     <Button
@@ -2157,7 +2190,7 @@ export default function Dashboard() {
                       <div className="text-xs font-medium leading-none">
                         학번: {formattedStudentId}
                       </div>
-                      {grade !== "1" && (
+                      {effectiveGrade !== "1" && (
                         <div className="text-[10px] text-gray-700 leading-none truncate max-w-[50%] text-right">
                           {electiveSummary || "선택과목 미설정"}
                         </div>
@@ -2554,7 +2587,7 @@ export default function Dashboard() {
                                 {Array.from({ length: 5 }, (_, weekdayIdx) => {
                                   const currentDate = toDateString(weekDates[weekdayIdx]);
                                   const specialSchedule = settings?.special_schedules?.find((s: any) => 
-                                    s.date === currentDate && (s.grade === 0 || s.grade.toString() === grade.toString())
+                                    s.date === currentDate && (s.grade === 0 || s.grade.toString() === effectiveGrade.toString())
                                   );
 
                                   if (specialSchedule) {
@@ -2597,7 +2630,8 @@ export default function Dashboard() {
 
               const periodAssessments = (allAssessments as AssessmentItem[]).filter(a =>
                 a.endDate && a.startDate &&
-                a.startDate <= limitStr && a.endDate >= todayStr
+                a.startDate <= limitStr && a.endDate >= todayStr &&
+                isAssessmentMatchingStudent(a)
               );
               if (periodAssessments.length === 0) return null;
 
@@ -3345,11 +3379,8 @@ export default function Dashboard() {
             });
 
             // 2/3학년 과목 필터링 적용
-            const studentFiltered = (grade === "2" || grade === "3")
-              ? allFiltered.filter(a => {
-                  const baseSubject = a.subject.replace(/\s*\(.*$/, '').trim();
-                  return myActualSubjects.has(baseSubject);
-                })
+            const studentFiltered = (effectiveGrade === "2" || effectiveGrade === "3")
+              ? allFiltered.filter(isAssessmentMatchingStudent)
               : allFiltered;
 
             // 고유 과목명 추출
@@ -3683,12 +3714,13 @@ export default function Dashboard() {
         const activeTeacherList: string[] = Array.isArray(settings?.active_teachers) ? settings.active_teachers : [];
         if (activeTeacherList.length === 0) return null;
 
-        // 이용중인 교사별로 등록된 수행평가에서 과목 추출
+        // 이용중인 교사별로 등록된 수행평가에서 과목 추출 (학생이 실제 수강하는 수행평가만)
+        const relevantAssessments = (allAssessments as AssessmentItem[] || []).filter(isAssessmentMatchingStudent);
         const teacherSubjects: { teacher: string; subjects: string[] }[] = activeTeacherList
           .map((teacherName: string) => {
             const cleanTarget = normalizeTeacherName(teacherName);
             const subjects = Array.from(new Set(
-              (allAssessments as any[] || [])
+              relevantAssessments
                 .filter((a: any) => normalizeTeacherName(a.teacher) === cleanTarget)
                 .map((a: any) => a.subject as string)
                 .filter(Boolean)
@@ -3811,8 +3843,8 @@ export default function Dashboard() {
       {/* 선택과목 선택 다이얼로그 */}
       <ElectiveSelectionDialog
         isOpen={showElectiveDialog}
-        grade={grade}
-        classNum={classNum}
+        grade={isDevStudent ? effectiveGrade : grade}
+        classNum={isDevStudent ? effectiveClassNum : classNum}
         studentNumber={studentNumber}
         studentName={studentName}
         datasetId={(rawTimetableData as any)?.datasetId || ''}

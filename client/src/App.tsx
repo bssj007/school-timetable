@@ -49,7 +49,14 @@ function Router() {
 function AppContent() {
   const { isValidating, userRole, refreshRole, publicSettings, grade } = useUserConfig();
   const [location, setLocation] = useLocation();
-  const [isBetaTester, setIsBetaTester] = useState(() => getPumasiCookie().isPumasi);
+  const [isBetaTester, setIsBetaTester] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        if (sessionStorage.getItem('pumasi_session_view') === 'timetable') return false;
+      } catch {}
+    }
+    return getPumasiCookie().isPumasi;
+  });
 
   const isTeacherRoute = location.startsWith("/teacher");
   const isAdminRoute = location.startsWith("/admin");
@@ -114,9 +121,18 @@ function AppContent() {
   useEffect(() => {
     if (publicSettings?.is_force_beta_tester && !isAdminRoute) {
       setPumasiCookie();
+      try { sessionStorage.removeItem('pumasi_session_view'); } catch {}
       setIsBetaTester(true);
     }
   }, [publicSettings?.is_force_beta_tester, isAdminRoute]);
+
+  // /pumasi 경로 직접 접근 시 세션 해제 및 품앗이 화면 진입
+  useEffect(() => {
+    if (location === "/pumasi") {
+      try { sessionStorage.removeItem('pumasi_session_view'); } catch {}
+      setIsBetaTester(true);
+    }
+  }, [location]);
 
   // ── 교사 리다이렉트 ──────────────────────────────────────────────────────────
   // Rules of Hooks: 모든 useEffect는 반드시 어떠한 conditional return보다도 앞에 선언되어야 함!
@@ -197,7 +213,12 @@ function AppContent() {
       <>
         <Toaster />
         <BetaTesterPage
-          onBack={() => setIsBetaTester(false)}
+          onBack={() => {
+            if (typeof window !== 'undefined') {
+              try { sessionStorage.setItem('pumasi_session_view', 'timetable'); } catch {}
+            }
+            setIsBetaTester(false);
+          }}
           hideBack={Boolean(publicSettings?.is_force_beta_tester)}
         />
       </>
@@ -216,7 +237,12 @@ function AppContent() {
       {!isDownloadRoute && !isIOSGuideRoute && !isPrivacyRoute && (
         <RoleSelectDialog
           onRoleSelected={() => refreshRole()}
-          onBetaSelected={() => setIsBetaTester(true)}
+          onBetaSelected={() => {
+            if (typeof window !== 'undefined') {
+              try { sessionStorage.removeItem('pumasi_session_view'); } catch {}
+            }
+            setIsBetaTester(true);
+          }}
         />
       )}
       {!isPrivacyRoute && <OnboardingDialog />}

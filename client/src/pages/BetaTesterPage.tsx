@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, RotateCcw, Undo2 } from 'lucide-react';
-import { getPumasiCookie, clearPumasiCookie, PumasiStatus } from '@/lib/pumasiCookie';
+import { getPumasiCookie, PumasiStatus } from '@/lib/pumasiCookie';
 import { useUserConfig } from '@/contexts/UserConfigContext';
 
 interface BetaTesterPageProps {
@@ -50,9 +50,8 @@ export default function BetaTesterPage({ onBack, hideBack }: BetaTesterPageProps
 
   const handleBack = () => {
     if (shouldHideBack) return;
-    const confirmMessage = '품앗이 모드를 종료하고 시간표 페이지로 이동하시겠습니까?\n\n※ 주의: 시간표로 돌아갈 경우 지금까지 누적된 14일 비공개 테스트 참여 카운터가 완전히 리셋(초기화)됩니다.';
+    const confirmMessage = '시간표 페이지로 이동하시겠습니까?';
     if (window.confirm(confirmMessage)) {
-      clearPumasiCookie();
       onBack?.();
     }
   };
