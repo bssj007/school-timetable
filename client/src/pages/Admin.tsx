@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound, Network, Smartphone, LogOut
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound, Network, Smartphone, LogOut, ArrowDownToLine
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import IPProfileViewer from "@/components/IPProfileViewer";
 import DatabaseManager from "@/components/DatabaseManager";
 import TeacherTimetable from "@/components/TeacherTimetable";
+import DbCloneDialog from "@/components/DbCloneDialog";
 import { IPProfile } from "@/types";
 import {
     Table,
@@ -1001,10 +1002,13 @@ function ElectiveManager({ password }: { password: string }) {
 // ----------------------------------------------------------------------
 // 6. Data Transfer Manager Component (Import/Export)
 // ----------------------------------------------------------------------
-function DataTransferManager({ adminPassword }: { adminPassword: string }) {
+function DataTransferManager({ adminPassword, envInfo }: { adminPassword: string; envInfo: EnvBindingInfo }) {
     const [isExporting, setIsExporting] = React.useState(false);
     const [isImporting, setIsImporting] = React.useState(false);
+    const [isCloneDialogOpen, setIsCloneDialogOpen] = React.useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    const isTestOk = Boolean(envInfo && envInfo.isTestServer && envInfo.isTestDb && !envInfo.isMismatch);
 
     const handleExport = async () => {
         setIsExporting(true);
@@ -1104,6 +1108,34 @@ function DataTransferManager({ adminPassword }: { adminPassword: string }) {
 
     return (
         <div className="space-y-6">
+            {isTestOk && (
+                <Card className="border-amber-300 bg-amber-50/30 shadow-xs">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-amber-900 flex items-center justify-between gap-2 flex-wrap text-base md:text-lg">
+                            <div className="flex items-center gap-2">
+                                <ArrowDownToLine className="w-5 h-5 text-amber-600" />
+                                <span>본 DB (school-timetable-db)에서 가져오기</span>
+                            </div>
+                            <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                                테스트 환경 전용
+                            </span>
+                        </CardTitle>
+                        <CardDescription className="text-xs text-slate-600">
+                            운영 데이터베이스(school-timetable-db)의 최신 데이터를 읽기 전용으로 안전하게 조회하여 현재 테스트 DB로 덮어씁니다. 본 DB에는 어떠한 변경도 발생하지 않습니다.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button
+                            onClick={() => setIsCloneDialogOpen(true)}
+                            className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm gap-2"
+                        >
+                            <ArrowDownToLine className="w-4 h-4" />
+                            본 DB school-timetable-db에서 가져오기
+                        </Button>
+                    </CardContent>
+                </Card>
+            )}
+
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -1147,6 +1179,12 @@ function DataTransferManager({ adminPassword }: { adminPassword: string }) {
                     </Button>
                 </CardContent>
             </Card>
+
+            <DbCloneDialog
+                open={isCloneDialogOpen}
+                onOpenChange={setIsCloneDialogOpen}
+                adminPassword={adminPassword}
+            />
         </div>
     );
 }
@@ -9423,7 +9461,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                 </TabsContent>
 
                 <TabsContent value="datatransfer" className="space-y-6">
-                    <DataTransferManager adminPassword={password} />
+                    <DataTransferManager adminPassword={password} envInfo={envInfo} />
                 </TabsContent>
 
                 <TabsContent value="manualplan" className="space-y-6">
