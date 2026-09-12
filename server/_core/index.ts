@@ -11,6 +11,7 @@ import { adminRouter } from "../routes/admin";
 import { assessmentRouter } from "../routes/assessment";
 import { myIpRouter } from "../routes/my-ip";
 import { mealRouter } from "../routes/meal";
+import { testDbQueryRouter } from "../routes/test-db-query";
 import { runMigrations } from "./migrate";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { sql } from "drizzle-orm";
@@ -142,6 +143,7 @@ async function startServer() {
   app.use("/api/assessment", assessmentRouter);
   app.use("/api/my-ip", myIpRouter);
   app.use("/api/meal", mealRouter);
+  app.use("/api/test-db/query", testDbQueryRouter);
 
   registerOAuthRoutes(app);
   app.use(
