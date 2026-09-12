@@ -9,7 +9,8 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound, Network, Smartphone, LogOut, ArrowDownToLine
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound, Network, Smartphone, LogOut, ArrowDownToLine,
+    Bot, Copy, Terminal, Play, Code
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -1010,6 +1011,109 @@ function DataTransferManager({ adminPassword, envInfo }: { adminPassword: string
 
     const isTestOk = Boolean(envInfo && envInfo.isTestServer && envInfo.isTestDb && !envInfo.isMismatch);
 
+    // 에이전트 쿼리 엑세스 (비밀번호 Bypass) 상태 관리
+    const [isAgentAccessEnabled, setIsAgentAccessEnabled] = React.useState(false);
+    const [isLoadingSettings, setIsLoadingSettings] = React.useState(true);
+    const [isTogglingAccess, setIsTogglingAccess] = React.useState(false);
+    const [isCopied, setIsCopied] = React.useState(false);
+    const [testQuery, setTestQuery] = React.useState("SELECT name FROM sqlite_schema WHERE type='table' LIMIT 10");
+    const [isExecutingTest, setIsExecutingTest] = React.useState(false);
+    const [testOutput, setTestOutput] = React.useState<any>(null);
+    const [showSnippets, setShowSnippets] = React.useState(false);
+    const [snippetTab, setSnippetTab] = React.useState<"curl" | "fetch" | "python">("curl");
+
+    // 테스트 환경일 때 시스템 설정에서 에이전트 엑세스 활성 여부 조회
+    React.useEffect(() => {
+        if (!isTestOk) return;
+        let isMounted = true;
+        setIsLoadingSettings(true);
+        fetch("/api/admin/settings", {
+            headers: { "X-Admin-Password": adminPassword },
+        })
+            .then((res) => (res.ok ? res.json() : {}))
+            .then((data) => {
+                if (isMounted) {
+                    setIsAgentAccessEnabled(data.test_db_agent_query_enabled === "true");
+                }
+            })
+            .catch(() => {})
+            .finally(() => {
+                if (isMounted) setIsLoadingSettings(false);
+            });
+        return () => {
+            isMounted = false;
+        };
+    }, [isTestOk, adminPassword]);
+
+    const handleToggleAgentAccess = async (checked: boolean) => {
+        setIsTogglingAccess(true);
+        try {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify({
+                    test_db_agent_query_enabled: String(checked),
+                }),
+            });
+            if (!res.ok) throw new Error("설정 저장 실패");
+            setIsAgentAccessEnabled(checked);
+            if (checked) {
+                toast.success("에이전트 쿼리 엑세스가 활성화되었습니다 (비밀번호 Bypass 적용).");
+            } else {
+                toast.info("에이전트 쿼리 엑세스가 비활성화되었습니다 (외부 쿼리 차단).");
+            }
+        } catch (e: any) {
+            toast.error("설정 변경 오류: " + e.message);
+        } finally {
+            setIsTogglingAccess(false);
+        }
+    };
+
+    const queryAccessUrl = typeof window !== "undefined" ? `${window.location.origin}/api/test-db/query` : "/api/test-db/query";
+
+    const handleCopyUrl = async () => {
+        try {
+            await navigator.clipboard.writeText(queryAccessUrl);
+            setIsCopied(true);
+            toast.success("엑세스 주소가 클립보드에 복사되었습니다.");
+            setTimeout(() => setIsCopied(false), 2000);
+        } catch {
+            toast.error("클립보드 복사 실패");
+        }
+    };
+
+    const handleExecuteTest = async () => {
+        if (!testQuery.trim()) {
+            toast.error("실행할 SQL 쿼리를 입력하세요.");
+            return;
+        }
+        setIsExecutingTest(true);
+        setTestOutput(null);
+        try {
+            // X-Admin-Password 없이 브라우저에서 직접 요청하여 Bypass 작동 여부를 명확히 검증
+            const res = await fetch("/api/test-db/query", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sql: testQuery }),
+            });
+            const data = await res.json();
+            setTestOutput({ status: res.status, ok: res.ok, data });
+            if (res.ok) {
+                toast.success("쿼리 실행 성공 (비밀번호 없이 실행 완료)");
+            } else {
+                toast.error(`실행 실패 (${res.status}): ${data.error || "오류"}`);
+            }
+        } catch (err: any) {
+            setTestOutput({ status: 0, ok: false, data: { error: err.message } });
+            toast.error("요청 실패: " + err.message);
+        } finally {
+            setIsExecutingTest(false);
+        }
+    };
+
     const handleExport = async () => {
         setIsExporting(true);
         try {
@@ -1108,6 +1212,198 @@ function DataTransferManager({ adminPassword, envInfo }: { adminPassword: string
 
     return (
         <div className="space-y-6">
+            {isTestOk && (
+                <Card className="border-indigo-300 bg-gradient-to-br from-indigo-50/50 via-white to-sky-50/30 shadow-xs">
+                    <CardHeader className="pb-3 border-b border-indigo-100">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <CardTitle className="text-indigo-950 flex items-center gap-2 text-base md:text-lg">
+                                <div className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700">
+                                    <Bot className="w-5 h-5" />
+                                </div>
+                                <span>에이전트 테스트 DB 직접 쿼리 엑세스 (Agent Direct Access)</span>
+                            </CardTitle>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                                    테스트 환경 전용
+                                </span>
+                                {isAgentAccessEnabled ? (
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                        Bypass 활성
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-300">
+                                        <span className="w-2 h-2 rounded-full bg-slate-400" />
+                                        비활성 (차단)
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                        <CardDescription className="text-xs text-slate-600 mt-1">
+                            외부 에이전트(LLM, CI/CD, 자동화 스크립트)가 테스트 DB({envInfo?.dbName || "school-timetable-testserver-db"})에 직접 쿼리를 전송할 수 있는 전용 엔드포인트입니다. 스위치가 켜지면 <strong>비밀번호 검증이 우회(Bypass)</strong>되어 자유롭게 질의 및 데이터를 수정할 수 있습니다.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-4 space-y-4">
+                        {/* 1. Toggle Switch */}
+                        <div className="flex items-center justify-between p-3.5 rounded-lg bg-white/90 border border-indigo-100 shadow-2xs gap-3">
+                            <div className="space-y-0.5">
+                                <div className="text-sm font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                                    <span>에이전트 쿼리 엑세스 활성화</span>
+                                    {isAgentAccessEnabled ? (
+                                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                            비밀번호 우회(Bypass) 가동 중
+                                        </span>
+                                    ) : (
+                                        <span className="text-[11px] font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                                            외부 요청 거절 상태
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    {isAgentAccessEnabled
+                                        ? "스위치가 켜져 있습니다. 관리자 비밀번호 헤더(X-Admin-Password) 없이 엑세스 주소로 SQL 쿼리가 즉시 실행됩니다."
+                                        : "스위치가 꺼져 있습니다. 외부에서 엑세스 주소 호출 시 401 Unauthorized로 거절됩니다."}
+                                </p>
+                            </div>
+                            <Switch
+                                checked={isAgentAccessEnabled}
+                                onCheckedChange={handleToggleAgentAccess}
+                                disabled={isLoadingSettings || isTogglingAccess}
+                            />
+                        </div>
+
+                        {/* 2. Access Address URL Box */}
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                                <span className="flex items-center gap-1.5">
+                                    <Link2 className="w-3.5 h-3.5 text-indigo-600" />
+                                    <span>에이전트 엑세스 주소 (Access URL)</span>
+                                </span>
+                                <span className="text-[11px] text-slate-500">POST / GET 지원</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="flex-1 bg-slate-900 text-emerald-400 font-mono text-xs md:text-sm px-3.5 py-2.5 rounded-lg border border-slate-800 select-all overflow-x-auto whitespace-nowrap shadow-inner">
+                                    {queryAccessUrl}
+                                </div>
+                                <Button
+                                    type="button"
+                                    onClick={handleCopyUrl}
+                                    variant="outline"
+                                    className="shrink-0 gap-1.5 font-semibold text-xs border-indigo-200 hover:bg-indigo-50"
+                                >
+                                    {isCopied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-600" />}
+                                    <span>{isCopied ? "복사됨!" : "주소 복사"}</span>
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* 3. API Usage Guide Collapsible/Tabs */}
+                        <div className="border border-indigo-100 rounded-lg overflow-hidden bg-white/70">
+                            <button
+                                type="button"
+                                onClick={() => setShowSnippets(!showSnippets)}
+                                className="w-full flex items-center justify-between p-2.5 text-xs font-semibold text-indigo-900 hover:bg-indigo-50/50 transition-colors"
+                            >
+                                <span className="flex items-center gap-1.5">
+                                    <Terminal className="w-3.5 h-3.5 text-indigo-600" />
+                                    <span>에이전트 연동 코드 예시 (cURL, Fetch, Python)</span>
+                                </span>
+                                <span className="text-slate-400">{showSnippets ? "접기 ▲" : "펼치기 ▼"}</span>
+                            </button>
+                            {showSnippets && (
+                                <div className="p-3 border-t border-indigo-100 space-y-2 bg-slate-950 text-slate-200">
+                                    <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setSnippetTab("curl")}
+                                            className={`text-xs px-2.5 py-1 rounded font-mono ${snippetTab === "curl" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                                        >
+                                            cURL
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSnippetTab("fetch")}
+                                            className={`text-xs px-2.5 py-1 rounded font-mono ${snippetTab === "fetch" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                                        >
+                                            JavaScript (fetch)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSnippetTab("python")}
+                                            className={`text-xs px-2.5 py-1 rounded font-mono ${snippetTab === "python" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                                        >
+                                            Python
+                                        </button>
+                                    </div>
+                                    <pre className="text-[11px] font-mono p-2 overflow-x-auto text-emerald-300 leading-relaxed">
+                                        {snippetTab === "curl" && `curl -X POST "${queryAccessUrl}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"sql": "SELECT name FROM sqlite_schema WHERE type=\\'table\\'"}'`}
+                                        {snippetTab === "fetch" && `const response = await fetch("${queryAccessUrl}", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ sql: "SELECT * FROM system_settings LIMIT 5" })
+});
+const data = await response.json();
+console.log(data.results);`}
+                                        {snippetTab === "python" && `import requests
+
+res = requests.post(
+    "${queryAccessUrl}",
+    json={"sql": "SELECT name FROM sqlite_schema WHERE type='table'"}
+)
+print(res.json())`}
+                                    </pre>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 4. Quick Test Console / Playground */}
+                        <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2.5">
+                            <div className="flex items-center justify-between flex-wrap gap-1">
+                                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                    <Play className="w-3.5 h-3.5 text-indigo-600" />
+                                    <span>간이 쿼리 테스트 콘솔 (비밀번호 미제공 Bypass 검증)</span>
+                                </span>
+                                <span className="text-[11px] text-slate-500">
+                                    인증 헤더 없이 브라우저에서 직접 요청하여 우회 작동을 확인합니다
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    value={testQuery}
+                                    onChange={(e) => setTestQuery(e.target.value)}
+                                    placeholder="SELECT * FROM ... "
+                                    className="font-mono text-xs bg-white"
+                                />
+                                <Button
+                                    type="button"
+                                    onClick={handleExecuteTest}
+                                    disabled={isExecutingTest}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shrink-0 gap-1.5"
+                                >
+                                    <Play className="w-3 h-3" />
+                                    <span>{isExecutingTest ? "실행 중..." : "실행"}</span>
+                                </Button>
+                            </div>
+                            {testOutput && (
+                                <div className="space-y-1">
+                                    <div className="flex items-center justify-between text-[11px]">
+                                        <span className="font-semibold text-slate-600">응답 상태:</span>
+                                        <span className={`font-mono font-bold ${testOutput.ok ? "text-emerald-600" : "text-red-600"}`}>
+                                            HTTP {testOutput.status} {testOutput.ok ? "(성공: 데이터 반환됨)" : "(차단 또는 오류)"}
+                                        </span>
+                                    </div>
+                                    <pre className="text-[11px] font-mono bg-slate-900 text-slate-100 p-2.5 rounded max-h-48 overflow-auto whitespace-pre-wrap break-all border border-slate-800">
+                                        {JSON.stringify(testOutput.data, null, 2)}
+                                    </pre>
+                                </div>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {isTestOk && (
                 <Card className="border-amber-300 bg-amber-50/30 shadow-xs">
                     <CardHeader className="pb-3">
