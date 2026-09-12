@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { TriangleAlert, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { getAdminPasswordCookie, clearAdminPasswordCookie } from "@/lib/adminCookie";
 
 export default function FactoryReset() {
     const [, setLocation] = useLocation();
@@ -13,9 +14,9 @@ export default function FactoryReset() {
     const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
 
-    // Load password from session if available
+    // Load password from cookie or session if available
     useState(() => {
-        const stored = sessionStorage.getItem("adminPassword");
+        const stored = getAdminPasswordCookie() || (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("adminPassword") : null);
         if (stored) {
             setPassword(stored);
         } else {
@@ -64,6 +65,7 @@ export default function FactoryReset() {
             toast.success("초기화 완료. 메인 페이지로 이동합니다.");
 
             // Clear Cookies
+            clearAdminPasswordCookie();
             document.cookie.split(";").forEach((c) => {
                 document.cookie = c
                     .replace(/^ +/, "")

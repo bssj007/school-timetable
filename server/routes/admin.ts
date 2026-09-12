@@ -6,9 +6,23 @@ import { updateMealDatabase } from "../mealScraper";
 
 const router = Router();
 
+// Login Endpoint (POST /api/admin)
+router.post("/", (req, res) => {
+    const { password } = req.body || {};
+    if (password === adminPassword) {
+        res.setHeader('Set-Cookie', `admin_password=${encodeURIComponent(password)}; Path=/; Max-Age=86400; SameSite=Lax`);
+        res.json({ success: true });
+    } else {
+        res.setHeader('Set-Cookie', `admin_password=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax`);
+        res.status(401).json({ success: false, message: "그라믄 안돼" });
+    }
+});
+
 // Authentication Middleware
 router.use((req, res, next) => {
-    const authHeader = req.headers['x-admin-password'];
+    const cookieMatch = req.headers.cookie?.match(/(?:^|;\s*)(?:admin_password|sj_admin_password)=([^;]*)/);
+    const cookiePassword = cookieMatch ? decodeURIComponent(cookieMatch[1]) : undefined;
+    const authHeader = req.headers['x-admin-password'] || cookiePassword;
     if (authHeader !== adminPassword) {
         res.status(401).json({ error: "Unauthorized" });
         return;

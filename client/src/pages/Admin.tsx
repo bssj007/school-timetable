@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound, Network, Smartphone
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound, Network, Smartphone, LogOut
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -45,6 +45,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { normalizeTeacherName } from "@/lib/teacherUtils";
+import { getAdminPasswordCookie, setAdminPasswordCookie, clearAdminPasswordCookie } from "@/lib/adminCookie";
 
 declare const __BUILD_INFO__: {
     commitSha: string;
@@ -7372,7 +7373,7 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
 }
 
 export default function Admin() {
-    const [password, setPassword] = useState("");
+    const [password, setPassword] = useState(() => getAdminPasswordCookie() || "");
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [userIp, setUserIp] = useState<string | null>(null);
@@ -7420,6 +7421,7 @@ export default function Admin() {
             toast.success("초기화 완료. 메인 페이지로 이동합니다.");
 
             // Clear Cookies
+            clearAdminPasswordCookie();
             document.cookie.split(";").forEach((c) => {
                 document.cookie = c
                     .replace(/^ +/, "")
@@ -7519,15 +7521,22 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
     );
 }
 
-// --- Authentication ---
-// Password persistence removed for security
+    // --- Authentication ---
+    // 1일 만료 쿠키가 존재하는 경우 마운트 시 자동 인증 검증 수행
+    useEffect(() => {
+        const storedPassword = getAdminPasswordCookie();
+        if (storedPassword) {
+            setPassword(storedPassword);
+            checkPasswordMutation.mutate(storedPassword);
+        }
+    }, []);
 
     const checkPasswordMutation = useMutation({
-        mutationFn: async (password: string) => {
+        mutationFn: async (inputPassword: string) => {
             const res = await fetch("/api/admin", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ password }),
+                body: JSON.stringify({ password: inputPassword }),
             });
 
             const data = await res.json();
@@ -7538,17 +7547,19 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                 throw new Error(data.message || data.error || "Invalid password");
             }
         },
-        onSuccess: () => {
+        onSuccess: (_data, inputPassword) => {
             setIsAuthenticated(true);
+            setAdminPasswordCookie(inputPassword);
             toast.success("관리자 로그인 성공");
 
             // Background DB Migration/Sync
             fetch("/api/admin/migrate_db", {
-                headers: { "X-Admin-Password": password }
+                headers: { "X-Admin-Password": inputPassword }
             }).catch(console.error);
         },
         onError: (error: Error) => {
             toast.error(error.message || "로그인 실패");
+            clearAdminPasswordCookie();
             setPassword("");
         },
     });
@@ -7556,6 +7567,13 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
         checkPasswordMutation.mutate(password);
+    };
+
+    const handleLogout = () => {
+        clearAdminPasswordCookie();
+        setIsAuthenticated(false);
+        setPassword("");
+        toast.info("관리자 로그아웃되었습니다.");
     };
 
     // --- Assessment Management ---
@@ -7766,6 +7784,18 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
 
 
     if (!isAuthenticated) {
+        // 쿠키가 존재하여 마운트 시 자동 로그인 검증 진행 중인 경우 깜빡임 방지 로딩 표시
+        if (checkPasswordMutation.isPending && getAdminPasswordCookie()) {
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+                    <div className="flex flex-col items-center gap-3">
+                        <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
+                        <p className="text-sm font-medium text-slate-600">관리자 인증 확인 중...</p>
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
                 <Card className="w-full max-w-md shadow-lg">
@@ -7855,6 +7885,15 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         <TriangleAlert className="h-4 w-4 mr-2" />
                         <span className="hidden md:inline">DB 초기화</span>
                         <span className="md:hidden">초기화</span>
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleLogout}
+                        className="text-gray-600 hover:text-gray-900 border-gray-300"
+                    >
+                        <LogOut className="h-4 w-4 mr-1.5" />
+                        로그아웃
                     </Button>
                 </div>
                 <div className="self-end md:self-auto flex flex-wrap items-center gap-2">

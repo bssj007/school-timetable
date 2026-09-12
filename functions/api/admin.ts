@@ -7,14 +7,18 @@ export const onRequestPost = async (context: any) => {
         const { password } = body;
 
         if (password === adminPassword) {
+            const headers = new Headers({ 'Content-Type': 'application/json' });
+            headers.append('Set-Cookie', `admin_password=${encodeURIComponent(password)}; Path=/; Max-Age=86400; SameSite=Lax`);
             return new Response(JSON.stringify({ success: true }), {
-                headers: { 'Content-Type': 'application/json' }
+                headers
             });
         }
         else {
+            const headers = new Headers({ 'Content-Type': 'application/json' });
+            headers.append('Set-Cookie', `admin_password=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax`);
             return new Response(JSON.stringify({ success: false, message: "그라믄 안돼" }), {
                 status: 401,
-                headers: { 'Content-Type': 'application/json' }
+                headers
             });
         }
     } catch (err: any) {
