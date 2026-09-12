@@ -4,7 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { getPerformanceAssessments, createPerformanceAssessment, updatePerformanceAssessment, deletePerformanceAssessment } from "../server/db";
 import { fetchTimetableFromComcigan, searchSchools } from "./comcigan";
-import { adminPassword } from "./adminPW";
+import { verifyAdminPassword } from "./adminPW";
 
 export const appRouter = router({
   system: systemRouter,
@@ -151,7 +151,7 @@ export const appRouter = router({
       })
       .mutation(async ({ input: password }) => {
         // Cloudflare Pages/Workers environment check
-        if (password === adminPassword) {
+        if (verifyAdminPassword(password)) {
           return { success: true };
         } else {
           return { success: false, message: "Incorrect password" };

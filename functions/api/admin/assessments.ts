@@ -1,4 +1,4 @@
-import { adminPassword } from "../../../server/adminPW";
+import { verifyAdminPassword } from "../../../server/adminPW";
 
 export const onRequest = async (context: any) => {
     const { request, env } = context;
@@ -9,7 +9,7 @@ export const onRequest = async (context: any) => {
     // or we can implement a proper login session.
     // For now, let's check the header for simplicity and security.
     const authHeader = request.headers.get('X-Admin-Password');
-    if (authHeader !== adminPassword) {
+    if (!verifyAdminPassword(authHeader, env)) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
 

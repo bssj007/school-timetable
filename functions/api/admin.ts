@@ -1,12 +1,12 @@
-import { adminPassword } from "../../server/adminPW";
+import { verifyAdminPassword } from "../../server/adminPW";
 
 export const onRequestPost = async (context: any) => {
     try {
-        const { request } = context;
+        const { request, env } = context;
         const body = await request.json();
         const { password } = body;
 
-        if (password === adminPassword) {
+        if (verifyAdminPassword(password, env)) {
             const headers = new Headers({ 'Content-Type': 'application/json' });
             headers.append('Set-Cookie', `admin_password=${encodeURIComponent(password)}; Path=/; Max-Age=86400; SameSite=Lax`);
             return new Response(JSON.stringify({ success: true }), {

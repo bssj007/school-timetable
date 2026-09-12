@@ -1,5 +1,5 @@
 
-import { adminPassword } from "../../../server/adminPW";
+import { verifyAdminPassword } from "../../../server/adminPW";
 
 export const onRequestPost = async (context: any) => {
     const { request, env } = context;
@@ -15,7 +15,7 @@ export const onRequestPost = async (context: any) => {
 
         // 1. Auth Check (Added)
         const password = request.headers.get("X-Admin-Password");
-        if (password !== adminPassword) {
+        if (!verifyAdminPassword(password, env)) {
             return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
         }
 

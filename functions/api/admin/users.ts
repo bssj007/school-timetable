@@ -1,4 +1,4 @@
-import { adminPassword } from "../../../server/adminPW";
+import { verifyAdminPassword } from "../../../server/adminPW";
 import { ensureAllTables } from "../../db_schema";
 import { parseUA } from "../../_uaDetect";
 
@@ -77,7 +77,7 @@ export const onRequest = async (context: any) => {
 
     // Authentication
     const authHeader = request.headers.get('X-Admin-Password');
-    if (authHeader !== adminPassword) {
+    if (!verifyAdminPassword(authHeader, env)) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
 

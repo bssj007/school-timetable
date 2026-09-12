@@ -1,4 +1,4 @@
-import { adminPassword } from "../../../server/adminPW";
+import { verifyAdminPassword } from "../../../server/adminPW";
 
 export const onRequest = async (context: any) => {
     const { request, env } = context;
@@ -6,13 +6,8 @@ export const onRequest = async (context: any) => {
 
     // Auth Check
     const authHeader = request.headers.get('X-Admin-Password');
-    // Simple check matching assessments.ts
-    // If adminPassword import fails (e.g. server file not in functions), we might fallback or need another way.
-    // assessments.ts uses it, so it should be fine.
-    if (authHeader !== adminPassword) {
-        // Allow if no password set in server/adminPW (dev mode) or strictly enforce?
-        // For now, if import works, use it.
-        // Actually, let's just use the header check as implies in assessments.ts
+    if (!verifyAdminPassword(authHeader, env)) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
 
     if (!env.DB) {

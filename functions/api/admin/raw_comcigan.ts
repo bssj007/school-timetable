@@ -1,4 +1,4 @@
-import { adminPassword } from "../../../server/adminPW";
+import { verifyAdminPassword } from "../../../server/adminPW";
 
 const BASE_URL = "http://comci.net:4082";
 const SEARCH_HEX = "%BA%CE%BB%EA%BC%BA%C1%F6%B0%ED"; // 부산성지고 EUC-KR Hex
@@ -96,7 +96,7 @@ export const onRequest = async (context: any) => {
     try {
         // 1. Auth Check
         const password = request.headers.get("X-Admin-Password");
-        if (password !== adminPassword) {
+        if (!verifyAdminPassword(password, env)) {
             return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { 'Content-Type': 'application/json' } });
         }
 

@@ -1,4 +1,4 @@
-import { adminPassword as envAdminPassword } from "../../../server/adminPW";
+import { verifyAdminPassword } from "../../../server/adminPW";
 import { executeCronTasks } from "../../server/cronLogic";
 
 export const onRequest = async (context: any) => {
@@ -21,7 +21,7 @@ export const onRequest = async (context: any) => {
     const token = url.searchParams.get('token') || request.headers.get('Authorization')?.replace('Bearer ', '') || bodyToken;
     
     // Validate the token against the backend admin password
-    if (token !== envAdminPassword) {
+    if (!verifyAdminPassword(token, env)) {
         return new Response(JSON.stringify({ error: 'Unauthorized. Invalid token provided.' }), {
             status: 401,
             headers: { 'Content-Type': 'application/json' }

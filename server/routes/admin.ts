@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { adminPassword } from "../adminPW";
+import { verifyAdminPassword } from "../adminPW";
 import { updateMealDatabase } from "../mealScraper";
 
 const router = Router();
@@ -9,7 +9,7 @@ const router = Router();
 // Login Endpoint (POST /api/admin)
 router.post("/", (req, res) => {
     const { password } = req.body || {};
-    if (password === adminPassword) {
+    if (verifyAdminPassword(password)) {
         res.setHeader('Set-Cookie', `admin_password=${encodeURIComponent(password)}; Path=/; Max-Age=86400; SameSite=Lax`);
         res.json({ success: true });
     } else {
@@ -22,8 +22,8 @@ router.post("/", (req, res) => {
 router.use((req, res, next) => {
     const cookieMatch = req.headers.cookie?.match(/(?:^|;\s*)(?:admin_password|sj_admin_password)=([^;]*)/);
     const cookiePassword = cookieMatch ? decodeURIComponent(cookieMatch[1]) : undefined;
-    const authHeader = req.headers['x-admin-password'] || cookiePassword;
-    if (authHeader !== adminPassword) {
+    const authHeader = (req.headers['x-admin-password'] as string) || cookiePassword;
+    if (!verifyAdminPassword(authHeader)) {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }

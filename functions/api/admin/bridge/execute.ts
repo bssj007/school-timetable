@@ -1,4 +1,4 @@
-import { adminPassword } from "../../../../server/adminPW";
+import { verifyAdminPassword, getAdminPassword } from "../../../../server/adminPW";
 
 /**
  * Executes a BRIDGE mapping.
@@ -10,7 +10,7 @@ export const onRequest = async (context: any) => {
     const { request, env } = context;
 
     const authHeader = request.headers.get('X-Admin-Password');
-    if (authHeader !== adminPassword) {
+    if (!verifyAdminPassword(authHeader, env)) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
 
@@ -106,7 +106,7 @@ export const onRequest = async (context: any) => {
                 const fetchUrl = `${origin}/api/admin/comcigan-subjects?grade=${targetGrade}&dataset=${toDataset}`;
                 
                 const subjRes = await fetch(fetchUrl, {
-                    headers: { "X-Admin-Password": adminPassword }
+                    headers: { "X-Admin-Password": authHeader || getAdminPassword(env) }
                 });
                 
                 if (subjRes.ok) {

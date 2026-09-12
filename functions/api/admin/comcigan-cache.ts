@@ -1,11 +1,11 @@
-import { adminPassword as envAdminPassword } from "../../../server/adminPW";
+import { verifyAdminPassword } from "../../../server/adminPW";
 import { createTimetableCacheTable } from "../../db_schema";
 
 export const onRequest = async (context: any) => {
     const { request, env } = context;
     const adminPassword = request.headers.get('X-Admin-Password');
 
-    if (adminPassword !== envAdminPassword) {
+    if (!verifyAdminPassword(adminPassword, env)) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,
             headers: { 'Content-Type': 'application/json' }
