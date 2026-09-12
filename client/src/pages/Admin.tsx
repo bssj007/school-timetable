@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { agent, shouldShowDownloadPage, getCurrentBypassEnvironment, parseAppTypeFromUserAgent, type BypassEnvironmentKey } from "@/lib/browserDetect";
+import { agent, shouldShowDownloadPage, getCurrentBypassEnvironment, parseAppTypeFromUserAgent, detectFromUserAgent, type BypassEnvironmentKey } from "@/lib/browserDetect";
 import { parseUA } from "@/lib/uaDetect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -7498,21 +7498,45 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         });
                                     };
 
-                                    // ── 현재 접속환경 배지 (OS·브라우저 + 라이브 점) ────────────
+                                    // ── 현재 접속환경 배지 (OS·브라우저 + 라이브 점) — 접속환경 메뉴 표 기준 ────────────
                                     const osLabel = (os: string | null | undefined) =>
                                         os === 'ios' ? 'iOS' : os === 'android' ? 'Android' : os === 'windows' ? 'Windows' : os === 'macos' ? 'macOS' : os === 'linux' ? 'Linux' : null;
                                     const browserLabel = (bk: string | null | undefined) =>
-                                        bk === 'chrome' ? 'Chrome' : bk === 'safari' ? 'Safari' : bk === 'samsung' ? 'Samsung' : bk === 'firefox' ? 'Firefox' : bk === 'other' ? '기타' : null;
+                                        bk === 'chrome' ? 'Chrome' : bk === 'safari' ? 'Safari' : bk === 'samsung' ? 'Samsung' : (bk === 'other' || bk === 'firefox') ? '그외' : null;
 
                                     const renderEnvBadge = (u: IPProfile | undefined | null) => {
                                         if (!u) return <span className="text-gray-300 text-xs">-</span>;
                                         let os = osLabel(u.os);
-                                        let browser = u.appType === 'webview' ? '앱' : browserLabel(u.browserKey);
-                                        if ((!os || !browser) && u.userAgent) {
-                                            const parsed = parseUA(u.userAgent);
-                                            if (!os) os = osLabel(parsed.os);
-                                            if (!browser) browser = (u.appType === 'webview' || parsed.isApp) ? '앱' : browserLabel(parsed.browserKey);
+                                        let browser: string | null = null;
+
+                                        // 1. 최신 접속 userAgent가 있으면 detectFromUserAgent로 3-Layer 단일 진실원천 감지
+                                        if (u.userAgent) {
+                                            const detected = detectFromUserAgent(u.userAgent);
+                                            if (!os) {
+                                                os = osLabel(detected.desktopOS || (detected.isIOS ? 'ios' : detected.isAndroid ? 'android' : null));
+                                            }
+                                            if (detected.isInstalledApp && detected.installedAppType === 'webview') {
+                                                browser = '앱';
+                                            } else if (detected.isInstalledApp && detected.installedAppType === 'pwa') {
+                                                browser = 'PWA';
+                                            } else {
+                                                browser = browserLabel(detected.browserKey);
+                                            }
                                         }
+
+                                        // 2. UA 파싱으로 미확정된 경우 fallback: u.browserKey, u.appType
+                                        if (!browser) {
+                                            if (u.browserKey && ['chrome', 'safari', 'samsung'].includes(u.browserKey)) {
+                                                browser = browserLabel(u.browserKey);
+                                            } else if (u.appType === 'webview') {
+                                                browser = '앱';
+                                            } else if (u.appType === 'pwa') {
+                                                browser = 'PWA';
+                                            } else {
+                                                browser = browserLabel(u.browserKey);
+                                            }
+                                        }
+
                                         if (!os && !browser) return <span className="text-gray-300 text-xs">-</span>;
                                         return (
                                             <div className="flex items-center gap-1.5">
@@ -7540,30 +7564,26 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                             const uas = [userFallback.userAgent, ...(userFallback.recentUserAgents || [])].filter(Boolean) as string[];
                                             if (uas.length > 0) {
                                                 effectiveEnvs = uas.map(ua => {
-                                                    const p = parseUA(ua);
+                                                    const detected = detectFromUserAgent(ua);
                                                     return {
-                                                        os: p.os || '',
-                                                        deviceType: p.deviceType || '',
-                                                        browserKey: p.browserKey || 'other',
-                                                        isInApp: p.isInApp,
-                                                        isApp: p.isApp,
+                                                        os: detected.desktopOS || (detected.isIOS ? 'ios' : detected.isAndroid ? 'android' : ''),
+                                                        deviceType: detected.isMobile ? 'mobile' : 'desktop',
+                                                        browserKey: detected.isInstalledApp && detected.installedAppType === 'pwa' ? 'pwa' : detected.browserKey || 'other',
+                                                        isInApp: detected.isInAppBrowser,
+                                                        isApp: detected.isInstalledApp && detected.installedAppType === 'webview',
                                                     };
                                                 });
                                             }
                                         }
 
-                                        // 앱 접속 기록 필터링 (1. isApp 정식 앱, 2. PWA 모드, 3. 일반 모바일 브라우저 제외)
+                                        // 앱 접속 기록 필터링 (접속환경 메뉴 표 기준: 1. 정식 앱(WebView), 2. PWA 모드. 일반 브라우저는 제외)
                                         const appEnvs = effectiveEnvs.filter(e => {
                                             // 인앱 브라우저(카카오/네이버 등)는 제외
                                             if (e.isInApp) return false;
-                                            // 정식 앱(WebView) 또는 PWA로 식별된 경우 포함
+                                            // 정식 앱(WebView) 또는 PWA로 식별된 경우만 포함
                                             if (e.isApp || e.browserKey === 'pwa') return true;
-                                            // 데스크톱은 제외
-                                            if (e.deviceType === 'desktop') return false;
-                                            // 일반 브라우저 접속은 제외 (chrome, safari, samsung, firefox)
-                                            if (['chrome', 'safari', 'samsung', 'firefox'].includes(e.browserKey)) return false;
-                                            // 남은 것: browserKey가 other인 모바일/태블릿 → WebView 가능성 높음
-                                            return true;
+                                            // 일반 브라우저(chrome, safari, samsung, other 등)는 앱이 아님
+                                            return false;
                                         });
 
                                         const hasStandaloneFlag = Boolean(groupHasStandalone || userFallback?.isStandalone);
@@ -7576,14 +7596,22 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
 
                                         // appEnvs 목록에 누락되었으나 isStandalone/appType 플래그로 과거 앱 사용이 확인된 경우 보정
                                         if (appEnvs.length === 0 && (hasStandaloneFlag || hasAppType)) {
-                                            const fallbackOs = userFallback?.os || (userFallback?.userAgent ? parseUA(userFallback.userAgent).os : '') || '';
-                                            appEnvs.push({
-                                                os: fallbackOs,
-                                                deviceType: userFallback?.deviceType || 'mobile',
-                                                browserKey: userFallback?.appType === 'pwa' ? 'pwa' : 'webview',
-                                                isInApp: false,
-                                                isApp: true
-                                            });
+                                            const detected = userFallback?.userAgent ? detectFromUserAgent(userFallback.userAgent) : null;
+                                            const uaAppType = userFallback?.userAgent ? parseAppTypeFromUserAgent(userFallback.userAgent) : null;
+                                            // 일반 브라우저(chrome, safari, samsung)인 경우 webview 앱으로 오판하지 않음
+                                            const isRegularBrowser = detected && ['chrome', 'safari', 'samsung'].includes(detected.browserKey) && !detected.isInstalledApp;
+                                            
+                                            if (!isRegularBrowser || hasStandaloneFlag) {
+                                                const fallbackOs = userFallback?.os || (detected ? detected.desktopOS || (detected.isIOS ? 'ios' : 'android') : '') || '';
+                                                const isWebview = !isRegularBrowser && (uaAppType === 'webview' || userFallback?.appType === 'webview');
+                                                appEnvs.push({
+                                                    os: fallbackOs,
+                                                    deviceType: userFallback?.deviceType || 'mobile',
+                                                    browserKey: isWebview ? 'webview' : 'pwa',
+                                                    isInApp: false,
+                                                    isApp: isWebview
+                                                });
+                                            }
                                         }
 
                                         // 중복 제거 (os 및 browserKey 기준)

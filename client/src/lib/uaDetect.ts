@@ -67,7 +67,8 @@ export function parseUA(ua: string | null | undefined): UAProfile {
   // ── 정식 WebView 앱 판별 ────────────────────────────────────────────────────
   const isSeongjisuhaengApp = /SeongjisuhaengApp/i.test(str);
   const hasAndroidWvToken = !/GSA\//i.test(str) && (/;\s*wv[;)]/i.test(str) || /\bwv\b/i.test(str));
-  const isAndroidWebViewUA = !/GSA\//i.test(str) && /Version\/[0-9.]+/i.test(str) && /Chrome\/[0-9.]+/i.test(str) && /Mobile Safari\/[0-9.]+/i.test(str);
+  // SamsungBrowser도 Version/xx Chrome/xx Mobile Safari/xx 패턴을 포함하므로 반드시 제외
+  const isAndroidWebViewUA = !/GSA\//i.test(str) && !/SamsungBrowser/i.test(str) && /Version\/[0-9.]+/i.test(str) && /Chrome\/[0-9.]+/i.test(str) && /Mobile Safari\/[0-9.]+/i.test(str);
   const isIOSApp = isIOS && !/CriOS/i.test(str) && !/FxiOS/i.test(str) && !/Safari\//i.test(str);
   const isApp = !isInApp && (isSeongjisuhaengApp || hasAndroidWvToken || isAndroidWebViewUA || isIOSApp);
 

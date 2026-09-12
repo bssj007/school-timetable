@@ -21,7 +21,7 @@ interface IPProfileViewerProps {
 // ── 접속환경 표시용 헬퍼 ────────────────────────────────────────────────────
 const BROWSER_LABEL: Record<string, string> = {
     chrome: 'Chrome', safari: 'Safari', samsung: '삼성 인터넷',
-    firefox: 'Firefox', other: '기타 브라우저',
+    firefox: 'Firefox', other: '그외 브라우저',
 };
 const DEVICE_LABEL: Record<string, string> = {
     mobile: '스마트폰', tablet: '태블릿', desktop: '데스크톱',
@@ -234,8 +234,23 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                 <span className="text-sm font-mono">{data.lastAccess ? new Date(data.lastAccess + 'Z').toLocaleString() : '-'}</span>
                             </div>
                             {(() => {
-                                const appType = data.appType || (data.isStandalone ? 'pwa' : null) || parseAppTypeFromUserAgent(data.recentUserAgents?.[0] || (data as any).userAgent);
-                                if (appType === 'webview') {
+                                const latestUa = data.recentUserAgents?.[0] || (data as any).userAgent;
+                                const uaAppType = parseAppTypeFromUserAgent(latestUa);
+                                // UA가 정식 앱(WebView)이면 webview
+                                let resolvedAppType = uaAppType;
+                                if (!resolvedAppType) {
+                                    // UA에 앱 토큰이 없는데 data.isStandalone이 있으면 PWA
+                                    if (data.isStandalone) {
+                                        resolvedAppType = 'pwa';
+                                    } else if (data.appType === 'pwa') {
+                                        resolvedAppType = 'pwa';
+                                    } else if (data.appType === 'webview' && !/SamsungBrowser|Chrome|Safari/i.test(latestUa || '')) {
+                                        // 일반 브라우저가 아닐 때만 webview 허용
+                                        resolvedAppType = 'webview';
+                                    }
+                                }
+
+                                if (resolvedAppType === 'webview') {
                                     return (
                                         <div className="bg-emerald-50 p-4 rounded-lg flex flex-col gap-1 border border-emerald-200">
                                             <span className="text-xs text-emerald-700 font-bold flex items-center gap-1"><Smartphone className="w-3 h-3" /> 앱 설치 상태</span>
@@ -245,7 +260,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                         </div>
                                     );
                                 }
-                                if (appType === 'pwa') {
+                                if (resolvedAppType === 'pwa') {
                                     return (
                                         <div className="bg-purple-50 p-4 rounded-lg flex flex-col gap-1 border border-purple-200">
                                             <span className="text-xs text-purple-600 font-bold flex items-center gap-1"><Smartphone className="w-3 h-3" /> 앱 설치 상태</span>

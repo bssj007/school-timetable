@@ -199,9 +199,9 @@ function detectLayer1(): Partial<AgentInfo> | null {
 //
 // iOS 버전: Safari/iOS 기기에서만 계산, 그 외 0
 
-function detectLayer2(): AgentInfo {
-  const ua  = typeof navigator !== "undefined" ? navigator.userAgent : "";
-  const mtp = typeof navigator !== "undefined" ? navigator.maxTouchPoints : 0;
+function detectLayer2(customUa?: string, customMtp?: number): AgentInfo {
+  const ua  = customUa !== undefined ? (customUa || "") : (typeof navigator !== "undefined" ? navigator.userAgent : "");
+  const mtp = customMtp !== undefined ? customMtp : (typeof navigator !== "undefined" ? navigator.maxTouchPoints : 0);
 
   // iPad: 구형 (iPad in UA) + 신형 (Macintosh + touch > 1)
   const isIPad   = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && mtp > 1);
@@ -357,8 +357,10 @@ export function getInstalledAppType(): "pwa" | "webview" | null {
   // 2. Android WebView / 정식 앱 감지
   // - Android UA의 '; wv' 토큰 (세미콜론/괄호/공백 등 위치 무관 매칭)
   const hasAndroidWvToken = !/GSA\//i.test(ua) && (/;\s*wv[;)]/i.test(ua) || /\bwv\b/i.test(ua));
-  // - Android WebView 기본 UA 특성: Version/X.X 와 Chrome/X.X, Mobile Safari 동시 포함 (일반 모바일 크롬 브라우저에는 Version/X.X가 없음)
-  const isAndroidWebViewUA = !/GSA\//i.test(ua) && /Version\/[0-9.]+/i.test(ua) && /Chrome\/[0-9.]+/i.test(ua) && /Mobile Safari\/[0-9.]+/i.test(ua);
+  // - Android WebView 기본 UA 특성 (삼성 인터넷 및 일반 브라우저의 Version/X.X 오판 방지)
+  const isAndroidWebViewUA = !/GSA\//i.test(ua) &&
+    !/SamsungBrowser|Whale|OPR|OPT|Opera|EdgA|Firefox|FxiOS/i.test(ua) &&
+    /Version\/[0-9.]+/i.test(ua) && /Chrome\/[0-9.]+/i.test(ua) && /Mobile Safari\/[0-9.]+/i.test(ua);
   // - Android TWA / 앱 레퍼러 (Google Play 정식 앱에서 웹 페이지 로드 시 레퍼러가 android-app:// 으로 설정됨)
   const isAndroidAppReferrer = typeof document !== "undefined" && Boolean(document.referrer && document.referrer.startsWith("android-app://"));
   // - Android Native Bridge 인터페이스 주입 확인
@@ -418,19 +420,36 @@ export function parseAppTypeFromUserAgent(
   if (inApp) return null;
 
   // 1. Android WebView / 정식 앱 감지
-    const isSeongjisuhaengApp = /SeongjisuhaengApp/i.test(str);
-    const hasAndroidWvToken = !/GSA\//i.test(str) && (/;\s*wv[;)]/i.test(str) || /\bwv\b/i.test(str));
-    const isAndroidWebViewUA = !/GSA\//i.test(str) && /Version\/[0-9.]+/i.test(str) && /Chrome\/[0-9.]+/i.test(str) && /Mobile Safari\/[0-9.]+/i.test(str);
+  const isSeongjisuhaengApp = /SeongjisuhaengApp/i.test(str);
+  const hasAndroidWvToken = !/GSA\//i.test(str) && (/;\s*wv[;)]/i.test(str) || /\bwv\b/i.test(str));
+  const isAndroidWebViewUA = !/GSA\//i.test(str) &&
+    !/SamsungBrowser|Whale|OPR|OPT|Opera|EdgA|Firefox|FxiOS/i.test(str) &&
+    /Version\/[0-9.]+/i.test(str) && /Chrome\/[0-9.]+/i.test(str) && /Mobile Safari\/[0-9.]+/i.test(str);
 
-    // 2. iOS 정식 앱 (WKWebView) 감지
-    const isIOSDevice = /iPhone|iPad|iPod/i.test(str) || (/Macintosh/i.test(str) && /Mobile/i.test(str));
-    const isIOSApp = isIOSDevice && !/CriOS/i.test(str) && !/FxiOS/i.test(str) && !/Safari\//i.test(str);
+  // 2. iOS 정식 앱 (WKWebView) 감지
+  const isIOSDevice = /iPhone|iPad|iPod/i.test(str) || (/Macintosh/i.test(str) && /Mobile/i.test(str));
+  const isIOSApp = isIOSDevice && !/CriOS/i.test(str) && !/FxiOS/i.test(str) && !/Safari\//i.test(str);
 
-    if (isSeongjisuhaengApp || hasAndroidWvToken || isAndroidWebViewUA || isIOSApp) {
-      return "webview";
-    }
+  if (isSeongjisuhaengApp || hasAndroidWvToken || isAndroidWebViewUA || isIOSApp) {
+    return "webview";
+  }
 
   return null;
+}
+
+/**
+ * detectFromUserAgent(ua)
+ * 임의의 User-Agent 문자열로부터 detect() 함수와 동일한 기준의 AgentInfo를 추출.
+ * 관리페이지 사용자 관리 테이블 및 프로필 뷰어의 단일 진실원천.
+ */
+export function detectFromUserAgent(ua: string | null | undefined): AgentInfo {
+  const info = detectLayer2(ua || "", 0);
+  const appType = parseAppTypeFromUserAgent(ua);
+  return {
+    ...info,
+    isInstalledApp: appType !== null,
+    installedAppType: appType,
+  };
 }
 
 // ── 통합 감지 함수 ────────────────────────────────────────────────────────────
