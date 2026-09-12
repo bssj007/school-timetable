@@ -177,6 +177,12 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         fetch('/api/settings/public')
             .then(res => res.ok ? res.json() : null)
             .then(data => {
+                if (data?.is_force_beta_tester) {
+                    setPumasiCookie();
+                    closeRoleSelect();
+                    onBetaSelected?.();
+                    return;
+                }
                 if (data?.beta_testing_enabled) {
                     setBetaEnabled(true);
                 }

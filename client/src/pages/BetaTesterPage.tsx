@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, RotateCcw, Undo2 } from 'lucide-react';
 import { getPumasiCookie, clearPumasiCookie, PumasiStatus } from '@/lib/pumasiCookie';
+import { useUserConfig } from '@/contexts/UserConfigContext';
 
 interface BetaTesterPageProps {
-  onBack: () => void;
+  onBack?: () => void;
+  hideBack?: boolean;
 }
 
 const BOARD_SIZE = 15;
@@ -26,7 +28,9 @@ const STAR_POINTS = [
   { r: 11, c: 11 },
 ];
 
-export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
+export default function BetaTesterPage({ onBack, hideBack }: BetaTesterPageProps) {
+  const { publicSettings } = useUserConfig();
+  const shouldHideBack = hideBack ?? Boolean(publicSettings?.is_force_beta_tester);
   const [pumasi, setPumasi] = useState<PumasiStatus>(() => getPumasiCookie());
   const [board, setBoard] = useState<Board>(() =>
     Array(BOARD_SIZE).fill(0).map(() => Array(BOARD_SIZE).fill(0))
@@ -45,9 +49,10 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
   }, []);
 
   const handleBack = () => {
+    if (shouldHideBack) return;
     if (window.confirm('품앗이 모드를 종료하고 시간표 페이지로 이동하시겠습니까?')) {
       clearPumasiCookie();
-      onBack();
+      onBack?.();
     }
   };
 
@@ -337,19 +342,21 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
         }
       `}</style>
 
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-100 px-4 py-2">
-        <div className="max-w-md mx-auto flex items-center justify-between">
-          <button
-            onClick={handleBack}
-            className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors py-0.5"
-            title="시간표로 돌아가기"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>시간표로 돌아가기</span>
-          </button>
-        </div>
-      </header>
+      {/* Top Navigation Bar (강제 지정 시 조용히 뒤로가기 버튼 숨김) */}
+      {!shouldHideBack && (
+        <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-100 px-4 py-2">
+          <div className="max-w-md mx-auto flex items-center justify-between">
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors py-0.5"
+              title="시간표로 돌아가기"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>시간표로 돌아가기</span>
+            </button>
+          </div>
+        </header>
+      )}
 
       {/* Main Content Area (No Card Containers, Compact Layout) */}
       <main className="flex-1 max-w-md mx-auto w-full px-4 py-3 flex flex-col gap-4">

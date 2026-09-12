@@ -22,7 +22,7 @@ import IOSChromeInstallGuide from "./pages/IOSChromeInstallGuide";
 import AppDownloadPage from "./pages/AppDownloadPage";
 import Privacy from "./pages/Privacy";
 import BetaTesterPage from "./pages/BetaTesterPage";
-import { getPumasiCookie } from "@/lib/pumasiCookie";
+import { getPumasiCookie, setPumasiCookie } from "@/lib/pumasiCookie";
 import { shouldShowDownloadPage, isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 function Router() {
@@ -110,6 +110,14 @@ function AppContent() {
     }
   }, [_shouldDownload, location]);
 
+  // IP 강제 지정 오픈 베타테스터: 클라이언트 쿠키 발급/갱신 및 품앗이 모드 즉시 활성화
+  useEffect(() => {
+    if (publicSettings?.is_force_beta_tester && !isAdminRoute) {
+      setPumasiCookie();
+      setIsBetaTester(true);
+    }
+  }, [publicSettings?.is_force_beta_tester, isAdminRoute]);
+
   // ── 교사 리다이렉트 ──────────────────────────────────────────────────────────
   // Rules of Hooks: 모든 useEffect는 반드시 어떠한 conditional return보다도 앞에 선언되어야 함!
   // 동작:
@@ -188,7 +196,10 @@ function AppContent() {
     return (
       <>
         <Toaster />
-        <BetaTesterPage onBack={() => setIsBetaTester(false)} />
+        <BetaTesterPage
+          onBack={() => setIsBetaTester(false)}
+          hideBack={Boolean(publicSettings?.is_force_beta_tester)}
+        />
       </>
     );
   }

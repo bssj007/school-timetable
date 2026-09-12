@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
-    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound
+    TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound, Network
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -2130,6 +2130,100 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
         }
     });
 
+    // ── 오픈 베타테스터 강제 지정 IP 목록 상태 및 로직 ──────────────────────
+    const [forceIpsText, setForceIpsText] = useState<string>("");
+    const [forceIpsInitialized, setForceIpsInitialized] = useState<boolean>(false);
+    const [myIp, setMyIp] = useState<string>("");
+
+    useEffect(() => {
+        fetch('/api/my-ip')
+            .then(res => res.json())
+            .then(data => { if (data?.ip) setMyIp(data.ip); })
+            .catch(() => {});
+    }, []);
+
+    const savedForceIpsText = useMemo(() => {
+        const raw = settingsQuery.data?.beta_tester_force_ips;
+        if (!raw) return "";
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed.join("\n");
+            if (typeof parsed === "string") return parsed;
+        } catch {}
+        return String(raw);
+    }, [settingsQuery.data?.beta_tester_force_ips]);
+
+    useEffect(() => {
+        if (settingsQuery.data && !forceIpsInitialized) {
+            setForceIpsText(savedForceIpsText);
+            setForceIpsInitialized(true);
+        }
+    }, [settingsQuery.data, savedForceIpsText, forceIpsInitialized]);
+
+    const isForceIpsDirty = forceIpsText.trim() !== savedForceIpsText.trim();
+
+    const forceIpList = useMemo(() => {
+        return forceIpsText
+            .split("\n")
+            .map(s => s.trim())
+            .filter(Boolean);
+    }, [forceIpsText]);
+
+    const saveForceIpsMutation = useMutation({
+        mutationFn: async (ips: string[]) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({
+                    beta_tester_force_ips: JSON.stringify(ips)
+                })
+            });
+            if (!res.ok) throw new Error("Failed to save force IPs");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            toast.success("오픈 베타테스터 강제 지정 IP 목록이 저장되었습니다.");
+        },
+        onError: () => {
+            toast.error("강제 지정 IP 목록 저장 중 오류가 발생했습니다.");
+        }
+    });
+
+    const handleAddMyIp = () => {
+        if (!myIp) {
+            toast.error("현재 IP를 확인하지 못했습니다.");
+            return;
+        }
+        const currentList = forceIpsText.split("\n").map(s => s.trim()).filter(Boolean);
+        if (currentList.includes(myIp)) {
+            toast.info("현재 IP가 이미 목록에 포함되어 있습니다.");
+            return;
+        }
+        const nextList = [...currentList, myIp];
+        setForceIpsText(nextList.join("\n"));
+        toast.success(`현재 IP(${myIp})가 목록에 추가되었습니다. '목록 저장'을 눌러 반영하세요.`);
+    };
+
+    const handleRemoveIp = (ipToRemove: string) => {
+        const nextList = forceIpsText
+            .split("\n")
+            .map(s => s.trim())
+            .filter(Boolean)
+            .filter(ip => ip !== ipToRemove);
+        setForceIpsText(nextList.join("\n"));
+    };
+
+    const handleResetForceIps = () => {
+        setForceIpsText(savedForceIpsText);
+        toast.info("변경사항이 취소되었습니다.");
+    };
+
+    const handleSaveForceIps = () => {
+        saveForceIpsMutation.mutate(forceIpList);
+    };
+
     const isDevAccountEnabled = settingsQuery.data?.dev_account_enabled === 'true';
 
     // Local state for developer accounts
@@ -2309,6 +2403,101 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
                             <li><strong>14일 연속 참여 기준:</strong> Google Play 비공개 테스트 요건(14일 연속 참여)에 따라 며칠째 접속 중인지, 남은 기간은 며칠인지 시각적 프로그레스 바로 표시되며 14일 달성 시 앱을 삭제하셔도 좋다는 안내가 제공됩니다.</li>
                             <li><strong>사용자 관리 탭 연동:</strong> 기능이 켜져 있는 동안 '사용자 관리' 탭에 <strong>🧪 품앗이 접속</strong> 접이식 단락이 표시되어 참여 테스터들의 IP, 접속 환경, 참여 경과를 한눈에 모니터링할 수 있습니다.</li>
                         </ul>
+                    </div>
+
+                    {/* IP 오픈 베타테스터 강제 지정 목록 */}
+                    <div className="p-5 rounded-xl bg-violet-50/50 border border-violet-200 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="space-y-0.5">
+                                <div className="font-semibold text-slate-800 flex items-center gap-2">
+                                    <Network className="w-4 h-4 text-violet-600" />
+                                    <span>IP 오픈 베타테스터 강제 지정 목록</span>
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200">
+                                        {forceIpList.length}개 설정됨
+                                    </span>
+                                    {isForceIpsDirty && (
+                                        <span className="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                            미저장 변경사항
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    목록에 포함된 IP로 접속하는 클라이언트는 기기 환경(Android Native 여부)이나 역할 선택과 무관하게 자동으로 베타테스터 쿠키(<code className="font-mono text-violet-600 bg-violet-100/70 px-1 py-0.5 rounded">sj_beta_pumasi</code>)를 업데이트/발급받고 전용 품앗이(오목) 화면으로 진입합니다.
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {myIp && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleAddMyIp}
+                                        className="text-xs h-8 border-violet-300 text-violet-700 hover:bg-violet-100"
+                                    >
+                                        + 현재 내 IP 추가 ({myIp})
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Textarea
+                                value={forceIpsText}
+                                onChange={(e) => setForceIpsText(e.target.value)}
+                                placeholder={"줄바꿈(엔터)으로 IP를 구분하여 입력하세요.\n예시:\n192.168.1.1\n211.234.123.45\n* (전체 접속자 강제 지정 시)"}
+                                className="font-mono text-xs bg-white min-h-[110px] border-slate-300 focus-visible:ring-violet-500"
+                            />
+
+                            {/* 파싱된 활성 IP 칩 목록 */}
+                            {forceIpList.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                    <span className="text-xs text-slate-400 font-medium mr-1">지정된 IP:</span>
+                                    {forceIpList.map((ip) => (
+                                        <span
+                                            key={ip}
+                                            className="inline-flex items-center gap-1 text-xs font-mono bg-white border border-slate-300 text-slate-700 px-2 py-0.5 rounded-md shadow-2xs"
+                                        >
+                                            {ip === '*' ? <strong className="text-violet-600 font-bold">* (모든 IP 강제)</strong> : ip}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveIp(ip)}
+                                                className="text-slate-400 hover:text-red-500 font-bold ml-0.5 cursor-pointer"
+                                                title="이 IP 제거"
+                                            >
+                                                ×
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex items-center justify-between pt-1 text-xs">
+                                <span className="text-slate-500">
+                                    * 전체 접속자 강제 지정은 <code>*</code> 한 줄만 추가하면 적용됩니다.
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleResetForceIps}
+                                        disabled={!isForceIpsDirty || saveForceIpsMutation.isPending}
+                                        className="h-8 text-xs"
+                                    >
+                                        변경 취소
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={handleSaveForceIps}
+                                        disabled={!isForceIpsDirty || saveForceIpsMutation.isPending}
+                                        className="h-8 text-xs bg-violet-600 hover:bg-violet-700 text-white"
+                                    >
+                                        {saveForceIpsMutation.isPending ? "저장 중..." : "목록 저장"}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
