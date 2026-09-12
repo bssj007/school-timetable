@@ -7740,6 +7740,29 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
         onError: () => toast.error("상태 초기화 실패"),
     });
 
+    const deleteLogsMutation = useMutation({
+        mutationFn: async (ips: string[]) => {
+            const res = await fetch("/api/admin/users/delete-logs", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": password,
+                },
+                body: JSON.stringify({ ips }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || "Failed to delete logs");
+            }
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("로그가 삭제되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+        },
+        onError: (err: any) => toast.error(err?.message || "로그 삭제 실패"),
+    });
+
 
 
     if (!isAuthenticated) {
@@ -8490,10 +8513,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     }
                                                 } else {
                                                     os = osLabel(raw.os);
-                                                    if (raw.isApp || (raw as any).appType === 'webview') {
-                                                        browser = 'Native 앱';
-                                                    } else if (raw.browserKey === 'pwa' || (raw as any).appType === 'pwa') {
+                                                    if (raw.browserKey === 'pwa' || (raw as any).appType === 'pwa') {
                                                         browser = 'PWA 앱';
+                                                    } else if (raw.isApp || (raw as any).appType === 'webview') {
+                                                        browser = 'Native 앱';
                                                     } else if (raw.browserKey) {
                                                         browser = browserLabel(raw.browserKey) || '그외';
                                                     }
@@ -8776,22 +8799,36 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                 {user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}
                                             </TableCell>
                                             <TableCell>
-                                                {user.isBlocked
-                                                    ? <Badge variant="destructive" className="text-xs">차단됨</Badge>
-                                                    : (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="text-red-400 hover:text-red-600 hover:bg-red-50 h-7 px-2 text-xs"
-                                                            onClick={() => {
-                                                                if (confirm(`IP ${user.ip}를 차단하시겠습니까?`)) {
-                                                                    blockUserMutation.mutate({ identifier: user.ip, type: 'IP' });
-                                                                }
-                                                            }}
-                                                        >
-                                                            <Ban className="h-3 w-3 mr-1" />차단
-                                                        </Button>
-                                                    )}
+                                                <div className="flex items-center gap-1">
+                                                    {user.isBlocked
+                                                        ? <Badge variant="destructive" className="text-xs">차단됨</Badge>
+                                                        : (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="text-red-400 hover:text-red-600 hover:bg-red-50 h-7 px-2 text-xs"
+                                                                onClick={() => {
+                                                                    if (confirm(`IP ${user.ip}를 차단하시겠습니까?`)) {
+                                                                        blockUserMutation.mutate({ identifier: user.ip, type: 'IP' });
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Ban className="h-3 w-3 mr-1" />차단
+                                                            </Button>
+                                                        )}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-slate-400 hover:text-red-600 hover:bg-red-50 h-7 px-2 text-xs"
+                                                        onClick={() => {
+                                                            if (confirm(`IP ${user.ip} 관련 로그를 삭제하시겠습니까?`)) {
+                                                                deleteLogsMutation.mutate([user.ip]);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Trash2 className="h-3 w-3 mr-1" />삭제
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                         );
@@ -8913,7 +8950,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         {group.lastAccess ? new Date(group.lastAccess + 'Z').toLocaleString() : '-'}
                                                     </TableCell>
                                                     <TableCell onClick={e => e.stopPropagation()}>
-                                                        <div className="flex gap-2">
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
                                                             {group.instructionDismissed && (
                                                                 <Button
                                                                     variant="outline" size="sm"
@@ -8940,6 +8977,24 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                     }}
                                                                 ><Ban className="h-4 w-4 mr-1" />차단</Button>
                                                             )}
+                                                            <Button
+                                                                variant="outline" size="sm"
+                                                                className="text-slate-600 hover:text-red-600 hover:bg-red-50"
+                                                                onClick={() => {
+                                                                    const ips = group.ips.map(u => u.ip).filter(Boolean);
+                                                                    const userDesc = group.studentName
+                                                                        ? `${group.studentName} 학생`
+                                                                        : group.teacherName
+                                                                        ? `${group.teacherName} 선생님`
+                                                                        : '선택한 사용자';
+                                                                    const ipDesc = ips.length === 1 ? `IP ${ips[0]}` : `${ips.length}개 IP (${ips.join(', ')})`;
+                                                                    if (confirm(`${userDesc}의 ${ipDesc} 관련 접속 로그를 삭제하시겠습니까?`)) {
+                                                                        deleteLogsMutation.mutate(ips);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Trash2 className="h-4 w-4 mr-1" />삭제
+                                                            </Button>
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
@@ -8964,7 +9019,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                             <TableHead className="w-[140px] min-w-[140px]" title="실시간 최신 접속 브라우저 및 OS 환경 (LIVE 시 빨간색 표시, 오프라인 시 최근 1개 표시, 더보기 지원)">접속환경</TableHead>
                                                             <TableHead className="w-[105px] min-w-[105px]" title="현재 접속 여부 무관, 과거 전체 로그 기준 앱(WebView/PWA) 접속 이력 여부">앱설치</TableHead>
                                                             <SortHeader col="lastAccess" label="마지막 접속" className="w-[160px] min-w-[160px]" />
-                                                            <TableHead className="w-[160px] min-w-[160px]">관리</TableHead>
+                                                            <TableHead className="w-[190px] min-w-[190px]">관리</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
@@ -8997,6 +9052,19 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     {isOthersExpanded && (
                                                         <div className="bg-gray-50 border-t overflow-x-auto">
                                                             <Table className="min-w-[1280px]">
+                                                                <TableHeader>
+                                                                    <TableRow>
+                                                                        <TableHead className="w-[120px] min-w-[120px]">IP 주소</TableHead>
+                                                                        <TableHead className="w-[140px] min-w-[140px]">학년/반/번호</TableHead>
+                                                                        <TableHead className="w-[120px] min-w-[120px]">수정/추가/삭제</TableHead>
+                                                                        <TableHead className="w-[80px] min-w-[80px]">출력</TableHead>
+                                                                        <TableHead className="w-[80px] min-w-[80px]">다운로드</TableHead>
+                                                                        <TableHead className="w-[140px] min-w-[140px]">접속환경</TableHead>
+                                                                        <TableHead className="w-[105px] min-w-[105px]">앱설치</TableHead>
+                                                                        <TableHead className="w-[160px] min-w-[160px]">마지막 접속</TableHead>
+                                                                        <TableHead className="w-[190px] min-w-[190px]">관리</TableHead>
+                                                                    </TableRow>
+                                                                </TableHeader>
                                                                 <TableBody>
                                                                     {unknownUsers.map((user: IPProfile, idx: number) => {
                                                                         const isDevUnknown = user.studentName === '김학생' || (user as any).teacherName === '김교사' || (Number(user.grade) === 9 && Number(user.classNum) === 9);
@@ -9159,13 +9227,24 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                                     </TableCell>
                                                                                     <TableCell>{user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}</TableCell>
                                                                                     <TableCell>
-                                                                                        {user.isBlocked ? (
-                                                                                            <Badge variant="destructive">차단됨</Badge>
-                                                                                        ) : (
-                                                                                            <Button variant="outline" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                                                                                                onClick={() => { if (confirm(`IP ${user.ip}를 차단하시겠습니까?`)) blockUserMutation.mutate({ identifier: user.ip, type: 'IP' }); }}
-                                                                                            ><Ban className="h-4 w-4 mr-1" />차단</Button>
-                                                                                        )}
+                                                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                            {user.isBlocked ? (
+                                                                                                <Badge variant="destructive">차단됨</Badge>
+                                                                                            ) : (
+                                                                                                <Button variant="outline" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                                                                                    onClick={() => { if (confirm(`IP ${user.ip}를 차단하시겠습니까?`)) blockUserMutation.mutate({ identifier: user.ip, type: 'IP' }); }}
+                                                                                                ><Ban className="h-4 w-4 mr-1" />차단</Button>
+                                                                                            )}
+                                                                                            <Button variant="outline" size="sm" className="text-slate-600 hover:text-red-600 hover:bg-red-50"
+                                                                                                onClick={() => {
+                                                                                                    if (confirm(`IP ${user.ip} 관련 로그를 삭제하시겠습니까?`)) {
+                                                                                                        deleteLogsMutation.mutate([user.ip]);
+                                                                                                    }
+                                                                                                }}
+                                                                                            >
+                                                                                                <Trash2 className="h-4 w-4 mr-1" />삭제
+                                                                                            </Button>
+                                                                                        </div>
                                                                                     </TableCell>
                                                                                 </TableRow>
                                                                             );

@@ -517,11 +517,35 @@ export const onRequest = async (context: any) => {
         }
 
         if (request.method === 'DELETE') {
-            // Unblock
             const body = await request.json();
-            const { id } = body;
+            
+            // 1. IP별 로그 삭제 요청인 경우
+            const rawIps = Array.isArray(body?.ips) ? body.ips : (body?.ip ? [body.ip] : null);
+            if (rawIps && rawIps.length > 0) {
+                const ips: string[] = rawIps.filter(Boolean).map((ip: any) => String(ip).trim()).filter((ip: string) => ip.length > 0);
+                const statements = [];
+                for (const ip of ips) {
+                    const cleanIpv4 = ip.replace(/^::ffff:/i, '');
+                    statements.push(
+                        env.DB.prepare("DELETE FROM access_logs WHERE ip = ? OR LOWER(TRIM(ip)) = ? OR LOWER(TRIM(ip)) = ?")
+                            .bind(ip, ip.toLowerCase(), cleanIpv4.toLowerCase())
+                    );
+                    statements.push(
+                        env.DB.prepare("DELETE FROM ip_profiles WHERE ip = ? OR LOWER(TRIM(ip)) = ? OR LOWER(TRIM(ip)) = ?")
+                            .bind(ip, ip.toLowerCase(), cleanIpv4.toLowerCase())
+                    );
+                }
+                for (let i = 0; i < statements.length; i += 100) {
+                    await env.DB.batch(statements.slice(i, i + 100));
+                }
+                return new Response(JSON.stringify({ success: true, deletedIps: ips }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
 
-            if (!id) return new Response("Missing ID", { status: 400 });
+            // 2. 차단 해제 (Unblock)
+            const { id } = body;
+            if (!id) return new Response("Missing ID or IPs", { status: 400 });
 
             await env.DB.prepare(
                 "DELETE FROM blocked_users WHERE id = ?"
