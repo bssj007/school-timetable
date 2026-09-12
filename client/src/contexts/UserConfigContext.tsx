@@ -5,6 +5,8 @@ import {
     setRoleCookie,
     setTeacherNameCookie,
     clearRoleCookie,
+    clearTeacherCookie,
+    clearStoredTeacherPassword,
     getAuthenticatedTeacher,
     getActiveTeacherName
 } from "@/lib/teacherUtils";
@@ -221,6 +223,46 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
                 localStorage.setItem(LS_SEMESTER_KEY, serverKey);
 
                 const cookieData = readCookieRaw();
+
+                // 개발자 가상 계정 비활성화(OFF) 시 기존 가상 세션 즉시 파기 및 차단
+                const isDevEnabled = Boolean(settings?.dev_account_enabled);
+                let devBlocked = false;
+
+                if (!isDevEnabled) {
+                    // 1) 학생 가상 계정 (9999 김학생) 검사
+                    if (cookieData && (cookieData.studentName === '김학생' || cookieData.grade === '9' || cookieData.studentNumber === '99')) {
+                        clearConfigCookie();
+                        clearRoleCookie();
+                        setConfigState(EMPTY_CONFIG);
+                        setUserRoleState(null);
+                        devBlocked = true;
+                    }
+
+                    // 2) 교사 가상 계정 (김교사) 검사
+                    const activeT = getTeacherNameCookie();
+                    const authT = getAuthenticatedTeacher();
+                    const lsTeacher = typeof localStorage !== 'undefined' ? localStorage.getItem('last_selected_teacher_name') : null;
+                    if (activeT === '김교사' || authT === '김교사' || lsTeacher === '김교사') {
+                        clearTeacherCookie();
+                        clearStoredTeacherPassword('김교사');
+                        clearRoleCookie();
+                        setUserRoleState(null);
+                        setTeacherNameState(null);
+                        try {
+                            localStorage.removeItem('last_selected_teacher_name');
+                            localStorage.removeItem('teacher-page-selected-teacher');
+                        } catch {}
+                        devBlocked = true;
+                    }
+
+                    if (devBlocked) {
+                        toast.error("개발자 가상 계정 기능이 비활성화되어 접근이 차단되었습니다.");
+                        if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+                            window.location.href = '/';
+                        }
+                        return;
+                    }
+                }
 
                 if (cookieData) {
                     const cookieKey = cookieData.semesterKey ?? '';

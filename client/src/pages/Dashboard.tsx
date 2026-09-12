@@ -176,9 +176,22 @@ export default function Dashboard() {
     refetchOnWindowFocus: true,
   });
 
-  const isDevStudent = Boolean(studentName === "김학생" || grade === "9" || (studentNumber === "99" && studentName === "김학생"));
+  const isDevStudent = Boolean(
+    settings?.dev_account_enabled &&
+    (studentName === "김학생" || grade === "9" || (studentNumber === "99" && studentName === "김학생"))
+  );
   const effectiveGrade = isDevStudent ? (settings?.dev_student_grade || "2") : grade;
   const effectiveClassNum = isDevStudent ? (settings?.dev_student_class || "1") : classNum;
+
+  // 개발자 가상 계정 비활성화(OFF) 시 기존 김학생 세션 차단 및 메인 리다이렉트
+  useEffect(() => {
+    if (settings && !settings.dev_account_enabled && (studentName === "김학생" || grade === "9" || (studentNumber === "99" && studentName === "김학생"))) {
+      toast.error("개발자 가상 계정 기능이 비활성화되어 접근이 차단되었습니다.");
+      document.cookie = "school_timetable_config=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+      document.cookie = "sj_user_role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+      window.location.href = "/";
+    }
+  }, [settings, studentName, grade, studentNumber]);
 
   const isSettingsReady = !isSettingsLoading && !!settings;
   const configuredElectiveMode: 'auto' | 'manual' | undefined = isSettingsReady
@@ -265,7 +278,12 @@ export default function Dashboard() {
       const g = changeStudentId[0];
       const cn = changeStudentId[1];
       const sn = parseInt(changeStudentId.substring(2)).toString();
-      const isDevStudent = (changeStudentId === "9999" && trimmedName === "김학생");
+      const isTryingDev = (changeStudentId === "9999" || trimmedName === "김학생");
+      if (isTryingDev && !settings?.dev_account_enabled) {
+        alert("개발자 가상 계정 기능이 비활성화되어 있습니다.");
+        return;
+      }
+      const isDevStudent = Boolean(settings?.dev_account_enabled && changeStudentId === "9999" && trimmedName === "김학생");
       if (isDevStudent || (parseInt(g) >= 1 && parseInt(g) <= 3 && parseInt(cn) >= 1)) {
         let semesterKey = '1';
         try {

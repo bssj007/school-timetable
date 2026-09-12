@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { useUserConfig } from "@/contexts/UserConfigContext";
-import { getRoleCookie, setRoleCookie, getTeacherNameCookie, setTeacherNameCookie, getStoredTeacherPassword, setStoredTeacherPassword, clearStoredTeacherPassword, getAuthenticatedTeacher, getActiveTeacherName, normalizeTeacherName } from "@/lib/teacherUtils";
+import { getRoleCookie, setRoleCookie, clearRoleCookie, getTeacherNameCookie, setTeacherNameCookie, clearTeacherCookie, getStoredTeacherPassword, setStoredTeacherPassword, clearStoredTeacherPassword, getAuthenticatedTeacher, getActiveTeacherName, normalizeTeacherName } from "@/lib/teacherUtils";
 import { isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 interface TeacherTimetableResponse {
@@ -1039,7 +1039,11 @@ export default function TeacherPage() {
   const [showTeacherSelectModal, setShowTeacherSelectModal] = useState(false);
   const [teacherSearchQuery, setTeacherSearchQuery] = useState("");
 
-  const isDevTeacher = selectedTeacherId === "9999" || getTeacherNameCookie() === "김교사" || (typeof localStorage !== "undefined" && localStorage.getItem("last_selected_teacher_name") === "김교사");
+  const isDevAccountEnabled = Boolean(settings?.dev_account_enabled);
+  const isDevTeacher = Boolean(
+    isDevAccountEnabled &&
+    (selectedTeacherId === "9999" || getTeacherNameCookie() === "김교사" || (typeof localStorage !== "undefined" && localStorage.getItem("last_selected_teacher_name") === "김교사"))
+  );
 
   // If dev teacher, resolve the internal data source teacher ID from settings
   const devSourceTeacherId = useMemo(() => {
@@ -1052,7 +1056,23 @@ export default function TeacherPage() {
     return 1;
   }, [settings?.dev_teacher_source, timetableData?.teachers]);
 
-  const isDevAccountEnabled = settings?.dev_account_enabled;
+  // 개발자 가상 계정 비활성화(OFF) 시 김교사 접속 차단 및 메인 리다이렉트
+  useEffect(() => {
+    if (settings && !isDevAccountEnabled) {
+      const isTryingDev = selectedTeacherId === "9999" || getTeacherNameCookie() === "김교사" || getAuthenticatedTeacher() === "김교사" || (typeof localStorage !== "undefined" && localStorage.getItem("last_selected_teacher_name") === "김교사");
+      if (isTryingDev) {
+        toast.error("개발자 가상 계정 기능이 비활성화되어 접근이 차단되었습니다.");
+        clearTeacherCookie();
+        clearStoredTeacherPassword("김교사");
+        clearRoleCookie();
+        try {
+          localStorage.removeItem("last_selected_teacher_name");
+          localStorage.removeItem("teacher-page-selected-teacher");
+        } catch {}
+        window.location.href = "/";
+      }
+    }
+  }, [settings, isDevAccountEnabled, selectedTeacherId]);
 
   const filteredTeacherOptions = useMemo(() => {
     const q = teacherSearchQuery.trim();
@@ -4134,6 +4154,10 @@ export default function TeacherPage() {
                       const newId = opt.idx.toString();
                       setSelectedTeacherId(newId);
                       if (opt.rawName === "김교사" || newId === "9999") {
+                        if (!isDevAccountEnabled) {
+                          toast.error("개발자 가상 계정 기능이 비활성화되어 있습니다.");
+                          return;
+                        }
                         setStoredTeacherPassword("김교사", "dev");
                         setTeacherNameCookie("김교사");
                         if (typeof localStorage !== "undefined") {

@@ -190,9 +190,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                 if (data?.beta_pumasi_button_visible !== undefined) {
                     setBetaButtonVisible(data.beta_pumasi_button_visible !== false);
                 }
-                if (data?.dev_account_enabled) {
-                    setDevAccountEnabled(true);
-                }
+                setDevAccountEnabled(Boolean(data?.dev_account_enabled));
             })
             .catch(() => { });
     }, []);
@@ -322,7 +320,15 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         const classNum = studentId[1];
         const studentNumber = parseInt(studentId.substring(2)).toString();
 
-        const isDevStudent = (studentId === "9999" && trimmedName === "김학생");
+        const isTryingDevStudent = (studentId === "9999" || trimmedName === "김학생");
+        if (isTryingDevStudent) {
+            if (!devAccountEnabled) {
+                setStudentError("개발자 가상 계정 기능이 비활성화되어 있습니다.");
+                return;
+            }
+        }
+
+        const isDevStudent = devAccountEnabled && (studentId === "9999" && trimmedName === "김학생");
         if (!isDevStudent && !(parseInt(grade) >= 1 && parseInt(grade) <= 3 && parseInt(classNum) >= 1)) {
             setStudentError("올바른 학번 형식이 아닙니다. (예: 1102)");
             return;
@@ -349,6 +355,10 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         setRoleCookie("teacher");
         setTeacherNameCookie(selectedOption.rawName);
         if (selectedOption.rawName === "김교사") {
+            if (!devAccountEnabled) {
+                setTeacherError("개발자 가상 계정 기능이 비활성화되어 있습니다.");
+                return;
+            }
             setStoredTeacherPassword("김교사", "dev");
             if (typeof localStorage !== "undefined") {
                 localStorage.setItem("last_selected_teacher_name", "김교사");

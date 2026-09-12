@@ -23,9 +23,18 @@ export async function verifyTeacherPassword(
         return { valid: false, trimmedName, cleanName };
     }
 
-    // 개발자 교사 계정 ("김교사"): 인증 면제
+    // 개발자 교사 계정 ("김교사"): 개발자 계정 활성화 시에만 인증 면제
     if (cleanName === '김교사') {
-        return { valid: true, trimmedName, cleanName, expectedPassword: '' };
+        try {
+            const devSetting: any = await env.DB.prepare(
+                "SELECT value FROM system_settings WHERE key = 'dev_account_enabled'"
+            ).first();
+            if (devSetting?.value === 'true') {
+                return { valid: true, trimmedName, cleanName, expectedPassword: '' };
+            }
+        } catch (_) {}
+        // 개발자 계정이 비활성화(OFF)되어 있으면 인증 실패 (완전 차단)
+        return { valid: false, trimmedName, cleanName };
     }
 
     if (!presentedPassword || !presentedPassword.trim()) {

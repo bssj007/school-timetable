@@ -161,11 +161,25 @@ export const onRequest = async (context: any) => {
             beta_tester_force_ips: betaTesterForceIps,
             is_force_beta_tester: isForceBetaTester,
             // 개발자 계정 (9999 김학생, 김교사) 설정
-            dev_account_enabled: settings['dev_account_enabled'] === 'true',
-            dev_student_grade: settings['dev_student_grade'] || '2',
-            dev_student_class: settings['dev_student_class'] || '1',
-            dev_student_electives: (() => { try { return settings['dev_student_electives'] ? JSON.parse(settings['dev_student_electives']) : {}; } catch { return {}; } })(),
-            dev_teacher_source: settings['dev_teacher_source'] || '',
+            ...(() => {
+                const isDevEnabled = settings['dev_account_enabled'] === 'true';
+                if (!isDevEnabled) {
+                    return {
+                        dev_account_enabled: false,
+                        dev_student_grade: null,
+                        dev_student_class: null,
+                        dev_student_electives: {},
+                        dev_teacher_source: null,
+                    };
+                }
+                return {
+                    dev_account_enabled: true,
+                    dev_student_grade: settings['dev_student_grade'] || '2',
+                    dev_student_class: settings['dev_student_class'] || '1',
+                    dev_student_electives: (() => { try { return settings['dev_student_electives'] ? JSON.parse(settings['dev_student_electives']) : {}; } catch { return {}; } })(),
+                    dev_teacher_source: settings['dev_teacher_source'] || '',
+                };
+            })(),
         }), {
             headers: {
                 'Content-Type': 'application/json',

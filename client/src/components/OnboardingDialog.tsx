@@ -40,18 +40,27 @@ export default function OnboardingDialog() {
             // 0으로 시작하는 번호 처리 (05 → 5)
             const studentNumber = parseInt(studentId.substring(2)).toString();
 
-            const isDevStudent = (studentId === "9999" && trimmedName === "김학생");
-            if (isDevStudent || (parseInt(grade) >= 1 && parseInt(grade) <= 3 && parseInt(classNum) >= 1)) {
-                // 서버의 현재 semester_key를 함께 저장
-                let semesterKey = '1';
-                try {
-                    const res = await fetch('/api/settings/public');
-                    if (res.ok) {
-                        const s = await res.json();
-                        semesterKey = s?.semester_key ?? '1';
-                    }
-                } catch { }
+            const isTryingDevStudent = (studentId === "9999" || trimmedName === "김학생");
 
+            // 서버의 현재 설정 조회
+            let semesterKey = '1';
+            let devAccountEnabled = false;
+            try {
+                const res = await fetch('/api/settings/public');
+                if (res.ok) {
+                    const s = await res.json();
+                    semesterKey = s?.semester_key ?? '1';
+                    devAccountEnabled = Boolean(s?.dev_account_enabled);
+                }
+            } catch { }
+
+            if (isTryingDevStudent && !devAccountEnabled) {
+                alert("개발자 가상 계정 기능이 비활성화되어 있습니다.");
+                return;
+            }
+
+            const isDevStudent = devAccountEnabled && (studentId === "9999" && trimmedName === "김학생");
+            if (isDevStudent || (parseInt(grade) >= 1 && parseInt(grade) <= 3 && parseInt(classNum) >= 1)) {
                 setConfig({
                     schoolName: "부산성지고등학교",
                     grade,
