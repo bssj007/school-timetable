@@ -1,4 +1,6 @@
 
+import { resolveEnvBindingInfo } from "../../_testEnv";
+
 export const onRequest = async (context: any) => {
     const { env } = context;
 
@@ -178,6 +180,18 @@ export const onRequest = async (context: any) => {
                     dev_student_class: settings['dev_student_class'] || '1',
                     dev_student_electives: (() => { try { return settings['dev_student_electives'] ? JSON.parse(settings['dev_student_electives']) : {}; } catch { return {}; } })(),
                     dev_teacher_source: settings['dev_teacher_source'] || '',
+                };
+            })(),
+            // 환경 바인딩 정보 (테스트 서버/DB 일치 여부 포함)
+            ...await (async () => {
+                const envInfo = await resolveEnvBindingInfo(env, new URL(context.request.url));
+                return {
+                    env_info: envInfo,
+                    is_test_server: envInfo.isTestServer,
+                    server_name: envInfo.serverName,
+                    is_test_db: envInfo.isTestDb,
+                    test_db_name: envInfo.dbName,
+                    is_env_mismatch: envInfo.isMismatch,
                 };
             })(),
         }), {

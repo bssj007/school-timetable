@@ -62,6 +62,8 @@ export async function setupVite(app: Express, server: Server) {
   }
 </style>
 <div id="test-db-watermark">school-timetable-testserver-db</div>`;
+      const scriptTag = `<script>window.__ENV_INFO__ = { isTestServer: true, serverName: "school-timetable-testserver", isTestDb: true, dbName: "school-timetable-testserver-db", isMismatch: false }; window.__IS_TEST_SERVER__ = true; window.__IS_TEST_DB__ = true; window.__TEST_DB_NAME__ = "school-timetable-testserver-db";</script>`;
+      template = template.replace("</head>", `${scriptTag}</head>`);
       template = template.replace("</body>", `${watermarkHtml}</body>`);
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);

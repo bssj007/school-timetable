@@ -83,9 +83,46 @@ export default function FactoryReset() {
         }
     };
 
+    const envInfo = typeof window !== "undefined" && (window as any).__ENV_INFO__ ? (window as any).__ENV_INFO__ : (() => {
+        const host = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "";
+        const isTestServer = host.includes('test') || host.includes('preview') || host === 'localhost' || host === '127.0.0.1';
+        const isTestDb = Boolean((window as any)?.__TEST_DB_NAME__?.includes('test') || isTestServer);
+        return {
+            isTestServer,
+            serverName: isTestServer ? 'school-timetable-testserver' : 'school-timetable',
+            isTestDb,
+            dbName: (window as any)?.__TEST_DB_NAME__ || (isTestDb ? 'school-timetable-testserver-db' : 'school-timetable-db'),
+            isMismatch: isTestServer !== isTestDb,
+        };
+    })();
+
+    const testLabel = envInfo.isTestServer && envInfo.isTestDb ? "테스트 서버+DB" : (envInfo.isTestServer ? "테스트 서버" : "테스트 DB");
+
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-white p-4">
             <div className="w-full max-w-sm space-y-8">
+                {envInfo.isMismatch && (
+                    <div className="w-full bg-yellow-100 border border-yellow-300 text-yellow-900 text-xs py-1.5 px-3 rounded font-semibold text-center flex items-center justify-center gap-1.5 shadow-sm">
+                        <TriangleAlert className="h-3.5 w-3.5 text-yellow-700 shrink-0" />
+                        <span>[환경 불일치] {envInfo.isTestServer ? `테스트 서버에 운영 DB 연결됨` : `운영 서버에 테스트 DB 연결됨`}</span>
+                    </div>
+                )}
+                {(envInfo.isTestServer || envInfo.isTestDb) && (
+                    <div
+                        className={`w-full py-2 px-3 text-center rounded border-2 font-black text-xs tracking-wider flex items-center justify-center gap-1.5 select-none shadow-sm ${
+                            envInfo.isMismatch ? "text-amber-900 border-amber-400" : "text-red-700 border-red-400"
+                        }`}
+                        style={{
+                            backgroundImage: envInfo.isMismatch
+                                ? 'repeating-linear-gradient(-45deg, #fefce8, #fefce8 8px, #fef08a 8px, #fef08a 16px)'
+                                : 'repeating-linear-gradient(-45deg, #fef2f2, #fef2f2 8px, #fee2e2 8px, #fee2e2 16px)',
+                        }}
+                    >
+                        <TriangleAlert className={`h-3.5 w-3.5 animate-pulse ${envInfo.isMismatch ? "text-amber-600" : "text-red-600"}`} />
+                        <span>{testLabel}</span>
+                        <TriangleAlert className={`h-3.5 w-3.5 animate-pulse ${envInfo.isMismatch ? "text-amber-600" : "text-red-600"}`} />
+                    </div>
+                )}
                 <div className="text-center space-y-2">
                     <h1 className="text-3xl font-black text-red-600">데이터베이스 초기화</h1>
                     <p className="text-gray-900 font-medium">

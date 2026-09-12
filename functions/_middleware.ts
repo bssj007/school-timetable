@@ -1,6 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 import { createStudentProfilesTable, createIpProfilesTable, createAccessLogsTable } from "./db_schema";
 import { parseUA } from "./_uaDetect";
+import { resolveEnvBindingInfo, type EnvBindingInfo } from "./_testEnv";
 
 interface Env {
     DB: D1Database;
@@ -42,43 +43,7 @@ function getTestDbWatermarkHtml(dbName: string): string {
 <div id="test-db-watermark">${dbName}</div>`;
 }
 
-async function resolveTestDbInfo(env: any, url: URL): Promise<{ isTestDb: boolean; dbName: string }> {
-    let dbName = '';
-    if (env.DB_NAME) {
-        dbName = String(env.DB_NAME);
-    }
 
-    if (!dbName && env.DB) {
-        try {
-            await env.DB.prepare("CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT)").run();
-            const row = await env.DB.prepare("SELECT value FROM system_settings WHERE key = 'db_name'").first();
-            if (row && row.value) {
-                dbName = String(row.value);
-            }
-        } catch (_) {}
-    }
-
-    const hostname = url.hostname.toLowerCase();
-    const isTestHostname = hostname.includes('test') || hostname.includes('localhost') || hostname === '127.0.0.1' || hostname.includes('preview');
-
-    if (!dbName && isTestHostname) {
-        dbName = 'school-timetable-testserver-db';
-        if (env.DB) {
-            try {
-                await env.DB.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('db_name', 'school-timetable-testserver-db')").run();
-            } catch (_) {}
-        }
-    }
-
-    const isTestDb = Boolean(
-        dbName && (
-            dbName.toLowerCase().includes('test') ||
-            isTestHostname
-        )
-    );
-
-    return { isTestDb, dbName: dbName || 'school-timetable-testserver-db' };
-}
 
 export const onRequest = async (context: any) => {
     const { request, env, next } = context;
@@ -98,7 +63,7 @@ export const onRequest = async (context: any) => {
                 }
 
                 const maintenanceMode = settings['maintenance_mode'] ? JSON.parse(settings['maintenance_mode']) : { active: false };
-                
+
                 if (maintenanceMode.active) {
                     const clientIp = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
                     const ipWhitelist = settings['ip_whitelist'] ? JSON.parse(settings['ip_whitelist']) : [];
@@ -122,8 +87,8 @@ export const onRequest = async (context: any) => {
         <div class="icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
         </div>`;
-                        const { isTestDb: isMaintTestDb, dbName: maintDbName } = await resolveTestDbInfo(env, url);
-                        const maintWatermarkHtml = (isMaintTestDb && maintDbName) ? getTestDbWatermarkHtml(maintDbName) : '';
+                        const envInfo = await resolveEnvBindingInfo(env, url);
+                        const maintWatermarkHtml = (envInfo.isTestDb && envInfo.dbName) ? getTestDbWatermarkHtml(envInfo.dbName) : '';
 
                         const html = `
 <!DOCTYPE html>
@@ -263,11 +228,11 @@ ${logoOrIconHtml}
                 try {
                     await env.DB.prepare(createAccessLogsTable).run();
                     // 구버전 컬럼 보장
-                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN teacherName TEXT").run(); } catch (_) {}
-                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN browserKey TEXT").run(); } catch (_) {}
-                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN deviceType TEXT").run(); } catch (_) {}
-                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN os TEXT").run(); } catch (_) {}
-                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN isInApp INTEGER DEFAULT 0").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN teacherName TEXT").run(); } catch (_) { }
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN browserKey TEXT").run(); } catch (_) { }
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN deviceType TEXT").run(); } catch (_) { }
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN os TEXT").run(); } catch (_) { }
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN isInApp INTEGER DEFAULT 0").run(); } catch (_) { }
                     accessLogsSchemaVerified = true;
                 } catch (schemaErr) {
                     console.warn('[Middleware] access_logs schema ensure failed:', schemaErr);
@@ -309,11 +274,11 @@ ${logoOrIconHtml}
                     }
                 } else if (e.message && e.message.includes("no such column")) {
                     // 컨럼 누락 구버전 테이블 자동 마이그레이션
-                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN teacherName TEXT").run(); } catch (_) {}
-                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN browserKey TEXT").run(); } catch (_) {}
-                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN deviceType TEXT").run(); } catch (_) {}
-                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN os TEXT").run(); } catch (_) {}
-                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN isInApp INTEGER DEFAULT 0").run(); } catch (_) {}
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN teacherName TEXT").run(); } catch (_) { }
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN browserKey TEXT").run(); } catch (_) { }
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN deviceType TEXT").run(); } catch (_) { }
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN os TEXT").run(); } catch (_) { }
+                    try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN isInApp INTEGER DEFAULT 0").run(); } catch (_) { }
                     try { await insertLog(); } catch (_) { console.warn("[Middleware] Column mismatch in access_logs after migration"); }
                 } else {
                     console.error("[Middleware] Log Insert Failed:", e);
@@ -399,7 +364,7 @@ ${logoOrIconHtml}
                 const isDeleteAction = isAssessmentApi && request.method === 'DELETE' && isSuccess;
                 // 순수 수정: PUT 또는 투표가 아닌 PATCH 요청 및 성공 응답
                 const isPureEditAction = isAssessmentApi && !hasAction && (request.method === 'PUT' || (request.method === 'PATCH' && !isVoteAction)) && isSuccess;
-                
+
                 // 전체 수정 기여 횟수: 추가 + 삭제 + 수정
                 const isModificationAction = isAddAction || isDeleteAction || isPureEditAction;
 
@@ -574,7 +539,7 @@ ${logoOrIconHtml}
 
     if (isHtmlRoute) {
         try {
-            const { isTestDb, dbName } = await resolveTestDbInfo(env, url);
+            const envInfo = await resolveEnvBindingInfo(env, url);
 
             let siteTitle = '수행 일정공유';
             let siteTitleHtml = '';
@@ -603,16 +568,14 @@ ${logoOrIconHtml}
                         if (siteTitleHtml) {
                             element.append(`<script>window.__INITIAL_SITE_TITLE_HTML__ = ${JSON.stringify(siteTitleHtml)};</script>`, { html: true });
                         }
-                        if (isTestDb && dbName) {
-                            element.append(`<script>window.__TEST_DB_NAME__ = ${JSON.stringify(dbName)};</script>`, { html: true });
-                        }
+                        element.append(`<script>window.__ENV_INFO__ = ${JSON.stringify(envInfo)}; window.__IS_TEST_SERVER__ = ${envInfo.isTestServer}; window.__IS_TEST_DB__ = ${envInfo.isTestDb}; window.__TEST_DB_NAME__ = ${JSON.stringify(envInfo.dbName)};</script>`, { html: true });
                     }
                 });
 
-            if (isTestDb && dbName) {
+            if (envInfo.isTestDb && envInfo.dbName) {
                 rewriter.on("body", {
                     element(element: any) {
-                        element.append(getTestDbWatermarkHtml(dbName), { html: true });
+                        element.append(getTestDbWatermarkHtml(envInfo.dbName), { html: true });
                     }
                 });
             }
@@ -623,8 +586,13 @@ ${logoOrIconHtml}
             const finalResponse = new Response(transformedResponse.body, transformedResponse);
             finalResponse.headers.set("X-Edge-Title-Injected", "true");
             finalResponse.headers.set("X-Edge-Title-Value", encodeURIComponent(siteTitle));
-            if (isTestDb && dbName) {
-                finalResponse.headers.set("X-Test-DB-Watermark", encodeURIComponent(dbName));
+            finalResponse.headers.set("X-Test-Server", envInfo.isTestServer ? "true" : "false");
+            finalResponse.headers.set("X-Test-DB", envInfo.isTestDb ? "true" : "false");
+            if (envInfo.isTestDb && envInfo.dbName) {
+                finalResponse.headers.set("X-Test-DB-Watermark", encodeURIComponent(envInfo.dbName));
+            }
+            if (envInfo.isMismatch) {
+                finalResponse.headers.set("X-Env-Mismatch", "true");
             }
 
             return finalResponse;

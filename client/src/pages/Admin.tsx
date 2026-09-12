@@ -7372,12 +7372,108 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
     );
 }
 
+interface EnvBindingInfo {
+    isTestServer: boolean;
+    serverName: string;
+    isTestDb: boolean;
+    dbName: string;
+    isMismatch: boolean;
+}
+
+function getTestBadgeLabel(envInfo: EnvBindingInfo): string {
+    if (envInfo.isTestServer && envInfo.isTestDb) {
+        return "테스트 서버+DB";
+    }
+    if (envInfo.isTestServer && !envInfo.isTestDb) {
+        return "테스트 서버 (운영 DB 연결됨)";
+    }
+    if (!envInfo.isTestServer && envInfo.isTestDb) {
+        return "운영 서버 (테스트 DB 연결됨)";
+    }
+    return "테스트 환경";
+}
+
+function EnvMismatchWarningBar({ envInfo }: { envInfo: EnvBindingInfo }) {
+    if (!envInfo.isMismatch) return null;
+
+    const mismatchDetail = envInfo.isTestServer && !envInfo.isTestDb
+        ? `테스트 서버(${envInfo.serverName})에 운영 DB(${envInfo.dbName})가 연결되어 있습니다.`
+        : `운영 서버(${envInfo.serverName})에 테스트 DB(${envInfo.dbName})가 연결되어 있습니다.`;
+
+    return (
+        <div className="w-full bg-yellow-100/95 border-b border-yellow-300 text-yellow-900 text-xs py-1 px-4 font-semibold text-center flex items-center justify-center gap-1.5 shadow-sm sticky top-0 z-50">
+            <TriangleAlert className="h-3.5 w-3.5 text-yellow-700 shrink-0" />
+            <span>[환경 불일치 경고] {mismatchDetail}</span>
+        </div>
+    );
+}
+
+function TestServerBadge({ envInfo, className = "" }: { envInfo: EnvBindingInfo; className?: string }) {
+    if (!envInfo.isTestServer && !envInfo.isTestDb) return null;
+    const label = getTestBadgeLabel(envInfo);
+    const isMismatch = envInfo.isMismatch;
+
+    return (
+        <span
+            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs md:text-sm font-black border-2 border-dashed shadow-sm select-none tracking-tight ${
+                isMismatch ? "text-amber-900 border-amber-500" : "text-red-700 border-red-400"
+            } ${className}`}
+            style={{
+                backgroundImage: isMismatch
+                    ? 'repeating-linear-gradient(-45deg, #fefce8, #fefce8 6px, #fef08a 6px, #fef08a 12px)'
+                    : 'repeating-linear-gradient(-45deg, #fef2f2, #fef2f2 6px, #fee2e2 6px, #fee2e2 12px)',
+            }}
+        >
+            <TriangleAlert className={`h-3.5 w-3.5 shrink-0 ${isMismatch ? "text-amber-600" : "text-red-600"}`} />
+            <span>{label}</span>
+        </span>
+    );
+}
+
+function TestServerTopBanner({ envInfo, className = "" }: { envInfo: EnvBindingInfo; className?: string }) {
+    if (!envInfo.isTestServer && !envInfo.isTestDb) return null;
+    const label = getTestBadgeLabel(envInfo);
+    const isMismatch = envInfo.isMismatch;
+
+    return (
+        <div
+            className={`w-full py-2 px-4 text-center rounded-lg border-2 font-black text-xs md:text-sm tracking-wider flex items-center justify-center gap-2 select-none shadow-sm ${
+                isMismatch ? "text-amber-900 border-amber-500" : "text-red-700 border-red-400"
+            } ${className}`}
+            style={{
+                backgroundImage: isMismatch
+                    ? 'repeating-linear-gradient(-45deg, #fefce8, #fefce8 8px, #fef08a 8px, #fef08a 16px)'
+                    : 'repeating-linear-gradient(-45deg, #fef2f2, #fef2f2 8px, #fee2e2 8px, #fee2e2 16px)',
+            }}
+        >
+            <TriangleAlert className={`h-4 w-4 shrink-0 animate-pulse ${isMismatch ? "text-amber-600" : "text-red-600"}`} />
+            <span>{label}</span>
+            <TriangleAlert className={`h-4 w-4 shrink-0 animate-pulse ${isMismatch ? "text-amber-600" : "text-red-600"}`} />
+        </div>
+    );
+}
+
 export default function Admin() {
     const [password, setPassword] = useState(() => getAdminPasswordCookie() || "");
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [userIp, setUserIp] = useState<string | null>(null);
     const [timeRange, setTimeRange] = useState("24h");
+    const [envInfo, setEnvInfo] = useState<EnvBindingInfo>(() => {
+        if (typeof window !== "undefined" && (window as any).__ENV_INFO__) {
+            return (window as any).__ENV_INFO__;
+        }
+        const host = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "";
+        const isTestServer = host.includes('test') || host.includes('preview') || host === 'localhost' || host === '127.0.0.1';
+        const isTestDb = Boolean((window as any)?.__TEST_DB_NAME__?.includes('test') || isTestServer);
+        return {
+            isTestServer,
+            serverName: isTestServer ? 'school-timetable-testserver' : 'school-timetable',
+            isTestDb,
+            dbName: (window as any)?.__TEST_DB_NAME__ || (isTestDb ? 'school-timetable-testserver-db' : 'school-timetable-db'),
+            isMismatch: isTestServer !== isTestDb,
+        };
+    });
     const queryClient = useQueryClient();
 
     // Factory Reset State
@@ -7453,6 +7549,27 @@ export default function Admin() {
             .then(res => res.json())
             .then(data => setUserIp(data.ip))
             .catch(() => setUserIp(null));
+
+        fetch('/api/settings/public')
+            .then(res => res.json())
+            .then(data => {
+                if (data.env_info) {
+                    setEnvInfo(data.env_info);
+                } else if (data.is_test_server !== undefined) {
+                    const isTestServer = Boolean(data.is_test_server);
+                    const isTestDb = Boolean(data.is_test_db ?? (data.test_db_name ? data.test_db_name.includes('test') : isTestServer));
+                    const serverName = data.server_name || (isTestServer ? 'school-timetable-testserver' : 'school-timetable');
+                    const dbName = data.test_db_name || (isTestDb ? 'school-timetable-testserver-db' : 'school-timetable-db');
+                    setEnvInfo({
+                        isTestServer,
+                        serverName,
+                        isTestDb,
+                        dbName,
+                        isMismatch: isTestServer !== isTestDb,
+                    });
+                }
+            })
+            .catch(() => {});
     }, []);
 
 function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExpired, adminPassword }: any) {
@@ -7806,13 +7923,32 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
         }
 
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-                <Card className="w-full max-w-md shadow-lg">
-                    <CardHeader>
-                        <CardTitle className="text-2xl text-center flex items-center justify-center gap-2">
-                            <Lock className="h-6 w-6" />
-                            관리사무소
-                        </CardTitle>
+            <div className="min-h-screen flex flex-col bg-gray-50">
+                <EnvMismatchWarningBar envInfo={envInfo} />
+                <div className="flex-1 flex items-center justify-center px-4 py-8">
+                    <Card className="w-full max-w-md shadow-lg overflow-hidden border-2 border-slate-200">
+                        {(envInfo.isTestServer || envInfo.isTestDb) && (
+                            <div
+                                className={`w-full py-2.5 px-4 text-center border-b-2 font-black text-sm tracking-wider flex items-center justify-center gap-2 select-none shadow-sm ${
+                                    envInfo.isMismatch ? "text-amber-900 border-amber-400" : "text-red-700 border-red-400"
+                                }`}
+                                style={{
+                                    backgroundImage: envInfo.isMismatch
+                                        ? 'repeating-linear-gradient(-45deg, #fefce8, #fefce8 8px, #fef08a 8px, #fef08a 16px)'
+                                        : 'repeating-linear-gradient(-45deg, #fef2f2, #fef2f2 8px, #fee2e2 8px, #fee2e2 16px)',
+                                }}
+                            >
+                                <TriangleAlert className={`h-4 w-4 animate-pulse shrink-0 ${envInfo.isMismatch ? "text-amber-600" : "text-red-600"}`} />
+                                <span>{getTestBadgeLabel(envInfo)}</span>
+                                <TriangleAlert className={`h-4 w-4 animate-pulse shrink-0 ${envInfo.isMismatch ? "text-amber-600" : "text-red-600"}`} />
+                            </div>
+                        )}
+                        <CardHeader>
+                            <CardTitle className="text-2xl text-center flex items-center justify-center gap-2 flex-wrap">
+                                <Lock className="h-6 w-6" />
+                                <span>관리사무소</span>
+                                {(envInfo.isTestServer || envInfo.isTestDb) && <TestServerBadge envInfo={envInfo} />}
+                            </CardTitle>
                         <CardDescription className="text-center">
                             관리자 암호를 입력하세요
                         </CardDescription>
@@ -7861,6 +7997,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         </form>
                     </CardContent>
                 </Card>
+                </div>
             </div>
         );
     }
@@ -7879,12 +8016,18 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
     }
 
     return (
-        <div className="container max-w-6xl mx-auto px-4 py-8">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-8 gap-4">
-                <div className="flex items-center gap-3">
-                    <Settings className="h-6 w-6 md:h-8 md:w-8 text-gray-700" />
-                    <h1 className="text-2xl md:text-3xl font-bold">관리사무소</h1>
-                    <Button
+        <div className="min-h-screen flex flex-col bg-background">
+            <EnvMismatchWarningBar envInfo={envInfo} />
+            <div className="container max-w-6xl mx-auto px-4 py-8 flex-1">
+                {(envInfo.isTestServer || envInfo.isTestDb) && (
+                    <TestServerTopBanner envInfo={envInfo} className="mb-6" />
+                )}
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-8 gap-4">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <Settings className="h-6 w-6 md:h-8 md:w-8 text-gray-700" />
+                        <h1 className="text-2xl md:text-3xl font-bold">관리사무소</h1>
+                        {(envInfo.isTestServer || envInfo.isTestDb) && <TestServerBadge envInfo={envInfo} />}
+                        <Button
                         variant="destructive"
                         size="sm"
                         className="ml-4"
@@ -9496,7 +9639,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div >
+            </div>
+        </div>
     );
 }
 
