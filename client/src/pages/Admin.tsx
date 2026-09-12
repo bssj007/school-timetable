@@ -7299,6 +7299,28 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
         onError: () => toast.error("해제 실패"),
     });
 
+    const recalibrateMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch("/api/admin/users?action=recalibrate", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": password,
+                },
+                body: JSON.stringify({ action: "recalibrate" }),
+            });
+            if (!res.ok) throw new Error("수행평가 횟수 재정비에 실패했습니다.");
+            return res.json();
+        },
+        onSuccess: (data: any) => {
+            toast.success(data?.message || "수행평가 횟수가 실데이터 기준으로 완벽히 재정비되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+        },
+        onError: (err: any) => {
+            toast.error(err?.message || "수행평가 횟수 재정비 실패");
+        },
+    });
+
     const resetDismissMutation = useMutation({
         mutationFn: async (ip: string) => {
             const res = await fetch("/api/admin/users/reset-dismiss", {
@@ -7781,11 +7803,30 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                             </div>
                         </div>
                         <Card className="min-w-0 overflow-hidden">
-                            <CardHeader>
-                                <CardTitle>활성 사용자 ({timeRange === '24h' ? '최근 24시간' : timeRange === '7d' ? '최근 1주일' : '전체 사용자'})</CardTitle>
-                                <CardDescription>
-                                    최근 접속한 IP 및 카카오 계정 목록입니다. 같은 학번의 여러 IP는 하나의 항목으로 묶입니다.
-                                </CardDescription>
+                            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div>
+                                    <CardTitle>활성 사용자 ({timeRange === '24h' ? '최근 24시간' : timeRange === '7d' ? '최근 1주일' : '전체 사용자'})</CardTitle>
+                                    <CardDescription>
+                                        최근 접속한 IP 및 카카오 계정 목록입니다. 같은 학번의 여러 IP는 하나의 항목으로 묶입니다.
+                                    </CardDescription>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={recalibrateMutation.isPending}
+                                        onClick={() => {
+                                            if (confirm("실제 등록된 수행평가 및 등록 성공 이력과 대조하여 모든 사용자의 추가/수정/삭제 횟수를 정확한 값으로 전수 재정비하시겠습니까?")) {
+                                                recalibrateMutation.mutate();
+                                            }
+                                        }}
+                                        className="text-xs text-blue-600 border-blue-200 hover:bg-blue-50 h-8 gap-1.5 whitespace-nowrap shadow-sm"
+                                        title="실제 등록된 수행평가 및 등록 성공 로그와 대조하여 모든 IP의 추가/수정/삭제 횟수를 정확하게 재계산 및 정화합니다."
+                                    >
+                                        <RefreshCw className={`w-3.5 h-3.5 ${recalibrateMutation.isPending ? 'animate-spin text-blue-500' : ''}`} />
+                                        {recalibrateMutation.isPending ? '재정비 중...' : '수행평가 횟수 재정비'}
+                                    </Button>
+                                </div>
                             </CardHeader>
                             <CardContent className="min-w-0 overflow-hidden p-0 sm:p-6">
                                 {(() => {
@@ -8082,9 +8123,9 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     }
                                                 } else {
                                                     os = osLabel(raw.os);
-                                                    if (raw.isApp || raw.appType === 'webview') {
+                                                    if (raw.isApp || (raw as any).appType === 'webview') {
                                                         browser = '앱';
-                                                    } else if (raw.browserKey === 'pwa' || raw.appType === 'pwa') {
+                                                    } else if (raw.browserKey === 'pwa' || (raw as any).appType === 'pwa') {
                                                         browser = 'PWA';
                                                     } else if (raw.browserKey) {
                                                         browser = browserLabel(raw.browserKey) || '그외';
@@ -8237,7 +8278,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         });
 
                                         const hasStandaloneFlag = Boolean(groupHasStandalone || userFallback?.isStandalone);
-                                        const hasAppType = userFallback?.appType === 'webview' || userFallback?.appType === 'pwa';
+                                        const hasAppType = (userFallback as any)?.appType === 'webview' || (userFallback as any)?.appType === 'pwa';
 
                                         // 전체 로그 및 프로필 통틀어 앱 접속 기록이 전혀 없는 경우
                                         if (appEnvs.length === 0 && !hasStandaloneFlag && !hasAppType) {
@@ -8253,7 +8294,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                             
                                             if (!isRegularBrowser || hasStandaloneFlag) {
                                                 const fallbackOs = userFallback?.os || (detected ? detected.desktopOS || (detected.isIOS ? 'ios' : 'android') : '') || '';
-                                                const isWebview = !isRegularBrowser && (uaAppType === 'webview' || userFallback?.appType === 'webview');
+                                                const isWebview = !isRegularBrowser && (uaAppType === 'webview' || (userFallback as any)?.appType === 'webview');
                                                 appEnvs.push({
                                                     os: fallbackOs,
                                                     deviceType: userFallback?.deviceType || 'mobile',
@@ -8299,7 +8340,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                     };
 
                                     const IpSubRow = ({ user }: { user: IPProfile }) => {
-                                        const isDevUser = user.studentName === '김학생' || (user as any).teacherName === '김교사' || (user.grade === 9 && user.classNum === 9);
+                                        const isDevUser = user.studentName === '김학생' || (user as any).teacherName === '김교사' || (Number(user.grade) === 9 && Number(user.classNum) === 9);
                                         return (
                                         <TableRow className={`${isDevUser ? 'bg-violet-50/60 dark:bg-violet-950/20' : 'bg-slate-50/80'} text-xs`}>
                                             <TableCell className="pl-8 font-mono text-slate-500">
@@ -8403,8 +8444,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         const representativeUser = group.ips[0];
                                         const isDevGroup = group.studentName === '김학생' ||
                                             group.teacherName === '김교사' ||
-                                            (group.grade === 9 && group.classNum === 9) ||
-                                            group.ips.some(u => u.studentName === '김학생' || (u as any).teacherName === '김교사' || (u.grade === 9 && u.classNum === 9));
+                                            (Number(group.grade) === 9 && Number(group.classNum) === 9) ||
+                                            group.ips.some(u => u.studentName === '김학생' || (u as any).teacherName === '김교사' || (Number(u.grade) === 9 && Number(u.classNum) === 9));
                                         return (
                                             <>
                                                 <TableRow
@@ -8643,7 +8684,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                             <Table className="min-w-[1280px]">
                                                                 <TableBody>
                                                                     {unknownUsers.map((user: IPProfile, idx: number) => {
-                                                                        const isDevUnknown = user.studentName === '김학생' || (user as any).teacherName === '김교사' || (user.grade === 9 && user.classNum === 9);
+                                                                        const isDevUnknown = user.studentName === '김학생' || (user as any).teacherName === '김교사' || (Number(user.grade) === 9 && Number(user.classNum) === 9);
                                                                         return (
                                                                         <TableRow key={idx} className={isDevUnknown ? 'bg-violet-50/60 dark:bg-violet-950/25' : ''}>
                                                                             <TableCell className="font-mono">

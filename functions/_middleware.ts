@@ -312,13 +312,24 @@ ${logoOrIconHtml}
             };
 
             const updateIpProfile = async () => {
-            const isAssessmentApi = url.pathname === '/api/assessment' || url.pathname === '/api/assessment/';
-                const isVoteAction = isAssessmentApi && url.searchParams.get('action') === 'vote';
-                const isAddAction = isAssessmentApi && !isVoteAction && request.method === 'POST';
-                const isDeleteAction = isAssessmentApi && !isVoteAction && request.method === 'DELETE';
-                const isEditAction = isAssessmentApi && !isVoteAction && ['POST', 'DELETE', 'PATCH', 'PUT'].includes(request.method);
-                const isPrintAction = url.pathname === '/api/action/print';
-                const isDownloadAction = url.pathname === '/api/action/download';
+                const isSuccess = response.status >= 200 && response.status < 300;
+                const isAssessmentApi = url.pathname === '/api/assessment' || url.pathname === '/api/assessment/';
+                const rawAction = url.searchParams.get('action');
+                const hasAction = rawAction !== null && rawAction.trim() !== '';
+                const isVoteAction = isAssessmentApi && rawAction === 'vote';
+
+                // 순수 추가: action 쿼리 파라미터가 없는 POST 요청 및 성공 응답 (predict, preview, force_predict 배제)
+                const isAddAction = isAssessmentApi && !hasAction && request.method === 'POST' && isSuccess;
+                // 순수 삭제: DELETE 요청 및 성공 응답
+                const isDeleteAction = isAssessmentApi && request.method === 'DELETE' && isSuccess;
+                // 순수 수정: PUT 또는 투표가 아닌 PATCH 요청 및 성공 응답
+                const isPureEditAction = isAssessmentApi && !hasAction && (request.method === 'PUT' || (request.method === 'PATCH' && !isVoteAction)) && isSuccess;
+                
+                // 전체 수정 기여 횟수: 추가 + 삭제 + 수정
+                const isModificationAction = isAddAction || isDeleteAction || isPureEditAction;
+
+                const isPrintAction = url.pathname === '/api/action/print' && isSuccess;
+                const isDownloadAction = url.pathname === '/api/action/download' && isSuccess;
 
                 const query = `
                     INSERT INTO ip_profiles (
@@ -349,7 +360,7 @@ ${logoOrIconHtml}
                         isStandalone = CASE WHEN excluded.isStandalone = 1 THEN 1 ELSE ip_profiles.isStandalone END
                 `;
 
-                const increment = isEditAction ? 1 : 0;
+                const increment = isModificationAction ? 1 : 0;
                 const addIncrement = isAddAction ? 1 : 0;
                 const deleteIncrement = isDeleteAction ? 1 : 0;
                 const printIncrement = isPrintAction ? 1 : 0;

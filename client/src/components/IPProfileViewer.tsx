@@ -200,10 +200,23 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="bg-blue-50 p-4 rounded-lg flex flex-col gap-1 border border-blue-100 relative">
                                 <span className="text-xs text-blue-600 font-bold flex items-center gap-1"><FileText className="w-3 h-3" /> 수정 기여</span>
-                                <span className="text-2xl font-bold">{data.modificationCount}회</span>
-                                <div className="flex gap-2 mt-1 -mb-1">
-                                    {data.addCount !== undefined && <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-[10px] px-1 py-0 h-4">추가 {data.addCount}회</Badge>}
-                                    {data.deleteCount !== undefined && <Badge variant="secondary" className="bg-red-100 text-red-800 text-[10px] px-1 py-0 h-4">삭제 {data.deleteCount}회</Badge>}
+                                <span className="text-2xl font-bold">{data.modificationCount || 0}회</span>
+                                <div className="flex flex-wrap gap-1 mt-1 -mb-1">
+                                    {(() => {
+                                        const adds = data.addCount || 0;
+                                        const dels = data.deleteCount || 0;
+                                        const pureMods = Math.max(0, (data.modificationCount || 0) - adds - dels);
+                                        if (adds === 0 && dels === 0 && pureMods === 0) {
+                                            return <span className="text-[11px] text-slate-400">수행평가 기여 이력 없음</span>;
+                                        }
+                                        return (
+                                            <>
+                                                {adds > 0 && <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0 h-4 font-mono">추가 {adds}회</Badge>}
+                                                {dels > 0 && <Badge variant="secondary" className="bg-red-100 text-red-800 text-[10px] px-1.5 py-0 h-4 font-mono">삭제 {dels}회</Badge>}
+                                                {pureMods > 0 && <Badge variant="secondary" className="bg-gray-100 text-gray-800 text-[10px] px-1.5 py-0 h-4 font-mono">수정 {pureMods}회</Badge>}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                             <div className="bg-green-50 p-4 rounded-lg flex flex-col gap-1 border border-green-200">

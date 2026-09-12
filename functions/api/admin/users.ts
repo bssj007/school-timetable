@@ -2,6 +2,76 @@ import { adminPassword } from "../../../server/adminPW";
 import { ensureAllTables } from "../../db_schema";
 import { parseUA } from "../../_uaDetect";
 
+interface AssessmentStats {
+    adds: number;
+    deletes: number;
+    edits: number;
+    totalMods: number;
+}
+
+async function resolveRealAssessmentStats(db: any): Promise<Map<string, AssessmentStats>> {
+    const statsMap = new Map<string, AssessmentStats>();
+
+    // 1. access_logs 집계
+    try {
+        const { results: logResults } = await db.prepare(`
+            SELECT 
+                ip,
+                COUNT(CASE WHEN method = 'POST' AND (endpoint = '/api/assessment' OR endpoint = '/api/assessment/') AND (status IS NULL OR (status >= 200 AND status < 300)) THEN 1 END) as logAdds,
+                COUNT(CASE WHEN method = 'DELETE' AND endpoint LIKE '/api/assessment%' AND (status IS NULL OR (status >= 200 AND status < 300)) THEN 1 END) as logDels,
+                COUNT(CASE WHEN method IN ('PUT', 'PATCH') AND endpoint LIKE '/api/assessment%' AND endpoint NOT LIKE '%action=vote%' AND (status IS NULL OR (status >= 200 AND status < 300)) THEN 1 END) as logEdits
+            FROM access_logs
+            WHERE endpoint LIKE '/api/assessment%'
+            GROUP BY ip
+        `).all();
+
+        for (const row of (logResults || [])) {
+            if (!row.ip) continue;
+            const ip = row.ip.trim();
+            statsMap.set(ip, {
+                adds: Number(row.logAdds) || 0,
+                deletes: Number(row.logDels) || 0,
+                edits: Number(row.logEdits) || 0,
+                totalMods: (Number(row.logAdds) || 0) + (Number(row.logDels) || 0) + (Number(row.logEdits) || 0),
+            });
+        }
+    } catch (e: any) {
+        console.warn('[Admin Users] Failed to aggregate assessment stats from access_logs:', e?.message);
+    }
+
+    // 2. performance_assessments 실존 데이터 집계 (보완)
+    try {
+        const { results: paResults } = await db.prepare(`
+            SELECT 
+                lastModifiedIp as ip,
+                COUNT(CASE WHEN (isDeleted IS NULL OR isDeleted = 0) AND (isAutoPredicted IS NULL OR isAutoPredicted = 0) THEN 1 END) as activeCount,
+                COUNT(CASE WHEN isDeleted = 1 THEN 1 END) as deletedCount
+            FROM performance_assessments
+            WHERE lastModifiedIp IS NOT NULL AND lastModifiedIp != ''
+            GROUP BY lastModifiedIp
+        `).all();
+
+        for (const row of (paResults || [])) {
+            if (!row.ip) continue;
+            const ip = row.ip.trim();
+            const existing = statsMap.get(ip) || { adds: 0, deletes: 0, edits: 0, totalMods: 0 };
+            const effectiveAdds = Math.max(existing.adds, Number(row.activeCount) || 0);
+            const effectiveDels = Math.max(existing.deletes, Number(row.deletedCount) || 0);
+            const effectiveTotal = effectiveAdds + effectiveDels + existing.edits;
+            statsMap.set(ip, {
+                adds: effectiveAdds,
+                deletes: effectiveDels,
+                edits: existing.edits,
+                totalMods: effectiveTotal,
+            });
+        }
+    } catch (e: any) {
+        console.warn('[Admin Users] Failed to aggregate assessment stats from performance_assessments:', e?.message);
+    }
+
+    return statsMap;
+}
+
 export const onRequest = async (context: any) => {
     const { request, env } = context;
 
@@ -218,6 +288,9 @@ export const onRequest = async (context: any) => {
                 console.warn('[Admin Users] Historical environments query failed:', e.message);
             }
 
+            const realStatsMap = await resolveRealAssessmentStats(env.DB);
+            const syncStatements: any[] = [];
+
             const activeUsers = profiles.map((p: any) => {
                 const parsedLatestUA = parseUA(p.userAgent);
                 const os = p.os || parsedLatestUA.os || null;
@@ -296,15 +369,30 @@ export const onRequest = async (context: any) => {
                     ? "webview"
                     : (hasAppEver ? "pwa" : null);
 
+                // 실데이터 기반 검증된 정확한 수행평가 통계
+                const stats = realStatsMap.get(p.ip) || { adds: 0, deletes: 0, edits: 0, totalMods: 0 };
+                const curAdd = Number(p.addCount) || 0;
+                const curDel = Number(p.deleteCount) || 0;
+                const curMod = Number(p.modificationCount) || 0;
+
+                // 기존 오염 수치와 불일치 시 DB 자동 보정 대기열 등록
+                if (curAdd !== stats.adds || curDel !== stats.deletes || curMod !== stats.totalMods) {
+                    syncStatements.push(
+                        env.DB.prepare(
+                            "UPDATE ip_profiles SET addCount = ?, deleteCount = ?, modificationCount = ? WHERE ip = ?"
+                        ).bind(stats.adds, stats.deletes, stats.totalMods, p.ip)
+                    );
+                }
+
                 const profile = {
                     clientId: p.ip,
                     ip: p.ip,
                     kakaoAccounts: p.kakaoId ? [{ kakaoId: p.kakaoId, kakaoNickname: p.kakaoNickname || '(알 수 없음)' }] : [],
                     isBlocked: false,
                     blockReason: null,
-                    modificationCount: p.modificationCount || 0,
-                    addCount: p.addCount || 0,
-                    deleteCount: p.deleteCount || 0,
+                    modificationCount: stats.totalMods,
+                    addCount: stats.adds,
+                    deleteCount: stats.deletes,
                     printCount: p.printCount || 0,
                     downloadCount: p.downloadCount || 0,
                     isStandalone: hasAppEver,
@@ -341,6 +429,17 @@ export const onRequest = async (context: any) => {
                 return profile;
             });
 
+            // 오염된 ip_profiles 자동 보정 일괄 실행
+            if (syncStatements.length > 0) {
+                try {
+                    for (let i = 0; i < syncStatements.length; i += 100) {
+                        await env.DB.batch(syncStatements.slice(i, i + 100));
+                    }
+                } catch (syncErr: any) {
+                    console.warn('[Admin Users] Auto-sync ip_profiles batch failed:', syncErr?.message);
+                }
+            }
+
             return new Response(JSON.stringify({
                 activeUsers,
                 blockedUsers
@@ -350,8 +449,49 @@ export const onRequest = async (context: any) => {
         }
 
         if (request.method === 'POST') {
+            const url = new URL(request.url);
+            const queryAction = url.searchParams.get('action');
+
+            let body: any = {};
+            try { body = await request.json(); } catch (_) {}
+
+            // 전체 수행평가 횟수 재정비 (Recalibrate) 액션
+            if (queryAction === 'recalibrate' || body.action === 'recalibrate') {
+                const statsMap = await resolveRealAssessmentStats(env.DB);
+                const { results: allIps } = await env.DB.prepare("SELECT ip, addCount, deleteCount, modificationCount FROM ip_profiles").all();
+
+                const updateStatements = [];
+                let changedCount = 0;
+                for (const row of (allIps || [])) {
+                    if (!row.ip) continue;
+                    const s = statsMap.get(row.ip) || { adds: 0, deletes: 0, edits: 0, totalMods: 0 };
+                    const curAdd = Number(row.addCount) || 0;
+                    const curDel = Number(row.deleteCount) || 0;
+                    const curMod = Number(row.modificationCount) || 0;
+
+                    if (curAdd !== s.adds || curDel !== s.deletes || curMod !== s.totalMods) {
+                        changedCount++;
+                        updateStatements.push(
+                            env.DB.prepare("UPDATE ip_profiles SET addCount = ?, deleteCount = ?, modificationCount = ? WHERE ip = ?")
+                                .bind(s.adds, s.deletes, s.totalMods, row.ip)
+                        );
+                    }
+                }
+
+                if (updateStatements.length > 0) {
+                    for (let i = 0; i < updateStatements.length; i += 100) {
+                        await env.DB.batch(updateStatements.slice(i, i + 100));
+                    }
+                }
+
+                return new Response(JSON.stringify({ 
+                    success: true, 
+                    message: `전체 ${allIps?.length || 0}개 IP 중 ${changedCount}개의 오염된 카운트가 성공적으로 재정비되었습니다.`,
+                    changedCount 
+                }), { headers: { 'Content-Type': 'application/json' } });
+            }
+
             // Block a user/IP
-            const body = await request.json();
             const { identifier, type, reason } = body; // identifier: IP or ID, type: 'IP' or 'KAKAO_ID'
 
             if (!identifier || !type) {

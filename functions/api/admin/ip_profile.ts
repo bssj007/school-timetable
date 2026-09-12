@@ -41,13 +41,45 @@ export const onRequest = async (context: any) => {
             ).bind(targetIp, lowerTargetIp).first();
         } catch (e: any) { queryErrors.blockStatus = e?.message; }
 
-        // B. Modification Count
+        // B. Modification / Add / Delete Counts (실데이터 기반 정확한 통계 산출)
         let modificationCount = 0;
+        let addCount = 0;
+        let deleteCount = 0;
         try {
-            const r: any = await env.DB.prepare(
-                `SELECT COUNT(*) as count FROM performance_assessments WHERE (lastModifiedIp = ? OR LOWER(TRIM(lastModifiedIp)) = ? OR LOWER(TRIM(lastModifiedIp)) = ?)`
-            ).bind(targetIp, lowerTargetIp, cleanIpv4).first();
-            modificationCount = r?.count || 0;
+            const logRow: any = await env.DB.prepare(`
+                SELECT 
+                    COUNT(CASE WHEN method = 'POST' AND (endpoint = '/api/assessment' OR endpoint = '/api/assessment/') AND (status IS NULL OR (status >= 200 AND status < 300)) THEN 1 END) as logAdds,
+                    COUNT(CASE WHEN method = 'DELETE' AND endpoint LIKE '/api/assessment%' AND (status IS NULL OR (status >= 200 AND status < 300)) THEN 1 END) as logDels,
+                    COUNT(CASE WHEN method IN ('PUT', 'PATCH') AND endpoint LIKE '/api/assessment%' AND endpoint NOT LIKE '%action=vote%' AND (status IS NULL OR (status >= 200 AND status < 300)) THEN 1 END) as logEdits
+                FROM access_logs
+                WHERE ${ipMatchSql} AND endpoint LIKE '/api/assessment%'
+            `).bind(...ipMatchBinds).first();
+
+            const paRow: any = await env.DB.prepare(`
+                SELECT 
+                    COUNT(CASE WHEN (isDeleted IS NULL OR isDeleted = 0) AND (isAutoPredicted IS NULL OR isAutoPredicted = 0) THEN 1 END) as activeCount,
+                    COUNT(CASE WHEN isDeleted = 1 THEN 1 END) as deletedCount
+                FROM performance_assessments
+                WHERE (lastModifiedIp = ? OR LOWER(TRIM(lastModifiedIp)) = ? OR LOWER(TRIM(lastModifiedIp)) = ?)
+            `).bind(targetIp, lowerTargetIp, cleanIpv4).first();
+
+            const logAdds = Number(logRow?.logAdds) || 0;
+            const logDels = Number(logRow?.logDels) || 0;
+            const logEdits = Number(logRow?.logEdits) || 0;
+
+            const paActive = Number(paRow?.activeCount) || 0;
+            const paDels = Number(paRow?.deletedCount) || 0;
+
+            addCount = Math.max(logAdds, paActive);
+            deleteCount = Math.max(logDels, paDels);
+            modificationCount = addCount + deleteCount + logEdits;
+
+            // ip_profiles 테이블도 동기화
+            try {
+                await env.DB.prepare(
+                    `UPDATE ip_profiles SET addCount = ?, deleteCount = ?, modificationCount = ? WHERE ${ipMatchSql}`
+                ).bind(addCount, deleteCount, modificationCount, ...ipMatchBinds).run();
+            } catch (_) {}
         } catch (e: any) { queryErrors.modCount = e?.message; }
 
         // C. Last Access (MAX — cheap, indexed by value comparator)
@@ -323,6 +355,8 @@ export const onRequest = async (context: any) => {
             blockId: blockEntry?.id,
 
             modificationCount,
+            addCount,
+            deleteCount,
             printCount,
             downloadCount,
             isStandalone: Boolean(isStandalone === 1 || (recentEnvironments || []).some((e: any) => e.isApp)),
