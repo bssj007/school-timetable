@@ -167,16 +167,17 @@ export const onRequest = async (context: any) => {
             // 4. IP별 과거 접속환경 조회 (access_logs에서 distinct userAgent 조회하여 파싱)
             //    - endpoint는 GROUP BY에서 제거 (endpoint 수 × ip 수만큼 행 폭발 방지)
             //    - 90일 이내 + LIMIT 5000 으로 Worker CPU 한계 초과 방지
-            let envMap: Record<string, { os: string; deviceType: string; browserKey: string; isInApp: boolean; isApp: boolean }[]> = {};
-            let pwaIpSet = new Set<string>(); // PWA 엔드포인트 접속 기록이 있는 IP 집합
+            let envMap: Record<string, { os: string; deviceType: string; browserKey: string; isInApp: boolean; isApp: boolean; userAgent: string; lastAccess: string }[]> = {};
+            let pwaIpMap = new Map<string, string>(); // PWA 엔드포인트 접속 기록이 있는 IP 및 최신 접속 시각
             try {
                 const envQuery = `
-                    SELECT ip, userAgent
+                    SELECT ip, userAgent, MAX(accessedAt) as lastAccess
                     FROM access_logs
-                    WHERE accessedAt > datetime('now', '+9 hours', '-90 days')
+                    WHERE accessedAt > datetime('now', '-90 days')
                       AND userAgent IS NOT NULL
                       AND userAgent != ''
                     GROUP BY ip, userAgent
+                    ORDER BY lastAccess DESC
                     LIMIT 5000
                 `;
                 const { results: envResults } = await env.DB.prepare(envQuery).all();
@@ -191,20 +192,23 @@ export const onRequest = async (context: any) => {
                         browserKey: parsed.browserKey || 'other',
                         isInApp: parsed.isInApp,
                         isApp: parsed.isApp,
+                        userAgent: row.userAgent,
+                        lastAccess: row.lastAccess || '',
                     });
                 }
 
-                // PWA 엔드포인트 접속 기록 IP 별도 조회 (간단하게 DISTINCT ip만)
+                // PWA 엔드포인트 접속 기록 IP 별도 조회
                 const pwaQuery = `
-                    SELECT DISTINCT ip
+                    SELECT ip, MAX(accessedAt) as lastAccess
                     FROM access_logs
-                    WHERE accessedAt > datetime('now', '+9 hours', '-90 days')
+                    WHERE accessedAt > datetime('now', '-90 days')
                       AND (endpoint LIKE '%mode=pwa%' OR endpoint LIKE '%standalone=1%' OR endpoint LIKE '%utm_source=homescreen%')
+                    GROUP BY ip
                     LIMIT 2000
                 `;
                 const { results: pwaResults } = await env.DB.prepare(pwaQuery).all();
                 for (const row of pwaResults as any[]) {
-                    if (row.ip) pwaIpSet.add(row.ip);
+                    if (row.ip) pwaIpMap.set(row.ip, row.lastAccess || '');
                 }
             } catch (e: any) {
                 console.warn('[Admin Users] Historical environments query failed:', e.message);
@@ -217,27 +221,49 @@ export const onRequest = async (context: any) => {
                 const deviceType = p.deviceType || parsedLatestUA.deviceType || null;
                 const isInApp = p.isInApp === 1 || parsedLatestUA.isInApp;
 
-                // envMap[p.ip]가 비어있고 최신 UA가 있으면 최신 환경 추가
-                let userEnvs = envMap[p.ip] || [];
-                if (userEnvs.length === 0 && (parsedLatestUA.os || parsedLatestUA.browserKey)) {
+                let userEnvs = [...(envMap[p.ip] || [])];
+
+                // 최신 접속 UA 및 lastAccess가 userEnvs에 없거나 갱신 필요한 경우 보정
+                if (p.userAgent) {
+                    const existingIndex = userEnvs.findIndex(e => e.userAgent === p.userAgent);
+                    if (existingIndex >= 0) {
+                        if (p.lastAccess && (!userEnvs[existingIndex].lastAccess || p.lastAccess > userEnvs[existingIndex].lastAccess)) {
+                            userEnvs[existingIndex].lastAccess = p.lastAccess;
+                        }
+                    } else {
+                        userEnvs.unshift({
+                            os: parsedLatestUA.os || '',
+                            deviceType: parsedLatestUA.deviceType || '',
+                            browserKey: parsedLatestUA.browserKey || 'other',
+                            isInApp: parsedLatestUA.isInApp,
+                            isApp: parsedLatestUA.isApp,
+                            userAgent: p.userAgent,
+                            lastAccess: p.lastAccess || '',
+                        });
+                    }
+                } else if (userEnvs.length === 0 && (os || browserKey || parsedLatestUA.os || parsedLatestUA.browserKey)) {
                     userEnvs = [{
-                        os: parsedLatestUA.os || '',
-                        deviceType: parsedLatestUA.deviceType || '',
-                        browserKey: parsedLatestUA.browserKey || 'other',
-                        isInApp: parsedLatestUA.isInApp,
-                        isApp: parsedLatestUA.isApp,
+                        os: os || parsedLatestUA.os || '',
+                        deviceType: deviceType || parsedLatestUA.deviceType || '',
+                        browserKey: browserKey || parsedLatestUA.browserKey || 'other',
+                        isInApp: isInApp,
+                        isApp: p.isStandalone === 1,
+                        userAgent: '',
+                        lastAccess: p.lastAccess || '',
                     }];
                 }
 
                 // PWA 엔드포인트 접속 이력 반영
-                const hasPwaAccess = pwaIpSet.has(p.ip);
-                if (hasPwaAccess && !userEnvs.some(e => e.browserKey === 'pwa')) {
+                const pwaLastAccess = pwaIpMap.get(p.ip);
+                if (pwaLastAccess && !userEnvs.some(e => e.browserKey === 'pwa')) {
                     userEnvs.push({
                         os: parsedLatestUA.os || '',
                         deviceType: 'mobile',
                         browserKey: 'pwa',
                         isInApp: false,
                         isApp: true,
+                        userAgent: '',
+                        lastAccess: pwaLastAccess,
                     });
                 }
 
@@ -254,8 +280,13 @@ export const onRequest = async (context: any) => {
                         browserKey: 'pwa',
                         isInApp: false,
                         isApp: true,
+                        userAgent: '',
+                        lastAccess: p.lastAccess || '',
                     });
                 }
+
+                // 최신 접속 순 정렬
+                userEnvs.sort((a, b) => (b.lastAccess || '').localeCompare(a.lastAccess || ''));
 
                 const appType = (userEnvs.some(e => e.isApp && e.browserKey !== 'pwa') || detectServerAppType(p.userAgent))
                     ? "webview"

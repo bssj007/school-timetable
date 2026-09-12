@@ -6689,6 +6689,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
     const [sortColumn, setSortColumn] = useState<'id' | 'modCount' | 'lastAccess'>('lastAccess');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+    const [expandedEnvRows, setExpandedEnvRows] = useState<Set<string>>(new Set());
     const [assessmentDsFilterG1, setAssessmentDsFilterG1] = useState<string>('_auto_');
     const [assessmentDsFilterG23, setAssessmentDsFilterG23] = useState<string>('_auto_');
     const [userSearchQuery, setUserSearchQuery] = useState("");
@@ -7498,60 +7499,234 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         });
                                     };
 
-                                    // ── 현재 접속환경 배지 (OS·브라우저 + 라이브 점) — 접속환경 메뉴 표 기준 ────────────
-                                    const osLabel = (os: string | null | undefined) =>
-                                        os === 'ios' ? 'iOS' : os === 'android' ? 'Android' : os === 'windows' ? 'Windows' : os === 'macos' ? 'macOS' : os === 'linux' ? 'Linux' : null;
-                                    const browserLabel = (bk: string | null | undefined) =>
-                                        bk === 'chrome' ? 'Chrome' : bk === 'safari' ? 'Safari' : bk === 'samsung' ? 'Samsung' : (bk === 'other' || bk === 'firefox') ? '그외' : null;
+                                    const toggleEnvRow = (key: string) => {
+                                        setExpandedEnvRows(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(key)) next.delete(key);
+                                            else next.add(key);
+                                            return next;
+                                        });
+                                    };
 
-                                    const renderEnvBadge = (u: IPProfile | undefined | null) => {
-                                        if (!u) return <span className="text-gray-300 text-xs">-</span>;
-                                        let os = osLabel(u.os);
-                                        let browser: string | null = null;
+                                    // ── 접속환경 상대 시간 포맷팅 ──────────────────────────────────────────────
+                                    const formatEnvRelativeTime = (dateStr: string | null | undefined): string => {
+                                        if (!dateStr) return '';
+                                        try {
+                                            const timeMs = new Date(dateStr.trim().replace(' ', 'T') + (dateStr.endsWith('Z') ? '' : 'Z')).getTime();
+                                            if (isNaN(timeMs)) return '';
+                                            const diffSec = Math.floor((Date.now() - timeMs) / 1000);
+                                            if (diffSec < 60) return '방금';
+                                            const diffMin = Math.floor(diffSec / 60);
+                                            if (diffMin < 60) return `${diffMin}분 전`;
+                                            const diffHour = Math.floor(diffMin / 60);
+                                            if (diffHour < 24) return `${diffHour}시간 전`;
+                                            const diffDay = Math.floor(diffHour / 24);
+                                            if (diffDay === 1) return '어제';
+                                            if (diffDay < 30) return `${diffDay}일 전`;
+                                            return `${Math.floor(diffDay / 30)}달 전`;
+                                        } catch {
+                                            return '';
+                                        }
+                                    };
 
-                                        // 1. 최신 접속 userAgent가 있으면 detectFromUserAgent로 3-Layer 단일 진실원천 감지
-                                        if (u.userAgent) {
-                                            const detected = detectFromUserAgent(u.userAgent);
-                                            if (!os) {
-                                                os = osLabel(detected.desktopOS || (detected.isIOS ? 'ios' : detected.isAndroid ? 'android' : null));
-                                            }
-                                            if (detected.isInstalledApp && detected.installedAppType === 'webview') {
-                                                browser = '앱';
-                                            } else if (detected.isInstalledApp && detected.installedAppType === 'pwa') {
-                                                browser = 'PWA';
-                                            } else {
-                                                browser = browserLabel(detected.browserKey);
+                                    // ── 접속환경 실시간 LIVE 여부 판별 (최근 5분 이내 활동 시 LIVE) ──────────────────
+                                    const isEnvLive = (dateStr: string | null | undefined): boolean => {
+                                        if (!dateStr) return false;
+                                        try {
+                                            const timeMs = new Date(dateStr.trim().replace(' ', 'T') + (dateStr.endsWith('Z') ? '' : 'Z')).getTime();
+                                            if (isNaN(timeMs)) return false;
+                                            const diff = Date.now() - timeMs;
+                                            return diff >= -60000 && diff <= 5 * 60 * 1000;
+                                        } catch {
+                                            return false;
+                                        }
+                                    };
+
+                                    // ── 접속환경 라벨 변환 (접속환경 메뉴 표 기준) ──────────────────────────────────
+                                    const osLabel = (os: string | null | undefined): string | null => {
+                                        if (!os) return null;
+                                        const s = os.toLowerCase();
+                                        if (s === 'ios') return 'iOS';
+                                        if (s === 'android') return 'Android';
+                                        if (s === 'windows') return 'Windows';
+                                        if (s === 'macos') return 'macOS';
+                                        if (s === 'linux') return 'Linux';
+                                        return null;
+                                    };
+
+                                    const browserLabel = (bk: string | null | undefined): string | null => {
+                                        if (!bk) return null;
+                                        const s = bk.toLowerCase();
+                                        if (s === 'chrome') return 'Chrome';
+                                        if (s === 'safari') return 'Safari';
+                                        if (s === 'samsung') return 'Samsung';
+                                        if (s === 'other' || s === 'firefox' || s === 'edge' || s === 'opera') return '그외';
+                                        return null;
+                                    };
+
+                                    interface ParsedEnvItem {
+                                        key: string;
+                                        os: string | null;
+                                        browser: string | null;
+                                        label: string;
+                                        lastAccess: string | null;
+                                        isLive: boolean;
+                                    }
+
+                                    const parseAllEnvironments = (users: IPProfile[]): ParsedEnvItem[] => {
+                                        const map = new Map<string, ParsedEnvItem>();
+
+                                        for (const u of users) {
+                                            const rawList = [
+                                                ...(u.historicalEnvironments || []),
+                                                {
+                                                    userAgent: u.userAgent,
+                                                    os: u.os,
+                                                    browserKey: u.browserKey,
+                                                    deviceType: u.deviceType,
+                                                    isInApp: u.isInApp,
+                                                    isApp: u.isStandalone || u.appType === 'webview',
+                                                    appType: u.appType,
+                                                    lastAccess: u.lastAccess,
+                                                }
+                                            ];
+
+                                            for (const raw of rawList) {
+                                                let os: string | null = null;
+                                                let browser: string | null = null;
+
+                                                if (raw.userAgent) {
+                                                    const detected = detectFromUserAgent(raw.userAgent);
+                                                    os = osLabel(detected.desktopOS || (detected.isIOS ? 'ios' : detected.isAndroid ? 'android' : null)) || osLabel(raw.os);
+                                                    if (detected.isInstalledApp && detected.installedAppType === 'webview') {
+                                                        browser = '앱';
+                                                    } else if (detected.isInstalledApp && detected.installedAppType === 'pwa') {
+                                                        browser = 'PWA';
+                                                    } else {
+                                                        browser = browserLabel(detected.browserKey) || browserLabel(raw.browserKey) || '그외';
+                                                    }
+                                                } else {
+                                                    os = osLabel(raw.os);
+                                                    if (raw.isApp || raw.appType === 'webview') {
+                                                        browser = '앱';
+                                                    } else if (raw.browserKey === 'pwa' || raw.appType === 'pwa') {
+                                                        browser = 'PWA';
+                                                    } else if (raw.browserKey) {
+                                                        browser = browserLabel(raw.browserKey) || '그외';
+                                                    }
+                                                }
+
+                                                if (!os && !browser) continue;
+
+                                                const label = [os, browser].filter(Boolean).join(' · ');
+                                                const key = `${os || '기타'}__${browser || '기타'}`;
+                                                const accessTime = raw.lastAccess || u.lastAccess || null;
+
+                                                const existing = map.get(key);
+                                                if (existing) {
+                                                    if (accessTime && (!existing.lastAccess || accessTime > existing.lastAccess)) {
+                                                        existing.lastAccess = accessTime;
+                                                    }
+                                                } else {
+                                                    map.set(key, {
+                                                        key,
+                                                        os,
+                                                        browser,
+                                                        label,
+                                                        lastAccess: accessTime,
+                                                        isLive: false,
+                                                    });
+                                                }
                                             }
                                         }
 
-                                        // 2. UA 파싱으로 미확정된 경우 fallback: u.browserKey, u.appType
-                                        if (!browser) {
-                                            if (u.browserKey && ['chrome', 'safari', 'samsung'].includes(u.browserKey)) {
-                                                browser = browserLabel(u.browserKey);
-                                            } else if (u.appType === 'webview') {
-                                                browser = '앱';
-                                            } else if (u.appType === 'pwa') {
-                                                browser = 'PWA';
-                                            } else {
-                                                browser = browserLabel(u.browserKey);
-                                            }
+                                        const items = Array.from(map.values()).map(item => ({
+                                            ...item,
+                                            isLive: isEnvLive(item.lastAccess),
+                                        }));
+
+                                        // 정렬: LIVE 우선, 그 다음 최신 접속시간 순
+                                        items.sort((a, b) => {
+                                            if (a.isLive && !b.isLive) return -1;
+                                            if (!a.isLive && b.isLive) return 1;
+                                            return (b.lastAccess || '').localeCompare(a.lastAccess || '');
+                                        });
+
+                                        return items;
+                                    };
+
+                                    const renderEnvCell = (users: IPProfile[], rowKey: string) => {
+                                        const allEnvs = parseAllEnvironments(users);
+                                        if (allEnvs.length === 0) {
+                                            return <span className="text-gray-300 text-xs">-</span>;
                                         }
 
-                                        if (!os && !browser) return <span className="text-gray-300 text-xs">-</span>;
+                                        const liveEnvs = allEnvs.filter(e => e.isLive);
+                                        // 현재 사용 중인 LIVE 브라우저가 있으면 모든 LIVE 브라우저, 없으면 가장 최근 1개
+                                        const defaultEnvs = liveEnvs.length > 0 ? liveEnvs : allEnvs.slice(0, 1);
+                                        const hasMore = allEnvs.length > defaultEnvs.length;
+                                        const isExpanded = expandedEnvRows.has(rowKey);
+                                        const displayedEnvs = isExpanded ? allEnvs : defaultEnvs;
+
                                         return (
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="relative flex h-2 w-2 flex-shrink-0" title="현재 접속 중">
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-                                                </span>
-                                                <span className="text-xs text-slate-700 whitespace-nowrap">
-                                                    {[os, browser].filter(Boolean).join(' · ')}
-                                                </span>
+                                            <div className="flex flex-col gap-1 min-w-[130px]" onClick={e => e.stopPropagation()}>
+                                                <div className="flex flex-col gap-1">
+                                                    {displayedEnvs.map((env) => (
+                                                         <div key={env.key} className="flex items-center gap-1.5 py-0.5">
+                                                             {env.isLive ? (
+                                                                 <span className="relative flex h-2 w-2 flex-shrink-0" title="실시간 사용 중 (LIVE)">
+                                                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                                                                     <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                                                                 </span>
+                                                             ) : (
+                                                                 <span className="h-1.5 w-1.5 rounded-full bg-slate-300 flex-shrink-0" title="오프라인" />
+                                                             )}
+                                                             <span className={`text-xs whitespace-nowrap ${env.isLive ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>
+                                                                 {env.label}
+                                                             </span>
+                                                             {isExpanded && env.lastAccess && (
+                                                                 <span 
+                                                                     className="text-[10px] text-slate-400 font-mono ml-auto pl-1" 
+                                                                     title={new Date(env.lastAccess.trim().replace(' ', 'T') + (env.lastAccess.endsWith('Z') ? '' : 'Z')).toLocaleString()}
+                                                                 >
+                                                                     {formatEnvRelativeTime(env.lastAccess)}
+                                                                 </span>
+                                                             )}
+                                                         </div>
+                                                    ))}
+                                                </div>
+                                                {hasMore && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                             e.stopPropagation();
+                                                             toggleEnvRow(rowKey);
+                                                        }}
+                                                        className="self-start inline-flex items-center gap-0.5 text-[10px] text-sky-600 hover:text-sky-800 hover:underline mt-0.5 font-medium select-none cursor-pointer"
+                                                    >
+                                                        {isExpanded ? (
+                                                             <>
+                                                                 <span>접기</span>
+                                                                 <ChevronUp className="w-2.5 h-2.5" />
+                                                             </>
+                                                        ) : (
+                                                             <>
+                                                                 <span>더보기 ({allEnvs.length})</span>
+                                                                 <ChevronDown className="w-2.5 h-2.5" />
+                                                             </>
+                                                        )}
+                                                    </button>
+                                                )}
                                             </div>
                                         );
                                     };
 
-                                    // ── 앱 설치 이력 배지 (과거 전체 로그 및 프로필 통틀어 앱 접속 기록 여부 판별) ────────
+                                    // 기존 단일 IPProfile 호환 함수
+                                    const renderEnvBadge = (u: IPProfile | undefined | null) => {
+                                        if (!u) return <span className="text-gray-300 text-xs">-</span>;
+                                        return renderEnvCell([u], `single:${u.ip}`);
+                                    };
+
                                     const renderAppHistoryBadges = (
                                         envs: { os: string; deviceType: string; browserKey: string; isInApp: boolean; isApp?: boolean }[] | undefined,
                                         userFallback?: IPProfile,
@@ -7713,7 +7888,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     : <span className="text-gray-300">-</span>}
                                             </TableCell>
                                             <TableCell>
-                                                {renderEnvBadge(user)}
+                                                {renderEnvCell([user], `sub:${user.ip}`)}
                                             </TableCell>
                                             <TableCell>
                                                 {renderAppHistoryBadges(user.historicalEnvironments, user, user.isStandalone)}
@@ -7850,7 +8025,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         ) : <span className="text-gray-400 text-xs">-</span>}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {renderEnvBadge(representativeUser)}
+                                                        {renderEnvCell(group.ips, `group:${group.key}`)}
                                                     </TableCell>
                                                     <TableCell>
                                                         {(() => {
@@ -7945,7 +8120,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                             <SortHeader col="modCount" label="수정/추가/삭제" className="w-[120px] min-w-[120px]" />
                                                             <TableHead className="w-[80px] min-w-[80px]">출력</TableHead>
                                                             <TableHead className="w-[80px] min-w-[80px]">다운로드</TableHead>
-                                                            <TableHead className="w-[120px] min-w-[120px]" title="실시간 최신 접속 브라우저 및 OS 환경">접속환경</TableHead>
+                                                            <TableHead className="w-[140px] min-w-[140px]" title="실시간 최신 접속 브라우저 및 OS 환경 (LIVE 시 빨간색 표시, 오프라인 시 최근 1개 표시, 더보기 지원)">접속환경</TableHead>
                                                             <TableHead className="w-[105px] min-w-[105px]" title="현재 접속 여부 무관, 과거 전체 로그 기준 앱(WebView/PWA) 접속 이력 여부">앱설치</TableHead>
                                                             <SortHeader col="lastAccess" label="마지막 접속" className="w-[160px] min-w-[160px]" />
                                                             <TableHead className="w-[160px] min-w-[160px]">알림</TableHead>
@@ -8030,7 +8205,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                                 ) : <span className="text-gray-400 text-xs">-</span>}
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                {renderEnvBadge(user)}
+                                                                                {renderEnvCell([user], `unknown:${user.ip}`)}
                                                                             </TableCell>
                                                                             <TableCell>
                                                                                 {renderAppHistoryBadges(user.historicalEnvironments, user, user.isStandalone)}
