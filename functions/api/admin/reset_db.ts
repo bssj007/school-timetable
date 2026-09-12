@@ -6,21 +6,30 @@ export const onRequestPost = async (context: any) => {
 
     try {
         const body = await request.json();
-        const { confirmation } = body;
+        const { confirmation, adminPassword } = body;
         const TARGET_PHRASE = "햇빛이 선명하게 나뭇잎을 핥고 있었다";
 
         if (confirmation !== TARGET_PHRASE) {
-            return new Response(JSON.stringify({ error: "Invalid confirmation phrase" }), { status: 401 });
+            return new Response(JSON.stringify({ error: "확인 문구가 일치하지 않습니다." }), {
+                status: 400,
+                headers: { "Content-Type": "application/json" }
+            });
         }
 
-        // 1. Auth Check (Added)
-        const password = request.headers.get("X-Admin-Password");
-        if (!verifyAdminPassword(password, env)) {
-            return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+        // 1. Auth Check (Admin password from body or header)
+        const password = adminPassword || request.headers.get("X-Admin-Password");
+        if (!password || !verifyAdminPassword(password, env)) {
+            return new Response(JSON.stringify({ error: "관리자 암호가 올바르지 않습니다." }), {
+                status: 401,
+                headers: { "Content-Type": "application/json" }
+            });
         }
 
         if (!env.DB) {
-            return new Response(JSON.stringify({ error: "Database not configured" }), { status: 500 });
+            return new Response(JSON.stringify({ error: "Database not configured" }), {
+                status: 500,
+                headers: { "Content-Type": "application/json" }
+            });
         }
 
         // 2. Drop Tables (Robust Topological Sort)

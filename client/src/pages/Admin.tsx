@@ -7383,6 +7383,7 @@ export default function Admin() {
     // Factory Reset State
     const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
     const [resetConfirmation, setResetConfirmation] = useState("");
+    const [resetPassword, setResetPassword] = useState("");
     const [isResetting, setIsResetting] = useState(false);
     const TARGET_PHRASE = "햇빛이 선명하게 나뭇잎을 핥고 있었다";
 
@@ -7393,6 +7394,11 @@ export default function Admin() {
     const handleFactoryReset = async () => {
         if (resetConfirmation !== TARGET_PHRASE) {
             toast.error("확인 문구가 일치하지 않습니다.");
+            return;
+        }
+
+        if (!resetPassword.trim()) {
+            toast.error("관리자 암호를 입력해주세요.");
             return;
         }
 
@@ -7407,9 +7413,12 @@ export default function Admin() {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "X-Admin-Password": password
+                    "X-Admin-Password": resetPassword
                 },
-                body: JSON.stringify({ confirmation: resetConfirmation })
+                body: JSON.stringify({
+                    confirmation: resetConfirmation,
+                    adminPassword: resetPassword
+                })
             });
 
             const data = await res.json();
@@ -9426,7 +9435,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
             {/* Factory Reset Dialog */}
             <Dialog open={isResetDialogOpen} onOpenChange={(open) => {
                 setIsResetDialogOpen(open);
-                if (!open) setResetConfirmation("");
+                if (!open) {
+                    setResetConfirmation("");
+                    setResetPassword("");
+                }
             }}>
                 <DialogContent>
                     <DialogHeader>
@@ -9437,20 +9449,39 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         <DialogDescription>
                             모든 데이터가 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
                             <br />
-                            확인을 위해 아래 문구를 정확히 입력하세요:
+                            확인을 위해 아래 문구와 관리자 암호를 정확히 입력하세요:
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-4 py-4">
-                        <div className="p-3 bg-gray-50 border rounded-md text-center font-bold text-sm select-none">
-                            {TARGET_PHRASE}
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-gray-700">확인 문구</label>
+                            <div className="p-3 bg-gray-50 border rounded-md text-center font-bold text-sm select-none">
+                                {TARGET_PHRASE}
+                            </div>
+                            <Input
+                                value={resetConfirmation}
+                                onChange={(e) => setResetConfirmation(e.target.value)}
+                                placeholder="위 문구를 입력하세요"
+                                className="text-center"
+                            />
                         </div>
-                        <Input
-                            value={resetConfirmation}
-                            onChange={(e) => setResetConfirmation(e.target.value)}
-                            placeholder="위 문구를 입력하세요"
-                            className="text-center"
-                        />
+
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-gray-700">관리자 암호</label>
+                            <Input
+                                type="password"
+                                value={resetPassword}
+                                onChange={(e) => setResetPassword(e.target.value)}
+                                placeholder="관리자 암호를 입력하세요"
+                                className="text-center"
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" && resetConfirmation === TARGET_PHRASE && resetPassword.trim() && !isResetting) {
+                                        handleFactoryReset();
+                                    }
+                                }}
+                            />
+                        </div>
                     </div>
 
                     <DialogFooter>
@@ -9458,7 +9489,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         <Button
                             variant="destructive"
                             onClick={handleFactoryReset}
-                            disabled={resetConfirmation !== TARGET_PHRASE || isResetting}
+                            disabled={resetConfirmation !== TARGET_PHRASE || !resetPassword.trim() || isResetting}
                         >
                             {isResetting ? "초기화 중..." : "초기화 실행"}
                         </Button>

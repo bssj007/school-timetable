@@ -11,15 +11,13 @@ import { getAdminPasswordCookie, clearAdminPasswordCookie } from "@/lib/adminCoo
 export default function FactoryReset() {
     const [, setLocation] = useLocation();
     const [confirmation, setConfirmation] = useState("");
-    const [password, setPassword] = useState("");
+    const [adminPasswordInput, setAdminPasswordInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
 
-    // Load password from cookie or session if available
+    // Verify admin login is present in cookie or session
     useState(() => {
         const stored = getAdminPasswordCookie() || (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("adminPassword") : null);
-        if (stored) {
-            setPassword(stored);
-        } else {
+        if (!stored) {
             // Redirect to admin login if not authenticated
             toast.error("관리자 로그인이 필요합니다.");
             setTimeout(() => setLocation("/admin"), 100);
@@ -34,9 +32,8 @@ export default function FactoryReset() {
             return;
         }
 
-        if (!password) {
-            toast.error("관리자 세션이 만료되었습니다. 다시 로그인해주세요.");
-            setLocation("/admin");
+        if (!adminPasswordInput.trim()) {
+            toast.error("관리자 암호를 입력해주세요.");
             return;
         }
 
@@ -51,9 +48,12 @@ export default function FactoryReset() {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "X-Admin-Password": password
+                    "X-Admin-Password": adminPasswordInput
                 },
-                body: JSON.stringify({ confirmation })
+                body: JSON.stringify({
+                    confirmation,
+                    adminPassword: adminPasswordInput
+                })
             });
 
             const data = await res.json();
@@ -93,8 +93,9 @@ export default function FactoryReset() {
                     </p>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-5">
                     <div className="space-y-2">
+                        <label className="text-sm font-semibold text-gray-700">확인 문구</label>
                         <div className="py-3 text-base font-bold text-black select-all text-center bg-gray-50 border border-gray-200 rounded-none">
                             {/* Target Phrase Display */}
                             {TARGET_PHRASE}
@@ -103,7 +104,23 @@ export default function FactoryReset() {
                             value={confirmation}
                             onChange={(e) => setConfirmation(e.target.value)}
                             className="font-bold text-center border-2 border-gray-300 focus:border-red-500 rounded-none py-6 text-lg placeholder:text-gray-400 focus-visible:ring-0"
-                            placeholder="위 문구를 그대로 입력하세요"
+                            placeholder="위 확인 문구를 그대로 입력하세요"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-semibold text-gray-700">관리자 암호</label>
+                        <Input
+                            type="password"
+                            value={adminPasswordInput}
+                            onChange={(e) => setAdminPasswordInput(e.target.value)}
+                            className="font-bold text-center border-2 border-gray-300 focus:border-red-500 rounded-none py-6 text-lg placeholder:text-gray-400 focus-visible:ring-0"
+                            placeholder="관리자 암호를 입력하세요"
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && confirmation === TARGET_PHRASE && adminPasswordInput.trim() && !isLoading) {
+                                    handleReset();
+                                }
+                            }}
                         />
                     </div>
                 </div>
@@ -119,7 +136,7 @@ export default function FactoryReset() {
                     <Button
                         variant="destructive"
                         className="flex-1 h-12 text-base font-bold bg-red-600 hover:bg-red-700 shadow-md transform hover:scale-[1.02] transition-all rounded-none"
-                        disabled={confirmation !== TARGET_PHRASE || !password || isLoading}
+                        disabled={confirmation !== TARGET_PHRASE || !adminPasswordInput.trim() || isLoading}
                         onClick={handleReset}
                     >
                         {isLoading ? (
