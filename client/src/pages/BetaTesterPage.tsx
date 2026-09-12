@@ -304,10 +304,35 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
 
   const lastMove = history[history.length - 1];
 
+  const remainingTotalHours = Math.max(0, Math.floor(pumasi.remainingMs / (1000 * 60 * 60)));
+  const remainingDays = Math.floor(remainingTotalHours / 24);
+  const remainingHours = remainingTotalHours % 24;
+
   return (
-    <div className="min-h-screen bg-white text-slate-800 flex flex-col font-sans select-none pb-8">
+    <div className="min-h-screen bg-white text-slate-800 flex flex-col font-sans select-none pb-6">
+      <style>{`
+        @keyframes winShimmer {
+          0% { transform: translateX(-150%); }
+          100% { transform: translateX(350%); }
+        }
+        @keyframes stoneDrop {
+          0% {
+            transform: scale(1.35) translateY(-3px);
+            opacity: 0.7;
+          }
+          65% {
+            transform: scale(0.96) translateY(0);
+            opacity: 1;
+          }
+          100% {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
+
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-100 px-4 py-2.5">
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-100 px-4 py-2">
         <div className="max-w-md mx-auto flex items-center justify-between">
           <button
             onClick={handleBack}
@@ -320,8 +345,8 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
         </div>
       </header>
 
-      {/* Main Content Area (No Card Containers) */}
-      <main className="flex-1 max-w-md mx-auto w-full px-4 py-4 flex flex-col gap-6">
+      {/* Main Content Area (No Card Containers, Compact Layout) */}
+      <main className="flex-1 max-w-md mx-auto w-full px-4 py-3 flex flex-col gap-4">
         
         {/* Testing Status Section */}
         <section className="space-y-2">
@@ -329,53 +354,54 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
             <h2 className="text-sm font-bold text-slate-900">
               {pumasi.isComplete ? '14일 비공개 테스트 완료' : '14일 비공개 테스트'}
             </h2>
-            <span className="text-xs font-mono font-bold text-blue-600">
-              {pumasi.exactPercent.toFixed(2)}%
-            </span>
-          </div>
-
-          {/* Accurate Continuous Progress Bar */}
-          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-            <div
-              className={`h-full transition-all duration-300 rounded-full ${
-                pumasi.isComplete ? 'bg-emerald-500' : 'bg-blue-600'
-              }`}
-              style={{ width: `${Math.min(100, pumasi.exactPercent)}%` }}
-            />
-          </div>
-
-          {/* Concrete Time Information */}
-          <div className="flex flex-col gap-1 text-xs text-slate-600 font-mono pt-1">
-            <div className="flex justify-between">
-              <span className="text-slate-400">시작 일시</span>
-              <span className="text-slate-700">{pumasi.startDateText}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">경과 시간</span>
-              <span className="text-slate-700">{pumasi.elapsedText}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">남은 시간</span>
-              <span className={pumasi.isComplete ? 'text-emerald-600 font-semibold' : 'text-slate-900 font-semibold'}>
-                {pumasi.remainingText}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-600">
+                {pumasi.isComplete ? '완료' : `남은 기간: ${remainingDays}일 ${remainingHours}시간`}
+              </span>
+              <span className="text-xs font-mono font-bold text-emerald-600">
+                {pumasi.exactPercent.toFixed(1)}%
               </span>
             </div>
           </div>
 
+          {/* Windows File Explorer Style Progress Bar */}
+          <div className="w-full h-5 sm:h-6 bg-[#e6e6e6] border border-[#bcbcbc] rounded-[3px] p-[1.5px] overflow-hidden shadow-inner relative">
+            <div
+              className="h-full rounded-[2px] transition-all duration-300 relative overflow-hidden"
+              style={{
+                width: `${Math.min(100, pumasi.exactPercent)}%`,
+                background: 'linear-gradient(180deg, #4ade80 0%, #22c55e 35%, #16a34a 70%, #15803d 100%)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -1px 0 rgba(0,0,0,0.15)',
+              }}
+            >
+              <div
+                className="absolute inset-0 opacity-40 pointer-events-none"
+                style={{
+                  background: 'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.7) 50%, rgba(255,255,255,0) 100%)',
+                  animation: 'winShimmer 2.2s infinite linear',
+                  width: '40%',
+                }}
+              />
+            </div>
+          </div>
+
           {/* Simplified Description */}
-          <p className="text-xs text-slate-400 pt-0.5">
+          <p className="text-[11px] text-slate-400">
             {pumasi.isComplete
               ? '14일 기준이 충족되었습니다. 이제 앱을 삭제하셔도 좋습니다.'
               : '14일 기준 충족 시 앱을 삭제하셔도 좋습니다.'}
           </p>
         </section>
 
-        {/* Gomoku Game Section (No Outer Card Container) */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-2 pb-1">
+        {/* Gomoku Game Section */}
+        <section className="space-y-2.5">
+          <div className="flex items-center justify-between gap-2 pb-0.5">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                AI 오목
+              <h3
+                className="text-xl font-bold text-slate-900 tracking-wider"
+                style={{ fontFamily: "'Gungsuh', 'GungsuhChe', 'Batang', serif" }}
+              >
+                오목
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 {winner === 1 && <span className="text-emerald-600 font-bold">플레이어 승리!</span>}
@@ -383,7 +409,7 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
                 {winner === 'draw' && <span className="text-slate-600 font-bold">무승부</span>}
                 {winner === 0 && (
                   isAiThinking ? (
-                    <span className="text-blue-600 animate-pulse">AI 착수 중...</span>
+                    <span className="text-blue-600 animate-pulse font-medium">AI 착수 중...</span>
                   ) : (
                     <span>흑돌(선공) 차례</span>
                   )
@@ -413,12 +439,12 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
             </div>
           </div>
 
-          {/* Board Wrapper */}
-          <div className="w-full flex justify-center py-1">
+          {/* Board Wrapper (Reduced size for optimal screen fit and convenience) */}
+          <div className="w-full flex justify-center py-0.5">
             <div
-              className="relative w-full max-w-[400px] aspect-square bg-[#f4e4ba] rounded-lg shadow-sm border border-[#bfa068] p-2 select-none touch-manipulation"
+              className="relative w-[86vw] max-w-[310px] aspect-square bg-[#f4e4ba] rounded-lg shadow-sm border border-[#bfa068] p-1.5 select-none touch-manipulation"
               style={{
-                boxShadow: 'inset 0 0 8px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.08)'
+                boxShadow: 'inset 0 0 6px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.08)'
               }}
             >
               {/* Grid Lines (15x15) */}
@@ -462,7 +488,7 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
                         key={idx}
                         cx={cx}
                         cy={cy}
-                        r="1.8"
+                        r="1.6"
                         fill="#593e15"
                       />
                     );
@@ -495,37 +521,32 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
                             <div className="w-[78%] h-[78%] rounded-full bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                           )}
 
-                          {/* Placed Stone */}
+                          {/* Placed Stone (Player: Black) */}
                           {cell === 1 && (
                             <div
-                              className={`relative w-[84%] h-[84%] rounded-full shadow-md transition-all ${
+                              className={`relative w-[86%] h-[86%] rounded-full shadow-md transition-all ${
                                 isWinningStone ? 'ring-2 ring-emerald-500 scale-105' : ''
                               }`}
                               style={{
                                 background: 'radial-gradient(circle at 35% 35%, #555 0%, #111 60%, #000 100%)',
-                                boxShadow: '1px 2px 4px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.3)',
+                                boxShadow: '1px 2px 3px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.3)',
+                                animation: isLast ? 'stoneDrop 0.22s cubic-bezier(0.2, 0.8, 0.3, 1) forwards' : undefined,
                               }}
-                            >
-                              {isLast && (
-                                <div className="absolute inset-0 m-auto w-2 h-2 rounded-full bg-red-500 ring-2 ring-white/80" />
-                              )}
-                            </div>
+                            />
                           )}
 
+                          {/* Placed Stone (AI: White) - No dot, drop animation */}
                           {cell === 2 && (
                             <div
-                              className={`relative w-[84%] h-[84%] rounded-full shadow-md transition-all border border-slate-300 ${
+                              className={`relative w-[86%] h-[86%] rounded-full shadow-md transition-all border border-slate-300 ${
                                 isWinningStone ? 'ring-2 ring-rose-500 scale-105' : ''
                               }`}
                               style={{
                                 background: 'radial-gradient(circle at 35% 35%, #ffffff 0%, #f0f0f0 50%, #d6d6d6 100%)',
-                                boxShadow: '1px 2px 4px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.9)',
+                                boxShadow: '1px 2px 3px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.9)',
+                                animation: isLast ? 'stoneDrop 0.22s cubic-bezier(0.2, 0.8, 0.3, 1) forwards' : undefined,
                               }}
-                            >
-                              {isLast && (
-                                <div className="absolute inset-0 m-auto w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white/80" />
-                              )}
-                            </div>
+                            />
                           )}
                         </button>
                       );

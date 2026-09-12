@@ -261,7 +261,8 @@ export default function Dashboard() {
       const g = changeStudentId[0];
       const cn = changeStudentId[1];
       const sn = parseInt(changeStudentId.substring(2)).toString();
-      if (parseInt(g) >= 1 && parseInt(g) <= 3 && parseInt(cn) >= 1) {
+      const isDevStudent = (changeStudentId === "9999" && trimmedName === "김학생");
+      if (isDevStudent || (parseInt(g) >= 1 && parseInt(g) <= 3 && parseInt(cn) >= 1)) {
         let semesterKey = '1';
         try {
           const res = await fetch('/api/settings/public');
@@ -423,7 +424,7 @@ export default function Dashboard() {
       document.body.classList.remove('capturing');
 
       const link = document.createElement('a');
-      link.download = `${grade}학년_${classNum}반_시간표.png`;
+      link.download = `${isDevStudent ? effectiveGrade : grade}학년_${isDevStudent ? effectiveClassNum : classNum}반_시간표.png`;
       link.href = dataUrl;
       link.click();
 
@@ -547,15 +548,19 @@ export default function Dashboard() {
     }, 150);
   };
 
-  // 1. 시간표 조회
+  // 1. 시간표 조회 (개발자 계정 9999 김학생인 경우 지정된 내부 시간표 반 및 선택과목 적용)
+  const isDevStudent = (studentName === "김학생" || grade === "9" || (studentNumber === "99" && studentName === "김학생"));
+  const effectiveGrade = isDevStudent ? (settings?.dev_student_grade || "2") : grade;
+  const effectiveClassNum = isDevStudent ? (settings?.dev_student_class || "1") : classNum;
+
   const { data: rawTimetableData, isLoading: timetableLoading, isFetching: isTimetableFetching, refetch: refetchTimetable } = useQuery({
-    queryKey: ['timetable', schoolName, grade, classNum, weekDates[0].toISOString()],
+    queryKey: ['timetable', schoolName, effectiveGrade, effectiveClassNum, weekDates[0].toISOString()],
     queryFn: async () => {
-      if (!grade || !classNum) return [];
+      if (!effectiveGrade || !effectiveClassNum) return [];
       try {
-        const queryClassNum = (grade === "2" || grade === "3") ? "all" : classNum;
+        const queryClassNum = (effectiveGrade === "2" || effectiveGrade === "3") ? "all" : effectiveClassNum;
         const targetDate = toDateString(weekDates[0]);
-        const response = await fetch(`/api/comcigan?type=timetable&grade=${grade}&classNum=${queryClassNum}&targetDate=${encodeURIComponent(targetDate)}`);
+        const response = await fetch(`/api/comcigan?type=timetable&grade=${effectiveGrade}&classNum=${queryClassNum}&targetDate=${encodeURIComponent(targetDate)}`);
         if (!response.ok) {
           throw new Error(`Failed to fetch from Comcigan: ${response.status}`);
         }
@@ -589,7 +594,7 @@ export default function Dashboard() {
         throw e;
       }
     },
-    enabled: !!grade && !!classNum && !!schoolName,
+    enabled: !!effectiveGrade && !!effectiveClassNum && !!schoolName,
     retry: true, // 무한 재시도
     retryDelay: 3000, // 3초 간격
     staleTime: 5000, // 5초 동안은 데이터를 신선한 상태로 유지하여, 캐싱 반영 및 UI 깜빡임 최소화
@@ -607,24 +612,27 @@ export default function Dashboard() {
 
   // 1.5 선택과목 데이터 및 프로필 조회 (2, 3학년용)
   const { data: electiveConfigs, isFetching: isElectiveConfigsFetching } = useQuery({
-    queryKey: ['electiveConfigs', grade, datasetType],
+    queryKey: ['electiveConfigs', effectiveGrade, datasetType],
     queryFn: async () => {
-      if ((grade !== "2" && grade !== "3")) return [];
-      const res = await fetch(`/api/electives?grade=${grade}&dataset=${datasetType}`);
+      if ((effectiveGrade !== "2" && effectiveGrade !== "3")) return [];
+      const res = await fetch(`/api/electives?grade=${effectiveGrade}&dataset=${datasetType}`);
       if (!res.ok) {
         if (res.status === 404) return [];
         throw new Error(`Failed to fetch elective configs: ${res.status}`);
       }
       return res.json();
     },
-    enabled: (grade === "2" || grade === "3")
+    enabled: (effectiveGrade === "2" || effectiveGrade === "3")
   });
 
   const { data: studentProfile } = useQuery({
-    queryKey: ['studentProfile', grade, classNum, studentNumber, studentName, datasetType],
+    queryKey: ['studentProfile', effectiveGrade, effectiveClassNum, studentNumber, studentName, datasetType],
     queryFn: async () => {
-      if ((grade !== "2" && grade !== "3") || !classNum || !studentNumber || !studentName) return null;
-      const res = await fetch(`/api/electives?type=student&grade=${grade}&classNum=${classNum}&studentNumber=${studentNumber}&studentName=${encodeURIComponent(studentName)}&dataset=${datasetType}`);
+      if (isDevStudent) {
+        return { electives: settings?.dev_student_electives || {} };
+      }
+      if ((effectiveGrade !== "2" && effectiveGrade !== "3") || !effectiveClassNum || !studentNumber || !studentName) return null;
+      const res = await fetch(`/api/electives?type=student&grade=${effectiveGrade}&classNum=${effectiveClassNum}&studentNumber=${studentNumber}&studentName=${encodeURIComponent(studentName)}&dataset=${datasetType}`);
       if (!res.ok) {
         if (res.status === 404) return null;
         throw new Error(`Failed to fetch student profile: ${res.status}`);
@@ -639,12 +647,15 @@ export default function Dashboard() {
       }
       return data;
     },
-    enabled: !!grade && !!classNum && !!studentNumber && (grade === "2" || grade === "3")
+    enabled: isDevStudent ? true : (!!effectiveGrade && !!effectiveClassNum && !!studentNumber && (effectiveGrade === "2" || effectiveGrade === "3"))
   });
 
   const lastValidProfileRef = React.useRef<any>(null);
   const currentProfile = React.useMemo(() => {
-    if (grade !== "2" && grade !== "3") {
+    if (isDevStudent) {
+      return { electives: settings?.dev_student_electives || {} };
+    }
+    if (effectiveGrade !== "2" && effectiveGrade !== "3") {
       lastValidProfileRef.current = null;
       return null;
     }
@@ -653,17 +664,22 @@ export default function Dashboard() {
       return studentProfile;
     }
     return lastValidProfileRef.current; // retain only if undefined (e.g. background fetch just started, though usually data stays populated)
-  }, [studentProfile, grade]);
+  }, [studentProfile, effectiveGrade, isDevStudent, settings?.dev_student_electives]);
 
   // 2, 3학년 선택과목 완벽 입력 상태 확인 logic
   useEffect(() => {
-    if (grade !== "2" && grade !== "3") {
+    if (isDevStudent) {
+      setIsElectiveEntered(true);
+      setShowElectiveWarning(false);
+      return;
+    }
+    if (effectiveGrade !== "2" && effectiveGrade !== "3") {
       setIsElectiveEntered(true);
       setShowElectiveWarning(false);
       return;
     }
 
-    if (!classNum || !studentNumber || !electiveConfigs) {
+    if (!effectiveClassNum || !studentNumber || !electiveConfigs) {
       // Still loading necessary contexts
       return;
     }
@@ -678,8 +694,6 @@ export default function Dashboard() {
     
     // If no configs are found, block if it's required (but since we don't know, we'll assume not fully entered to be safe or maybe let it pass if setup is incomplete)
     if (requiredGroups.length === 0) {
-      // Empty configs scenario: usually means electives aren't actively defined yet. Let pass?
-      // Better to assume true to not block the Dashboard if the admin hasn't set anything up.
       setIsElectiveEntered(true);
       setShowElectiveWarning(false);
       return;
@@ -694,14 +708,14 @@ export default function Dashboard() {
     setIsElectiveEntered(isFullyEntered);
     setShowElectiveWarning(!isFullyEntered);
 
-  }, [grade, classNum, studentNumber, datasetType, currentProfile, electiveConfigs]);
+  }, [effectiveGrade, effectiveClassNum, studentNumber, datasetType, currentProfile, electiveConfigs, isDevStudent]);
 
   const { timetableData, allClassesTimetable } = useMemo(() => {
     if (!rawTimetableData) return { timetableData: [], allClassesTimetable: [] };
     const all = rawTimetableData;
-    const current = all.filter(t => !t.class || t.class.toString() === classNum.toString());
+    const current = all.filter(t => !t.class || t.class.toString() === effectiveClassNum.toString());
     return { timetableData: current, allClassesTimetable: all };
-  }, [rawTimetableData, classNum]);
+  }, [rawTimetableData, effectiveClassNum]);
 
   // 학년별 학생 등록/수정/연기/삭제 권한 검증 헬퍼
   const checkStudentPermission = (targetGrade?: number) => {
@@ -725,7 +739,7 @@ export default function Dashboard() {
   // 각 시간(교시)별 다수결 그룹 계산
 
   const computedGroups = useMemo(() => {
-    if (grade !== "2" && grade !== "3") {
+    if (effectiveGrade !== "2" && effectiveGrade !== "3") {
       return {};
     }
     // 시간표 데이터 자체가 없으면 그룹 매핑도 없는 것이 정상입니다.
@@ -802,8 +816,8 @@ export default function Dashboard() {
     }
 
     // Override는 electiveConfigs 유무와 무관하게 항상 적용
-    if (settings?.elective_group_overrides?.[grade]) {
-      const gradeOverrides = settings.elective_group_overrides[grade];
+    if (settings?.elective_group_overrides?.[effectiveGrade]) {
+      const gradeOverrides = settings.elective_group_overrides[effectiveGrade];
       for (const [cellKey, overrideValue] of Object.entries(gradeOverrides)) {
         if (overrideValue === "NONE") {
           delete cellGroups[cellKey];
@@ -813,7 +827,7 @@ export default function Dashboard() {
       }
     }
     return cellGroups;
-  }, [allClassesTimetable, electiveConfigs, grade, settings?.elective_group_overrides]);
+  }, [allClassesTimetable, electiveConfigs, effectiveGrade, settings?.elective_group_overrides]);
 
   // 표준 인쇄 모드용: 기준 데이터셋(baseline)으로 매핑된 전체 시간표
   const baselineAllClassesTimetable = useMemo(() => {
@@ -834,7 +848,7 @@ export default function Dashboard() {
 
   // 표준 인쇄 모드용: baseline 데이터를 이용한 선택과목 그룹 계산
   const baselineComputedGroups = useMemo(() => {
-    if (grade !== '2' && grade !== '3') return {};
+    if (effectiveGrade !== '2' && effectiveGrade !== '3') return {};
     if (!baselineAllClassesTimetable || baselineAllClassesTimetable.length === 0) return {};
     const cellGroups: Record<string, string> = {};
     if (electiveConfigs && electiveConfigs.length > 0) {
@@ -876,20 +890,20 @@ export default function Dashboard() {
         }
       }
     }
-    if (settings?.elective_group_overrides?.[grade]) {
-      const gradeOverrides = settings.elective_group_overrides[grade];
+    if (settings?.elective_group_overrides?.[effectiveGrade]) {
+      const gradeOverrides = settings.elective_group_overrides[effectiveGrade];
       for (const [cellKey, overrideValue] of Object.entries(gradeOverrides)) {
         if (overrideValue === 'NONE') delete cellGroups[cellKey];
         else if (typeof overrideValue === 'string') cellGroups[cellKey] = overrideValue;
       }
     }
     return cellGroups;
-  }, [baselineAllClassesTimetable, electiveConfigs, grade, settings?.elective_group_overrides]);
+  }, [baselineAllClassesTimetable, electiveConfigs, effectiveGrade, settings?.elective_group_overrides]);
 
   // 2. 컴시간에서 시간표 가져오기
   const fetchFromComcigan = useMutation({
     mutationFn: async () => {
-      if (!schoolName || !grade || !classNum) {
+      if (!schoolName || !effectiveGrade || !effectiveClassNum) {
         throw new Error('학교, 학년, 반 정보가 필요합니다');
       }
 
@@ -898,8 +912,8 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           schoolName,
-          grade: parseInt(grade),
-          classNum: parseInt(classNum),
+          grade: parseInt(effectiveGrade),
+          classNum: parseInt(effectiveClassNum),
         }),
       });
 
@@ -920,12 +934,12 @@ export default function Dashboard() {
 
   // 3. 수행평가 목록 조회
   const { data: allAssessments, isLoading: assessmentLoading } = useQuery({
-    queryKey: ['assessments', grade, classNum, datasetType],
+    queryKey: ['assessments', effectiveGrade, effectiveClassNum, datasetType],
     queryFn: async () => {
-      if (!grade || !classNum) return [];
+      if (!effectiveGrade || !effectiveClassNum) return [];
       try {
         const datasetQuery = datasetType ? `&dataset=${encodeURIComponent(datasetType)}` : '';
-        const res = await fetch(`/api/assessment?grade=${grade}&classNum=${classNum}${datasetQuery}`);
+        const res = await fetch(`/api/assessment?grade=${effectiveGrade}&classNum=${effectiveClassNum}${datasetQuery}`);
         if (!res.ok) {
           if (res.status === 404) return [];
           throw new Error(`API Error: ${res.status}`);
@@ -2133,7 +2147,7 @@ export default function Dashboard() {
                   <div className="capture-only mb-1.5 p-1.5 border rounded-md text-black flex flex-col gap-0.5">
                     <div className="flex justify-between items-end border-b pb-0.5 mb-0.5">
                       <div className="text-sm font-bold leading-none">
-                        {grade}학년 {classNum}반 {studentNumber || '?'}번
+                        {isDevStudent ? `${effectiveGrade}학년 ${effectiveClassNum}반` : `${grade}학년 ${classNum}반 ${studentNumber || '?'}번`}
                       </div>
                       <div className="text-[10px] text-gray-600 leading-none">
                         발급일자: {new Date().toLocaleDateString('ko-KR')} (수행평가는 출력 시점 기준)

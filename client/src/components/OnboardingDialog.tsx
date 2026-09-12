@@ -40,7 +40,8 @@ export default function OnboardingDialog() {
             // 0으로 시작하는 번호 처리 (05 → 5)
             const studentNumber = parseInt(studentId.substring(2)).toString();
 
-            if (parseInt(grade) >= 1 && parseInt(grade) <= 3 && parseInt(classNum) >= 1) {
+            const isDevStudent = (studentId === "9999" && trimmedName === "김학생");
+            if (isDevStudent || (parseInt(grade) >= 1 && parseInt(grade) <= 3 && parseInt(classNum) >= 1)) {
                 // 서버의 현재 semester_key를 함께 저장
                 let semesterKey = '1';
                 try {

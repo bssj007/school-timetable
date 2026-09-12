@@ -162,8 +162,9 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
     const [teacherError, setTeacherError] = useState("");
     const teacherInputRef = useRef<HTMLInputElement>(null);
 
-    // ── 베타테스터 (Android 품앗이) ──
+    // ── 베타테스터 (Android 품앗이) & 개발자 계정 ──
     const [betaEnabled, setBetaEnabled] = useState(false);
+    const [devAccountEnabled, setDevAccountEnabled] = useState(false);
     const [isAndroidNative, setIsAndroidNative] = useState(false);
 
     useEffect(() => {
@@ -178,6 +179,9 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
             .then(data => {
                 if (data?.beta_testing_enabled) {
                     setBetaEnabled(true);
+                }
+                if (data?.dev_account_enabled) {
+                    setDevAccountEnabled(true);
                 }
             })
             .catch(() => { });
@@ -225,8 +229,23 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
     const filteredOptions = useMemo(() => {
         const q = query.trim();
         if (!q) return [];
-        return teacherOptions.filter(o => matchesTeacher(o.rawName, o.subjects, q));
-    }, [teacherOptions, query]);
+
+        const normalMatches = teacherOptions.filter(o => matchesTeacher(o.rawName, o.subjects, q));
+
+        // 개발자 계정 ("김교사"): 정확히 "김교사" 또는 "김교사 선생님" 검색 시에만 노출
+        if (devAccountEnabled && (q === "김교사" || q === "김교사 선생님")) {
+            const devOption: TeacherOption = {
+                idx: 9999,
+                rawName: "김교사",
+                displayName: "김교사",
+                subjects: [],
+                label: "김교사 선생님",
+            };
+            return [devOption, ...normalMatches.filter(o => o.rawName !== "김교사")];
+        }
+
+        return normalMatches.filter(o => o.rawName !== "김교사");
+    }, [teacherOptions, query, devAccountEnabled]);
 
     // ── 핸들러 ──
 
@@ -293,7 +312,8 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         const classNum = studentId[1];
         const studentNumber = parseInt(studentId.substring(2)).toString();
 
-        if (!(parseInt(grade) >= 1 && parseInt(grade) <= 3 && parseInt(classNum) >= 1)) {
+        const isDevStudent = (studentId === "9999" && trimmedName === "김학생");
+        if (!isDevStudent && !(parseInt(grade) >= 1 && parseInt(grade) <= 3 && parseInt(classNum) >= 1)) {
             setStudentError("올바른 학번 형식이 아닙니다. (예: 1102)");
             return;
         }

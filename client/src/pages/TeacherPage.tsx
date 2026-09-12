@@ -329,8 +329,10 @@ function getCachedTeachers(): string[] | null {
 }
 
 function resolveTeacherId(nameToFind: string | null | undefined, teachersList?: string[]): string | null {
-  if (!nameToFind || !teachersList || teachersList.length <= 1) return null;
+  if (!nameToFind) return null;
   const cleanTarget = normalizeTeacherName(nameToFind);
+  if (cleanTarget === "김교사") return "9999";
+  if (!teachersList || teachersList.length <= 1) return null;
   const idx = teachersList.findIndex((n) => normalizeTeacherName(n) === cleanTarget);
   return idx > 0 ? String(idx) : null;
 }
@@ -1016,26 +1018,63 @@ export default function TeacherPage() {
   const [showTeacherSelectModal, setShowTeacherSelectModal] = useState(false);
   const [teacherSearchQuery, setTeacherSearchQuery] = useState("");
 
+  const isDevTeacher = selectedTeacherId === "9999" || getTeacherNameCookie() === "김교사" || (typeof localStorage !== "undefined" && localStorage.getItem("last_selected_teacher_name") === "김교사");
+
+  // If dev teacher, resolve the internal data source teacher ID from settings
+  const devSourceTeacherId = useMemo(() => {
+    if (!settings?.dev_teacher_source || !timetableData?.teachers) return 1;
+    const source = String(settings.dev_teacher_source).trim();
+    const parsed = parseInt(source, 10);
+    if (!isNaN(parsed) && timetableData.teachers[parsed]) return parsed;
+    const foundIdx = resolveTeacherId(source, timetableData.teachers);
+    if (foundIdx && foundIdx !== "9999") return parseInt(foundIdx, 10);
+    return 1;
+  }, [settings?.dev_teacher_source, timetableData?.teachers]);
+
+  const isDevAccountEnabled = settings?.dev_account_enabled;
+
   const filteredTeacherOptions = useMemo(() => {
-    if (!teacherSearchQuery.trim()) return teacherOptions;
-    const q = teacherSearchQuery.trim().toLowerCase();
-    return teacherOptions.filter(opt => {
-      const matchName = opt.displayName.toLowerCase().includes(q) || opt.rawName.toLowerCase().includes(q) || opt.label.toLowerCase().includes(q);
-      const matchSubject = opt.subjects.some(s => s.toLowerCase().includes(q));
+    const q = teacherSearchQuery.trim();
+    if (!q) {
+      return teacherOptions.filter(opt => opt.rawName !== "김교사");
+    }
+    const qLower = q.toLowerCase();
+    const normalMatches = teacherOptions.filter(opt => {
+      if (opt.rawName === "김교사") return false;
+      const matchName = opt.displayName.toLowerCase().includes(qLower) || opt.rawName.toLowerCase().includes(qLower) || opt.label.toLowerCase().includes(qLower);
+      const matchSubject = opt.subjects.some(s => s.toLowerCase().includes(qLower));
       return matchName || matchSubject;
     });
-  }, [teacherOptions, teacherSearchQuery]);
 
-  const tId = parseInt(selectedTeacherId, 10);
-  const rawTeacherName = timetableData?.teachers?.[tId] || "";
-  const teacherName = getTeacherDisplayName(rawTeacherName, tId);
+    if (isDevAccountEnabled && (q === "김교사" || q === "김교사 선생님")) {
+      const devOpt = {
+        idx: 9999,
+        rawName: "김교사",
+        displayName: "김교사",
+        subjects: [],
+        label: "김교사 선생님"
+      };
+      return [devOpt, ...normalMatches];
+    }
+
+    return normalMatches;
+  }, [teacherOptions, teacherSearchQuery, isDevAccountEnabled]);
+
+  const effectiveTeacherId = isDevTeacher ? devSourceTeacherId : parseInt(selectedTeacherId, 10);
+  const tId = effectiveTeacherId;
+  const rawTeacherName = isDevTeacher ? "김교사" : (timetableData?.teachers?.[tId] || "");
+  const teacherName = isDevTeacher ? "김교사" : getTeacherDisplayName(rawTeacherName, tId);
   const selectedSchedule = timetableData?.timetable?.[tId];
 
   // ── 서버 기반 교사 비밀번호 실시간 검증 (단일 진실원천: 서버 D1) ──────────────
   // 마운트 시 또는 선생님 변경 시: 저장된 비밀번호가 있다면 서버에 제시하여 유효성 검증
-  // 서버 측에서 비밀번호가 변경되었으면 401을 반환하므로, 즉시 인증을 해제하고 재입력 요구
+  // 개발자 교사 ("김교사")는 인증 면제
   useEffect(() => {
     if (!rawTeacherName) return;
+    if (isDevTeacher) {
+      setIsCurrentTeacherVerified(true);
+      return;
+    }
 
     const storedPw = getStoredTeacherPassword(rawTeacherName);
     if (!storedPw) {
@@ -1594,7 +1633,13 @@ export default function TeacherPage() {
   // 평가 항목이 현재 선택된 선생님의 수업(과목/반/그룹)에 해당하는지 판별
   // 아래 과목별/반-그룹별 수행 리스트(panelAssessments)의 데이터 구조 및 필터링 규칙과 일치
   const isAssessmentForTeacher = useCallback((a: AssessmentItem): boolean => {
-    if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
+    if (isDevTeacher) {
+      const sourceRaw = timetableData?.teachers?.[devSourceTeacherId] || "";
+      const sourceDisplay = getTeacherDisplayName(sourceRaw, devSourceTeacherId);
+      if (!matchTeacherAndSubject(a, sourceDisplay, sourceRaw, taughtSubjects)) return false;
+    } else {
+      if (!matchTeacherAndSubject(a, teacherName, rawTeacherName, taughtSubjects)) return false;
+    }
 
     return allTeacherClassTabs.some(tab => {
       if (tab.subject && a.subject && !isSubjectMatch(a.subject, [tab.subject])) return false;
@@ -3300,7 +3345,9 @@ export default function TeacherPage() {
                     className="flex items-center gap-1 pl-2.5 pr-1.5 py-1.5 wide:pl-2.5 wide:pr-1.5 wide:py-1.5 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-extrabold text-xs wide:text-sm tracking-tight leading-tight transition-colors focus:outline-none cursor-pointer group min-w-0 max-w-[140px] wide:max-w-[190px]"
                   >
                     <span className="truncate text-left min-w-0">
-                      {selectedTeacherId
+                      {isDevTeacher
+                        ? "김교사 선생님"
+                        : selectedTeacherId
                         ? `${teacherOptions.find(o => o.idx.toString() === selectedTeacherId)?.label || getTeacherDisplayName(timetableData.teachers[parseInt(selectedTeacherId, 10)], parseInt(selectedTeacherId, 10))} 선생님`
                         : "선생님 선택"}
                     </span>

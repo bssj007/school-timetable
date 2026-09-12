@@ -2130,6 +2130,117 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
         }
     });
 
+    const isDevAccountEnabled = settingsQuery.data?.dev_account_enabled === 'true';
+
+    // Local state for developer accounts
+    const [devGrade, setDevGrade] = useState<string>("2");
+    const [devClass, setDevClass] = useState<string>("1");
+    const [devElectives, setDevElectives] = useState<Record<string, { subject: string }>>({});
+    const [devTeacherSource, setDevTeacherSource] = useState<string>("");
+    const [devInitialized, setDevInitialized] = useState<boolean>(false);
+
+    useEffect(() => {
+        if (settingsQuery.data && !devInitialized) {
+            if (settingsQuery.data.dev_student_grade) {
+                setDevGrade(settingsQuery.data.dev_student_grade);
+            }
+            if (settingsQuery.data.dev_student_class) {
+                setDevClass(settingsQuery.data.dev_student_class);
+            }
+            if (settingsQuery.data.dev_student_electives) {
+                try {
+                    const parsed = typeof settingsQuery.data.dev_student_electives === 'string'
+                        ? JSON.parse(settingsQuery.data.dev_student_electives)
+                        : settingsQuery.data.dev_student_electives;
+                    if (parsed && typeof parsed === 'object') {
+                        setDevElectives(parsed);
+                    }
+                } catch (e) {
+                    console.error("Failed to parse dev_student_electives", e);
+                }
+            }
+            if (settingsQuery.data.dev_teacher_source) {
+                setDevTeacherSource(settingsQuery.data.dev_teacher_source);
+            }
+            setDevInitialized(true);
+        }
+    }, [settingsQuery.data, devInitialized]);
+
+    // Teacher list query for dev teacher source selection
+    const teachersQuery = useQuery({
+        queryKey: ["comcigan", "teachers", "adminDev"],
+        queryFn: async () => {
+            const res = await fetch("/api/comcigan?type=teacher_timetable");
+            if (!res.ok) return { teachers: [] };
+            return res.json();
+        }
+    });
+
+    const teacherList: string[] = useMemo(() => {
+        const list = teachersQuery.data?.teachers || [];
+        return list.filter((t: string) => t && t.trim() !== '' && t !== '김교사');
+    }, [teachersQuery.data?.teachers]);
+
+    // Elective config query for devGrade
+    const electiveConfigQuery = useQuery({
+        queryKey: ["admin", "devElectiveConfig", devGrade],
+        queryFn: async () => {
+            const res = await fetch(`/api/electives?grade=${devGrade}&dataset=COMCIGAN`);
+            if (!res.ok) return [];
+            return res.json();
+        },
+        enabled: devGrade === "2" || devGrade === "3"
+    });
+
+    const groupSubjects = useMemo(() => {
+        if (!electiveConfigQuery.data || !Array.isArray(electiveConfigQuery.data)) return {};
+        const map: Record<string, { subject: string; teacher: string }[]> = {};
+        const EXCLUDED = ["빈교실", "공강", "창체", "자습", "동아리", "점심시간", "채플", "Empty", "Free"];
+        for (const cfg of electiveConfigQuery.data) {
+            const rawCode = cfg.classCode || "";
+            if (!rawCode || rawCode === "?") continue;
+            if (EXCLUDED.some((ex: string) => (cfg.subject || "").trim().includes(ex))) continue;
+            const codes = rawCode.split(",").map((c: string) => c.trim()).filter(Boolean);
+            const entry = { subject: cfg.subject, teacher: cfg.originalTeacher || cfg.fullTeacherName || "" };
+            for (const code of codes) {
+                if (!map[code]) map[code] = [];
+                if (!map[code].some((e) => e.subject === entry.subject)) map[code].push(entry);
+            }
+        }
+        return map;
+    }, [electiveConfigQuery.data]);
+
+    const groupCodes = useMemo(() => Object.keys(groupSubjects).sort(), [groupSubjects]);
+
+    // Save developer settings mutation
+    const saveDevSettingsMutation = useMutation({
+        mutationFn: async (overrideEnabled?: boolean) => {
+            const isEnabled = overrideEnabled !== undefined ? overrideEnabled : isDevAccountEnabled;
+            const payload = {
+                dev_account_enabled: isEnabled ? 'true' : 'false',
+                dev_student_grade: devGrade,
+                dev_student_class: devClass,
+                dev_student_electives: JSON.stringify(devElectives),
+                dev_teacher_source: devTeacherSource
+            };
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error("Failed to save settings");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            toast.success("개발자용 계정 설정이 저장되었습니다.");
+        },
+        onError: () => {
+            toast.error("설정 저장 중 오류가 발생했습니다.");
+        }
+    });
+
     return (
         <div className="space-y-6">
             <Card className="w-full">
@@ -2173,6 +2284,214 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
                             <li><strong>14일 연속 참여 기준:</strong> Google Play 비공개 테스트 요건(14일 연속 참여)에 따라 며칠째 접속 중인지, 남은 기간은 며칠인지 시각적 프로그레스 바로 표시되며 14일 달성 시 앱을 삭제하셔도 좋다는 안내가 제공됩니다.</li>
                             <li><strong>사용자 관리 탭 연동:</strong> 기능이 켜져 있는 동안 '사용자 관리' 탭에 <strong>🧪 품앗이 접속</strong> 접이식 단락이 표시되어 참여 테스터들의 IP, 접속 환경, 참여 경과를 한눈에 모니터링할 수 있습니다.</li>
                         </ul>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* 개발자용 가상 계정 설정 카드 */}
+            <Card className="w-full border-slate-200 shadow-sm">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                            <CardTitle className="text-xl flex items-center gap-2">
+                                <span className="p-1 rounded-lg bg-violet-100 text-violet-700 text-lg">💻</span>
+                                <span>개발자용 가상 계정 (시간표 및 기능 테스트)</span>
+                            </CardTitle>
+                            <CardDescription>
+                                시간표 표출, 선택과목 변경, 교사용 기능 등을 실제 계정 간섭 없이 즉시 시뮬레이션할 수 있는 전용 계정을 설정합니다.
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center space-x-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                            <Switch
+                                id="dev-account-switch"
+                                checked={isDevAccountEnabled}
+                                onCheckedChange={(checked) => saveDevSettingsMutation.mutate(checked)}
+                                disabled={saveDevSettingsMutation.isPending || settingsQuery.isLoading}
+                            />
+                            <Label htmlFor="dev-account-switch" className="text-sm font-bold cursor-pointer">
+                                {isDevAccountEnabled ? (
+                                    <span className="text-violet-600">활성화됨 (ON)</span>
+                                ) : (
+                                    <span className="text-slate-400">비활성화 (OFF)</span>
+                                )}
+                            </Label>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="p-4 rounded-xl bg-violet-50/60 border border-violet-200 text-sm text-slate-700 space-y-2">
+                        <div className="font-semibold text-violet-900 flex items-center gap-1.5">
+                            <Info className="w-4 h-4 text-violet-600" />
+                            <span>개발자 계정 사용 안내</span>
+                        </div>
+                        <ul className="list-disc list-inside space-y-1 text-xs text-slate-600 pl-1 leading-relaxed">
+                            <li><strong>학생용 가상 계정:</strong> 학번 <code className="bg-white px-1.5 py-0.5 rounded text-violet-700 font-mono font-bold border border-violet-200">9999</code> / 이름 <code className="bg-white px-1.5 py-0.5 rounded text-violet-700 font-mono font-bold border border-violet-200">김학생</code>으로 로그인 시 아래 지정된 학년/반 및 선택과목의 시간표가 표출됩니다.</li>
+                            <li><strong>선생님용 가상 계정:</strong> 선생님 이름 <code className="bg-white px-1.5 py-0.5 rounded text-violet-700 font-mono font-bold border border-violet-200">김교사</code>로 접속 시 <strong>비밀번호 검증이 면제</strong>되며, 정확히 '김교사'로 검색한 경우에만 목록에 노출됩니다.</li>
+                            <li><strong>사용자 관리 탭 추적:</strong> 개발자 계정 접속 기록은 일반 계정과 동일한 트래킹 프레임워크로 기록되며, '사용자 관리' 목록에서 보라색 하이라이트 및 <Badge className="bg-violet-600 text-white text-[10px] px-1 py-0 h-4">💻 개발자 계정</Badge> 배지가 부여됩니다.</li>
+                        </ul>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* 1. 학생용 가상 계정 설정 */}
+                        <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-4 shadow-sm">
+                            <div className="flex items-center justify-between border-b pb-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="p-1 rounded bg-blue-100 text-blue-700 text-sm">🎓</span>
+                                    <h4 className="font-bold text-slate-800 text-sm">학생용 계정: 9999 김학생</h4>
+                                </div>
+                                <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50 text-[11px]">
+                                    학번: 9999
+                                </Badge>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <Label className="text-xs text-slate-500 font-medium mb-1.5 block">내부 매핑 학년</Label>
+                                    <Select value={devGrade} onValueChange={(val) => { setDevGrade(val); setDevElectives({}); }}>
+                                        <SelectTrigger className="h-9 text-sm">
+                                            <SelectValue placeholder="학년 선택" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="1">1학년</SelectItem>
+                                            <SelectItem value="2">2학년</SelectItem>
+                                            <SelectItem value="3">3학년</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-slate-500 font-medium mb-1.5 block">내부 매핑 반</Label>
+                                    <Select value={devClass} onValueChange={setDevClass}>
+                                        <SelectTrigger className="h-9 text-sm">
+                                            <SelectValue placeholder="반 선택" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(c => (
+                                                <SelectItem key={c} value={String(c)}>{c}반</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 pt-1">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-semibold text-slate-700">선택과목 직접 지정 ({devGrade}학년)</Label>
+                                    {groupCodes.length > 0 && (
+                                        <span className="text-[11px] text-slate-400 font-mono">{groupCodes.length}개 그룹</span>
+                                    )}
+                                </div>
+
+                                {devGrade === "1" ? (
+                                    <div className="p-3 bg-slate-50 rounded-lg text-xs text-slate-500 border border-dashed border-slate-200 text-center">
+                                        1학년은 공통과목으로 구성되어 선택과목 지정이 필요하지 않습니다.
+                                    </div>
+                                ) : electiveConfigQuery.isLoading ? (
+                                    <div className="p-3 bg-slate-50 rounded-lg text-xs text-slate-400 text-center">
+                                        선택과목 그룹 로딩 중...
+                                    </div>
+                                ) : groupCodes.length === 0 ? (
+                                    <div className="p-3 bg-slate-50 rounded-lg text-xs text-slate-400 text-center border border-dashed">
+                                        해당 학년의 선택과목 그룹 데이터가 없습니다.
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                        {groupCodes.map((groupCode) => {
+                                            const subjects = groupSubjects[groupCode] || [];
+                                            const currentVal = devElectives[groupCode]?.subject || "";
+                                            return (
+                                                <div key={groupCode} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-50 border border-slate-200">
+                                                    <Badge variant="secondary" className="font-mono text-xs px-2 py-0.5 bg-slate-200 text-slate-800 font-bold shrink-0">
+                                                        그룹 {groupCode}
+                                                    </Badge>
+                                                    <Select
+                                                        value={currentVal || "_none_"}
+                                                        onValueChange={(val) => {
+                                                            setDevElectives(prev => {
+                                                                const updated = { ...prev };
+                                                                if (val === "_none_") {
+                                                                    delete updated[groupCode];
+                                                                } else {
+                                                                    updated[groupCode] = { subject: val };
+                                                                }
+                                                                return updated;
+                                                            });
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className="h-8 text-xs bg-white flex-1">
+                                                            <SelectValue placeholder="과목 선택" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="_none_">(선택 안 함)</SelectItem>
+                                                            {subjects.map(s => (
+                                                                <SelectItem key={s.subject} value={s.subject}>
+                                                                    {s.subject} {s.teacher ? `(${s.teacher})` : ''}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* 2. 선생님용 가상 계정 설정 */}
+                        <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-4 shadow-sm flex flex-col justify-between">
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between border-b pb-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="p-1 rounded bg-amber-100 text-amber-700 text-sm">👨‍🏫</span>
+                                        <h4 className="font-bold text-slate-800 text-sm">선생님용 계정: 김교사</h4>
+                                    </div>
+                                    <Badge variant="outline" className="text-amber-700 border-amber-200 bg-amber-50 text-[11px]">
+                                        인증 면제 (비번 무관)
+                                    </Badge>
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs text-slate-500 font-medium mb-1.5 block">시간표 복제 원본 선생님 선택</Label>
+                                    <Select value={devTeacherSource || "_none_"} onValueChange={(val) => setDevTeacherSource(val === "_none_" ? "" : val)}>
+                                        <SelectTrigger className="h-9 text-sm">
+                                            <SelectValue placeholder="원본 선생님 선택..." />
+                                        </SelectTrigger>
+                                        <SelectContent className="max-h-60">
+                                            <SelectItem value="_none_">(선택 안 함 / 기본 빈 시간표)</SelectItem>
+                                            {teacherList.map(name => (
+                                                <SelectItem key={name} value={name}>
+                                                    {name} 선생님
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+                                        '김교사'로 접속 시 위에서 선택한 선생님의 시간표와 담당 학급 데이터가 그대로 복제되어 표시됩니다.
+                                    </p>
+                                </div>
+
+                                <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs text-amber-800 space-y-1">
+                                    <div className="font-semibold flex items-center gap-1">
+                                        <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                                        보안 및 검색 제한
+                                    </div>
+                                    <p className="text-[11px] text-amber-700 leading-relaxed">
+                                        선생님 검색창에 일반 검색 시에는 '김교사'가 절대 노출되지 않으며, 오직 검색창에 <strong>'김교사'</strong>를 완전 일치로 입력했을 때만 접근 가능합니다.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="pt-2">
+                                <Button
+                                    onClick={() => saveDevSettingsMutation.mutate(undefined)}
+                                    disabled={saveDevSettingsMutation.isPending}
+                                    className="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium text-xs h-9 shadow-sm flex items-center justify-center gap-1.5"
+                                >
+                                    <Save className="w-3.5 h-3.5" />
+                                    <span>개발자 계정 설정 저장하기</span>
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -7979,8 +8298,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         );
                                     };
 
-                                    const IpSubRow = ({ user }: { user: IPProfile }) => (
-                                        <TableRow className="bg-slate-50/80 text-xs">
+                                    const IpSubRow = ({ user }: { user: IPProfile }) => {
+                                        const isDevUser = user.studentName === '김학생' || (user as any).teacherName === '김교사' || (user.grade === 9 && user.classNum === 9);
+                                        return (
+                                        <TableRow className={`${isDevUser ? 'bg-violet-50/60 dark:bg-violet-950/20' : 'bg-slate-50/80'} text-xs`}>
                                             <TableCell className="pl-8 font-mono text-slate-500">
                                                 <Button
                                                     variant="link"
@@ -7991,6 +8312,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                 </Button>
                                             </TableCell>
                                             <TableCell>
+                                                
                                                 {/* 선생님 이름 (해당 시) */}
                                                 {(user as any).teacherName ? (
                                                     <div className="flex flex-col gap-0.5">
@@ -8072,16 +8394,21 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     )}
                                             </TableCell>
                                         </TableRow>
-                                    );
+                                        );
+                                    };
 
                                     const GroupRow = ({ group }: { group: UserGroup }) => {
                                         const isExpanded = expandedGroups.has(group.key);
                                         const hasMultiple = group.ips.length > 1;
                                         const representativeUser = group.ips[0];
+                                        const isDevGroup = group.studentName === '김학생' ||
+                                            group.teacherName === '김교사' ||
+                                            (group.grade === 9 && group.classNum === 9) ||
+                                            group.ips.some(u => u.studentName === '김학생' || (u as any).teacherName === '김교사' || (u.grade === 9 && u.classNum === 9));
                                         return (
                                             <>
                                                 <TableRow
-                                                    className={`${hasMultiple ? 'cursor-pointer hover:bg-blue-50/50' : ''} ${group.isBlocked ? 'bg-red-50/30' : ''}`}
+                                                    className={`${hasMultiple ? 'cursor-pointer hover:bg-blue-50/50' : ''} ${group.isBlocked ? 'bg-red-50/30' : isDevGroup ? 'bg-violet-50/60 dark:bg-violet-950/25' : ''}`}
                                                     onClick={hasMultiple ? () => toggleGroup(group.key) : undefined}
                                                 >
                                                     <TableCell className="font-mono">
@@ -8107,6 +8434,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         )}
                                                     </TableCell>
                                                     <TableCell>
+                                                        
                                                         {group.grade && group.classNum ? (
                                                             <div className="flex flex-col gap-0.5">
                                                                 {/* 선생님 이름 (동시 접속 시) */}
@@ -8314,14 +8642,17 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         <div className="bg-gray-50 border-t overflow-x-auto">
                                                             <Table className="min-w-[1280px]">
                                                                 <TableBody>
-                                                                    {unknownUsers.map((user: IPProfile, idx: number) => (
-                                                                        <TableRow key={idx}>
+                                                                    {unknownUsers.map((user: IPProfile, idx: number) => {
+                                                                        const isDevUnknown = user.studentName === '김학생' || (user as any).teacherName === '김교사' || (user.grade === 9 && user.classNum === 9);
+                                                                        return (
+                                                                        <TableRow key={idx} className={isDevUnknown ? 'bg-violet-50/60 dark:bg-violet-950/25' : ''}>
                                                                             <TableCell className="font-mono">
                                                                                 <Button variant="link" className="p-0 h-auto font-mono text-blue-600 hover:text-blue-800 underline decoration-dotted" onClick={() => setSelectedProfile(user)}>
                                                                                     {user.ip}
                                                                                 </Button>
                                                                             </TableCell>
                                                                             <TableCell>
+                                                                                
                                                                                 {user.grade && user.classNum ? (
                                                                                     <div className="flex flex-col gap-0.5">
                                                                                         <span className="font-bold text-sm text-slate-800">
@@ -8377,7 +8708,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                                 )}
                                                                             </TableCell>
                                                                         </TableRow>
-                                                                    ))}
+                                                                    );
+                                                                    })}
                                                                 </TableBody>
                                                             </Table>
                                                         </div>
