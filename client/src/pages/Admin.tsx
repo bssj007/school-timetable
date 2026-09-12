@@ -7430,28 +7430,6 @@ function TestServerBadge({ envInfo, className = "" }: { envInfo: EnvBindingInfo;
     );
 }
 
-function TestServerTopBanner({ envInfo, className = "" }: { envInfo: EnvBindingInfo; className?: string }) {
-    if (!envInfo.isTestServer && !envInfo.isTestDb) return null;
-    const label = getTestBadgeLabel(envInfo);
-    const isMismatch = envInfo.isMismatch;
-
-    return (
-        <div
-            className={`w-full py-2 px-4 text-center rounded-lg border-2 font-black text-xs md:text-sm tracking-wider flex items-center justify-center gap-2 select-none shadow-sm ${
-                isMismatch ? "text-amber-900 border-amber-500" : "text-red-700 border-red-400"
-            } ${className}`}
-            style={{
-                backgroundImage: isMismatch
-                    ? 'repeating-linear-gradient(-45deg, #fefce8, #fefce8 8px, #fef08a 8px, #fef08a 16px)'
-                    : 'repeating-linear-gradient(-45deg, #fef2f2, #fef2f2 8px, #fee2e2 8px, #fee2e2 16px)',
-            }}
-        >
-            <TriangleAlert className={`h-4 w-4 shrink-0 animate-pulse ${isMismatch ? "text-amber-600" : "text-red-600"}`} />
-            <span>{label}</span>
-            <TriangleAlert className={`h-4 w-4 shrink-0 animate-pulse ${isMismatch ? "text-amber-600" : "text-red-600"}`} />
-        </div>
-    );
-}
 
 export default function Admin() {
     const [password, setPassword] = useState(() => getAdminPasswordCookie() || "");
@@ -8019,9 +7997,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
         <div className="min-h-screen flex flex-col bg-background">
             <EnvMismatchWarningBar envInfo={envInfo} />
             <div className="container max-w-6xl mx-auto px-4 py-8 flex-1">
-                {(envInfo.isTestServer || envInfo.isTestDb) && (
-                    <TestServerTopBanner envInfo={envInfo} className="mb-6" />
-                )}
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-8 gap-4">
                     <div className="flex items-center gap-3 flex-wrap">
                         <Settings className="h-6 w-6 md:h-8 md:w-8 text-gray-700" />
