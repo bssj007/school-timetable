@@ -442,16 +442,7 @@ export default function DatabaseManager({ adminPassword }: DatabaseManagerProps)
                                     <Database className="w-3 h-3" /> 목록
                                 </h3>
                                 <div className="flex gap-1">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                        onClick={() => handleTruncateTable('ALL')}
-                                        title="전체 데이터 초기화"
-                                    >
-                                        <Trash2 className="w-3 h-3" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => fetchTables(false)}>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => fetchTables(false)} title="새로고침">
                                         <RefreshCw className="w-3 h-3" />
                                     </Button>
                                 </div>
