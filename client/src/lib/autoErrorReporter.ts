@@ -79,6 +79,7 @@ export async function reportErrorToBugApi(error: {
     message: string;
     stack?: string;
     source?: string;
+    isFatal?: boolean;
 }) {
     try {
         const dedupKey = error.message || "unknown";
@@ -88,7 +89,10 @@ export async function reportErrorToBugApi(error: {
         const location = typeof window !== "undefined" ? (window.location.pathname + window.location.hash) : "";
 
         const isD1 = isD1SqliteError(error.message) || isD1SqliteError(error.stack) || isD1SqliteError(error.source);
-        const headerTag = isD1 ? `[D1/SQLite 자동오류보고]` : `[자동오류보고]`;
+        const isFatal = Boolean(error.isFatal || (error.source && error.source.toLowerCase().includes("errorboundary")));
+        const headerTag = isFatal
+            ? `[치명적 오류보고 (unexpected error occurred)]`
+            : (isD1 ? `[D1/SQLite 자동오류보고]` : `[자동오류보고]`);
 
         const lines = [
             headerTag,

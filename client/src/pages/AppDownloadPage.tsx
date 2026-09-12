@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { agent, shouldShowDownloadPage, checkIsInstalledApp } from "@/lib/browserDetect";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -102,19 +102,116 @@ export default function AppDownloadPage() {
       .catch(() => {});
   }, []);
 
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(() =>
+    typeof window !== "undefined" ? (window as any).__deferredPwaPrompt : null
+  );
+  const [isPrompting, setIsPrompting] = useState(false);
+  const [showManualGuide, setShowManualGuide] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if ((window as any).__deferredPwaPrompt) {
+      setDeferredPrompt((window as any).__deferredPwaPrompt);
+    }
+
+    const handlePrompt = (e: any) => {
+      e.preventDefault();
+      (window as any).__deferredPwaPrompt = e;
+      setDeferredPrompt(e);
+    };
+
+    const handleCustomPrompt = (e: CustomEvent) => {
+      const evt = e.detail || (window as any).__deferredPwaPrompt;
+      if (evt) setDeferredPrompt(evt);
+    };
+
+    window.addEventListener("beforeinstallprompt", handlePrompt);
+    window.addEventListener("pwa-prompt-ready", handleCustomPrompt as EventListener);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handlePrompt);
+      window.removeEventListener("pwa-prompt-ready", handleCustomPrompt as EventListener);
+    };
+  }, []);
+
   const handlePwaInstall = async () => {
-    const promptEvent = (window as any).__deferredPwaPrompt;
+    if (isPrompting) return;
+    setIsPrompting(true);
+
+    let promptEvent = (window as any).__deferredPwaPrompt || deferredPrompt;
+
+    // 만약 beforeinstallprompt 이벤트가 아직 수신되지 않은 경우, 최대 1.8초간 대기
+    // (페이지 최초 진입 시 브라우저가 manifest/sw를 백그라운드 검증하는 데 수백ms~1초 소요됨)
+    if (!promptEvent && typeof window !== "undefined") {
+      promptEvent = await new Promise((resolve) => {
+        let done = false;
+        const timer = setTimeout(() => {
+          if (!done) {
+            done = true;
+            window.removeEventListener("beforeinstallprompt", handler);
+            window.removeEventListener("pwa-prompt-ready", customHandler as EventListener);
+            resolve(null);
+          }
+        }, 1800);
+
+        const handler = (e: any) => {
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            e.preventDefault();
+            (window as any).__deferredPwaPrompt = e;
+            setDeferredPrompt(e);
+            window.removeEventListener("beforeinstallprompt", handler);
+            window.removeEventListener("pwa-prompt-ready", customHandler as EventListener);
+            resolve(e);
+          }
+        };
+
+        const customHandler = (e: CustomEvent) => {
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            const evt = e.detail || (window as any).__deferredPwaPrompt;
+            if (evt) setDeferredPrompt(evt);
+            window.removeEventListener("beforeinstallprompt", handler);
+            window.removeEventListener("pwa-prompt-ready", customHandler as EventListener);
+            resolve(evt);
+          }
+        };
+
+        window.addEventListener("beforeinstallprompt", handler);
+        window.addEventListener("pwa-prompt-ready", customHandler as EventListener);
+      });
+    }
+
+    setIsPrompting(false);
+
     if (promptEvent) {
       try {
-        promptEvent.prompt();
-        const { outcome } = await promptEvent.userChoice;
-        if (outcome === "accepted") {
+        await promptEvent.prompt();
+        const choice = await promptEvent.userChoice;
+        if (choice && choice.outcome === "accepted") {
           (window as any).__deferredPwaPrompt = null;
+          setDeferredPrompt(null);
+          localStorage.setItem("download_page_dismissed", "1");
+          toast.success("앱 설치가 진행 중입니다. 홈 화면에서 앱을 확인해 주세요!");
+          setTimeout(() => {
+            setLocation("/");
+          }, 1200);
+          return;
+        } else {
+          toast.info("앱 설치가 취소되었습니다.");
+          return;
         }
-      } catch { }
+      } catch (err) {
+        console.warn("PWA prompt error:", err);
+      }
     }
-    localStorage.setItem("download_page_dismissed", "1");
-    setLocation("/");
+
+    // 브라우저에서 beforeinstallprompt API를 지원하지 않거나(삼성/웨일 등), 이미 팝업이 닫힌 경우:
+    // 절대로 사이트로 즉시 건너뛰지 않고 수동 설치 안내 팝업을 표시!
+    setShowManualGuide(true);
   };
 
   // Desktop 또는 이미 설치된 앱(PWA/WebView)으로 접속한 경우에만 메인으로 즉시 직행 (무한 핑퐁 루프 방지)
@@ -187,10 +284,22 @@ export default function AppDownloadPage() {
       if (browserType === "chrome") {
         if (settings?.chrome_install_button_visible === false) return null;
         return (
-          <button onClick={handlePwaInstall}
-            className="w-full h-14 bg-[#3DDC84] text-black font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg transition-transform active:scale-95">
-            <AndroidLogo />
-            <span>{appTitle} 앱 다운로드</span>
+          <button
+            onClick={handlePwaInstall}
+            disabled={isPrompting}
+            className="w-full h-14 bg-[#3DDC84] hover:bg-[#35c073] text-black font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg transition-transform active:scale-95 disabled:opacity-80"
+          >
+            {isPrompting ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>앱 다운로드 준비 중...</span>
+              </>
+            ) : (
+              <>
+                <AndroidLogo />
+                <span>{appTitle} 앱 다운로드</span>
+              </>
+            )}
           </button>
         );
       }
@@ -303,6 +412,76 @@ export default function AppDownloadPage() {
                 ) : (
                   '신고 전송'
                 )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* PWA 수동 설치 / 홈 화면 추가 안내 다이얼로그 (beforeinstallprompt 미지원 또는 지연 시) */}
+      <Dialog open={showManualGuide} onOpenChange={setShowManualGuide}>
+        <DialogContent className="sm:max-w-[420px] w-[92vw] rounded-2xl p-6 z-[100]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-900">
+              <Download className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span>{appTitle} 앱 설치 안내</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <p className="text-xs text-gray-600 leading-relaxed">
+              현재 브라우저에서는 자동 설치 팝업이 바로 실행되지 않을 수 있습니다.<br />
+              아래 순서대로 진행하시면 <strong>홈 화면에 앱으로 추가</strong>하여 편리하게 이용하실 수 있습니다.
+            </p>
+
+            <div className="space-y-2.5 text-xs text-gray-700">
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">
+                  1
+                </span>
+                <div>
+                  <strong className="text-gray-900 font-semibold">브라우저 메뉴 열기</strong>
+                  <p className="text-gray-500 mt-0.5">
+                    화면 상단 또는 하단의 <strong>더보기 메뉴 (⋮ 또는 ≡)</strong>를 눌러주세요.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">
+                  2
+                </span>
+                <div>
+                  <strong className="text-gray-900 font-semibold">[앱 설치] 또는 [홈 화면에 추가] 터치</strong>
+                  <p className="text-gray-500 mt-0.5">
+                    메뉴 목록에서 <strong>'앱 설치'</strong> 또는 <strong>'홈 화면에 추가'</strong>를 누르시면 설치가 완료됩니다.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <Button
+                type="button"
+                className="w-full bg-[#3DDC84] hover:bg-[#35c073] text-black font-bold rounded-xl text-sm h-12 shadow-sm"
+                onClick={() => {
+                  setShowManualGuide(false);
+                  toast.success("설치 후 홈 화면에서 앱 아이콘을 터치해 접속해주세요!");
+                }}
+              >
+                확인했습니다
+              </Button>
+              <Button
+                variant="ghost"
+                type="button"
+                className="w-full text-gray-400 hover:text-gray-600 text-xs py-2"
+                onClick={() => {
+                  setShowManualGuide(false);
+                  localStorage.setItem("download_page_dismissed", "1");
+                  setLocation("/");
+                }}
+              >
+                설치하지 않고 사이트로 바로가기
               </Button>
             </div>
           </div>

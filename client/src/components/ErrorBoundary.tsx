@@ -32,7 +32,8 @@ class ErrorBoundary extends Component<Props, State> {
     reportErrorToBugApi({
       message: error.message,
       stack,
-      source: "React ErrorBoundary",
+      source: "React ErrorBoundary (unexpected error occurred - 사이트 중단)",
+      isFatal: true,
     }).then(() => {
       this.setState({ reported: true });
     });

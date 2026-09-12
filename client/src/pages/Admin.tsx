@@ -1931,6 +1931,22 @@ function TargetClassDisplaySettings({ adminPassword }: { adminPassword: string }
 // ----------------------------------------------------------------------
 // 6.9 Bug Report Manager (오류신고 현황)
 // ----------------------------------------------------------------------
+// 치명적인 오류 (An unexpected error occurred 전체화면 발생 및 사이트 중단) 여부 판별
+export function isFatalBugReport(msg: string | undefined | null): boolean {
+    if (!msg) return false;
+    const lower = msg.toLowerCase();
+    return (
+        lower.includes("react errorboundary") ||
+        lower.includes("errorboundary") ||
+        lower.includes("unexpected error occurred") ||
+        lower.includes("unexpected error occured") ||
+        lower.includes("unexpected error") ||
+        lower.includes("[치명적") ||
+        lower.includes("치명적 오류") ||
+        lower.includes("사이트 중단")
+    );
+}
+
 function BugReportManager({ adminPassword }: { adminPassword: string }) {
     const queryClient = useQueryClient();
 
@@ -1986,6 +2002,7 @@ function BugReportManager({ adminPassword }: { adminPassword: string }) {
     });
 
     const reports = reportsQuery.data || [];
+    const fatalReportsCount = reports.filter((r: any) => isFatalBugReport(r.message)).length;
 
     return (
         <div className="space-y-4">
@@ -2006,7 +2023,16 @@ function BugReportManager({ adminPassword }: { adminPassword: string }) {
 
             {/* Reports List */}
             <div className="space-y-2">
-                <p className="text-sm font-bold text-gray-700">신고 목록 ({reports.length}건)</p>
+                <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                        <span>신고 목록 ({reports.length}건)</span>
+                        {fatalReportsCount > 0 && (
+                            <Badge variant="destructive" className="bg-red-600 text-white text-[11px] font-bold px-2 py-0.5 shadow-sm">
+                                치명적 {fatalReportsCount}건
+                            </Badge>
+                        )}
+                    </p>
+                </div>
                 {reportsQuery.isLoading ? (
                     <p className="text-sm text-gray-400">로딩 중...</p>
                 ) : reports.length === 0 ? (
@@ -2014,14 +2040,32 @@ function BugReportManager({ adminPassword }: { adminPassword: string }) {
                 ) : (
                     <div className="space-y-2 max-h-[400px] overflow-y-auto">
                         {reports.map((report: any) => {
+                            const isFatal = isFatalBugReport(report.message);
                             const nameText = (report.studentName || report.name || '').trim();
                             const studentInfo = report.grade
                                 ? `${nameText ? nameText + ' ' : ''}${report.grade}학년 ${report.classNum}반 ${report.studentNumber}번`
                                 : (nameText || '미입력');
                             return (
-                                <div key={report.id} className="p-3 border rounded-lg bg-white flex flex-col gap-1">
+                                <div
+                                    key={report.id}
+                                    className={`p-3 border rounded-lg flex flex-col gap-1 transition-all ${
+                                        isFatal
+                                            ? 'bg-red-50/50 border-red-300 shadow-sm'
+                                            : 'bg-white border-gray-200'
+                                    }`}
+                                >
                                     <div className="flex justify-between items-start">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            {isFatal && (
+                                                <Badge
+                                                    variant="destructive"
+                                                    className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2 py-0.5 border-red-700 shadow-sm flex items-center gap-1"
+                                                    title="화면 전체에 'An unexpected error occurred'가 표시되고 사이트 사용이 중단된 치명적 오류입니다."
+                                                >
+                                                    <TriangleAlert className="w-3 h-3 text-white" />
+                                                    치명적
+                                                </Badge>
+                                            )}
                                             <Badge variant="outline" className="text-xs font-semibold">
                                                 {studentInfo}
                                             </Badge>
@@ -4320,9 +4364,17 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                             오류신고 현황
                         </div>
                         {reportsQuery.data && reportsQuery.data.length > 0 && (
-                            <span className="text-xs text-red-500 font-bold ml-2">
-                                ({reportsQuery.data.length})
-                            </span>
+                            <div className="flex items-center gap-1 ml-2">
+                                {reportsQuery.data.some((r: any) => isFatalBugReport(r.message)) && (
+                                    <span className="relative flex h-2 w-2" title="치명적 오류 접수됨">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
+                                    </span>
+                                )}
+                                <span className="text-xs text-red-500 font-bold">
+                                    ({reportsQuery.data.length})
+                                </span>
+                            </div>
                         )}
                     </div>
                 </Button>

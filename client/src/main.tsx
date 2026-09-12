@@ -60,15 +60,14 @@ if (typeof window !== 'undefined') {
 
 
   // Register beforeinstallprompt as early as possible, BEFORE React renders.
-  // Samsung Internet fires this event very early on page load.
-  // If we only listen inside a useEffect, the event will already be gone by the time
-  // React mounts. Storing it globally guarantees Dashboard can always access it.
+  // Samsung Internet & Chromium fire this event early or during PWA validation.
+  // Storing it globally guarantees AppDownloadPage & Dashboard can always access it.
   window.addEventListener('beforeinstallprompt', (e: any) => {
     e.preventDefault();
-    // isMobileDevice — browserDetect.ts agent.isMobile 사용 (모바일에서만 프롬프트 캡처)
-    if (agent.isMobile) {
-      (window as any).__deferredPwaPrompt = e;
-    }
+    (window as any).__deferredPwaPrompt = e;
+    try {
+      window.dispatchEvent(new CustomEvent('pwa-prompt-ready', { detail: e }));
+    } catch {}
   });
 }
 

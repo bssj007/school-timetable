@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, RotateCcw, Undo2, Award, CheckCircle2, Clock, Sparkles } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Undo2 } from 'lucide-react';
 import { getPumasiCookie, clearPumasiCookie, PumasiStatus } from '@/lib/pumasiCookie';
 
 interface BetaTesterPageProps {
@@ -38,10 +38,14 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
 
   useEffect(() => {
     setPumasi(getPumasiCookie());
+    const interval = setInterval(() => {
+      setPumasi(getPumasiCookie());
+    }, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleBack = () => {
-    if (window.confirm('품앗이 모드를 종료하고 시간표 페이지로 이동하시겠습니까?\n(언제든 다시 품앗이 모드로 진입할 수 있습니다)')) {
+    if (window.confirm('품앗이 모드를 종료하고 시간표 페이지로 이동하시겠습니까?')) {
       clearPumasiCookie();
       onBack();
     }
@@ -299,107 +303,89 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
   };
 
   const lastMove = history[history.length - 1];
-  const progressPercent = Math.min(100, Math.round((pumasi.daysPassed / 14) * 100));
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans select-none pb-12">
+    <div className="min-h-screen bg-white text-slate-800 flex flex-col font-sans select-none pb-8">
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3 shadow-sm">
-        <div className="max-w-xl mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-100 px-4 py-2.5">
+        <div className="max-w-md mx-auto flex items-center justify-between">
           <button
             onClick={handleBack}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors active:scale-95"
-            title="원래 시간표 페이지로 돌아가기"
+            className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors py-0.5"
+            title="시간표로 돌아가기"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>시간표로 돌아가기</span>
           </button>
-
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-              <Sparkles className="w-3 h-3 text-amber-500" />
-              품앗이 모드
-            </span>
-          </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-xl mx-auto w-full px-4 py-5 flex flex-col gap-4">
+      {/* Main Content Area (No Card Containers) */}
+      <main className="flex-1 max-w-md mx-auto w-full px-4 py-4 flex flex-col gap-6">
         
-        {/* Android Closed Testing Status Banner */}
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-sm transition-all">
-          <div className="flex items-start justify-between gap-3 mb-2.5">
-            <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${pumasi.isComplete ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
-                {pumasi.isComplete ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-slate-900 leading-tight">
-                  Android 비공개 테스터 참여 현황
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Google Play 비공개 테스트 (14일 연속 참여 기준)
-                </p>
-              </div>
-            </div>
-
-            <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${pumasi.isComplete ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
-              {pumasi.isComplete ? '14일 달성 완료' : `${pumasi.daysPassed}일차 / 14일`}
+        {/* Testing Status Section */}
+        <section className="space-y-2">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-bold text-slate-900">
+              {pumasi.isComplete ? '14일 비공개 테스트 완료' : '14일 비공개 테스트'}
+            </h2>
+            <span className="text-xs font-mono font-bold text-blue-600">
+              {pumasi.exactPercent.toFixed(2)}%
             </span>
           </div>
 
-          {/* Progress Bar */}
-          <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden my-3 border border-slate-200/50">
+          {/* Accurate Continuous Progress Bar */}
+          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
             <div
-              className={`h-full transition-all duration-500 rounded-full ${pumasi.isComplete ? 'bg-emerald-500' : 'bg-blue-500'}`}
-              style={{ width: `${progressPercent}%` }}
+              className={`h-full transition-all duration-300 rounded-full ${
+                pumasi.isComplete ? 'bg-emerald-500' : 'bg-blue-600'
+              }`}
+              style={{ width: `${Math.min(100, pumasi.exactPercent)}%` }}
             />
           </div>
 
-          {/* Status Message */}
-          {pumasi.isComplete ? (
-            <div className="bg-emerald-50/80 border border-emerald-200/70 rounded-xl p-3 text-xs text-emerald-800 flex items-start gap-2">
-              <Award className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-              <div>
-                <strong className="font-semibold">🎉 비공개 테스트 최소 기준(14일)이 모두 충족되었습니다!</strong>
-                <p className="mt-0.5 text-emerald-700/90 leading-relaxed">
-                  성실하게 테스트에 참여해 주셔서 진심으로 감사드립니다. 이제 앱을 안전하게 제거하셔도 좋으며, 시간표 기능으로 언제든 돌아가실 수 있습니다.
-                </p>
-              </div>
+          {/* Concrete Time Information */}
+          <div className="flex flex-col gap-1 text-xs text-slate-600 font-mono pt-1">
+            <div className="flex justify-between">
+              <span className="text-slate-400">시작 일시</span>
+              <span className="text-slate-700">{pumasi.startDateText}</span>
             </div>
-          ) : (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 flex items-start gap-2">
-              <Clock className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-              <div>
-                <span>
-                  테스트 완료까지 <strong className="font-semibold text-slate-800">{pumasi.daysRemaining}일</strong> 남았습니다.
-                </span>
-                <p className="mt-0.5 text-slate-500 leading-relaxed">
-                  비공개 테스트 요건 충족을 위해 앱을 설치 유지해 주시고, 틈틈이 오목 게임을 한 판씩 즐겨주시면 큰 힘이 됩니다!
-                </p>
-              </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">경과 시간</span>
+              <span className="text-slate-700">{pumasi.elapsedText}</span>
             </div>
-          )}
-        </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">남은 시간</span>
+              <span className={pumasi.isComplete ? 'text-emerald-600 font-semibold' : 'text-slate-900 font-semibold'}>
+                {pumasi.remainingText}
+              </span>
+            </div>
+          </div>
 
-        {/* Gomoku Game Container */}
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-sm flex flex-col items-center">
-          {/* Game Header / Controls */}
-          <div className="w-full flex items-center justify-between gap-2 mb-3 pb-3 border-b border-slate-100">
+          {/* Simplified Description */}
+          <p className="text-xs text-slate-400 pt-0.5">
+            {pumasi.isComplete
+              ? '14일 기준이 충족되었습니다. 이제 앱을 삭제하셔도 좋습니다.'
+              : '14일 기준 충족 시 앱을 삭제하셔도 좋습니다.'}
+          </p>
+        </section>
+
+        {/* Gomoku Game Section (No Outer Card Container) */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-2 pb-1">
             <div>
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-1.5">
-                <span>원클릭 AI 오목</span>
+              <h3 className="text-sm font-bold text-slate-900">
+                AI 오목
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                {winner === 1 && <span className="text-emerald-600 font-bold">🎉 축하합니다! 흑돌(플레이어) 승리!</span>}
-                {winner === 2 && <span className="text-rose-600 font-bold">🤖 AI(백돌)의 승리입니다!</span>}
-                {winner === 'draw' && <span className="text-slate-600 font-bold">무승부입니다!</span>}
+                {winner === 1 && <span className="text-emerald-600 font-bold">플레이어 승리!</span>}
+                {winner === 2 && <span className="text-rose-600 font-bold">AI 승리</span>}
+                {winner === 'draw' && <span className="text-slate-600 font-bold">무승부</span>}
                 {winner === 0 && (
                   isAiThinking ? (
-                    <span className="text-blue-600 font-medium animate-pulse">AI가 최선의 수를 생각하고 있습니다...</span>
+                    <span className="text-blue-600 animate-pulse">AI 착수 중...</span>
                   ) : (
-                    <span>당신의 차례입니다 (흑돌 선공)</span>
+                    <span>흑돌(선공) 차례</span>
                   )
                 )}
               </p>
@@ -409,7 +395,7 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
               <button
                 onClick={handleUndo}
                 disabled={history.length < 2 || isAiThinking || winner !== 0}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:pointer-events-none rounded-lg transition-colors active:scale-95"
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:pointer-events-none rounded transition-colors"
                 title="한 수 무르기"
               >
                 <Undo2 className="w-3.5 h-3.5" />
@@ -418,7 +404,7 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
 
               <button
                 onClick={handleReset}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors active:scale-95 shadow-sm"
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-white bg-slate-800 hover:bg-slate-700 rounded transition-colors shadow-sm"
                 title="새 게임 시작"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -430,9 +416,9 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
           {/* Board Wrapper */}
           <div className="w-full flex justify-center py-1">
             <div
-              className="relative w-full max-w-[400px] aspect-square bg-[#f4e4ba] rounded-lg shadow-md border-2 border-[#bfa068] p-2 select-none touch-manipulation"
+              className="relative w-full max-w-[400px] aspect-square bg-[#f4e4ba] rounded-lg shadow-sm border border-[#bfa068] p-2 select-none touch-manipulation"
               style={{
-                boxShadow: 'inset 0 0 10px rgba(0,0,0,0.08), 0 4px 14px rgba(0,0,0,0.12)'
+                boxShadow: 'inset 0 0 8px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.08)'
               }}
             >
               {/* Grid Lines (15x15) */}
@@ -549,12 +535,7 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
               </div>
             </div>
           </div>
-
-          {/* Footer note */}
-          <div className="mt-3 text-center text-xs text-slate-400">
-            교차점을 터치하여 돌을 놓으세요. 5개의 돌을 먼저 연속으로 놓는 쪽이 승리합니다.
-          </div>
-        </div>
+        </section>
 
       </main>
     </div>

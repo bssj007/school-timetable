@@ -20,6 +20,35 @@ interface TeacherOption {
     label: string;
 }
 
+function GooglePlayConsoleLogo({ className = "w-6 h-6" }: { className?: string }) {
+    return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3.6 2.4C3.3 2.7 3.1 3.2 3.1 3.8V20.2C3.1 20.8 3.3 21.3 3.6 21.6L3.7 21.7L13.1 12.3V11.7L3.7 2.3L3.6 2.4Z" fill="url(#gpc-blue1)" />
+            <path d="M16.2 15.4L13.1 12.3V11.7L16.2 8.6L16.3 8.7L20 10.8C21.1 11.4 21.1 12.6 20 13.2L16.3 15.3L16.2 15.4Z" fill="url(#gpc-blue2)" />
+            <path d="M16.3 15.3L13.1 12L3.6 21.6C4 22 4.7 22.1 5.5 21.6L16.3 15.3Z" fill="url(#gpc-blue3)" />
+            <path d="M16.3 8.7L5.5 2.4C4.7 1.9 4 2 3.6 2.4L13.1 12L16.3 8.7Z" fill="url(#gpc-blue4)" />
+            <defs>
+                <linearGradient id="gpc-blue1" x1="12.3" y1="3.1" x2="1.8" y2="13.6" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#00E5FF" />
+                    <stop offset="1" stopColor="#0091EA" />
+                </linearGradient>
+                <linearGradient id="gpc-blue2" x1="21.3" y1="12" x2="3.1" y2="12" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#40C4FF" />
+                    <stop offset="1" stopColor="#00B0FF" />
+                </linearGradient>
+                <linearGradient id="gpc-blue3" x1="14.8" y1="13.7" x2="0.6" y2="27.9" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#0D47A1" />
+                    <stop offset="1" stopColor="#1565C0" />
+                </linearGradient>
+                <linearGradient id="gpc-blue4" x1="2.2" y1="-2.3" x2="14.1" y2="9.6" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#00B0FF" />
+                    <stop offset="1" stopColor="#00E5FF" />
+                </linearGradient>
+            </defs>
+        </svg>
+    );
+}
+
 // ── timetable 데이터에서 교사별 담당 과목 추출 ──────────────
 function buildTeacherOptions(
     teachers: string[],
@@ -356,8 +385,8 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                                     onClick={handleSelectBetaTester}
                                     className="group relative flex items-center gap-4 p-4 rounded-2xl border-2 border-slate-300 bg-slate-100 hover:border-slate-400 hover:bg-slate-200/80 transition-all duration-200 text-left cursor-pointer shadow-sm"
                                 >
-                                    <div className="w-12 h-12 rounded-xl bg-slate-200 flex items-center justify-center text-2xl flex-shrink-0">
-                                        🤖
+                                    <div className="w-12 h-12 rounded-xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-center flex-shrink-0">
+                                        <GooglePlayConsoleLogo className="w-6 h-6" />
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <div className="font-bold text-base text-slate-800 flex items-center gap-1.5 flex-wrap">
@@ -365,7 +394,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                                             <span className="text-xs font-semibold text-slate-500">(오픈채팅 베타테스터용)</span>
                                         </div>
                                         <div className="text-xs text-slate-500 mt-0.5">
-                                            비공개 테스트 14일 참여 확인 및 AI 오목
+                                            비공개 테스트 14일 참여 확인
                                         </div>
                                     </div>
                                     <span className="ml-auto text-slate-400 group-hover:text-slate-600 text-xl">›</span>
