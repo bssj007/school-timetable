@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { TriangleAlert, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { getAdminPasswordCookie, clearAdminPasswordCookie } from "@/lib/adminCookie";
+import { TestServerBadge } from "@/components/TestServerBadge";
 
 export default function FactoryReset() {
     const [, setLocation] = useLocation();
@@ -96,8 +97,6 @@ export default function FactoryReset() {
         };
     })();
 
-    const testLabel = envInfo.isTestServer && envInfo.isTestDb ? "테스트 서버+DB" : (envInfo.isTestServer ? "테스트 서버" : "테스트 DB");
-
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-white p-4">
             <div className="w-full max-w-sm space-y-8">
@@ -108,19 +107,8 @@ export default function FactoryReset() {
                     </div>
                 )}
                 {(envInfo.isTestServer || envInfo.isTestDb) && (
-                    <div
-                        className={`w-full py-2 px-3 text-center rounded border-2 font-black text-xs tracking-wider flex items-center justify-center gap-1.5 select-none shadow-sm ${
-                            envInfo.isMismatch ? "text-amber-900 border-amber-400" : "text-red-700 border-red-400"
-                        }`}
-                        style={{
-                            backgroundImage: envInfo.isMismatch
-                                ? 'repeating-linear-gradient(-45deg, #fefce8, #fefce8 8px, #fef08a 8px, #fef08a 16px)'
-                                : 'repeating-linear-gradient(-45deg, #fef2f2, #fef2f2 8px, #fee2e2 8px, #fee2e2 16px)',
-                        }}
-                    >
-                        <TriangleAlert className={`h-3.5 w-3.5 animate-pulse ${envInfo.isMismatch ? "text-amber-600" : "text-red-600"}`} />
-                        <span>{testLabel}</span>
-                        <TriangleAlert className={`h-3.5 w-3.5 animate-pulse ${envInfo.isMismatch ? "text-amber-600" : "text-red-600"}`} />
+                    <div className="flex justify-center">
+                        <TestServerBadge envInfo={envInfo} />
                     </div>
                 )}
                 <div className="text-center space-y-2">

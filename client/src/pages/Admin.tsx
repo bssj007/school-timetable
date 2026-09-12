@@ -28,6 +28,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EnvBindingInfo, getTestBadgeLabel, EnvMismatchWarningBar, TestServerBadge } from "@/components/TestServerBadge";
 import { Badge } from "@/components/ui/badge";
 import {
     Select,
@@ -7372,64 +7373,6 @@ function MealManager({ adminPassword }: { adminPassword: string }) {
     );
 }
 
-interface EnvBindingInfo {
-    isTestServer: boolean;
-    serverName: string;
-    isTestDb: boolean;
-    dbName: string;
-    isMismatch: boolean;
-}
-
-function getTestBadgeLabel(envInfo: EnvBindingInfo): string {
-    if (envInfo.isTestServer && envInfo.isTestDb) {
-        return "테스트 서버+DB";
-    }
-    if (envInfo.isTestServer && !envInfo.isTestDb) {
-        return "테스트 서버 (운영 DB 연결됨)";
-    }
-    if (!envInfo.isTestServer && envInfo.isTestDb) {
-        return "운영 서버 (테스트 DB 연결됨)";
-    }
-    return "테스트 환경";
-}
-
-function EnvMismatchWarningBar({ envInfo }: { envInfo: EnvBindingInfo }) {
-    if (!envInfo.isMismatch) return null;
-
-    const mismatchDetail = envInfo.isTestServer && !envInfo.isTestDb
-        ? `테스트 서버(${envInfo.serverName})에 운영 DB(${envInfo.dbName})가 연결되어 있습니다.`
-        : `운영 서버(${envInfo.serverName})에 테스트 DB(${envInfo.dbName})가 연결되어 있습니다.`;
-
-    return (
-        <div className="w-full bg-yellow-100/95 border-b border-yellow-300 text-yellow-900 text-xs py-1 px-4 font-semibold text-center flex items-center justify-center gap-1.5 shadow-sm sticky top-0 z-50">
-            <TriangleAlert className="h-3.5 w-3.5 text-yellow-700 shrink-0" />
-            <span>[환경 불일치 경고] {mismatchDetail}</span>
-        </div>
-    );
-}
-
-function TestServerBadge({ envInfo, className = "" }: { envInfo: EnvBindingInfo; className?: string }) {
-    if (!envInfo.isTestServer && !envInfo.isTestDb) return null;
-    const label = getTestBadgeLabel(envInfo);
-    const isMismatch = envInfo.isMismatch;
-
-    return (
-        <span
-            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs md:text-sm font-black border-2 border-dashed shadow-sm select-none tracking-tight ${
-                isMismatch ? "text-amber-900 border-amber-500" : "text-red-700 border-red-400"
-            } ${className}`}
-            style={{
-                backgroundImage: isMismatch
-                    ? 'repeating-linear-gradient(-45deg, #fefce8, #fefce8 6px, #fef08a 6px, #fef08a 12px)'
-                    : 'repeating-linear-gradient(-45deg, #fef2f2, #fef2f2 6px, #fee2e2 6px, #fee2e2 12px)',
-            }}
-        >
-            <TriangleAlert className={`h-3.5 w-3.5 shrink-0 ${isMismatch ? "text-amber-600" : "text-red-600"}`} />
-            <span>{label}</span>
-        </span>
-    );
-}
-
 
 export default function Admin() {
     const [password, setPassword] = useState(() => getAdminPasswordCookie() || "");
@@ -7905,22 +7848,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                 <EnvMismatchWarningBar envInfo={envInfo} />
                 <div className="flex-1 flex items-center justify-center px-4 py-8">
                     <Card className="w-full max-w-md shadow-lg overflow-hidden border-2 border-slate-200">
-                        {(envInfo.isTestServer || envInfo.isTestDb) && (
-                            <div
-                                className={`w-full py-2.5 px-4 text-center border-b-2 font-black text-sm tracking-wider flex items-center justify-center gap-2 select-none shadow-sm ${
-                                    envInfo.isMismatch ? "text-amber-900 border-amber-400" : "text-red-700 border-red-400"
-                                }`}
-                                style={{
-                                    backgroundImage: envInfo.isMismatch
-                                        ? 'repeating-linear-gradient(-45deg, #fefce8, #fefce8 8px, #fef08a 8px, #fef08a 16px)'
-                                        : 'repeating-linear-gradient(-45deg, #fef2f2, #fef2f2 8px, #fee2e2 8px, #fee2e2 16px)',
-                                }}
-                            >
-                                <TriangleAlert className={`h-4 w-4 animate-pulse shrink-0 ${envInfo.isMismatch ? "text-amber-600" : "text-red-600"}`} />
-                                <span>{getTestBadgeLabel(envInfo)}</span>
-                                <TriangleAlert className={`h-4 w-4 animate-pulse shrink-0 ${envInfo.isMismatch ? "text-amber-600" : "text-red-600"}`} />
-                            </div>
-                        )}
                         <CardHeader>
                             <CardTitle className="text-2xl text-center flex items-center justify-center gap-2 flex-wrap">
                                 <Lock className="h-6 w-6" />
