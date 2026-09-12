@@ -7986,16 +7986,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
 
                                     const isBetaTestingEnabled = adminSettings?.beta_testing_enabled === 'true';
 
-                                    // 품앗이(베타테스터) 사용자와 일반 사용자 분리 (기능 ON 시에만 분리)
-                                    const pumasiUsers = isBetaTestingEnabled
-                                        ? filteredActiveUsers.filter((u: any) => u.isBetaTester)
-                                        : [];
-                                    const standardUsers = isBetaTestingEnabled
-                                        ? filteredActiveUsers.filter((u: any) => !u.isBetaTester)
-                                        : filteredActiveUsers;
-
-                                    const knownUsers = standardUsers.filter(isKnownUser);
-                                    const unknownUsers = standardUsers.filter((u: any) => !isKnownUser(u));
+                                    // 품앗이 접속은 일반 학생/교사 접속과 병렬로 별도 표시하며 일반 접속 표시에는 아무런 영향도 주지 않음
+                                    const knownUsers = filteredActiveUsers.filter(isKnownUser);
+                                    const unknownUsers = filteredActiveUsers.filter((u: any) => !isKnownUser(u));
+                                    const pumasiUsers = filteredActiveUsers.filter((u: any) => u.isBetaTester);
 
                                     // --- Group known users by (name + student ID) = composite identity ---
                                     type UserGroup = {
@@ -8813,8 +8807,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                 </div>
                                             )}
 
-                                            {/* 품앗이 접속 접이식 단락 (베타테스팅 기능 ON 시에만 표시) */}
-                                            {isBetaTestingEnabled && (
+                                            {/* 품앗이 접속 접이식 단락 (일반 학생/교사 접속과 병렬로 별도 표시) */}
+                                            {(isBetaTestingEnabled || pumasiUsers.length > 0) && (
                                                 <div className="border rounded-md overflow-hidden mt-4">
                                                     <div
                                                         className="flex items-center justify-between p-4 bg-violet-50 cursor-pointer hover:bg-violet-100/80 transition-colors"
@@ -8824,7 +8818,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                             {isPumasiExpanded ? <ChevronDown className="h-5 w-5 text-violet-600" /> : <ChevronRight className="h-5 w-5 text-violet-600" />}
                                                             🧪 품앗이 접속 ({pumasiUsers.length})
                                                         </div>
-                                                        <span className="text-xs text-violet-600 font-medium">Android 비공개 테스트 (오픈채팅 품앗이) 참여자</span>
+                                                        <span className="text-xs text-violet-600 font-medium">Android 비공개 테스트 (오픈채팅 품앗이) 참여자 (병렬 별도 표시)</span>
                                                     </div>
                                                     {isPumasiExpanded && (
                                                         <div className="bg-gray-50 border-t overflow-x-auto">

@@ -308,6 +308,12 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
   const remainingDays = Math.floor(remainingTotalHours / 24);
   const remainingHours = remainingTotalHours % 24;
 
+  const elapsedTotalSec = Math.floor(pumasi.elapsedMs / 1000);
+  const elapsedDays = Math.floor(elapsedTotalSec / 86400);
+  const elapsedHours = Math.floor((elapsedTotalSec % 86400) / 3600);
+  const elapsedMinutes = Math.floor((elapsedTotalSec % 3600) / 60);
+  const elapsedSeconds = elapsedTotalSec % 60;
+
   return (
     <div className="min-h-screen bg-white text-slate-800 flex flex-col font-sans select-none pb-6">
       <style>{`
@@ -349,7 +355,7 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
       <main className="flex-1 max-w-md mx-auto w-full px-4 py-3 flex flex-col gap-4">
         
         {/* Testing Status Section */}
-        <section className="space-y-2">
+        <section className="space-y-2.5">
           <div className="flex items-baseline justify-between">
             <h2 className="text-sm font-bold text-slate-900">
               {pumasi.isComplete ? '14일 비공개 테스트 완료' : '14일 비공개 테스트'}
@@ -359,7 +365,7 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
                 {pumasi.isComplete ? '완료' : `남은 기간: ${remainingDays}일 ${remainingHours}시간`}
               </span>
               <span className="text-xs font-mono font-bold text-emerald-600">
-                {pumasi.exactPercent.toFixed(1)}%
+                {pumasi.exactPercent.toFixed(2)}%
               </span>
             </div>
           </div>
@@ -382,6 +388,67 @@ export default function BetaTesterPage({ onBack }: BetaTesterPageProps) {
                   width: '40%',
                 }}
               />
+            </div>
+          </div>
+
+          {/* ── 디지털 빨간색 시계 (검은 배경): 실시간 일, 시간, 분, 초 경과 ── */}
+          <div className="bg-black text-red-500 rounded-xl p-3 border border-neutral-800 shadow-[inset_0_2px_8px_rgba(0,0,0,0.9),0_4px_12px_rgba(0,0,0,0.2)] flex flex-col gap-1.5">
+            <div className="flex items-center justify-between text-[11px] font-mono border-b border-neutral-900 pb-1 px-1 text-neutral-400">
+              <span className="flex items-center gap-1.5 font-semibold text-red-500">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-ping inline-block" />
+                <span>실시간 참여 경과</span>
+              </span>
+              <span className="text-[10px] text-neutral-500">
+                시작: {pumasi.startDateText}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-center gap-1 sm:gap-1.5 py-1 font-mono select-none">
+              {/* 일 */}
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-2xl sm:text-3xl font-black tracking-wider text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.85)]">
+                  {String(elapsedDays).padStart(2, '0')}
+                </span>
+                <span className="text-[11px] font-bold text-red-400/80 mr-1.5">일</span>
+              </div>
+
+              {/* 구분자 */}
+              <span className="text-xl sm:text-2xl font-bold text-red-600/70 pb-1">:</span>
+
+              {/* 시간 */}
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-2xl sm:text-3xl font-black tracking-wider text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.85)]">
+                  {String(elapsedHours).padStart(2, '0')}
+                </span>
+                <span className="text-[11px] font-bold text-red-400/80 mr-1.5">시간</span>
+              </div>
+
+              {/* 구분자 */}
+              <span className="text-xl sm:text-2xl font-bold text-red-600/70 pb-1">:</span>
+
+              {/* 분 */}
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-2xl sm:text-3xl font-black tracking-wider text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.85)]">
+                  {String(elapsedMinutes).padStart(2, '0')}
+                </span>
+                <span className="text-[11px] font-bold text-red-400/80 mr-1.5">분</span>
+              </div>
+
+              {/* 구분자 */}
+              <span className="text-xl sm:text-2xl font-bold text-red-600/70 pb-1">:</span>
+
+              {/* 초 */}
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-2xl sm:text-3xl font-black tracking-wider text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.85)]">
+                  {String(elapsedSeconds).padStart(2, '0')}
+                </span>
+                <span className="text-[11px] font-bold text-red-400/80">초</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono px-1 pt-0.5 border-t border-neutral-900/80">
+              <span>진행률: <strong className="text-emerald-400">{pumasi.exactPercent.toFixed(2)}%</strong></span>
+              <span>{pumasi.isComplete ? <strong className="text-emerald-400">14일 달성 완료</strong> : `남은 기간: ${pumasi.remainingText}`}</span>
             </div>
           </div>
 

@@ -8,6 +8,7 @@
  */
 
 const COOKIE_NAME = 'sj_beta_pumasi';
+const STORAGE_KEY = 'sj_beta_pumasi_time';
 export const REQUIRED_DAYS = 14;
 export const REQUIRED_MS = REQUIRED_DAYS * 24 * 60 * 60 * 1000; // 14일 (1,209,600,000 ms)
 
@@ -49,9 +50,72 @@ export function formatDateTime(ms: number): string {
   return `${year}.${month}.${date} ${hours}:${minutes}:${seconds}`;
 }
 
+/**
+ * 저장된 품앗이 최초 시작 타임스탬프 조회 (쿠키 및 localStorage 상호 백업)
+ * 브라우저 세션 만료, 쿠키 휘발 등에도 최초 시작 시간이 절대로 리셋되지 않도록 보호
+ */
+export function getStoredPumasiTime(): number | null {
+  if (typeof document === 'undefined') return null;
+
+  // 1. 쿠키에서 읽기
+  let timeFromCookie: number | null = null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${COOKIE_NAME}=([^;]*)`));
+  if (match) {
+    const rawVal = decodeURIComponent(match[1]);
+    let parsed = parseInt(rawVal, 10);
+    if (isNaN(parsed)) parsed = new Date(rawVal).getTime();
+    if (!isNaN(parsed) && parsed > 0) {
+      timeFromCookie = parsed;
+    }
+  }
+
+  // 2. localStorage에서 읽기
+  let timeFromStorage: number | null = null;
+  try {
+    const rawStorage = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(COOKIE_NAME);
+    if (rawStorage) {
+      let parsed = parseInt(rawStorage, 10);
+      if (isNaN(parsed)) parsed = new Date(rawStorage).getTime();
+      if (!isNaN(parsed) && parsed > 0) {
+        timeFromStorage = parsed;
+      }
+    }
+  } catch {}
+
+  // 3. 둘 다 존재하는 경우: 더 이른(과거) 시간을 보존하여 참여 진행률 손실 방지
+  if (timeFromCookie && timeFromStorage) {
+    const earliest = Math.min(timeFromCookie, timeFromStorage);
+    if (timeFromCookie !== earliest) {
+      setPumasiCookie(earliest);
+    }
+    return earliest;
+  }
+
+  // 4. 쿠키만 존재하는 경우: localStorage로 동기화 백업
+  if (timeFromCookie) {
+    try {
+      localStorage.setItem(STORAGE_KEY, String(timeFromCookie));
+      localStorage.setItem(COOKIE_NAME, String(timeFromCookie));
+    } catch {}
+    return timeFromCookie;
+  }
+
+  // 5. localStorage만 존재하는 경우: 쿠키 복원
+  if (timeFromStorage) {
+    const maxAge = 60 * 24 * 60 * 60;
+    const expires = new Date(Date.now() + maxAge * 1000).toUTCString();
+    document.cookie = `${COOKIE_NAME}=${timeFromStorage}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Lax`;
+    return timeFromStorage;
+  }
+
+  return null;
+}
+
 /** 쿠키 읽기 및 정밀 상태 계산 */
 export function getPumasiCookie(now: number = Date.now()): PumasiStatus {
-  if (typeof document === 'undefined') {
+  const timeMs = getStoredPumasiTime();
+
+  if (!timeMs) {
     return {
       isPumasi: false,
       firstAccessTime: null,
@@ -65,33 +129,6 @@ export function getPumasiCookie(now: number = Date.now()): PumasiStatus {
       elapsedText: '0일 0시간 0분 0초',
       remainingText: '14일 0시간 0분 0초',
     };
-  }
-
-  const match = document.cookie.match(new RegExp(`(?:^|; )${COOKIE_NAME}=([^;]*)`));
-  if (!match) {
-    return {
-      isPumasi: false,
-      firstAccessTime: null,
-      elapsedMs: 0,
-      remainingMs: REQUIRED_MS,
-      exactPercent: 0,
-      daysPassed: 0,
-      daysRemaining: REQUIRED_DAYS,
-      isComplete: false,
-      startDateText: '-',
-      elapsedText: '0일 0시간 0분 0초',
-      remainingText: '14일 0시간 0분 0초',
-    };
-  }
-
-  const rawVal = decodeURIComponent(match[1]);
-  let timeMs = parseInt(rawVal, 10);
-  if (isNaN(timeMs)) {
-    timeMs = new Date(rawVal).getTime();
-  }
-
-  if (isNaN(timeMs) || timeMs <= 0) {
-    timeMs = now;
   }
 
   const elapsedMs = Math.max(0, now - timeMs);
@@ -116,16 +153,33 @@ export function getPumasiCookie(now: number = Date.now()): PumasiStatus {
   };
 }
 
-/** 쿠키 생성 (기본 60일 유지) */
+/** 쿠키 생성 (기본 60일 유지, 기존 타임스탬프 존재 시 절대 리셋되지 않음) */
 export function setPumasiCookie(timestamp?: number): void {
   if (typeof document === 'undefined') return;
-  const timeMs = timestamp || Date.now();
+
+  // 타임스탬프가 지정되지 않은 경우 기존 보관값을 우선 탐색하여 리셋 방지
+  let timeMs = timestamp;
+  if (!timeMs) {
+    const existing = getStoredPumasiTime();
+    timeMs = existing || Date.now();
+  }
+
   const maxAge = 60 * 24 * 60 * 60; // 60일
-  document.cookie = `${COOKIE_NAME}=${timeMs}; path=/; max-age=${maxAge}; SameSite=Lax`;
+  const expires = new Date(Date.now() + maxAge * 1000).toUTCString();
+  document.cookie = `${COOKIE_NAME}=${timeMs}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Lax`;
+
+  try {
+    localStorage.setItem(STORAGE_KEY, String(timeMs));
+    localStorage.setItem(COOKIE_NAME, String(timeMs));
+  } catch {}
 }
 
-/** 쿠키 삭제 (뒤로가기 시 일반 시간표로 복귀) */
+/** 쿠키 및 로컬스토리지 삭제 (뒤로가기 시 일반 시간표로 복귀) */
 export function clearPumasiCookie(): void {
   if (typeof document === 'undefined') return;
-  document.cookie = `${COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
+  document.cookie = `${COOKIE_NAME}=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(COOKIE_NAME);
+  } catch {}
 }
