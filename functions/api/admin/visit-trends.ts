@@ -40,8 +40,12 @@ export const onRequest = async (context: any) => {
                 excludeBinds.push(g, c, n);
                 return "(final_grade = ? AND final_classNum = ? AND final_studentNumber = ?)";
             });
-            excludeClause = `AND NOT (${conditions.join(" OR ")})`;
+            excludeClause = `AND (final_grade IS NULL OR NOT (${conditions.join(" OR ")}))`;
         }
+
+        // 컬럼 보장
+        try { await env.DB.prepare("ALTER TABLE access_logs ADD COLUMN teacherName TEXT").run(); } catch (_) {}
+        try { await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN teacherName TEXT").run(); } catch (_) {}
 
         // Determine time range and bucket format
         let timeFilter = "";
@@ -84,10 +88,7 @@ export const onRequest = async (context: any) => {
                 break;
         }
 
-        // Uses a single optimized query with Conditional Aggregation instead of 4 separate queries
-        // Uses CTE to ensure 1:1 join with ip_profiles (takes the most recently seen student per IP) to prevent JOIN explosion
-        // Ranks IP profiles ONLY for IPs that appear in the time-filtered access logs (massive optimization for rows read)
-        // 새 아키텍처: 고유 접속자 = (grade, classNum, studentNumber, name) 4개 조합 기준
+        // 학생(Student), 교사(Teacher), 기타(Other) 3계층 아키텍처 적용
         const unifiedQuery = `
             WITH FilteredLogs AS (
                 SELECT 
@@ -96,7 +97,8 @@ export const onRequest = async (context: any) => {
                     al.ip,
                     al.grade as al_grade,
                     al.classNum as al_classNum,
-                    al.studentNumber as al_studentNumber
+                    al.studentNumber as al_studentNumber,
+                    al.teacherName as al_teacherName
                 FROM access_logs al
                 WHERE al.method = 'GET' 
                   AND al.endpoint IN ('/', '/index.html')
@@ -106,18 +108,20 @@ export const onRequest = async (context: any) => {
                 SELECT 
                     ip, 
                     student_profile_id, 
+                    teacherName as ip_teacherName,
                     ROW_NUMBER() OVER(PARTITION BY LOWER(ip) ORDER BY lastAccess DESC) as rn
                 FROM ip_profiles
                 WHERE LOWER(ip) IN (SELECT DISTINCT LOWER(ip) FROM FilteredLogs)
             ),
             LatestIPs AS (
-                SELECT LOWER(ip) as ip_lower, student_profile_id 
+                SELECT LOWER(ip) as ip_lower, student_profile_id, ip_teacherName 
                 FROM RankedIPs 
                 WHERE rn = 1
             ),
             JoinedData AS (
                 SELECT 
                     fl.bucket,
+                    NULLIF(TRIM(COALESCE(fl.al_teacherName, ip.ip_teacherName, '')), '') as final_teacher,
                     COALESCE(fl.al_grade, sp.grade) as final_grade,
                     COALESCE(fl.al_classNum, sp.classNum) as final_classNum,
                     COALESCE(fl.al_studentNumber, sp.studentNumber) as final_studentNumber,
@@ -127,27 +131,50 @@ export const onRequest = async (context: any) => {
                 FROM FilteredLogs fl
                 LEFT JOIN LatestIPs ip ON LOWER(fl.ip) = ip.ip_lower
                 LEFT JOIN student_profiles sp ON ip.student_profile_id = sp.id
+            ),
+            CategorizedData AS (
+                SELECT 
+                    bucket,
+                    ip_lower,
+                    session10Min,
+                    CASE 
+                        WHEN final_teacher IS NOT NULL THEN 'teacher'
+                        WHEN final_grade IS NOT NULL AND final_classNum IS NOT NULL THEN 'student'
+                        ELSE 'other'
+                    END as category,
+                    final_teacher as teacherId,
+                    (COALESCE(final_grade, '') || '-' || COALESCE(final_classNum, '') || '-' || COALESCE(final_studentNumber, 0) || '-' || final_name) as studentId
+                FROM JoinedData
+                WHERE 1=1 ${excludeClause}
             )
             SELECT 
                 bucket as label,
                 
-                -- 고유 접속자 (이름-학번 기준: 새 아키텍처)
-                COUNT(DISTINCT (final_grade || '-' || final_classNum || '-' || final_studentNumber || '-' || final_name)) as uniqueStudents,
+                -- 고유 학생 (파랑)
+                COUNT(DISTINCT CASE WHEN category = 'student' THEN studentId END) as students,
                 
-                -- Unique IPs
+                -- 고유 교사 (초록)
+                COUNT(DISTINCT CASE WHEN category = 'teacher' THEN teacherId END) as teachers,
+                
+                -- 고유 기타 (회색)
+                COUNT(DISTINCT CASE WHEN category = 'other' THEN ip_lower END) as others,
+                
+                -- 총 학생 접속 횟수 (10분 세션)
+                COUNT(DISTINCT CASE WHEN category = 'student' THEN (studentId || '-' || session10Min) END) as studentVisits,
+                
+                -- 총 교사 접속 횟수 (10분 세션)
+                COUNT(DISTINCT CASE WHEN category = 'teacher' THEN (teacherId || '-' || session10Min) END) as teacherVisits,
+                
+                -- 총 기타 접속 횟수 (10분 세션)
+                COUNT(DISTINCT CASE WHEN category = 'other' THEN (ip_lower || '-' || session10Min) END) as otherVisits,
+                
+                -- 구버전 호환 필드
+                COUNT(DISTINCT CASE WHEN category = 'student' THEN studentId END) as uniqueStudents,
                 COUNT(DISTINCT ip_lower) as uniqueIPs,
-                
-                -- Total Visits (Student Sessions: 이름-학번 기준)
-                COUNT(DISTINCT (final_grade || '-' || final_classNum || '-' || final_studentNumber || '-' || final_name || '-' || session10Min)) as totalVisitsStudent,
-                
-                -- Total Visits (IP Sessions)
+                COUNT(DISTINCT CASE WHEN category = 'student' THEN (studentId || '-' || session10Min) END) as totalVisitsStudent,
                 COUNT(DISTINCT (ip_lower || '-' || session10Min)) as totalVisitsIP
                 
-            FROM JoinedData
-            WHERE final_grade IS NOT NULL 
-              AND final_classNum IS NOT NULL 
-              AND final_studentNumber IS NOT NULL
-              ${excludeClause}
+            FROM CategorizedData
             GROUP BY bucket
             ORDER BY bucket ASC
         `;
@@ -155,7 +182,6 @@ export const onRequest = async (context: any) => {
         const result = await env.DB.prepare(unifiedQuery).bind(...excludeBinds).all();
         
         const buckets = result.results || [];
-
 
         return new Response(JSON.stringify({ buckets, unit: labelFormat }), {
             headers: { "Content-Type": "application/json" },

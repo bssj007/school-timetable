@@ -268,7 +268,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                         <div className="bg-emerald-50 p-4 rounded-lg flex flex-col gap-1 border border-emerald-200">
                                             <span className="text-xs text-emerald-700 font-bold flex items-center gap-1"><Smartphone className="w-3 h-3" /> 앱 설치 상태</span>
                                             <span className="text-xl font-bold text-emerald-700">
-                                                정식 앱 <span className="text-xs font-normal text-emerald-600">(WebView)</span>
+                                                Native 앱 <span className="text-xs font-normal text-emerald-600">(WebView)</span>
                                             </span>
                                         </div>
                                     );
@@ -278,7 +278,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                         <div className="bg-purple-50 p-4 rounded-lg flex flex-col gap-1 border border-purple-200">
                                             <span className="text-xs text-purple-600 font-bold flex items-center gap-1"><Smartphone className="w-3 h-3" /> 앱 설치 상태</span>
                                             <span className="text-xl font-bold text-purple-600">
-                                                PWA <span className="text-xs font-normal text-purple-500">(홈화면 추가)</span>
+                                                PWA 앱 <span className="text-xs font-normal text-purple-500">(홈화면 추가)</span>
                                             </span>
                                         </div>
                                     );
@@ -290,14 +290,6 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                     </div>
                                 );
                             })()}
-                            <div className="bg-yellow-50 p-4 rounded-lg flex flex-col gap-1 border border-yellow-100 md:col-span-4">
-                                <span className="text-xs text-yellow-700 font-bold flex items-center gap-1"><User className="w-3 h-3" /> 카카오 계정</span>
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                    {data.kakaoAccounts?.length > 0 ? data.kakaoAccounts.map((k: { kakaoId: string; kakaoNickname: string }, i: number) => (
-                                        <Badge key={i} variant="secondary" className="text-xs">{k.kakaoNickname}</Badge>
-                                    )) : <span className="text-xs text-gray-400">-</span>}
-                                </div>
-                            </div>
                             <div className="col-span-1 md:col-span-4 flex justify-end items-center gap-2">
                                 <Button
                                     variant="outline"

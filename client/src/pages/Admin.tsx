@@ -2214,15 +2214,13 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
 
     // Save developer settings mutation
     const saveDevSettingsMutation = useMutation({
-        mutationFn: async (overrideEnabled?: boolean) => {
-            const isEnabled = overrideEnabled !== undefined ? overrideEnabled : isDevAccountEnabled;
-            const payload = {
-                dev_account_enabled: isEnabled ? 'true' : 'false',
-                dev_student_grade: devGrade,
-                dev_student_class: devClass,
-                dev_student_electives: JSON.stringify(devElectives),
-                dev_teacher_source: devTeacherSource
-            };
+        mutationFn: async (payload: {
+            dev_account_enabled: string;
+            dev_student_grade: string;
+            dev_student_class: string;
+            dev_student_electives: string;
+            dev_teacher_source: string;
+        }) => {
             const res = await fetch("/api/admin/settings", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
@@ -2234,12 +2232,39 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
             queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
-            toast.success("개발자용 계정 설정이 저장되었습니다.");
+            toast.success("개발자 계정 설정이 자동 저장되었습니다.", { id: "dev-account-save" });
         },
         onError: () => {
-            toast.error("설정 저장 중 오류가 발생했습니다.");
+            toast.error("설정 저장 중 오류가 발생했습니다.", { id: "dev-account-save" });
         }
     });
+
+    const updateDevSettings = (patch: {
+        enabled?: boolean;
+        grade?: string;
+        classNum?: string;
+        electives?: Record<string, { subject: string }>;
+        teacher?: string;
+    }) => {
+        const nextEnabled = patch.enabled !== undefined ? patch.enabled : isDevAccountEnabled;
+        const nextGrade = patch.grade !== undefined ? patch.grade : devGrade;
+        const nextClass = patch.classNum !== undefined ? patch.classNum : devClass;
+        const nextElectives = patch.electives !== undefined ? patch.electives : devElectives;
+        const nextTeacher = patch.teacher !== undefined ? patch.teacher : devTeacherSource;
+
+        if (patch.grade !== undefined) setDevGrade(patch.grade);
+        if (patch.classNum !== undefined) setDevClass(patch.classNum);
+        if (patch.electives !== undefined) setDevElectives(patch.electives);
+        if (patch.teacher !== undefined) setDevTeacherSource(patch.teacher);
+
+        saveDevSettingsMutation.mutate({
+            dev_account_enabled: nextEnabled ? 'true' : 'false',
+            dev_student_grade: nextGrade,
+            dev_student_class: nextClass,
+            dev_student_electives: JSON.stringify(nextElectives),
+            dev_teacher_source: nextTeacher
+        });
+    };
 
     return (
         <div className="space-y-6">
@@ -2297,15 +2322,18 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
                                 <span className="p-1 rounded-lg bg-violet-100 text-violet-700 text-lg">💻</span>
                                 <span>개발자용 가상 계정 (시간표 및 기능 테스트)</span>
                             </CardTitle>
-                            <CardDescription>
-                                시간표 표출, 선택과목 변경, 교사용 기능 등을 실제 계정 간섭 없이 즉시 시뮬레이션할 수 있는 전용 계정을 설정합니다.
+                            <CardDescription className="flex flex-wrap items-center gap-2">
+                                <span>시간표 표출, 선택과목 변경, 교사용 기능 등을 실제 계정 간섭 없이 즉시 시뮬레이션할 수 있는 전용 계정을 설정합니다.</span>
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full shadow-xs">
+                                    ⚡ 실시간 자동 저장
+                                </span>
                             </CardDescription>
                         </div>
                         <div className="flex items-center space-x-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                             <Switch
                                 id="dev-account-switch"
                                 checked={isDevAccountEnabled}
-                                onCheckedChange={(checked) => saveDevSettingsMutation.mutate(checked)}
+                                onCheckedChange={(checked) => updateDevSettings({ enabled: checked })}
                                 disabled={saveDevSettingsMutation.isPending || settingsQuery.isLoading}
                             />
                             <Label htmlFor="dev-account-switch" className="text-sm font-bold cursor-pointer">
@@ -2347,7 +2375,13 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <Label className="text-xs text-slate-500 font-medium mb-1.5 block">내부 매핑 학년</Label>
-                                    <Select value={devGrade} onValueChange={(val) => { setDevGrade(val); setDevElectives({}); }}>
+                                    <Select 
+                                        value={devGrade} 
+                                        onValueChange={(val) => { 
+                                            updateDevSettings({ grade: val, electives: {} }); 
+                                        }}
+                                        disabled={!devInitialized || settingsQuery.isLoading}
+                                    >
                                         <SelectTrigger className="h-9 text-sm">
                                             <SelectValue placeholder="학년 선택" />
                                         </SelectTrigger>
@@ -2360,7 +2394,13 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
                                 </div>
                                 <div>
                                     <Label className="text-xs text-slate-500 font-medium mb-1.5 block">내부 매핑 반</Label>
-                                    <Select value={devClass} onValueChange={setDevClass}>
+                                    <Select 
+                                        value={devClass} 
+                                        onValueChange={(val) => {
+                                            updateDevSettings({ classNum: val });
+                                        }}
+                                        disabled={!devInitialized || settingsQuery.isLoading}
+                                    >
                                         <SelectTrigger className="h-9 text-sm">
                                             <SelectValue placeholder="반 선택" />
                                         </SelectTrigger>
@@ -2406,16 +2446,15 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
                                                     <Select
                                                         value={currentVal || "_none_"}
                                                         onValueChange={(val) => {
-                                                            setDevElectives(prev => {
-                                                                const updated = { ...prev };
-                                                                if (val === "_none_") {
-                                                                    delete updated[groupCode];
-                                                                } else {
-                                                                    updated[groupCode] = { subject: val };
-                                                                }
-                                                                return updated;
-                                                            });
+                                                            const updated = { ...devElectives };
+                                                            if (val === "_none_") {
+                                                                delete updated[groupCode];
+                                                            } else {
+                                                                updated[groupCode] = { subject: val };
+                                                            }
+                                                            updateDevSettings({ electives: updated });
                                                         }}
+                                                        disabled={!devInitialized || settingsQuery.isLoading}
                                                     >
                                                         <SelectTrigger className="h-8 text-xs bg-white flex-1">
                                                             <SelectValue placeholder="과목 선택" />
@@ -2452,7 +2491,14 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
 
                                 <div>
                                     <Label className="text-xs text-slate-500 font-medium mb-1.5 block">시간표 복제 원본 선생님 선택</Label>
-                                    <Select value={devTeacherSource || "_none_"} onValueChange={(val) => setDevTeacherSource(val === "_none_" ? "" : val)}>
+                                    <Select 
+                                        value={devTeacherSource || "_none_"} 
+                                        onValueChange={(val) => {
+                                            const newTeacher = val === "_none_" ? "" : val;
+                                            updateDevSettings({ teacher: newTeacher });
+                                        }}
+                                        disabled={!devInitialized || settingsQuery.isLoading}
+                                    >
                                         <SelectTrigger className="h-9 text-sm">
                                             <SelectValue placeholder="원본 선생님 선택..." />
                                         </SelectTrigger>
@@ -2482,14 +2528,31 @@ function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
                             </div>
 
                             <div className="pt-2">
-                                <Button
-                                    onClick={() => saveDevSettingsMutation.mutate(undefined)}
-                                    disabled={saveDevSettingsMutation.isPending}
-                                    className="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium text-xs h-9 shadow-sm flex items-center justify-center gap-1.5"
-                                >
-                                    <Save className="w-3.5 h-3.5" />
-                                    <span>개발자 계정 설정 저장하기</span>
-                                </Button>
+                                <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-200 text-xs">
+                                    <div className="flex items-center gap-1.5 text-emerald-800 font-medium">
+                                        {saveDevSettingsMutation.isPending ? (
+                                            <>
+                                                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                                                <span className="text-amber-700 font-semibold">설정 서버 저장 중...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="text-emerald-600 font-bold">⚡</span>
+                                                <span>모든 변경 사항이 즉시 자동 반영됩니다</span>
+                                            </>
+                                        )}
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => updateDevSettings({})}
+                                        disabled={saveDevSettingsMutation.isPending || !devInitialized}
+                                        className="h-7 text-xs text-emerald-700 hover:bg-emerald-100 hover:text-emerald-900 px-2 font-semibold"
+                                    >
+                                        {saveDevSettingsMutation.isPending ? "저장 중..." : "수동 재저장"}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -3490,7 +3553,7 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
     const [unit, setUnit] = useState<string>("day");
     const [excludeInput, setExcludeInput] = useState("");
     const [excludeApplied, setExcludeApplied] = useState("");
-    const [totalMetric, setTotalMetric] = useState<"student" | "ip">("student");
+    const [showOtherVisits, setShowOtherVisits] = useState(false);
 
     const [startDate, setStartDate] = useState<string>("");
     const [endDate, setEndDate] = useState<string>("");
@@ -3548,26 +3611,18 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
 
     const buckets = trendData?.buckets || [];
 
-    const isBucketCurrent = (label: string, unit: string) => {
+    const isBucketCurrent = (label: string, currentUnit: string) => {
         const now = new Date();
         const yyyy = now.getFullYear();
         const mm = String(now.getMonth() + 1).padStart(2, '0');
         const dd = String(now.getDate()).padStart(2, '0');
         const hh = String(now.getHours()).padStart(2, '0');
 
-        console.log("isBucketCurrent DEBUG:", {
-            incomingLabel: label,
-            unit,
-            targetHour: `${yyyy}-${mm}-${dd} ${hh}:00`,
-            targetDay: `${yyyy}-${mm}-${dd}`,
-            targetMonth: `${yyyy}-${mm}`
-        });
+        if (currentUnit === 'hour') return label === `${yyyy}-${mm}-${dd} ${hh}:00`;
+        if (currentUnit === 'day') return label === `${yyyy}-${mm}-${dd}`;
+        if (currentUnit === 'month' || currentUnit === 'all') return label === `${yyyy}-${mm}`;
 
-        if (unit === 'hour') return label === `${yyyy}-${mm}-${dd} ${hh}:00`;
-        if (unit === 'day') return label === `${yyyy}-${mm}-${dd}`;
-        if (unit === 'month' || unit === 'all') return label === `${yyyy}-${mm}`;
-
-        if (unit === 'week') {
+        if (currentUnit === 'week') {
             const firstDay = new Date(yyyy, 0, 1);
             let firstMondayDate = 1 + (8 - firstDay.getDay()) % 7;
             if (firstDay.getDay() === 1) firstMondayDate = 1;
@@ -3582,6 +3637,34 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
             return label === `${yyyy}-W${String(weekNum).padStart(2, '0')}`;
         }
         return false;
+    };
+
+    const renderCustomTooltip = (unitSuffix: string) => ({ active, payload, label }: any) => {
+        if (!active || !payload || !payload.length) return null;
+        const total = payload.reduce((sum: number, p: any) => sum + (Number(p.value) || 0), 0);
+        return (
+            <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg text-xs space-y-1.5 z-50 min-w-[160px]">
+                <div className="font-bold text-gray-700 pb-1 border-b border-gray-100 flex items-center justify-between gap-2">
+                    <span>구간</span>
+                    <span className="text-gray-500 font-normal">{label}</span>
+                </div>
+                <div className="space-y-1">
+                    {payload.map((entry: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between gap-4">
+                            <span className="flex items-center gap-1.5">
+                                <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: entry.color || entry.fill }} />
+                                <span className="text-gray-600">{entry.name}:</span>
+                            </span>
+                            <span className="font-semibold text-gray-800">{entry.value}{unitSuffix}</span>
+                        </div>
+                    ))}
+                </div>
+                <div className="pt-1.5 border-t border-gray-200 flex items-center justify-between font-bold text-gray-900">
+                    <span>합계:</span>
+                    <span className="text-blue-600">{total}{unitSuffix}</span>
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -3658,6 +3741,20 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                         </Button>
                     )}
                 </div>
+
+                {/* 기타 접속 표시 Checkbox */}
+                <label className="flex items-center gap-2 bg-white rounded-lg px-3 py-1 border shadow-sm h-10 cursor-pointer select-none hover:bg-gray-50 transition-colors">
+                    <input
+                        type="checkbox"
+                        checked={showOtherVisits}
+                        onChange={(e) => setShowOtherVisits(e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block" />
+                        기타 접속 표시
+                    </span>
+                </label>
             </div>
 
             {isLoading ? (
@@ -3668,9 +3765,27 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                 <div className="text-center text-gray-400 py-12">해당 기간에 데이터가 없습니다.</div>
             ) : (
                 <div className="space-y-8">
-                    {/* Graph 1: Unique Students */}
+                    {/* Graph 1: Unique Visitors (Stacked: Student [Blue] + Teacher [Green] + Other [Gray]) */}
                     <div>
-                        <h4 className="text-sm font-semibold text-gray-600 mb-3">고유 접속자 수 (학번-이름 기준)</h4>
+                        <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-semibold text-gray-700">고유 접속자 수 (층별 적층 바)</h4>
+                            <div className="flex items-center gap-3 text-xs">
+                                <span className="flex items-center gap-1">
+                                    <span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" />
+                                    <span className="text-gray-600">학생</span>
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block" />
+                                    <span className="text-gray-600">교사</span>
+                                </span>
+                                {showOtherVisits && (
+                                    <span className="flex items-center gap-1">
+                                        <span className="w-3 h-3 rounded-sm bg-slate-400 inline-block" />
+                                        <span className="text-gray-600">기타</span>
+                                    </span>
+                                )}
+                            </div>
+                        </div>
                         <div className="h-64 w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={buckets}>
@@ -3679,118 +3794,158 @@ function VisitorTrends({ adminPassword }: { adminPassword: string }) {
                                             <rect width="8" height="8" fill="#3b82f6" />
                                             <rect width="4" height="8" fill="#bfdbfe" />
                                         </pattern>
-                                        <pattern id="stripe-purple" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-                                            <rect width="8" height="8" fill="#8b5cf6" />
-                                            <rect width="4" height="8" fill="#ddd6fe" />
-                                        </pattern>
                                         <pattern id="stripe-green" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
                                             <rect width="8" height="8" fill="#10b981" />
                                             <rect width="4" height="8" fill="#a7f3d0" />
                                         </pattern>
-                                        <pattern id="stripe-orange" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-                                            <rect width="8" height="8" fill="#f59e0b" />
-                                            <rect width="4" height="8" fill="#fde68a" />
+                                        <pattern id="stripe-gray" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                                            <rect width="8" height="8" fill="#94a3b8" />
+                                            <rect width="4" height="8" fill="#cbd5e1" />
                                         </pattern>
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                                     <XAxis dataKey="label" tickFormatter={formatLabel} tick={{ fontSize: 12 }} />
                                     <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                                    <Tooltip
-                                        labelFormatter={(v) => `구간: ${v}`}
-                                        formatter={(v: number) => [`${v}명`, '고유 접속자 (학번-이름)']}
-                                    />
-                                    <Bar dataKey="uniqueStudents" name="고유 접속자 (학번-이름)" radius={[4, 4, 0, 0]}>
+                                    <Tooltip content={renderCustomTooltip('명')} />
+                                    <Bar dataKey="students" stackId="uniqueStack" name="학생" fill="#3b82f6">
                                         {buckets.map((entry: any, index: number) => (
-                                            <Cell key={`cell-${index}`} fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-blue)" : "#3b82f6"} />
+                                            <Cell 
+                                                key={`cell-student-${index}`} 
+                                                fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-blue)" : "#3b82f6"} 
+                                            />
                                         ))}
                                     </Bar>
+                                    <Bar dataKey="teachers" stackId="uniqueStack" name="교사" fill="#10b981">
+                                        {buckets.map((entry: any, index: number) => (
+                                            <Cell 
+                                                key={`cell-teacher-${index}`} 
+                                                fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-green)" : "#10b981"} 
+                                            />
+                                        ))}
+                                    </Bar>
+                                    {showOtherVisits && (
+                                        <Bar dataKey="others" stackId="uniqueStack" name="기타" fill="#94a3b8">
+                                            {buckets.map((entry: any, index: number) => (
+                                                <Cell 
+                                                    key={`cell-other-${index}`} 
+                                                    fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-gray)" : "#94a3b8"} 
+                                                />
+                                            ))}
+                                        </Bar>
+                                    )}
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
 
-                    {/* Graph 1.5: Unique IPs */}
+                    {/* Graph 2: Total Visits (Stacked: Student [Blue] + Teacher [Green] + Other [Gray]) */}
                     <div>
-                        <h4 className="text-sm font-semibold text-gray-600 mb-3">고유 접속자 수 (IP 기준)</h4>
-                        <div className="h-64 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={buckets}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                                    <XAxis dataKey="label" tickFormatter={formatLabel} tick={{ fontSize: 12 }} />
-                                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                                    <Tooltip
-                                        labelFormatter={(v) => `구간: ${v}`}
-                                        formatter={(v: number) => [`${v}개`, '고유 IP']}
-                                    />
-                                    <Bar dataKey="uniqueIPs" name="고유 IP" radius={[4, 4, 0, 0]}>
-                                        {buckets.map((entry: any, index: number) => (
-                                            <Cell key={`cell-${index}`} fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-purple)" : "#8b5cf6"} />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-
-                    {/* Graph 2: Total Visits */}
-                    <div>
-                        <div className="flex items-center gap-3 mb-3">
+                        <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
-                                <h4 className="text-sm font-semibold text-gray-600">총 접속 횟수</h4>
-                                <span className="text-xs text-gray-400 font-normal shadow-none">(10분당 1회 제한)</span>
+                                <h4 className="text-sm font-semibold text-gray-700">총 접속 횟수</h4>
+                                <span className="text-xs text-gray-400 font-normal">(10분당 1회 세션 기준)</span>
                             </div>
-                            <div className="flex bg-gray-100 rounded-md p-0.5">
-                                <button
-                                    onClick={() => setTotalMetric("student")}
-                                    className={`px-2 py-1 text-xs rounded-sm transition-colors ${totalMetric === "student"
-                                        ? 'bg-white shadow-sm text-blue-600 font-bold'
-                                        : 'text-gray-500 hover:text-gray-700'
-                                        }`}
-                                >
-                                    학번 기준
-                                </button>
-                                <button
-                                    onClick={() => setTotalMetric("ip")}
-                                    className={`px-2 py-1 text-xs rounded-sm transition-colors ${totalMetric === "ip"
-                                        ? 'bg-white shadow-sm text-purple-600 font-bold'
-                                        : 'text-gray-500 hover:text-gray-700'
-                                        }`}
-                                >
-                                    IP 기준
-                                </button>
+                            <div className="flex items-center gap-3 text-xs">
+                                <span className="flex items-center gap-1">
+                                    <span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" />
+                                    <span className="text-gray-600">학생 접속</span>
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block" />
+                                    <span className="text-gray-600">교사 접속</span>
+                                </span>
+                                {showOtherVisits && (
+                                    <span className="flex items-center gap-1">
+                                        <span className="w-3 h-3 rounded-sm bg-slate-400 inline-block" />
+                                        <span className="text-gray-600">기타 접속</span>
+                                    </span>
+                                )}
                             </div>
                         </div>
                         <div className="h-64 w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={buckets}>
+                                    <defs>
+                                        <pattern id="stripe-blue-visit" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                                            <rect width="8" height="8" fill="#3b82f6" />
+                                            <rect width="4" height="8" fill="#bfdbfe" />
+                                        </pattern>
+                                        <pattern id="stripe-green-visit" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                                            <rect width="8" height="8" fill="#10b981" />
+                                            <rect width="4" height="8" fill="#a7f3d0" />
+                                        </pattern>
+                                        <pattern id="stripe-gray-visit" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                                            <rect width="8" height="8" fill="#94a3b8" />
+                                            <rect width="4" height="8" fill="#cbd5e1" />
+                                        </pattern>
+                                    </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                                     <XAxis dataKey="label" tickFormatter={formatLabel} tick={{ fontSize: 12 }} />
                                     <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                                    <Tooltip
-                                        labelFormatter={(v) => `구간: ${v}`}
-                                        formatter={(v: number) => [`${v}회`, totalMetric === 'student' ? '접속 횟수 (학번 매핑됨)' : '접속 횟수 (모든 IP)']}
-                                    />
-                                    <Bar
-                                        dataKey={totalMetric === "student" ? "totalVisitsStudent" : "totalVisitsIP"}
-                                        radius={[4, 4, 0, 0]}
-                                        name="접속 횟수"
-                                    >
+                                    <Tooltip content={renderCustomTooltip('회')} />
+                                    <Bar dataKey="studentVisits" stackId="totalVisitStack" name="학생 접속" fill="#3b82f6">
                                         {buckets.map((entry: any, index: number) => (
-                                            <Cell key={`cell-${index}`} fill={isBucketCurrent(entry.label, unit) ? (totalMetric === "student" ? "url(#stripe-green)" : "url(#stripe-orange)") : (totalMetric === "student" ? "#10b981" : "#f59e0b")} />
+                                            <Cell 
+                                                key={`cell-student-visit-${index}`} 
+                                                fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-blue-visit)" : "#3b82f6"} 
+                                            />
                                         ))}
                                     </Bar>
+                                    <Bar dataKey="teacherVisits" stackId="totalVisitStack" name="교사 접속" fill="#10b981">
+                                        {buckets.map((entry: any, index: number) => (
+                                            <Cell 
+                                                key={`cell-teacher-visit-${index}`} 
+                                                fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-green-visit)" : "#10b981"} 
+                                            />
+                                        ))}
+                                    </Bar>
+                                    {showOtherVisits && (
+                                        <Bar dataKey="otherVisits" stackId="totalVisitStack" name="기타 접속" fill="#94a3b8">
+                                            {buckets.map((entry: any, index: number) => (
+                                                <Cell 
+                                                    key={`cell-other-visit-${index}`} 
+                                                    fill={isBucketCurrent(entry.label, unit) ? "url(#stripe-gray-visit)" : "#94a3b8"} 
+                                                />
+                                            ))}
+                                        </Bar>
+                                    )}
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
 
                     {/* Summary stats */}
-                    <div className="flex gap-4 text-sm text-gray-500 border-t pt-3">
-                        <span>구간 수: {buckets.length}</span>
-                        <span>총 고유 접속자(학번-이름): {buckets.reduce((s: number, b: any) => s + b.uniqueStudents, 0)}명</span>
-                        <span>총 고유 IP: {buckets.reduce((s: number, b: any) => s + (b.uniqueIPs || 0), 0)}개</span>
-                        <span>총 접속: {buckets.reduce((s: number, b: any) => s + b.totalVisits, 0)}회</span>
-                        {excludeApplied && <span className="text-orange-500">제외: {excludeApplied}</span>}
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-gray-600 border-t pt-3 bg-gray-50/50 p-3 rounded-lg">
+                        <span className="font-medium text-gray-700">구간 수: <strong className="text-gray-900">{buckets.length}</strong></span>
+                        <span>
+                            학생: <strong className="text-blue-600">{buckets.reduce((s: number, b: any) => s + (b.students || 0), 0)}</strong>명
+                        </span>
+                        <span>
+                            교사: <strong className="text-emerald-600">{buckets.reduce((s: number, b: any) => s + (b.teachers || 0), 0)}</strong>명
+                        </span>
+                        {showOtherVisits && (
+                            <span>
+                                기타: <strong className="text-slate-500">{buckets.reduce((s: number, b: any) => s + (b.others || 0), 0)}</strong>명
+                            </span>
+                        )}
+                        <span className="border-l border-gray-300 pl-4 font-semibold text-gray-800">
+                            총 고유 접속자: <strong className="text-blue-700">
+                                {buckets.reduce((s: number, b: any) => s + (b.students || 0) + (b.teachers || 0) + (showOtherVisits ? (b.others || 0) : 0), 0)}
+                            </strong>명
+                        </span>
+                        <span className="border-l border-gray-300 pl-4 text-gray-600">
+                            총 고유 IP: <strong className="text-gray-800">{buckets.reduce((s: number, b: any) => s + (b.uniqueIPs || 0), 0)}</strong>개
+                        </span>
+                        <span className="border-l border-gray-300 pl-4 font-semibold text-gray-800">
+                            총 접속: <strong className="text-indigo-700">
+                                {buckets.reduce((s: number, b: any) => s + (b.studentVisits || 0) + (b.teacherVisits || 0) + (showOtherVisits ? (b.otherVisits || 0) : 0), 0)}
+                            </strong>회
+                        </span>
+                        {excludeApplied && (
+                            <span className="border-l border-gray-300 pl-4 text-orange-600 font-medium">
+                                제외 학번: {excludeApplied}
+                            </span>
+                        )}
                     </div>
                 </div>
             )}
@@ -7299,28 +7454,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
         onError: () => toast.error("해제 실패"),
     });
 
-    const recalibrateMutation = useMutation({
-        mutationFn: async () => {
-            const res = await fetch("/api/admin/users?action=recalibrate", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-Admin-Password": password,
-                },
-                body: JSON.stringify({ action: "recalibrate" }),
-            });
-            if (!res.ok) throw new Error("수행평가 횟수 재정비에 실패했습니다.");
-            return res.json();
-        },
-        onSuccess: (data: any) => {
-            toast.success(data?.message || "수행평가 횟수가 실데이터 기준으로 완벽히 재정비되었습니다.");
-            queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-        },
-        onError: (err: any) => {
-            toast.error(err?.message || "수행평가 횟수 재정비 실패");
-        },
-    });
-
     const resetDismissMutation = useMutation({
         mutationFn: async (ip: string) => {
             const res = await fetch("/api/admin/users/reset-dismiss", {
@@ -7803,30 +7936,11 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                             </div>
                         </div>
                         <Card className="min-w-0 overflow-hidden">
-                            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                <div>
-                                    <CardTitle>활성 사용자 ({timeRange === '24h' ? '최근 24시간' : timeRange === '7d' ? '최근 1주일' : '전체 사용자'})</CardTitle>
-                                    <CardDescription>
-                                        최근 접속한 IP 및 카카오 계정 목록입니다. 같은 학번의 여러 IP는 하나의 항목으로 묶입니다.
-                                    </CardDescription>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={recalibrateMutation.isPending}
-                                        onClick={() => {
-                                            if (confirm("실제 등록된 수행평가 및 등록 성공 이력과 대조하여 모든 사용자의 추가/수정/삭제 횟수를 정확한 값으로 전수 재정비하시겠습니까?")) {
-                                                recalibrateMutation.mutate();
-                                            }
-                                        }}
-                                        className="text-xs text-blue-600 border-blue-200 hover:bg-blue-50 h-8 gap-1.5 whitespace-nowrap shadow-sm"
-                                        title="실제 등록된 수행평가 및 등록 성공 로그와 대조하여 모든 IP의 추가/수정/삭제 횟수를 정확하게 재계산 및 정화합니다."
-                                    >
-                                        <RefreshCw className={`w-3.5 h-3.5 ${recalibrateMutation.isPending ? 'animate-spin text-blue-500' : ''}`} />
-                                        {recalibrateMutation.isPending ? '재정비 중...' : '수행평가 횟수 재정비'}
-                                    </Button>
-                                </div>
+                            <CardHeader>
+                                <CardTitle>활성 사용자 ({timeRange === '24h' ? '최근 24시간' : timeRange === '7d' ? '최근 1주일' : '전체 사용자'})</CardTitle>
+                                <CardDescription>
+                                    최근 접속한 IP 목록입니다. 같은 학번의 여러 IP는 하나의 항목으로 묶입니다.
+                                </CardDescription>
                             </CardHeader>
                             <CardContent className="min-w-0 overflow-hidden p-0 sm:p-6">
                                 {(() => {
@@ -7859,7 +7973,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         const gradeClassNum2 = `${u.grade || ''}${u.classNum || ''}${u.studentNumber || ''}`;
                                         const gradeClassNumHyphen = `${u.grade || ''}-${u.classNum || ''}-${u.studentNumber || ''}`;
                                         const ip = u.ip || '';
-                                        const kakaoNames = (u.kakaoAccounts || []).map((k: any) => k.kakaoNickname).join(' ');
                                         const name = (u.studentName || '').toLowerCase();
                                         const teacher = ((u as any).teacherName || '').toLowerCase();
                                         
@@ -7867,7 +7980,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                gradeClassNum.includes(query) || 
                                                gradeClassNum2.includes(query) ||
                                                gradeClassNumHyphen.includes(query) ||
-                                               kakaoNames.toLowerCase().includes(query) ||
                                                name.includes(query) ||
                                                teacher.includes(query);
                                     });
@@ -7900,7 +8012,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         printCount: number;
                                         downloadCount: number;
                                         lastAccess: string | null;
-                                        kakaoAccounts: { kakaoId: string; kakaoNickname: string }[];
                                         isBlocked: boolean;
                                         hasElectives?: boolean;
                                         instructionDismissed: boolean;
@@ -7925,11 +8036,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                             if (!existing.lastAccess || (user.lastAccess && user.lastAccess > existing.lastAccess)) {
                                                 existing.lastAccess = user.lastAccess;
                                             }
-                                            for (const acc of (user.kakaoAccounts || [])) {
-                                                if (!existing.kakaoAccounts.some(a => a.kakaoId === acc.kakaoId)) {
-                                                    existing.kakaoAccounts.push(acc);
-                                                }
-                                            }
                                             if (user.isBlocked) existing.isBlocked = true;
                                             if (user.hasElectives) existing.hasElectives = true;
                                             if (user.instructionDismissed) existing.instructionDismissed = true;
@@ -7950,7 +8056,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                 printCount: user.printCount || 0,
                                                 downloadCount: user.downloadCount || 0,
                                                 lastAccess: user.lastAccess,
-                                                kakaoAccounts: [...(user.kakaoAccounts || [])],
                                                 isBlocked: !!user.isBlocked,
                                                 hasElectives: !!user.hasElectives,
                                                 instructionDismissed: !!user.instructionDismissed,
@@ -8076,6 +8181,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         if (s === 'chrome') return 'Chrome';
                                         if (s === 'safari') return 'Safari';
                                         if (s === 'samsung') return 'Samsung';
+                                        if (s === 'pwa') return 'PWA 앱';
+                                        if (s === 'webview' || s === 'app') return 'Native 앱';
                                         if (s === 'other' || s === 'firefox' || s === 'edge' || s === 'opera') return '그외';
                                         return null;
                                     };
@@ -8115,18 +8222,18 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     const detected = detectFromUserAgent(raw.userAgent);
                                                     os = osLabel(detected.desktopOS || (detected.isIOS ? 'ios' : detected.isAndroid ? 'android' : null)) || osLabel(raw.os);
                                                     if (detected.isInstalledApp && detected.installedAppType === 'webview') {
-                                                        browser = '앱';
+                                                        browser = 'Native 앱';
                                                     } else if (detected.isInstalledApp && detected.installedAppType === 'pwa') {
-                                                        browser = 'PWA';
+                                                        browser = 'PWA 앱';
                                                     } else {
                                                         browser = browserLabel(detected.browserKey) || browserLabel(raw.browserKey) || '그외';
                                                     }
                                                 } else {
                                                     os = osLabel(raw.os);
                                                     if (raw.isApp || (raw as any).appType === 'webview') {
-                                                        browser = '앱';
+                                                        browser = 'Native 앱';
                                                     } else if (raw.browserKey === 'pwa' || (raw as any).appType === 'pwa') {
-                                                        browser = 'PWA';
+                                                        browser = 'PWA 앱';
                                                     } else if (raw.browserKey) {
                                                         browser = browserLabel(raw.browserKey) || '그외';
                                                     }
@@ -8329,9 +8436,9 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                     ? "bg-purple-600 border-purple-700 hover:bg-purple-700"
                                                                     : "bg-emerald-600 border-emerald-700 hover:bg-emerald-700"
                                                             }`}
-                                                            title={isPwa ? "로그 통틀어 PWA(홈화면 추가) 앱 접속 이력 있음" : "로그 통틀어 정식 앱(WebView) 접속 이력 있음"}
+                                                            title={isPwa ? "로그 통틀어 PWA 앱(홈화면 추가) 접속 이력 있음" : "로그 통틀어 Native 앱(WebView) 접속 이력 있음"}
                                                         >
-                                                            {isPwa ? `PWA·${os || '모바일'}` : `앱·${os || e.deviceType || '모바일'}`}
+                                                            {isPwa ? `PWA 앱·${os || '모바일'}` : `Native 앱·${os || e.deviceType || '모바일'}`}
                                                         </Badge>
                                                     );
                                                 })}
@@ -8373,13 +8480,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                 ) : null}
                                             </TableCell>
                                             <TableCell>
-                                                {user.kakaoAccounts && user.kakaoAccounts.length > 0 ? (
-                                                    user.kakaoAccounts.map((k, i) => (
-                                                        <span key={i} className="text-xs text-slate-500">{k.kakaoNickname}</span>
-                                                    ))
-                                                ) : <span className="text-gray-300">-</span>}
-                                            </TableCell>
-                                            <TableCell>
                                                     <div className="flex flex-col gap-1 items-start">
                                                         {(() => {
                                                             const adds = user.addCount || 0;
@@ -8415,7 +8515,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                             <TableCell className="text-slate-400">
                                                 {user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}
                                             </TableCell>
-                                            <TableCell />
                                             <TableCell>
                                                 {user.isBlocked
                                                     ? <Badge variant="destructive" className="text-xs">차단됨</Badge>
@@ -8514,15 +8613,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         ) : <span className="text-gray-300 text-xs">-</span>}
                                                     </TableCell>
                                                     <TableCell>
-                                                        <div className="flex flex-col gap-1">
-                                                            {group.kakaoAccounts.length > 0 ? (
-                                                                group.kakaoAccounts.map((k, i) => (
-                                                                    <span key={i} className="font-bold text-xs">{k.kakaoNickname}</span>
-                                                                ))
-                                                            ) : <span className="text-gray-400 text-xs">-</span>}
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell>
                                                         <div className="flex flex-col gap-1 items-start">
                                                             {(() => {
                                                                 const adds = group.addCount || 0;
@@ -8561,39 +8651,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     </TableCell>
                                                     <TableCell>
                                                         {group.lastAccess ? new Date(group.lastAccess + 'Z').toLocaleString() : '-'}
-                                                    </TableCell>
-                                                    <TableCell onClick={e => e.stopPropagation()}>
-                                                        {!hasMultiple && group.kakaoAccounts.length > 0 ? (
-                                                            <div className="flex gap-2">
-                                                                <Button
-                                                                    variant="outline" size="sm"
-                                                                    className="text-purple-500 hover:text-purple-600 hover:bg-purple-50"
-                                                                    onClick={async () => {
-                                                                        if (!confirm("이 사용자에게 '수행평가 알림' 캘린더 일정을 등록하시겠습니까?\n(1분 후 시작, 10분간 지속, 즉시 알림)")) return;
-                                                                        const targetKakaoId = group.kakaoAccounts[0].kakaoId;
-                                                                        try {
-                                                                            const response = await fetch('/api/admin/users/calendar', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Password': password }, body: JSON.stringify({ kakaoId: targetKakaoId, title: "🔔 수행평가 확인 알림", description: "관리자가 보낸 수행평가 확인 알림입니다." }) });
-                                                                            const data = await response.json();
-                                                                            if (response.ok && data.success) { alert('캘린더 일정이 등록되었습니다.'); } else { alert(`실패: ${data.error || JSON.stringify(data)}`); }
-                                                                        } catch (error: any) { alert(`오류: ${error.message}`); }
-                                                                    }}
-                                                                ><Calendar className="h-4 w-4 mr-1" />캘린더</Button>
-                                                                <Button
-                                                                    variant="outline" size="sm"
-                                                                    className="text-blue-500 hover:text-blue-600 hover:bg-blue-50"
-                                                                    onClick={async () => {
-                                                                        const message = prompt("전송할 메시지를 입력하세요:");
-                                                                        if (!message) return;
-                                                                        const targetKakaoId = group.kakaoAccounts[0].kakaoId;
-                                                                        try {
-                                                                            const response = await fetch('/api/admin/users/notify', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Password': password }, body: JSON.stringify({ ip: representativeUser.ip, kakaoId: targetKakaoId, message }) });
-                                                                            const data = await response.json();
-                                                                            alert(data.success ? '알림 전송됨 (개발중)' : '실패: ' + data.error);
-                                                                        } catch { alert('오류 발생'); }
-                                                                    }}
-                                                                >📱 알림</Button>
-                                                            </div>
-                                                        ) : <span className="text-gray-400 text-xs">{hasMultiple ? '(펼쳐서 확인)' : '-'}</span>}
                                                     </TableCell>
                                                     <TableCell onClick={e => e.stopPropagation()}>
                                                         <div className="flex gap-2">
@@ -8641,14 +8698,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         <TableRow>
                                                             <TableHead className="w-[120px] min-w-[120px]">IP 주소</TableHead>
                                                             <SortHeader col="id" label="학년/반/번호" className="w-[140px] min-w-[140px]" />
-                                                            <TableHead className="w-[180px] min-w-[180px]">카카오 계정</TableHead>
                                                             <SortHeader col="modCount" label="수정/추가/삭제" className="w-[120px] min-w-[120px]" />
                                                             <TableHead className="w-[80px] min-w-[80px]">출력</TableHead>
                                                             <TableHead className="w-[80px] min-w-[80px]">다운로드</TableHead>
                                                             <TableHead className="w-[140px] min-w-[140px]" title="실시간 최신 접속 브라우저 및 OS 환경 (LIVE 시 빨간색 표시, 오프라인 시 최근 1개 표시, 더보기 지원)">접속환경</TableHead>
                                                             <TableHead className="w-[105px] min-w-[105px]" title="현재 접속 여부 무관, 과거 전체 로그 기준 앱(WebView/PWA) 접속 이력 여부">앱설치</TableHead>
                                                             <SortHeader col="lastAccess" label="마지막 접속" className="w-[160px] min-w-[160px]" />
-                                                            <TableHead className="w-[160px] min-w-[160px]">알림</TableHead>
                                                             <TableHead className="w-[160px] min-w-[160px]">관리</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
@@ -8658,7 +8713,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         ))}
                                                         {groups.length === 0 && (
                                                             <TableRow>
-                                                                <TableCell colSpan={11} className="h-24 text-center text-gray-500">
+                                                                <TableCell colSpan={9} className="h-24 text-center text-gray-500">
                                                                     일반 접속 기록이 없습니다.
                                                                 </TableCell>
                                                             </TableRow>
@@ -10387,7 +10442,6 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const [restrictedGrades, setRestrictedGrades] = useState<number[]>([]);
     const [restrictionReason, setRestrictionReason] = useState("");
     const [ipWhitelist, setIpWhitelist] = useState("");
-    const [kakaoLoginRestricted, setKakaoLoginRestricted] = useState(false);
 
     const [maintenanceActive, setMaintenanceActive] = useState(false);
     const [maintenanceDuration, setMaintenanceDuration] = useState("3"); // hours
@@ -10440,8 +10494,6 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
             setRestrictionReason(
                 settingsQuery.data.restriction_reason || "현재 해당 학년은 서비스 이용이 제한되어 있습니다."
             );
-
-            setKakaoLoginRestricted(settingsQuery.data.kakao_login_restricted === 'true');
 
             try {
                 const parsedMaint = settingsQuery.data.maintenance_mode ? JSON.parse(settingsQuery.data.maintenance_mode) : null;
@@ -10530,7 +10582,6 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
             restricted_grades: JSON.stringify(restrictedGrades),
             restriction_reason: restrictionReason,
             ip_whitelist: JSON.stringify(ips),
-            kakao_login_restricted: String(kakaoLoginRestricted),
             maintenance_mode: JSON.stringify({
                 active: maintenanceActive,
                 endTime: maintenanceEndTime,
@@ -10584,9 +10635,6 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     const savedReason = settingsQuery.data?.restriction_reason || "현재 해당 학년은 서비스 이용이 제한되어 있습니다.";
     const isReasonDirty = savedReason !== restrictionReason;
 
-    const savedKakaoRestricted = settingsQuery.data?.kakao_login_restricted === 'true';
-    const isKakaoRestrictedDirty = savedKakaoRestricted !== kakaoLoginRestricted;
-
     let savedIpsStr = "";
     try {
         const parsed = settingsQuery.data?.ip_whitelist ? JSON.parse(settingsQuery.data.ip_whitelist) : [];
@@ -10611,7 +10659,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
     // We ignore duration/endTime/startTime check for dirtiness since it's dynamic
     const isMaintenanceDirty = currentMaintStr !== savedMaintStr;
 
-    const isDirty = isGradesDirty || isReasonDirty || isKakaoRestrictedDirty || isIpsDirty || isMaintenanceDirty;
+    const isDirty = isGradesDirty || isReasonDirty || isIpsDirty || isMaintenanceDirty;
 
     return (
         <div className="space-y-6 flex flex-col items-center">
@@ -10759,22 +10807,7 @@ function VisitRestrictionSettings({ adminPassword }: { adminPassword: string }) 
                         </p>
                     </div>
 
-                    <div className="space-y-4 pt-4 border-t">
-                        <h4 className="text-sm font-bold">카카오 연동 제한</h4>
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                                id="kakao-restrict"
-                                checked={kakaoLoginRestricted}
-                                onCheckedChange={(c) => setKakaoLoginRestricted(!!c)}
-                            />
-                            <label
-                                htmlFor="kakao-restrict"
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                            >
-                                카카오 로그인 연동 제한 (모든 학년 적용)
-                            </label>
-                        </div>
-                    </div>
+
 
                     <div className="space-y-2 pt-4 border-t border-slate-100">
                         <label className="text-sm font-medium">IP 화이트리스트 (줄바꿈으로 구분)</label>
@@ -11603,7 +11636,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                         <div className="flex items-center gap-2">
                                             <span className="text-base">🏠</span>
                                             <div>
-                                                <p className="font-semibold text-gray-800">PWA 홈화면 추가 앱</p>
+                                                <p className="font-semibold text-gray-800">PWA 앱 (홈화면 추가)</p>
                                                 <p className="text-xs text-gray-500">display-mode: standalone · iOS navigator.standalone</p>
                                             </div>
                                         </div>
@@ -11619,7 +11652,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                     <td className="px-3 py-3 text-center">
                                         {currentBypassEnv === "pwa_app" && (
                                             <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100 border border-purple-300 px-2 py-0.5 rounded-full">
-                                                🏠 현재 (PWA)
+                                                🏠 현재 (PWA 앱)
                                             </span>
                                         )}
                                     </td>
@@ -11630,7 +11663,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                                 <button
                                                     id="bypass-btn-pwa_app"
                                                     type="button"
-                                                    onClick={() => requestBypassToggle("pwa_app", !isBypassed, "PWA 홈화면 추가 앱")}
+                                                    onClick={() => requestBypassToggle("pwa_app", !isBypassed, "PWA 앱")}
                                                     disabled={saveSettingMutation.isPending}
                                                     className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
                                                         isBypassed
@@ -11650,7 +11683,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                         <div className="flex items-center gap-2">
                                             <span className="text-base">📦</span>
                                             <div>
-                                                <p className="font-semibold text-gray-800">정식 설치된 앱 (WebView)</p>
+                                                <p className="font-semibold text-gray-800">Native 앱 (WebView)</p>
                                                 <p className="text-xs text-gray-500">Android TWA / WebView · UA에 "; wv)" 포함</p>
                                             </div>
                                         </div>
@@ -11666,7 +11699,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                     <td className="px-3 py-3 text-center">
                                         {currentBypassEnv === "webview_app" && (
                                             <span className="inline-flex items-center gap-1 text-xs font-bold text-orange-700 bg-orange-100 border border-orange-300 px-2 py-0.5 rounded-full">
-                                                📦 현재 (앱)
+                                                📦 현재 (Native 앱)
                                             </span>
                                         )}
                                     </td>
@@ -11677,7 +11710,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                                                 <button
                                                     id="bypass-btn-webview_app"
                                                     type="button"
-                                                    onClick={() => requestBypassToggle("webview_app", !isBypassed, "정식 설치된 앱 (WebView)")}
+                                                    onClick={() => requestBypassToggle("webview_app", !isBypassed, "Native 앱")}
                                                     disabled={saveSettingMutation.isPending}
                                                     className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
                                                         isBypassed
