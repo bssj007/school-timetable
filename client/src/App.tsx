@@ -21,6 +21,8 @@ import IOSInstallGuide from "./pages/IOSInstallGuide";
 import IOSChromeInstallGuide from "./pages/IOSChromeInstallGuide";
 import AppDownloadPage from "./pages/AppDownloadPage";
 import Privacy from "./pages/Privacy";
+import BetaTesterPage from "./pages/BetaTesterPage";
+import { getPumasiCookie } from "@/lib/pumasiCookie";
 import { shouldShowDownloadPage, isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 function Router() {
@@ -47,6 +49,7 @@ function Router() {
 function AppContent() {
   const { isValidating, userRole, refreshRole, publicSettings, grade } = useUserConfig();
   const [location, setLocation] = useLocation();
+  const [isBetaTester, setIsBetaTester] = useState(() => getPumasiCookie().isPumasi);
 
   const isTeacherRoute = location.startsWith("/teacher");
   const isAdminRoute = location.startsWith("/admin");
@@ -180,6 +183,16 @@ function AppContent() {
     return null;
   }
 
+  // Google Play 비공개 테스터(오픈채팅 품앗이) 쿠키가 존재하는 경우 전용 오목 페이지 렌더링
+  if (isBetaTester && !isAdminRoute) {
+    return (
+      <>
+        <Toaster />
+        <BetaTesterPage onBack={() => setIsBetaTester(false)} />
+      </>
+    );
+  }
+
   return (
     <>
       <Toaster />
@@ -189,7 +202,12 @@ function AppContent() {
         </div>
       )}
       {/* 역할 미선택 시 역할 선택 다이얼로그 — 다운로드/가이드/개인정보 페이지에서는 숨김 */}
-      {!isDownloadRoute && !isIOSGuideRoute && !isPrivacyRoute && <RoleSelectDialog onRoleSelected={() => refreshRole()} />}
+      {!isDownloadRoute && !isIOSGuideRoute && !isPrivacyRoute && (
+        <RoleSelectDialog
+          onRoleSelected={() => refreshRole()}
+          onBetaSelected={() => setIsBetaTester(true)}
+        />
+      )}
       {!isPrivacyRoute && <OnboardingDialog />}
       <Router />
     </>

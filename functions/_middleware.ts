@@ -117,6 +117,8 @@ ${logoOrIconHtml}
             let grade = null, classNum = null, studentNumber = null, studentName: string | null = null;
             let kakaoId = null, kakaoNickname = null;
             let teacherName: string | null = null;
+            let isBetaTester = false;
+            let betaTesterSince: string | null = null;
 
             if (cookies) {
                 const configMatch = cookies.match(new RegExp('(^| )school_timetable_config=([^;]+)'));
@@ -143,6 +145,23 @@ ${logoOrIconHtml}
                 const teacherMatch = cookies.match(new RegExp('(^| )sj_teacher_name=([^;]+)'));
                 if (teacherMatch) {
                     try { teacherName = decodeURIComponent(teacherMatch[2]).trim() || null; } catch { }
+                }
+
+                // 오픈채팅 베타테스터 품앗이 쿠키 (sj_beta_pumasi)
+                const pumasiMatch = cookies.match(new RegExp('(^| )sj_beta_pumasi=([^;]+)'));
+                if (pumasiMatch) {
+                    isBetaTester = true;
+                    try {
+                        const raw = decodeURIComponent(pumasiMatch[2]);
+                        const num = parseInt(raw, 10);
+                        if (!isNaN(num) && num > 0) {
+                            betaTesterSince = new Date(num).toISOString();
+                        } else {
+                            betaTesterSince = raw;
+                        }
+                    } catch {
+                        betaTesterSince = new Date().toISOString();
+                    }
                 }
             }
 
@@ -305,9 +324,10 @@ ${logoOrIconHtml}
                     INSERT INTO ip_profiles (
                         ip, student_profile_id, kakaoId, kakaoNickname, lastAccess,
                         modificationCount, addCount, deleteCount, userAgent, printCount, downloadCount,
-                        isStandalone, teacherName, browserKey, deviceType, os, isInApp
+                        isStandalone, teacherName, browserKey, deviceType, os, isInApp,
+                        isBetaTester, betaTesterSince
                     )
-                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(ip) DO UPDATE SET
                         lastAccess = datetime('now'),
                         userAgent = excluded.userAgent,
@@ -319,6 +339,8 @@ ${logoOrIconHtml}
                         deviceType = excluded.deviceType,
                         os = excluded.os,
                         isInApp = excluded.isInApp,
+                        isBetaTester = CASE WHEN excluded.isBetaTester = 1 THEN 1 ELSE ip_profiles.isBetaTester END,
+                        betaTesterSince = COALESCE(ip_profiles.betaTesterSince, excluded.betaTesterSince),
                         modificationCount = ip_profiles.modificationCount + ?,
                         addCount = ip_profiles.addCount + ?,
                         deleteCount = ip_profiles.deleteCount + ?,
@@ -351,6 +373,8 @@ ${logoOrIconHtml}
                         uaProfile.deviceType,
                         uaProfile.os,
                         uaProfile.isInApp ? 1 : 0,
+                        isBetaTester ? 1 : 0,
+                        betaTesterSince,
                         increment, // modificationCount Update
                         addIncrement,
                         deleteIncrement,
@@ -420,6 +444,12 @@ ${logoOrIconHtml}
                     } catch (_) { /* already exists */ }
                     try {
                         await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN isInApp INTEGER DEFAULT 0").run();
+                    } catch (_) { /* already exists */ }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN isBetaTester INTEGER DEFAULT 0").run();
+                    } catch (_) { /* already exists */ }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN betaTesterSince TEXT").run();
                     } catch (_) { /* already exists */ }
 
                     // Retry update after ALTER

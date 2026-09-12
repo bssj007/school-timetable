@@ -7,7 +7,7 @@ export const onRequest = async (context: any) => {
     }
 
     try {
-        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'elective_input_mode_grade2', 'elective_input_mode_grade3', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'chrome_install_button_visible', 'safari_install_button_visible', 'other_install_button_visible', 'play_store_url', 'app_store_url', 'show_target_class_main_menu', 'promotion_popup_enabled', 'promotion_reset_days', 'assessment_distrust_threshold', 'assessment_positive_color', 'assessment_positive_ratio', 'assessment_negative_color', 'assessment_negative_ratio', 'assessment_timetable_color', 'changed_class_tint_color', 'changed_class_tint_opacity', 'comcigan_debug_overlay_enabled', 'comcigan_debug_whitelist', 'access_debug_mode_enabled', 'access_debug_ip_list', 'special_schedules', 'special_schedules_enabled', 'meal_lunch_cutoff_hour', 'meal_rating_enabled', 'meal_emphasis_enabled', 'teacher_ignore_keywords', 'semester_key', 'assessment_allow_student_grade1', 'assessment_allow_student_grade2', 'assessment_allow_student_grade3', 'assessment_allow_teacher_grade1', 'assessment_allow_teacher_grade2', 'assessment_allow_teacher_grade3', 'assessment_disallow_msg_student', 'assessment_disallow_msg_teacher', 'teacher_default_password', 'teacher_auth_expire_days', 'teacher_passwords', 'active_teachers', 'maintenance_bypass_chrome', 'maintenance_bypass_samsung', 'maintenance_bypass_safari', 'maintenance_bypass_other', 'maintenance_bypass_pwa_app', 'maintenance_bypass_webview_app')").all();
+        const rows = await env.DB.prepare("SELECT key, value FROM system_settings WHERE key IN ('hide_past_assessments', 'restricted_grades', 'restriction_reason', 'ip_whitelist', 'kakao_login_restricted', 'kakao_restriction_reason', 'elective_group_overrides', 'maintenance_mode', 'elective_input_mode', 'elective_input_mode_grade2', 'elective_input_mode_grade3', 'bug_report_enabled', 'site_title', 'site_title_html', 'site_favicon_url', 'pwa_app_title', 'pwa_app_icon_url', 'allow_png_download', 'print_subject_font_size', 'allow_print_by_grade', 'samsung_install_button_visible', 'pwa_install_button_visible', 'chrome_install_button_visible', 'safari_install_button_visible', 'other_install_button_visible', 'play_store_url', 'app_store_url', 'show_target_class_main_menu', 'promotion_popup_enabled', 'promotion_reset_days', 'assessment_distrust_threshold', 'assessment_positive_color', 'assessment_positive_ratio', 'assessment_negative_color', 'assessment_negative_ratio', 'assessment_timetable_color', 'changed_class_tint_color', 'changed_class_tint_opacity', 'comcigan_debug_overlay_enabled', 'comcigan_debug_whitelist', 'access_debug_mode_enabled', 'access_debug_ip_list', 'special_schedules', 'special_schedules_enabled', 'meal_lunch_cutoff_hour', 'meal_rating_enabled', 'meal_emphasis_enabled', 'teacher_ignore_keywords', 'semester_key', 'assessment_allow_student_grade1', 'assessment_allow_student_grade2', 'assessment_allow_student_grade3', 'assessment_allow_teacher_grade1', 'assessment_allow_teacher_grade2', 'assessment_allow_teacher_grade3', 'assessment_disallow_msg_student', 'assessment_disallow_msg_teacher', 'teacher_default_password', 'teacher_auth_expire_days', 'teacher_passwords', 'active_teachers', 'maintenance_bypass_chrome', 'maintenance_bypass_samsung', 'maintenance_bypass_safari', 'maintenance_bypass_other', 'maintenance_bypass_pwa_app', 'maintenance_bypass_webview_app', 'beta_testing_enabled')").all();
 
         const settings: any = {};
         if (rows && rows.results) {
@@ -114,8 +114,8 @@ export const onRequest = async (context: any) => {
             assessment_negative_color: settings['assessment_negative_color'] || '#9ca3af',
             assessment_negative_ratio: settings['assessment_negative_ratio'] || '40',
             assessment_timetable_color: settings['assessment_timetable_color'] === 'true',
-            changed_class_tint_color: settings['changed_class_tint_color'],
-            changed_class_tint_opacity: settings['changed_class_tint_opacity'],
+            changed_class_tint_color: settings['changed_class_tint_color'] || '#fef08a',
+            changed_class_tint_opacity: settings['changed_class_tint_opacity'] || '0.75',
             comcigan_debug_overlay_enabled: settings['comcigan_debug_overlay_enabled'] === 'true',
             special_schedules_enabled: settings['special_schedules_enabled'] !== 'false',
             special_schedules: settings['special_schedules'] ? JSON.parse(settings['special_schedules']) : [],
@@ -139,6 +139,8 @@ export const onRequest = async (context: any) => {
             teacher_auth_expire_days: parseInt(settings['teacher_auth_expire_days'] || '0', 10),
             // 학생에게 교사 지원표시 — 이용중인 교사 이름 배열
             active_teachers: (() => { try { return settings['active_teachers'] ? JSON.parse(settings['active_teachers']) : []; } catch { return []; } })(),
+            // 오픈채팅 Android 품앗이 베타테스팅 기능 활성화 여부 (기본: false)
+            beta_testing_enabled: settings['beta_testing_enabled'] === 'true',
         }), {
             headers: {
                 'Content-Type': 'application/json',

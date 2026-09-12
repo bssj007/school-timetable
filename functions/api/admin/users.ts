@@ -46,6 +46,8 @@ export const onRequest = async (context: any) => {
                     ip_profiles.os,
                     ip_profiles.isInApp,
                     ip_profiles.teacherName,
+                    ip_profiles.isBetaTester,
+                    ip_profiles.betaTesterSince,
                     student_profiles.name as profileName,
                     student_profiles.grade as profileGrade,
                     student_profiles.classNum as profileClassNum,
@@ -102,6 +104,8 @@ export const onRequest = async (context: any) => {
                         "ALTER TABLE ip_profiles ADD COLUMN os TEXT",
                         "ALTER TABLE ip_profiles ADD COLUMN isInApp INTEGER DEFAULT 0",
                         "ALTER TABLE ip_profiles ADD COLUMN teacherName TEXT",
+                        "ALTER TABLE ip_profiles ADD COLUMN isBetaTester INTEGER DEFAULT 0",
+                        "ALTER TABLE ip_profiles ADD COLUMN betaTesterSince TEXT",
                         "ALTER TABLE student_profiles ADD COLUMN name TEXT NOT NULL DEFAULT ''",
                     ];
                     for (const sql of alters) {
@@ -319,6 +323,8 @@ export const onRequest = async (context: any) => {
                     studentNumber: p.profileStudentNumber || null,
                     hasElectives: !!p.rawElectives && p.rawElectives !== '{}' && p.rawElectives !== 'null',
                     instructionDismissed: !!p.instructionDismissed,
+                    isBetaTester: p.isBetaTester === 1,
+                    betaTesterSince: p.betaTesterSince || null,
                     historicalEnvironments: userEnvs,
                     assessments: [],
                     logs: [],

@@ -2050,6 +2050,93 @@ function BugReportManager({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
+// 6.94 Beta Testing Manager (Google Play 비공개 테스트 품앗이 설정)
+// ----------------------------------------------------------------------
+function BetaTestingManager({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    const settingsQuery = useQuery({
+        queryKey: ["admin", "settings", "betaTesting"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", { headers: { "X-Admin-Password": adminPassword } });
+            if (!res.ok) throw new Error("Failed to fetch settings");
+            return res.json();
+        }
+    });
+
+    const isBetaTestingEnabled = settingsQuery.data?.beta_testing_enabled === 'true';
+
+    const toggleMutation = useMutation({
+        mutationFn: async (enabled: boolean) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+                body: JSON.stringify({ beta_testing_enabled: enabled ? 'true' : 'false' })
+            });
+            if (!res.ok) throw new Error("Failed to update setting");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            toast.success("베타테스팅 설정이 저장되었습니다.");
+        },
+        onError: () => {
+            toast.error("설정 변경 중 오류가 발생했습니다.");
+        }
+    });
+
+    return (
+        <div className="space-y-6">
+            <Card className="w-full">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                            <CardTitle className="text-xl flex items-center gap-2">
+                                <span>🧪</span>
+                                <span>Google Play 비공개 테스트 (품앗이) 기능</span>
+                            </CardTitle>
+                            <CardDescription>
+                                Android Native 앱으로 접속한 오픈채팅 베타테스터 대상 전용 화면(AI 오목 게임 및 14일 참여 현황 배너) 활성화 여부를 제어합니다.
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center space-x-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                            <Switch
+                                id="beta-testing-switch"
+                                checked={isBetaTestingEnabled}
+                                onCheckedChange={(checked) => toggleMutation.mutate(checked)}
+                                disabled={toggleMutation.isPending || settingsQuery.isLoading}
+                            />
+                            <Label htmlFor="beta-testing-switch" className="text-sm font-bold cursor-pointer">
+                                {isBetaTestingEnabled ? (
+                                    <span className="text-violet-600">활성화됨 (ON)</span>
+                                ) : (
+                                    <span className="text-slate-400">비활성화 (OFF)</span>
+                                )}
+                            </Label>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-600 space-y-2">
+                        <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                            <Info className="w-4 h-4 text-violet-600" />
+                            <span>기능 동작 안내</span>
+                        </div>
+                        <ul className="list-disc list-inside space-y-1 text-xs text-slate-600 pl-1 leading-relaxed">
+                            <li><strong>대상 사용자:</strong> Android Native 앱(WebView)으로 접속한 환경에 한해 최초 접속 역할 선택 화면에 회색 <strong>(오픈채팅 베타테스터용) Android 품앗이</strong> 버튼이 노출됩니다.</li>
+                            <li><strong>순수 쿠키 기반:</strong> 테스터가 버튼을 누르면 순수 쿠키(<code className="bg-slate-200 px-1 py-0.5 rounded text-violet-700 font-mono">sj_beta_pumasi</code>)가 60일간 발급되며, 뒤로가기 버튼을 누르기 전까지 앱을 켤 때마다 시간표 대신 깔끔한 화이트 테마의 15x15 AI 오목 게임 페이지가 바로 열립니다.</li>
+                            <li><strong>14일 연속 참여 기준:</strong> Google Play 비공개 테스트 요건(14일 연속 참여)에 따라 며칠째 접속 중인지, 남은 기간은 며칠인지 시각적 프로그레스 바로 표시되며 14일 달성 시 앱을 삭제하셔도 좋다는 안내가 제공됩니다.</li>
+                            <li><strong>사용자 관리 탭 연동:</strong> 기능이 켜져 있는 동안 '사용자 관리' 탭에 <strong>🧪 품앗이 접속</strong> 접이식 단락이 표시되어 참여 테스터들의 IP, 접속 환경, 참여 경과를 한눈에 모니터링할 수 있습니다.</li>
+                        </ul>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------
 // 6.95 Elective Presets Manager (학번별 선택과목 사전지정)
 // 이름과 무관히 학번(학년+반+번호)별로 선택과목 기본값을 지정.
 // 신규 사용자 첫 접속 시 해당 학번의 사전지정이 자동 적용됨.
@@ -2629,7 +2716,7 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     const [pwaAppTitle, setPwaAppTitle] = useState("");
     const [pwaAppIconUrl, setPwaAppIconUrl] = useState("");
     const [tintColor, setTintColor] = useState("#fbbf24");
-    const [tintOpacity, setTintOpacity] = useState(0.4);
+    const [tintOpacity, setTintOpacity] = useState(0.75);
     const [isSaving, setIsSaving] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
     const titleHtmlRef = React.useRef<HTMLDivElement>(null);
@@ -2659,7 +2746,7 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 setPwaAppTitle(currentSettings.pwa_app_title || '성지수행');
                 setPwaAppIconUrl(currentSettings.pwa_app_icon_url || currentSettings.site_favicon_url || '');
                 setTintColor(currentSettings.changed_class_tint_color || '#fef08a');
-                setTintOpacity(currentSettings.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings.changed_class_tint_opacity) : 1.0);
+                setTintOpacity(currentSettings.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings.changed_class_tint_opacity) : 0.75);
                 setIsInitialized(true);
                 setHtmlChanged(false);
             } else if (!htmlChanged) {
@@ -2672,7 +2759,7 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
                 setPwaAppTitle(currentSettings.pwa_app_title || '성지수행');
                 setPwaAppIconUrl(currentSettings.pwa_app_icon_url || currentSettings.site_favicon_url || '');
                 setTintColor(currentSettings.changed_class_tint_color || '#fef08a');
-                setTintOpacity(currentSettings.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings.changed_class_tint_opacity) : 1.0);
+                setTintOpacity(currentSettings.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings.changed_class_tint_opacity) : 0.75);
             }
         }
     }, [currentSettings, isInitialized, htmlChanged]);
@@ -2755,7 +2842,7 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
         setPwaAppTitle(currentSettings?.pwa_app_title || '성지수행');
         setPwaAppIconUrl(currentSettings?.pwa_app_icon_url || currentSettings?.site_favicon_url || '');
         setTintColor(currentSettings?.changed_class_tint_color || '#fef08a');
-        setTintOpacity(currentSettings?.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings?.changed_class_tint_opacity) : 1.0);
+        setTintOpacity(currentSettings?.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings?.changed_class_tint_opacity) : 0.75);
         setHtmlChanged(false);
     };
 
@@ -2764,7 +2851,7 @@ function SiteDesignSettings({ adminPassword }: { adminPassword: string }) {
     const savedPwaTitle = currentSettings?.pwa_app_title || '성지수행';
     const savedPwaIcon = currentSettings?.pwa_app_icon_url || currentSettings?.site_favicon_url || '';
     const savedTintColor = currentSettings?.changed_class_tint_color || '#fef08a';
-    const savedTintOpacity = currentSettings?.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings?.changed_class_tint_opacity) : 1.0;
+    const savedTintOpacity = currentSettings?.changed_class_tint_opacity !== undefined ? parseFloat(currentSettings?.changed_class_tint_opacity) : 0.75;
     const hasChanges = siteTitle !== savedTitle || siteFaviconUrl !== savedFavicon || htmlChanged || pwaAppTitle !== savedPwaTitle || pwaAppIconUrl !== savedPwaIcon || tintColor !== savedTintColor || tintOpacity !== savedTintOpacity;
 
     if (isLoading) {
@@ -6686,6 +6773,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
     const [selectedProfile, setSelectedProfile] = useState<IPProfile | null>(null);
     const [selectedIp, setSelectedIp] = useState<string | null>(null);
     const [isOthersExpanded, setIsOthersExpanded] = useState(false);
+    const [isPumasiExpanded, setIsPumasiExpanded] = useState(false);
     const [sortColumn, setSortColumn] = useState<'id' | 'modCount' | 'lastAccess'>('lastAccess');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -7032,6 +7120,12 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         🌐 접속환경
                     </TabsTrigger>
                     <TabsTrigger
+                        value="beta-testing"
+                        className="data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800 font-medium"
+                    >
+                        🧪 베타테스팅
+                    </TabsTrigger>
+                    <TabsTrigger
                         value="meal"
                         className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800"
                     >
@@ -7366,8 +7460,18 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                teacher.includes(query);
                                     });
 
-                                    const knownUsers = filteredActiveUsers.filter(isKnownUser);
-                                    const unknownUsers = filteredActiveUsers.filter((u: any) => !isKnownUser(u));
+                                    const isBetaTestingEnabled = adminSettings?.beta_testing_enabled === 'true';
+
+                                    // 품앗이(베타테스터) 사용자와 일반 사용자 분리 (기능 ON 시에만 분리)
+                                    const pumasiUsers = isBetaTestingEnabled
+                                        ? filteredActiveUsers.filter((u: any) => u.isBetaTester)
+                                        : [];
+                                    const standardUsers = isBetaTestingEnabled
+                                        ? filteredActiveUsers.filter((u: any) => !u.isBetaTester)
+                                        : filteredActiveUsers;
+
+                                    const knownUsers = standardUsers.filter(isKnownUser);
+                                    const unknownUsers = standardUsers.filter((u: any) => !isKnownUser(u));
 
                                     // --- Group known users by (name + student ID) = composite identity ---
                                     type UserGroup = {
@@ -8228,6 +8332,111 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     )}
                                                 </div>
                                             )}
+
+                                            {/* 품앗이 접속 접이식 단락 (베타테스팅 기능 ON 시에만 표시) */}
+                                            {isBetaTestingEnabled && (
+                                                <div className="border rounded-md overflow-hidden mt-4">
+                                                    <div
+                                                        className="flex items-center justify-between p-4 bg-violet-50 cursor-pointer hover:bg-violet-100/80 transition-colors"
+                                                        onClick={() => setIsPumasiExpanded(!isPumasiExpanded)}
+                                                    >
+                                                        <div className="flex items-center gap-2 font-semibold text-violet-900">
+                                                            {isPumasiExpanded ? <ChevronDown className="h-5 w-5 text-violet-600" /> : <ChevronRight className="h-5 w-5 text-violet-600" />}
+                                                            🧪 품앗이 접속 ({pumasiUsers.length})
+                                                        </div>
+                                                        <span className="text-xs text-violet-600 font-medium">Android 비공개 테스트 (오픈채팅 품앗이) 참여자</span>
+                                                    </div>
+                                                    {isPumasiExpanded && (
+                                                        <div className="bg-gray-50 border-t overflow-x-auto">
+                                                            {pumasiUsers.length === 0 ? (
+                                                                <div className="p-6 text-center text-sm text-gray-500">
+                                                                    현재 등록된 품앗이 테스터 접속 기록이 없습니다.
+                                                                </div>
+                                                            ) : (
+                                                                <Table className="min-w-[1280px]">
+                                                                    <TableBody>
+                                                                        {pumasiUsers.map((user: IPProfile, idx: number) => {
+                                                                            let daysPassed = 1;
+                                                                            let dateLabel = '-';
+                                                                            if (user.betaTesterSince) {
+                                                                                try {
+                                                                                    const sinceMs = new Date(user.betaTesterSince.endsWith('Z') ? user.betaTesterSince : user.betaTesterSince + 'Z').getTime();
+                                                                                    if (!isNaN(sinceMs)) {
+                                                                                        daysPassed = Math.floor(Math.max(0, Date.now() - sinceMs) / (24 * 60 * 60 * 1000)) + 1;
+                                                                                        dateLabel = new Date(sinceMs).toLocaleDateString('ko-KR');
+                                                                                    }
+                                                                                } catch { }
+                                                                            }
+                                                                            const isComplete = daysPassed >= 14;
+
+                                                                            return (
+                                                                                <TableRow key={idx}>
+                                                                                    <TableCell className="font-mono">
+                                                                                        <Button variant="link" className="p-0 h-auto font-mono text-blue-600 hover:text-blue-800 underline decoration-dotted" onClick={() => setSelectedProfile(user)}>
+                                                                                            {user.ip}
+                                                                                        </Button>
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        <div className="flex flex-col gap-0.5">
+                                                                                            <Badge variant="outline" className={`font-mono text-xs w-fit ${isComplete ? 'text-emerald-700 border-emerald-200 bg-emerald-50' : 'text-violet-700 border-violet-200 bg-violet-50'}`}>
+                                                                                                {isComplete ? '14일 완료' : `${daysPassed}일차 / 14일`}
+                                                                                            </Badge>
+                                                                                            <span className="text-[11px] text-slate-400 font-mono">시작: {dateLabel}</span>
+                                                                                        </div>
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        <div className="flex flex-col gap-1 items-start">
+                                                                                            {(() => {
+                                                                                                const adds = user.addCount || 0;
+                                                                                                const dels = user.deleteCount || 0;
+                                                                                                const pureMods = Math.max(0, (user.modificationCount || 0) - adds - dels);
+                                                                                                if (adds === 0 && dels === 0 && pureMods === 0) return <span className="text-gray-400 text-xs">-</span>;
+                                                                                                return (
+                                                                                                    <>
+                                                                                                        {adds > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-blue-100 text-blue-800 px-1 py-0 h-4">추가 {adds}회</Badge>}
+                                                                                                        {dels > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-red-100 text-red-800 px-1 py-0 h-4">삭제 {dels}회</Badge>}
+                                                                                                        {pureMods > 0 && <Badge variant="secondary" className="font-mono text-[10px] bg-gray-100 text-gray-800 px-1 py-0 h-4">수정 {pureMods}회</Badge>}
+                                                                                                    </>
+                                                                                                );
+                                                                                            })()}
+                                                                                        </div>
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        {user.printCount && user.printCount > 0 ? (
+                                                                                            <Badge variant="secondary" className="font-mono bg-blue-50 text-blue-700 border-blue-200">{user.printCount}회</Badge>
+                                                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        {user.downloadCount && user.downloadCount > 0 ? (
+                                                                                            <Badge variant="secondary" className="font-mono bg-green-50 text-green-700 border-green-200">{user.downloadCount}회</Badge>
+                                                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        {renderEnvCell([user], `pumasi:${user.ip}`)}
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        {renderAppHistoryBadges(user.historicalEnvironments, user, user.isStandalone)}
+                                                                                    </TableCell>
+                                                                                    <TableCell>{user.lastAccess ? new Date(user.lastAccess + 'Z').toLocaleString() : '-'}</TableCell>
+                                                                                    <TableCell>
+                                                                                        {user.isBlocked ? (
+                                                                                            <Badge variant="destructive">차단됨</Badge>
+                                                                                        ) : (
+                                                                                            <Button variant="outline" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                                                                                onClick={() => { if (confirm(`IP ${user.ip}를 차단하시겠습니까?`)) blockUserMutation.mutate({ identifier: user.ip, type: 'IP' }); }}
+                                                                                            ><Ban className="h-4 w-4 mr-1" />차단</Button>
+                                                                                        )}
+                                                                                    </TableCell>
+                                                                                </TableRow>
+                                                                            );
+                                                                        })}
+                                                                    </TableBody>
+                                                                </Table>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })()}
@@ -8329,6 +8538,10 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                         <span className="text-xs text-slate-400 font-mono">browserDetect.ts → agent 싱글턴 기반</span>
                     </div>
                     <InstallButtonSettings adminPassword={password} />
+                </TabsContent>
+
+                <TabsContent value="beta-testing" className="space-y-6">
+                    <BetaTestingManager adminPassword={password} />
                 </TabsContent>
 
                 <TabsContent value="meal" className="space-y-6">

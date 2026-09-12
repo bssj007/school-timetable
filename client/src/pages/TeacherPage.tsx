@@ -3072,7 +3072,7 @@ export default function TeacherPage() {
                           if (cellData && isCellChanged && !hasAssessment) {
                             const tColor = settings?.changed_class_tint_color || '#fef08a';
                             const tOpacity = settings?.changed_class_tint_opacity !== undefined
-                              ? parseFloat(settings.changed_class_tint_opacity) : 1.0;
+                              ? parseFloat(settings.changed_class_tint_opacity) : 0.75;
                             const h = tColor.replace('#', '');
                             const r = parseInt(h.length === 3 ? h.slice(0,1).repeat(2) : h.slice(0,2), 16);
                             const g2 = parseInt(h.length === 3 ? h.slice(1,2).repeat(2) : h.slice(2,4), 16);

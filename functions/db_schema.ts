@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS ip_profiles (
     printCount INTEGER DEFAULT 0,
     downloadCount INTEGER DEFAULT 0,
     isStandalone INTEGER DEFAULT 0,
+    isBetaTester INTEGER DEFAULT 0,
+    betaTesterSince TEXT,
     FOREIGN KEY (student_profile_id) REFERENCES student_profiles(id) ON DELETE SET NULL
 );
 `;
@@ -322,6 +324,9 @@ export async function ensureAllTables(db: any) {
         try { await db.prepare("ALTER TABLE access_logs ADD COLUMN deviceType TEXT").run(); } catch (_) {}
         try { await db.prepare("ALTER TABLE access_logs ADD COLUMN os TEXT").run(); } catch (_) {}
         try { await db.prepare("ALTER TABLE access_logs ADD COLUMN isInApp INTEGER DEFAULT 0").run(); } catch (_) {}
+        // ip_profiles: 베타테스터 품앗이 컬럼 보장
+        try { await db.prepare("ALTER TABLE ip_profiles ADD COLUMN isBetaTester INTEGER DEFAULT 0").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE ip_profiles ADD COLUMN betaTesterSince TEXT").run(); } catch (_) {}
 
         console.log('[DB] All tables ensured.');
     } catch (e) {

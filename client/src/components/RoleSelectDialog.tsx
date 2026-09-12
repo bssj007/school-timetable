@@ -8,6 +8,8 @@ import { useUserConfig } from "@/contexts/UserConfigContext";
 // 교사 유틸 함수는 @/lib/teacherUtils 에서 직접 import 하세요.
 // (RoleSelectDialog에서 re-export하면 순환 의존성으로 인한 TDZ 오류가 발생합니다)
 import { getActiveTeacherName, getAuthenticatedTeacher, getTeacherNameCookie, setRoleCookie, setTeacherNameCookie, normalizeTeacherName, getRoleCookie } from "@/lib/teacherUtils";
+import { detect } from "@/lib/browserDetect";
+import { setPumasiCookie } from "@/lib/pumasiCookie";
 
 // ── 교사 옵션 타입 ───────────────────────────────────────────
 interface TeacherOption {
@@ -97,9 +99,10 @@ type Step = "role" | "student-info" | "teacher-name";
 
 interface RoleSelectDialogProps {
     onRoleSelected: (role: "student" | "teacher") => void;
+    onBetaSelected?: () => void;
 }
 
-export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogProps) {
+export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: RoleSelectDialogProps) {
     const [location, setLocation] = useLocation();
     const {
         setConfig,
@@ -129,6 +132,27 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
     const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
     const [teacherError, setTeacherError] = useState("");
     const teacherInputRef = useRef<HTMLInputElement>(null);
+
+    // ── 베타테스터 (Android 품앗이) ──
+    const [betaEnabled, setBetaEnabled] = useState(false);
+    const [isAndroidNative, setIsAndroidNative] = useState(false);
+
+    useEffect(() => {
+        try {
+            const a = detect();
+            const isNative = Boolean(a.isAndroid && a.isInstalledApp && a.installedAppType === 'webview');
+            setIsAndroidNative(isNative);
+        } catch { }
+
+        fetch('/api/settings/public')
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data?.beta_testing_enabled) {
+                    setBetaEnabled(true);
+                }
+            })
+            .catch(() => { });
+    }, []);
 
     const skipPaths = ["/admin", "/admin/factory-reset", "/teacher"];
     const shouldSkip = skipPaths.some(p => location.startsWith(p));
@@ -219,6 +243,14 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
         }
         setStep("teacher-name");
         fetchTeacherOptions();
+    };
+
+    const handleSelectBetaTester = () => {
+        setPumasiCookie();
+        closeRoleSelect();
+        if (onBetaSelected) {
+            onBetaSelected();
+        }
     };
 
     // 학생 정보 제출 → 쿠키 + setConfig 저장
@@ -315,6 +347,30 @@ export default function RoleSelectDialog({ onRoleSelected }: RoleSelectDialogPro
                                 </div>
                                 <span className="ml-auto text-emerald-300 group-hover:text-emerald-500 text-xl">›</span>
                             </button>
+
+                            {/* Android Native 앱 + 관리자 베타테스팅 활성화 시 오픈채팅 품앗이 버튼 노출 */}
+                            {betaEnabled && isAndroidNative && (
+                                <button
+                                    id="role-select-beta-tester"
+                                    type="button"
+                                    onClick={handleSelectBetaTester}
+                                    className="group relative flex items-center gap-4 p-4 rounded-2xl border-2 border-slate-300 bg-slate-100 hover:border-slate-400 hover:bg-slate-200/80 transition-all duration-200 text-left cursor-pointer shadow-sm"
+                                >
+                                    <div className="w-12 h-12 rounded-xl bg-slate-200 flex items-center justify-center text-2xl flex-shrink-0">
+                                        🤖
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="font-bold text-base text-slate-800 flex items-center gap-1.5 flex-wrap">
+                                            <span>Android 품앗이</span>
+                                            <span className="text-xs font-semibold text-slate-500">(오픈채팅 베타테스터용)</span>
+                                        </div>
+                                        <div className="text-xs text-slate-500 mt-0.5">
+                                            비공개 테스트 14일 참여 확인 및 AI 오목
+                                        </div>
+                                    </div>
+                                    <span className="ml-auto text-slate-400 group-hover:text-slate-600 text-xl">›</span>
+                                </button>
+                            )}
                         </div>
                     </>
                 )}
