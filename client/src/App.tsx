@@ -10,7 +10,7 @@ import Navigation from "./components/Navigation";
 import OnboardingDialog from "./components/OnboardingDialog";
 import RoleSelectDialog from "./components/RoleSelectDialog";
 import { UserConfigProvider, useUserConfig } from "@/contexts/UserConfigContext";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ShieldAlert } from "lucide-react";
 
 import FactoryReset from "./pages/FactoryReset";
