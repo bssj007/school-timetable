@@ -21,7 +21,8 @@ import {
   isNotificationSubscribed,
   syncNotificationStatusOnConnect,
   toggleNotificationSubscription,
-  getOrCreateDeviceId
+  getOrCreateDeviceId,
+  useClientNotificationState
 } from "@/lib/notificationService";
 import { buildTeacherOptions, filterTeacherOptions } from "@/lib/teacherSearch";
 
@@ -1094,19 +1095,17 @@ export default function TeacherPage() {
     staleTime: 15000
   });
 
-  const teacherNotifItems: Array<{
-    id: number;
-    title: string;
-    message: string;
-    link: string;
-    category: string;
-    createdAt: string;
-    read: boolean;
-  }> = teacherNotifsQuery.data?.notifications || [];
-  const teacherUnreadCount: number = teacherNotifsQuery.data?.unreadCount ?? 0;
+  const serverTeacherNotifs = teacherNotifsQuery.data?.notifications || [];
+  const {
+    items: teacherNotifItems,
+    unreadCount: teacherUnreadCount,
+    markAllRead: markTeacherAllClientRead,
+    markSingleRead: markTeacherSingleClientRead
+  } = useClientNotificationState(serverTeacherNotifs);
 
   const markTeacherAllReadMutation = useMutation({
     mutationFn: async () => {
+      markTeacherAllClientRead();
       await fetch('/api/notifications/read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1119,6 +1118,7 @@ export default function TeacherPage() {
   });
 
   const markTeacherSingleRead = async (notificationId: number) => {
+    markTeacherSingleClientRead(notificationId);
     try {
       await fetch('/api/notifications/read', {
         method: 'POST',
@@ -2254,7 +2254,10 @@ export default function TeacherPage() {
             {teacherUnreadCount > 0 && (
               <button
                 type="button"
-                onClick={() => markTeacherAllReadMutation.mutate()}
+                onClick={() => {
+                  markTeacherAllClientRead();
+                  markTeacherAllReadMutation.mutate();
+                }}
                 className="text-[11px] font-bold text-gray-900 bg-white/40 hover:bg-white/60 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
               >
                 모두 읽음
@@ -2265,8 +2268,10 @@ export default function TeacherPage() {
           {/* 수행 알림받기 토글 카드 */}
           <div className="px-5 py-3 bg-amber-50/70 border-b border-amber-100 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center shrink-0 shadow-xs text-gray-900">
-                <Bell className="w-4 h-4" />
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-xs ${
+                isNotifSubscribed ? "bg-amber-400 text-gray-900" : "bg-slate-200 text-slate-700"
+              }`}>
+                <Bell className={`w-4 h-4 ${!isNotifSubscribed ? "text-slate-700 stroke-[2.2]" : "text-gray-900 stroke-[2.2]"}`} />
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
@@ -3537,10 +3542,26 @@ export default function TeacherPage() {
 
               {/* 학생공지 — 좁은화면/넓은화면 공통, ml-auto로 우측 정렬 */}
               {isCurrentTeacherVerified && (
-                <button type="button" onClick={() => setShowNoticeDialog(true)} style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs shrink-0 transition-colors border border-yellow-300 cursor-pointer shadow-sm"
+                <button type="button" 
+                  onClick={() => {
+                    setShowNoticeDialog(true);
+                    markTeacherAllClientRead();
+                    markTeacherAllReadMutation.mutate();
+                  }} 
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                  className={`ml-auto relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-bold text-xs shrink-0 transition-colors border cursor-pointer shadow-sm ${
+                    isNotifSubscribed
+                      ? "bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 border-yellow-300"
+                      : "bg-slate-200/90 hover:bg-slate-300 active:bg-slate-400 text-slate-700 border-slate-300"
+                  }`}
                   title="학생공지">
-                  <Bell className="w-3.5 h-3.5" /><span>학생공지</span>
+                  <Bell className={`w-3.5 h-3.5 ${!isNotifSubscribed ? "text-slate-700 stroke-[2.2]" : "text-gray-900 stroke-[2.2]"}`} />
+                  <span>학생공지</span>
+                  {teacherUnreadCount > 0 && (
+                    <span className="flex items-center justify-center min-w-[17px] h-[17px] px-[4px] text-[9px] font-bold leading-none text-white bg-red-500 rounded-full shadow-xs">
+                      {teacherUnreadCount > 99 ? '99+' : teacherUnreadCount}
+                    </span>
+                  )}
                 </button>
               )}
 

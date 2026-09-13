@@ -41,7 +41,8 @@ import {
   isNotificationSubscribed,
   syncNotificationStatusOnConnect,
   toggleNotificationSubscription,
-  getOrCreateDeviceId
+  getOrCreateDeviceId,
+  useClientNotificationState
 } from "@/lib/notificationService";
 import ElectiveSelectionDialog from "@/components/ElectiveSelectionDialog";
 
@@ -349,20 +350,18 @@ export default function Dashboard() {
     staleTime: 15000
   });
 
-  const notificationItems: Array<{
-    id: number;
-    title: string;
-    message: string;
-    link: string;
-    category: string;
-    createdAt: string;
-    read: boolean;
-  }> = notificationsQuery.data?.notifications || [];
-  const unreadNotificationCount: number = notificationsQuery.data?.unreadCount ?? 0;
+  const serverNotifications = notificationsQuery.data?.notifications || [];
+  const {
+    items: notificationItems,
+    unreadCount: unreadNotificationCount,
+    markAllRead: markAllClientRead,
+    markSingleRead: markSingleClientRead
+  } = useClientNotificationState(serverNotifications);
 
-  // 모두 읽음 처리
+  // 모두 읽음 처리 (클라이언트 로컬 즉시 반영 + 서버 동기화)
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
+      markAllClientRead();
       await fetch('/api/notifications/read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -374,8 +373,9 @@ export default function Dashboard() {
     }
   });
 
-  // 단일 알림 읽음 처리
+  // 단일 알림 읽음 처리 (클라이언트 로컬 즉시 반영 + 서버 동기화)
   const markSingleRead = async (notificationId: number) => {
+    markSingleClientRead(notificationId);
     try {
       await fetch('/api/notifications/read', {
         method: 'POST',
@@ -1924,11 +1924,19 @@ export default function Dashboard() {
               id="notification-bell-btn"
               variant="ghost"
               size="icon"
-              className="relative h-9 w-9 rounded-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 shadow-sm transition-all duration-200"
-              onClick={() => setShowNotifications(prev => !prev)}
+              className={`relative h-9 w-9 rounded-full shadow-sm transition-all duration-200 cursor-pointer ${
+                isNotifSubscribed
+                  ? "bg-yellow-400 hover:bg-yellow-500 text-gray-900 border border-yellow-300/80"
+                  : "bg-slate-200/90 hover:bg-slate-300 text-slate-700 border border-slate-300/80"
+              }`}
+              onClick={() => {
+                setShowNotifications(prev => !prev);
+                markAllClientRead();
+                markAllReadMutation.mutate();
+              }}
               aria-label="알림"
             >
-              <Bell className="h-4 w-4" />
+              <Bell className={`h-4 w-4 ${!isNotifSubscribed ? "text-slate-700 stroke-[2.2]" : "text-gray-900 stroke-[2.2]"}`} />
               {/* 읽지 않은 알림 뱃지 */}
               {unreadNotificationCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-[5px] text-[10px] font-bold leading-none text-white bg-red-500 rounded-full shadow ring-2 ring-white">
@@ -1955,7 +1963,10 @@ export default function Dashboard() {
                     {unreadNotificationCount > 0 && (
                       <button
                         className="text-[11px] text-blue-500 hover:text-blue-700 font-semibold px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
-                        onClick={() => markAllReadMutation.mutate()}
+                        onClick={() => {
+                          markAllClientRead();
+                          markAllReadMutation.mutate();
+                        }}
                       >
                         모두 읽음
                       </button>
@@ -1973,8 +1984,10 @@ export default function Dashboard() {
                 {/* 수행 알림받기 토글 카드 */}
                 <div className="px-4 py-3 bg-amber-50/70 border-b border-amber-100/80 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center shrink-0 shadow-xs text-gray-900">
-                      <Bell className="w-4 h-4" />
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-xs ${
+                      isNotifSubscribed ? "bg-amber-400 text-gray-900" : "bg-slate-200 text-slate-700"
+                    }`}>
+                      <Bell className={`w-4 h-4 ${!isNotifSubscribed ? "text-slate-700 stroke-[2.2]" : "text-gray-900 stroke-[2.2]"}`} />
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
