@@ -468,11 +468,65 @@ export default function Dashboard() {
     // Track print metric
     fetch('/api/action/print', { method: 'POST' }).catch(() => { });
 
-    setTimeout(() => {
-      window.print();
+    let isCleanedUp = false;
+    const cleanupPrint = () => {
+      if (isCleanedUp) return;
+      isCleanedUp = true;
       setIsPrinting(false); // Restore — main screen is now normal again
       resetPrintOptions();
-    }, 100);
+      window.removeEventListener('afterprint', cleanupPrint);
+      if ((window as any).onNativePrintFinish === cleanupPrint) {
+        delete (window as any).onNativePrintFinish;
+      }
+    };
+
+    window.addEventListener('afterprint', cleanupPrint);
+    (window as any).onNativePrintFinish = cleanupPrint;
+
+    setTimeout(() => {
+      const win = window as any;
+      const hasNativePrint = Boolean(win.Android?.print || win.AndroidBridge?.print);
+
+      // 1. Android 네이티브 앱 브리지가 존재하는 경우
+      if (hasNativePrint) {
+        try {
+          if (typeof win.Android?.print === 'function') {
+            win.Android.print('성지수행_시간표');
+          } else if (typeof win.AndroidBridge?.print === 'function') {
+            win.AndroidBridge.print('성지수행_시간표');
+          }
+          // 안전 타임아웃: 인쇄 다이얼로그 취소/종료 이벤트 누락 시에도 10초 후 복구
+          setTimeout(cleanupPrint, 10000);
+          return;
+        } catch (err) {
+          console.error('네이티브 인쇄 호출 실패:', err);
+        }
+      }
+
+      // 2. Android WebView 환경이지만 네이티브 인쇄 브리지가 없는 경우 (구버전 앱 사용자 보호)
+      const isWebView = agent.installedAppType === 'webview' || (agent.isAndroid && /;\s*wv/i.test(navigator.userAgent));
+      if (isWebView && !hasNativePrint) {
+        cleanupPrint();
+        toast.info("현재 앱 버전에서는 인쇄 API를 지원하지 않습니다. 이미지로 저장하시거나 앱을 업데이트해 주세요.", {
+          action: {
+            label: "이미지 저장",
+            onClick: () => handleSaveImage()
+          },
+          duration: 6000
+        });
+        return;
+      }
+
+      // 3. 일반 웹 브라우저 (Chrome, Safari, 삼성 인터넷 등)
+      try {
+        window.print();
+      } catch (err) {
+        console.error("인쇄 실행 실패:", err);
+      }
+
+      // afterprint 이벤트 미지원 브라우저 대비 안전 타이머 (1.5초 후 복구)
+      setTimeout(cleanupPrint, 1500);
+    }, 150);
   };
 
 
