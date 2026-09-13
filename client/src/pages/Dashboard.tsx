@@ -42,7 +42,10 @@ import {
   syncNotificationStatusOnConnect,
   toggleNotificationSubscription,
   getOrCreateDeviceId,
-  useClientNotificationState
+  useClientNotificationState,
+  displayLocalNotification,
+  getSessionNotifiedBannerIds,
+  markSessionBannerNotified
 } from "@/lib/notificationService";
 import ElectiveSelectionDialog from "@/components/ElectiveSelectionDialog";
 
@@ -330,7 +333,7 @@ export default function Dashboard() {
     setIsNotifSubscribed(isNotificationSubscribed());
   }, [effectiveGrade, effectiveClassNum, grade, classNum, studentNumber, studentName, isDevStudent]);
 
-  // 실시간 알림 목록 조회 (30초 주기 자동 갱신)
+  // 실시간 알림 목록 조회 (5초 주기 자동 갱신)
   const notificationsQuery = useQuery({
     queryKey: ['notifications', 'student', grade, classNum, studentNumber, studentName, deviceId],
     queryFn: async () => {
@@ -346,8 +349,8 @@ export default function Dashboard() {
       if (!res.ok) throw new Error('Failed to fetch notifications');
       return res.json();
     },
-    refetchInterval: 30000,
-    staleTime: 15000
+    refetchInterval: 5000,
+    staleTime: 2000
   });
 
   const serverNotifications = notificationsQuery.data?.notifications || [];
@@ -357,6 +360,34 @@ export default function Dashboard() {
     markAllRead: markAllClientRead,
     markSingleRead: markSingleClientRead
   } = useClientNotificationState(serverNotifications);
+
+  // 알림 기술(발송 방식)에 따른 신규 미읽음 알림 배너 발송 처리
+  useEffect(() => {
+    if (!notificationItems || notificationItems.length === 0) return;
+
+    const notifiedBannerIds = getSessionNotifiedBannerIds();
+    const unnotifiedItems = notificationItems.filter(it => !it.read && !notifiedBannerIds.has(it.id));
+    if (unnotifiedItems.length === 0) return;
+
+    const itemsToNotify = unnotifiedItems.slice(0, 2);
+
+    itemsToNotify.forEach(it => {
+      if (it.deliveryType === 'in_app') {
+        markSessionBannerNotified(it.id);
+        return;
+      }
+      if (it.deliveryType === 'app') {
+        const isApp = isNativeApp() || (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches);
+        if (!isApp) return;
+      }
+
+      const isExplicitlyDisabled = typeof window !== 'undefined' && localStorage.getItem('sj_notification_enabled') === '0';
+      if (!isExplicitlyDisabled) {
+        markSessionBannerNotified(it.id);
+        displayLocalNotification(it.title, it.message, it.link || "/").catch(() => {});
+      }
+    });
+  }, [notificationItems]);
 
   // 모두 읽음 처리 (클라이언트 로컬 즉시 반영 + 서버 동기화)
   const markAllReadMutation = useMutation({

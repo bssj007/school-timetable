@@ -326,28 +326,32 @@ export function clearAppBadge() {
  * 로컬 시스템 알림 팝업 즉시 띄우기
  */
 export async function displayLocalNotification(title: string, body: string, url: string = "/") {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") return false;
 
     // 1. AndroidBridge / Android 네이티브 호출 확인
     const win = window as any;
     if (typeof win.AndroidBridge?.postNotification === "function") {
         try {
             win.AndroidBridge.postNotification(title, body);
-            return;
+            return true;
         } catch (_) {}
     }
     if (typeof win.Android?.postNotification === "function") {
         try {
             win.Android.postNotification(title, body);
-            return;
+            return true;
         } catch (_) {}
     }
 
-    // 2. Service Worker showNotification 우선 시도
+    // 2. Service Worker showNotification 우선 시도 (데드락 방지 250ms 타임아웃 레이스)
     let shown = false;
     if ("serviceWorker" in navigator && typeof Notification !== "undefined" && Notification.permission === "granted") {
         try {
-            const reg = await (navigator.serviceWorker.ready.catch(() => null) || navigator.serviceWorker.getRegistration().catch(() => null));
+            const readyPromise = navigator.serviceWorker.ready.catch(() => null);
+            const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 250));
+            const reg = (await Promise.race([readyPromise, timeoutPromise])) as ServiceWorkerRegistration | null
+                || (await navigator.serviceWorker.getRegistration().catch(() => null));
+
             if (reg && reg.showNotification) {
                 await reg.showNotification(title, {
                     body,
@@ -357,7 +361,7 @@ export async function displayLocalNotification(title: string, body: string, url:
                     tag: "sj-alert-" + Date.now()
                 });
                 shown = true;
-                return;
+                return true;
             }
         } catch (_) {}
     }
@@ -365,18 +369,36 @@ export async function displayLocalNotification(title: string, body: string, url:
     // 3. 브라우저 표준 Notification 객체 폴백
     if (!shown && typeof Notification !== "undefined" && Notification.permission === "granted") {
         try {
-            new Notification(title, {
+            const notif = new Notification(title, {
                 body,
                 icon: "/favicon-48x48.png",
                 tag: "sj-alert-" + Date.now()
             });
+            notif.onclick = () => {
+                window.focus();
+                if (url && url !== "/") {
+                    window.location.href = url;
+                }
+            };
             shown = true;
-            return;
+            return true;
         } catch (_) {}
     }
 
-    // 4. 최후 폴백: 토스트 메시지
-    toast.info(title, { description: body });
+    // 4. 최후 폴백: 인앱 토스트 배너 (Sonner)
+    try {
+        toast.info(title, {
+            description: body,
+            duration: 6000,
+            action: url && url !== "/" ? {
+                label: "이동",
+                onClick: () => { window.location.href = url; }
+            } : undefined
+        });
+        return true;
+    } catch (_) {
+        return false;
+    }
 }
 
 export interface UserSubscriptionInfo {

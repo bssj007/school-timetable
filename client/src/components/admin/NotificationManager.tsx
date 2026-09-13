@@ -143,7 +143,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
             if (!res.ok) throw new Error("구독자 목록 조회 실패");
             return res.json();
         },
-        refetchInterval: 10000
+        refetchInterval: 5000
     });
 
     // 2. Fetch sent notification history
@@ -156,7 +156,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
             if (!res.ok) throw new Error("발송 내역 조회 실패");
             return res.json();
         },
-        refetchInterval: 15000
+        refetchInterval: 5000
     });
 
     // 3. Send notification mutation

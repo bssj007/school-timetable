@@ -78,7 +78,7 @@ export default function Navigation() {
     setIsNotifSubscribed(isNotificationSubscribed());
   }, [isTeacherPage, grade, classNum, studentNumber, studentName, teacherName]);
 
-  // 실시간 알림 목록 조회 (30초 주기 자동 갱신)
+  // 실시간 알림 목록 조회 (5초 주기 자동 갱신)
   const notificationsQuery = useQuery({
     queryKey: ['notifications', isTeacherPage ? 'teacher' : 'student', isTeacherPage ? (teacherName || '') : `${grade}-${classNum}-${studentNumber}-${studentName}`, deviceId],
     queryFn: async () => {
@@ -95,8 +95,8 @@ export default function Navigation() {
       if (!res.ok) throw new Error('Failed to fetch notifications');
       return res.json();
     },
-    refetchInterval: 30000,
-    staleTime: 15000
+    refetchInterval: 5000,
+    staleTime: 2000
   });
 
   const serverNotifications = notificationsQuery.data?.notifications || [];
@@ -115,15 +115,13 @@ export default function Navigation() {
     const unnotifiedItems = notificationItems.filter(it => !it.read && !notifiedBannerIds.has(it.id));
     if (unnotifiedItems.length === 0) return;
 
-    // 세션 중복 방지를 위해 즉시 세션 목록에 등록
-    unnotifiedItems.forEach(it => markSessionBannerNotified(it.id));
-
     // 다량의 알림이 있을 경우 최대 2개까지만 배너를 띄워 팝업 폭탄 방지
     const itemsToNotify = unnotifiedItems.slice(0, 2);
 
     itemsToNotify.forEach(it => {
       // 일반 알림(in_app)은 기기 푸시 배너를 띄우지 않고 알림함에만 조용히 보관
       if (it.deliveryType === 'in_app') {
+        markSessionBannerNotified(it.id);
         return;
       }
 
@@ -133,12 +131,14 @@ export default function Navigation() {
         if (!isApp) return;
       }
 
-      // 알림 ON 상태일 때 로컬 배너 발송
-      if (isNotifSubscribed) {
+      // 사용자가 명시적으로 알림을 끄지 않았다면(스위치 OFF '0' 제외) 로컬/토스트 배너 즉시 발송
+      const isExplicitlyDisabled = typeof window !== 'undefined' && localStorage.getItem('sj_notification_enabled') === '0';
+      if (!isExplicitlyDisabled) {
+        markSessionBannerNotified(it.id);
         displayLocalNotification(it.title, it.message, it.link || "/").catch(() => {});
       }
     });
-  }, [notificationItems, isNotifSubscribed]);
+  }, [notificationItems]);
 
   // 모두 읽음 처리 (클라이언트 로컬 즉시 반영 + 서버 동기화)
   const markAllReadMutation = useMutation({

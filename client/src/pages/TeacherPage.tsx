@@ -1081,7 +1081,7 @@ export default function TeacherPage() {
     }
   }, [rawTeacherName]);
 
-  // 교사 대상 알림 쿼리 (30초 주기)
+  // 교사 대상 알림 쿼리 (5초 주기)
   const teacherNotifsQuery = useQuery({
     queryKey: ['notifications', 'teacher', rawTeacherName, deviceId],
     queryFn: async () => {
@@ -1095,8 +1095,8 @@ export default function TeacherPage() {
       return res.json();
     },
     enabled: !!rawTeacherName,
-    refetchInterval: 30000,
-    staleTime: 15000
+    refetchInterval: 5000,
+    staleTime: 2000
   });
 
   const serverTeacherNotifs = teacherNotifsQuery.data?.notifications || [];
@@ -1115,22 +1115,26 @@ export default function TeacherPage() {
     const unnotifiedItems = teacherNotifItems.filter(it => !it.read && !notifiedBannerIds.has(it.id));
     if (unnotifiedItems.length === 0) return;
 
-    unnotifiedItems.forEach(it => markSessionBannerNotified(it.id));
-
     const itemsToNotify = unnotifiedItems.slice(0, 2);
 
     itemsToNotify.forEach(it => {
-      if (it.deliveryType === 'in_app') return;
+      if (it.deliveryType === 'in_app') {
+        markSessionBannerNotified(it.id);
+        return;
+      }
       if (it.deliveryType === 'app') {
         const isApp = isNativeApp() || (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches);
         if (!isApp) return;
       }
 
-      if (isNotifSubscribed) {
+      // 사용자가 명시적으로 알림을 끄지 않았다면(스위치 OFF '0' 제외) 로컬/토스트 배너 즉시 발송
+      const isExplicitlyDisabled = typeof window !== 'undefined' && localStorage.getItem('sj_notification_enabled') === '0';
+      if (!isExplicitlyDisabled) {
+        markSessionBannerNotified(it.id);
         displayLocalNotification(it.title, it.message, it.link || "/").catch(() => {});
       }
     });
-  }, [teacherNotifItems, isNotifSubscribed]);
+  }, [teacherNotifItems]);
 
   const markTeacherAllReadMutation = useMutation({
     mutationFn: async () => {
