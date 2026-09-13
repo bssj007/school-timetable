@@ -605,40 +605,37 @@ export function isPwaInstalled(): boolean {
   );
 }
 
-// ── 다운로드 유도 페이지 표시 여부 ───────────────────────────────────────────
+// ── 다운로드 유도 페이지 및 설치 바 표시 대상 판정 ───────────────────────────
+
+export type InstallTargetType = "android_pwa" | "playstore" | "apple_pwa" | "appstore";
 
 /**
- * shouldShowDownloadPage(settings?: any) — 단일 진실원천
- * 표시 조건:
- *   1. 인앱 브라우저 아닐 것 (단, 카카오톡은 스토어 링크 등록 및 스위치 활성 시 허용)
- *   2. 앱으로 실행 중이 아닐 것 (PWA standalone / TWA / WebView)
- *      → 브라우저로 재접속 시 쿠키·설치 여부와 무관하게 표시함
- *   3. 사용자가 dismiss 하지 않았을 것
- *   4. 모바일 기기일 것 (데스크톱 제외)
- *   5. 전체 서킷브레이커(pwa_install_button_visible)가 켜져 있을 것
- *   6. 다운로드 대상 브라우저 및 링크 등록 / 개별 스위치 여부:
- *      - Android:
- *        * Chrome/Google: chrome_install_button_visible 켜져 있으면 항상 표시
- *        * 카카오톡: play_store_url 등록 + other_install_button_visible 켜져 있을 때만 표시
- *        * 삼성: play_store_url 등록 + samsung_install_button_visible 켜져 있을 때만 표시
- *        * 기타 브라우저: play_store_url 등록 + other_install_button_visible 켜져 있을 때만 표시
- *      - iOS:
- *        * app_store_url 등록 시: 해당 브라우저 스위치(safari/chrome/other) 켜져 있으면 표시
- *        * app_store_url 미등록 시: Safari(safari_install_button_visible) 및 Chrome(chrome_install_button_visible)만 PWA 가이드 유도 (카카오 및 기타 브라우저는 사이트 직행)
+ * getInstallTargetType(settings?, customAgent?) — 단일 진실원천
+ * detect() 3-Layer 통합 감지 및 서버 설정을 바탕으로 현재 접속환경의 설치 유도 유형을 결정한다.
+ *
+ * 반환값:
+ *   - "android_pwa" : Android Chrome/Google 브라우저 (성지수행 Lite 설치)
+ *   - "playstore"   : Android Samsung 및 기타 브라우저 + Play Store 링크 등록 (성지수행 설치)
+ *   - "appstore"    : iOS 전 브라우저 + App Store 링크 등록 (성지수행 설치)
+ *   - "apple_pwa"   : iOS Safari 및 Chrome + App Store 링크 미등록 (성지수행 설치방법)
+ *   - null          : 설치 유도 대상이 아님 (PC 데스크톱, 이미 설치된 앱, 지원 외 브라우저, 스위치 OFF 등)
  */
-export function shouldShowDownloadPage(settings?: any): boolean {
-  if (typeof window === "undefined") return false;
+export function getInstallTargetType(
+  settings?: any,
+  customAgent?: AgentInfo
+): InstallTargetType | null {
+  if (typeof window === "undefined" && !customAgent) return null;
 
-  // PWA 앱이나 WebView 정식 앱의 경우 다운로드 버튼이나 유도 페이지를 절대 표시하지 않음 (단일 진실원천)
-  if (agent.isInstalledApp || checkIsInstalledApp()) {
-    return false;
+  const a = customAgent || detect();
+
+  // 1. 이미 PWA 앱이나 WebView 정식 앱으로 실행 중인 경우 설치 유도 대상 아님
+  if (a.isInstalledApp || (!customAgent && checkIsInstalledApp())) {
+    return null;
   }
 
-  const isDismissed =
-    typeof localStorage !== "undefined" &&
-    localStorage.getItem("download_page_dismissed") === "1";
-  if (isDismissed || !agent.isMobile) {
-    return false;
+  // 2. 모바일 기기가 아닌 경우 (Windows, macOS, Linux PC 데스크톱) 설치 유도 대상 아님
+  if (!a.isMobile) {
+    return null;
   }
 
   let resolvedSettings = settings;
@@ -649,56 +646,89 @@ export function shouldShowDownloadPage(settings?: any): boolean {
     } catch {}
   }
 
-  // 설정이 아직 로드되지 않은 상태에서는 리다이렉트 판단을 보류(false)하여 무한 루프 방지
-  if (!resolvedSettings) {
-    return false;
+  // 3. 전체 서킷브레이커 OFF 시 설치 유도 미표시
+  if (resolvedSettings && resolvedSettings.pwa_install_button_visible === false) {
+    return null;
   }
 
-  // 전체 서킷브레이커 OFF 시 유도 페이지 미표시
-  if (resolvedSettings.pwa_install_button_visible === false) {
-    return false;
+  // 4. 일반 인앱 브라우저(카카오톡 제외)는 설치 유도 미표시
+  if (a.isInAppBrowser && !a.isKakaoTalk) {
+    return null;
   }
 
-  const hasAppStore = Boolean(resolvedSettings.app_store_url && resolvedSettings.app_store_url.trim());
-  const hasPlayStore = Boolean(resolvedSettings.play_store_url && resolvedSettings.play_store_url.trim());
-  // 일반 인앱 브라우저(네이버, 인스타그램 등)는 유도 페이지 미표시 (카카오톡은 기타 브라우저로 취급하여 통과)
-  if (agent.isInAppBrowser && !agent.isKakaoTalk) {
-    return false;
-  }
+  const hasAppStore = Boolean(resolvedSettings?.app_store_url && resolvedSettings.app_store_url.trim());
+  const hasPlayStore = Boolean(resolvedSettings?.play_store_url && resolvedSettings.play_store_url.trim());
 
-  if (agent.isIOS) {
-    // 1. 앱스토어 링크가 있는 경우: 해당 브라우저의 스위치 확인 후 표시
+  // 5. iOS 환경 판정
+  if (a.isIOS) {
+    // 5-1. 앱스토어 링크 등록 시: 브라우저별 스위치 확인 후 appstore 대상
     if (hasAppStore) {
-      const isHidden = agent.isIOSSafari
-        ? resolvedSettings.safari_install_button_visible === false
-        : agent.browserKey === "chrome"
-          ? resolvedSettings.chrome_install_button_visible === false
-          : resolvedSettings.other_install_button_visible === false;
-      if (isHidden) return false;
-      return true;
+      const isHidden = a.isIOSSafari
+        ? resolvedSettings?.safari_install_button_visible === false
+        : a.browserKey === "chrome"
+          ? resolvedSettings?.chrome_install_button_visible === false
+          : resolvedSettings?.other_install_button_visible === false;
+      if (isHidden) return null;
+      return "appstore";
     }
-    // 2. 앱스토어 링크 없는 경우: Safari와 Chrome만 PWA 가이드 유도 (기타 브라우저는 사이트 직행)
-    if (agent.isIOSSafari) return resolvedSettings.safari_install_button_visible !== false;
-    if (agent.isIOSChrome) return resolvedSettings.chrome_install_button_visible !== false;
-    return false;
+
+    // 5-2. 앱스토어 링크 미등록 시: Safari 및 Chrome만 PWA 가이드 유도 (기타 브라우저는 사이트 직행)
+    if (a.isIOSSafari) {
+      if (resolvedSettings?.safari_install_button_visible === false) return null;
+      return "apple_pwa";
+    }
+    if (a.isIOSChrome || a.browserKey === "chrome") {
+      if (resolvedSettings?.chrome_install_button_visible === false) return null;
+      return "apple_pwa";
+    }
+    return null;
   }
 
-  if (agent.isAndroid) {
-    // 1. Chrome/Google 브라우저이면 PWA 설치 버튼 지원하므로 스위치 확인 후 표시
-    if (agent.browserKey === "chrome") {
-      return resolvedSettings.chrome_install_button_visible !== false;
+  // 6. Android 환경 판정
+  if (a.isAndroid) {
+    // 6-1. Chrome / Google 브라우저인 경우: 항상 PWA 설치 대상 (스위치 확인)
+    if (a.browserKey === "chrome") {
+      if (resolvedSettings?.chrome_install_button_visible === false) return null;
+      return "android_pwa";
     }
-    // 2. 삼성 브라우저 및 기타 Android 브라우저(카카오 포함): Play Store 링크 등록 + 스위치 활성 시 표시
-    const isSamsung = agent.browserKey === "samsung";
+
+    // 6-2. 삼성 브라우저 및 기타 Android 브라우저 (카카오톡 포함): Play Store 링크 등록 + 스위치 활성 시 표시
+    const isSamsung = a.browserKey === "samsung";
     const isHidden = isSamsung
-      ? resolvedSettings.samsung_install_button_visible === false
-      : resolvedSettings.other_install_button_visible === false;
-    if (isHidden) return false;
+      ? resolvedSettings?.samsung_install_button_visible === false
+      : resolvedSettings?.other_install_button_visible === false;
+    if (isHidden) return null;
 
-    return hasPlayStore;
+    if (hasPlayStore) {
+      return "playstore";
+    }
+    return null;
   }
 
-  return false;
+  return null;
+}
+
+/**
+ * shouldShowDownloadPage(settings?, options?) — 단일 진실원천
+ * detect() 함수 기반으로 현재 접속환경이 다운로드/설치 유도 대상인지 여부를 반환합니다.
+ */
+export function shouldShowDownloadPage(
+  settings?: any,
+  options?: { ignoreDismiss?: boolean; customAgent?: AgentInfo } | boolean
+): boolean {
+  if (typeof window === "undefined") return false;
+
+  const ignoreDismiss = typeof options === "boolean" ? options : options?.ignoreDismiss ?? true;
+  const customAgent = typeof options === "object" ? options?.customAgent : undefined;
+
+  if (!ignoreDismiss) {
+    const isDismissed =
+      typeof localStorage !== "undefined" &&
+      localStorage.getItem("download_page_dismissed") === "1";
+    if (isDismissed) return false;
+  }
+
+  return getInstallTargetType(settings, customAgent) !== null;
 }
 
 /** @internal UA 기반 인앱 브라우저 여부 (detect() 내부에서 사용) */

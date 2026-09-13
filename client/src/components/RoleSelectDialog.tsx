@@ -11,7 +11,7 @@ import { toast } from "sonner";
 // 교사 유틸 함수는 @/lib/teacherUtils 에서 직접 import 하세요.
 // (RoleSelectDialog에서 re-export하면 순환 의존성으로 인한 TDZ 오류가 발생합니다)
 import { getActiveTeacherName, getAuthenticatedTeacher, getTeacherNameCookie, setRoleCookie, setTeacherNameCookie, normalizeTeacherName, getRoleCookie, setStoredTeacherPassword, clearStoredTeacherPassword } from "@/lib/teacherUtils";
-import { detect, shouldShowDownloadPage, agent } from "@/lib/browserDetect";
+import { detect, shouldShowDownloadPage, agent, getInstallTargetType, type InstallTargetType } from "@/lib/browserDetect";
 import { setPumasiCookie } from "@/lib/pumasiCookie";
 
 // ── 교사 옵션 타입 ───────────────────────────────────────────
@@ -150,7 +150,14 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         publicSettings,
     } = useUserConfig();
 
-    const [step, setStep] = useState<Step>("role");
+    const [installDismissed, setInstallDismissed] = useState(false);
+
+    // 구 버전 전체 리다이렉트 시절의 dismiss 잔여 데이터 정리
+    useEffect(() => {
+        try {
+            localStorage.removeItem("download_page_dismissed");
+        } catch {}
+    }, []);
 
     // ── 학생 정보 ──
     const [studentName, setStudentName] = useState("");
@@ -175,7 +182,27 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
     // ── 서버 설정 및 설치 유도 상태 ──
     const [settings, setSettings] = useState<any>(null);
     const activeSettings = settings || publicSettings;
-    const [installDismissed, setInstallDismissed] = useState(false);
+
+    // 접속환경 감지(detect) 기반 단일 진실원천 설치 대상 판정
+    const targetInstallType = useMemo<InstallTargetType | null>(() => {
+        const a = detect();
+        return getInstallTargetType(activeSettings, a);
+    }, [activeSettings]);
+
+    const isDownloadPromptTarget = !installDismissed && targetInstallType !== null;
+
+    const [step, setStep] = useState<Step>(() => {
+        if (roleSelectStep) return roleSelectStep;
+        if (typeof window === "undefined") return "role";
+        const a = detect();
+        let cachedSettings: any = null;
+        try {
+            const cached = localStorage.getItem("public_settings_cache");
+            if (cached) cachedSettings = JSON.parse(cached);
+        } catch {}
+        const initialTarget = getInstallTargetType(cachedSettings, a);
+        return initialTarget ? "install" : "role";
+    });
 
     // ── PWA 이벤트 및 수동 설치 안내 상태 ──
     const [deferredPrompt, setDeferredPrompt] = useState<any>(() =>
@@ -242,14 +269,14 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
     const skipPaths = ["/admin", "/admin/factory-reset", "/teacher"];
     const shouldSkip = skipPaths.some(p => location.startsWith(p));
 
-    const isDownloadPromptTarget = !installDismissed && Boolean(activeSettings && shouldShowDownloadPage(activeSettings));
-
     useEffect(() => {
         if (shouldSkip) return;
-        if (isDownloadPromptTarget) {
-            openRoleSelect("install");
-        } else if (!getRoleCookie() || !userRole) {
-            openRoleSelect("role");
+        if (!getRoleCookie() || !userRole) {
+            if (isDownloadPromptTarget) {
+                openRoleSelect("install");
+            } else {
+                openRoleSelect("role");
+            }
         }
     }, [shouldSkip, isDownloadPromptTarget, userRole, location]);
 
@@ -310,47 +337,40 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
     const hasPlayStore = Boolean(playStoreUrl && activeSettings?.play_store_url);
 
     const installButtonConfig = useMemo(() => {
-        if (agent.isIOS) {
-            if (hasAppStore) {
-                return {
-                    type: "appstore" as const,
-                    title: "성지수행 설치",
-                    subtitle: "App Store에서 앱 다운로드",
-                };
-            }
+        const appTitle = activeSettings?.pwa_app_title || "성지수행";
+
+        if (targetInstallType === "appstore") {
+            return {
+                type: "appstore" as const,
+                title: `${appTitle} 설치`,
+                subtitle: "App Store에서 앱 다운로드",
+            };
+        }
+
+        if (targetInstallType === "apple_pwa") {
             return {
                 type: "apple_pwa" as const,
-                title: "성지수행 설치방법",
+                title: `${appTitle} 설치방법`,
                 subtitle: "홈 화면에 추가하여 편리하게 이용",
             };
         }
 
-        if (agent.isAndroid) {
-            if (agent.browserKey === "chrome") {
-                return {
-                    type: "android_pwa" as const,
-                    title: "성지수행 Lite 설치",
-                    subtitle: "홈 화면에 가벼운 앱으로 설치",
-                };
-            }
-            if (hasPlayStore) {
-                return {
-                    type: "playstore" as const,
-                    title: "성지수행 설치",
-                    subtitle: "Google Play에서 앱 다운로드",
-                };
-            }
+        if (targetInstallType === "playstore") {
+            return {
+                type: "playstore" as const,
+                title: `${appTitle} 설치`,
+                subtitle: "Google Play에서 앱 다운로드",
+            };
         }
 
         return {
             type: "android_pwa" as const,
-            title: "성지수행 Lite 설치",
-            subtitle: "홈 화면에 앱으로 추가하여 빠르게 이용",
+            title: `${appTitle} Lite 설치`,
+            subtitle: "홈 화면에 가벼운 앱으로 설치",
         };
-    }, [hasAppStore, hasPlayStore]);
+    }, [targetInstallType, activeSettings?.pwa_app_title]);
 
     const handleContinueWeb = () => {
-        localStorage.setItem("download_page_dismissed", "1");
         setInstallDismissed(true);
         if (userRole) {
             closeRoleSelect();
@@ -416,7 +436,6 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                 if (choice && choice.outcome === "accepted") {
                     (window as any).__deferredPwaPrompt = null;
                     setDeferredPrompt(null);
-                    localStorage.setItem("download_page_dismissed", "1");
                     setInstallDismissed(true);
                     toast.success("앱 설치가 진행 중입니다. 홈 화면에서 앱을 확인해 주세요!");
                     if (userRole) {
@@ -442,7 +461,6 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
             if (playStoreUrl) {
                 window.open(playStoreUrl, "_blank", "noopener,noreferrer");
             }
-            localStorage.setItem("download_page_dismissed", "1");
             setInstallDismissed(true);
             if (userRole) {
                 closeRoleSelect();
@@ -456,7 +474,6 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
             if (appStoreUrl) {
                 window.open(appStoreUrl, "_blank", "noopener,noreferrer");
             }
-            localStorage.setItem("download_page_dismissed", "1");
             setInstallDismissed(true);
             if (userRole) {
                 closeRoleSelect();
@@ -467,10 +484,10 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         }
 
         if (installButtonConfig.type === "apple_pwa") {
-            localStorage.setItem("download_page_dismissed", "1");
             setInstallDismissed(true);
             closeRoleSelect();
-            if (agent.browserKey === "chrome") {
+            const a = detect();
+            if (a.isIOSChrome || a.browserKey === "chrome") {
                 setLocation("/ios-chrome-install-guide");
             } else {
                 setLocation("/ios-install-guide");
@@ -1002,7 +1019,6 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                             className="w-full text-gray-400 hover:text-gray-600 text-xs py-2 cursor-pointer"
                             onClick={() => {
                                 setShowManualGuide(false);
-                                localStorage.setItem("download_page_dismissed", "1");
                                 setInstallDismissed(true);
                                 if (userRole) {
                                     closeRoleSelect();

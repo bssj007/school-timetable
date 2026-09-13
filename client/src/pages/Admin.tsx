@@ -12283,7 +12283,7 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                     {/* shouldShowDownloadPage 결과 */}
                     <div className="border-t pt-3">
                         <p className="text-xs text-gray-500 mb-1 font-mono">shouldShowDownloadPage()</p>
-                        {shouldShowDownloadPage()
+                        {shouldShowDownloadPage(settingsData)
                             ? <span className="inline-flex items-center gap-1 text-sm font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-3 py-1 rounded-full">✅ 다운로드 유도 페이지 표시 대상</span>
                             : <span className="inline-flex items-center gap-1 text-sm font-bold text-gray-500 bg-gray-100 border border-gray-200 px-3 py-1 rounded-full">— 표시 안함 (PC·이미설치 등)</span>
                         }

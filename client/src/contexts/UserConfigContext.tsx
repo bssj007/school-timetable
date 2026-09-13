@@ -10,7 +10,7 @@ import {
     getAuthenticatedTeacher,
     getActiveTeacherName
 } from "@/lib/teacherUtils";
-import { isMaintenanceBypassed } from "@/lib/browserDetect";
+import { isMaintenanceBypassed, getInstallTargetType } from "@/lib/browserDetect";
 import { toast } from "sonner";
 
 export interface UserConfig {
@@ -144,10 +144,22 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
 
     // ── 역할 선택 다이얼로그 제어 ──
     const [isRoleSelectOpen, setIsRoleSelectOpen] = useState(false);
-    const [roleSelectStep, setRoleSelectStep] = useState<"role" | "student-info" | "teacher-name" | "install">("role");
+    const [roleSelectStep, setRoleSelectStep] = useState<"role" | "student-info" | "teacher-name" | "install">(() => {
+        if (typeof window === "undefined") return "role";
+        let cachedSettings: any = null;
+        try {
+            const cached = localStorage.getItem("public_settings_cache");
+            if (cached) cachedSettings = JSON.parse(cached);
+        } catch {}
+        return getInstallTargetType(cachedSettings) !== null ? "install" : "role";
+    });
 
-    const openRoleSelect = (step: "role" | "student-info" | "teacher-name" | "install" = "role") => {
-        setRoleSelectStep(step);
+    const openRoleSelect = (step?: "role" | "student-info" | "teacher-name" | "install") => {
+        let targetStep = step;
+        if (!targetStep) {
+            targetStep = getInstallTargetType(publicSettings) !== null ? "install" : "role";
+        }
+        setRoleSelectStep(targetStep);
         setIsRoleSelectOpen(true);
     };
 
