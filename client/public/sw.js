@@ -1,4 +1,4 @@
-const CACHE_NAME = 'school-timetable-v8';
+const CACHE_NAME = 'school-timetable-v9';
 const urlsToCache = [
     '/',
     '/index.html',
@@ -40,7 +40,7 @@ self.addEventListener('fetch', event => {
     );
 });
 
-// Push notification event listener
+// Push notification event listener (푸시 알림만 띄우고 앱 아이콘 숫자 배지는 남기지 않음)
 self.addEventListener('push', event => {
     let data = {
         title: '성지수행 알림',
@@ -62,7 +62,6 @@ self.addEventListener('push', event => {
     const options = {
         body: data.body || data.message || '',
         icon: '/favicon-48x48.png',
-        badge: '/favicon-32x32.png',
         data: {
             url: data.url || data.link || '/'
         },
@@ -72,13 +71,24 @@ self.addEventListener('push', event => {
     };
 
     event.waitUntil(
-        self.registration.showNotification(data.title || '성지수행', options)
+        (async () => {
+            await self.registration.showNotification(data.title || '성지수행', options);
+            // PWA 앱 아이콘에 숫자(배지)가 표시되지 않도록 강제 클리어
+            if (self.navigator && 'clearAppBadge' in self.navigator) {
+                try {
+                    await self.navigator.clearAppBadge();
+                } catch (_) {}
+            }
+        })()
     );
 });
 
 // Notification click event listener
 self.addEventListener('notificationclick', event => {
     event.notification.close();
+    if (self.navigator && 'clearAppBadge' in self.navigator) {
+        try { self.navigator.clearAppBadge(); } catch (_) {}
+    }
     const urlToOpen = (event.notification.data && event.notification.data.url) || '/';
 
     event.waitUntil(
@@ -95,4 +105,11 @@ self.addEventListener('notificationclick', event => {
             }
         })
     );
+});
+
+// Notification close event listener (알림 스와이프 시에도 배지 클리어 보장)
+self.addEventListener('notificationclose', event => {
+    if (self.navigator && 'clearAppBadge' in self.navigator) {
+        try { self.navigator.clearAppBadge(); } catch (_) {}
+    }
 });
