@@ -6,33 +6,36 @@ import path from "path";
 import fs from "fs";
 
 let _db: any = null;
+let _sqlite: any = null;
+
+export function getRawSqliteDb() {
+  if (!_sqlite) {
+    try {
+      const d1Dir = path.join(process.cwd(), ".wrangler/state/v3/d1/miniflare-D1DatabaseObject");
+      if (!fs.existsSync(d1Dir)) {
+        fs.mkdirSync(d1Dir, { recursive: true });
+      }
+      const files = fs.readdirSync(d1Dir);
+      let sqliteFile = files.find(f => f.endsWith(".sqlite"));
+      if (!sqliteFile) {
+        sqliteFile = "local-d1.sqlite";
+      }
+      const dbPath = path.join(d1Dir, sqliteFile);
+      _sqlite = new Database(dbPath);
+      console.log("[Database] Connected to Raw SQLite:", dbPath);
+    } catch (e) {
+      console.error("[Database] Error connecting to Raw SQLite:", e);
+      return null;
+    }
+  }
+  return _sqlite;
+}
 
 export async function getDb() {
   if (!_db) {
-    try {
-      // Find D1 sqlite file in .wrangler dir
-      const d1Dir = path.join(process.cwd(), ".wrangler/state/v3/d1/miniflare-D1DatabaseObject");
-      
-      if (!fs.existsSync(d1Dir)) {
-          console.error(`[Database] D1 directory not found: ${d1Dir}`);
-          return null;
-      }
-
-      const files = fs.readdirSync(d1Dir);
-      const sqliteFile = files.find(f => f.endsWith(".sqlite"));
-      
-      if (!sqliteFile) {
-        console.error("[Database] No SQLite file found in wrangler state directory.");
-        return null;
-      }
-      
-      const dbPath = path.join(d1Dir, sqliteFile);
-      const sqlite = new Database(dbPath);
+    const sqlite = getRawSqliteDb();
+    if (sqlite) {
       _db = drizzle(sqlite);
-      console.log("[Database] Connected to D1:", dbPath);
-    } catch (error) {
-      console.error("[Database] Error connecting to D1:", error);
-      _db = null;
     }
   }
   return _db;

@@ -12,6 +12,7 @@ import { assessmentRouter } from "../routes/assessment";
 import { myIpRouter } from "../routes/my-ip";
 import { mealRouter } from "../routes/meal";
 import { testDbQueryRouter } from "../routes/test-db-query";
+import { notificationsRouter, adminNotificationsRouter } from "../routes/notifications";
 import { runMigrations } from "./migrate";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { sql } from "drizzle-orm";
@@ -139,7 +140,9 @@ async function startServer() {
     next();
   });
 
+  app.use("/api/admin/notifications", adminNotificationsRouter);
   app.use("/api/admin", adminRouter);
+  app.use("/api/notifications", notificationsRouter);
   app.use("/api/assessment", assessmentRouter);
   app.use("/api/my-ip", myIpRouter);
   app.use("/api/meal", mealRouter);

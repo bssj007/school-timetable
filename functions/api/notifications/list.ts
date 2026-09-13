@@ -54,9 +54,13 @@ export const onRequest = async (context: any) => {
         if (role === "teacher") {
             query += `
                 (sn.target_type = 'all' 
-                 OR (sn.target_type = 'teacher' AND (sn.target_teacher_name = '' OR sn.target_teacher_name = ?)))
+                 OR (sn.target_type = 'teacher' AND (
+                     sn.target_teacher_name = '' 
+                     OR sn.target_teacher_name = ? 
+                     OR REPLACE(sn.target_teacher_name, '*', '') = REPLACE(?, '*', '')
+                 )))
             `;
-            bindings.push(teacherName);
+            bindings.push(teacherName, teacherName);
         } else {
             // Student
             query += `
@@ -64,18 +68,14 @@ export const onRequest = async (context: any) => {
                     sn.target_type = 'all'
                     OR (
                         sn.target_type = 'student'
-                        AND (
-                            (? > 0 AND sn.target_grade = ? AND (sn.target_class = 0 OR sn.target_class = ?) AND (sn.target_student_number = 0 OR sn.target_student_number = ?))
-                            OR (? != '' AND sn.target_student_name != '' AND sn.target_student_name = ?)
-                            OR (sn.target_grade = 0 AND sn.target_student_name = '')
-                        )
+                        AND (sn.target_grade = 0 OR sn.target_grade = ?)
+                        AND (sn.target_class = 0 OR sn.target_class = ?)
+                        AND (sn.target_student_number = 0 OR sn.target_student_number = ?)
+                        AND (sn.target_student_name = '' OR sn.target_student_name = ?)
                     )
                 )
             `;
-            bindings.push(
-                grade, grade, classNum, studentNumber,
-                studentName, studentName
-            );
+            bindings.push(grade, classNum, studentNumber, studentName);
         }
 
         query += ` ORDER BY sn.created_at DESC LIMIT 50`;

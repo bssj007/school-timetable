@@ -184,8 +184,15 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
             });
 
             if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.error || "발송 실패");
+                let errorMsg = `발송 실패 (상태코드: ${res.status})`;
+                try {
+                    const err = await res.json();
+                    if (err.error) errorMsg = err.error;
+                } catch (_) {
+                    const txt = await res.text().catch(() => "");
+                    if (txt) errorMsg += `: ${txt.slice(0, 100)}`;
+                }
+                throw new Error(errorMsg);
             }
             return res.json();
         },
@@ -193,6 +200,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
             const deliveryObj = DELIVERY_TYPES.find(d => d.id === (data.deliveryType || deliveryType)) || DELIVERY_TYPES[0];
             toast.success(`[${deliveryObj.label}] 알림이 성공적으로 등록되었습니다! (매칭 기기: ${data.matchedCount}대)`);
             queryClient.invalidateQueries({ queryKey: ["admin", "notification-history"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "notification-subscribers"] });
         },
         onError: (err: any) => {
             toast.error(err.message || "알림 발송 중 오류가 발생했습니다.");
@@ -826,6 +834,20 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                         onChange={(e) => setLink(e.target.value)}
                                         className="h-8 text-xs font-mono"
                                     />
+                                </div>
+
+                                {/* 발송 대상 요약 안내 */}
+                                <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-[11px]">
+                                    <span className="text-gray-500 font-medium">최종 발송 대상:</span>
+                                    <span className="font-bold text-gray-900">
+                                        {targetType === "all" ? (
+                                            "🌐 전체 사용자 (전교생 + 전체 교사)"
+                                        ) : targetType === "teacher" ? (
+                                            targetTeacherName ? `👩‍🏫 ${selectedTeacherObj ? selectedTeacherObj.label : targetTeacherName} 선생님` : "👩‍🏫 전체 선생님"
+                                        ) : (
+                                            `👨‍🎓 학생 [${targetGrade ? `${targetGrade}학년 ` : '전체학년 '}${targetClass ? `${targetClass}반 ` : '전체반 '}${targetStudentNumber ? `${targetStudentNumber}번 ` : ''}${targetStudentName ? targetStudentName : ''}]`
+                                        )}
+                                    </span>
                                 </div>
 
                                 {/* 유일한 알림 발송 버튼 */}

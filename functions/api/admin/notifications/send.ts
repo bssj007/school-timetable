@@ -84,14 +84,14 @@ export const onRequest = async (context: any) => {
         if (deliveryType === "app") {
             subscriberQuery += ` AND platform IN ('pwa', 'webview')`;
         } else if (deliveryType === "push") {
-            subscriberQuery += ` AND (push_subscription != '' OR platform IN ('pwa', 'web', 'webview'))`;
+            subscriberQuery += ` AND (COALESCE(push_subscription, '') != '' OR COALESCE(platform, 'web') IN ('pwa', 'web', 'webview'))`;
         }
 
         if (targetType === "teacher") {
             subscriberQuery += ` AND role = 'teacher'`;
             if (targetTeacherName) {
-                subscriberQuery += ` AND teacher_name = ?`;
-                bindings.push(targetTeacherName);
+                subscriberQuery += ` AND (teacher_name = ? OR REPLACE(teacher_name, '*', '') = REPLACE(?, '*', ''))`;
+                bindings.push(targetTeacherName, targetTeacherName);
             }
         } else if (targetType === "student") {
             subscriberQuery += ` AND role = 'student'`;

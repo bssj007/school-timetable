@@ -22,7 +22,9 @@ import {
   syncNotificationStatusOnConnect,
   toggleNotificationSubscription,
   getOrCreateDeviceId,
-  useClientNotificationState
+  useClientNotificationState,
+  displayLocalNotification,
+  isNativeApp
 } from "@/lib/notificationService";
 import { buildTeacherOptions, filterTeacherOptions } from "@/lib/teacherSearch";
 
@@ -1102,6 +1104,30 @@ export default function TeacherPage() {
     markAllRead: markTeacherAllClientRead,
     markSingleRead: markTeacherSingleClientRead
   } = useClientNotificationState(serverTeacherNotifs);
+
+  // 알림 기술(발송 방식)에 따른 신규 미읽음 알림 배너 발송 처리
+  const notifiedTeacherIdsRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!teacherNotifsQuery.data?.notifications) return;
+    const items: Array<any> = teacherNotifsQuery.data.notifications;
+
+    items.forEach(it => {
+      if (!it.read && !notifiedTeacherIdsRef.current.has(it.id)) {
+        notifiedTeacherIdsRef.current.add(it.id);
+
+        if (it.deliveryType === 'in_app') return;
+        if (it.deliveryType === 'app') {
+          const isApp = isNativeApp() || (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches);
+          if (!isApp) return;
+        }
+
+        if (isNotifSubscribed) {
+          displayLocalNotification(it.title, it.message, it.link || "/").catch(() => {});
+        }
+      }
+    });
+  }, [teacherNotifsQuery.data, isNotifSubscribed]);
 
   const markTeacherAllReadMutation = useMutation({
     mutationFn: async () => {
@@ -3540,30 +3566,28 @@ export default function TeacherPage() {
                 )}
               </div>
 
-              {/* 학생공지 — 좁은화면/넓은화면 공통, ml-auto로 우측 정렬 */}
-              {isCurrentTeacherVerified && (
-                <button type="button" 
-                  onClick={() => {
-                    setShowNoticeDialog(true);
-                    markTeacherAllClientRead();
-                    markTeacherAllReadMutation.mutate();
-                  }} 
-                  style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className={`ml-auto relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-bold text-xs shrink-0 transition-colors border cursor-pointer shadow-sm ${
-                    isNotifSubscribed
-                      ? "bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 border-yellow-300"
-                      : "bg-slate-200/90 hover:bg-slate-300 active:bg-slate-400 text-slate-700 border-slate-300"
-                  }`}
-                  title="학생공지">
-                  <Bell className={`w-3.5 h-3.5 ${!isNotifSubscribed ? "text-slate-700 stroke-[2.2]" : "text-gray-900 stroke-[2.2]"}`} />
-                  <span>학생공지</span>
-                  {teacherUnreadCount > 0 && (
-                    <span className="flex items-center justify-center min-w-[17px] h-[17px] px-[4px] text-[9px] font-bold leading-none text-white bg-red-500 rounded-full shadow-xs">
-                      {teacherUnreadCount > 99 ? '99+' : teacherUnreadCount}
-                    </span>
-                  )}
-                </button>
-              )}
+              {/* 교사 알림 — 좁은화면/넓은화면 공통, ml-auto로 우측 정렬 */}
+              <button type="button" 
+                onClick={() => {
+                  setShowNoticeDialog(true);
+                  markTeacherAllClientRead();
+                  markTeacherAllReadMutation.mutate();
+                }} 
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+                className={`ml-auto relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-bold text-xs shrink-0 transition-colors border cursor-pointer shadow-sm ${
+                  isNotifSubscribed
+                    ? "bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 border-yellow-300"
+                    : "bg-slate-200/90 hover:bg-slate-300 active:bg-slate-400 text-slate-700 border-slate-300"
+                }`}
+                title="교사 알림">
+                <Bell className={`w-3.5 h-3.5 ${!isNotifSubscribed ? "text-slate-700 stroke-[2.2]" : "text-gray-900 stroke-[2.2]"}`} />
+                <span>알림</span>
+                {teacherUnreadCount > 0 && (
+                  <span className="flex items-center justify-center min-w-[17px] h-[17px] px-[4px] text-[9px] font-bold leading-none text-white bg-red-500 rounded-full shadow-xs">
+                    {teacherUnreadCount > 99 ? '99+' : teacherUnreadCount}
+                  </span>
+                )}
+              </button>
 
 
               {/* 미인증 시 우측 묶음: [보기 전용] [로그인] */}

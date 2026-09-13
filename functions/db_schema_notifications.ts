@@ -61,6 +61,24 @@ export async function ensureNotificationTables(db: any): Promise<void> {
         // Safe column alter checks
         try { await db.prepare("ALTER TABLE ip_profiles ADD COLUMN notificationEnabled INTEGER DEFAULT 0").run(); } catch (_) {}
         try { await db.prepare("ALTER TABLE notification_subscriptions ADD COLUMN ip TEXT DEFAULT ''").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE notification_subscriptions ADD COLUMN user_agent TEXT DEFAULT ''").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE notification_subscriptions ADD COLUMN platform TEXT DEFAULT 'web'").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE notification_subscriptions ADD COLUMN grade INTEGER DEFAULT 0").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE notification_subscriptions ADD COLUMN class_num INTEGER DEFAULT 0").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE notification_subscriptions ADD COLUMN student_number INTEGER DEFAULT 0").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE notification_subscriptions ADD COLUMN student_name TEXT DEFAULT ''").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE notification_subscriptions ADD COLUMN teacher_name TEXT DEFAULT ''").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE notification_subscriptions ADD COLUMN push_subscription TEXT DEFAULT ''").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE notification_subscriptions ADD COLUMN is_active INTEGER DEFAULT 1").run(); } catch (_) {}
+
+        try { await db.prepare("ALTER TABLE site_notifications ADD COLUMN target_type TEXT DEFAULT 'all'").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE site_notifications ADD COLUMN target_grade INTEGER DEFAULT 0").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE site_notifications ADD COLUMN target_class INTEGER DEFAULT 0").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE site_notifications ADD COLUMN target_student_number INTEGER DEFAULT 0").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE site_notifications ADD COLUMN target_student_name TEXT DEFAULT ''").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE site_notifications ADD COLUMN target_teacher_name TEXT DEFAULT ''").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE site_notifications ADD COLUMN link TEXT DEFAULT ''").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE site_notifications ADD COLUMN category TEXT DEFAULT 'assessment'").run(); } catch (_) {}
         try { await db.prepare("ALTER TABLE site_notifications ADD COLUMN delivery_type TEXT DEFAULT 'all'").run(); } catch (_) {}
 
         notificationsSchemaVerified = true;
