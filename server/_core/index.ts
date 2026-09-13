@@ -13,6 +13,7 @@ import { myIpRouter } from "../routes/my-ip";
 import { mealRouter } from "../routes/meal";
 import { testDbQueryRouter } from "../routes/test-db-query";
 import { notificationsRouter, adminNotificationsRouter } from "../routes/notifications";
+import { publicGuideAssetsRouter, adminGuideAssetsRouter } from "../routes/guide-assets";
 import { runMigrations } from "./migrate";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { sql } from "drizzle-orm";
@@ -140,6 +141,8 @@ async function startServer() {
     next();
   });
 
+  app.use("/api/admin/guide-assets", adminGuideAssetsRouter);
+  app.use("/api/guide-assets", publicGuideAssetsRouter);
   app.use("/api/admin/notifications", adminNotificationsRouter);
   app.use("/api/admin", adminRouter);
   app.use("/api/notifications", notificationsRouter);

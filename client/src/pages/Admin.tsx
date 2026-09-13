@@ -12374,6 +12374,513 @@ function NativeAppUpdateSettings({ adminPassword }: { adminPassword: string }) {
 }
 
 // ----------------------------------------------------------------------
+// IphonePwaGuideGifSection - iPhone/iPad PWA 가이드 GIF 에셋 벌크 업로드 및 기기별 바인딩
+// ----------------------------------------------------------------------
+function formatGuideFileSize(bytes: number): string {
+    if (!bytes || bytes === 0) return "0 B";
+    const k = 1024;
+    if (bytes < k) return `${bytes} B`;
+    if (bytes < k * k) return `${(bytes / k).toFixed(1)} KB`;
+    return `${(bytes / (k * k)).toFixed(2)} MB`;
+}
+
+function IphonePwaGuideGifSection({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [uploadingFiles, setUploadingFiles] = useState<string[]>([]);
+    const [previewAsset, setPreviewAsset] = useState<{ id: string; name: string } | null>(null);
+
+    // 1. Fetch guide assets & bindings
+    const { data: guideData, isLoading } = useQuery({
+        queryKey: ["admin", "guideAssets"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/guide-assets", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("가이드 에셋 불러오기 실패");
+            return res.json();
+        }
+    });
+
+    const assets: Array<{ id: string; name: string; size: number; mime_type: string; created_at: string }> = guideData?.assets || [];
+    const bindings: Record<string, string> = guideData?.bindings || {};
+
+    // 2. Auto-save bindings mutation
+    const saveBindingMutation = useMutation({
+        mutationFn: async (nextBindings: Record<string, string>) => {
+            const res = await fetch("/api/admin/guide-assets", {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify({ bindings: nextBindings }),
+            });
+            if (!res.ok) throw new Error("바인딩 저장 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "guideAssets"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            toast.success("기기 바인딩 설정이 자동 저장되었습니다.");
+        },
+        onError: () => {
+            toast.error("설정 저장에 실패했습니다.");
+        }
+    });
+
+    // 3. Bulk upload mutation
+    const uploadMutation = useMutation({
+        mutationFn: async (newAssets: Array<{ name: string; size: number; mime_type: string; dataUrl: string }>) => {
+            const res = await fetch("/api/admin/guide-assets", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword,
+                },
+                body: JSON.stringify({ assets: newAssets }),
+            });
+            if (!res.ok) throw new Error("에셋 업로드 실패");
+            return res.json();
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "guideAssets"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            const count = data?.uploaded?.length || 0;
+            toast.success(`${count}개의 GIF 에셋이 업로드되어 자동 저장되었습니다.`);
+            setUploadingFiles([]);
+        },
+        onError: () => {
+            toast.error("에셋 업로드에 실패했습니다.");
+            setUploadingFiles([]);
+        }
+    });
+
+    // 4. Delete asset mutation
+    const deleteMutation = useMutation({
+        mutationFn: async (assetId: string) => {
+            const res = await fetch(`/api/admin/guide-assets?id=${encodeURIComponent(assetId)}`, {
+                method: "DELETE",
+                headers: {
+                    "X-Admin-Password": adminPassword,
+                },
+            });
+            if (!res.ok) throw new Error("에셋 삭제 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "guideAssets"] });
+            queryClient.invalidateQueries({ queryKey: ["publicSettings"] });
+            toast.success("에셋이 삭제되었으며 바인딩이 자동 해제되었습니다.");
+        },
+        onError: () => {
+            toast.error("에셋 삭제에 실패했습니다.");
+        }
+    });
+
+    const handleFiles = async (files: FileList | File[]) => {
+        const fileArr = Array.from(files).filter(f => f.type === "image/gif" || f.name.toLowerCase().endsWith(".gif"));
+        if (fileArr.length === 0) {
+            toast.error("GIF 파일(.gif)만 업로드할 수 있습니다.");
+            return;
+        }
+
+        setUploadingFiles(fileArr.map(f => f.name));
+        const readPromises = fileArr.map(file => {
+            return new Promise<{ name: string; size: number; mime_type: string; dataUrl: string }>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    resolve({
+                        name: file.name,
+                        size: file.size,
+                        mime_type: file.type || "image/gif",
+                        dataUrl: e.target?.result as string,
+                    });
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        });
+
+        try {
+            const processedAssets = await Promise.all(readPromises);
+            uploadMutation.mutate(processedAssets);
+        } catch (err) {
+            toast.error("파일을 읽는 중 오류가 발생했습니다.");
+            setUploadingFiles([]);
+        }
+    };
+
+    const handleBindingChange = (deviceKey: string, newAssetId: string) => {
+        const next = { ...bindings, [deviceKey]: newAssetId };
+        saveBindingMutation.mutate(next);
+    };
+
+    const targetDevices = [
+        {
+            group: "iPhone",
+            items: [
+                { key: "ios26", label: "iOS 26+ (iPhone 17+)", desc: "iOS 26 이상 최신 iPhone 기기" },
+                { key: "ios15_25", label: "iOS 15 ~ 25", desc: "iOS 15부터 25까지의 iPhone (가장 넓은 기기군)" },
+                { key: "ios13_14", label: "iOS 13 ~ 14", desc: "iOS 13, 14 버전 iPhone" },
+                { key: "ios12_under", label: "iOS 12 이하", desc: "구형 레거시 iOS 기기" },
+            ]
+        },
+        {
+            group: "iPad",
+            items: [
+                { key: "ipad26", label: "iPadOS 26+", desc: "iPadOS 26 이상 최신 iPad" },
+                { key: "ipad13_25", label: "iPadOS 13 ~ 25", desc: "iPadOS 13부터 25까지의 iPad" },
+                { key: "ipad12_under", label: "iOS 12 이하", desc: "구형 레거시 iPadOS 기기" },
+            ]
+        }
+    ];
+
+    const getBoundDevicesForAsset = (assetId: string) => {
+        const boundList: string[] = [];
+        targetDevices.forEach(g => {
+            g.items.forEach(item => {
+                if (bindings[item.key] === assetId) {
+                    boundList.push(`${g.group} ${item.label.split(" ")[0]}`);
+                }
+            });
+        });
+        return boundList;
+    };
+
+    return (
+        <Card className="border-2 border-indigo-200 bg-white shadow-sm overflow-hidden">
+            <CardHeader className="pb-4 bg-gradient-to-r from-indigo-50/70 via-blue-50/40 to-white border-b border-indigo-100/60">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-1">
+                        <CardTitle className="text-base flex items-center gap-2 text-indigo-950 font-bold">
+                            <span className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700 text-base">📱</span>
+                            Iphone PWA용 가이드 GIF
+                            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-100/80 text-indigo-700 border border-indigo-200">
+                                ⚡ 자동 저장
+                            </span>
+                        </CardTitle>
+                        <CardDescription className="text-xs text-gray-600 leading-relaxed">
+                            iOS 설명서(Safari PWA 홈 화면 추가 안내)에 표시될 기기별 가이드 GIF를 벌크로 올리고 바인딩합니다.<br />
+                            <strong>바인딩되지 않은 기기</strong>는 기존 단계별 설명서가 표시되며, <strong>바인딩된 기기</strong>는 설명서가 해당 GIF로 완전히 대체됩니다. (동일 에셋 중복 바인딩 가능)
+                        </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <a
+                            href="/ios-install-guide"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors shadow-2xs"
+                        >
+                            <span>📱 iOS 가이드 화면 확인</span>
+                            <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </a>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-6 pt-5">
+                {/* 1. GIF 에셋 벌크 업로드 영역 */}
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                        <Label className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                            <span>1. GIF 에셋 벌크 업로드</span>
+                            <span className="text-xs font-normal text-gray-500">(다중 선택 및 드래그 앤 드롭 지원)</span>
+                        </Label>
+                        {uploadMutation.isPending && (
+                            <span className="text-xs font-semibold text-indigo-600 animate-pulse">
+                                ⏳ 업로드 및 저장 중... ({uploadingFiles.length}개)
+                            </span>
+                        )}
+                    </div>
+
+                    <div
+                        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                        onDragLeave={() => setIsDragging(false)}
+                        onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDragging(false);
+                            if (e.dataTransfer.files) handleFiles(e.dataTransfer.files);
+                        }}
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${
+                            isDragging
+                                ? "border-indigo-500 bg-indigo-50/80 scale-[0.99]"
+                                : "border-gray-200 bg-slate-50/50 hover:bg-slate-100/60 hover:border-gray-300"
+                        }`}
+                    >
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            accept="image/gif"
+                            className="hidden"
+                            onChange={(e) => {
+                                if (e.target.files) handleFiles(e.target.files);
+                                e.target.value = "";
+                            }}
+                        />
+                        <div className="flex flex-col items-center justify-center gap-2">
+                            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+                                <Upload className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-gray-800">
+                                    클릭하여 GIF 파일들을 선택하거나 여기로 끌어다 놓으세요
+                                </p>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                    .gif 형식 지원 · 다중 파일 일괄 업로드 가능 · 업로드 즉시 자동 저장됩니다.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 2. 등록된 GIF 에셋 목록 */}
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <Label className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                            <span>2. 등록된 GIF 에셋 라이브러리</span>
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                {assets.length}개 등록됨
+                            </span>
+                        </Label>
+                    </div>
+
+                    {isLoading ? (
+                        <div className="p-6 text-center text-xs text-gray-400">에셋 목록을 불러오는 중...</div>
+                    ) : assets.length === 0 ? (
+                        <div className="p-6 text-center rounded-xl border border-gray-100 bg-gray-50/50 text-xs text-gray-400">
+                            등록된 GIF 에셋이 없습니다. 위 업로드 영역에 GIF 파일을 추가해 주세요.
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                            {assets.map((asset) => {
+                                const boundDevices = getBoundDevicesForAsset(asset.id);
+                                return (
+                                    <div
+                                        key={asset.id}
+                                        className="rounded-xl border border-gray-200 bg-white p-3 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between gap-2.5 relative group"
+                                    >
+                                        <div className="flex items-start gap-3 min-w-0">
+                                            {/* 썸네일 */}
+                                            <div
+                                                onClick={() => setPreviewAsset(asset)}
+                                                className="w-14 h-14 rounded-lg border border-gray-200 bg-black/5 overflow-hidden shrink-0 cursor-pointer relative group/thumb"
+                                                title="클릭하여 원본 크기로 미리보기"
+                                            >
+                                                <img
+                                                    src={`/api/guide-assets?id=${asset.id}`}
+                                                    alt={asset.name}
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => {
+                                                        (e.target as HTMLImageElement).src = "/icon.svg";
+                                                    }}
+                                                />
+                                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px] font-bold">
+                                                    🔍
+                                                </div>
+                                            </div>
+
+                                            {/* 정보 */}
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-bold text-gray-900 truncate" title={asset.name}>
+                                                    {asset.name}
+                                                </p>
+                                                <p className="text-[11px] text-gray-400 font-mono mt-0.5">
+                                                    {formatGuideFileSize(asset.size)}
+                                                </p>
+                                                <div className="mt-1">
+                                                    {boundDevices.length > 0 ? (
+                                                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                                            ✅ {boundDevices.length}개 기기 바인딩됨
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-gray-400 italic">
+                                                            미바인딩 (대기 중)
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* 하단 액션 바 */}
+                                        <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-xs">
+                                            <button
+                                                type="button"
+                                                onClick={() => setPreviewAsset(asset)}
+                                                className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium"
+                                            >
+                                                크게 보기
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (confirm(`'${asset.name}' 에셋을 삭제하시겠습니까?\n이 에셋에 바인딩된 기기들은 자동으로 기본 설명서로 전환됩니다.`)) {
+                                                        deleteMutation.mutate(asset.id);
+                                                    }
+                                                }}
+                                                disabled={deleteMutation.isPending}
+                                                className="text-gray-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
+                                                title="에셋 삭제"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* 3. 기기별 GIF 바인딩 설정 */}
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <Label className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                            <span>3. 기기별 GIF 바인딩 설정</span>
+                            <span className="text-xs font-normal text-gray-500">(선택 시 즉시 자동 저장)</span>
+                        </Label>
+                        {saveBindingMutation.isPending && (
+                            <span className="text-xs font-semibold text-emerald-600 animate-pulse">
+                                💾 서버 자동 저장 중...
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="rounded-xl border border-gray-200 overflow-hidden shadow-2xs">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b bg-gray-50/80 text-gray-600 text-xs">
+                                    <th className="text-left px-4 py-3 font-semibold w-[220px]">대상 기기 및 OS 버전</th>
+                                    <th className="text-left px-4 py-3 font-semibold">바인딩할 GIF 에셋</th>
+                                    <th className="text-center px-4 py-3 font-semibold w-[160px]">적용 상태</th>
+                                    <th className="text-center px-4 py-3 font-semibold w-[80px]">미리보기</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {targetDevices.map((group) => (
+                                    <React.Fragment key={group.group}>
+                                        <tr className="bg-slate-100/60">
+                                            <td colSpan={4} className="px-4 py-1.5 text-[11px] font-bold text-slate-600">
+                                                {group.group === "iPhone" ? "📱 iPhone 계열" : "💻 iPad 계열"}
+                                            </td>
+                                        </tr>
+                                        {group.items.map((item) => {
+                                            const boundId = bindings[item.key] || "";
+                                            const boundAsset = assets.find(a => a.id === boundId);
+                                            const isBound = !!boundId && !!boundAsset;
+
+                                            return (
+                                                <tr key={item.key} className="hover:bg-gray-50/80 transition-colors">
+                                                    <td className="px-4 py-3">
+                                                        <div>
+                                                            <p className="font-bold text-gray-900 text-xs">
+                                                                {item.label}
+                                                            </p>
+                                                            <p className="text-[11px] text-gray-400">
+                                                                {item.desc}
+                                                            </p>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <select
+                                                            value={boundId}
+                                                            onChange={(e) => handleBindingChange(item.key, e.target.value)}
+                                                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-2xs font-medium"
+                                                        >
+                                                            <option value="">📝 기본 설명서 표시 (바인딩 안 됨)</option>
+                                                            {assets.length > 0 && (
+                                                                <optgroup label="업로드된 GIF 에셋">
+                                                                    {assets.map((a) => (
+                                                                        <option key={a.id} value={a.id}>
+                                                                            🎬 {a.name} ({formatGuideFileSize(a.size)})
+                                                                        </option>
+                                                                    ))}
+                                                                </optgroup>
+                                                            )}
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        {isBound ? (
+                                                            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-full">
+                                                                ✅ GIF 대체 적용
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 border border-gray-200 px-2.5 py-1 rounded-full">
+                                                                기본 설명서
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        {isBound && boundAsset ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPreviewAsset(boundAsset)}
+                                                                className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors shadow-2xs"
+                                                                title={`${boundAsset.name} 미리보기`}
+                                                            >
+                                                                👁️
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-gray-300 text-xs">—</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </React.Fragment>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </CardContent>
+
+            {/* GIF 전체 미리보기 다이얼로그 */}
+            {previewAsset && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
+                    onClick={() => setPreviewAsset(null)}
+                >
+                    <div
+                        className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-200 flex flex-col max-h-[90vh]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 bg-gray-50">
+                            <div>
+                                <p className="font-bold text-gray-900 text-sm">{previewAsset.name}</p>
+                                <p className="text-[11px] text-gray-400">PWA 가이드 GIF 미리보기</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setPreviewAsset(null)}
+                                className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600 transition-colors cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="p-4 flex-1 overflow-y-auto flex items-center justify-center bg-slate-900/5 min-h-[300px]">
+                            <img
+                                src={`/api/guide-assets?id=${previewAsset.id}`}
+                                alt={previewAsset.name}
+                                className="max-w-full max-h-[70vh] rounded-xl object-contain shadow-md"
+                            />
+                        </div>
+                        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
+                            <span>바인딩된 기기에서 위 GIF가 설명서로 노출됩니다.</span>
+                            <Button size="sm" variant="outline" onClick={() => setPreviewAsset(null)}>
+                                닫기
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </Card>
+    );
+}
+
+// ----------------------------------------------------------------------
 // InstallButtonSettings - 앱 다운로드 버튼 브라우저별 표시 제어
 // Located under: 기타 > 미해결 문제
 // ----------------------------------------------------------------------
@@ -13139,6 +13646,9 @@ function InstallButtonSettings({ adminPassword }: { adminPassword: string }) {
                     </div>
                 </CardContent>
             </Card>
+
+            {/* ── Iphone PWA용 가이드 GIF ────────────────────────────────── */}
+            <IphonePwaGuideGifSection adminPassword={adminPassword} />
 
             {/* ── IP별 디버그 모드 설정 ────────────────────────────────────────── */}
             <Card className="border-2 border-amber-200 bg-amber-50/40">

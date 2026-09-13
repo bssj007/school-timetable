@@ -965,6 +965,12 @@ export default function IOSInstallGuide() {
 
   const guideProps: GuideProps = { appTitle, appIconUrl };
 
+  // 기기별 바인딩된 가이드 GIF 에셋 ID 조회
+  const guideBindings: Record<string, string> = settings?.iphone_pwa_guide_bindings || {};
+  const boundAssetId = effectiveDevice === "ipad"
+    ? guideBindings[effectiveIPadVer]
+    : guideBindings[effectiveIPhoneVer];
+
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col overflow-hidden">
       {/* 헤더 */}
@@ -1189,7 +1195,21 @@ export default function IOSInstallGuide() {
         /* 스크롤 가능한 단계 안내 본문 (자동 감지 또는 수동 선택 기반 분기) */
         <div className="flex-1 overflow-y-auto">
           <div className="px-6 py-6 max-w-lg mx-auto">
-            {effectiveDevice === "ipad" ? (
+            {boundAssetId ? (
+              /* 바인딩된 경우: 기존 설명서를 GIF로 완전히 대체 */
+              <div className="space-y-4">
+                <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-md bg-black/5 flex items-center justify-center">
+                  <img
+                    src={`/api/guide-assets?id=${boundAssetId}`}
+                    alt={`${effectiveDevice === "ipad" ? "iPad" : "iPhone"} PWA 설치 가이드 GIF`}
+                    className="w-full h-auto object-contain rounded-2xl max-h-[75vh]"
+                  />
+                </div>
+                <div className="rounded-xl bg-slate-50 border border-slate-200/90 p-3.5 text-xs text-slate-600 text-center font-medium leading-relaxed shadow-2xs">
+                  💡 위 GIF 애니메이션 안내에 따라 Safari 브라우저에서 홈 화면에 추가를 진행해 주세요.
+                </div>
+              </div>
+            ) : effectiveDevice === "ipad" ? (
               effectiveIPadVer === "ipad26" ? (
                 <GuideIPadNew {...guideProps} />
               ) : effectiveIPadVer === "ipad13_25" ? (
