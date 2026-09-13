@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { agent } from "@/lib/browserDetect";
 import { useLocation } from "wouter";
+import { SafariLogo } from "@/components/SafariLogo";
+import { toast } from "sonner";
 
 // ── detect() 결과 직접 참조 ──────────────────────────────────────────────────
 const { isIPad, isIPhone, iosVersion } = agent;
@@ -862,6 +864,31 @@ type IPadVersion = "ipad26" | "ipad13_25" | "ipad12_under";
 export default function IOSInstallGuide() {
   const [, setLocation] = useLocation();
   const [showGuide, setShowGuide] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Chrome 브라우저 여부 감지
+  const isChrome = agent.browserKey === "chrome" || agent.isIOSChrome;
+
+  const handleCopyUrl = async () => {
+    const urlToCopy = window.location.origin;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(urlToCopy);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = urlToCopy;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setCopied(true);
+      toast.success("사이트 주소가 복사되었습니다! Safari 주소창에 붙여넣어 주세요.");
+      setTimeout(() => setCopied(false), 3000);
+    } catch {
+      toast.error("주소 복사에 실패했습니다. 브라우저 주소창의 URL을 직접 복사해 주세요.");
+    }
+  };
 
   // 디자인설정 비동기 로드
   const [settings, setSettings] = useState<any>(null);
@@ -1164,6 +1191,38 @@ export default function IOSInstallGuide() {
             <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight mb-4">
               {appTitle} 홈 화면에 추가
             </h2>
+
+            {/* Chrome 접속 시 Safari 권장 안내 배너 */}
+            {isChrome && (
+              <div className="bg-amber-50 border border-amber-200/90 rounded-2xl p-4 mb-6 text-left flex items-start gap-3.5 shadow-xs">
+                <SafariLogo className="w-12 h-12 shrink-0 mt-0.5 drop-shadow-sm" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-black text-amber-900">Safari 브라우저 권장</span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-200 text-amber-900">Chrome 감지</span>
+                  </div>
+                  <p className="text-xs text-amber-800 mt-1 leading-relaxed break-keep">
+                    이 설명서는 Safari 기준입니다. Chrome 환경에서는 PWA 기능이 제한될 수 있으므로, 아래 주소를 복사하여 <strong>Safari로 다시 열어주세요.</strong>
+                  </p>
+                  <div className="mt-3 flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleCopyUrl}
+                      className="px-3 py-1.5 bg-[#0071E3] hover:bg-[#0077ED] active:bg-[#005BB5] text-white rounded-xl font-bold text-xs shadow-xs active:scale-95 transition-all cursor-pointer"
+                    >
+                      {copied ? "✓ 주소 복사 완료!" : "주소 복사하기"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLocation("/ios-chrome-install-guide")}
+                      className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded-xl font-bold text-xs shadow-2xs hover:bg-amber-100 active:scale-95 transition-all cursor-pointer"
+                    >
+                      Chrome 전용 가이드 보기
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* 부연 설명 (유저 요청 100% 반영) */}
             <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-5 mb-8 text-center shadow-xs">

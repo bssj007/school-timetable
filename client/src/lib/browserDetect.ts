@@ -64,6 +64,13 @@ export interface AgentInfo {
   /** iOS 13~14 — 상단 주소창 + 하단 툴바 가운데 공유 버튼 */
   isIOS13Plus: boolean;
   /**
+   * iOS Chrome에서 PWA(홈 화면에 추가) 지원 여부
+   * - iOS 16.4 미만에서는 WebKit 제약으로 Chrome의 홈 화면 추가 기능 미지원 (Safari 필요)
+   * - iOS 16.4 이상에서만 Chrome PWA 지원
+   * - Android 및 데스크톱 Chrome은 true
+   */
+  isChromePWASupported: boolean;
+  /**
    * PWA standalone 모드 또는 네이티브 앱 래퍼(TWA/WebView)에서 실행 중
    * - display-mode: standalone  → PWA 설치 후 앱으로 실행
    * - navigator.standalone      → iOS Safari PWA
@@ -94,6 +101,7 @@ function defaultAgent(): AgentInfo {
     browserKey: "other", isInAppBrowser: false, isKakaoTalk: false,
     isFirefox: false,
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
+    isChromePWASupported: true,
     isInstalledApp: false, installedAppType: null,
     detectionLayer: 3,
   };
@@ -180,6 +188,7 @@ function detectLayer1(): Partial<AgentInfo> | null {
     isFirefox: false,
     // iOS 버전: Chromium 환경이므로 항상 0
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
+    isChromePWASupported: true,
     isInstalledApp: false, installedAppType: null,  // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 1,
   };
@@ -275,6 +284,13 @@ function detectLayer2(customUa?: string, customMtp?: number): AgentInfo {
   const isIOS15Plus  = iosVersion >= 15;
   const isIOS13Plus  = iosVersion >= 13;
 
+  // iOS 세부 버전 (major.minor) 및 Chrome PWA 지원 여부 (WebKit 제약으로 iOS 16.4+ 필수)
+  const exactMatch = /os (\d+)(?:_(\d+))?/i.exec(ua);
+  const majorVer = exactMatch ? parseInt(exactMatch[1], 10) : iosVersion;
+  const minorVer = exactMatch && exactMatch[2] ? parseInt(exactMatch[2], 10) : 0;
+  const exactIOSVer = majorVer + (minorVer / 10);
+  const isChromePWASupported = !isIOS || exactIOSVer >= 16.4;
+
   const isIOSChrome = isIOS && browserKey === "chrome";
   const isIOSOther  = isIOS && !isIOSSafari && !isIOSChrome;
 
@@ -285,6 +301,7 @@ function detectLayer2(customUa?: string, customMtp?: number): AgentInfo {
     browserKey, isInAppBrowser: isInApp, isKakaoTalk,
     isFirefox: /Firefox|FxiOS/i.test(ua),
     iosVersion, isIOS26Plus, isIOS15Plus, isIOS13Plus,
+    isChromePWASupported,
     isInstalledApp: false, installedAppType: null,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 2,
   };
@@ -319,6 +336,7 @@ function detectLayer3(): AgentInfo {
     isKakaoTalk,
     isFirefox: typeof navigator !== "undefined" && /Firefox|FxiOS/i.test(navigator.userAgent),
     iosVersion: 0, isIOS26Plus: false, isIOS15Plus: false, isIOS13Plus: false,
+    isChromePWASupported: true,
     isInstalledApp: false, installedAppType: null,   // detect() 에서 실제 값으로 덧쓰임
     detectionLayer: 3,
   };
@@ -489,6 +507,7 @@ export function detect(): AgentInfo {
       isIOS26Plus:      false,
       isIOS15Plus:      false,
       isIOS13Plus:      false,
+      isChromePWASupported: true,
       isInstalledApp,
       installedAppType,
       detectionLayer:   1,
@@ -800,3 +819,31 @@ export function isMaintenanceBypassed(settings?: any): boolean {
 
 /** 하위 호환성 유지용 alias (기존 getMaintenanceBypassCookie 호출 코드와 100% 호환) */
 export const getMaintenanceBypassCookie = isMaintenanceBypassed;
+
+/**
+ * iOS Chrome에서 PWA(홈 화면에 추가) 기능 지원 여부 판별 헬퍼
+ * - iOS 16.4 이상에서만 WebKit의 3rd party 브라우저 홈 화면 추가 API 지원
+ * - URL 파라미터 ?unsupported=1 / ?supported=1 로 오버라이드 지원 (디버그/테스트용)
+ */
+export function checkIsChromePWASupported(customUa?: string): boolean {
+  if (typeof window !== "undefined" && window.location?.search) {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("unsupported") === "1" || sp.get("unsupported") === "true") return false;
+    if (sp.get("supported") === "1" || sp.get("supported") === "true") return true;
+  }
+  const ua = customUa !== undefined ? customUa : (typeof navigator !== "undefined" ? navigator.userAgent : "");
+  const isIPad = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && typeof navigator !== "undefined" && navigator.maxTouchPoints > 1);
+  const isIPhone = /iPhone|iPod/.test(ua) && !isIPad;
+  const isIOS = isIPad || isIPhone;
+  if (!isIOS) return true;
+
+  const exactMatch = /os (\d+)(?:_(\d+))?/i.exec(ua);
+  if (exactMatch) {
+    const major = parseInt(exactMatch[1], 10);
+    const minor = exactMatch[2] ? parseInt(exactMatch[2], 10) : 0;
+    return (major + minor / 10) >= 16.4;
+  }
+  const major = parseInt(/os (\d+)/i.exec(ua)?.[1] ?? "0", 10);
+  if (major > 0 && major < 16) return false;
+  return true;
+}
