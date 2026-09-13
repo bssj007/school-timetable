@@ -1,5 +1,6 @@
 // client/src/lib/notificationService.ts
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { agent, getInstalledAppType } from "./browserDetect";
 import { toast } from "sonner";
 
@@ -331,74 +332,62 @@ export async function displayLocalNotification(title: string, body: string, url:
     // 1. AndroidBridge / Android 네이티브 호출 확인
     const win = window as any;
     if (typeof win.AndroidBridge?.postNotification === "function") {
-        try {
-            win.AndroidBridge.postNotification(title, body);
-            return true;
-        } catch (_) {}
-    }
-    if (typeof win.Android?.postNotification === "function") {
-        try {
-            win.Android.postNotification(title, body);
-            return true;
-        } catch (_) {}
+        try { win.AndroidBridge.postNotification(title, body); } catch (_) {}
+    } else if (typeof win.Android?.postNotification === "function") {
+        try { win.Android.postNotification(title, body); } catch (_) {}
     }
 
-    // 2. Service Worker showNotification 우선 시도 (데드락 방지 250ms 타임아웃 레이스)
-    let shown = false;
-    if ("serviceWorker" in navigator && typeof Notification !== "undefined" && Notification.permission === "granted") {
-        try {
-            const readyPromise = navigator.serviceWorker.ready.catch(() => null);
-            const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 250));
-            const reg = (await Promise.race([readyPromise, timeoutPromise])) as ServiceWorkerRegistration | null
-                || (await navigator.serviceWorker.getRegistration().catch(() => null));
+    // 2. 브라우저/PWA OS 푸시 알림 (Service Worker showNotification 또는 Notification 객체)
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        if ("serviceWorker" in navigator) {
+            try {
+                const readyPromise = navigator.serviceWorker.ready.catch(() => null);
+                const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 250));
+                const reg = (await Promise.race([readyPromise, timeoutPromise])) as ServiceWorkerRegistration | null
+                    || (await navigator.serviceWorker.getRegistration().catch(() => null));
 
-            if (reg && reg.showNotification) {
-                await reg.showNotification(title, {
+                if (reg && reg.showNotification) {
+                    await reg.showNotification(title, {
+                        body,
+                        icon: "/favicon-48x48.png",
+                        badge: "/favicon-48x48.png",
+                        data: { url },
+                        tag: "sj-alert-" + Date.now()
+                    });
+                }
+            } catch (_) {}
+        } else {
+            try {
+                const notif = new Notification(title, {
                     body,
                     icon: "/favicon-48x48.png",
-                    badge: "/favicon-48x48.png",
-                    data: { url },
                     tag: "sj-alert-" + Date.now()
                 });
-                shown = true;
-                return true;
-            }
-        } catch (_) {}
+                notif.onclick = () => {
+                    window.focus();
+                    if (url && url !== "/") {
+                        window.location.href = url;
+                    }
+                };
+            } catch (_) {}
+        }
     }
 
-    // 3. 브라우저 표준 Notification 객체 폴백
-    if (!shown && typeof Notification !== "undefined" && Notification.permission === "granted") {
-        try {
-            const notif = new Notification(title, {
-                body,
-                icon: "/favicon-48x48.png",
-                tag: "sj-alert-" + Date.now()
-            });
-            notif.onclick = () => {
-                window.focus();
-                if (url && url !== "/") {
-                    window.location.href = url;
-                }
-            };
-            shown = true;
-            return true;
-        } catch (_) {}
-    }
-
-    // 4. 최후 폴백: 인앱 토스트 배너 (Sonner)
+    // 3. 인앱 화면 토스트 배너 (Sonner)
+    // 사용자가 웹/앱을 켜두고 있는 상태(foreground)에서는 OS 상단바 알림과 별개로 화면 내에서 즉시 인지할 수 있도록
+    // 상시 인앱 토스트 팝업 표출
     try {
         toast.info(title, {
             description: body,
-            duration: 6000,
+            duration: 7000,
             action: url && url !== "/" ? {
                 label: "이동",
                 onClick: () => { window.location.href = url; }
             } : undefined
         });
-        return true;
-    } catch (_) {
-        return false;
-    }
+    } catch (_) {}
+
+    return true;
 }
 
 export interface UserSubscriptionInfo {
@@ -662,4 +651,137 @@ export async function toggleNotificationSubscription(
     })();
 
     return { success: true, enabled: true };
+}
+
+export interface GlobalNotificationWatcherProps {
+    role?: "student" | "teacher" | null;
+    grade?: number | string;
+    classNum?: number | string;
+    studentNumber?: number | string;
+    studentName?: string;
+    teacherName?: string | null;
+}
+
+/**
+ * 알림 쿼리 키 생성기 (전역 동일 키 보장 및 불필요한 중복 네트워크 요청 차단)
+ */
+export function getNotificationQueryKey(
+    role: "student" | "teacher" | null | undefined,
+    info: {
+        grade?: number | string;
+        classNum?: number | string;
+        studentNumber?: number | string;
+        studentName?: string;
+        teacherName?: string | null;
+    },
+    deviceId: string
+) {
+    const effectiveRole = role === "teacher" ? "teacher" : "student";
+    const targetKey = effectiveRole === "teacher"
+        ? (info.teacherName || "")
+        : `${info.grade || "0"}-${info.classNum || "0"}-${info.studentNumber || "0"}-${info.studentName || ""}`;
+    return ["notifications", effectiveRole, targetKey, deviceId] as const;
+}
+
+/**
+ * 전역 알림 감시 및 즉시 배너/푸시 디스패처 훅
+ * - 앱 루트(App.tsx)에서 단 1회 실행
+ * - 모바일 복귀 / 화면 켜짐 / 탭 전환(visibilitychange, focus, pageshow) 즉시 무지연(0ms) 캐시 무효화 및 서버 조회
+ * - 신규 미읽음 알림 감지 시 OS 알림 및 인앱 토스트 즉각 표출
+ * - 이미 표출된 알림은 세션 스토리지에 등록하여 벨 아이콘 클릭 시 밀린 푸시가 다시 뜨는 기현상 원천 차단
+ */
+export function useGlobalNotificationWatcher(info: GlobalNotificationWatcherProps) {
+    const queryClient = useQueryClient();
+    const deviceId = useMemo(() => getOrCreateDeviceId(), []);
+
+    const effectiveRole = info.role || "student";
+    const queryKey = getNotificationQueryKey(effectiveRole, info, deviceId);
+
+    // 실시간 알림 쿼리 (5초 폴링 + 윈도우 포커스/재연결 시 즉시 갱신)
+    const notificationsQuery = useQuery({
+        queryKey,
+        queryFn: async () => {
+            const sp = new URLSearchParams({
+                role: effectiveRole,
+                grade: String(info.grade || "0"),
+                classNum: String(info.classNum || "0"),
+                studentNumber: String(info.studentNumber || "0"),
+                studentName: String(info.studentName || ""),
+                teacherName: String(info.teacherName || ""),
+                deviceId
+            });
+            const res = await fetch(`/api/notifications/list?${sp.toString()}`);
+            if (!res.ok) throw new Error("Failed to fetch notifications");
+            return res.json();
+        },
+        refetchInterval: 5000,
+        staleTime: 2000,
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true
+    });
+
+    // 1. 모바일 앱 복귀 / 화면 켜짐 / 탭 전환 감지 즉시 무지연(0ms) 동기화
+    useEffect(() => {
+        const handleWakeup = () => {
+            if (typeof document !== "undefined" && document.visibilityState === "visible") {
+                queryClient.invalidateQueries({ queryKey: ["notifications"] });
+            }
+        };
+
+        document.addEventListener("visibilitychange", handleWakeup);
+        window.addEventListener("focus", handleWakeup);
+        window.addEventListener("pageshow", handleWakeup);
+
+        return () => {
+            document.removeEventListener("visibilitychange", handleWakeup);
+            window.removeEventListener("focus", handleWakeup);
+            window.removeEventListener("pageshow", handleWakeup);
+        };
+    }, [queryClient]);
+
+    // 2. 접속 시 구독 상태 동기화
+    useEffect(() => {
+        syncNotificationStatusOnConnect({
+            role: effectiveRole,
+            grade: info.grade,
+            classNum: info.classNum,
+            studentNumber: info.studentNumber,
+            studentName: info.studentName,
+            teacherName: info.teacherName || undefined
+        });
+    }, [effectiveRole, info.grade, info.classNum, info.studentNumber, info.studentName, info.teacherName]);
+
+    // 3. 신규 미읽음 알림 감지 시 즉각 배너/토스트 발송 (전역 단일 실행)
+    const serverNotifications = notificationsQuery.data?.notifications || [];
+    const { items: notificationItems } = useClientNotificationState(serverNotifications);
+
+    useEffect(() => {
+        if (!notificationItems || notificationItems.length === 0) return;
+
+        const notifiedBannerIds = getSessionNotifiedBannerIds();
+        const unnotifiedItems = notificationItems.filter(it => !it.read && !notifiedBannerIds.has(it.id));
+        if (unnotifiedItems.length === 0) return;
+
+        const itemsToNotify = unnotifiedItems.slice(0, 2);
+
+        itemsToNotify.forEach(it => {
+            if (it.deliveryType === "in_app") {
+                markSessionBannerNotified(it.id);
+                return;
+            }
+
+            if (it.deliveryType === "app") {
+                const isApp = isNativeApp() || (typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches);
+                if (!isApp) return;
+            }
+
+            const isExplicitlyDisabled = typeof window !== "undefined" && localStorage.getItem(NOTIF_ENABLED_KEY) === "0";
+            if (!isExplicitlyDisabled) {
+                markSessionBannerNotified(it.id);
+                displayLocalNotification(it.title, it.message, it.link || "/").catch(() => {});
+            }
+        });
+    }, [notificationItems]);
+
+    return notificationsQuery;
 }

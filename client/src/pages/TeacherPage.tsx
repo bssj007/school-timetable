@@ -23,10 +23,7 @@ import {
   toggleNotificationSubscription,
   getOrCreateDeviceId,
   useClientNotificationState,
-  displayLocalNotification,
-  isNativeApp,
-  getSessionNotifiedBannerIds,
-  markSessionBannerNotified
+  getNotificationQueryKey
 } from "@/lib/notificationService";
 import { buildTeacherOptions, filterTeacherOptions } from "@/lib/teacherSearch";
 
@@ -1081,9 +1078,15 @@ export default function TeacherPage() {
     }
   }, [rawTeacherName]);
 
-  // 교사 대상 알림 쿼리 (5초 주기)
+  const queryKey = getNotificationQueryKey(
+    'teacher',
+    { teacherName: rawTeacherName },
+    deviceId
+  );
+
+  // 교사 대상 알림 쿼리 (5초 주기 - 전역 Watcher와 캐시 공유)
   const teacherNotifsQuery = useQuery({
-    queryKey: ['notifications', 'teacher', rawTeacherName, deviceId],
+    queryKey,
     queryFn: async () => {
       const sp = new URLSearchParams({
         role: 'teacher',
@@ -1106,35 +1109,6 @@ export default function TeacherPage() {
     markAllRead: markTeacherAllClientRead,
     markSingleRead: markTeacherSingleClientRead
   } = useClientNotificationState(serverTeacherNotifs);
-
-  // 알림 기술(발송 방식)에 따른 신규 미읽음 알림 배너 발송 처리
-  useEffect(() => {
-    if (!teacherNotifItems || teacherNotifItems.length === 0) return;
-
-    const notifiedBannerIds = getSessionNotifiedBannerIds();
-    const unnotifiedItems = teacherNotifItems.filter(it => !it.read && !notifiedBannerIds.has(it.id));
-    if (unnotifiedItems.length === 0) return;
-
-    const itemsToNotify = unnotifiedItems.slice(0, 2);
-
-    itemsToNotify.forEach(it => {
-      if (it.deliveryType === 'in_app') {
-        markSessionBannerNotified(it.id);
-        return;
-      }
-      if (it.deliveryType === 'app') {
-        const isApp = isNativeApp() || (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches);
-        if (!isApp) return;
-      }
-
-      // 사용자가 명시적으로 알림을 끄지 않았다면(스위치 OFF '0' 제외) 로컬/토스트 배너 즉시 발송
-      const isExplicitlyDisabled = typeof window !== 'undefined' && localStorage.getItem('sj_notification_enabled') === '0';
-      if (!isExplicitlyDisabled) {
-        markSessionBannerNotified(it.id);
-        displayLocalNotification(it.title, it.message, it.link || "/").catch(() => {});
-      }
-    });
-  }, [teacherNotifItems]);
 
   const markTeacherAllReadMutation = useMutation({
     mutationFn: async () => {

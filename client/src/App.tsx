@@ -24,6 +24,7 @@ import Privacy from "./pages/Privacy";
 import BetaTesterPage from "./pages/BetaTesterPage";
 import { getPumasiCookie, setPumasiCookie, hasPumasiRedirectCookie, clearPumasiRedirectCookie } from "@/lib/pumasiCookie";
 import { isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
+import { useGlobalNotificationWatcher } from "@/lib/notificationService";
 
 function Router() {
   return (
@@ -47,8 +48,18 @@ function Router() {
 }
 
 function AppContent() {
-  const { isValidating, userRole, refreshRole, publicSettings, grade } = useUserConfig();
+  const { isValidating, userRole, refreshRole, publicSettings, grade, classNum, studentNumber, studentName, teacherName } = useUserConfig();
   const [location, setLocation] = useLocation();
+
+  // 전역 알림 감시: 모바일 복귀 / 화면 켜짐 / 탭 전환(0ms) 즉시 서버 동기화 및 푸시/토스트 표출
+  useGlobalNotificationWatcher({
+    role: userRole,
+    grade,
+    classNum,
+    studentNumber,
+    studentName,
+    teacherName
+  });
   const [isBetaTester, setIsBetaTester] = useState(() => {
     if (typeof window !== 'undefined') {
       try {

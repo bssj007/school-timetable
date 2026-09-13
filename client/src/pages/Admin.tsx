@@ -5575,6 +5575,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <Bell className="w-4 h-4 mr-2" />
                     알림 메뉴
                 </Button>
+                <Button
+                    variant={selectedMenu === "native-app-update" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium"
+                    onClick={() => setSelectedMenu("native-app-update")}
+                >
+                    <Smartphone className="w-4 h-4 mr-2" />
+                    Native 앱 업데이트 관리
+                </Button>
                 {/* Additional list items can go here later */}
             </div>
 
@@ -5849,6 +5857,9 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 )}
                 {selectedMenu === "notification-manager" && (
                     <NotificationManager adminPassword={adminPassword} />
+                )}
+                {selectedMenu === "native-app-update" && (
+                    <NativeAppUpdateSettings adminPassword={adminPassword} />
                 )}
             </div>
         </div>
@@ -12010,6 +12021,354 @@ function PromotionSettings({ adminPassword }: { adminPassword: string }) {
                     </div>
                 </CardContent>
             </Card>
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------
+// NativeAppUpdateSettings - Native 안드로이드 앱 업데이트 관리
+// Located under: 기타 > Native 앱 업데이트 관리
+// ----------------------------------------------------------------------
+function NativeAppUpdateSettings({ adminPassword }: { adminPassword: string }) {
+    const queryClient = useQueryClient();
+
+    const { data: settingsData, isLoading } = useQuery({
+        queryKey: ["admin", "settings"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/settings", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("설정 불러오기 실패");
+            return res.json();
+        }
+    });
+
+    const [enabled, setEnabled] = useState(true);
+    const [updateType, setUpdateType] = useState<"recommended" | "mandatory">("recommended");
+    const [latestVersionCode, setLatestVersionCode] = useState("5");
+    const [latestVersionName, setLatestVersionName] = useState("1.0.4");
+    const [minVersionCode, setMinVersionCode] = useState("3");
+    const [title, setTitle] = useState("새로운 버전 업데이트 안내");
+    const [notes, setNotes] = useState("• 푸시/배지/헤드업 배너 알림 수신 기능 개선\n• 앱 접속 안정성 향상");
+    const [playStoreUrl, setPlayStoreUrl] = useState("https://play.google.com/store/apps/details?id=com.seongjisuhaeng.app");
+    const [apkDownloadUrl, setApkDownloadUrl] = useState("");
+
+    useEffect(() => {
+        if (settingsData) {
+            if (settingsData.android_update_enabled !== undefined) {
+                setEnabled(settingsData.android_update_enabled === "true" || settingsData.android_update_enabled === "1");
+            }
+            if (settingsData.android_update_type) {
+                setUpdateType(settingsData.android_update_type === "mandatory" ? "mandatory" : "recommended");
+            }
+            if (settingsData.android_latest_version_code !== undefined) {
+                setLatestVersionCode(settingsData.android_latest_version_code || "5");
+            }
+            if (settingsData.android_latest_version_name !== undefined) {
+                setLatestVersionName(settingsData.android_latest_version_name || "1.0.4");
+            }
+            if (settingsData.android_min_version_code !== undefined) {
+                setMinVersionCode(settingsData.android_min_version_code || "3");
+            }
+            if (settingsData.android_update_title !== undefined) {
+                setTitle(settingsData.android_update_title || "새로운 버전 업데이트 안내");
+            }
+            if (settingsData.android_update_notes !== undefined) {
+                setNotes(settingsData.android_update_notes || "• 푸시/배지/헤드업 배너 알림 수신 기능 개선\n• 앱 접속 안정성 향상");
+            }
+            if (settingsData.play_store_url !== undefined) {
+                setPlayStoreUrl(settingsData.play_store_url || "https://play.google.com/store/apps/details?id=com.seongjisuhaeng.app");
+            }
+            if (settingsData.apk_download_url !== undefined) {
+                setApkDownloadUrl(settingsData.apk_download_url || "");
+            }
+        }
+    }, [settingsData]);
+
+    const saveMutation = useMutation({
+        mutationFn: async (payload: Record<string, string>) => {
+            const res = await fetch("/api/admin/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error("저장 실패");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast.success("Native 앱 업데이트 설정이 성공적으로 저장되었습니다.");
+            queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+        },
+        onError: (err: any) => {
+            toast.error(`설정 저장 중 오류: ${err.message}`);
+        }
+    });
+
+    const handleSave = () => {
+        saveMutation.mutate({
+            android_update_enabled: enabled ? "true" : "false",
+            android_update_type: updateType,
+            android_latest_version_code: latestVersionCode.trim() || "5",
+            android_latest_version_name: latestVersionName.trim() || "1.0.4",
+            android_min_version_code: minVersionCode.trim() || "3",
+            android_update_title: title.trim() || "새로운 버전 업데이트 안내",
+            android_update_notes: notes.trim(),
+            play_store_url: playStoreUrl.trim(),
+            apk_download_url: apkDownloadUrl.trim()
+        });
+    };
+
+    if (isLoading) {
+        return <div className="p-4 text-gray-400">설정을 불러오는 중입니다...</div>;
+    }
+
+    return (
+        <div className="flex flex-col h-full gap-4 overflow-y-auto pr-1">
+            <div className="flex items-center justify-between pb-3 border-b">
+                <div>
+                    <h3 className="text-lg font-bold flex items-center gap-2 text-emerald-800">
+                        <Smartphone className="w-5 h-5" />
+                        Native 안드로이드 앱 업데이트 관리
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        성지수행 모바일 앱 진입 시 최신 버전을 감지하여 안드로이드 기본 UI 컴포넌트(MaterialAlertDialog)로 업데이트를 권장하거나 강제 적용합니다.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Badge variant={enabled ? "default" : "secondary"} className={enabled ? "bg-emerald-600 hover:bg-emerald-700" : ""}>
+                        {enabled ? (updateType === "mandatory" ? "🔴 의무(강제) 업데이트 활성" : "🟢 권장 업데이트 활성") : "⚪ 비활성"}
+                    </Badge>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* 좌측: 설정 폼 */}
+                <div className="lg:col-span-7 space-y-4">
+                    {/* 1. 사용 여부 및 정책 선택 */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-sm font-bold">1. 업데이트 팝업 동작 제어</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border">
+                                <div>
+                                    <Label className="text-sm font-bold">업데이트 팝업 사용 여부</Label>
+                                    <p className="text-xs text-gray-500">앱 시작 시 구버전 사용자에게 다이얼로그 팝업을 표시합니다.</p>
+                                </div>
+                                <Switch
+                                    checked={enabled}
+                                    onCheckedChange={setEnabled}
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-sm font-bold">업데이트 정책 (권장 vs 의무)</Label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setUpdateType("recommended")}
+                                        className={`p-3 rounded-lg border text-left transition-all ${updateType === "recommended" ? "border-emerald-500 bg-emerald-50/70 shadow-xs ring-1 ring-emerald-500" : "border-gray-200 hover:bg-gray-50"}`}
+                                    >
+                                        <div className="font-bold text-sm text-emerald-800 flex items-center gap-1.5">
+                                            <span>🟢 권장 업데이트</span>
+                                        </div>
+                                        <p className="text-xs text-gray-600 mt-1">
+                                            [나중에 하기] 및 [오늘 하루 보지 않기]를 제공하여 사용자가 팝업을 닫고 앱을 이용할 수 있습니다.
+                                        </p>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setUpdateType("mandatory")}
+                                        className={`p-3 rounded-lg border text-left transition-all ${updateType === "mandatory" ? "border-red-500 bg-red-50/70 shadow-xs ring-1 ring-red-500" : "border-gray-200 hover:bg-gray-50"}`}
+                                    >
+                                        <div className="font-bold text-sm text-red-800 flex items-center gap-1.5">
+                                            <span>🔴 의무 (강제) 업데이트</span>
+                                        </div>
+                                        <p className="text-xs text-gray-600 mt-1">
+                                            닫기 및 취소가 불가능하며, 업데이트를 완료해야만 앱을 이용할 수 있습니다. (API 개편 등)
+                                        </p>
+                                    </button>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 2. 버전 정보 */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-sm font-bold">2. 버전 기준값 설정</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="grid grid-cols-3 gap-3">
+                                <div>
+                                    <Label className="text-xs font-semibold text-gray-700">최신 versionCode</Label>
+                                    <Input
+                                        type="number"
+                                        value={latestVersionCode}
+                                        onChange={(e) => setLatestVersionCode(e.target.value)}
+                                        placeholder="5"
+                                        className="mt-1 font-mono text-sm"
+                                    />
+                                    <p className="text-[11px] text-gray-400 mt-1">현재 앱: 5</p>
+                                </div>
+                                <div>
+                                    <Label className="text-xs font-semibold text-gray-700">최신 versionName</Label>
+                                    <Input
+                                        type="text"
+                                        value={latestVersionName}
+                                        onChange={(e) => setLatestVersionName(e.target.value)}
+                                        placeholder="1.0.4"
+                                        className="mt-1 font-mono text-sm"
+                                    />
+                                    <p className="text-[11px] text-gray-400 mt-1">표시용 버전명</p>
+                                </div>
+                                <div>
+                                    <Label className="text-xs font-semibold text-gray-700">의무 최소 versionCode</Label>
+                                    <Input
+                                        type="number"
+                                        value={minVersionCode}
+                                        onChange={(e) => setMinVersionCode(e.target.value)}
+                                        placeholder="3"
+                                        className="mt-1 font-mono text-sm"
+                                    />
+                                    <p className="text-[11px] text-gray-400 mt-1">이 미만은 무조건 강제</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 3. 문구 및 링크 */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-sm font-bold">3. 다이얼로그 문구 및 스토어 링크</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div>
+                                <Label className="text-xs font-semibold text-gray-700">다이얼로그 제목</Label>
+                                <Input
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    placeholder="새로운 버전 업데이트 안내"
+                                    className="mt-1 text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <Label className="text-xs font-semibold text-gray-700">업데이트 릴리즈 공지 (내용)</Label>
+                                <Textarea
+                                    rows={4}
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    placeholder="• 주요 개선 사항 입력..."
+                                    className="mt-1 text-xs font-mono"
+                                />
+                            </div>
+
+                            <div>
+                                <Label className="text-xs font-semibold text-gray-700">Google Play Store URL</Label>
+                                <Input
+                                    value={playStoreUrl}
+                                    onChange={(e) => setPlayStoreUrl(e.target.value)}
+                                    placeholder="https://play.google.com/store/apps/details?id=com.seongjisuhaeng.app"
+                                    className="mt-1 text-xs font-mono"
+                                />
+                            </div>
+
+                            <div>
+                                <Label className="text-xs font-semibold text-gray-700">직접 APK 다운로드 URL (선택사항)</Label>
+                                <Input
+                                    value={apkDownloadUrl}
+                                    onChange={(e) => setApkDownloadUrl(e.target.value)}
+                                    placeholder="https://example.com/download/app-release.apk (선택)"
+                                    className="mt-1 text-xs font-mono"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 저장 버튼 */}
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button
+                            onClick={handleSave}
+                            disabled={saveMutation.isPending}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 shadow-sm"
+                        >
+                            {saveMutation.isPending ? "저장 중..." : "설정 저장"}
+                        </Button>
+                    </div>
+                </div>
+
+                {/* 우측: 스마트폰 실제 다이얼로그 팝업 라이브 미리보기 */}
+                <div className="lg:col-span-5 space-y-4">
+                    <Card className="border-2 border-emerald-100 bg-slate-50/50">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-700">
+                                <Smartphone className="w-4 h-4 text-emerald-600" />
+                                안드로이드 기본 다이얼로그 실시간 미리보기
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                사용자가 앱 진입 시 마주하게 될 실제 MaterialAlertDialog 화면입니다.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="mx-auto max-w-[340px] bg-white rounded-3xl p-5 shadow-xl border border-slate-200/80 space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-emerald-700 flex items-center justify-center text-white text-base font-bold shadow-xs">
+                                        SJ
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-sm text-gray-900 leading-tight">
+                                            {title || "새로운 버전 업데이트 안내"}
+                                        </h4>
+                                        <p className="text-[11px] text-emerald-700 font-mono font-medium">
+                                            v{latestVersionName || "1.0.4"} ({updateType === "mandatory" ? "의무 업데이트" : "권장 업데이트"})
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs text-gray-700 whitespace-pre-line leading-relaxed max-h-48 overflow-y-auto font-sans">
+                                    {notes || "업데이트 상세 내용이 여기에 표시됩니다."}
+                                </div>
+
+                                {updateType === "mandatory" ? (
+                                    <div className="space-y-2 pt-1">
+                                        <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-700 font-semibold text-center">
+                                            ⚠️ 필수 업데이트: 업데이트 완료 전까지 앱을 닫을 수 없습니다.
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+                                        >
+                                            지금 업데이트
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2 pt-1">
+                                        <button
+                                            type="button"
+                                            className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+                                        >
+                                            지금 업데이트
+                                        </button>
+                                        <div className="flex items-center justify-between text-xs text-gray-500 pt-1">
+                                            <span className="hover:text-gray-800 cursor-pointer underline text-[11px]">
+                                                오늘 하루 보지 않기
+                                            </span>
+                                            <span className="hover:text-gray-800 cursor-pointer text-[11px]">
+                                                나중에 하기
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
         </div>
     );
 }
