@@ -3548,7 +3548,7 @@ export default function Dashboard() {
                 );
               }
 
-              // iOS Chrome/Google: Chrome 전용 PWA 설치 가이드로 이동
+              // iOS Chrome/Google: Chrome 미지원·Safari 안내 페이지로 이동
               if (isChromeBrowser) {
                 if (settings?.chrome_install_button_visible === false) return null;
                 return (
@@ -3557,7 +3557,7 @@ export default function Dashboard() {
                     className="w-full h-14 bg-black hover:bg-gray-900 active:bg-gray-800 text-white font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95"
                   >
                     <AppleLogo />
-                    <span>Chrome에서 홈 화면 추가</span>
+                    <span>성지수행 Lite 설치방법</span>
                   </button>
                 );
               }

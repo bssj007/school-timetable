@@ -105,7 +105,7 @@ export default function IOSChromeInstallGuide() {
         document.body.removeChild(textArea);
       }
       setCopied(true);
-      toast.success("사이트 주소(성지수행.com)가 복사되었습니다! Safari 주소창에 붙여넣어 주세요.");
+      toast.success("성지수행.com이 복사되었습니다! Safari 주소창에 붙여넣어 주세요.");
       setTimeout(() => setCopied(false), 3000);
     } catch {
       toast.error("주소 복사에 실패했습니다. 브라우저 주소창의 URL을 직접 복사해 주세요.");

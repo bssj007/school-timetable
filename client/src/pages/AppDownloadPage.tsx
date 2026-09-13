@@ -76,7 +76,7 @@ export default function AppDownloadPage() {
         document.body.removeChild(textArea);
       }
       setCopied(true);
-      toast.success("사이트 주소(성지수행.com)가 복사되었습니다! Safari 주소창에 붙여넣어 주세요.");
+      toast.success("성지수행.com이 복사되었습니다! Safari 주소창에 붙여넣어 주세요.");
       setTimeout(() => setCopied(false), 3000);
     } catch {
       toast.error("주소 복사에 실패했습니다. 브라우저 주소창의 URL을 직접 복사해 주세요.");
@@ -291,13 +291,13 @@ export default function AppDownloadPage() {
           </button>
         );
       }
-      // 1-3. iOS Chrome인 경우 Chrome 전용 PWA 가이드 버튼 표시
+      // 1-3. iOS Chrome인 경우 Chrome 미지원·Safari 안내 페이지로 이동
       if (browserType === "chrome" && settings?.chrome_install_button_visible !== false) {
         return (
           <button onClick={() => setLocation("/ios-chrome-install-guide")}
             className="w-full h-14 bg-black text-white font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg transition-transform active:scale-95">
             <AppleLogo />
-            <span>홈 화면에 추가하기</span>
+            <span>성지수행 Lite 설치방법</span>
           </button>
         );
       }

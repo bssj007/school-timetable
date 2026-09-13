@@ -372,7 +372,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         if (targetInstallType === "apple_pwa") {
             return {
                 type: "apple_pwa" as const,
-                title: `${baseTitle} 설치방법`,
+                title: `${baseTitle} Lite 설치방법`,
                 subtitle: "홈 화면에 추가하여 편리하게 이용",
             };
         }
@@ -493,7 +493,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         if (installButtonConfig.type === "apple_pwa") {
             closeRoleSelect();
             const a = detect();
-            if (a.isIOSChrome || a.browserKey === "chrome") {
+            if (a.isIOSChrome || (a.isIOS && a.browserKey === "chrome") || a.browserKey === "chrome") {
                 setLocation("/ios-chrome-install-guide");
             } else {
                 setLocation("/ios-install-guide");
@@ -507,6 +507,12 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
     };
 
     const handleInstallBarClick = async () => {
+        const a = detect();
+        if (a.isIOSChrome || (a.isIOS && a.browserKey === "chrome")) {
+            closeRoleSelect();
+            setLocation("/ios-chrome-install-guide");
+            return;
+        }
         if (isPwaInstalled) {
             openPwaApp("/?mode=pwa");
             return;

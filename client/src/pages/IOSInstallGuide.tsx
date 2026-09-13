@@ -883,7 +883,7 @@ export default function IOSInstallGuide() {
         document.body.removeChild(textArea);
       }
       setCopied(true);
-      toast.success("사이트 주소(성지수행.com)가 복사되었습니다! Safari 주소창에 붙여넣어 주세요.");
+      toast.success("성지수행.com이 복사되었습니다! Safari 주소창에 붙여넣어 주세요.");
       setTimeout(() => setCopied(false), 3000);
     } catch {
       toast.error("주소 복사에 실패했습니다. 브라우저 주소창의 URL을 직접 복사해 주세요.");
@@ -892,6 +892,13 @@ export default function IOSInstallGuide() {
 
   // 디자인설정 비동기 로드
   const [settings, setSettings] = useState<any>(null);
+
+  // iOS Chrome으로 접근 시 즉시 Chrome 미지원·Safari 안내 페이지로 리디렉션
+  useEffect(() => {
+    if (isChrome) {
+      setLocation("/ios-chrome-install-guide");
+    }
+  }, [isChrome, setLocation]);
 
   useEffect(() => {
     fetch("/api/settings/public")
@@ -1227,7 +1234,10 @@ export default function IOSInstallGuide() {
             {/* 부연 설명 (유저 요청 100% 반영) */}
             <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-5 mb-8 text-center shadow-xs">
               <p className="text-slate-700 text-sm sm:text-[15px] leading-relaxed font-medium break-keep">
-                성지수행은 AppStore에 출시되지 않았기 때문에 간단한 설치방법을 따라 다운받으셔야 합니다. 오래 걸리지 않습니다.
+                성지수행은 AppStore에 출시되지 않았기 때문에 간단한 설치방법을 따라 다운받으셔야 합니다.
+                <span className="block mt-1.5 text-blue-600 font-bold">
+                  오래 걸리지 않습니다.
+                </span>
               </p>
             </div>
 
