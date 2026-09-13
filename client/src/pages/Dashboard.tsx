@@ -20,7 +20,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Route, Switch, useLocation, Link } from "wouter";
-import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon, ThumbsUp, X, Bell, ArrowRight } from "lucide-react";
+import { Loader2, Trash2, Plus, Download, ChevronLeft, ChevronRight, Pencil, LogOut, ArrowUp, ShieldAlert, AlertTriangle, Printer, Image as ImageIcon, ThumbsUp, X, Bell, ArrowRight, Check } from "lucide-react";
+import { useIsPwaInstalled, openPwaApp } from "@/lib/pwaDetect";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
@@ -165,6 +166,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const { schoolName, grade, classNum, isConfigured, setConfig, kakaoUser, studentNumber, studentName, refreshKakaoUser, instructionDismissedV2, refreshRole, switchToRole } = useUserConfig();
   const [, setLocation] = useLocation();
+  const isPwaInstalled = useIsPwaInstalled();
 
   const handleGoToTeacher = (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
@@ -3422,18 +3424,28 @@ export default function Dashboard() {
                 if (settings?.chrome_install_button_visible === false) return null;
                 return (
                   <Button
-                    onClick={handleInstallClick}
-                    disabled={isInstalling}
-                    className={`w-full h-14 ${isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
+                    onClick={isPwaInstalled ? () => openPwaApp("/?mode=pwa") : handleInstallClick}
+                    disabled={isInstalling && !isPwaInstalled}
+                    className={`w-full h-14 ${isPwaInstalled ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : isInstalling ? 'bg-gray-300 text-gray-700' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-lg rounded-xl shadow-md flex items-center justify-center gap-3 transition-transform active:scale-95`}
                   >
-                    {isInstalling ? (
-                      <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
+                    {isPwaInstalled ? (
+                      <>
+                        <Check className="w-6 h-6 stroke-[3]" />
+                        <span>설치완료</span>
+                      </>
+                    ) : isInstalling ? (
+                      <>
+                        <Loader2 className="w-7 h-7 animate-spin border-gray-500" />
+                        <span>설치 중...</span>
+                      </>
                     ) : (
-                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
-                        <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
-                      </svg>
+                      <>
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
+                          <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0004.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.4158.4158 0 0 0-.1516-.5668.4144.4144 0 0 0-.5665.1517L17.11 8.9959a11.9701 11.9701 0 0 0-5.1102-1.1448c-1.8028 0-3.5134.4074-5.1106 1.1448L4.8385 5.4471A.4147.4147 0 0 0 4.272 5.2954a.4159.4159 0 0 0-.1516.5668l1.9972 3.4594C2.6224 11.2335.3418 14.8872.036 19.112h23.928c-.3058-4.2248-2.5864-7.8785-6.0825-9.7906" />
+                        </svg>
+                        <span>{settings?.pwa_app_title || '성지수행'} 앱 다운로드</span>
+                      </>
                     )}
-                    <span>{isInstalling ? '설치 중...' : `${settings?.pwa_app_title || '성지수행'} 앱 다운로드`}</span>
                   </Button>
                 );
               }

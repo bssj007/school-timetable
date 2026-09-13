@@ -84,6 +84,8 @@ export const onRequest = async (context: any) => {
                 }
             ];
 
+        const manifestUrl = new URL('/manifest.json', context.request.url).toString();
+
         const manifest: any = {
             "id": "/",
             "name": appTitle,
@@ -96,6 +98,12 @@ export const onRequest = async (context: any) => {
             "orientation": "portrait",
             "categories": ["education", "productivity"],
             "prefer_related_applications": false,
+            "related_applications": [
+                {
+                    "platform": "webapp",
+                    "url": manifestUrl
+                }
+            ],
             "background_color": "#ffffff",
             "theme_color": "#ffffff",
             "icons": icons

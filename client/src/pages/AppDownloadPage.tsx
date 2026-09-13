@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { agent, shouldShowDownloadPage, checkIsInstalledApp } from "@/lib/browserDetect";
-import { AlertTriangle, Loader2, Download } from "lucide-react";
+import { AlertTriangle, Loader2, Download, Check } from "lucide-react";
+import { useIsPwaInstalled, openPwaApp } from "@/lib/pwaDetect";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -231,6 +232,7 @@ export default function AppDownloadPage() {
   const playStoreUrl = normalizeUrl(settings?.play_store_url || "");
   const appStoreUrl  = normalizeUrl(settings?.app_store_url  || "");
   const pwaBtnVisible = settings?.pwa_install_button_visible !== false;
+  const isPwaInstalled = useIsPwaInstalled();
 
   function DownloadButton() {
     if (!settings || !pwaBtnVisible) return null;
@@ -285,11 +287,16 @@ export default function AppDownloadPage() {
         if (settings?.chrome_install_button_visible === false) return null;
         return (
           <button
-            onClick={handlePwaInstall}
-            disabled={isPrompting}
-            className="w-full h-14 bg-[#3DDC84] hover:bg-[#35c073] text-black font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg transition-transform active:scale-95 disabled:opacity-80"
+            onClick={isPwaInstalled ? () => openPwaApp("/?mode=pwa") : handlePwaInstall}
+            disabled={isPrompting && !isPwaInstalled}
+            className={`w-full h-14 ${isPwaInstalled ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-[#3DDC84] hover:bg-[#35c073] text-black'} font-bold text-base rounded-2xl flex items-center justify-center gap-3 active:opacity-80 shadow-lg transition-transform active:scale-95 disabled:opacity-80`}
           >
-            {isPrompting ? (
+            {isPwaInstalled ? (
+              <>
+                <Check className="w-6 h-6 stroke-[3]" />
+                <span>설치완료</span>
+              </>
+            ) : isPrompting ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
                 <span>앱 다운로드 준비 중...</span>

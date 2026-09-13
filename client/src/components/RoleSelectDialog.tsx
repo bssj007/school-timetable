@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 
-import { Globe, Download, Loader2 } from "lucide-react";
+import { Globe, Download, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
+import { useIsPwaInstalled, openPwaApp } from "@/lib/pwaDetect";
 
 // 교사 유틸 함수는 @/lib/teacherUtils 에서 직접 import 하세요.
 // (RoleSelectDialog에서 re-export하면 순환 의존성으로 인한 TDZ 오류가 발생합니다)
@@ -150,6 +151,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         publicSettings,
     } = useUserConfig();
 
+    const isPwaInstalled = useIsPwaInstalled();
     const [installDismissed, setInstallDismissed] = useState(() => {
         try {
             if (typeof sessionStorage !== "undefined" && sessionStorage.getItem("sj_install_dismissed") === "true") return true;
@@ -520,6 +522,20 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         }
     };
 
+    const handleInstallBarClick = async () => {
+        if (isPwaInstalled) {
+            markInstallDismissed();
+            openPwaApp("/?mode=pwa");
+            if (userRole) {
+                closeRoleSelect();
+            } else {
+                setStep("role");
+            }
+            return;
+        }
+        await handleInstallAction();
+    };
+
     // ── 핸들러 ──
 
     const handleBack = () => {
@@ -696,8 +712,8 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                             <button
                                 id="install-select-app"
                                 type="button"
-                                onClick={handleInstallAction}
-                                disabled={isPrompting}
+                                onClick={handleInstallBarClick}
+                                disabled={isPrompting && !isPwaInstalled}
                                 className="group relative flex items-center gap-4 p-5 rounded-2xl border-2 border-emerald-900/40 shadow-md transition-all duration-200 text-left cursor-pointer overflow-hidden active:scale-[0.99] disabled:opacity-80 bg-[#1b3d2f]"
                                 style={{
                                     backgroundImage: "url('/chalkboard-bg-thumb.webp'), url('/chalkboard-bg.jpg')",
@@ -717,19 +733,28 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                                 </div>
 
                                 <div className="relative z-10 min-w-0 flex-1">
-                                    <div className="font-bold text-lg text-white group-hover:text-emerald-100 flex items-center gap-1.5">
-                                        {isPrompting ? (
-                                            <>
-                                                <Loader2 className="w-5 h-5 animate-spin" />
-                                                <span>앱 준비 중...</span>
-                                            </>
-                                        ) : (
-                                            installButtonConfig.title
-                                        )}
-                                    </div>
-                                    <div className="text-sm text-emerald-100/90 mt-0.5">
-                                        {installButtonConfig.subtitle}
-                                    </div>
+                                    {isPwaInstalled ? (
+                                        <div className="font-bold text-lg text-white group-hover:text-emerald-100 flex items-center gap-2">
+                                            <Check className="w-5 h-5 text-emerald-400 stroke-[3]" />
+                                            <span>설치완료</span>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="font-bold text-lg text-white group-hover:text-emerald-100 flex items-center gap-1.5">
+                                                {isPrompting ? (
+                                                    <>
+                                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                                        <span>앱 준비 중...</span>
+                                                    </>
+                                                ) : (
+                                                    installButtonConfig.title
+                                                )}
+                                            </div>
+                                            <div className="text-sm text-emerald-100/90 mt-0.5">
+                                                {installButtonConfig.subtitle}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                                 <span className="relative z-10 ml-auto text-emerald-200/80 group-hover:text-white text-xl font-medium">›</span>
                             </button>
