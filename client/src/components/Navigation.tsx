@@ -16,7 +16,9 @@ import {
   toggleNotificationSubscription,
   displayLocalNotification,
   isNativeApp,
-  useClientNotificationState
+  useClientNotificationState,
+  getSessionNotifiedBannerIds,
+  markSessionBannerNotified
 } from "@/lib/notificationService";
 
 // Helper: Download PC Desktop .url Shortcut
@@ -106,41 +108,37 @@ export default function Navigation() {
   } = useClientNotificationState(serverNotifications);
 
   // 알림 기술(발송 방식)에 따른 신규 미읽음 알림 배너 발송 처리
-  const initialMountRef = useRef(true);
-  const notifiedIdsRef = useRef<Set<number>>(new Set());
-
   useEffect(() => {
-    if (!notificationsQuery.data?.notifications) return;
-    const items: Array<any> = notificationsQuery.data.notifications;
+    if (!notificationItems || notificationItems.length === 0) return;
 
-    if (initialMountRef.current) {
-      initialMountRef.current = false;
-      items.forEach(it => notifiedIdsRef.current.add(it.id));
-      return;
-    }
+    const notifiedBannerIds = getSessionNotifiedBannerIds();
+    const unnotifiedItems = notificationItems.filter(it => !it.read && !notifiedBannerIds.has(it.id));
+    if (unnotifiedItems.length === 0) return;
 
-    items.forEach(it => {
-      if (!it.read && !notifiedIdsRef.current.has(it.id)) {
-        notifiedIdsRef.current.add(it.id);
+    // 세션 중복 방지를 위해 즉시 세션 목록에 등록
+    unnotifiedItems.forEach(it => markSessionBannerNotified(it.id));
 
-        // 일반 알림(in_app)은 기기 푸시 배너를 띄우지 않고 알림함에만 조용히 보관
-        if (it.deliveryType === 'in_app') {
-          return;
-        }
+    // 다량의 알림이 있을 경우 최대 2개까지만 배너를 띄워 팝업 폭탄 방지
+    const itemsToNotify = unnotifiedItems.slice(0, 2);
 
-        // 앱 전용 알림(app)은 PWA 또는 앱 환경에서만 팝업 알림
-        if (it.deliveryType === 'app') {
-          const isApp = isNativeApp() || (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches);
-          if (!isApp) return;
-        }
+    itemsToNotify.forEach(it => {
+      // 일반 알림(in_app)은 기기 푸시 배너를 띄우지 않고 알림함에만 조용히 보관
+      if (it.deliveryType === 'in_app') {
+        return;
+      }
 
-        // 푸시 알림(push) 또는 통합 발송(all): 알림 ON 상태일 때 로컬 배너 발송
-        if (isNotifSubscribed) {
-          displayLocalNotification(it.title, it.message, it.link || "/").catch(() => {});
-        }
+      // 앱 전용 알림(app)은 PWA 또는 앱 환경에서만 팝업 알림
+      if (it.deliveryType === 'app') {
+        const isApp = isNativeApp() || (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches);
+        if (!isApp) return;
+      }
+
+      // 알림 ON 상태일 때 로컬 배너 발송
+      if (isNotifSubscribed) {
+        displayLocalNotification(it.title, it.message, it.link || "/").catch(() => {});
       }
     });
-  }, [notificationsQuery.data, isNotifSubscribed]);
+  }, [notificationItems, isNotifSubscribed]);
 
   // 모두 읽음 처리 (클라이언트 로컬 즉시 반영 + 서버 동기화)
   const markAllReadMutation = useMutation({
@@ -467,7 +465,7 @@ export default function Navigation() {
                     </div>
 
                     {/* 알림 목록 */}
-                    <div className="max-h-[320px] overflow-y-auto">
+                    <div className="max-h-[320px] sm:max-h-[380px] overflow-y-auto overscroll-contain touch-pan-y">
                       {notificationItems.length === 0 ? (
                         /* 빈 상태 */
                         <div className="flex flex-col items-center justify-center py-10 px-4 gap-3">

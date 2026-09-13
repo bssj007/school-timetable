@@ -68,9 +68,9 @@ export function markClientSingleNotificationAsRead(notificationId: number) {
 
 /**
  * 클라이언트 전용 미읽음 계산 로직
- * - 최초 접속 시(lastViewed가 없고 readIds가 비어있음): 알림이 있으면 무조건 안 읽은 알림으로 취급하여 배지 표출
- * - 알림 버튼을 클릭하여 markClientNotificationsAsRead가 호출되면 즉시 배지 제거
- * - 이후 새로운 알림(id가 readIds에 없고 createdAt > lastViewedTime)이 오면 다시 배지 표출
+ * - 사용자의 로컬 읽음 목록(readIds)에 없는 알림은 모두 미읽음으로 계산하여 배지 표출
+ * - 사용자가 알림 버튼을 클릭하여 markClientNotificationsAsRead가 호출되면 즉시 배지 제거
+ * - 이후 신규 알림이 도착하면 ID가 readIds에 없으므로 자동으로 다시 배지 표출
  */
 export function computeClientNotificationItems<T extends { id: number; createdAt?: string; read?: boolean }>(
     items: T[]
@@ -80,30 +80,43 @@ export function computeClientNotificationItems<T extends { id: number; createdAt
     }
 
     const readIds = getClientReadNotificationIds();
-    const lastViewed = getClientLastViewedNotificationTime();
-
-    // 최초 접속 시점 판단: readIds가 비어 있고 lastViewed가 없는 경우 -> 자체적으로 모두 안 읽은 상태로 취급
-    const isFirstEverVisit = !lastViewed && readIds.size === 0;
 
     const processed = items.map(item => {
-        if (isFirstEverVisit) {
-            return { ...item, read: false };
-        }
-        if (readIds.has(item.id)) {
-            return { ...item, read: true };
-        }
-        if (lastViewed && item.createdAt) {
-            const itemTime = new Date(item.createdAt.replace(" ", "T") + (item.createdAt.endsWith("Z") ? "" : "Z")).getTime();
-            const viewedTime = new Date(lastViewed).getTime();
-            if (itemTime <= viewedTime) {
-                return { ...item, read: true };
-            }
-        }
-        return { ...item, read: false };
+        const isRead = readIds.has(item.id);
+        return { ...item, read: isRead };
     });
 
     const unreadCount = processed.filter(it => !it.read).length;
     return { items: processed, unreadCount };
+}
+
+const BANNER_NOTIFIED_KEY = "sj_banner_notified_ids";
+
+/**
+ * 이번 브라우저 세션에서 이미 푸시/토스트 배너가 표출된 알림 ID 목록
+ */
+export function getSessionNotifiedBannerIds(): Set<number> {
+    if (typeof window === "undefined") return new Set();
+    try {
+        const raw = sessionStorage.getItem(BANNER_NOTIFIED_KEY);
+        if (!raw) return new Set();
+        const arr = JSON.parse(raw);
+        return new Set(Array.isArray(arr) ? arr : []);
+    } catch {
+        return new Set();
+    }
+}
+
+/**
+ * 배너 표출 완료된 알림 ID 기록 (세션 단위 중복 알림 방지)
+ */
+export function markSessionBannerNotified(id: number) {
+    if (typeof window === "undefined") return;
+    try {
+        const set = getSessionNotifiedBannerIds();
+        set.add(id);
+        sessionStorage.setItem(BANNER_NOTIFIED_KEY, JSON.stringify(Array.from(set).slice(-100)));
+    } catch (_) {}
 }
 
 /**
@@ -125,6 +138,11 @@ export function useClientNotificationState(serverNotifications: any[] = []) {
     const { items, unreadCount } = useMemo(() => {
         return computeClientNotificationItems(serverNotifications);
     }, [serverNotifications, readVersion]);
+
+    // 미읽음 알림 개수에 맞춰 모바일/PWA 앱 아이콘 배지 동기화
+    useEffect(() => {
+        updateAppBadge(unreadCount);
+    }, [unreadCount]);
 
     const markAllRead = useCallback(() => {
         markClientNotificationsAsRead(serverNotifications);
@@ -219,16 +237,21 @@ export function isNotificationSubscribed(): boolean {
     if (typeof window === "undefined") return false;
     if (!isNotificationSupported()) return false;
     
-    // 네이티브 앱 환경: 브라우저 Notification 객체 권한 대신 로컬 스토리지 활성화 여부 확인
+    // 명시적으로 비활성화(0)한 경우는 제외
+    const stored = localStorage.getItem(NOTIF_ENABLED_KEY);
+    if (stored === "0") return false;
+
+    // 1. 네이티브 앱 환경: 사용자가 명시적으로 끄지 않았다면 기본 활성
     if (isNativeApp()) {
-        return localStorage.getItem(NOTIF_ENABLED_KEY) === "1";
+        return true;
     }
 
-    return (
-        typeof Notification !== "undefined" &&
-        Notification.permission === "granted" &&
-        localStorage.getItem(NOTIF_ENABLED_KEY) === "1"
-    );
+    // 2. 웹/PWA 환경: 브라우저 알림 권한이 허용되어 있거나 명시적으로 켠 경우 활성
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        return true;
+    }
+
+    return stored === "1";
 }
 
 /**
@@ -251,10 +274,47 @@ function setNotificationCookie(enabled: boolean) {
 }
 
 /**
- * PWA 앱 아이콘에 표시되는 숫자 배지(알림 숫자) 강제 제거
+ * PWA 앱 아이콘 및 네이티브 앱 배지(숫자) 동기화
+ */
+export function updateAppBadge(count: number) {
+    if (typeof window === "undefined") return;
+
+    // 1. AndroidBridge / Android 네이티브 브리지 배지 연동
+    const win = window as any;
+    if (typeof win.AndroidBridge?.setBadge === "function") {
+        try { win.AndroidBridge.setBadge(count); } catch (_) {}
+    } else if (typeof win.Android?.setBadge === "function") {
+        try { win.Android.setBadge(count); } catch (_) {}
+    } else if (typeof win.AndroidBridge?.setAppBadge === "function") {
+        try { win.AndroidBridge.setAppBadge(count); } catch (_) {}
+    } else if (typeof win.Android?.setAppBadge === "function") {
+        try { win.Android.setAppBadge(count); } catch (_) {}
+    }
+
+    // 2. 표준 Badging API (PWA, Chrome, Edge, Safari iOS 16.4+)
+    if (count > 0) {
+        if ("setAppBadge" in navigator) {
+            try {
+                (navigator as any).setAppBadge(count).catch(() => {});
+            } catch (_) {}
+        }
+    } else {
+        clearAppBadge();
+    }
+}
+
+/**
+ * PWA 앱 아이콘 및 네이티브 앱 배지 제거
  */
 export function clearAppBadge() {
     if (typeof window === "undefined") return;
+    const win = window as any;
+    if (typeof win.AndroidBridge?.clearBadge === "function") {
+        try { win.AndroidBridge.clearBadge(); } catch (_) {}
+    } else if (typeof win.Android?.clearBadge === "function") {
+        try { win.Android.clearBadge(); } catch (_) {}
+    }
+
     if ("clearAppBadge" in navigator) {
         try {
             (navigator as any).clearAppBadge().catch(() => {});
@@ -273,50 +333,44 @@ export async function displayLocalNotification(title: string, body: string, url:
     if (typeof win.AndroidBridge?.postNotification === "function") {
         try {
             win.AndroidBridge.postNotification(title, body);
-            clearAppBadge();
             return;
         } catch (_) {}
     }
     if (typeof win.Android?.postNotification === "function") {
         try {
             win.Android.postNotification(title, body);
-            clearAppBadge();
             return;
         } catch (_) {}
     }
 
     // 2. Service Worker showNotification 우선 시도
-    if ("serviceWorker" in navigator) {
+    let shown = false;
+    if ("serviceWorker" in navigator && typeof Notification !== "undefined" && Notification.permission === "granted") {
         try {
-            const reg = await navigator.serviceWorker.getRegistration();
+            const reg = await (navigator.serviceWorker.ready.catch(() => null) || navigator.serviceWorker.getRegistration().catch(() => null));
             if (reg && reg.showNotification) {
                 await reg.showNotification(title, {
                     body,
                     icon: "/favicon-48x48.png",
+                    badge: "/favicon-48x48.png",
                     data: { url },
                     tag: "sj-alert-" + Date.now()
                 });
-                // 푸시 알림만 띄우고 PWA 앱 아이콘에 별도 숫자(배지)가 표시되지 않도록 즉시 클리어
-                clearAppBadge();
-                setTimeout(clearAppBadge, 150);
-                setTimeout(clearAppBadge, 500);
-                setTimeout(clearAppBadge, 1200);
+                shown = true;
                 return;
             }
         } catch (_) {}
     }
 
     // 3. 브라우저 표준 Notification 객체 폴백
-    if (isNotificationSupported() && Notification.permission === "granted") {
+    if (!shown && typeof Notification !== "undefined" && Notification.permission === "granted") {
         try {
             new Notification(title, {
                 body,
                 icon: "/favicon-48x48.png",
                 tag: "sj-alert-" + Date.now()
             });
-            clearAppBadge();
-            setTimeout(clearAppBadge, 150);
-            setTimeout(clearAppBadge, 500);
+            shown = true;
             return;
         } catch (_) {}
     }
@@ -555,7 +609,6 @@ export async function toggleNotificationSubscription(
     // 3. 성공 시 로컬 및 쿠키 즉시 갱신 (지연 없이 즉각 완료 처리)
     localStorage.setItem(NOTIF_ENABLED_KEY, "1");
     setNotificationCookie(true);
-    clearAppBadge();
 
     // 4. 백그라운드에서 서버 동기화 및 환영 알림 발송 (UI 블로킹 방지)
     (async () => {

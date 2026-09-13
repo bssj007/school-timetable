@@ -283,8 +283,27 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
         }
     };
 
+    // 내부 스크롤 영역에서 끝(상단/하단)에 도달했을 때 상위 컨테이너로 휠 스크롤 부드럽게 전달 (스크롤 갇힘 방지)
+    const handleInnerWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+        const el = e.currentTarget;
+        const isAtTop = el.scrollTop <= 0;
+        const isAtBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+
+        if ((e.deltaY < 0 && isAtTop) || (e.deltaY > 0 && isAtBottom)) {
+            let parent = el.parentElement;
+            while (parent && parent !== document.body) {
+                const style = window.getComputedStyle(parent);
+                if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && parent.scrollHeight > parent.clientHeight) {
+                    parent.scrollTop += e.deltaY;
+                    break;
+                }
+                parent = parent.parentElement;
+            }
+        }
+    };
+
     return (
-        <div className="flex flex-col h-full gap-4 overflow-y-auto pr-1">
+        <div className="flex flex-col h-full gap-4 overflow-y-auto pr-1 overscroll-contain">
             {/* 상단 헤더: 중복되는 '알림 발송' 버튼을 완전히 제거하고 발송내역 토글과 새로고침만 배치 */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
                 <div>
@@ -391,7 +410,10 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                 </p>
                             </div>
                         ) : (
-                            <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                            <div 
+                                className="space-y-3 max-h-[520px] overflow-y-auto pr-1 overscroll-contain touch-pan-y"
+                                onWheel={handleInnerWheel}
+                            >
                                 {/* 학생 목록 섹션 (중복 없음) */}
                                 {students.length > 0 && (
                                     <div>
@@ -589,6 +611,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                                     placeholder="예: 1"
                                                     value={targetGrade}
                                                     onChange={(e) => { setTargetGrade(e.target.value); setSelectedTargetKey(null); }}
+                                                    onWheel={(e) => (e.target as HTMLElement).blur()}
                                                     className="h-8 text-xs bg-white"
                                                 />
                                             </div>
@@ -599,6 +622,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                                     placeholder="예: 3"
                                                     value={targetClass}
                                                     onChange={(e) => { setTargetClass(e.target.value); setSelectedTargetKey(null); }}
+                                                    onWheel={(e) => (e.target as HTMLElement).blur()}
                                                     className="h-8 text-xs bg-white"
                                                 />
                                             </div>
@@ -609,6 +633,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                                     placeholder="예: 15"
                                                     value={targetStudentNumber}
                                                     onChange={(e) => { setTargetStudentNumber(e.target.value); setSelectedTargetKey(null); }}
+                                                    onWheel={(e) => (e.target as HTMLElement).blur()}
                                                     className="h-8 text-xs bg-white"
                                                 />
                                             </div>
@@ -883,7 +908,10 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                 발송된 알림 내역이 없습니다.
                             </div>
                         ) : (
-                            <div className="divide-y divide-gray-100 max-h-[550px] overflow-y-auto">
+                            <div 
+                                className="divide-y divide-gray-100 max-h-[550px] overflow-y-auto overscroll-contain touch-pan-y"
+                                onWheel={handleInnerWheel}
+                            >
                                 {historyQuery.data.notifications.map((n: any) => {
                                     let targetText = "전체 사용자";
                                     if (n.target_type === "student") {

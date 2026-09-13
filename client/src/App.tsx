@@ -24,7 +24,6 @@ import Privacy from "./pages/Privacy";
 import BetaTesterPage from "./pages/BetaTesterPage";
 import { getPumasiCookie, setPumasiCookie, hasPumasiRedirectCookie, clearPumasiRedirectCookie } from "@/lib/pumasiCookie";
 import { isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
-import { clearAppBadge } from "@/lib/notificationService";
 
 function Router() {
   return (
@@ -66,17 +65,7 @@ function AppContent() {
   const isIOSGuideRoute = location === "/ios-install-guide" || location === "/ios-chrome-install-guide";
   const isPrivacyRoute = location === "/privacy";
 
-  // PWA 앱 아이콘 숫자 배지 방지 및 자동 클리어
-  useEffect(() => {
-    clearAppBadge();
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        clearAppBadge();
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, []);
+
 
   // 사이트 디자인설정 동적 적용 (제목 + 파비콘 + PWA 아이콘)
   useEffect(() => {

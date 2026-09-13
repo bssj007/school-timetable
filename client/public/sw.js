@@ -73,10 +73,10 @@ self.addEventListener('push', event => {
     event.waitUntil(
         (async () => {
             await self.registration.showNotification(data.title || '성지수행', options);
-            // PWA 앱 아이콘에 숫자(배지)가 표시되지 않도록 강제 클리어
-            if (self.navigator && 'clearAppBadge' in self.navigator) {
+            if (self.navigator && 'setAppBadge' in self.navigator) {
                 try {
-                    await self.navigator.clearAppBadge();
+                    const badgeCount = Number(data.unreadCount) || 1;
+                    await self.navigator.setAppBadge(badgeCount);
                 } catch (_) {}
             }
         })()
@@ -107,9 +107,4 @@ self.addEventListener('notificationclick', event => {
     );
 });
 
-// Notification close event listener (알림 스와이프 시에도 배지 클리어 보장)
-self.addEventListener('notificationclose', event => {
-    if (self.navigator && 'clearAppBadge' in self.navigator) {
-        try { self.navigator.clearAppBadge(); } catch (_) {}
-    }
-});
+

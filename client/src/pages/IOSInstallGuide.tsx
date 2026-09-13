@@ -974,8 +974,14 @@ export default function IOSInstallGuide() {
         <div className="flex items-center gap-3 min-w-0">
           {/* 뒤로 가기 */}
           <button
-            onClick={() => setLocation("/")}
-            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0 active:bg-white/20 transition-colors"
+            onClick={() => {
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                window.history.back();
+              } else {
+                setLocation("/");
+              }
+            }}
+            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0 active:bg-white/20 transition-colors cursor-pointer"
             aria-label="뒤로 가기"
           >
             <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

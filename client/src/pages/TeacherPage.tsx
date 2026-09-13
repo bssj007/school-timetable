@@ -24,7 +24,9 @@ import {
   getOrCreateDeviceId,
   useClientNotificationState,
   displayLocalNotification,
-  isNativeApp
+  isNativeApp,
+  getSessionNotifiedBannerIds,
+  markSessionBannerNotified
 } from "@/lib/notificationService";
 import { buildTeacherOptions, filterTeacherOptions } from "@/lib/teacherSearch";
 
@@ -1106,28 +1108,29 @@ export default function TeacherPage() {
   } = useClientNotificationState(serverTeacherNotifs);
 
   // 알림 기술(발송 방식)에 따른 신규 미읽음 알림 배너 발송 처리
-  const notifiedTeacherIdsRef = useRef<Set<number>>(new Set());
-
   useEffect(() => {
-    if (!teacherNotifsQuery.data?.notifications) return;
-    const items: Array<any> = teacherNotifsQuery.data.notifications;
+    if (!teacherNotifItems || teacherNotifItems.length === 0) return;
 
-    items.forEach(it => {
-      if (!it.read && !notifiedTeacherIdsRef.current.has(it.id)) {
-        notifiedTeacherIdsRef.current.add(it.id);
+    const notifiedBannerIds = getSessionNotifiedBannerIds();
+    const unnotifiedItems = teacherNotifItems.filter(it => !it.read && !notifiedBannerIds.has(it.id));
+    if (unnotifiedItems.length === 0) return;
 
-        if (it.deliveryType === 'in_app') return;
-        if (it.deliveryType === 'app') {
-          const isApp = isNativeApp() || (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches);
-          if (!isApp) return;
-        }
+    unnotifiedItems.forEach(it => markSessionBannerNotified(it.id));
 
-        if (isNotifSubscribed) {
-          displayLocalNotification(it.title, it.message, it.link || "/").catch(() => {});
-        }
+    const itemsToNotify = unnotifiedItems.slice(0, 2);
+
+    itemsToNotify.forEach(it => {
+      if (it.deliveryType === 'in_app') return;
+      if (it.deliveryType === 'app') {
+        const isApp = isNativeApp() || (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches);
+        if (!isApp) return;
+      }
+
+      if (isNotifSubscribed) {
+        displayLocalNotification(it.title, it.message, it.link || "/").catch(() => {});
       }
     });
-  }, [teacherNotifsQuery.data, isNotifSubscribed]);
+  }, [teacherNotifItems, isNotifSubscribed]);
 
   const markTeacherAllReadMutation = useMutation({
     mutationFn: async () => {
@@ -2320,7 +2323,7 @@ export default function TeacherPage() {
           </div>
 
           {/* 알림 목록 영역 */}
-          <div className="max-h-[300px] overflow-y-auto px-4 py-2">
+          <div className="max-h-[300px] sm:max-h-[380px] overflow-y-auto overscroll-contain touch-pan-y px-4 py-2">
             {teacherNotifItems.length === 0 ? (
               <div className="py-8 flex flex-col items-center justify-center gap-2 text-center">
                 <div className="w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center border border-yellow-100 text-xl">

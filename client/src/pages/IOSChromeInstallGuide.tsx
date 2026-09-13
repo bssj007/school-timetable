@@ -84,10 +84,10 @@ export default function IOSChromeInstallGuide() {
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-2xs">
         <button
           onClick={() => {
-            if (window.history.length > 1) {
+            if (typeof window !== "undefined" && window.history.length > 1) {
               window.history.back();
             } else {
-              setLocation("/download");
+              setLocation("/");
             }
           }}
           className="flex items-center gap-1 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors py-1 px-2 rounded-lg hover:bg-gray-100 active:scale-95"

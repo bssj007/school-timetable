@@ -5363,9 +5363,9 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
     };
 
     return (
-        <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)] min-h-[600px] md:h-[600px]">
+        <div className="flex flex-col md:flex-row gap-6 min-h-[600px] md:min-h-[700px] md:h-[calc(100vh-200px)]">
             {/* Sidebar List */}
-            <div className="w-full md:w-64 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto">
+            <div className="w-full md:w-64 flex flex-row md:flex-col gap-2 p-2 border-b md:border-b-0 md:border-r shrink-0 overflow-x-auto md:overflow-y-auto overscroll-contain">
                 <Button
                     variant={selectedMenu === "raw-comcigan" ? "default" : "ghost"}
                     className="justify-start whitespace-nowrap text-left"
@@ -5579,7 +5579,7 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 flex flex-col gap-4 overflow-hidden border rounded-md bg-white p-4">
+            <div className="flex-1 flex flex-col gap-4 overflow-hidden border rounded-md bg-white p-4 min-h-0">
                 {selectedMenu === "dataset-viewer" && (
                     <DatasetDatesViewer rawData={rawDataQuery.data} adminPassword={adminPassword} />
                 )}

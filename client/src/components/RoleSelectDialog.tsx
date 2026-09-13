@@ -458,12 +458,9 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                 if (choice && choice.outcome === "accepted") {
                     (window as any).__deferredPwaPrompt = null;
                     setDeferredPrompt(null);
-                    markInstallDismissed();
                     toast.success("앱 설치가 진행 중입니다. 홈 화면에서 앱을 확인해 주세요!");
                     if (userRole) {
                         closeRoleSelect();
-                    } else {
-                        setStep("role");
                     }
                     return;
                 } else {
@@ -483,12 +480,6 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
             if (playStoreUrl) {
                 window.open(playStoreUrl, "_blank", "noopener,noreferrer");
             }
-            markInstallDismissed();
-            if (userRole) {
-                closeRoleSelect();
-            } else {
-                setStep("role");
-            }
             return;
         }
 
@@ -496,17 +487,10 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
             if (appStoreUrl) {
                 window.open(appStoreUrl, "_blank", "noopener,noreferrer");
             }
-            markInstallDismissed();
-            if (userRole) {
-                closeRoleSelect();
-            } else {
-                setStep("role");
-            }
             return;
         }
 
         if (installButtonConfig.type === "apple_pwa") {
-            markInstallDismissed();
             closeRoleSelect();
             const a = detect();
             if (a.isIOSChrome || a.browserKey === "chrome") {
@@ -689,7 +673,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                                 id="install-select-web"
                                 type="button"
                                 onClick={handleContinueWeb}
-                                className="group relative flex items-center gap-4 p-5 rounded-2xl border-2 border-slate-200 bg-slate-100 hover:border-slate-300 hover:bg-slate-200/80 transition-all duration-200 text-left cursor-pointer shadow-sm active:scale-[0.99]"
+                                className="group relative flex items-center gap-4 py-4 px-5 rounded-2xl border-2 border-slate-200 bg-slate-100 hover:border-slate-300 hover:bg-slate-200/80 transition-all duration-200 text-left cursor-pointer shadow-sm active:scale-[0.99]"
                             >
                                 <div className="w-12 h-12 rounded-xl bg-white border border-slate-200/90 shadow-xs flex items-center justify-center flex-shrink-0">
                                     <Globe className="w-6 h-6 text-slate-600 group-hover:text-slate-900 transition-colors" />
@@ -708,7 +692,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                                 type="button"
                                 onClick={handleInstallBarClick}
                                 disabled={isPrompting && !isPwaInstalled}
-                                className="group relative flex items-center gap-4 p-5 rounded-2xl border-2 border-emerald-900/40 shadow-md transition-all duration-200 text-left cursor-pointer overflow-hidden active:scale-[0.99] disabled:opacity-80 bg-[#1b3d2f]"
+                                className="group relative flex items-center gap-4 py-4 px-5 rounded-2xl border-2 border-emerald-900/40 shadow-md transition-all duration-200 text-left cursor-pointer overflow-hidden active:scale-[0.99] disabled:opacity-80 bg-[#1b3d2f]"
                                 style={{
                                     backgroundImage: "url('/chalkboard-bg-thumb.webp'), url('/chalkboard-bg.jpg')",
                                     backgroundSize: "cover",
@@ -759,7 +743,20 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                 {/* ── Step 1: 역할 선택 ── */}
                 {step === "role" && (
                     <>
-                        <DialogHeader>
+                        <DialogHeader className="relative">
+                            {targetInstallType !== null && !userRole && (
+                                <button
+                                    type="button"
+                                    onClick={() => setStep("install")}
+                                    className="absolute left-0 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+                                    aria-label="이전 이용안내로 돌아가기"
+                                    title="이전으로"
+                                >
+                                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="15 18 9 12 15 6" />
+                                    </svg>
+                                </button>
+                            )}
                             <DialogTitle className="text-xl font-bold text-center">접속 유형 선택</DialogTitle>
                             <DialogDescription className="sr-only">
                                 접속 유형 선택
