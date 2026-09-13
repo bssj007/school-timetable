@@ -697,7 +697,7 @@ export function useGlobalNotificationWatcher(info: GlobalNotificationWatcherProp
     const effectiveRole = info.role || "student";
     const queryKey = getNotificationQueryKey(effectiveRole, info, deviceId);
 
-    // 실시간 알림 쿼리 (5초 폴링 + 윈도우 포커스/재연결 시 즉시 갱신)
+    // 실시간 알림 쿼리 (5초 주기 백그라운드 포함 연속 폴링 + 윈도우 포커스/재연결 시 즉시 갱신)
     const notificationsQuery = useQuery({
         queryKey,
         queryFn: async () => {
@@ -708,22 +708,35 @@ export function useGlobalNotificationWatcher(info: GlobalNotificationWatcherProp
                 studentNumber: String(info.studentNumber || "0"),
                 studentName: String(info.studentName || ""),
                 teacherName: String(info.teacherName || ""),
-                deviceId
+                deviceId,
+                _t: String(Date.now())
             });
-            const res = await fetch(`/api/notifications/list?${sp.toString()}`);
+            const res = await fetch(`/api/notifications/list?${sp.toString()}`, {
+                cache: "no-store",
+                headers: {
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache"
+                }
+            });
             if (!res.ok) throw new Error("Failed to fetch notifications");
             return res.json();
         },
         refetchInterval: 5000,
-        staleTime: 2000,
+        refetchIntervalInBackground: true,
+        staleTime: 1000,
         refetchOnWindowFocus: true,
-        refetchOnReconnect: true
+        refetchOnReconnect: true,
+        networkMode: "always"
     });
 
-    // 1. 모바일 앱 복귀 / 화면 켜짐 / 탭 전환 감지 즉시 무지연(0ms) 동기화
+    // 1. 모바일 앱 복귀 / 화면 켜짐 / 탭 전환 / 다른 탭 실시간 발송 감지 (0ms 즉시 동기화)
     useEffect(() => {
         const handleWakeup = () => {
-            if (typeof document !== "undefined" && document.visibilityState === "visible") {
+            queryClient.invalidateQueries({ queryKey: ["notifications"] });
+        };
+
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key === "sj_last_notification_posted" || e.key === "sj_notification_read_updated") {
                 queryClient.invalidateQueries({ queryKey: ["notifications"] });
             }
         };
@@ -731,11 +744,19 @@ export function useGlobalNotificationWatcher(info: GlobalNotificationWatcherProp
         document.addEventListener("visibilitychange", handleWakeup);
         window.addEventListener("focus", handleWakeup);
         window.addEventListener("pageshow", handleWakeup);
+        window.addEventListener("storage", handleStorage);
+
+        // 백그라운드 탭에서도 5초마다 강제 무효화 실행 (TanStack 쿼리 타이머와 이중 안전망)
+        const intervalId = setInterval(() => {
+            queryClient.invalidateQueries({ queryKey: ["notifications"] });
+        }, 5000);
 
         return () => {
             document.removeEventListener("visibilitychange", handleWakeup);
             window.removeEventListener("focus", handleWakeup);
             window.removeEventListener("pageshow", handleWakeup);
+            window.removeEventListener("storage", handleStorage);
+            clearInterval(intervalId);
         };
     }, [queryClient]);
 

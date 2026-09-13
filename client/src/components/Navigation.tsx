@@ -92,14 +92,25 @@ export default function Navigation() {
         studentNumber: String(studentNumber || '0'),
         studentName: String(studentName || ''),
         teacherName: String(teacherName || ''),
-        deviceId
+        deviceId,
+        _t: String(Date.now())
       });
-      const res = await fetch(`/api/notifications/list?${sp.toString()}`);
+      const res = await fetch(`/api/notifications/list?${sp.toString()}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache"
+        }
+      });
       if (!res.ok) throw new Error('Failed to fetch notifications');
       return res.json();
     },
     refetchInterval: 5000,
-    staleTime: 2000
+    refetchIntervalInBackground: true,
+    staleTime: 1000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    networkMode: "always"
   });
 
   const serverNotifications = notificationsQuery.data?.notifications || [];

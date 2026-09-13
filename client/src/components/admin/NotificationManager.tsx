@@ -201,6 +201,10 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
             toast.success(`[${deliveryObj.label}] 알림이 성공적으로 등록되었습니다! (매칭 기기: ${data.matchedCount}대)`);
             queryClient.invalidateQueries({ queryKey: ["admin", "notification-history"] });
             queryClient.invalidateQueries({ queryKey: ["admin", "notification-subscribers"] });
+            queryClient.invalidateQueries({ queryKey: ["notifications"] });
+            try {
+                localStorage.setItem("sj_last_notification_posted", String(Date.now()));
+            } catch (_) {}
         },
         onError: (err: any) => {
             toast.error(err.message || "알림 발송 중 오류가 발생했습니다.");

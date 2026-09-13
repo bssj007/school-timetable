@@ -166,6 +166,10 @@ notificationsRouter.get("/list", (req, res) => {
 
         const unreadCount = formatted.filter((n: any) => !n.read).length;
 
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+
         res.json({
             notifications: formatted,
             unreadCount

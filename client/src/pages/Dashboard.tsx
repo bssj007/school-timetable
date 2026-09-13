@@ -342,7 +342,7 @@ export default function Dashboard() {
     deviceId
   );
 
-  // 실시간 알림 목록 조회 (5초 주기 자동 갱신)
+  // 실시간 알림 목록 조회 (5초 주기 자동 갱신 - 전역 Watcher와 캐시 공유)
   const notificationsQuery = useQuery({
     queryKey,
     queryFn: async () => {
@@ -352,14 +352,25 @@ export default function Dashboard() {
         classNum: String(isDevStudent ? effectiveClassNum : classNum || '0'),
         studentNumber: String(studentNumber || '0'),
         studentName: String(studentName || ''),
-        deviceId
+        deviceId,
+        _t: String(Date.now())
       });
-      const res = await fetch(`/api/notifications/list?${sp.toString()}`);
+      const res = await fetch(`/api/notifications/list?${sp.toString()}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache"
+        }
+      });
       if (!res.ok) throw new Error('Failed to fetch notifications');
       return res.json();
     },
     refetchInterval: 5000,
-    staleTime: 2000
+    refetchIntervalInBackground: true,
+    staleTime: 1000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    networkMode: "always"
   });
 
   const serverNotifications = notificationsQuery.data?.notifications || [];
