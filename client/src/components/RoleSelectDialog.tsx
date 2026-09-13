@@ -5,10 +5,13 @@ import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
 import { useUserConfig } from "@/contexts/UserConfigContext";
 
+import { Globe, Download, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+
 // 교사 유틸 함수는 @/lib/teacherUtils 에서 직접 import 하세요.
 // (RoleSelectDialog에서 re-export하면 순환 의존성으로 인한 TDZ 오류가 발생합니다)
 import { getActiveTeacherName, getAuthenticatedTeacher, getTeacherNameCookie, setRoleCookie, setTeacherNameCookie, normalizeTeacherName, getRoleCookie, setStoredTeacherPassword, clearStoredTeacherPassword } from "@/lib/teacherUtils";
-import { detect } from "@/lib/browserDetect";
+import { detect, shouldShowDownloadPage, agent } from "@/lib/browserDetect";
 import { setPumasiCookie } from "@/lib/pumasiCookie";
 
 // ── 교사 옵션 타입 ───────────────────────────────────────────
@@ -124,7 +127,7 @@ function matchesTeacher(rawName: string, subjects: string[], query: string): boo
 }
 
 // ── 메인 컴포넌트 ────────────────────────────────────────────
-type Step = "role" | "student-info" | "teacher-name";
+type Step = "install" | "role" | "student-info" | "teacher-name";
 
 interface RoleSelectDialogProps {
     onRoleSelected: (role: "student" | "teacher") => void;
@@ -144,6 +147,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         roleSelectStep,
         openRoleSelect,
         closeRoleSelect,
+        publicSettings,
     } = useUserConfig();
 
     const [step, setStep] = useState<Step>("role");
@@ -168,6 +172,45 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
     const [devAccountEnabled, setDevAccountEnabled] = useState(false);
     const [isAndroidNative, setIsAndroidNative] = useState(false);
 
+    // ── 서버 설정 및 설치 유도 상태 ──
+    const [settings, setSettings] = useState<any>(null);
+    const activeSettings = settings || publicSettings;
+    const [installDismissed, setInstallDismissed] = useState(false);
+
+    // ── PWA 이벤트 및 수동 설치 안내 상태 ──
+    const [deferredPrompt, setDeferredPrompt] = useState<any>(() =>
+        typeof window !== "undefined" ? (window as any).__deferredPwaPrompt : null
+    );
+    const [isPrompting, setIsPrompting] = useState(false);
+    const [showManualGuide, setShowManualGuide] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        if ((window as any).__deferredPwaPrompt) {
+            setDeferredPrompt((window as any).__deferredPwaPrompt);
+        }
+
+        const handlePrompt = (e: any) => {
+            e.preventDefault();
+            (window as any).__deferredPwaPrompt = e;
+            setDeferredPrompt(e);
+        };
+
+        const handleCustomPrompt = (e: CustomEvent) => {
+            const evt = e.detail || (window as any).__deferredPwaPrompt;
+            if (evt) setDeferredPrompt(evt);
+        };
+
+        window.addEventListener("beforeinstallprompt", handlePrompt);
+        window.addEventListener("pwa-prompt-ready", handleCustomPrompt as EventListener);
+
+        return () => {
+            window.removeEventListener("beforeinstallprompt", handlePrompt);
+            window.removeEventListener("pwa-prompt-ready", handleCustomPrompt as EventListener);
+        };
+    }, []);
+
     useEffect(() => {
         try {
             const a = detect();
@@ -178,6 +221,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         fetch('/api/settings/public')
             .then(res => res.ok ? res.json() : null)
             .then(data => {
+                if (data) setSettings(data);
                 if (data?.is_force_beta_tester) {
                     setPumasiCookie();
                     closeRoleSelect();
@@ -198,12 +242,16 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
     const skipPaths = ["/admin", "/admin/factory-reset", "/teacher"];
     const shouldSkip = skipPaths.some(p => location.startsWith(p));
 
+    const isDownloadPromptTarget = !installDismissed && Boolean(activeSettings && shouldShowDownloadPage(activeSettings));
+
     useEffect(() => {
         if (shouldSkip) return;
-        if (!getRoleCookie() || !userRole) {
+        if (isDownloadPromptTarget) {
+            openRoleSelect("install");
+        } else if (!getRoleCookie() || !userRole) {
             openRoleSelect("role");
         }
-    }, [shouldSkip, userRole, location]);
+    }, [shouldSkip, isDownloadPromptTarget, userRole, location]);
 
     useEffect(() => {
         if (roleSelectStep) {
@@ -254,6 +302,186 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
 
         return normalMatches.filter(o => o.rawName !== "김교사");
     }, [teacherOptions, query, devAccountEnabled]);
+
+    // ── 설치 바 URL 및 분기 설정 ──
+    const playStoreUrl = activeSettings?.play_store_url ? (activeSettings.play_store_url.startsWith("http") ? activeSettings.play_store_url : `https://${activeSettings.play_store_url}`) : "";
+    const appStoreUrl = activeSettings?.app_store_url ? (activeSettings.app_store_url.startsWith("http") ? activeSettings.app_store_url : `https://${activeSettings.app_store_url}`) : "";
+    const hasAppStore = Boolean(appStoreUrl && activeSettings?.app_store_url);
+    const hasPlayStore = Boolean(playStoreUrl && activeSettings?.play_store_url);
+
+    const installButtonConfig = useMemo(() => {
+        if (agent.isIOS) {
+            if (hasAppStore) {
+                return {
+                    type: "appstore" as const,
+                    title: "성지수행 설치",
+                    subtitle: "App Store에서 앱 다운로드",
+                };
+            }
+            return {
+                type: "apple_pwa" as const,
+                title: "성지수행 설치방법",
+                subtitle: "홈 화면에 추가하여 편리하게 이용",
+            };
+        }
+
+        if (agent.isAndroid) {
+            if (agent.browserKey === "chrome") {
+                return {
+                    type: "android_pwa" as const,
+                    title: "성지수행 Lite 설치",
+                    subtitle: "홈 화면에 가벼운 앱으로 설치",
+                };
+            }
+            if (hasPlayStore) {
+                return {
+                    type: "playstore" as const,
+                    title: "성지수행 설치",
+                    subtitle: "Google Play에서 앱 다운로드",
+                };
+            }
+        }
+
+        return {
+            type: "android_pwa" as const,
+            title: "성지수행 Lite 설치",
+            subtitle: "홈 화면에 앱으로 추가하여 빠르게 이용",
+        };
+    }, [hasAppStore, hasPlayStore]);
+
+    const handleContinueWeb = () => {
+        localStorage.setItem("download_page_dismissed", "1");
+        setInstallDismissed(true);
+        if (userRole) {
+            closeRoleSelect();
+        } else {
+            setStep("role");
+        }
+    };
+
+    const handlePwaInstall = async () => {
+        if (isPrompting) return;
+        setIsPrompting(true);
+
+        let promptEvent = (window as any).__deferredPwaPrompt || deferredPrompt;
+
+        if (!promptEvent && typeof window !== "undefined") {
+            promptEvent = await new Promise((resolve) => {
+                let done = false;
+                const timer = setTimeout(() => {
+                    if (!done) {
+                        done = true;
+                        window.removeEventListener("beforeinstallprompt", handler);
+                        window.removeEventListener("pwa-prompt-ready", customHandler as EventListener);
+                        resolve(null);
+                    }
+                }, 1800);
+
+                const handler = (e: any) => {
+                    if (!done) {
+                        done = true;
+                        clearTimeout(timer);
+                        e.preventDefault();
+                        (window as any).__deferredPwaPrompt = e;
+                        setDeferredPrompt(e);
+                        window.removeEventListener("beforeinstallprompt", handler);
+                        window.removeEventListener("pwa-prompt-ready", customHandler as EventListener);
+                        resolve(e);
+                    }
+                };
+
+                const customHandler = (e: CustomEvent) => {
+                    if (!done) {
+                        done = true;
+                        clearTimeout(timer);
+                        const evt = e.detail || (window as any).__deferredPwaPrompt;
+                        if (evt) setDeferredPrompt(evt);
+                        window.removeEventListener("beforeinstallprompt", handler);
+                        window.removeEventListener("pwa-prompt-ready", customHandler as EventListener);
+                        resolve(evt);
+                    }
+                };
+
+                window.addEventListener("beforeinstallprompt", handler);
+                window.addEventListener("pwa-prompt-ready", customHandler as EventListener);
+            });
+        }
+
+        setIsPrompting(false);
+
+        if (promptEvent) {
+            try {
+                await promptEvent.prompt();
+                const choice = await promptEvent.userChoice;
+                if (choice && choice.outcome === "accepted") {
+                    (window as any).__deferredPwaPrompt = null;
+                    setDeferredPrompt(null);
+                    localStorage.setItem("download_page_dismissed", "1");
+                    setInstallDismissed(true);
+                    toast.success("앱 설치가 진행 중입니다. 홈 화면에서 앱을 확인해 주세요!");
+                    if (userRole) {
+                        closeRoleSelect();
+                    } else {
+                        setStep("role");
+                    }
+                    return;
+                } else {
+                    toast.info("앱 설치가 취소되었습니다.");
+                    return;
+                }
+            } catch (err) {
+                console.warn("PWA prompt error:", err);
+            }
+        }
+
+        setShowManualGuide(true);
+    };
+
+    const handleInstallAction = async () => {
+        if (installButtonConfig.type === "playstore") {
+            if (playStoreUrl) {
+                window.open(playStoreUrl, "_blank", "noopener,noreferrer");
+            }
+            localStorage.setItem("download_page_dismissed", "1");
+            setInstallDismissed(true);
+            if (userRole) {
+                closeRoleSelect();
+            } else {
+                setStep("role");
+            }
+            return;
+        }
+
+        if (installButtonConfig.type === "appstore") {
+            if (appStoreUrl) {
+                window.open(appStoreUrl, "_blank", "noopener,noreferrer");
+            }
+            localStorage.setItem("download_page_dismissed", "1");
+            setInstallDismissed(true);
+            if (userRole) {
+                closeRoleSelect();
+            } else {
+                setStep("role");
+            }
+            return;
+        }
+
+        if (installButtonConfig.type === "apple_pwa") {
+            localStorage.setItem("download_page_dismissed", "1");
+            setInstallDismissed(true);
+            closeRoleSelect();
+            if (agent.browserKey === "chrome") {
+                setLocation("/ios-chrome-install-guide");
+            } else {
+                setLocation("/ios-install-guide");
+            }
+            return;
+        }
+
+        if (installButtonConfig.type === "android_pwa") {
+            await handlePwaInstall();
+        }
+    };
 
     // ── 핸들러 ──
 
@@ -388,6 +616,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
     const canSubmitStudent = isNameValid && isIdValid;
 
     return (
+        <>
         <Dialog open={isRoleSelectOpen} onOpenChange={(open) => { if (!open && userRole) closeRoleSelect(); }}>
             <DialogContent
                 className="sm:max-w-[440px]"
@@ -398,6 +627,82 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                 onOpenAutoFocus={(e: any) => e.preventDefault()}
                 showCloseButton={!!userRole}
             >
+                {/* ── Step 0: 앱 설치 or 웹 계속 ── */}
+                {step === "install" && (
+                    <>
+                        <DialogHeader>
+                            <DialogTitle className="text-xl font-bold text-center">성지수행 이용 안내</DialogTitle>
+                            <DialogDescription className="text-center text-sm text-gray-500 mt-1">
+                                원하시는 이용 방식을 선택해 주세요
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="flex flex-col gap-3 pt-3">
+                            {/* 상단: 웹 사이트로 계속 바 (회색, www 아이콘) */}
+                            <button
+                                id="install-select-web"
+                                type="button"
+                                onClick={handleContinueWeb}
+                                className="group relative flex items-center gap-4 p-5 rounded-2xl border-2 border-slate-200 bg-slate-100 hover:border-slate-300 hover:bg-slate-200/80 transition-all duration-200 text-left cursor-pointer shadow-sm active:scale-[0.99]"
+                            >
+                                <div className="w-12 h-12 rounded-xl bg-white border border-slate-200/90 shadow-xs flex items-center justify-center flex-shrink-0">
+                                    <Globe className="w-6 h-6 text-slate-600 group-hover:text-slate-900 transition-colors" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="font-bold text-lg text-slate-800 group-hover:text-slate-950">
+                                        웹 사이트로 계속
+                                    </div>
+                                    <div className="text-sm text-slate-500 mt-0.5">
+                                        설치 없이 브라우저에서 바로 이용
+                                    </div>
+                                </div>
+                                <span className="ml-auto text-slate-400 group-hover:text-slate-600 text-xl font-medium">›</span>
+                            </button>
+
+                            {/* 하단: 성지수행 [Lite] 설치 바 (칠판 배경 애셋, 앱 아이콘, 주황색 테두리) */}
+                            <button
+                                id="install-select-app"
+                                type="button"
+                                onClick={handleInstallAction}
+                                disabled={isPrompting}
+                                className="group relative flex items-center gap-4 p-5 rounded-2xl border-2 border-emerald-900/40 shadow-md transition-all duration-200 text-left cursor-pointer overflow-hidden active:scale-[0.99] disabled:opacity-80"
+                                style={{
+                                    backgroundImage: "url('/chalkboard-bg.jpg')",
+                                    backgroundSize: "cover",
+                                    backgroundPosition: "center",
+                                }}
+                            >
+                                <div className="absolute inset-0 bg-black/25 group-hover:bg-black/15 transition-colors" />
+
+                                <div className="relative z-10 w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 shadow-md border border-orange-500/90 bg-black/10">
+                                    <img
+                                        src="/android-chrome-192x192.png"
+                                        alt="성지수행 앱"
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }}
+                                    />
+                                </div>
+
+                                <div className="relative z-10 min-w-0 flex-1">
+                                    <div className="font-bold text-lg text-white group-hover:text-emerald-100 flex items-center gap-1.5">
+                                        {isPrompting ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                <span>앱 준비 중...</span>
+                                            </>
+                                        ) : (
+                                            installButtonConfig.title
+                                        )}
+                                    </div>
+                                    <div className="text-sm text-emerald-100/90 mt-0.5">
+                                        {installButtonConfig.subtitle}
+                                    </div>
+                                </div>
+                                <span className="relative z-10 ml-auto text-emerald-200/80 group-hover:text-white text-xl font-medium">›</span>
+                            </button>
+                        </div>
+                    </>
+                )}
+
                 {/* ── Step 1: 역할 선택 ── */}
                 {step === "role" && (
                     <>
@@ -637,5 +942,81 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                 )}
             </DialogContent>
         </Dialog>
+
+        {/* PWA 수동 설치 / 홈 화면 추가 안내 다이얼로그 (beforeinstallprompt 미지원 또는 지연 시) */}
+        <Dialog open={showManualGuide} onOpenChange={setShowManualGuide}>
+            <DialogContent className="sm:max-w-[420px] w-[92vw] rounded-2xl p-6 z-[120]">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-900">
+                        <Download className="w-5 h-5 text-emerald-600 shrink-0" />
+                        <span>성지수행 앱 설치 안내</span>
+                    </DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-4 pt-2">
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                        현재 브라우저에서는 자동 설치 팝업이 바로 실행되지 않을 수 있습니다.<br />
+                        아래 순서대로 진행하시면 <strong>홈 화면에 앱으로 추가</strong>하여 편리하게 이용하실 수 있습니다.
+                    </p>
+
+                    <div className="space-y-2.5 text-xs text-gray-700">
+                        <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                            <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">
+                                1
+                            </span>
+                            <div>
+                                <strong className="text-gray-900 font-semibold">브라우저 메뉴 열기</strong>
+                                <p className="text-gray-500 mt-0.5">
+                                    화면 상단 또는 하단의 <strong>더보기 메뉴 (⋮ 또는 ≡)</strong>를 눌러주세요.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                            <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">
+                                2
+                            </span>
+                            <div>
+                                <strong className="text-gray-900 font-semibold">[앱 설치] 또는 [홈 화면에 추가] 터치</strong>
+                                <p className="text-gray-500 mt-0.5">
+                                    메뉴 목록에서 <strong>'앱 설치'</strong> 또는 <strong>'홈 화면에 추가'</strong>를 누르시면 설치가 완료됩니다.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2 pt-2">
+                        <Button
+                            type="button"
+                            className="w-full bg-[#3DDC84] hover:bg-[#35c073] text-black font-bold rounded-xl text-sm h-12 shadow-sm cursor-pointer"
+                            onClick={() => {
+                                setShowManualGuide(false);
+                                toast.success("설치 후 홈 화면에서 앱 아이콘을 터치해 접속해주세요!");
+                            }}
+                        >
+                            확인했습니다
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            type="button"
+                            className="w-full text-gray-400 hover:text-gray-600 text-xs py-2 cursor-pointer"
+                            onClick={() => {
+                                setShowManualGuide(false);
+                                localStorage.setItem("download_page_dismissed", "1");
+                                setInstallDismissed(true);
+                                if (userRole) {
+                                    closeRoleSelect();
+                                } else {
+                                    setStep("role");
+                                }
+                            }}
+                        >
+                            설치하지 않고 사이트로 바로가기
+                        </Button>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
+        </>
     );
 }

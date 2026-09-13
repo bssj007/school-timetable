@@ -23,7 +23,7 @@ import AppDownloadPage from "./pages/AppDownloadPage";
 import Privacy from "./pages/Privacy";
 import BetaTesterPage from "./pages/BetaTesterPage";
 import { getPumasiCookie, setPumasiCookie, hasPumasiRedirectCookie, clearPumasiRedirectCookie } from "@/lib/pumasiCookie";
-import { shouldShowDownloadPage, isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
+import { isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
 
 function Router() {
   return (
@@ -108,14 +108,6 @@ function AppContent() {
       .catch(() => {}); // 실패 시 기본값 유지
   }, []);
 
-  // 모바일 브라우저별 조건(Android Chrome/Google, PlayStore 등록 시 기타, iOS AppStore/Safari/Chrome) → 다운로드 유도 페이지로 리다이렉트
-  // 이미 설치된 앱(standalone), dismiss된 경우, PC는 건너뜀
-  const _shouldDownload = Boolean(publicSettings && shouldShowDownloadPage(publicSettings));
-  useEffect(() => {
-    if (_shouldDownload && location === "/") {
-      setLocation("/download");
-    }
-  }, [_shouldDownload, location]);
 
   // IP 강제 지정 오픈 베타테스터: 클라이언트 쿠키 발급/갱신 및 품앗이 모드 즉시 활성화
   useEffect(() => {
@@ -196,10 +188,6 @@ function AppContent() {
     );
   }
 
-  // 다운로드 유도 대상 브라우저 + 아직 redirect 되지 않은 경우 → 빈 화면 유지
-  if (_shouldDownload && location === "/") {
-    return null;
-  }
 
   // useEffect(위)가 setLocation을 실행하기 전 1프레임 동안 null을 반환하여
   // Dashboard가 절대 보이지 않도록 막는다.

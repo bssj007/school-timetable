@@ -73,13 +73,13 @@ interface UserConfigContextType {
     /** 역할 전환 함수 (프로필 보존하며 학생/교사 간 전환) */
     switchToRole: (targetRole: "student" | "teacher") => void;
     /** RoleSelectDialog 열기 제어 */
-    openRoleSelect: (step?: "role" | "student-info" | "teacher-name") => void;
+    openRoleSelect: (step?: "role" | "student-info" | "teacher-name" | "install") => void;
     /** RoleSelectDialog 닫기 제어 */
     closeRoleSelect: () => void;
     /** RoleSelectDialog 열림 여부 */
     isRoleSelectOpen: boolean;
     /** RoleSelectDialog 현재 단계 */
-    roleSelectStep: "role" | "student-info" | "teacher-name";
+    roleSelectStep: "role" | "student-info" | "teacher-name" | "install";
     /** 서버 점검 중 여부 — true이면 역할 선택/온보딩 다이얼로그를 숨긴다 */
     isMaintenanceMode: boolean;
     /** 전역 public 설정 데이터 (캐시된 상태 포함) */
@@ -144,9 +144,9 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
 
     // ── 역할 선택 다이얼로그 제어 ──
     const [isRoleSelectOpen, setIsRoleSelectOpen] = useState(false);
-    const [roleSelectStep, setRoleSelectStep] = useState<"role" | "student-info" | "teacher-name">("role");
+    const [roleSelectStep, setRoleSelectStep] = useState<"role" | "student-info" | "teacher-name" | "install">("role");
 
-    const openRoleSelect = (step: "role" | "student-info" | "teacher-name" = "role") => {
+    const openRoleSelect = (step: "role" | "student-info" | "teacher-name" | "install" = "role") => {
         setRoleSelectStep(step);
         setIsRoleSelectOpen(true);
     };
