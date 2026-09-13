@@ -9199,11 +9199,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                 </Button>
                                             </TableCell>
                                             <TableCell>
-                                                {user.notificationEnabled && (
-                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1.5 py-0 h-4 w-fit mb-0.5 flex items-center gap-1">
-                                                        🔔 알림 ON
-                                                    </Badge>
-                                                )}
                                                 {/* 선생님 이름 (해당 시) */}
                                                 {(user as any).teacherName ? (
                                                     <div className="flex flex-col gap-0.5">
@@ -9240,14 +9235,26 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                     </div>
                                             </TableCell>
                                             <TableCell>
-                                                {user.printCount && user.printCount > 0
-                                                    ? <Badge variant="secondary" className="font-mono text-xs bg-blue-50 text-blue-700 border-blue-200">{user.printCount}회</Badge>
-                                                    : <span className="text-gray-300">-</span>}
+                                                <div className="flex flex-col gap-0.5 items-start">
+                                                    {user.printCount && user.printCount > 0 && (
+                                                        <Badge variant="secondary" className="font-mono text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1 py-0 h-4">출력 {user.printCount}회</Badge>
+                                                    )}
+                                                    {user.downloadCount && user.downloadCount > 0 && (
+                                                        <Badge variant="secondary" className="font-mono text-[10px] bg-green-50 text-green-700 border-green-200 px-1 py-0 h-4">다운 {user.downloadCount}회</Badge>
+                                                    )}
+                                                    {(!user.printCount || user.printCount === 0) && (!user.downloadCount || user.downloadCount === 0) && (
+                                                        <span className="text-gray-300 text-xs">-</span>
+                                                    )}
+                                                </div>
                                             </TableCell>
-                                            <TableCell>
-                                                {user.downloadCount && user.downloadCount > 0
-                                                    ? <Badge variant="secondary" className="font-mono text-xs bg-green-50 text-green-700 border-green-200">{user.downloadCount}회</Badge>
-                                                    : <span className="text-gray-300">-</span>}
+                                            <TableCell className="text-center">
+                                                {user.notificationEnabled ? (
+                                                    <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-300 font-bold px-1.5 py-0.5 inline-flex items-center gap-1 shadow-2xs">
+                                                        🔔 ON
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-gray-300 text-xs">-</span>
+                                                )}
                                             </TableCell>
                                             <TableCell>
                                                 {renderEnvCell([user], `sub:${user.ip}`)}
@@ -9334,11 +9341,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         
                                                         {group.grade && group.classNum ? (
                                                             <div className="flex flex-col gap-0.5">
-                                                                {group.notificationEnabled && (
-                                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1.5 py-0 h-4 w-fit mb-0.5 flex items-center gap-1">
-                                                                        🔔 알림 ON
-                                                                    </Badge>
-                                                                )}
                                                                 {/* 선생님 이름 (동시 접속 시) */}
                                                                 {group.teacherName && (
                                                                     <div className="flex items-center gap-1">
@@ -9367,11 +9369,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         ) : group.teacherName ? (
                                                             // 선생님만 있는 경우 (학생 정보 없음)
                                                             <div className="flex flex-col gap-0.5">
-                                                                {group.notificationEnabled && (
-                                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1.5 py-0 h-4 w-fit mb-0.5 flex items-center gap-1">
-                                                                        🔔 알림 ON
-                                                                    </Badge>
-                                                                )}
                                                                 <div className="flex items-center gap-1">
                                                                     <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 px-1.5 py-0 h-4">선생님</Badge>
                                                                     <span className="font-bold text-sm text-slate-800">{group.teacherName}</span>
@@ -9379,11 +9376,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-col gap-0.5">
-                                                                {group.notificationEnabled && (
-                                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1.5 py-0 h-4 w-fit mb-0.5 flex items-center gap-1">
-                                                                        🔔 알림 ON
-                                                                    </Badge>
-                                                                )}
                                                                 <span className="text-gray-300 text-xs">-</span>
                                                             </div>
                                                         )}
@@ -9406,14 +9398,26 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
-                                                        {group.printCount > 0 ? (
-                                                            <Badge variant="secondary" className="font-mono bg-blue-50 text-blue-700 border-blue-200">{group.printCount}회</Badge>
-                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                        <div className="flex flex-col gap-0.5 items-start">
+                                                            {group.printCount > 0 && (
+                                                                <Badge variant="secondary" className="font-mono text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1 py-0 h-4">출력 {group.printCount}회</Badge>
+                                                            )}
+                                                            {group.downloadCount > 0 && (
+                                                                <Badge variant="secondary" className="font-mono text-[10px] bg-green-50 text-green-700 border-green-200 px-1 py-0 h-4">다운 {group.downloadCount}회</Badge>
+                                                            )}
+                                                            {(!group.printCount || group.printCount === 0) && (!group.downloadCount || group.downloadCount === 0) && (
+                                                                <span className="text-gray-400 text-xs">-</span>
+                                                            )}
+                                                        </div>
                                                     </TableCell>
-                                                    <TableCell>
-                                                        {group.downloadCount > 0 ? (
-                                                            <Badge variant="secondary" className="font-mono bg-green-50 text-green-700 border-green-200">{group.downloadCount}회</Badge>
-                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                    <TableCell className="text-center">
+                                                        {group.notificationEnabled ? (
+                                                            <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-300 font-bold px-1.5 py-0.5 inline-flex items-center gap-1 shadow-2xs">
+                                                                🔔 ON
+                                                            </Badge>
+                                                        ) : (
+                                                            <span className="text-gray-300 text-xs">-</span>
+                                                        )}
                                                     </TableCell>
                                                     <TableCell>
                                                         {renderEnvCell(group.ips, `group:${group.key}`)}
@@ -9493,8 +9497,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                             <TableHead className="w-[120px] min-w-[120px]">IP 주소</TableHead>
                                                             <SortHeader col="id" label="학년/반/번호" className="w-[140px] min-w-[140px]" />
                                                             <SortHeader col="modCount" label="수정/추가/삭제" className="w-[120px] min-w-[120px]" />
-                                                            <TableHead className="w-[80px] min-w-[80px]">출력</TableHead>
-                                                            <TableHead className="w-[80px] min-w-[80px]">다운로드</TableHead>
+                                                            <TableHead className="w-[90px] min-w-[90px]">출력/다운</TableHead>
+                                                            <TableHead className="w-[70px] min-w-[70px] text-center">알림</TableHead>
                                                             <TableHead className="w-[140px] min-w-[140px]" title="실시간 최신 접속 브라우저 및 OS 환경 (LIVE 시 빨간색 표시, 오프라인 시 최근 1개 표시, 더보기 지원)">접속환경</TableHead>
                                                             <TableHead className="w-[105px] min-w-[105px]" title="현재 접속 여부 무관, 과거 전체 로그 기준 앱(WebView/PWA) 접속 이력 여부">앱설치</TableHead>
                                                             <SortHeader col="lastAccess" label="마지막 접속" className="w-[160px] min-w-[160px]" />
@@ -9536,8 +9540,8 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                         <TableHead className="w-[120px] min-w-[120px]">IP 주소</TableHead>
                                                                         <TableHead className="w-[140px] min-w-[140px]">학년/반/번호</TableHead>
                                                                         <TableHead className="w-[120px] min-w-[120px]">수정/추가/삭제</TableHead>
-                                                                        <TableHead className="w-[80px] min-w-[80px]">출력</TableHead>
-                                                                        <TableHead className="w-[80px] min-w-[80px]">다운로드</TableHead>
+                                                                        <TableHead className="w-[90px] min-w-[90px]">출력/다운</TableHead>
+                                                                        <TableHead className="w-[70px] min-w-[70px] text-center">알림</TableHead>
                                                                         <TableHead className="w-[140px] min-w-[140px]">접속환경</TableHead>
                                                                         <TableHead className="w-[105px] min-w-[105px]">앱설치</TableHead>
                                                                         <TableHead className="w-[160px] min-w-[160px]">마지막 접속</TableHead>
@@ -9555,11 +9559,6 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                                 </Button>
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                {user.notificationEnabled && (
-                                                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1.5 py-0 h-4 w-fit mb-0.5 flex items-center gap-1">
-                                                                                        🔔 알림 ON
-                                                                                    </Badge>
-                                                                                )}
                                                                                 {user.grade && user.classNum ? (
                                                                                     <div className="flex flex-col gap-0.5">
                                                                                         <span className="font-bold text-sm text-slate-800">
@@ -9589,14 +9588,26 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                                 </div>
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                {user.printCount && user.printCount > 0 ? (
-                                                                                    <Badge variant="secondary" className="font-mono bg-blue-50 text-blue-700 border-blue-200">{user.printCount}회</Badge>
-                                                                                ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                                <div className="flex flex-col gap-0.5 items-start">
+                                                                                    {user.printCount && user.printCount > 0 && (
+                                                                                        <Badge variant="secondary" className="font-mono text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1 py-0 h-4">출력 {user.printCount}회</Badge>
+                                                                                    )}
+                                                                                    {user.downloadCount && user.downloadCount > 0 && (
+                                                                                        <Badge variant="secondary" className="font-mono text-[10px] bg-green-50 text-green-700 border-green-200 px-1 py-0 h-4">다운 {user.downloadCount}회</Badge>
+                                                                                    )}
+                                                                                    {(!user.printCount || user.printCount === 0) && (!user.downloadCount || user.downloadCount === 0) && (
+                                                                                        <span className="text-gray-400 text-xs">-</span>
+                                                                                    )}
+                                                                                </div>
                                                                             </TableCell>
-                                                                            <TableCell>
-                                                                                {user.downloadCount && user.downloadCount > 0 ? (
-                                                                                    <Badge variant="secondary" className="font-mono bg-green-50 text-green-700 border-green-200">{user.downloadCount}회</Badge>
-                                                                                ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                            <TableCell className="text-center">
+                                                                                {user.notificationEnabled ? (
+                                                                                    <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-300 font-bold px-1.5 py-0.5 inline-flex items-center gap-1 shadow-2xs">
+                                                                                        🔔 ON
+                                                                                    </Badge>
+                                                                                ) : (
+                                                                                    <span className="text-gray-300 text-xs">-</span>
+                                                                                )}
                                                                             </TableCell>
                                                                             <TableCell>
                                                                                 {renderEnvCell([user], `unknown:${user.ip}`)}
@@ -9693,14 +9704,26 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                                         </div>
                                                                                     </TableCell>
                                                                                     <TableCell>
-                                                                                        {user.printCount && user.printCount > 0 ? (
-                                                                                            <Badge variant="secondary" className="font-mono bg-blue-50 text-blue-700 border-blue-200">{user.printCount}회</Badge>
-                                                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                                        <div className="flex flex-col gap-0.5 items-start">
+                                                                                            {user.printCount && user.printCount > 0 && (
+                                                                                                <Badge variant="secondary" className="font-mono text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1 py-0 h-4">출력 {user.printCount}회</Badge>
+                                                                                            )}
+                                                                                            {user.downloadCount && user.downloadCount > 0 && (
+                                                                                                <Badge variant="secondary" className="font-mono text-[10px] bg-green-50 text-green-700 border-green-200 px-1 py-0 h-4">다운 {user.downloadCount}회</Badge>
+                                                                                            )}
+                                                                                            {(!user.printCount || user.printCount === 0) && (!user.downloadCount || user.downloadCount === 0) && (
+                                                                                                <span className="text-gray-400 text-xs">-</span>
+                                                                                            )}
+                                                                                        </div>
                                                                                     </TableCell>
-                                                                                    <TableCell>
-                                                                                        {user.downloadCount && user.downloadCount > 0 ? (
-                                                                                            <Badge variant="secondary" className="font-mono bg-green-50 text-green-700 border-green-200">{user.downloadCount}회</Badge>
-                                                                                        ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                                    <TableCell className="text-center">
+                                                                                        {user.notificationEnabled ? (
+                                                                                            <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-300 font-bold px-1.5 py-0.5 inline-flex items-center gap-1 shadow-2xs">
+                                                                                                🔔 ON
+                                                                                            </Badge>
+                                                                                        ) : (
+                                                                                            <span className="text-gray-300 text-xs">-</span>
+                                                                                        )}
                                                                                     </TableCell>
                                                                                     <TableCell>
                                                                                         {renderEnvCell([user], `pumasi:${user.ip}`)}

@@ -524,13 +524,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
 
     const handleInstallBarClick = async () => {
         if (isPwaInstalled) {
-            markInstallDismissed();
             openPwaApp("/?mode=pwa");
-            if (userRole) {
-                closeRoleSelect();
-            } else {
-                setStep("role");
-            }
             return;
         }
         await handleInstallAction();

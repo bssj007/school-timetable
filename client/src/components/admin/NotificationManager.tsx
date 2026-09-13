@@ -1,7 +1,7 @@
 // client/src/components/admin/NotificationManager.tsx
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, Send, CheckCircle2, AlertCircle, Trash2, User, Users, Smartphone, RefreshCw, Clock } from "lucide-react";
+import { Bell, Send, CheckCircle2, AlertCircle, Trash2, Users, Smartphone, RefreshCw, Clock, Check, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +13,50 @@ interface NotificationManagerProps {
     adminPassword: string;
 }
 
+// 사전 정의된 알림 종류
+export const NOTIFICATION_TYPES = [
+    { 
+        id: "assessment", 
+        label: "수행평가", 
+        icon: "📝", 
+        defaultTitle: "[수행평가] 등록 및 마감 안내", 
+        defaultMessage: "새로운 수행평가가 등록되었습니다. 일정을 확인해 주세요.",
+        badgeClass: "bg-blue-100 text-blue-800 border-blue-200" 
+    },
+    { 
+        id: "notice", 
+        label: "공지사항", 
+        icon: "📢", 
+        defaultTitle: "[공지] 주요 안내사항", 
+        defaultMessage: "새로운 학교/학급 공지사항이 등록되었습니다.",
+        badgeClass: "bg-amber-100 text-amber-800 border-amber-200" 
+    },
+    { 
+        id: "timetable", 
+        label: "시간표 변경", 
+        icon: "📅", 
+        defaultTitle: "[시간표] 수업 시간표 변동 안내", 
+        defaultMessage: "수업 시간표에 변동 사항이 있습니다. 확인해 주세요.",
+        badgeClass: "bg-teal-100 text-teal-800 border-teal-200" 
+    },
+    { 
+        id: "urgent", 
+        label: "긴급공지", 
+        icon: "🚨", 
+        defaultTitle: "[긴급] 필독 안내사항", 
+        defaultMessage: "중요한 공지사항이 있습니다. 즉시 확인해 주시기 바랍니다.",
+        badgeClass: "bg-rose-100 text-rose-800 border-rose-200" 
+    },
+    { 
+        id: "test", 
+        label: "테스트", 
+        icon: "🧪", 
+        defaultTitle: "[테스트] 알림 수신 확인", 
+        defaultMessage: "수행평가 알림 수신 테스트 메시지입니다. 정상적으로 수신되었습니다.",
+        badgeClass: "bg-purple-100 text-purple-800 border-purple-200" 
+    },
+];
+
 export function NotificationManager({ adminPassword }: NotificationManagerProps) {
     const queryClient = useQueryClient();
 
@@ -20,7 +64,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
 
     // Target state
     const [targetType, setTargetType] = useState<"student" | "teacher" | "all">("student");
-    const [selectedSubscriberId, setSelectedSubscriberId] = useState<number | null>(null);
+    const [selectedTargetKey, setSelectedTargetKey] = useState<string | null>(null);
     const [targetGrade, setTargetGrade] = useState<string>("");
     const [targetClass, setTargetClass] = useState<string>("");
     const [targetStudentNumber, setTargetStudentNumber] = useState<string>("");
@@ -28,9 +72,9 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
     const [targetTeacherName, setTargetTeacherName] = useState<string>("");
 
     // Message state
-    const [title, setTitle] = useState("[테스트] 수행평가 알림");
-    const [message, setMessage] = useState("수행평가 알림 수신 테스트 메시지입니다. 정상적으로 수신되었습니다.");
-    const [category, setCategory] = useState<"assessment" | "notice" | "test">("assessment");
+    const [category, setCategory] = useState<string>("assessment");
+    const [title, setTitle] = useState(NOTIFICATION_TYPES[0].defaultTitle);
+    const [message, setMessage] = useState(NOTIFICATION_TYPES[0].defaultMessage);
     const [link, setLink] = useState("/");
 
     // 1. Fetch only users who enabled notifications (is_active = 1)
@@ -59,7 +103,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
         refetchInterval: 15000
     });
 
-    // 3. Send test notification mutation
+    // 3. Send notification mutation
     const sendMutation = useMutation({
         mutationFn: async () => {
             const res = await fetch("/api/admin/notifications/send", {
@@ -113,63 +157,101 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
         }
     });
 
-    const students = subscribersQuery.data?.students || [];
-    const teachers = subscribersQuery.data?.teachers || [];
-    const totalActiveCount = subscribersQuery.data?.totalCount ?? 0;
+    // 중복 제거된 고유 사용자 목록 (사용자 관리 탭 기준)
+    const rawSubscribers = subscribersQuery.data?.subscribers || [];
+    const students: any[] = subscribersQuery.data?.students || [];
+    const teachers: any[] = subscribersQuery.data?.teachers || [];
+    const totalActiveUsers = subscribersQuery.data?.totalUserCount ?? (students.length + teachers.length);
+    const totalDevices = subscribersQuery.data?.totalDeviceCount ?? rawSubscribers.length;
 
-    // Quick select helper
-    const handleSelectStudent = (s: any) => {
-        setSelectedSubscriberId(s.id);
-        setTargetType("student");
-        setTargetGrade(s.grade ? String(s.grade) : "");
-        setTargetClass(s.classNum ? String(s.classNum) : "");
-        setTargetStudentNumber(s.studentNumber ? String(s.studentNumber) : "");
-        setTargetStudentName(s.studentName || "");
-        setTargetTeacherName("");
+    // 알림 종류 변경 핸들러 (제목/내용 템플릿 스마트 동기화)
+    const handleSelectCategory = (typeId: string) => {
+        setCategory(typeId);
+        const matched = NOTIFICATION_TYPES.find(t => t.id === typeId);
+        if (matched) {
+            const isDefaultTitle = NOTIFICATION_TYPES.some(t => t.defaultTitle === title) || !title.trim();
+            if (isDefaultTitle) {
+                setTitle(matched.defaultTitle);
+            }
+            const isDefaultMessage = NOTIFICATION_TYPES.some(t => t.defaultMessage === message) || !message.trim();
+            if (isDefaultMessage) {
+                setMessage(matched.defaultMessage);
+            }
+        }
     };
 
-    const handleSelectTeacher = (t: any) => {
-        setSelectedSubscriberId(t.id);
-        setTargetType("teacher");
-        setTargetTeacherName(t.teacherName || "");
-        setTargetGrade("");
-        setTargetClass("");
-        setTargetStudentNumber("");
-        setTargetStudentName("");
+    // 타깃 학생 단일 선택 (토글 지원)
+    const handleToggleStudent = (s: any) => {
+        const sKey = `${s.studentName || ''}|${s.grade}-${s.classNum}-${s.studentNumber || 0}`;
+        if (selectedTargetKey === sKey) {
+            setSelectedTargetKey(null);
+            setTargetGrade("");
+            setTargetClass("");
+            setTargetStudentNumber("");
+            setTargetStudentName("");
+        } else {
+            setSelectedTargetKey(sKey);
+            setTargetType("student");
+            setTargetGrade(s.grade ? String(s.grade) : "");
+            setTargetClass(s.classNum ? String(s.classNum) : "");
+            setTargetStudentNumber(s.studentNumber ? String(s.studentNumber) : "");
+            setTargetStudentName(s.studentName || "");
+            setTargetTeacherName("");
+        }
+    };
+
+    // 타깃 교사 단일 선택 (토글 지원)
+    const handleToggleTeacher = (t: any) => {
+        const tKey = `teacher|${t.teacherName || ''}`;
+        if (selectedTargetKey === tKey) {
+            setSelectedTargetKey(null);
+            setTargetTeacherName("");
+        } else {
+            setSelectedTargetKey(tKey);
+            setTargetType("teacher");
+            setTargetTeacherName(t.teacherName || "");
+            setTargetGrade("");
+            setTargetClass("");
+            setTargetStudentNumber("");
+            setTargetStudentName("");
+        }
     };
 
     return (
         <div className="flex flex-col h-full gap-4 overflow-y-auto pr-1">
-            {/* 상단 헤더 및 통계 */}
+            {/* 상단 헤더: 중복되는 '알림 발송' 버튼을 완전히 제거하고 발송내역 토글과 새로고침만 배치 */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
                 <div>
                     <h3 className="text-lg font-bold flex items-center gap-2 text-amber-700">
                         <Bell className="w-5 h-5 text-amber-600" />
-                        알림 관리 &amp; 테스트 발송
+                        알림 관리 &amp; 발송
                     </h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                        종 모양 아이콘에서 <strong>수행 알림받기를 켠 사용자</strong>에게 테스트 알림을 발송합니다.
+                        종 모양 아이콘에서 <strong>수행 알림받기를 켠 활성 사용자</strong>에게 알림을 발송합니다.
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button
-                        size="sm"
-                        variant={activeTab === "send" ? "default" : "outline"}
-                        className={activeTab === "send" ? "bg-amber-500 hover:bg-amber-600 text-gray-900 font-bold text-xs" : "text-xs"}
-                        onClick={() => setActiveTab("send")}
-                    >
-                        <Send className="w-3.5 h-3.5 mr-1" />
-                        알림 발송
-                    </Button>
-                    <Button
-                        size="sm"
-                        variant={activeTab === "history" ? "default" : "outline"}
-                        className={activeTab === "history" ? "bg-amber-500 hover:bg-amber-600 text-gray-900 font-bold text-xs" : "text-xs"}
-                        onClick={() => setActiveTab("history")}
-                    >
-                        <Clock className="w-3.5 h-3.5 mr-1" />
-                        발송 내역 ({historyQuery.data?.notifications?.length ?? 0})
-                    </Button>
+                    {activeTab === "send" ? (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs hover:bg-amber-50 hover:text-amber-900 border-amber-200 cursor-pointer"
+                            onClick={() => setActiveTab("history")}
+                        >
+                            <Clock className="w-3.5 h-3.5 mr-1 text-amber-600" />
+                            발송 내역 ({historyQuery.data?.notifications?.length ?? 0})
+                        </Button>
+                    ) : (
+                        <Button
+                            size="sm"
+                            variant="default"
+                            className="bg-amber-500 hover:bg-amber-600 text-gray-900 font-bold text-xs cursor-pointer"
+                            onClick={() => setActiveTab("send")}
+                        >
+                            <Send className="w-3.5 h-3.5 mr-1" />
+                            새 알림 작성으로
+                        </Button>
+                    )}
                     <Button
                         size="sm"
                         variant="ghost"
@@ -177,7 +259,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                             subscribersQuery.refetch();
                             historyQuery.refetch();
                         }}
-                        className="h-8 w-8 p-0"
+                        className="h-8 w-8 p-0 cursor-pointer"
                         title="새로고침"
                     >
                         <RefreshCw className={`w-3.5 h-3.5 ${subscribersQuery.isFetching ? "animate-spin text-amber-600" : "text-gray-400"}`} />
@@ -185,12 +267,17 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                 </div>
             </div>
 
-            {/* 활성 구독자 수 현황 카드 */}
+            {/* 활성 구독자 수 현황 카드: 기기 대수가 아닌 사용자 관리 탭 기준 고유 활성 사용자 수 */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/50 flex items-center justify-between">
                     <div>
-                        <p className="text-[11px] font-semibold text-amber-800">알림 ON 전체 인원</p>
-                        <p className="text-xl font-extrabold text-amber-900 mt-0.5">{totalActiveCount}명</p>
+                        <p className="text-[11px] font-semibold text-amber-800">알림 ON 전체 사용자</p>
+                        <div className="flex items-baseline gap-1.5 mt-0.5">
+                            <p className="text-xl font-extrabold text-amber-900">{totalActiveUsers}명</p>
+                            {totalDevices > totalActiveUsers && (
+                                <span className="text-[10px] text-amber-700 font-medium">({totalDevices}대 기기)</span>
+                            )}
+                        </div>
                     </div>
                     <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 text-xs">
                         실시간 활성
@@ -216,20 +303,20 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                 </div>
             </div>
 
-            {/* TAB 1: 알림 발송 폼 & 활성 인원 목록 */}
+            {/* TAB 1: 알림 발송 폼 & 사용자 관리 기준 중복 없는 대상 목록 */}
             {activeTab === "send" && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                    {/* 좌측: 활성화된 인원만 뜨는 타깃 선택 목록 */}
+                    {/* 좌측: 사용자 관리 기준 중복 제거된 활성 대상 목록 */}
                     <div className="lg:col-span-5 flex flex-col gap-3">
                         <div className="flex items-center justify-between">
                             <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
                                 <Users className="w-3.5 h-3.5 text-amber-600" />
-                                알림 켠 대상 목록 ({totalActiveCount}명)
+                                알림 켠 사용자 목록 ({totalActiveUsers}명)
                             </span>
-                            <span className="text-[11px] text-gray-400">클릭 시 타깃 자동 선택</span>
+                            <span className="text-[11px] text-gray-400">클릭 시 자동 선택 / 해제</span>
                         </div>
 
-                        {totalActiveCount === 0 ? (
+                        {totalActiveUsers === 0 ? (
                             <div className="p-6 rounded-xl border border-dashed border-amber-200 bg-amber-50/30 text-center flex flex-col items-center gap-2">
                                 <AlertCircle className="w-8 h-8 text-amber-500" />
                                 <p className="text-xs font-bold text-gray-700">현재 알림을 켠 사용자가 없습니다.</p>
@@ -238,8 +325,8 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                 </p>
                             </div>
                         ) : (
-                            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                                {/* 학생 목록 섹션 */}
+                            <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                                {/* 학생 목록 섹션 (중복 없음) */}
                                 {students.length > 0 && (
                                     <div>
                                         <p className="text-[11px] font-bold text-blue-700 mb-1.5 flex items-center gap-1">
@@ -247,15 +334,18 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                         </p>
                                         <div className="space-y-1.5">
                                             {students.map((s: any) => {
-                                                const isSelected = selectedSubscriberId === s.id;
-                                                const studentIdStr = s.grade && s.classNum ? `${s.grade}학년 ${s.classNum}반 ${s.studentNumber ? `${s.studentNumber}번` : ''}` : '학번 미지정';
+                                                const sKey = `${s.studentName || ''}|${s.grade}-${s.classNum}-${s.studentNumber || 0}`;
+                                                const isSelected = selectedTargetKey === sKey;
+                                                const studentIdStr = s.grade && s.classNum ? `${s.grade}학년 ${s.classNum}반${s.studentNumber ? ` ${s.studentNumber}번` : ''}` : '학번 미지정';
+                                                const platforms = (s.platforms || ['web']).map((p: string) => p.toUpperCase()).join(', ');
+
                                                 return (
                                                     <div
-                                                        key={s.id}
-                                                        onClick={() => handleSelectStudent(s)}
-                                                        className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between ${
+                                                        key={sKey}
+                                                        onClick={() => handleToggleStudent(s)}
+                                                        className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between select-none ${
                                                             isSelected 
-                                                                ? 'border-amber-400 bg-amber-50/80 shadow-xs' 
+                                                                ? 'border-amber-400 bg-amber-50/90 shadow-sm ring-1 ring-amber-300' 
                                                                 : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
                                                         }`}
                                                     >
@@ -264,18 +354,25 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                                                 <span className="font-bold text-gray-900">
                                                                     {s.studentName || '이름 없음'}
                                                                 </span>
-                                                                <Badge variant="outline" className="text-[10px] font-mono px-1 py-0 bg-blue-50 text-blue-700 border-blue-200">
+                                                                <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200">
                                                                     {studentIdStr}
                                                                 </Badge>
+                                                                {s.deviceCount > 1 && (
+                                                                    <span className="text-[10px] font-semibold text-amber-600">
+                                                                        기기 {s.deviceCount}대
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                             <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-1">
-                                                                <span className="uppercase">{s.platform || 'web'}</span>
+                                                                <span className="font-medium text-slate-500">{platforms}</span>
                                                                 <span>·</span>
                                                                 <span>{s.updatedAt ? new Date(s.updatedAt.replace(' ', 'T') + (s.updatedAt.endsWith('Z') ? '' : 'Z')).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span>
                                                             </div>
                                                         </div>
                                                         {isSelected && (
-                                                            <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0 ml-2" />
+                                                            <div className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white shrink-0 ml-2 shadow-xs">
+                                                                <Check className="w-3 h-3 stroke-[3]" />
+                                                            </div>
                                                         )}
                                                     </div>
                                                 );
@@ -284,7 +381,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                     </div>
                                 )}
 
-                                {/* 선생님 목록 섹션 */}
+                                {/* 선생님 목록 섹션 (중복 없음) */}
                                 {teachers.length > 0 && (
                                     <div className="pt-2">
                                         <p className="text-[11px] font-bold text-emerald-700 mb-1.5 flex items-center gap-1">
@@ -292,14 +389,17 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                         </p>
                                         <div className="space-y-1.5">
                                             {teachers.map((t: any) => {
-                                                const isSelected = selectedSubscriberId === t.id;
+                                                const tKey = `teacher|${t.teacherName || ''}`;
+                                                const isSelected = selectedTargetKey === tKey;
+                                                const platforms = (t.platforms || ['web']).map((p: string) => p.toUpperCase()).join(', ');
+
                                                 return (
                                                     <div
-                                                        key={t.id}
-                                                        onClick={() => handleSelectTeacher(t)}
-                                                        className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between ${
+                                                        key={tKey}
+                                                        onClick={() => handleToggleTeacher(t)}
+                                                        className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between select-none ${
                                                             isSelected 
-                                                                ? 'border-amber-400 bg-amber-50/80 shadow-xs' 
+                                                                ? 'border-amber-400 bg-amber-50/90 shadow-sm ring-1 ring-amber-300' 
                                                                 : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
                                                         }`}
                                                     >
@@ -308,18 +408,25 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                                                 <span className="font-bold text-gray-900">
                                                                     {t.teacherName || '선생님'}
                                                                 </span>
-                                                                <Badge variant="outline" className="text-[10px] px-1 py-0 bg-emerald-50 text-emerald-700 border-emerald-200">
-                                                                    교사용
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200">
+                                                                    선생님
                                                                 </Badge>
+                                                                {t.deviceCount > 1 && (
+                                                                    <span className="text-[10px] font-semibold text-emerald-600">
+                                                                        기기 {t.deviceCount}대
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                             <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-1">
-                                                                <span className="uppercase">{t.platform || 'web'}</span>
+                                                                <span className="font-medium text-slate-500">{platforms}</span>
                                                                 <span>·</span>
                                                                 <span>{t.updatedAt ? new Date(t.updatedAt.replace(' ', 'T') + (t.updatedAt.endsWith('Z') ? '' : 'Z')).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span>
                                                             </div>
                                                         </div>
                                                         {isSelected && (
-                                                            <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0 ml-2" />
+                                                            <div className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white shrink-0 ml-2 shadow-xs">
+                                                                <Check className="w-3 h-3 stroke-[3]" />
+                                                            </div>
                                                         )}
                                                     </div>
                                                 );
@@ -331,31 +438,39 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                         )}
                     </div>
 
-                    {/* 우측: 알림 내용 입력 및 발송기 */}
+                    {/* 우측: 알림 내용 입력 및 단일 발송기 */}
                     <div className="lg:col-span-7 flex flex-col gap-4">
                         <Card className="border shadow-xs">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-sm font-bold text-gray-900 flex items-center gap-2">
                                     <Send className="w-4 h-4 text-amber-600" />
-                                    테스트 알림 작성 및 발송
+                                    알림 작성 및 발송
                                 </CardTitle>
                                 <CardDescription className="text-xs">
-                                    발송할 대상 정보와 알림 제목/내용을 입력하세요.
+                                    발송할 대상 정보와 알림 종류/제목/내용을 입력하세요.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4 text-xs">
-                                {/* 타깃 유형 라디오 버튼 */}
+                                {/* 타깃 유형 선택 버튼 */}
                                 <div className="space-y-1.5">
-                                    <label className="font-semibold text-gray-700">발송 대상 구분</label>
+                                    <div className="flex items-center justify-between">
+                                        <label className="font-semibold text-gray-700">발송 대상 구분</label>
+                                        {selectedTargetKey && (
+                                            <span className="text-[11px] text-amber-700 font-semibold flex items-center gap-1">
+                                                <CheckCircle2 className="w-3 h-3 text-amber-600" />
+                                                선택된 특정 사용자 타깃 중
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="flex items-center gap-2">
                                         <button
                                             type="button"
                                             onClick={() => {
                                                 setTargetType("student");
-                                                setSelectedSubscriberId(null);
+                                                setSelectedTargetKey(null);
                                             }}
-                                            className={`px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer ${
-                                                targetType === "student" ? "bg-blue-500 text-white shadow-xs" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                            className={`px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer text-xs ${
+                                                targetType === "student" ? "bg-blue-600 text-white shadow-xs" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                                             }`}
                                         >
                                             학생 타깃
@@ -364,10 +479,10 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                             type="button"
                                             onClick={() => {
                                                 setTargetType("teacher");
-                                                setSelectedSubscriberId(null);
+                                                setSelectedTargetKey(null);
                                             }}
-                                            className={`px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer ${
-                                                targetType === "teacher" ? "bg-emerald-500 text-white shadow-xs" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                            className={`px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer text-xs ${
+                                                targetType === "teacher" ? "bg-emerald-600 text-white shadow-xs" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                                             }`}
                                         >
                                             선생님 타깃
@@ -376,10 +491,10 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                             type="button"
                                             onClick={() => {
                                                 setTargetType("all");
-                                                setSelectedSubscriberId(null);
+                                                setSelectedTargetKey(null);
                                             }}
-                                            className={`px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer ${
-                                                targetType === "all" ? "bg-purple-500 text-white shadow-xs" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                            className={`px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer text-xs ${
+                                                targetType === "all" ? "bg-purple-600 text-white shadow-xs" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                                             }`}
                                         >
                                             전체 사용자 (전교생/교사)
@@ -398,7 +513,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                                     type="number"
                                                     placeholder="예: 1"
                                                     value={targetGrade}
-                                                    onChange={(e) => setTargetGrade(e.target.value)}
+                                                    onChange={(e) => { setTargetGrade(e.target.value); setSelectedTargetKey(null); }}
                                                     className="h-8 text-xs bg-white"
                                                 />
                                             </div>
@@ -408,7 +523,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                                     type="number"
                                                     placeholder="예: 3"
                                                     value={targetClass}
-                                                    onChange={(e) => setTargetClass(e.target.value)}
+                                                    onChange={(e) => { setTargetClass(e.target.value); setSelectedTargetKey(null); }}
                                                     className="h-8 text-xs bg-white"
                                                 />
                                             </div>
@@ -418,7 +533,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                                     type="number"
                                                     placeholder="예: 15"
                                                     value={targetStudentNumber}
-                                                    onChange={(e) => setTargetStudentNumber(e.target.value)}
+                                                    onChange={(e) => { setTargetStudentNumber(e.target.value); setSelectedTargetKey(null); }}
                                                     className="h-8 text-xs bg-white"
                                                 />
                                             </div>
@@ -428,7 +543,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                             <Input
                                                 placeholder="학생 이름 입력"
                                                 value={targetStudentName}
-                                                onChange={(e) => setTargetStudentName(e.target.value)}
+                                                onChange={(e) => { setTargetStudentName(e.target.value); setSelectedTargetKey(null); }}
                                                 className="h-8 text-xs bg-white"
                                             />
                                         </div>
@@ -444,39 +559,53 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                             <Input
                                                 placeholder="예: 김선생"
                                                 value={targetTeacherName}
-                                                onChange={(e) => setTargetTeacherName(e.target.value)}
+                                                onChange={(e) => { setTargetTeacherName(e.target.value); setSelectedTargetKey(null); }}
                                                 className="h-8 text-xs bg-white"
                                             />
                                         </div>
                                     </div>
                                 )}
 
-                                {/* 제목 & 카테고리 */}
-                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                                    <div className="sm:col-span-3">
-                                        <label className="font-semibold text-gray-700 mb-1 block">알림 제목</label>
-                                        <Input
-                                            placeholder="알림 제목을 입력하세요"
-                                            value={title}
-                                            onChange={(e) => setTitle(e.target.value)}
-                                            className="h-9 text-xs"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="font-semibold text-gray-700 mb-1 block">구분</label>
-                                        <select
-                                            value={category}
-                                            onChange={(e: any) => setCategory(e.target.value)}
-                                            className="w-full h-9 px-2 text-xs border rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-                                        >
-                                            <option value="assessment">수행평가</option>
-                                            <option value="notice">공지사항</option>
-                                            <option value="test">테스트</option>
-                                        </select>
+                                {/* 알림 종류 지정 UI (칩 선택기) */}
+                                <div className="space-y-1.5">
+                                    <label className="font-semibold text-gray-700 flex items-center gap-1.5">
+                                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                                        알림 종류 지정
+                                    </label>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {NOTIFICATION_TYPES.map((t) => {
+                                            const isSelected = category === t.id;
+                                            return (
+                                                <button
+                                                    key={t.id}
+                                                    type="button"
+                                                    onClick={() => handleSelectCategory(t.id)}
+                                                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                                                        isSelected
+                                                            ? `${t.badgeClass} ring-2 ring-amber-400 font-bold shadow-xs scale-[1.02]`
+                                                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                                                    }`}
+                                                >
+                                                    <span>{t.icon}</span>
+                                                    <span>{t.label}</span>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 
-                                {/* 내용 */}
+                                {/* 알림 제목 */}
+                                <div>
+                                    <label className="font-semibold text-gray-700 mb-1 block">알림 제목</label>
+                                    <Input
+                                        placeholder="알림 제목을 입력하세요"
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        className="h-9 text-xs"
+                                    />
+                                </div>
+
+                                {/* 알림 내용 */}
                                 <div>
                                     <label className="font-semibold text-gray-700 mb-1 block">알림 상세 내용</label>
                                     <Textarea
@@ -488,14 +617,25 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                     />
                                 </div>
 
-                                {/* 발송 버튼 */}
+                                {/* 이동 링크 (선택) */}
+                                <div>
+                                    <label className="font-semibold text-gray-700 mb-1 block">터치 시 이동 링크 (기본: /)</label>
+                                    <Input
+                                        placeholder="/"
+                                        value={link}
+                                        onChange={(e) => setLink(e.target.value)}
+                                        className="h-8 text-xs font-mono"
+                                    />
+                                </div>
+
+                                {/* 유일한 알림 발송 버튼 */}
                                 <Button
                                     className="w-full h-10 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-gray-900 font-bold text-xs shadow-sm cursor-pointer"
                                     onClick={() => sendMutation.mutate()}
                                     disabled={sendMutation.isPending || !title.trim() || !message.trim()}
                                 >
                                     <Send className="w-3.5 h-3.5 mr-1.5" />
-                                    {sendMutation.isPending ? "알림 발송 중..." : "테스트 알림 발송하기"}
+                                    {sendMutation.isPending ? "알림 발송 중..." : "알림 발송하기"}
                                 </Button>
                             </CardContent>
                         </Card>
@@ -530,12 +670,17 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                         targetText = `선생님 (${n.target_teacher_name || '전체'})`;
                                     }
 
+                                    const typeInfo = NOTIFICATION_TYPES.find(t => t.id === n.category) || {
+                                        label: n.category === 'notice' ? '공지사항' : n.category === 'test' ? '테스트' : n.category === 'timetable' ? '시간표' : n.category === 'urgent' ? '긴급공지' : '수행평가',
+                                        badgeClass: n.category === 'notice' ? 'bg-amber-100 text-amber-800 border-amber-200' : n.category === 'test' ? 'bg-purple-100 text-purple-800 border-purple-200' : n.category === 'timetable' ? 'bg-teal-100 text-teal-800 border-teal-200' : n.category === 'urgent' ? 'bg-rose-100 text-rose-800 border-rose-200' : 'bg-blue-100 text-blue-800 border-blue-200'
+                                    };
+
                                     return (
                                         <div key={n.id} className="p-4 flex items-start justify-between gap-4 hover:bg-gray-50/70 transition-colors">
                                             <div className="min-w-0 flex-1">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-50 text-amber-800 border-amber-200">
-                                                        {n.category === 'test' ? '테스트' : n.category === 'notice' ? '공지' : '수행평가'}
+                                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 font-semibold ${typeInfo.badgeClass}`}>
+                                                        {typeInfo.label}
                                                     </Badge>
                                                     <span className="text-xs font-bold text-gray-900">{n.title}</span>
                                                     <Badge variant="secondary" className="text-[10px] font-mono px-1 py-0 text-gray-600">

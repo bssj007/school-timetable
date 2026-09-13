@@ -451,6 +451,10 @@ export default function Navigation() {
                                     <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 font-semibold">테스트</span>
                                   ) : notif.category === 'notice' ? (
                                     <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold">공지</span>
+                                  ) : notif.category === 'timetable' ? (
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-teal-100 text-teal-800 font-semibold">시간표</span>
+                                  ) : notif.category === 'urgent' ? (
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 font-semibold">긴급</span>
                                   ) : (
                                     <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-700 font-semibold">수행</span>
                                   )}
