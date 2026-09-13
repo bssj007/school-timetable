@@ -861,6 +861,7 @@ type IPadVersion = "ipad26" | "ipad13_25" | "ipad12_under";
 
 export default function IOSInstallGuide() {
   const [, setLocation] = useLocation();
+  const [showGuide, setShowGuide] = useState(false);
 
   // 디자인설정 비동기 로드
   const [settings, setSettings] = useState<any>(null);
@@ -975,7 +976,9 @@ export default function IOSInstallGuide() {
           {/* 뒤로 가기 */}
           <button
             onClick={() => {
-              if (typeof window !== "undefined" && window.history.length > 1) {
+              if (showGuide) {
+                setShowGuide(false);
+              } else if (typeof window !== "undefined" && window.history.length > 1) {
                 window.history.back();
               } else {
                 setLocation("/");
@@ -1008,16 +1011,18 @@ export default function IOSInstallGuide() {
             <h1 className="text-base font-extrabold text-white leading-tight truncate">
               {appTitle} 홈 화면에 추가
             </h1>
-            <p className="text-gray-400 text-xs mt-0.5 flex items-center gap-1.5 truncate">
-              <span className={`w-1.5 h-1.5 rounded-full inline-block shrink-0 ${isManual ? "bg-amber-400" : "bg-green-400 animate-pulse"}`} />
-              <span>{displaySummary}</span>
-            </p>
+            {isDebug && (
+              <p className="text-gray-400 text-xs mt-0.5 flex items-center gap-1.5 truncate">
+                <span className={`w-1.5 h-1.5 rounded-full inline-block shrink-0 ${isManual ? "bg-amber-400" : "bg-green-400 animate-pulse"}`} />
+                <span>{displaySummary}</span>
+              </p>
+            )}
           </div>
         </div>
       </div>
 
       {/* 디버그 모드 상태 바 (IP 등록된 기기에서만 노출) */}
-      {isDebug && (
+      {isDebug && showGuide && (
         <div className="bg-amber-500/15 border-b border-amber-500/25 px-5 py-2 flex items-center justify-between text-xs shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <span className="inline-flex items-center gap-1.5 font-black text-amber-950 shrink-0">
@@ -1060,7 +1065,7 @@ export default function IOSInstallGuide() {
       )}
 
       {/* 수동 선택 모드 선택 시 수동선택 버튼(기기 전환 + 버전 탭) 표시 */}
-      {isManual && (
+      {isManual && showGuide && (
         <div className="bg-gray-900 px-5 pt-3 pb-3 border-b border-gray-800 shrink-0 space-y-2.5">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-bold text-gray-400">기기 전환</span>
@@ -1138,28 +1143,72 @@ export default function IOSInstallGuide() {
         </div>
       )}
 
-      {/* 스크롤 가능한 단계 안내 본문 (자동 감지 또는 수동 선택 기반 분기) */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="px-6 py-6 max-w-lg mx-auto">
-          {effectiveDevice === "ipad" ? (
-            effectiveIPadVer === "ipad26" ? (
-              <GuideIPadNew {...guideProps} />
-            ) : effectiveIPadVer === "ipad13_25" ? (
-              <GuideIPad13_25 {...guideProps} />
-            ) : (
-              <GuideIPad12 {...guideProps} />
-            )
-          ) : effectiveIPhoneVer === "ios26" ? (
-            <Guide26 {...guideProps} />
-          ) : effectiveIPhoneVer === "ios15_25" ? (
-            <Guide15 {...guideProps} />
-          ) : effectiveIPhoneVer === "ios13_14" ? (
-            <Guide13_14 {...guideProps} />
-          ) : (
-            <Guide12 {...guideProps} />
-          )}
+      {!showGuide ? (
+        /* 안내 시작 전 인트로 화면 (큰 애플 로고 + 부연 설명 + 1분 설치방법 보기 버튼) */
+        <div className="flex-1 overflow-y-auto flex flex-col justify-between px-6 py-8 sm:py-12 max-w-md mx-auto w-full text-center">
+          <div className="flex-1 flex flex-col items-center justify-center my-auto py-6">
+            {/* 세련되고 큰 애플 로고 */}
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-black text-white flex items-center justify-center shadow-2xl shadow-black/20 mb-6 transition-transform active:scale-95">
+              <svg viewBox="0 0 24 24" className="w-12 h-12 sm:w-14 sm:h-14" fill="currentColor">
+                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/>
+              </svg>
+            </div>
+
+            {/* 타이틀 */}
+            <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight mb-4">
+              {appTitle} 홈 화면에 추가
+            </h2>
+
+            {/* 부연 설명 (유저 요청 100% 반영) */}
+            <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-5 mb-8 text-center shadow-xs">
+              <p className="text-slate-700 text-sm sm:text-[15px] leading-relaxed font-medium break-keep">
+                성지수행은 AppStore에 출시되지 않았기 때문에 간단한 설치방법을 따라 다운받으셔야 합니다. 오래 걸리지 않습니다.
+              </p>
+            </div>
+
+            {/* 1분 설치방법 보기 버튼 */}
+            <button
+              type="button"
+              onClick={() => setShowGuide(true)}
+              className="w-full h-14 bg-black hover:bg-gray-900 active:scale-[0.98] text-white font-bold text-base sm:text-lg rounded-2xl shadow-xl shadow-black/10 flex items-center justify-center gap-2.5 transition-all cursor-pointer"
+            >
+              <span>1분 설치방법 보기</span>
+              <svg viewBox="0 0 24 24" className="w-5 h-5 text-white/80" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="pt-4">
+            <p className="text-xs text-slate-400">
+              Safari 브라우저의 기본 기능을 통해 안전하게 추가됩니다.
+            </p>
+          </div>
         </div>
-      </div>
+      ) : (
+        /* 스크롤 가능한 단계 안내 본문 (자동 감지 또는 수동 선택 기반 분기) */
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-6 py-6 max-w-lg mx-auto">
+            {effectiveDevice === "ipad" ? (
+              effectiveIPadVer === "ipad26" ? (
+                <GuideIPadNew {...guideProps} />
+              ) : effectiveIPadVer === "ipad13_25" ? (
+                <GuideIPad13_25 {...guideProps} />
+              ) : (
+                <GuideIPad12 {...guideProps} />
+              )
+            ) : effectiveIPhoneVer === "ios26" ? (
+              <Guide26 {...guideProps} />
+            ) : effectiveIPhoneVer === "ios15_25" ? (
+              <Guide15 {...guideProps} />
+            ) : effectiveIPhoneVer === "ios13_14" ? (
+              <Guide13_14 {...guideProps} />
+            ) : (
+              <Guide12 {...guideProps} />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
