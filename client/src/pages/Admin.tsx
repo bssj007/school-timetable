@@ -10,7 +10,7 @@ import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
     TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound, Network, Smartphone, LogOut, ArrowDownToLine,
-    Bot, Copy, Terminal, Play, Code, Bell
+    Bot, Copy, Terminal, Play, Code, Bell, Loader2
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -12390,6 +12390,7 @@ function IphonePwaGuideGifSection({ adminPassword }: { adminPassword: string }) 
     const [isDragging, setIsDragging] = useState(false);
     const [uploadingFiles, setUploadingFiles] = useState<string[]>([]);
     const [previewAsset, setPreviewAsset] = useState<{ id: string; name: string } | null>(null);
+    const [previewLoading, setPreviewLoading] = useState(true);
 
     // 1. Fetch guide assets & bindings
     const { data: guideData, isLoading } = useQuery({
@@ -12665,7 +12666,10 @@ function IphonePwaGuideGifSection({ adminPassword }: { adminPassword: string }) 
                                         <div className="flex items-start gap-3 min-w-0">
                                             {/* 썸네일 */}
                                             <div
-                                                onClick={() => setPreviewAsset(asset)}
+                                                onClick={() => {
+                                                    setPreviewLoading(true);
+                                                    setPreviewAsset(asset);
+                                                }}
                                                 className="w-14 h-14 rounded-lg border border-gray-200 bg-black/5 overflow-hidden shrink-0 cursor-pointer relative group/thumb"
                                                 title="클릭하여 원본 크기로 미리보기"
                                             >
@@ -12860,11 +12864,19 @@ function IphonePwaGuideGifSection({ adminPassword }: { adminPassword: string }) 
                                 ✕
                             </button>
                         </div>
-                        <div className="p-4 flex-1 overflow-y-auto flex items-center justify-center bg-slate-900/5 min-h-[300px]">
+                        <div className="p-4 flex-1 overflow-y-auto flex items-center justify-center bg-slate-900/5 min-h-[300px] relative">
+                            {previewLoading && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-50 text-slate-500 z-10 rounded-xl">
+                                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                                    <span className="text-xs font-bold text-gray-700">GIF 로딩중</span>
+                                </div>
+                            )}
                             <img
                                 src={`/api/guide-assets?id=${previewAsset.id}`}
                                 alt={previewAsset.name}
-                                className="max-w-full max-h-[70vh] rounded-xl object-contain shadow-md"
+                                onLoad={() => setPreviewLoading(false)}
+                                onError={() => setPreviewLoading(false)}
+                                className={`max-w-full max-h-[70vh] rounded-xl object-contain shadow-md transition-opacity duration-200 ${previewLoading ? 'opacity-0' : 'opacity-100'}`}
                             />
                         </div>
                         <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between text-xs text-gray-500">

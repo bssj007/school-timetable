@@ -3,6 +3,7 @@ import { agent } from "@/lib/browserDetect";
 import { useLocation } from "wouter";
 import { SafariLogo } from "@/components/SafariLogo";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 // ── detect() 결과 직접 참조 ──────────────────────────────────────────────────
 const { isIPad, isIPhone, iosVersion } = agent;
@@ -865,6 +866,7 @@ export default function IOSInstallGuide() {
   const [, setLocation] = useLocation();
   const [showGuide, setShowGuide] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [gifLoading, setGifLoading] = useState(true);
 
   // Chrome 브라우저 여부 감지
   const isChrome = agent.browserKey === "chrome" || agent.isIOSChrome;
@@ -1004,6 +1006,12 @@ export default function IOSInstallGuide() {
   const boundAssetId = effectiveDevice === "ipad"
     ? guideBindings[effectiveIPadVer]
     : guideBindings[effectiveIPhoneVer];
+
+  useEffect(() => {
+    if (boundAssetId) {
+      setGifLoading(true);
+    }
+  }, [boundAssetId]);
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col overflow-hidden">
@@ -1267,11 +1275,21 @@ export default function IOSInstallGuide() {
             {boundAssetId ? (
               /* 바인딩된 경우: 기존 설명서를 GIF로 완전히 대체 */
               <div className="space-y-4">
-                <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-md bg-black/5 flex items-center justify-center">
+                <div className="relative rounded-2xl overflow-hidden border border-gray-200 shadow-md bg-slate-50 flex items-center justify-center min-h-[300px]">
+                  {gifLoading && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-50 text-slate-500 z-10">
+                      <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                      <span className="text-xs font-bold text-gray-700">GIF 로딩중</span>
+                    </div>
+                  )}
                   <img
                     src={`/api/guide-assets?id=${boundAssetId}`}
                     alt={`${effectiveDevice === "ipad" ? "iPad" : "iPhone"} PWA 설치 가이드 GIF`}
-                    className="w-full h-auto object-contain rounded-2xl max-h-[75vh]"
+                    onLoad={() => setGifLoading(false)}
+                    onError={() => setGifLoading(false)}
+                    className={`w-full h-auto object-contain rounded-2xl max-h-[75vh] transition-opacity duration-200 ${
+                      gifLoading ? "opacity-0" : "opacity-100"
+                    }`}
                   />
                 </div>
                 <div className="rounded-xl bg-slate-50 border border-slate-200/90 p-3.5 text-xs text-slate-600 text-center font-medium leading-relaxed shadow-2xs">
