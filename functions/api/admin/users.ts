@@ -92,10 +92,8 @@ export const onRequest = async (context: any) => {
 
             // 어드민 경로는 _middleware에서 SKIP되므로 직접 테이블 자동 생성
             await ensureAllTables(env.DB);
-            // 1. Fetch Profiles
-            // 1. Fetch Profiles with Student Info and Dynamic Modification Count
-            // 1. Fetch Profiles with Student Info and Dynamic Modification Count
-            // NEW SCHEMA: Link via student_profile_id
+            try { await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN notificationEnabled INTEGER DEFAULT 0").run(); } catch (_) {}
+
             let query = `
                 SELECT 
                     ip_profiles.ip, 
@@ -118,6 +116,7 @@ export const onRequest = async (context: any) => {
                     ip_profiles.teacherName,
                     ip_profiles.isBetaTester,
                     ip_profiles.betaTesterSince,
+                    COALESCE(ip_profiles.notificationEnabled, 0) as notificationEnabled,
                     student_profiles.name as profileName,
                     student_profiles.grade as profileGrade,
                     student_profiles.classNum as profileClassNum,
@@ -413,6 +412,7 @@ export const onRequest = async (context: any) => {
                     instructionDismissed: !!p.instructionDismissed,
                     isBetaTester: p.isBetaTester === 1,
                     betaTesterSince: p.betaTesterSince || null,
+                    notificationEnabled: p.notificationEnabled === 1,
                     historicalEnvironments: userEnvs,
                     assessments: [],
                     logs: [],

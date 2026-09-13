@@ -150,7 +150,28 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         publicSettings,
     } = useUserConfig();
 
-    const [installDismissed, setInstallDismissed] = useState(false);
+    const [installDismissed, setInstallDismissed] = useState(() => {
+        try {
+            if (typeof sessionStorage !== "undefined" && sessionStorage.getItem("sj_install_dismissed") === "true") return true;
+        } catch {}
+        return false;
+    });
+
+    const markInstallDismissed = () => {
+        setInstallDismissed(true);
+        try {
+            if (typeof sessionStorage !== "undefined") {
+                sessionStorage.setItem("sj_install_dismissed", "true");
+            }
+        } catch {}
+    };
+
+    // 사용자가 이미 역할을 가지고 있거나 로그인 이력이 있다면 이용 방식 선택(앱 설치 유도)을 자동 해제
+    useEffect(() => {
+        if (userRole || getRoleCookie()) {
+            markInstallDismissed();
+        }
+    }, [userRole]);
 
     // 구 버전 전체 리다이렉트 시절의 dismiss 잔여 데이터 정리
     useEffect(() => {
@@ -194,6 +215,11 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
     const [step, setStep] = useState<Step>(() => {
         if (roleSelectStep) return roleSelectStep;
         if (typeof window === "undefined") return "role";
+        let isDismissed = false;
+        try {
+            isDismissed = sessionStorage.getItem("sj_install_dismissed") === "true";
+        } catch {}
+        if (isDismissed) return "role";
         const a = detect();
         let cachedSettings: any = null;
         try {
@@ -218,24 +244,15 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
             setDeferredPrompt((window as any).__deferredPwaPrompt);
         }
 
-        const handlePrompt = (e: any) => {
+        const handleBeforeInstall = (e: any) => {
             e.preventDefault();
             (window as any).__deferredPwaPrompt = e;
             setDeferredPrompt(e);
+            window.dispatchEvent(new CustomEvent("pwa-prompt-ready", { detail: e }));
         };
 
-        const handleCustomPrompt = (e: CustomEvent) => {
-            const evt = e.detail || (window as any).__deferredPwaPrompt;
-            if (evt) setDeferredPrompt(evt);
-        };
-
-        window.addEventListener("beforeinstallprompt", handlePrompt);
-        window.addEventListener("pwa-prompt-ready", handleCustomPrompt as EventListener);
-
-        return () => {
-            window.removeEventListener("beforeinstallprompt", handlePrompt);
-            window.removeEventListener("pwa-prompt-ready", handleCustomPrompt as EventListener);
-        };
+        window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+        return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
     }, []);
 
     useEffect(() => {
@@ -272,7 +289,8 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
     useEffect(() => {
         if (shouldSkip) return;
         if (!getRoleCookie() || !userRole) {
-            if (isDownloadPromptTarget) {
+            const isDismissed = installDismissed || (typeof sessionStorage !== "undefined" && sessionStorage.getItem("sj_install_dismissed") === "true");
+            if (!isDismissed && targetInstallType !== null) {
                 openRoleSelect("install");
             } else {
                 openRoleSelect("role");
@@ -337,12 +355,14 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
     const hasPlayStore = Boolean(playStoreUrl && activeSettings?.play_store_url);
 
     const installButtonConfig = useMemo(() => {
-        const appTitle = activeSettings?.pwa_app_title || "성지수행";
+        const rawTitle = activeSettings?.pwa_app_title || "성지수행";
+        // "Lite"가 이미 포함되어 있을 경우 중복 제거하여 "Lite Lite" 발생 방지
+        const baseTitle = rawTitle.replace(/\s*Lite\b/gi, "").trim() || "성지수행";
 
         if (targetInstallType === "appstore") {
             return {
                 type: "appstore" as const,
-                title: `${appTitle} 설치`,
+                title: `${baseTitle} 설치`,
                 subtitle: "App Store에서 앱 다운로드",
             };
         }
@@ -350,7 +370,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         if (targetInstallType === "apple_pwa") {
             return {
                 type: "apple_pwa" as const,
-                title: `${appTitle} 설치방법`,
+                title: `${baseTitle} 설치방법`,
                 subtitle: "홈 화면에 추가하여 편리하게 이용",
             };
         }
@@ -358,20 +378,20 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         if (targetInstallType === "playstore") {
             return {
                 type: "playstore" as const,
-                title: `${appTitle} 설치`,
+                title: `${baseTitle} 설치`,
                 subtitle: "Google Play에서 앱 다운로드",
             };
         }
 
         return {
             type: "android_pwa" as const,
-            title: `${appTitle} Lite 설치`,
+            title: `${baseTitle} Lite 설치`,
             subtitle: "홈 화면에 가벼운 앱으로 설치",
         };
     }, [targetInstallType, activeSettings?.pwa_app_title]);
 
     const handleContinueWeb = () => {
-        setInstallDismissed(true);
+        markInstallDismissed();
         if (userRole) {
             closeRoleSelect();
         } else {
@@ -436,7 +456,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                 if (choice && choice.outcome === "accepted") {
                     (window as any).__deferredPwaPrompt = null;
                     setDeferredPrompt(null);
-                    setInstallDismissed(true);
+                    markInstallDismissed();
                     toast.success("앱 설치가 진행 중입니다. 홈 화면에서 앱을 확인해 주세요!");
                     if (userRole) {
                         closeRoleSelect();
@@ -461,7 +481,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
             if (playStoreUrl) {
                 window.open(playStoreUrl, "_blank", "noopener,noreferrer");
             }
-            setInstallDismissed(true);
+            markInstallDismissed();
             if (userRole) {
                 closeRoleSelect();
             } else {
@@ -474,7 +494,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
             if (appStoreUrl) {
                 window.open(appStoreUrl, "_blank", "noopener,noreferrer");
             }
-            setInstallDismissed(true);
+            markInstallDismissed();
             if (userRole) {
                 closeRoleSelect();
             } else {
@@ -484,7 +504,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
         }
 
         if (installButtonConfig.type === "apple_pwa") {
-            setInstallDismissed(true);
+            markInstallDismissed();
             closeRoleSelect();
             const a = detect();
             if (a.isIOSChrome || a.browserKey === "chrome") {
@@ -668,9 +688,6 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                                     <div className="font-bold text-lg text-slate-800 group-hover:text-slate-950">
                                         웹 사이트로 계속
                                     </div>
-                                    <div className="text-sm text-slate-500 mt-0.5">
-                                        설치 없이 브라우저에서 바로 이용
-                                    </div>
                                 </div>
                                 <span className="ml-auto text-slate-400 group-hover:text-slate-600 text-xl font-medium">›</span>
                             </button>
@@ -681,9 +698,9 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                                 type="button"
                                 onClick={handleInstallAction}
                                 disabled={isPrompting}
-                                className="group relative flex items-center gap-4 p-5 rounded-2xl border-2 border-emerald-900/40 shadow-md transition-all duration-200 text-left cursor-pointer overflow-hidden active:scale-[0.99] disabled:opacity-80"
+                                className="group relative flex items-center gap-4 p-5 rounded-2xl border-2 border-emerald-900/40 shadow-md transition-all duration-200 text-left cursor-pointer overflow-hidden active:scale-[0.99] disabled:opacity-80 bg-[#1b3d2f]"
                                 style={{
-                                    backgroundImage: "url('/chalkboard-bg.jpg')",
+                                    backgroundImage: "url('/chalkboard-bg-thumb.webp'), url('/chalkboard-bg.jpg')",
                                     backgroundSize: "cover",
                                     backgroundPosition: "center",
                                 }}
@@ -1019,7 +1036,7 @@ export default function RoleSelectDialog({ onRoleSelected, onBetaSelected }: Rol
                             className="w-full text-gray-400 hover:text-gray-600 text-xs py-2 cursor-pointer"
                             onClick={() => {
                                 setShowManualGuide(false);
-                                setInstallDismissed(true);
+                                markInstallDismissed();
                                 if (userRole) {
                                     closeRoleSelect();
                                 } else {

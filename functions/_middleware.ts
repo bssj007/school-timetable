@@ -205,6 +205,14 @@ ${logoOrIconHtml}
                 }
             }
 
+            // 알림 활성화 여부 쿠키 (sj_notification_enabled: '1' or '0')
+            let notificationEnabled: number | null = null;
+            if (cookies.includes('sj_notification_enabled=1')) {
+                notificationEnabled = 1;
+            } else if (cookies.includes('sj_notification_enabled=0')) {
+                notificationEnabled = 0;
+            }
+
             const uaProfile = parseUA(userAgent);
 
             // 앱(WebView 또는 PWA) 접속 여부 감지
@@ -376,9 +384,9 @@ ${logoOrIconHtml}
                         ip, student_profile_id, kakaoId, kakaoNickname, lastAccess,
                         modificationCount, addCount, deleteCount, userAgent, printCount, downloadCount,
                         isStandalone, teacherName, browserKey, deviceType, os, isInApp,
-                        isBetaTester, betaTesterSince
+                        isBetaTester, betaTesterSince, notificationEnabled
                     )
-                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(ip) DO UPDATE SET
                         lastAccess = datetime('now'),
                         userAgent = excluded.userAgent,
@@ -392,6 +400,7 @@ ${logoOrIconHtml}
                         isInApp = excluded.isInApp,
                         isBetaTester = CASE WHEN excluded.isBetaTester = 1 THEN 1 ELSE ip_profiles.isBetaTester END,
                         betaTesterSince = COALESCE(ip_profiles.betaTesterSince, excluded.betaTesterSince),
+                        notificationEnabled = CASE WHEN excluded.notificationEnabled IS NOT NULL THEN excluded.notificationEnabled ELSE ip_profiles.notificationEnabled END,
                         modificationCount = ip_profiles.modificationCount + ?,
                         addCount = ip_profiles.addCount + ?,
                         deleteCount = ip_profiles.deleteCount + ?,
@@ -426,6 +435,7 @@ ${logoOrIconHtml}
                         uaProfile.isInApp ? 1 : 0,
                         isBetaTester ? 1 : 0,
                         betaTesterSince,
+                        notificationEnabled,
                         increment, // modificationCount Update
                         addIncrement,
                         deleteIncrement,
@@ -501,6 +511,9 @@ ${logoOrIconHtml}
                     } catch (_) { /* already exists */ }
                     try {
                         await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN betaTesterSince TEXT").run();
+                    } catch (_) { /* already exists */ }
+                    try {
+                        await env.DB.prepare("ALTER TABLE ip_profiles ADD COLUMN notificationEnabled INTEGER DEFAULT 0").run();
                     } catch (_) { /* already exists */ }
 
                     // Retry update after ALTER

@@ -10,7 +10,7 @@ import {
     AlertCircle, Calendar, Edit2, Save, Trash2, Users, Download, Upload, Server, Database, Key, Check, ShieldAlert, ShieldCheck, Link2, Settings, ArrowUp, X,
     BookOpen, Eye, EyeOff, Lock, Search, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, GripVertical, CheckCircle2, Plus,
     TriangleAlert, CheckSquare, Ban, Wand2, Grid2X2, Info, ArrowRight, Bug, Palette, TrendingUp, ArrowUpDown, ArchiveRestore, RefreshCw, Clock, UserCheck, KeyRound, Network, Smartphone, LogOut, ArrowDownToLine,
-    Bot, Copy, Terminal, Play, Code
+    Bot, Copy, Terminal, Play, Code, Bell
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
 import { BridgeManager } from './AdminBridge';
@@ -20,6 +20,7 @@ import IPProfileViewer from "@/components/IPProfileViewer";
 import DatabaseManager from "@/components/DatabaseManager";
 import TeacherTimetable from "@/components/TeacherTimetable";
 import DbCloneDialog from "@/components/DbCloneDialog";
+import { NotificationManager } from "@/components/admin/NotificationManager";
 import { IPProfile } from "@/types";
 import {
     Table,
@@ -1031,9 +1032,9 @@ function DataTransferManager({ adminPassword, envInfo }: { adminPassword: string
             headers: { "X-Admin-Password": adminPassword },
         })
             .then((res) => (res.ok ? res.json() : {}))
-            .then((data) => {
+            .then((data: any) => {
                 if (isMounted) {
-                    setIsAgentAccessEnabled(data.test_db_agent_query_enabled === "true");
+                    setIsAgentAccessEnabled(data?.test_db_agent_query_enabled === "true");
                 }
             })
             .catch(() => {})
@@ -5566,6 +5567,14 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                     <RefreshCw className="w-4 h-4 mr-2" />
                     학기 키 관리
                 </Button>
+                <Button
+                    variant={selectedMenu === "notification-manager" ? "default" : "ghost"}
+                    className="justify-start whitespace-nowrap text-left text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-medium"
+                    onClick={() => setSelectedMenu("notification-manager")}
+                >
+                    <Bell className="w-4 h-4 mr-2" />
+                    알림 메뉴
+                </Button>
                 {/* Additional list items can go here later */}
             </div>
 
@@ -5837,6 +5846,9 @@ function EtcManager({ adminPassword }: { adminPassword: string }) {
                 )}
                 {selectedMenu === "semester-key" && (
                     <SemesterKeySettings adminPassword={adminPassword} />
+                )}
+                {selectedMenu === "notification-manager" && (
+                    <NotificationManager adminPassword={adminPassword} />
                 )}
             </div>
         </div>
@@ -8740,6 +8752,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                         hasElectives?: boolean;
                                         instructionDismissed: boolean;
                                         isStandalone?: boolean;
+                                        notificationEnabled?: boolean;
                                     };
 
                                     const groupMap = new Map<string, UserGroup>();
@@ -8764,6 +8777,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                             if (user.hasElectives) existing.hasElectives = true;
                                             if (user.instructionDismissed) existing.instructionDismissed = true;
                                             if (user.isStandalone) existing.isStandalone = true;
+                                            if ((user as any).notificationEnabled) existing.notificationEnabled = true;
                                             if (!existing.teacherName && (user as any).teacherName) existing.teacherName = (user as any).teacherName;
                                         } else {
                                             groupMap.set(key, {
@@ -8784,6 +8798,7 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                 hasElectives: !!user.hasElectives,
                                                 instructionDismissed: !!user.instructionDismissed,
                                                 isStandalone: !!user.isStandalone,
+                                                notificationEnabled: !!(user as any).notificationEnabled,
                                             });
                                         }
                                     }
@@ -9184,7 +9199,11 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                 </Button>
                                             </TableCell>
                                             <TableCell>
-                                                
+                                                {user.notificationEnabled && (
+                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1.5 py-0 h-4 w-fit mb-0.5 flex items-center gap-1">
+                                                        🔔 알림 ON
+                                                    </Badge>
+                                                )}
                                                 {/* 선생님 이름 (해당 시) */}
                                                 {(user as any).teacherName ? (
                                                     <div className="flex flex-col gap-0.5">
@@ -9315,6 +9334,11 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         
                                                         {group.grade && group.classNum ? (
                                                             <div className="flex flex-col gap-0.5">
+                                                                {group.notificationEnabled && (
+                                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1.5 py-0 h-4 w-fit mb-0.5 flex items-center gap-1">
+                                                                        🔔 알림 ON
+                                                                    </Badge>
+                                                                )}
                                                                 {/* 선생님 이름 (동시 접속 시) */}
                                                                 {group.teacherName && (
                                                                     <div className="flex items-center gap-1">
@@ -9343,12 +9367,26 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                         ) : group.teacherName ? (
                                                             // 선생님만 있는 경우 (학생 정보 없음)
                                                             <div className="flex flex-col gap-0.5">
+                                                                {group.notificationEnabled && (
+                                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1.5 py-0 h-4 w-fit mb-0.5 flex items-center gap-1">
+                                                                        🔔 알림 ON
+                                                                    </Badge>
+                                                                )}
                                                                 <div className="flex items-center gap-1">
                                                                     <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 px-1.5 py-0 h-4">선생님</Badge>
                                                                     <span className="font-bold text-sm text-slate-800">{group.teacherName}</span>
                                                                 </div>
                                                             </div>
-                                                        ) : <span className="text-gray-300 text-xs">-</span>}
+                                                        ) : (
+                                                            <div className="flex flex-col gap-0.5">
+                                                                {group.notificationEnabled && (
+                                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1.5 py-0 h-4 w-fit mb-0.5 flex items-center gap-1">
+                                                                        🔔 알림 ON
+                                                                    </Badge>
+                                                                )}
+                                                                <span className="text-gray-300 text-xs">-</span>
+                                                            </div>
+                                                        )}
                                                     </TableCell>
                                                     <TableCell>
                                                         <div className="flex flex-col gap-1 items-start">
@@ -9517,7 +9555,11 @@ function AdminAssessmentTableRow({ assessment, isSelected, onToggleSelect, isExp
                                                                                 </Button>
                                                                             </TableCell>
                                                                             <TableCell>
-                                                                                
+                                                                                {user.notificationEnabled && (
+                                                                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 px-1.5 py-0 h-4 w-fit mb-0.5 flex items-center gap-1">
+                                                                                        🔔 알림 ON
+                                                                                    </Badge>
+                                                                                )}
                                                                                 {user.grade && user.classNum ? (
                                                                                     <div className="flex flex-col gap-0.5">
                                                                                         <span className="font-bold text-sm text-slate-800">

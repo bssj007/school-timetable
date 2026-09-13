@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Ban, User, Clock, FileText, Monitor, Smartphone } from "lucide-react";
+import { Loader2, Ban, User, Clock, FileText, Monitor, Smartphone, Bell } from "lucide-react";
 import { toast } from "sonner";
 import { IPProfile } from "../types";
 import { parseAppTypeFromUserAgent } from "@/lib/browserDetect";
@@ -197,7 +197,7 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
 
                 {data ? (
                     <div className="flex-1 overflow-hidden flex flex-col gap-4">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
                             <div className="bg-blue-50 p-4 rounded-lg flex flex-col gap-1 border border-blue-100 relative">
                                 <span className="text-xs text-blue-600 font-bold flex items-center gap-1"><FileText className="w-3 h-3" /> 수정 기여</span>
                                 <span className="text-2xl font-bold">{data.modificationCount || 0}회</span>
@@ -290,7 +290,21 @@ export default function IPProfileViewer({ initialData, isOpen, onClose, adminPas
                                     </div>
                                 );
                             })()}
-                            <div className="col-span-1 md:col-span-4 flex justify-end items-center gap-2">
+                            <div className={`${(data as any).notificationEnabled ? 'bg-sky-50 border-sky-200 text-sky-800' : 'bg-gray-50 border-gray-200 text-gray-400'} p-4 rounded-lg flex flex-col gap-1 border`}>
+                                <span className={`text-xs ${(data as any).notificationEnabled ? 'text-sky-700' : 'text-gray-500'} font-bold flex items-center gap-1`}>
+                                    <Bell className="w-3 h-3" /> 알림 수신 상태
+                                </span>
+                                <span className="text-xl font-bold">
+                                    {(data as any).notificationEnabled ? (
+                                        <span className="text-sky-700 flex items-center gap-1">
+                                            🔔 수신 허용
+                                        </span>
+                                    ) : (
+                                        <span className="text-gray-400 font-medium text-base">알림 미설정 (OFF)</span>
+                                    )}
+                                </span>
+                            </div>
+                            <div className="col-span-1 sm:col-span-2 md:col-span-5 flex justify-end items-center gap-2">
                                 <Button
                                     variant="outline"
                                     size="sm"

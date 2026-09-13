@@ -15,6 +15,14 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { useUserConfig } from "@/contexts/UserConfigContext";
 import { getRoleCookie, setRoleCookie, clearRoleCookie, getTeacherNameCookie, setTeacherNameCookie, clearTeacherCookie, getStoredTeacherPassword, setStoredTeacherPassword, clearStoredTeacherPassword, getAuthenticatedTeacher, getActiveTeacherName, normalizeTeacherName } from "@/lib/teacherUtils";
 import { isMaintenanceBypassed, getMaintenanceBypassCookie } from "@/lib/browserDetect";
+import { Switch as ToggleSwitch } from "@/components/ui/switch";
+import {
+  isNotificationSupported,
+  isNotificationSubscribed,
+  syncNotificationStatusOnConnect,
+  toggleNotificationSubscription,
+  getOrCreateDeviceId
+} from "@/lib/notificationService";
 
 interface TeacherTimetableResponse {
   success: boolean;
@@ -1107,6 +1115,105 @@ export default function TeacherPage() {
   const teacherName = isDevTeacher ? "김교사" : getTeacherDisplayName(rawTeacherName, tId);
   const selectedSchedule = timetableData?.timetable?.[tId];
 
+  // ── 교사용 알림 수신 상태 & 실시간 목록 ────────────────────────────────────
+  const [isNotifSubscribed, setIsNotifSubscribed] = useState(() => isNotificationSubscribed());
+  const [isTogglingNotif, setIsTogglingNotif] = useState(false);
+  const deviceId = useMemo(() => getOrCreateDeviceId(), []);
+
+  // 교사 접속 시 동기화
+  useEffect(() => {
+    if (rawTeacherName) {
+      syncNotificationStatusOnConnect({
+        role: 'teacher',
+        teacherName: rawTeacherName
+      });
+      setIsNotifSubscribed(isNotificationSubscribed());
+    }
+  }, [rawTeacherName]);
+
+  // 교사 대상 알림 쿼리 (30초 주기)
+  const teacherNotifsQuery = useQuery({
+    queryKey: ['notifications', 'teacher', rawTeacherName, deviceId],
+    queryFn: async () => {
+      const sp = new URLSearchParams({
+        role: 'teacher',
+        teacherName: rawTeacherName || '',
+        deviceId
+      });
+      const res = await fetch(`/api/notifications/list?${sp.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch notifications');
+      return res.json();
+    },
+    enabled: !!rawTeacherName,
+    refetchInterval: 30000,
+    staleTime: 15000
+  });
+
+  const teacherNotifItems: Array<{
+    id: number;
+    title: string;
+    message: string;
+    link: string;
+    category: string;
+    createdAt: string;
+    read: boolean;
+  }> = teacherNotifsQuery.data?.notifications || [];
+  const teacherUnreadCount: number = teacherNotifsQuery.data?.unreadCount ?? 0;
+
+  const markTeacherAllReadMutation = useMutation({
+    mutationFn: async () => {
+      await fetch('/api/notifications/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, all: true })
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    }
+  });
+
+  const markTeacherSingleRead = async (notificationId: number) => {
+    try {
+      await fetch('/api/notifications/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, notificationId })
+      });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    } catch (_) {}
+  };
+
+  const handleToggleTeacherNotification = async (checked: boolean) => {
+    setIsTogglingNotif(true);
+    try {
+      const result = await toggleNotificationSubscription(checked, {
+        role: 'teacher',
+        teacherName: rawTeacherName
+      });
+
+      if (result.success) {
+        setIsNotifSubscribed(result.enabled);
+        if (result.enabled) {
+          toast.success("교사용 수행 알림을 받도록 설정되었습니다!");
+        } else {
+          toast.info("교사용 수행 알림 수신이 해제되었습니다.");
+        }
+      } else {
+        setIsNotifSubscribed(false);
+        if (result.reason === 'ios_safari_needs_pwa') {
+          toast.info("iOS는 홈 화면에 앱을 추가(PWA)한 후 실행해야 알림을 받을 수 있습니다.", { duration: 5000 });
+        } else if (result.reason === 'permission_denied') {
+          toast.error("브라우저 알림 권한이 차단되어 있습니다. 브라우저 설정에서 알림을 허용해 주세요.", { duration: 5000 });
+        } else {
+          toast.error("이 브라우저 환경에서는 알림 기능을 지원하지 않습니다.");
+        }
+      }
+    } finally {
+      setIsTogglingNotif(false);
+    }
+  };
+
   // ── 서버 기반 교사 비밀번호 실시간 검증 (단일 진실원천: 서버 D1) ──────────────
   // 마운트 시 또는 선생님 변경 시: 저장된 비밀번호가 있다면 서버에 제시하여 유효성 검증
   // 개발자 교사 ("김교사")는 인증 면제
@@ -2189,29 +2296,99 @@ export default function TeacherPage() {
         backgroundAttachment: 'fixed',
       }}
     >
-      {/* ===== 학생공지 다이얼로그 ===== */}
+      {/* ===== 학생공지 & 교사 알림 다이얼로그 ===== */}
       <Dialog open={showNoticeDialog} onOpenChange={setShowNoticeDialog}>
-        <DialogContent className="sm:max-w-[320px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
-          <div className="bg-gradient-to-r from-yellow-400 to-amber-400 px-5 py-4">
+        <DialogContent className="sm:max-w-[360px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl bg-white">
+          <div className="bg-gradient-to-r from-yellow-400 to-amber-400 px-5 py-3.5 flex items-center justify-between">
             <DialogHeader>
               <DialogTitle className="text-base font-extrabold text-gray-900 flex items-center gap-2">
-                <Bell className="w-4 h-4" />
-                학생공지
+                <Bell className="w-4 h-4 text-gray-900" />
+                학생공지 &amp; 수행 알림
               </DialogTitle>
             </DialogHeader>
+            {teacherUnreadCount > 0 && (
+              <button
+                type="button"
+                onClick={() => markTeacherAllReadMutation.mutate()}
+                className="text-[11px] font-bold text-gray-900 bg-white/40 hover:bg-white/60 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+              >
+                모두 읽음
+              </button>
+            )}
           </div>
-          <div className="px-5 py-5 flex flex-col items-center gap-3 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-yellow-50 border border-yellow-100 flex items-center justify-center text-2xl">
-              🔔
+
+          {/* 수행 알림받기 토글 카드 */}
+          <div className="px-5 py-3 bg-amber-50/70 border-b border-amber-100 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center shrink-0 shadow-xs text-gray-900">
+                <Bell className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                  수행 알림받기
+                  {isNotifSubscribed && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-700 font-semibold">ON</span>
+                  )}
+                </p>
+                <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                  {isNotifSubscribed ? '교사용 공지 및 수행평가 수신 중' : '스위치를 켜면 교사용 알림을 받습니다'}
+                </p>
+              </div>
             </div>
-            <p className="text-sm font-semibold text-gray-700">현재 기능을 준비 중입니다.</p>
-            <p className="text-xs text-gray-400">-성지수행 개발팀</p>
+            <ToggleSwitch
+              checked={isNotifSubscribed}
+              disabled={isTogglingNotif}
+              onCheckedChange={handleToggleTeacherNotification}
+              aria-label="수행 알림받기"
+            />
+          </div>
+
+          {/* 알림 목록 영역 */}
+          <div className="max-h-[300px] overflow-y-auto px-4 py-2">
+            {teacherNotifItems.length === 0 ? (
+              <div className="py-8 flex flex-col items-center justify-center gap-2 text-center">
+                <div className="w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center border border-yellow-100 text-xl">
+                  🔔
+                </div>
+                <p className="text-xs font-semibold text-gray-500">도착한 알림 또는 공지사항이 없습니다.</p>
+                <p className="text-[11px] text-gray-400">새로운 공지가 발송되면 여기에 표시됩니다.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {teacherNotifItems.map((notif) => (
+                  <div
+                    key={notif.id}
+                    onClick={() => markTeacherSingleRead(notif.id)}
+                    className={`py-3 px-2 flex items-start gap-2.5 cursor-pointer rounded-xl hover:bg-gray-50 transition-colors ${
+                      !notif.read ? 'bg-amber-50/40' : ''
+                    }`}
+                  >
+                    <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${!notif.read ? 'bg-amber-500' : 'bg-gray-200'}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold">
+                          {notif.category === 'test' ? '테스트' : notif.category === 'notice' ? '공지' : '수행'}
+                        </span>
+                        <p className="text-xs font-bold text-gray-800 truncate">{notif.title}</p>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">{notif.message}</p>
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        {notif.createdAt ? new Date(notif.createdAt.replace(' ', 'T') + (notif.createdAt.endsWith('Z') ? '' : 'Z')).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
             <button
               type="button"
               onClick={() => setShowNoticeDialog(false)}
-              className="mt-1 w-full py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-sm transition-colors cursor-pointer"
+              className="w-full py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 active:bg-yellow-600 text-gray-900 font-bold text-xs transition-colors cursor-pointer"
             >
-              확인
+              닫기
             </button>
           </div>
         </DialogContent>

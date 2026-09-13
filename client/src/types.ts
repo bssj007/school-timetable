@@ -33,6 +33,7 @@ export interface IPProfile {
     instructionDismissed?: boolean;
     isBetaTester?: boolean;
     betaTesterSince?: string | null;
+    notificationEnabled?: boolean;
     historicalEnvironments?: { os: string; deviceType: string; browserKey: string; isInApp: boolean; isApp?: boolean; userAgent?: string | null; lastAccess?: string | null }[];
 
     // --- Detailed History (Empty in List View, Populated in Detail View) ---

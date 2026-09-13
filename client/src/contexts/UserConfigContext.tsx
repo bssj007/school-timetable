@@ -145,7 +145,11 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     // ── 역할 선택 다이얼로그 제어 ──
     const [isRoleSelectOpen, setIsRoleSelectOpen] = useState(false);
     const [roleSelectStep, setRoleSelectStep] = useState<"role" | "student-info" | "teacher-name" | "install">(() => {
-        if (typeof window === "undefined") return "role";
+        let isDismissed = false;
+        try {
+            isDismissed = typeof sessionStorage !== "undefined" && sessionStorage.getItem("sj_install_dismissed") === "true";
+        } catch {}
+        if (isDismissed) return "role";
         let cachedSettings: any = null;
         try {
             const cached = localStorage.getItem("public_settings_cache");
@@ -157,7 +161,11 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     const openRoleSelect = (step?: "role" | "student-info" | "teacher-name" | "install") => {
         let targetStep = step;
         if (!targetStep) {
-            targetStep = getInstallTargetType(publicSettings) !== null ? "install" : "role";
+            let isDismissed = false;
+            try {
+                isDismissed = typeof sessionStorage !== "undefined" && sessionStorage.getItem("sj_install_dismissed") === "true";
+            } catch {}
+            targetStep = (!isDismissed && getInstallTargetType(publicSettings) !== null) ? "install" : "role";
         }
         setRoleSelectStep(targetStep);
         setIsRoleSelectOpen(true);
@@ -179,12 +187,18 @@ export function UserConfigProvider({ children }: { children: ReactNode }) {
     };
 
     const switchToRole = (targetRole: "student" | "teacher") => {
+        // 역할 전환 시에는 이미 사이트를 이용 중이므로 앱 설치 유도(이용 방식 선택) 화면을 건너뛰고 바로 역할 선택을 표시
+        try {
+            if (typeof sessionStorage !== "undefined") {
+                sessionStorage.setItem("sj_install_dismissed", "true");
+            }
+        } catch {}
+        clearRoleCookie();
+        setUserRoleState(null);
+        openRoleSelect("role");
         if (targetRole === "student") {
             // 교사→학생 전환: 역할 선택 화면(role step)부터 다시 시작
             // 저장된 학생 정보는 다이얼로그 내 handleSelectStudent에서 이미 채워진 상태로 유지됨
-            clearRoleCookie();
-            setUserRoleState(null);
-            openRoleSelect("role");
             if (typeof window !== "undefined" && window.location.pathname !== "/") {
                 window.location.href = "/";
             }

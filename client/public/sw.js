@@ -1,10 +1,11 @@
-const CACHE_NAME = 'school-timetable-v6';
+const CACHE_NAME = 'school-timetable-v8';
 const urlsToCache = [
     '/',
     '/index.html',
     '/manifest.json',
     '/icon.svg',
-    '/api/app-icon'
+    '/api/app-icon',
+    '/chalkboard-bg-thumb.webp'
 ];
 
 self.addEventListener('install', event => {
@@ -36,5 +37,62 @@ self.addEventListener('fetch', event => {
     // Let the browser handle API/dynamic requests, only fallback for assets if offline
     event.respondWith(
         fetch(event.request).catch(() => caches.match(event.request))
+    );
+});
+
+// Push notification event listener
+self.addEventListener('push', event => {
+    let data = {
+        title: '성지수행 알림',
+        body: '새로운 알림이 도착했습니다.',
+        url: '/'
+    };
+
+    try {
+        if (event.data) {
+            const parsed = event.data.json();
+            data = { ...data, ...parsed };
+        }
+    } catch (e) {
+        if (event.data) {
+            data.body = event.data.text();
+        }
+    }
+
+    const options = {
+        body: data.body || data.message || '',
+        icon: '/favicon-48x48.png',
+        badge: '/favicon-32x32.png',
+        data: {
+            url: data.url || data.link || '/'
+        },
+        vibrate: [100, 50, 100],
+        tag: 'sj-notification-' + Date.now(),
+        renotify: true
+    };
+
+    event.waitUntil(
+        self.registration.showNotification(data.title || '성지수행', options)
+    );
+});
+
+// Notification click event listener
+self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    const urlToOpen = (event.notification.data && event.notification.data.url) || '/';
+
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+            for (let client of windowClients) {
+                if (client.url.includes(self.location.origin) && 'focus' in client) {
+                    return client.focus().then(() => {
+                        if (client.navigate) return client.navigate(urlToOpen);
+                    });
+                }
+            }
+            if (clients.openWindow) {
+                return clients.openWindow(urlToOpen);
+            }
+        })
     );
 });

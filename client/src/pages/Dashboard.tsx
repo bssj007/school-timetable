@@ -34,6 +34,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch as ToggleSwitch } from "@/components/ui/switch";
+import {
+  isNotificationSupported,
+  isNotificationSubscribed,
+  syncNotificationStatusOnConnect,
+  toggleNotificationSubscription,
+  getOrCreateDeviceId
+} from "@/lib/notificationService";
 import ElectiveSelectionDialog from "@/components/ElectiveSelectionDialog";
 
 function PlayStoreLogo() {
@@ -302,16 +310,117 @@ export default function Dashboard() {
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
 
-  // TODO: 실제 알림 API 연동 시 이 배열을 서버 데이터로 교체
+  // ── 알림 수신 상태 & 실시간 목록 ────────────────────────────────────────
+  const [isNotifSubscribed, setIsNotifSubscribed] = useState(() => isNotificationSubscribed());
+  const [isTogglingNotif, setIsTogglingNotif] = useState(false);
+  const deviceId = useMemo(() => getOrCreateDeviceId(), []);
+
+  // 접속 시 자동 동기화
+  useEffect(() => {
+    syncNotificationStatusOnConnect({
+      role: 'student',
+      grade: isDevStudent ? effectiveGrade : grade,
+      classNum: isDevStudent ? effectiveClassNum : classNum,
+      studentNumber,
+      studentName
+    });
+    setIsNotifSubscribed(isNotificationSubscribed());
+  }, [effectiveGrade, effectiveClassNum, grade, classNum, studentNumber, studentName, isDevStudent]);
+
+  // 실시간 알림 목록 조회 (30초 주기 자동 갱신)
+  const notificationsQuery = useQuery({
+    queryKey: ['notifications', 'student', grade, classNum, studentNumber, studentName, deviceId],
+    queryFn: async () => {
+      const sp = new URLSearchParams({
+        role: 'student',
+        grade: String(isDevStudent ? effectiveGrade : grade || '0'),
+        classNum: String(isDevStudent ? effectiveClassNum : classNum || '0'),
+        studentNumber: String(studentNumber || '0'),
+        studentName: String(studentName || ''),
+        deviceId
+      });
+      const res = await fetch(`/api/notifications/list?${sp.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch notifications');
+      return res.json();
+    },
+    refetchInterval: 30000,
+    staleTime: 15000
+  });
+
   const notificationItems: Array<{
     id: number;
     title: string;
     message: string;
-    time: string;
+    link: string;
+    category: string;
+    createdAt: string;
     read: boolean;
-    type: 'info' | 'assessment' | 'system';
-  }> = [];
-  const unreadNotificationCount = notificationItems.filter(n => !n.read).length;
+  }> = notificationsQuery.data?.notifications || [];
+  const unreadNotificationCount: number = notificationsQuery.data?.unreadCount ?? 0;
+
+  // 모두 읽음 처리
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      await fetch('/api/notifications/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, all: true })
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    }
+  });
+
+  // 단일 알림 읽음 처리
+  const markSingleRead = async (notificationId: number) => {
+    try {
+      await fetch('/api/notifications/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, notificationId })
+      });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    } catch (_) {}
+  };
+
+  // 알림받기 토글 핸들러
+  const handleToggleNotification = async (checked: boolean) => {
+    setIsTogglingNotif(true);
+    try {
+      const result = await toggleNotificationSubscription(checked, {
+        role: 'student',
+        grade: isDevStudent ? effectiveGrade : grade,
+        classNum: isDevStudent ? effectiveClassNum : classNum,
+        studentNumber,
+        studentName
+      });
+
+      if (result.success) {
+        setIsNotifSubscribed(result.enabled);
+        if (result.enabled) {
+          toast.success("수행 알림을 받도록 설정되었습니다!");
+        } else {
+          toast.info("수행 알림 수신이 해제되었습니다.");
+        }
+      } else {
+        setIsNotifSubscribed(false);
+        if (result.reason === 'ios_safari_needs_pwa') {
+          toast.info("iOS는 홈 화면에 앱을 추가(PWA)한 후 실행해야 알림을 받을 수 있습니다.", {
+            duration: 5000
+          });
+        } else if (result.reason === 'permission_denied') {
+          toast.error("브라우저 알림 권한이 차단되어 있습니다. 브라우저 주소창 설정에서 알림을 허용해 주세요.", {
+            duration: 5000
+          });
+        } else {
+          toast.error("이 브라우저 환경에서는 알림 기능을 지원하지 않습니다.");
+        }
+      }
+    } finally {
+      setIsTogglingNotif(false);
+    }
+  };
 
   useEffect(() => {
     if (!showNotifications) return;
@@ -510,7 +619,7 @@ export default function Dashboard() {
         toast.info("현재 앱 버전에서는 인쇄 API를 지원하지 않습니다. 이미지로 저장하시거나 앱을 업데이트해 주세요.", {
           action: {
             label: "이미지 저장",
-            onClick: () => handleSaveImage()
+            onClick: () => handleDownloadPng()
           },
           duration: 6000
         });
@@ -1843,20 +1952,46 @@ export default function Dashboard() {
                   <div className="flex items-center gap-1">
                     {unreadNotificationCount > 0 && (
                       <button
-                        className="text-[11px] text-blue-500 hover:text-blue-700 font-semibold px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
-                        onClick={() => { /* TODO: 모두 읽음 API */ }}
+                        className="text-[11px] text-blue-500 hover:text-blue-700 font-semibold px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
+                        onClick={() => markAllReadMutation.mutate()}
                       >
                         모두 읽음
                       </button>
                     )}
                     <button
-                      className="h-7 w-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
+                      className="h-7 w-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600 cursor-pointer"
                       onClick={() => setShowNotifications(false)}
                       aria-label="알림 닫기"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
+                </div>
+
+                {/* 수행 알림받기 토글 카드 */}
+                <div className="px-4 py-3 bg-amber-50/70 border-b border-amber-100/80 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center shrink-0 shadow-xs text-gray-900">
+                      <Bell className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                        수행 알림받기
+                        {isNotifSubscribed && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-700 font-semibold">ON</span>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                        {isNotifSubscribed ? '수행평가 및 주요 공지 수신 중' : '스위치를 켜면 새 알림을 받습니다'}
+                      </p>
+                    </div>
+                  </div>
+                  <ToggleSwitch
+                    checked={isNotifSubscribed}
+                    disabled={isTogglingNotif}
+                    onCheckedChange={handleToggleNotification}
+                    aria-label="수행 알림받기"
+                  />
                 </div>
 
                 {/* 알림 목록 */}
@@ -1878,6 +2013,7 @@ export default function Dashboard() {
                       {notificationItems.map((notif) => (
                         <div
                           key={notif.id}
+                          onClick={() => markSingleRead(notif.id)}
                           className={`flex items-start gap-3 px-4 py-3.5 hover:bg-gray-50 cursor-pointer transition-colors ${
                             !notif.read ? 'bg-blue-50/50' : ''
                           }`}
@@ -1889,9 +2025,20 @@ export default function Dashboard() {
                             }`}
                           />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-800">{notif.title}</p>
-                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{notif.message}</p>
-                            <p className="text-[11px] text-gray-400 mt-1.5 font-medium">{notif.time}</p>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              {notif.category === 'test' ? (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 font-semibold">테스트</span>
+                              ) : notif.category === 'notice' ? (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold">공지</span>
+                              ) : (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-700 font-semibold">수행</span>
+                              )}
+                              <p className="text-xs font-bold text-gray-800 truncate">{notif.title}</p>
+                            </div>
+                            <p className="text-xs text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">{notif.message}</p>
+                            <p className="text-[10px] text-gray-400 mt-1.5 font-medium">
+                              {notif.createdAt ? new Date(notif.createdAt.replace(' ', 'T') + (notif.createdAt.endsWith('Z') ? '' : 'Z')).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                            </p>
                           </div>
                         </div>
                       ))}
@@ -1900,8 +2047,8 @@ export default function Dashboard() {
                 </div>
 
                 {/* 패널 푸터 */}
-                <div className="border-t border-gray-100 px-4 py-2.5 bg-gray-50/60">
-                  <p className="text-[11px] text-center text-gray-400">알림 기능은 준비 중입니다</p>
+                <div className="border-t border-gray-100 px-4 py-2 bg-gray-50/60">
+                  <p className="text-[11px] text-center text-gray-400">🔔 수행평가 알림 및 공지사항 수신함</p>
                 </div>
               </div>
             )}
