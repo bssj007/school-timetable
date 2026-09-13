@@ -377,35 +377,25 @@ export default function AppDownloadPage() {
 
       {/* 로고 + 앱 이름 또는 iOS 크롬 무조건 Safari 안내 */}
       {isIOSChrome ? (
-        /* iOS Chrome 임시 방편: 무조건 Safari로 다시 열기 요구 */
-        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center my-auto">
-          {/* Safari 로고 */}
-          <div className="relative mb-5">
-            <SafariLogo className="w-24 h-24 drop-shadow-xl" />
-            <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-black shadow-md border-2 border-white">
-              !
-            </div>
+        /* iOS Chrome: Safari로 다시 열기 안내 (간소화) */
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center my-auto max-w-sm mx-auto w-full">
+          {/* Safari 로고 (배지 제거) */}
+          <div className="mb-6">
+            <SafariLogo className="w-24 h-24 drop-shadow-xl transition-transform hover:scale-105 active:scale-95 duration-200" />
           </div>
 
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200 mb-2.5">
-            <span>⚠️</span>
-            <span>iOS Chrome 환경 감지</span>
-          </div>
-
-          <h1 className="text-2xl font-black text-gray-900 leading-tight mb-2">
+          <h1 className="text-2xl font-black text-gray-900 leading-tight mb-2 tracking-tight">
             Safari로 다시 열어주세요
           </h1>
-          <p className="text-sm text-gray-600 leading-relaxed max-w-sm mx-auto mb-6 break-keep">
-            현재 접속하신 <strong>Chrome 브라우저</strong>에서는 홈 화면 추가(앱 설치)가 지원되지 않습니다.
-            <br />
-            기본 브라우저인 <strong className="text-blue-600 font-bold">Safari</strong>로 열어주시면 바로 홈 화면에 앱을 추가하실 수 있습니다.
+          <p className="text-sm text-gray-600 leading-relaxed max-w-xs mx-auto mb-6 break-keep">
+            기본 브라우저인 <strong className="text-blue-600 font-bold">Safari</strong>에서 열어주시면 바로 홈 화면에 앱을 추가하실 수 있습니다.
           </p>
 
           {/* 원클릭 주소 복사 버튼 */}
           <button
             type="button"
             onClick={handleCopyUrl}
-            className="w-full max-w-xs h-14 bg-[#0071E3] hover:bg-[#0077ED] active:bg-[#005BB5] text-white font-bold text-base rounded-2xl flex items-center justify-center gap-2.5 shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] cursor-pointer mb-5"
+            className="w-full max-w-xs h-14 bg-[#0071E3] hover:bg-[#0077ED] active:bg-[#005BB5] text-white font-bold text-base rounded-2xl flex items-center justify-center gap-2.5 shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] cursor-pointer"
           >
             {copied ? (
               <>
@@ -422,32 +412,6 @@ export default function AppDownloadPage() {
               </>
             )}
           </button>
-
-          {/* 3단계 안내 */}
-          <div className="w-full max-w-xs bg-slate-50 border border-slate-200/90 rounded-2xl p-4 text-left space-y-3 shadow-2xs text-xs text-gray-700">
-            <h3 className="font-bold text-gray-900 text-xs border-b border-gray-200 pb-1.5 flex items-center gap-1.5">
-              <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-black">i</span>
-              <span>Safari에서 설치하는 초간단 3단계</span>
-            </h3>
-            <div className="flex items-start gap-2.5">
-              <span className="w-4 h-4 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5">1</span>
-              <div>
-                <strong className="text-gray-900">주소 복사</strong>: 위의 버튼을 눌러 사이트 주소를 복사합니다.
-              </div>
-            </div>
-            <div className="flex items-start gap-2.5">
-              <span className="w-4 h-4 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5">2</span>
-              <div>
-                <strong className="text-gray-900">Safari 앱 실행</strong>: 홈 화면에서 Safari(나침반)를 엽니다.
-              </div>
-            </div>
-            <div className="flex items-start gap-2.5">
-              <span className="w-4 h-4 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5">3</span>
-              <div>
-                <strong className="text-gray-900">붙여넣기 및 추가</strong>: 주소창에 붙여넣고 화면 하단 <span className="text-blue-600 font-semibold">공유(↑) → '홈 화면에 추가'</span>를 누릅니다.
-              </div>
-            </div>
-          </div>
         </div>
       ) : (
         /* 기존 로고 + 앱 이름 */

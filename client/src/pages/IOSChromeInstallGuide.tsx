@@ -161,62 +161,22 @@ export default function IOSChromeInstallGuide() {
 
       {/* ── 본문 콘텐츠 ────────────────────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto px-4 py-6 max-w-lg mx-auto w-full space-y-6">
-        {/* 앱 타이틀 카드 */}
-        <div className="bg-white rounded-3xl p-5 border border-gray-200 shadow-sm flex items-center gap-4">
-          <img
-            src={appIconUrl}
-            alt={appTitle}
-            className="w-16 h-16 rounded-2xl shadow-md object-cover border border-gray-100 shrink-0"
-            onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }}
-          />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-lg font-black text-gray-900 tracking-tight">{appTitle}</span>
-              {isSupported ? (
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-100 text-blue-700 border border-blue-200">
-                  iOS Chrome
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
-                  Safari 권장
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-              {isSupported
-                ? "Google Chrome에서도 홈 화면에 추가하여 독립 앱 모드로 편리하게 이용할 수 있습니다."
-                : "현재 Chrome 환경에서는 홈 화면 추가(PWA) 기능이 지원되지 않아 Safari 브라우저 사용을 권장합니다."}
-            </p>
-          </div>
-        </div>
-
         {/* ── PWA 지원 여부에 따른 조건부 분기 ──────────────────────────────── */}
         {!isSupported ? (
-          /* [CASE 1] PWA 미지원 Chrome 환경: Safari 로고 및 Safari로 다시 열기 안내 */
-          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200 shadow-sm text-center space-y-6">
-            {/* Safari 로고 */}
+          /* [CASE 1] PWA 미지원 Chrome 환경: Safari 로고 및 Safari로 다시 열기 안내 (간소화) */
+          <div className="bg-white rounded-3xl p-6 sm:p-10 border border-gray-200 shadow-sm text-center space-y-6">
+            {/* Safari 로고 (배지 제거) */}
             <div className="flex justify-center pt-2">
-              <div className="relative inline-block">
-                <SafariLogo className="w-24 h-24 drop-shadow-xl transition-transform hover:scale-105 active:scale-95 duration-200" />
-                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-black shadow-md border-2 border-white">
-                  !
-                </div>
-              </div>
+              <SafariLogo className="w-24 h-24 drop-shadow-xl transition-transform hover:scale-105 active:scale-95 duration-200" />
             </div>
 
-            {/* 제목 및 부제목 */}
+            {/* 제목 및 부제목 (배지 제거, 중복 설명 제거) */}
             <div className="space-y-2">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200">
-                <span>⚠️</span>
-                <span>Chrome PWA 미지원 환경</span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
+              <h2 className="text-2xl font-black text-gray-900 tracking-tight">
                 Safari로 다시 열어주세요
               </h2>
-              <p className="text-xs sm:text-sm text-gray-600 leading-relaxed max-w-sm mx-auto break-keep">
-                현재 접속하신 <strong>Chrome 브라우저</strong>에서는 홈 화면 추가(PWA 앱 설치) 기능이 지원되지 않습니다.
-                <br />
-                기본 브라우저인 <strong className="text-blue-600 font-bold">Safari</strong>로 열어주시면 바로 홈 화면에 앱을 추가하실 수 있습니다.
+              <p className="text-sm text-gray-600 leading-relaxed max-w-sm mx-auto break-keep">
+                기본 브라우저인 <strong className="text-blue-600 font-bold">Safari</strong>에서 열어주시면 바로 홈 화면에 앱을 추가하실 수 있습니다.
               </p>
             </div>
 
@@ -244,41 +204,6 @@ export default function IOSChromeInstallGuide() {
                   </>
                 )}
               </button>
-              <p className="text-[11px] text-gray-400 mt-2">
-                주소를 복사한 뒤 Safari 앱 주소창에 붙여넣어 주세요.
-              </p>
-            </div>
-
-            {/* Safari 이동 3단계 초간단 안내 */}
-            <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 sm:p-5 text-left space-y-3.5 shadow-2xs">
-              <h3 className="text-xs font-black text-gray-900 flex items-center gap-1.5 border-b border-gray-200 pb-2.5">
-                <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-black">i</span>
-                <span>Safari에서 설치하는 초간단 3단계</span>
-              </h3>
-
-              <div className="flex items-start gap-3 text-xs text-gray-700">
-                <span className="w-5 h-5 rounded-full bg-gray-900 text-white flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5">1</span>
-                <div>
-                  <strong className="font-bold text-gray-900">주소 복사</strong>
-                  <p className="text-gray-500 text-[11px] mt-0.5">위의 <span className="text-blue-600 font-semibold">'사이트 주소 복사하기'</span> 버튼을 탭합니다.</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 text-xs text-gray-700">
-                <span className="w-5 h-5 rounded-full bg-gray-900 text-white flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5">2</span>
-                <div>
-                  <strong className="font-bold text-gray-900">Safari 앱 열기</strong>
-                  <p className="text-gray-500 text-[11px] mt-0.5">홈 화면에서 <span className="text-blue-600 font-semibold">Safari(나침반)</span> 앱을 실행합니다.</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 text-xs text-gray-700">
-                <span className="w-5 h-5 rounded-full bg-gray-900 text-white flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5">3</span>
-                <div>
-                  <strong className="font-bold text-gray-900">붙여넣기 및 홈 화면 추가</strong>
-                  <p className="text-gray-500 text-[11px] mt-0.5">주소창에 붙여넣어 접속 후 하단 중앙 <span className="text-blue-600 font-semibold">공유(↑) 버튼 → '홈 화면에 추가'</span>를 누릅니다.</p>
-                </div>
-              </div>
             </div>
 
             {/* Chrome에서 계속 이용하기 */}
@@ -286,7 +211,7 @@ export default function IOSChromeInstallGuide() {
               <button
                 type="button"
                 onClick={handleComplete}
-                className="w-full py-3 text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors hover:bg-gray-100 rounded-xl"
+                className="w-full py-2.5 text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors hover:bg-gray-100 rounded-xl"
               >
                 앱 설치 없이 Chrome에서 계속 이용하기 →
               </button>
@@ -295,6 +220,26 @@ export default function IOSChromeInstallGuide() {
         ) : (
           /* [CASE 2] PWA 지원 Chrome 환경 (iOS 16.4+): 3단계 Chrome 설치 안내 */
           <>
+            {/* 앱 타이틀 카드 */}
+            <div className="bg-white rounded-3xl p-5 border border-gray-200 shadow-sm flex items-center gap-4">
+              <img
+                src={appIconUrl}
+                alt={appTitle}
+                className="w-16 h-16 rounded-2xl shadow-md object-cover border border-gray-100 shrink-0"
+                onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-lg font-black text-gray-900 tracking-tight">{appTitle}</span>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-100 text-blue-700 border border-blue-200">
+                    iOS Chrome
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                  Google Chrome에서도 홈 화면에 추가하여 독립 앱 모드로 편리하게 이용할 수 있습니다.
+                </p>
+              </div>
+            </div>
             {/* 기기 선택 탭 (iPhone vs iPad) */}
             <div className="flex bg-gray-200/80 p-1 rounded-2xl border border-gray-300/60">
               <button

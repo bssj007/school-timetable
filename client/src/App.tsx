@@ -38,7 +38,10 @@ function Router() {
       <Route path={"/teacher"} component={TeacherPage} />
       <Route path={"/teachers"} component={TeacherPage} />
       <Route path={"/ios-install-guide"} component={IOSInstallGuide} />
+      <Route path={"/guide/ios"} component={IOSInstallGuide} />
+      <Route path={"/ios-guide"} component={IOSInstallGuide} />
       <Route path={"/ios-chrome-install-guide"} component={IOSChromeInstallGuide} />
+      <Route path={"/guide/ios-chrome"} component={IOSChromeInstallGuide} />
       <Route path={"/download"} component={AppDownloadPage} />
       <Route path={"/privacy"} component={Privacy} />
       <Route path={"/404"} component={NotFound} />
@@ -73,7 +76,12 @@ function AppContent() {
   const isAdminRoute = location.startsWith("/admin");
   const isMealRoute = location.startsWith("/meal");
   const isDownloadRoute = location === "/download";
-  const isIOSGuideRoute = location === "/ios-install-guide" || location === "/ios-chrome-install-guide";
+  const isIOSGuideRoute =
+    location === "/ios-install-guide" ||
+    location === "/ios-chrome-install-guide" ||
+    location === "/guide/ios" ||
+    location === "/ios-guide" ||
+    location === "/guide/ios-chrome";
   const isPrivacyRoute = location === "/privacy";
 
 
