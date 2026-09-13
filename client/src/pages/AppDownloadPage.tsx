@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useUserConfig } from "@/contexts/UserConfigContext";
+import { SafariLogo } from "@/components/SafariLogo";
 
 // ── detect() 결과 직접 참조 ──────────────────────────────────────────────────
 const isInAppBrowser  = agent.isInAppBrowser;
@@ -58,6 +59,29 @@ export default function AppDownloadPage() {
   const [settings, setSettings] = useState<any>(null);
   // browserDetect 통일 기준 사용
   const browserType = agent.browserKey;
+  const isIOSChrome = agent.isIOS && (agent.isIOSChrome || browserType === "chrome");
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyUrl = async () => {
+    const urlToCopy = window.location.origin;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(urlToCopy);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = urlToCopy;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setCopied(true);
+      toast.success("사이트 주소가 복사되었습니다! Safari 주소창에 붙여넣어 주세요.");
+      setTimeout(() => setCopied(false), 3000);
+    } catch {
+      toast.error("주소 복사에 실패했습니다. 브라우저 주소창의 URL을 직접 복사해 주세요.");
+    }
+  };
 
   const { grade, classNum, studentNumber, studentName, publicSettings } = useUserConfig();
   const [showBugReportDialog, setShowBugReportDialog] = useState(false);
@@ -351,28 +375,105 @@ export default function AppDownloadPage() {
         )}
       </div>
 
-      {/* 로고 + 앱 이름 */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8 text-center">
-        <img src={appIconUrl} alt={appTitle}
-          className="w-24 h-24 rounded-3xl shadow-xl object-cover"
-          onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }} />
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 leading-tight">{appTitle}</h1>
-          <p className="text-sm text-gray-400 mt-2 leading-relaxed">
-            앱을 설치하면 더 빠르고 편리하게<br />이용할 수 있어요
+      {/* 로고 + 앱 이름 또는 iOS 크롬 무조건 Safari 안내 */}
+      {isIOSChrome ? (
+        /* iOS Chrome 임시 방편: 무조건 Safari로 다시 열기 요구 */
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center my-auto">
+          {/* Safari 로고 */}
+          <div className="relative mb-5">
+            <SafariLogo className="w-24 h-24 drop-shadow-xl" />
+            <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-black shadow-md border-2 border-white">
+              !
+            </div>
+          </div>
+
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200 mb-2.5">
+            <span>⚠️</span>
+            <span>iOS Chrome 환경 감지</span>
+          </div>
+
+          <h1 className="text-2xl font-black text-gray-900 leading-tight mb-2">
+            Safari로 다시 열어주세요
+          </h1>
+          <p className="text-sm text-gray-600 leading-relaxed max-w-sm mx-auto mb-6 break-keep">
+            현재 접속하신 <strong>Chrome 브라우저</strong>에서는 홈 화면 추가(앱 설치)가 지원되지 않습니다.
+            <br />
+            기본 브라우저인 <strong className="text-blue-600 font-bold">Safari</strong>로 열어주시면 바로 홈 화면에 앱을 추가하실 수 있습니다.
           </p>
+
+          {/* 원클릭 주소 복사 버튼 */}
+          <button
+            type="button"
+            onClick={handleCopyUrl}
+            className="w-full max-w-xs h-14 bg-[#0071E3] hover:bg-[#0077ED] active:bg-[#005BB5] text-white font-bold text-base rounded-2xl flex items-center justify-center gap-2.5 shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] cursor-pointer mb-5"
+          >
+            {copied ? (
+              <>
+                <Check className="w-5 h-5 text-emerald-300 stroke-[2.5]" />
+                <span>주소가 복사되었습니다!</span>
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" className="w-5 h-5 text-white/90" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span>사이트 주소 복사하기</span>
+              </>
+            )}
+          </button>
+
+          {/* 3단계 안내 */}
+          <div className="w-full max-w-xs bg-slate-50 border border-slate-200/90 rounded-2xl p-4 text-left space-y-3 shadow-2xs text-xs text-gray-700">
+            <h3 className="font-bold text-gray-900 text-xs border-b border-gray-200 pb-1.5 flex items-center gap-1.5">
+              <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-black">i</span>
+              <span>Safari에서 설치하는 초간단 3단계</span>
+            </h3>
+            <div className="flex items-start gap-2.5">
+              <span className="w-4 h-4 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5">1</span>
+              <div>
+                <strong className="text-gray-900">주소 복사</strong>: 위의 버튼을 눌러 사이트 주소를 복사합니다.
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="w-4 h-4 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5">2</span>
+              <div>
+                <strong className="text-gray-900">Safari 앱 실행</strong>: 홈 화면에서 Safari(나침반)를 엽니다.
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="w-4 h-4 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5">3</span>
+              <div>
+                <strong className="text-gray-900">붙여넣기 및 추가</strong>: 주소창에 붙여넣고 화면 하단 <span className="text-blue-600 font-semibold">공유(↑) → '홈 화면에 추가'</span>를 누릅니다.
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        /* 기존 로고 + 앱 이름 */
+        <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8 text-center">
+          <img src={appIconUrl} alt={appTitle}
+            className="w-24 h-24 rounded-3xl shadow-xl object-cover"
+            onError={(e) => { (e.target as HTMLImageElement).src = "/icon.svg"; }} />
+          <div>
+            <h1 className="text-2xl font-black text-gray-900 leading-tight">{appTitle}</h1>
+            <p className="text-sm text-gray-400 mt-2 leading-relaxed">
+              앱을 설치하면 더 빠르고 편리하게<br />이용할 수 있어요
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* 다운로드 버튼 + 사이트로 계속 */}
       <div className="flex-shrink-0 px-6 pb-6 space-y-2">
-        {!settings
-          ? <div className="w-full h-14 bg-gray-100 rounded-2xl animate-pulse" />
-          : <DownloadButton />
-        }
+        {!isIOSChrome && (
+          !settings
+            ? <div className="w-full h-14 bg-gray-100 rounded-2xl animate-pulse" />
+            : <DownloadButton />
+        )}
         <button onClick={handleContinue}
           className="w-full py-3 text-sm text-gray-400 hover:text-gray-600 transition-colors">
-          사이트로 계속
+          {isIOSChrome ? "Chrome에서 사이트로 계속 이용하기 →" : "사이트로 계속"}
         </button>
       </div>
 

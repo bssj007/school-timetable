@@ -64,7 +64,16 @@ export default function IOSChromeInstallGuide() {
   const [, setLocation] = useLocation();
   const [settings, setSettings] = useState<any>(null);
   const [deviceTab, setDeviceTab] = useState<"iphone" | "ipad">(agent.isIPad ? "ipad" : "iphone");
-  const [isSupported, setIsSupported] = useState<boolean>(() => checkIsChromePWASupported());
+  // 임시 방편: iOS 크롬 접속 시 무조건 Safari로 다시 열 것을 요구 (isSupported = false)
+  const [isSupported, setIsSupported] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.get("supported") === "1" || sp.get("supported") === "true") return true;
+      if (sp.get("unsupported") === "1" || sp.get("unsupported") === "true") return false;
+    }
+    // 임시 방편: 무조건 Safari 재접속 요구
+    return false;
+  });
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
