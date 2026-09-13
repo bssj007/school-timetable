@@ -78,6 +78,20 @@ export const onRequest = async (context: any) => {
             bindings.push(grade, classNum, studentNumber, studentName);
         }
 
+        // 마스터 스위치 상태 점검
+        await env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        `).run();
+
+        const masterRow = await env.DB.prepare(
+            "SELECT value FROM system_settings WHERE key = 'notification_system_enabled'"
+        ).first();
+
+        const systemEnabled = masterRow ? (masterRow.value !== "0" && masterRow.value !== "false") : true;
+
         query += ` ORDER BY sn.created_at DESC LIMIT 50`;
 
         const { results = [] } = await env.DB.prepare(query).bind(...bindings).all();
@@ -96,8 +110,9 @@ export const onRequest = async (context: any) => {
         const unreadCount = formatted.filter((n: any) => !n.read).length;
 
         return new Response(JSON.stringify({
-            notifications: formatted,
-            unreadCount
+            notifications: systemEnabled ? formatted : [],
+            unreadCount: systemEnabled ? unreadCount : 0,
+            systemEnabled
         }), {
             status: 200,
             headers: {

@@ -200,20 +200,29 @@ export async function encryptWebPushPayload(
  * 단일 구독 기기로 Web Push 알림 발송 (Google/Apple/Mozilla 게이트웨이)
  */
 export async function sendWebPushNotification(
-    subscription: PushSubscriptionJson,
+    subscription: PushSubscriptionJson | string,
     payload: any,
     vapidConfig?: VapidConfig
 ): Promise<{ success: boolean; status?: number; error?: string; shouldDeactivate?: boolean }> {
-    if (!subscription || !subscription.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) {
-        return { success: false, error: "Invalid subscription", shouldDeactivate: true };
+    let sub: PushSubscriptionJson = subscription as any;
+    if (typeof subscription === "string") {
+        try {
+            sub = JSON.parse(subscription);
+        } catch (_) {
+            return { success: false, error: "Malformed subscription JSON", shouldDeactivate: false };
+        }
+    }
+
+    if (!sub || !sub.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
+        return { success: false, error: "Invalid subscription format", shouldDeactivate: false };
     }
 
     try {
-        const publicKey = vapidConfig?.publicKey || DEFAULT_VAPID_PUBLIC_KEY;
-        const privateKey = vapidConfig?.privateKey || DEFAULT_VAPID_PRIVATE_KEY;
-        const subject = vapidConfig?.subject || DEFAULT_VAPID_SUBJECT;
+        const publicKey = vapidConfig?.publicKey || (vapidConfig as any)?.VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY;
+        const privateKey = vapidConfig?.privateKey || (vapidConfig as any)?.VAPID_PRIVATE_KEY || DEFAULT_VAPID_PRIVATE_KEY;
+        const subject = vapidConfig?.subject || (vapidConfig as any)?.VAPID_SUBJECT || DEFAULT_VAPID_SUBJECT;
 
-        const endpointUrl = new URL(subscription.endpoint);
+        const endpointUrl = new URL(sub.endpoint);
         const audience = endpointUrl.origin;
 
         // VAPID JWT 토큰 서명
@@ -221,9 +230,9 @@ export async function sendWebPushNotification(
 
         // 페이로드 직렬화 및 RFC 8291 암호화
         const payloadText = typeof payload === "string" ? payload : JSON.stringify(payload);
-        const encryptedBody = await encryptWebPushPayload(subscription, payloadText);
+        const encryptedBody = await encryptWebPushPayload(sub, payloadText);
 
-        const res = await fetch(subscription.endpoint, {
+        const res = await fetch(sub.endpoint, {
             method: "POST",
             headers: {
                 "TTL": "86400",

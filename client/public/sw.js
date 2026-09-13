@@ -80,6 +80,12 @@ self.addEventListener('push', event => {
                     await self.navigator.setAppBadge(badgeCount);
                 } catch (_) {}
             }
+            try {
+                const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+                for (const client of windowClients) {
+                    client.postMessage({ type: 'PUSH_NOTIFICATION_RECEIVED', data });
+                }
+            } catch (_) {}
         })()
     );
 });

@@ -1168,8 +1168,12 @@ export default function TeacherPage() {
           toast.info("iOS는 홈 화면에 앱을 추가(PWA)한 후 실행해야 알림을 받을 수 있습니다.", { duration: 5000 });
         } else if (result.reason === 'permission_denied') {
           toast.error("브라우저 알림 권한이 차단되어 있습니다. 브라우저 설정에서 알림을 허용해 주세요.", { duration: 5000 });
+        } else if (result.reason === 'system_disabled') {
+          toast.info("알림 기능 준비중");
+        } else if (result.reason === 'browser_not_supported') {
+          toast.info("푸시 알림은 모바일 전용 앱(PWA/안드로이드 앱)에서 지원됩니다. 현재 브라우저에서는 종 아이콘을 눌러 알림을 확인하실 수 있습니다.", { duration: 5000 });
         } else {
-          toast.error("이 브라우저 환경에서는 알림 기능을 지원하지 않습니다.");
+          toast.error("이 환경에서는 푸시 알림 기능을 지원하지 않습니다.");
         }
       }
     } finally {

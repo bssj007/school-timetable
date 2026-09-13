@@ -165,6 +165,16 @@ notificationsRouter.get("/list", (req, res) => {
             read: r.is_read === 1
         }));
 
+        // 마스터 스위치 상태 점검
+        sqlite.exec(`
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        `);
+        const masterRow = sqlite.prepare("SELECT value FROM system_settings WHERE key = 'notification_system_enabled'").get();
+        const systemEnabled = masterRow ? (masterRow.value !== "0" && masterRow.value !== "false") : true;
+
         const unreadCount = formatted.filter((n: any) => !n.read).length;
 
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
@@ -172,12 +182,32 @@ notificationsRouter.get("/list", (req, res) => {
         res.setHeader("Expires", "0");
 
         res.json({
-            notifications: formatted,
-            unreadCount
+            notifications: systemEnabled ? formatted : [],
+            unreadCount: systemEnabled ? unreadCount : 0,
+            systemEnabled
         });
     } catch (err: any) {
         console.error("[/api/notifications/list] Error:", err);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/notifications/status
+notificationsRouter.get("/status", (req, res) => {
+    const sqlite = getRawSqliteDb();
+    if (!sqlite) return res.status(500).json({ error: "Database not available" });
+    try {
+        sqlite.exec(`
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        `);
+        const row = sqlite.prepare("SELECT value FROM system_settings WHERE key = 'notification_system_enabled'").get();
+        const systemEnabled = row ? (row.value !== "0" && row.value !== "false") : true;
+        res.json({ systemEnabled });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message, systemEnabled: true });
     }
 });
 
@@ -624,15 +654,30 @@ adminNotificationsRouter.post("/send", async (req, res) => {
             });
 
             const pushPromises = matched
-                .filter((sub: any) => Boolean(sub.push_subscription && sub.push_subscription.trim()))
+                .filter((sub: any) => Boolean(sub.push_subscription && String(sub.push_subscription).trim()))
                 .map(async (sub: any) => {
                     try {
-                        const pushRes = await sendWebPushNotification(sub.push_subscription, pushPayload, {
+                        let subObj: any = sub.push_subscription;
+                        if (typeof subObj === "string") {
+                            try {
+                                subObj = JSON.parse(subObj);
+                            } catch (_) {
+                                return { id: sub.id, success: false, statusCode: 0, statusText: "Invalid JSON format" };
+                            }
+                        }
+
+                        if (!subObj || !subObj.endpoint) {
+                            return { id: sub.id, success: false, statusCode: 0, statusText: "Missing endpoint" };
+                        }
+
+                        const pushRes = await sendWebPushNotification(subObj, pushPayload, {
                             publicKey: process.env.VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY,
                             privateKey: process.env.VAPID_PRIVATE_KEY || DEFAULT_VAPID_PRIVATE_KEY,
                             subject: process.env.VAPID_SUBJECT || DEFAULT_VAPID_SUBJECT
                         });
-                        if (pushRes.shouldDeactivate) {
+
+                        // 오직 푸시 게이트웨이가 404/410을 반환했을 때만 구독 비활성화 (일시 네트워크 오류 시에는 유지)
+                        if (pushRes.shouldDeactivate && (pushRes.status === 404 || pushRes.status === 410)) {
                             try {
                                 sqlite.prepare("UPDATE notification_subscriptions SET is_active = 0 WHERE id = ?").run(sub.id);
                             } catch (_) {}

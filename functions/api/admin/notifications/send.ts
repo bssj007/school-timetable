@@ -156,11 +156,30 @@ export const onRequest = async (context: any) => {
             });
 
             const pushPromises = matched
-                .filter((sub: any) => Boolean(sub.push_subscription && sub.push_subscription.trim()))
+                .filter((sub: any) => Boolean(sub.push_subscription && String(sub.push_subscription).trim()))
                 .map(async (sub: any) => {
                     try {
-                        const pushRes = await sendWebPushNotification(sub.push_subscription, pushPayload, env);
-                        if (pushRes.shouldDeactivate) {
+                        let subObj: any = sub.push_subscription;
+                        if (typeof subObj === "string") {
+                            try {
+                                subObj = JSON.parse(subObj);
+                            } catch (_) {
+                                return { id: sub.id, success: false, statusCode: 0, statusText: "Invalid JSON format" };
+                            }
+                        }
+
+                        if (!subObj || !subObj.endpoint) {
+                            return { id: sub.id, success: false, statusCode: 0, statusText: "Missing endpoint" };
+                        }
+
+                        const pushRes = await sendWebPushNotification(subObj, pushPayload, {
+                            publicKey: env.VAPID_PUBLIC_KEY,
+                            privateKey: env.VAPID_PRIVATE_KEY,
+                            subject: env.VAPID_SUBJECT
+                        });
+
+                        // 오직 푸시 게이트웨이가 404/410을 반환했을 때만 구독 비활성화 (일시 네트워크 오류 시에는 유지)
+                        if (pushRes.shouldDeactivate && (pushRes.status === 404 || pushRes.status === 410)) {
                             try {
                                 await env.DB.prepare("UPDATE notification_subscriptions SET is_active = 0 WHERE id = ?").bind(sub.id).run();
                             } catch (_) {}

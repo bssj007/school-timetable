@@ -179,8 +179,14 @@ export default function Navigation() {
           toast.error("브라우저 알림 권한이 차단되어 있습니다. 브라우저 주소창 설정에서 알림을 허용해 주세요.", {
             duration: 5000
           });
+        } else if (result.reason === 'system_disabled') {
+          toast.info("알림 기능 준비중");
+        } else if (result.reason === 'browser_not_supported') {
+          toast.info("푸시 알림은 모바일 전용 앱(PWA/안드로이드 앱)에서 지원됩니다. 현재 브라우저에서는 종 아이콘을 눌러 알림을 확인하실 수 있습니다.", {
+            duration: 5000
+          });
         } else {
-          toast.error("이 브라우저 환경에서는 알림 기능을 지원하지 않습니다.");
+          toast.error("이 환경에서는 푸시 알림 기능을 지원하지 않습니다.");
         }
       }
     } finally {
@@ -240,6 +246,9 @@ export default function Navigation() {
       setIsBugReportSending(false);
     }
   };
+
+  const isSystemEnabled = notificationsQuery.data?.systemEnabled ?? true;
+  const isEffectiveSubscribed = isSystemEnabled && isNotifSubscribed;
 
   return (
     <>
@@ -354,23 +363,28 @@ export default function Navigation() {
                   size="icon"
                   className={`relative h-9 w-9 transition-all duration-200 cursor-pointer ${
                     isTeacherPage
-                      ? isNotifSubscribed
+                      ? isEffectiveSubscribed
                         ? "border border-yellow-300/80 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-gray-900 shadow-xs"
                         : "border border-slate-300/80 rounded-lg bg-slate-200/90 hover:bg-slate-300 text-slate-700"
-                      : isNotifSubscribed
+                      : isEffectiveSubscribed
                         ? "rounded-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 shadow-sm border border-yellow-300/80"
                         : "rounded-full bg-slate-200/90 hover:bg-slate-300 text-slate-700 shadow-sm border border-slate-300/80"
                   }`}
                   onClick={() => {
+                    if (!isSystemEnabled) {
+                      setShowNotifications(false);
+                      toast.info("알림 기능 준비중");
+                      return;
+                    }
                     setShowNotifications(prev => !prev);
                     markAllClientRead();
                     markAllReadMutation.mutate();
                   }}
                   aria-label="알림"
                 >
-                  <Bell className={`h-4 w-4 ${!isNotifSubscribed ? "text-slate-700 stroke-[2.2]" : "text-gray-900 stroke-[2.2]"}`} />
+                  <Bell className={`h-4 w-4 ${!isEffectiveSubscribed ? "text-slate-700 stroke-[2.2]" : "text-gray-900 stroke-[2.2]"}`} />
                   {/* 읽지 않은 알림 뱃지 */}
-                  {unreadNotificationCount > 0 && (
+                  {unreadNotificationCount > 0 && isSystemEnabled && (
                     <span
                       className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[17px] h-[17px] px-[4px] text-[9px] font-bold leading-none text-white bg-red-500 rounded-full shadow-xs ring-2 ring-white"
                     >
@@ -380,7 +394,7 @@ export default function Navigation() {
                 </Button>
 
                 {/* 알림 드롭다운 패널 */}
-                {showNotifications && (
+                {showNotifications && isSystemEnabled && (
                   <div className="absolute right-0 top-11 z-50 w-[300px] sm:w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
                     {/* 패널 헤더 */}
                     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">

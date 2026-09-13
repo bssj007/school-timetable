@@ -13,13 +13,12 @@ import "./index.css";
 // 글로벌 오류 핸들러 등록 (앱 마운트 전)
 initGlobalErrorHandlers();
 
-if ('serviceWorker' in navigator) {
-  const hasNotifEnabled = typeof localStorage !== 'undefined' && (
-    localStorage.getItem("sj_notification_enabled") === "1" ||
-    (typeof Notification !== "undefined" && Notification.permission === "granted")
-  );
+if ('serviceWorker' in navigator && typeof window !== 'undefined') {
+  const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+  const isMobile = agent.isMobile;
 
-  if (agent.isMobile || hasNotifEnabled) {
+  // PWA 환경이거나 모바일인 경우에만 PWA 오프라인 지원 및 백그라운드 푸시용 Service Worker 등록
+  if (isPWA || isMobile) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js').then(registration => {
         console.log('SW registered: ', registration);
@@ -28,14 +27,13 @@ if ('serviceWorker' in navigator) {
       });
     });
   } else {
-    // 데스크톱: 알림을 사용하지 않는 경우 불필요한 서비스 워커 정리
+    // 일반 데스크톱 브라우저: 푸시 알림 및 PWA 설치 제외, 리소스 정리
     navigator.serviceWorker.getRegistrations().then(registrations => {
       for (const registration of registrations) {
         registration.unregister();
       }
     }).catch(() => {});
 
-    // 혹시 남아있는 manifest 태그도 완벽히 제거
     const manifestLink = document.querySelector("link[rel='manifest']");
     if (manifestLink) {
       manifestLink.remove();

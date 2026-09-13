@@ -1,13 +1,25 @@
 // client/src/lib/notificationService.ts
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { agent, getInstalledAppType } from "./browserDetect";
-import { toast } from "sonner";
 
 const DEVICE_ID_KEY = "sj_device_id";
 const NOTIF_ENABLED_KEY = "sj_notification_enabled";
 const NOTIF_LAST_VIEWED_KEY = "sj_notif_last_viewed_time";
 const NOTIF_READ_IDS_KEY = "sj_notif_read_ids";
+
+const DEFAULT_VAPID_PUBLIC_KEY =
+    "BGhRyV8sLTVNkaVOgJDVulv0aMNOpCljPB4Bv2EEqBBvTJWfTeSwB7t_Kj9VA7N2mQTPfnNUczO51ZQGVm3VE3E";
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
 
 /**
  * 클라이언트 로컬 스토리지 기준 읽은 알림 ID 목록 조회
@@ -69,9 +81,6 @@ export function markClientSingleNotificationAsRead(notificationId: number) {
 
 /**
  * 클라이언트 전용 미읽음 계산 로직
- * - 사용자의 로컬 읽음 목록(readIds)에 없는 알림은 모두 미읽음으로 계산하여 배지 표출
- * - 사용자가 알림 버튼을 클릭하여 markClientNotificationsAsRead가 호출되면 즉시 배지 제거
- * - 이후 신규 알림이 도착하면 ID가 readIds에 없으므로 자동으로 다시 배지 표출
  */
 export function computeClientNotificationItems<T extends { id: number; createdAt?: string; read?: boolean }>(
     items: T[]
@@ -81,43 +90,13 @@ export function computeClientNotificationItems<T extends { id: number; createdAt
     }
 
     const readIds = getClientReadNotificationIds();
-
     const processed = items.map(item => {
-        const isRead = readIds.has(item.id);
+        const isRead = readIds.has(item.id) || Boolean(item.read);
         return { ...item, read: isRead };
     });
 
     const unreadCount = processed.filter(it => !it.read).length;
     return { items: processed, unreadCount };
-}
-
-const BANNER_NOTIFIED_KEY = "sj_banner_notified_ids";
-
-/**
- * 이번 브라우저 세션에서 이미 푸시/토스트 배너가 표출된 알림 ID 목록
- */
-export function getSessionNotifiedBannerIds(): Set<number> {
-    if (typeof window === "undefined") return new Set();
-    try {
-        const raw = sessionStorage.getItem(BANNER_NOTIFIED_KEY);
-        if (!raw) return new Set();
-        const arr = JSON.parse(raw);
-        return new Set(Array.isArray(arr) ? arr : []);
-    } catch {
-        return new Set();
-    }
-}
-
-/**
- * 배너 표출 완료된 알림 ID 기록 (세션 단위 중복 알림 방지)
- */
-export function markSessionBannerNotified(id: number) {
-    if (typeof window === "undefined") return;
-    try {
-        const set = getSessionNotifiedBannerIds();
-        set.add(id);
-        sessionStorage.setItem(BANNER_NOTIFIED_KEY, JSON.stringify(Array.from(set).slice(-100)));
-    } catch (_) {}
 }
 
 /**
@@ -140,7 +119,6 @@ export function useClientNotificationState(serverNotifications: any[] = []) {
         return computeClientNotificationItems(serverNotifications);
     }, [serverNotifications, readVersion]);
 
-    // 미읽음 알림 개수에 맞춰 모바일/PWA 앱 아이콘 배지 동기화
     useEffect(() => {
         updateAppBadge(unreadCount);
     }, [unreadCount]);
@@ -179,47 +157,37 @@ export function getOrCreateDeviceId(): string {
 }
 
 /**
- * 네이티브 앱 (Android WebView, AndroidBridge 주입 환경, 전용 앱 등) 판별
+ * 네이티브 앱 (Android WebView, AndroidBridge 환경) 판별
  */
 export function isNativeApp(): boolean {
     if (typeof window === "undefined") return false;
     const win = window as any;
-
-    // 1. 네이티브 브리지 주입 확인
-    if (Boolean(win.AndroidBridge || win.Android || win.schoolTimetableApp || win.ReactNativeWebView || win.flutter_inappwebview)) {
-        return true;
-    }
-
-    // 2. getInstalledAppType() 검사
-    if (getInstalledAppType() === "webview") {
-        return true;
-    }
-
-    // 3. User-Agent 정식 앱 식별자 검사
-    const ua = navigator.userAgent || "";
-    if (/SeongjisuhaengApp/i.test(ua)) return true;
-    if (!/KAKAOTALK|NAVER|Instagram|FBAN|FBAV|LINE/i.test(ua)) {
-        if (!/GSA\//i.test(ua) && (/;\s*wv[;)]/i.test(ua) || /\bwv\b/i.test(ua))) {
-            return true;
-        }
-        if (!/SamsungBrowser|Whale|OPR|OPT|Opera|EdgA|Firefox|FxiOS/i.test(ua) &&
-            /Version\/[0-9.]+/i.test(ua) && /Chrome\/[0-9.]+/i.test(ua) && /Mobile Safari\/[0-9.]+/i.test(ua)) {
-            return true;
-        }
-    }
-
-    return false;
+    return Boolean(win.AndroidBridge || win.Android || win.schoolTimetableApp || win.ReactNativeWebView || win.flutter_inappwebview);
 }
 
 /**
- * 브라우저 및 앱 환경의 알림 지원 여부 확인
+ * PWA (홈 화면에 설치된 독립 실행형 웹앱) 판별
+ */
+export function isPWA(): boolean {
+    if (typeof window === "undefined") return false;
+    const isStandaloneMode = window.matchMedia("(display-mode: standalone)").matches;
+    const isIOSStandalone = (window.navigator as any).standalone === true;
+    return Boolean(isStandaloneMode || isIOSStandalone);
+}
+
+/**
+ * 푸시 알림 기능 지원 여부 확인
+ * - 사용자 요구사항: "현재 PWA와 네이티브 앱만 고려하여 개발하고 브라우저는 고려 사항에서 제외한다."
+ * - 네이티브 앱(AndroidBridge) 또는 PWA 환경에서만 true를 반환
  */
 export function isNotificationSupported(): boolean {
     if (typeof window === "undefined") return false;
-    // 1. 네이티브 앱 환경: Android WebView 및 브리지 환경은 알림 100% 지원
     if (isNativeApp()) return true;
-    // 2. 웹/PWA 환경: 표준 Notification API 존재 여부 확인
-    return "Notification" in window;
+    if (isPWA()) {
+        return "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
+    }
+    // 일반 브라우저: 푸시 알림 미지원 (헤더 알림함 조회 전용)
+    return false;
 }
 
 /**
@@ -237,8 +205,7 @@ export function getNotificationPermission(): NotificationPermission | "unsupport
 export function isNotificationSubscribed(): boolean {
     if (typeof window === "undefined") return false;
     if (!isNotificationSupported()) return false;
-    
-    // 명시적으로 비활성화(0)한 경우는 제외
+
     const stored = localStorage.getItem(NOTIF_ENABLED_KEY);
     if (stored === "0") return false;
 
@@ -247,31 +214,14 @@ export function isNotificationSubscribed(): boolean {
         return true;
     }
 
-    // 2. 웹/PWA 환경: 브라우저 알림 권한이 허용되어 있거나 명시적으로 켠 경우 활성
-    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-        return true;
+    // 2. PWA 환경: 브라우저 알림 권한 허용 여부와 로컬 설정 검사
+    if (isPWA()) {
+        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+            return stored !== "0";
+        }
     }
 
     return stored === "1";
-}
-
-/**
- * 현재 환경 플랫폼 분류 ('pwa' | 'webview' | 'web')
- */
-function getCurrentPlatform(): string {
-    const appType = getInstalledAppType();
-    if (appType === "pwa") return "pwa";
-    if (appType === "webview") return "webview";
-    return "web";
-}
-
-/**
- * 쿠키 설정 헬퍼
- */
-function setNotificationCookie(enabled: boolean) {
-    if (typeof document === "undefined") return;
-    const val = enabled ? "1" : "0";
-    document.cookie = `sj_notification_enabled=${val}; path=/; max-age=31536000; SameSite=Lax`;
 }
 
 /**
@@ -280,24 +230,16 @@ function setNotificationCookie(enabled: boolean) {
 export function updateAppBadge(count: number) {
     if (typeof window === "undefined") return;
 
-    // 1. AndroidBridge / Android 네이티브 브리지 배지 연동
     const win = window as any;
     if (typeof win.AndroidBridge?.setBadge === "function") {
         try { win.AndroidBridge.setBadge(count); } catch (_) {}
-    } else if (typeof win.Android?.setBadge === "function") {
-        try { win.Android.setBadge(count); } catch (_) {}
     } else if (typeof win.AndroidBridge?.setAppBadge === "function") {
         try { win.AndroidBridge.setAppBadge(count); } catch (_) {}
-    } else if (typeof win.Android?.setAppBadge === "function") {
-        try { win.Android.setAppBadge(count); } catch (_) {}
     }
 
-    // 2. 표준 Badging API (PWA, Chrome, Edge, Safari iOS 16.4+)
     if (count > 0) {
         if ("setAppBadge" in navigator) {
-            try {
-                (navigator as any).setAppBadge(count).catch(() => {});
-            } catch (_) {}
+            try { (navigator as any).setAppBadge(count).catch(() => {}); } catch (_) {}
         }
     } else {
         clearAppBadge();
@@ -312,178 +254,38 @@ export function clearAppBadge() {
     const win = window as any;
     if (typeof win.AndroidBridge?.clearBadge === "function") {
         try { win.AndroidBridge.clearBadge(); } catch (_) {}
-    } else if (typeof win.Android?.clearBadge === "function") {
-        try { win.Android.clearBadge(); } catch (_) {}
     }
-
     if ("clearAppBadge" in navigator) {
-        try {
-            (navigator as any).clearAppBadge().catch(() => {});
-        } catch (_) {}
+        try { (navigator as any).clearAppBadge().catch(() => {}); } catch (_) {}
     }
 }
 
 /**
- * 로컬 시스템 알림 팝업 즉시 띄우기
+ * PWA PushManager 구독 생성 또는 기존 구독 조회
  */
-export async function displayLocalNotification(title: string, body: string, url: string = "/") {
-    if (typeof window === "undefined") return false;
-
-    // 1. Android 네이티브 앱 환경:
-    // 실제 시스템 푸시/헤드업 배너 발송은 Android 백그라운드 워커(WorkManager)에 100% 전담시킵니다.
-    // 앱 진입 시 또는 포그라운드 사용 중 시스템 알림 배너를 일절 발송하지 않고 조용히 인앱 알림함에만 반영합니다.
-    if (isNativeApp()) {
-        return false;
+async function getOrRegisterPushSubscription(): Promise<PushSubscription | null> {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+        return null;
     }
 
-    // 2. 브라우저/PWA OS 푸시 알림 (Service Worker showNotification 또는 Notification 객체)
-    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-        if ("serviceWorker" in navigator) {
-            try {
-                const readyPromise = navigator.serviceWorker.ready.catch(() => null);
-                const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 250));
-                const reg = (await Promise.race([readyPromise, timeoutPromise])) as ServiceWorkerRegistration | null
-                    || (await navigator.serviceWorker.getRegistration().catch(() => null));
-
-                if (reg && reg.showNotification) {
-                    await reg.showNotification(title, {
-                        body,
-                        icon: "/favicon-48x48.png",
-                        badge: "/favicon-48x48.png",
-                        data: { url },
-                        tag: "sj-alert-" + Date.now()
-                    });
-                }
-            } catch (_) {}
-        } else {
-            try {
-                const notif = new Notification(title, {
-                    body,
-                    icon: "/favicon-48x48.png",
-                    tag: "sj-alert-" + Date.now()
-                });
-                notif.onclick = () => {
-                    window.focus();
-                    if (url && url !== "/") {
-                        window.location.href = url;
-                    }
-                };
-            } catch (_) {}
-        }
-    }
-
-    // 3. 인앱 화면 토스트 배너 (Sonner)
-    // 사용자가 웹/앱을 켜두고 있는 상태(foreground)에서는 OS 상단바 알림과 별개로 화면 내에서 즉시 인지할 수 있도록
-    // 상시 인앱 토스트 팝업 표출
     try {
-        toast.info(title, {
-            description: body,
-            duration: 7000,
-            action: url && url !== "/" ? {
-                label: "이동",
-                onClick: () => { window.location.href = url; }
-            } : undefined
-        });
-    } catch (_) {}
-
-    return true;
-}
-
-const DEFAULT_VAPID_PUBLIC_KEY = "BGhRyV8sLTVNkaVOgJDVulv0aMNOpCljPB4Bv2EEqBBvTJWfTeSwB7t_Kj9VA7N2mQTPfnNUczO51ZQGVm3VE3E";
-
-let cachedVapidKey: string | null = null;
-
-/**
- * 서버에서 VAPID 공개키 조회 (실패 시 기본 공개키 폴백)
- */
-export async function fetchVapidPublicKey(): Promise<string> {
-    if (cachedVapidKey) return cachedVapidKey;
-    try {
-        const res = await fetch("/api/notifications/vapid-public-key");
-        if (res.ok) {
-            const data = await res.json();
-            if (data?.publicKey) {
-                cachedVapidKey = data.publicKey;
-                return data.publicKey;
-            }
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+            const applicationServerKey = urlBase64ToUint8Array(DEFAULT_VAPID_PUBLIC_KEY);
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: applicationServerKey as any
+            });
         }
-    } catch (e) {
-        console.warn("[notificationService] Failed to fetch VAPID public key, using default:", e);
-    }
-    cachedVapidKey = DEFAULT_VAPID_PUBLIC_KEY;
-    return cachedVapidKey;
-}
-
-/**
- * URL-safe Base64 문자열을 Uint8Array로 변환 (PushManager applicationServerKey 요구 형식)
- */
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding)
-        .replace(/-/g, "+")
-        .replace(/_/g, "/");
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-}
-
-/**
- * ServiceWorkerRegistration 획득 (미등록 시 즉시 /sw.js 등록)
- */
-export async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
-    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return null;
-    try {
-        let reg = await navigator.serviceWorker.getRegistration();
-        if (!reg) {
-            reg = await navigator.serviceWorker.register("/sw.js");
-        }
-        await navigator.serviceWorker.ready;
-        return reg;
+        return subscription;
     } catch (err) {
-        console.warn("[notificationService] getServiceWorkerRegistration error:", err);
+        console.warn("[notificationService] Push subscription registration error:", err);
         return null;
     }
 }
 
-/**
- * 브라우저 표준 W3C PushManager 구독 객체 획득 또는 신규 구독 생성
- */
-export async function getOrRegisterPushSubscription(): Promise<PushSubscription | null> {
-    if (typeof window === "undefined" || isNativeApp() || !("serviceWorker" in navigator) || !("PushManager" in window)) {
-        return null;
-    }
-    if (typeof Notification === "undefined" || Notification.permission !== "granted") {
-        return null;
-    }
-
-    try {
-        const reg = await getServiceWorkerRegistration();
-        if (!reg || !reg.pushManager) return null;
-
-        let sub = await reg.pushManager.getSubscription();
-        if (sub) {
-            return sub;
-        }
-
-        const vapidPublicKey = await fetchVapidPublicKey();
-        const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
-
-        sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: convertedKey as any
-        });
-
-        return sub;
-    } catch (err) {
-        console.warn("[notificationService] pushManager.subscribe failed:", err);
-        return null;
-    }
-}
-
-export interface UserSubscriptionInfo {
+export interface UserSubscriptionProfile {
     role: "student" | "teacher";
     grade?: number | string;
     classNum?: number | string;
@@ -493,346 +295,208 @@ export interface UserSubscriptionInfo {
 }
 
 /**
- * 사이트 접속 시 알림 권한 및 상태 서버 동기화
+ * 앱 접속 시 구독 상태 및 사용자 프로필 동기화
  */
-export async function syncNotificationStatusOnConnect(info: UserSubscriptionInfo) {
+export async function syncNotificationStatusOnConnect(profile: UserSubscriptionProfile) {
     if (typeof window === "undefined") return;
 
+    // 일반 브라우저는 푸시 대상 제외이므로 서버 구독 동기화 건너뜀
     if (!isNotificationSupported()) return;
 
-    // 1. 네이티브 앱 처리
-    if (isNativeApp()) {
-        const localEnabled = localStorage.getItem(NOTIF_ENABLED_KEY) === "1";
-        setNotificationCookie(localEnabled);
-        const deviceId = getOrCreateDeviceId();
+    const deviceId = getOrCreateDeviceId();
+    const isEnabled = isNotificationSubscribed();
+
+    // 1. 네이티브 앱: AndroidBridge 동기화
+    const win = window as any;
+    const bridgeData = {
+        deviceId,
+        role: profile.role,
+        grade: Number(profile.grade) || 0,
+        classNum: Number(profile.classNum) || 0,
+        studentNumber: Number(profile.studentNumber) || 0,
+        studentName: (profile.studentName || "").trim(),
+        teacherName: (profile.teacherName || "").trim(),
+        enabled: isEnabled
+    };
+    if (typeof win.AndroidBridge?.syncUserSubscription === "function") {
+        try { win.AndroidBridge.syncUserSubscription(JSON.stringify(bridgeData)); } catch (_) {}
+    }
+
+    // 2. PWA 환경: 활성화 상태일 경우 서버 구독 정보 갱신
+    if (isPWA() && isEnabled) {
+        try {
+            let pushSubStr = "";
+            const sub = await getOrRegisterPushSubscription();
+            if (sub) {
+                pushSubStr = JSON.stringify(sub.toJSON());
+            }
+
+            await fetch("/api/notifications/subscribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    deviceId,
+                    role: profile.role,
+                    grade: Number(profile.grade) || 0,
+                    classNum: Number(profile.classNum) || 0,
+                    studentNumber: Number(profile.studentNumber) || 0,
+                    studentName: (profile.studentName || "").trim(),
+                    teacherName: (profile.teacherName || "").trim(),
+                    platform: "pwa",
+                    pushSubscription: pushSubStr,
+                    enabled: 1
+                })
+            });
+        } catch (_) {}
+    }
+}
+
+/**
+ * 알림 구독 ON/OFF 토글
+ * - toggleNotificationSubscription(checked, profile) 및 toggleNotificationSubscription(profile, checked) 양방향 지원
+ */
+export async function toggleNotificationSubscription(
+    arg1: boolean | UserSubscriptionProfile,
+    arg2?: UserSubscriptionProfile | boolean
+): Promise<{ success: boolean; enabled: boolean; reason?: string }> {
+    if (typeof window === "undefined") return { success: false, enabled: false };
+
+    let targetState: boolean | undefined = undefined;
+    let profile: UserSubscriptionProfile;
+
+    if (typeof arg1 === "boolean") {
+        targetState = arg1;
+        profile = (arg2 as UserSubscriptionProfile) || { role: "student" };
+    } else {
+        profile = arg1 || { role: "student" };
+        if (typeof arg2 === "boolean") {
+            targetState = arg2;
+        }
+    }
+
+    // 일반 브라우저는 푸시를 지원하지 않음
+    if (!isNotificationSupported()) {
+        return { success: false, enabled: false, reason: "browser_not_supported" };
+    }
+
+    const currentState = isNotificationSubscribed();
+    const nextState = targetState !== undefined ? targetState : !currentState;
+    const deviceId = getOrCreateDeviceId();
+
+    // 알림 끄기 (OFF)
+    if (!nextState) {
+        localStorage.setItem(NOTIF_ENABLED_KEY, "0");
+
+        // 네이티브 앱 브릿지 동기화
         const win = window as any;
-        const subData = {
+        const bridgeData = {
             deviceId,
-            role: info.role,
-            grade: Number(info.grade) || 0,
-            classNum: Number(info.classNum) || 0,
-            studentNumber: Number(info.studentNumber) || 0,
-            studentName: (info.studentName || "").trim(),
-            teacherName: (info.teacherName || "").trim(),
-            enabled: localEnabled
+            role: profile.role,
+            grade: Number(profile.grade) || 0,
+            classNum: Number(profile.classNum) || 0,
+            studentNumber: Number(profile.studentNumber) || 0,
+            studentName: (profile.studentName || "").trim(),
+            teacherName: (profile.teacherName || "").trim(),
+            enabled: false
         };
         if (typeof win.AndroidBridge?.syncUserSubscription === "function") {
-            try { win.AndroidBridge.syncUserSubscription(JSON.stringify(subData)); } catch (_) {}
-        } else if (typeof win.Android?.syncUserSubscription === "function") {
-            try { win.Android.syncUserSubscription(JSON.stringify(subData)); } catch (_) {}
+            try { win.AndroidBridge.syncUserSubscription(JSON.stringify(bridgeData)); } catch (_) {}
         }
 
-        if (localEnabled) {
+        // PWA Push 해제
+        if (isPWA()) {
+            try {
+                const reg = await navigator.serviceWorker.ready;
+                const sub = await reg.pushManager.getSubscription();
+                if (sub) await sub.unsubscribe();
+            } catch (_) {}
+
             try {
                 await fetch("/api/notifications/subscribe", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         deviceId,
-                        role: info.role,
-                        grade: Number(info.grade) || 0,
-                        classNum: Number(info.classNum) || 0,
-                        studentNumber: Number(info.studentNumber) || 0,
-                        studentName: (info.studentName || "").trim(),
-                        teacherName: (info.teacherName || "").trim(),
-                        platform: "webview",
-                        enabled: 1
+                        role: profile.role,
+                        platform: "pwa",
+                        enabled: 0
                     })
                 });
             } catch (_) {}
         }
-        return;
-    }
-
-    // 2. 일반 웹/PWA 브라우저 처리
-    const supported = typeof Notification !== "undefined";
-    const perm = supported ? Notification.permission : "unsupported";
-    const localEnabled = localStorage.getItem(NOTIF_ENABLED_KEY) === "1";
-
-    // 권한이 revoked되었으면 로컬 및 쿠키도 OFF로 보정
-    if (perm !== "granted" && localEnabled) {
-        localStorage.setItem(NOTIF_ENABLED_KEY, "0");
-        setNotificationCookie(false);
-        return;
-    }
-
-    const isActive = perm === "granted" && localEnabled;
-    setNotificationCookie(isActive);
-
-    if (isActive) {
-        // 백엔드에 최신 접속 기기/IP/Web Push 구독 정보 ping
-        try {
-            const deviceId = getOrCreateDeviceId();
-            let pushSubscriptionStr = "";
-
-            if (!isNativeApp() && "serviceWorker" in navigator && "PushManager" in window) {
-                try {
-                    const pushSub = await getOrRegisterPushSubscription();
-                    if (pushSub) {
-                        pushSubscriptionStr = JSON.stringify(pushSub.toJSON());
-                    }
-                } catch (err) {
-                    console.warn("[syncNotificationStatusOnConnect] push subscription check error:", err);
-                }
-            }
-
-            await fetch("/api/notifications/subscribe", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    deviceId,
-                    role: info.role,
-                    grade: Number(info.grade) || 0,
-                    classNum: Number(info.classNum) || 0,
-                    studentNumber: Number(info.studentNumber) || 0,
-                    studentName: (info.studentName || "").trim(),
-                    teacherName: (info.teacherName || "").trim(),
-                    platform: getCurrentPlatform(),
-                    pushSubscription: pushSubscriptionStr,
-                    enabled: 1
-                })
-            });
-        } catch (_) {}
-    }
-}
-
-/**
- * 브라우저 및 플랫폼 호환 알림 권한 요청 헬퍼
- * - Promise / Callback / undefined 반환 환경(삼성 인터넷 등) 모두 대응
- * - 사용자가 시스템 팝업에서 '허용' 누르는 순간 즉시 감지 (100ms 폴링 + focus 이벤트)
- */
-export async function requestNotificationPermission(): Promise<NotificationPermission> {
-    if (typeof window === "undefined" || !("Notification" in window)) return "denied";
-
-    if (Notification.permission !== "default") {
-        return Notification.permission;
-    }
-
-    return new Promise<NotificationPermission>((resolve) => {
-        let isDone = false;
-        let timer: any = null;
-        let timeoutTimer: any = null;
-
-        const cleanup = () => {
-            if (timer) clearInterval(timer);
-            if (timeoutTimer) clearTimeout(timeoutTimer);
-            window.removeEventListener("focus", onFocus);
-        };
-
-        const finish = (result?: any) => {
-            if (isDone) return;
-            isDone = true;
-            cleanup();
-            const finalPerm = (typeof Notification !== "undefined" && Notification.permission === "granted") || result === "granted"
-                ? "granted"
-                : (result || (typeof Notification !== "undefined" ? Notification.permission : "denied"));
-            resolve(finalPerm);
-        };
-
-        // 1. 주기적 감시 (삼성 인터넷/안드로이드 등 비동기 콜백 누락 및 undefined 반환 방지)
-        timer = setInterval(() => {
-            if (typeof Notification !== "undefined" && Notification.permission !== "default") {
-                finish(Notification.permission);
-            }
-        }, 100);
-
-        // 2. 창 포커스 복귀 감지 (시스템 팝업 클릭 완료 즉시)
-        const onFocus = () => {
-            setTimeout(() => {
-                if (typeof Notification !== "undefined" && Notification.permission !== "default") {
-                    finish(Notification.permission);
-                }
-            }, 80);
-        };
-        window.addEventListener("focus", onFocus);
-
-        // 3. 최대 45초 타임아웃 안전장치
-        timeoutTimer = setTimeout(() => {
-            finish(typeof Notification !== "undefined" ? Notification.permission : "default");
-        }, 45000);
-
-        // 4. 표준 API 호출 (Callback + Promise)
-        try {
-            const p = Notification.requestPermission((cbResult) => {
-                if (cbResult) {
-                    finish(cbResult);
-                }
-            });
-
-            if (p && typeof (p as any).then === "function") {
-                (p as any).then((promiseResult: any) => {
-                    if (promiseResult) {
-                        finish(promiseResult);
-                    }
-                }).catch(() => {
-                    finish(Notification.permission);
-                });
-            }
-        } catch (e) {
-            console.warn("Notification.requestPermission error:", e);
-        }
-    });
-}
-
-/**
- * 알림 구독 스위치 토글 핸들러
- */
-export async function toggleNotificationSubscription(
-    targetEnabled: boolean,
-    info: UserSubscriptionInfo
-): Promise<{ success: boolean; enabled: boolean; reason?: string }> {
-    if (typeof window === "undefined") return { success: false, enabled: false };
-
-    const deviceId = getOrCreateDeviceId();
-
-    if (!targetEnabled) {
-        // 알림 끄기 (OFF)
-        localStorage.setItem(NOTIF_ENABLED_KEY, "0");
-        setNotificationCookie(false);
-
-        // PushManager 구독 해제 (백그라운드)
-        if (!isNativeApp() && typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
-            try {
-                getServiceWorkerRegistration().then(reg => {
-                    if (reg?.pushManager) {
-                        reg.pushManager.getSubscription().then(sub => {
-                            if (sub) sub.unsubscribe().catch(() => {});
-                        }).catch(() => {});
-                    }
-                }).catch(() => {});
-            } catch (_) {}
-        }
-
-        const win = window as any;
-        const subData = {
-            deviceId,
-            role: info.role,
-            grade: Number(info.grade) || 0,
-            classNum: Number(info.classNum) || 0,
-            studentNumber: Number(info.studentNumber) || 0,
-            studentName: (info.studentName || "").trim(),
-            teacherName: (info.teacherName || "").trim(),
-            enabled: false
-        };
-        if (typeof win.AndroidBridge?.syncUserSubscription === "function") {
-            try { win.AndroidBridge.syncUserSubscription(JSON.stringify(subData)); } catch (_) {}
-        } else if (typeof win.Android?.syncUserSubscription === "function") {
-            try { win.Android.syncUserSubscription(JSON.stringify(subData)); } catch (_) {}
-        }
-
-        try {
-            await fetch("/api/notifications/subscribe", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    deviceId,
-                    role: info.role,
-                    grade: Number(info.grade) || 0,
-                    classNum: Number(info.classNum) || 0,
-                    studentNumber: Number(info.studentNumber) || 0,
-                    studentName: (info.studentName || "").trim(),
-                    teacherName: (info.teacherName || "").trim(),
-                    platform: isNativeApp() ? "webview" : getCurrentPlatform(),
-                    enabled: 0
-                })
-            });
-        } catch (_) {}
 
         return { success: true, enabled: false };
     }
 
     // 알림 켜기 (ON)
-    // 1. 지원 여부 점검
-    if (!isNotificationSupported()) {
-        // iOS Safari (비 PWA) 환경인지 확인
-        const isStandalone = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true);
-        if (agent.isIOS && !isStandalone) {
-            return { success: false, enabled: false, reason: "ios_safari_needs_pwa" };
+    // 0. 서버 마스터 스위치 확인
+    try {
+        const statusRes = await fetch("/api/notifications/status", { cache: "no-store" });
+        if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            if (statusData && statusData.systemEnabled === false) {
+                return { success: false, enabled: false, reason: "system_disabled" };
+            }
         }
-        return { success: false, enabled: false, reason: "unsupported" };
-    }
+    } catch (_) {}
 
-    // 2. 권한 요청 (네이티브 앱이 아닌 일반 웹/PWA 환경인 경우만 브라우저 권한 요청)
-    if (!isNativeApp()) {
+    // 1. PWA 권한 요청
+    if (isPWA()) {
         let permission = typeof Notification !== "undefined" ? Notification.permission : "default";
         if (permission === "default") {
-            permission = await requestNotificationPermission();
-        }
-
-        // 최신 상태 재확인 (허용 즉시 반영)
-        if (permission !== "granted" && typeof Notification !== "undefined" && Notification.permission === "granted") {
-            permission = "granted";
+            permission = await Notification.requestPermission();
         }
 
         if (permission !== "granted") {
             localStorage.setItem(NOTIF_ENABLED_KEY, "0");
-            setNotificationCookie(false);
             return { success: false, enabled: false, reason: "permission_denied" };
         }
     }
 
-    // 3. 성공 시 로컬 및 쿠키 즉시 갱신 (지연 없이 즉각 완료 처리)
     localStorage.setItem(NOTIF_ENABLED_KEY, "1");
-    setNotificationCookie(true);
 
+    // 2. 네이티브 앱 브릿지 동기화
     const win = window as any;
-    const subData = {
+    const bridgeData = {
         deviceId,
-        role: info.role,
-        grade: Number(info.grade) || 0,
-        classNum: Number(info.classNum) || 0,
-        studentNumber: Number(info.studentNumber) || 0,
-        studentName: (info.studentName || "").trim(),
-        teacherName: (info.teacherName || "").trim(),
+        role: profile.role,
+        grade: Number(profile.grade) || 0,
+        classNum: Number(profile.classNum) || 0,
+        studentNumber: Number(profile.studentNumber) || 0,
+        studentName: (profile.studentName || "").trim(),
+        teacherName: (profile.teacherName || "").trim(),
         enabled: true
     };
     if (typeof win.AndroidBridge?.syncUserSubscription === "function") {
-        try { win.AndroidBridge.syncUserSubscription(JSON.stringify(subData)); } catch (_) {}
-    } else if (typeof win.Android?.syncUserSubscription === "function") {
-        try { win.Android.syncUserSubscription(JSON.stringify(subData)); } catch (_) {}
+        try { win.AndroidBridge.syncUserSubscription(JSON.stringify(bridgeData)); } catch (_) {}
     }
 
-    // 4. 백그라운드에서 Web Push 구독 생성, 서버 동기화 및 환영 알림 발송 (UI 블로킹 방지)
-    (async () => {
-        let pushSubscriptionStr = "";
-        if (!isNativeApp() && typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
-            try {
-                const pushSub = await getOrRegisterPushSubscription();
-                if (pushSub) {
-                    pushSubscriptionStr = JSON.stringify(pushSub.toJSON());
-                }
-            } catch (err) {
-                console.warn("[toggleNotificationSubscription] Push subscription creation error:", err);
-            }
-        }
-
+    // 3. PWA PushManager 등록 및 서버 전송
+    if (isPWA()) {
         try {
+            const sub = await getOrRegisterPushSubscription();
+            const pushSubStr = sub ? JSON.stringify(sub.toJSON()) : "";
+
             await fetch("/api/notifications/subscribe", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     deviceId,
-                    role: info.role,
-                    grade: Number(info.grade) || 0,
-                    classNum: Number(info.classNum) || 0,
-                    studentNumber: Number(info.studentNumber) || 0,
-                    studentName: (info.studentName || "").trim(),
-                    teacherName: (info.teacherName || "").trim(),
-                    platform: isNativeApp() ? "webview" : getCurrentPlatform(),
-                    pushSubscription: pushSubscriptionStr,
+                    role: profile.role,
+                    grade: Number(profile.grade) || 0,
+                    classNum: Number(profile.classNum) || 0,
+                    studentNumber: Number(profile.studentNumber) || 0,
+                    studentName: (profile.studentName || "").trim(),
+                    teacherName: (profile.teacherName || "").trim(),
+                    platform: "pwa",
+                    pushSubscription: pushSubStr,
                     enabled: 1
                 })
             });
         } catch (e) {
-            console.warn("Notification subscribe server sync error:", e);
+            console.warn("[toggleNotificationSubscription] Server sync error:", e);
         }
-
-        const welcomeMsg = info.role === "teacher" 
-            ? "교사용 수행평가 및 공지 알림을 정상적으로 수신합니다."
-            : "새로운 수행평가 및 학사 일정이 등록되면 알려드립니다.";
-
-        displayLocalNotification("🔔 수행 알림받기 설정 완료", welcomeMsg).catch(() => {});
-    })();
+    }
 
     return { success: true, enabled: true };
 }
@@ -847,7 +511,7 @@ export interface GlobalNotificationWatcherProps {
 }
 
 /**
- * 알림 쿼리 키 생성기 (전역 동일 키 보장 및 불필요한 중복 네트워크 요청 차단)
+ * 알림 쿼리 키 생성기
  */
 export function getNotificationQueryKey(
     role: "student" | "teacher" | null | undefined,
@@ -868,11 +532,9 @@ export function getNotificationQueryKey(
 }
 
 /**
- * 전역 알림 감시 및 즉시 배너/푸시 디스패처 훅
- * - 앱 루트(App.tsx)에서 단 1회 실행
- * - 모바일 복귀 / 화면 켜짐 / 탭 전환(visibilitychange, focus, pageshow) 즉시 무지연(0ms) 캐시 무효화 및 서버 조회
- * - 신규 미읽음 알림 감지 시 OS 알림 및 인앱 토스트 즉각 표출
- * - 이미 표출된 알림은 세션 스토리지에 등록하여 벨 아이콘 클릭 시 밀린 푸시가 다시 뜨는 기현상 원천 차단
+ * 전역 알림 감시 훅
+ * - 앱 진입 시 또는 포그라운드 사용 중 시스템 알림이나 인앱 토스트를 일절 발생시키지 않습니다.
+ * - 오직 서버의 알림 목록 및 미읽음 배지(unreadCount)만 조용히 동기화합니다.
  */
 export function useGlobalNotificationWatcher(info: GlobalNotificationWatcherProps) {
     const queryClient = useQueryClient();
@@ -881,7 +543,6 @@ export function useGlobalNotificationWatcher(info: GlobalNotificationWatcherProp
     const effectiveRole = info.role || "student";
     const queryKey = getNotificationQueryKey(effectiveRole, info, deviceId);
 
-    // 실시간 알림 쿼리 (5초 주기 백그라운드 포함 연속 폴링 + 윈도우 포커스/재연결 시 즉시 갱신)
     const notificationsQuery = useQuery({
         queryKey,
         queryFn: async () => {
@@ -905,46 +566,40 @@ export function useGlobalNotificationWatcher(info: GlobalNotificationWatcherProp
             if (!res.ok) throw new Error("Failed to fetch notifications");
             return res.json();
         },
-        refetchInterval: 5000,
-        refetchIntervalInBackground: true,
-        staleTime: 1000,
+        refetchInterval: 60000, // 1분 주기 안전 폴링
+        staleTime: 5000,
         refetchOnWindowFocus: true,
-        refetchOnReconnect: true,
-        networkMode: "always"
+        refetchOnReconnect: true
     });
 
-    // 1. 모바일 앱 복귀 / 화면 켜짐 / 탭 전환 / 다른 탭 실시간 발송 감지 (0ms 즉시 동기화)
+    // 1. 화면 복귀 및 서비스 워커 푸시 수신 시 즉각 캐시 무효화
     useEffect(() => {
         const handleWakeup = () => {
             queryClient.invalidateQueries({ queryKey: ["notifications"] });
         };
 
-        const handleStorage = (e: StorageEvent) => {
-            if (e.key === "sj_last_notification_posted" || e.key === "sj_notification_read_updated") {
+        const handleSwMessage = (e: MessageEvent) => {
+            if (e.data && e.data.type === "PUSH_NOTIFICATION_RECEIVED") {
                 queryClient.invalidateQueries({ queryKey: ["notifications"] });
             }
         };
 
         document.addEventListener("visibilitychange", handleWakeup);
         window.addEventListener("focus", handleWakeup);
-        window.addEventListener("pageshow", handleWakeup);
-        window.addEventListener("storage", handleStorage);
-
-        // 백그라운드 탭에서도 5초마다 강제 무효화 실행 (TanStack 쿼리 타이머와 이중 안전망)
-        const intervalId = setInterval(() => {
-            queryClient.invalidateQueries({ queryKey: ["notifications"] });
-        }, 5000);
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.addEventListener("message", handleSwMessage);
+        }
 
         return () => {
             document.removeEventListener("visibilitychange", handleWakeup);
             window.removeEventListener("focus", handleWakeup);
-            window.removeEventListener("pageshow", handleWakeup);
-            window.removeEventListener("storage", handleStorage);
-            clearInterval(intervalId);
+            if ("serviceWorker" in navigator) {
+                navigator.serviceWorker.removeEventListener("message", handleSwMessage);
+            }
         };
     }, [queryClient]);
 
-    // 2. 접속 시 구독 상태 동기화
+    // 2. 접속 시 구독 상태 동기화 (PWA / 네이티브 앱)
     useEffect(() => {
         syncNotificationStatusOnConnect({
             role: effectiveRole,
@@ -955,41 +610,6 @@ export function useGlobalNotificationWatcher(info: GlobalNotificationWatcherProp
             teacherName: info.teacherName || undefined
         });
     }, [effectiveRole, info.grade, info.classNum, info.studentNumber, info.studentName, info.teacherName]);
-
-    // 3. 신규 미읽음 알림 감지 시 즉각 배너/토스트 발송 (전역 단일 실행)
-    const serverNotifications = notificationsQuery.data?.notifications || [];
-    const { items: notificationItems } = useClientNotificationState(serverNotifications);
-
-    useEffect(() => {
-        // 네이티브 앱 환경: 포그라운드/진입 시 시스템 배너 발송을 하지 않고 백그라운드 WorkManager에만 전담
-        if (isNativeApp()) return;
-
-        if (!notificationItems || notificationItems.length === 0) return;
-
-        const notifiedBannerIds = getSessionNotifiedBannerIds();
-        const unnotifiedItems = notificationItems.filter(it => !it.read && !notifiedBannerIds.has(it.id));
-        if (unnotifiedItems.length === 0) return;
-
-        const itemsToNotify = unnotifiedItems.slice(0, 2);
-
-        itemsToNotify.forEach(it => {
-            if (it.deliveryType === "in_app") {
-                markSessionBannerNotified(it.id);
-                return;
-            }
-
-            if (it.deliveryType === "app") {
-                const isApp = isNativeApp() || (typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches);
-                if (!isApp) return;
-            }
-
-            const isExplicitlyDisabled = typeof window !== "undefined" && localStorage.getItem(NOTIF_ENABLED_KEY) === "0";
-            if (!isExplicitlyDisabled) {
-                markSessionBannerNotified(it.id);
-                displayLocalNotification(it.title, it.message, it.link || "/").catch(() => {});
-            }
-        });
-    }, [notificationItems]);
 
     return notificationsQuery;
 }
