@@ -1,6 +1,7 @@
 // functions/api/admin/notifications/send.ts
 import { verifyAdminPassword } from "../../../../server/adminPW";
 import { ensureNotificationTables } from "../../../db_schema_notifications";
+import { sendWebPushNotification } from "../../../lib/webPush";
 
 export const onRequest = async (context: any) => {
     const { request, env } = context;
@@ -49,6 +50,29 @@ export const onRequest = async (context: any) => {
             });
         }
 
+        // 0. Check Notification System Master Switch
+        await env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        `).run();
+
+        const masterRow = await env.DB.prepare(
+            "SELECT value FROM system_settings WHERE key = 'notification_system_enabled'"
+        ).first();
+
+        const isMasterEnabled = masterRow ? (masterRow.value !== "0" && masterRow.value !== "false") : true;
+
+        if (!isMasterEnabled) {
+            return new Response(JSON.stringify({ 
+                error: "알림 기능 마스터 스위치가 OFF 상태입니다. 알림을 발송할 수 없습니다." 
+            }), {
+                status: 403,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+
         // 1. Insert into site_notifications
         const insertRes = await env.DB.prepare(`
             INSERT INTO site_notifications (
@@ -74,7 +98,7 @@ export const onRequest = async (context: any) => {
 
         // 2. Count matching active subscribers based on target and delivery technology
         let subscriberQuery = `
-            SELECT id, role, grade, class_num, student_number, student_name, teacher_name, platform
+            SELECT id, role, grade, class_num, student_number, student_name, teacher_name, platform, push_subscription
             FROM notification_subscriptions
             WHERE is_active = 1
         `;
@@ -115,11 +139,52 @@ export const onRequest = async (context: any) => {
 
         const { results: matched = [] } = await env.DB.prepare(subscriberQuery).bind(...bindings).all();
 
+        // 3. Dispatch Web Push if deliveryType is not 'in_app'
+        let pushedCount = 0;
+        let pushFailedCount = 0;
+
+        if (deliveryType !== "in_app" && matched.length > 0) {
+            const pushPayload = JSON.stringify({
+                id: notificationId,
+                title: title.trim(),
+                body: message.trim(),
+                message: message.trim(),
+                url: link.trim() || "/",
+                link: link.trim() || "/",
+                category: category || "assessment",
+                timestamp: Date.now()
+            });
+
+            const pushPromises = matched
+                .filter((sub: any) => Boolean(sub.push_subscription && sub.push_subscription.trim()))
+                .map(async (sub: any) => {
+                    try {
+                        const pushRes = await sendWebPushNotification(sub.push_subscription, pushPayload, env);
+                        if (pushRes.shouldDeactivate) {
+                            try {
+                                await env.DB.prepare("UPDATE notification_subscriptions SET is_active = 0 WHERE id = ?").bind(sub.id).run();
+                            } catch (_) {}
+                        }
+                        return { id: sub.id, ...pushRes };
+                    } catch (err: any) {
+                        return { id: sub.id, success: false, statusCode: 0, statusText: err.message || "Failed" };
+                    }
+                });
+
+            if (pushPromises.length > 0) {
+                const pushResults = await Promise.allSettled(pushPromises);
+                pushedCount = pushResults.filter(r => r.status === "fulfilled" && (r as any).value.success).length;
+                pushFailedCount = pushResults.filter(r => r.status === "rejected" || (r.status === "fulfilled" && !(r as any).value.success)).length;
+            }
+        }
+
         return new Response(JSON.stringify({
             success: true,
             notificationId,
             deliveryType,
             matchedCount: matched.length,
+            pushedCount,
+            pushFailedCount,
             matchedSubscribers: matched
         }), {
             status: 200,

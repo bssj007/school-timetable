@@ -2,6 +2,7 @@
 import { Router } from "express";
 import { getRawSqliteDb } from "../db";
 import { verifyAdminPassword } from "../adminPW";
+import { DEFAULT_VAPID_PUBLIC_KEY, DEFAULT_VAPID_PRIVATE_KEY, DEFAULT_VAPID_SUBJECT, sendWebPushNotification } from "../lib/webPush";
 
 export const notificationsRouter = Router();
 export const adminNotificationsRouter = Router();
@@ -178,6 +179,13 @@ notificationsRouter.get("/list", (req, res) => {
         console.error("[/api/notifications/list] Error:", err);
         res.status(500).json({ error: err.message });
     }
+});
+
+// GET /api/notifications/vapid-public-key
+notificationsRouter.get("/vapid-public-key", (req, res) => {
+    const publicKey = process.env.VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY;
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.json({ publicKey });
 });
 
 // POST /api/notifications/subscribe
@@ -451,8 +459,54 @@ adminNotificationsRouter.get("/", (req, res) => {
     }
 });
 
+// GET /api/admin/notifications/master-switch
+adminNotificationsRouter.get("/master-switch", (req, res) => {
+    const sqlite = getRawSqliteDb();
+    if (!sqlite) return res.status(500).json({ error: "Database not available" });
+    try {
+        sqlite.exec(`
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        `);
+        const row = sqlite.prepare("SELECT value FROM system_settings WHERE key = 'notification_system_enabled'").get();
+        const enabled = row ? (row.value !== "0" && row.value !== "false") : true;
+        res.json({ enabled });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/admin/notifications/master-switch
+adminNotificationsRouter.post("/master-switch", (req, res) => {
+    const sqlite = getRawSqliteDb();
+    if (!sqlite) return res.status(500).json({ error: "Database not available" });
+    try {
+        sqlite.exec(`
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        `);
+        const { enabled } = req.body || {};
+        const isEnabled = Boolean(enabled);
+        const valStr = isEnabled ? "1" : "0";
+
+        sqlite.prepare(`
+            INSERT INTO system_settings (key, value)
+            VALUES ('notification_system_enabled', ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        `).run(valStr);
+
+        res.json({ success: true, enabled: isEnabled });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /api/admin/notifications/send
-adminNotificationsRouter.post("/send", (req, res) => {
+adminNotificationsRouter.post("/send", async (req, res) => {
     const sqlite = getRawSqliteDb();
     if (!sqlite) return res.status(500).json({ error: "Database not available" });
     ensureLocalNotificationTables(sqlite);
@@ -474,6 +528,19 @@ adminNotificationsRouter.post("/send", (req, res) => {
 
         if (!title.trim() || !message.trim()) {
             return res.status(400).json({ error: "Title and message are required" });
+        }
+
+        // Check Notification System Master Switch
+        sqlite.exec(`
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        `);
+        const masterRow = sqlite.prepare("SELECT value FROM system_settings WHERE key = 'notification_system_enabled'").get();
+        const isMasterEnabled = masterRow ? (masterRow.value !== "0" && masterRow.value !== "false") : true;
+        if (!isMasterEnabled) {
+            return res.status(403).json({ error: "알림 기능 마스터 스위치가 OFF 상태입니다. 알림을 발송할 수 없습니다." });
         }
 
         const insertRes = sqlite.prepare(`
@@ -500,7 +567,7 @@ adminNotificationsRouter.post("/send", (req, res) => {
 
         // Count matching active subscribers
         let subscriberQuery = `
-            SELECT id, role, grade, class_num, student_number, student_name, teacher_name, platform
+            SELECT id, role, grade, class_num, student_number, student_name, teacher_name, platform, push_subscription
             FROM notification_subscriptions
             WHERE is_active = 1
         `;
@@ -540,11 +607,56 @@ adminNotificationsRouter.post("/send", (req, res) => {
 
         const matched = sqlite.prepare(subscriberQuery).all(...bindings);
 
+        // Dispatch Web Push if deliveryType is not 'in_app'
+        let pushedCount = 0;
+        let pushFailedCount = 0;
+
+        if (deliveryType !== "in_app" && matched.length > 0) {
+            const pushPayload = JSON.stringify({
+                id: notificationId,
+                title: title.trim(),
+                body: message.trim(),
+                message: message.trim(),
+                url: link.trim() || "/",
+                link: link.trim() || "/",
+                category: category || "assessment",
+                timestamp: Date.now()
+            });
+
+            const pushPromises = matched
+                .filter((sub: any) => Boolean(sub.push_subscription && sub.push_subscription.trim()))
+                .map(async (sub: any) => {
+                    try {
+                        const pushRes = await sendWebPushNotification(sub.push_subscription, pushPayload, {
+                            publicKey: process.env.VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY,
+                            privateKey: process.env.VAPID_PRIVATE_KEY || DEFAULT_VAPID_PRIVATE_KEY,
+                            subject: process.env.VAPID_SUBJECT || DEFAULT_VAPID_SUBJECT
+                        });
+                        if (pushRes.shouldDeactivate) {
+                            try {
+                                sqlite.prepare("UPDATE notification_subscriptions SET is_active = 0 WHERE id = ?").run(sub.id);
+                            } catch (_) {}
+                        }
+                        return { id: sub.id, ...pushRes };
+                    } catch (err: any) {
+                        return { id: sub.id, success: false, statusCode: 0, statusText: err.message || "Failed" };
+                    }
+                });
+
+            if (pushPromises.length > 0) {
+                const pushResults = await Promise.allSettled(pushPromises);
+                pushedCount = pushResults.filter(r => r.status === "fulfilled" && (r as any).value.success).length;
+                pushFailedCount = pushResults.filter(r => r.status === "rejected" || (r.status === "fulfilled" && !(r as any).value.success)).length;
+            }
+        }
+
         res.json({
             success: true,
             notificationId,
             deliveryType,
             matchedCount: matched.length,
+            pushedCount,
+            pushFailedCount,
             matchedSubscribers: matched
         });
     } catch (err: any) {

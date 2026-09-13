@@ -1,8 +1,9 @@
 // client/src/components/admin/NotificationManager.tsx
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, Send, CheckCircle2, AlertCircle, Trash2, Users, Smartphone, RefreshCw, Clock, Check, Sparkles, Radio, Search, X } from "lucide-react";
+import { Bell, Send, CheckCircle2, AlertCircle, Trash2, Users, Smartphone, RefreshCw, Clock, Check, Sparkles, Radio, Search, X, Power, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -133,6 +134,52 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
     const [message, setMessage] = useState(NOTIFICATION_TYPES[0].defaultMessage);
     const [link, setLink] = useState("/");
 
+    // 0. Fetch notification system master switch state (default: ON)
+    const masterSwitchQuery = useQuery({
+        queryKey: ["admin", "notification-master-switch"],
+        queryFn: async () => {
+            const res = await fetch("/api/admin/notifications/master-switch", {
+                headers: { "X-Admin-Password": adminPassword }
+            });
+            if (!res.ok) throw new Error("마스터 스위치 상태 조회 실패");
+            const data = await res.json();
+            return typeof data?.enabled === "boolean" ? data.enabled : true;
+        },
+        refetchInterval: 10000
+    });
+
+    const isMasterEnabled = masterSwitchQuery.data ?? true;
+
+    // Toggle master switch mutation
+    const toggleMasterSwitchMutation = useMutation({
+        mutationFn: async (nextEnabled: boolean) => {
+            const res = await fetch("/api/admin/notifications/master-switch", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Admin-Password": adminPassword
+                },
+                body: JSON.stringify({ enabled: nextEnabled })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || "마스터 스위치 상태 변경 실패");
+            }
+            return res.json();
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "notification-master-switch"] });
+            if (data.enabled) {
+                toast.success("알림 기능 마스터 스위치를 [ON]으로 켰습니다. (알림 발송 및 메뉴 사용 허용)");
+            } else {
+                toast.warning("알림 기능 마스터 스위치를 [OFF]로 껐습니다. (서버 측 발신 및 메뉴 사용 차단)");
+            }
+        },
+        onError: (err: any) => {
+            toast.error(err.message || "마스터 스위치 변경 중 오류가 발생했습니다.");
+        }
+    });
+
     // 1. Fetch only users who enabled notifications (is_active = 1)
     const subscribersQuery = useQuery({
         queryKey: ["admin", "notification-subscribers"],
@@ -162,6 +209,10 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
     // 3. Send notification mutation
     const sendMutation = useMutation({
         mutationFn: async () => {
+            if (!isMasterEnabled) {
+                throw new Error("알림 기능 마스터 스위치가 비활성화(OFF)되어 있어 알림을 발송할 수 없습니다.");
+            }
+
             const res = await fetch("/api/admin/notifications/send", {
                 method: "POST",
                 headers: {
@@ -198,7 +249,8 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
         },
         onSuccess: (data) => {
             const deliveryObj = DELIVERY_TYPES.find(d => d.id === (data.deliveryType || deliveryType)) || DELIVERY_TYPES[0];
-            toast.success(`[${deliveryObj.label}] 알림이 성공적으로 등록되었습니다! (매칭 기기: ${data.matchedCount}대)`);
+            const pushInfo = typeof data.pushedCount === "number" && data.pushedCount > 0 ? `, 웹 푸시 ${data.pushedCount}건 발송` : "";
+            toast.success(`[${deliveryObj.label}] 알림이 성공적으로 등록되었습니다! (대상: ${data.matchedCount}대${pushInfo})`);
             queryClient.invalidateQueries({ queryKey: ["admin", "notification-history"] });
             queryClient.invalidateQueries({ queryKey: ["admin", "notification-subscribers"] });
             queryClient.invalidateQueries({ queryKey: ["notifications"] });
@@ -356,6 +408,66 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                 </div>
             </div>
 
+            {/* 알림기능 마스터 스위치 상단 배너 */}
+            <div className={`p-4 rounded-xl border transition-all duration-200 ${
+                isMasterEnabled 
+                    ? "bg-gradient-to-r from-emerald-50 via-teal-50/50 to-emerald-50/30 border-emerald-300 shadow-2xs" 
+                    : "bg-gradient-to-r from-rose-50 via-amber-50/50 to-rose-50/30 border-rose-300 shadow-2xs"
+            }`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start sm:items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-xs transition-colors ${
+                            isMasterEnabled ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"
+                        }`}>
+                            <Power className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="font-bold text-sm text-gray-900">
+                                    알림 기능 마스터 스위치 (Master Switch)
+                                </h4>
+                                <Badge variant="outline" className={`text-[11px] font-bold px-2 py-0.5 ${
+                                    isMasterEnabled 
+                                        ? "bg-emerald-100 text-emerald-800 border-emerald-300" 
+                                        : "bg-rose-100 text-rose-800 border-rose-300 animate-pulse"
+                                }`}>
+                                    {isMasterEnabled ? "🟢 시스템 정상 가동 (발송 가능)" : "🔴 발신 & 메뉴 전면 차단됨 (OFF)"}
+                                </Badge>
+                            </div>
+                            <p className="text-xs text-gray-600 mt-1">
+                                {isMasterEnabled 
+                                    ? "현재 알림 시스템이 정상 가동 중입니다. OFF로 전환 시 서버 측 알림 발신과 알림 작성 메뉴 사용이 전면 차단됩니다. (기본값: ON)"
+                                    : "마스터 스위치가 OFF되어 서버 측 알림 발신과 작성 메뉴가 차단되었습니다. 알림을 작성/발송하려면 스위치를 ON으로 전환하세요."}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 self-end sm:self-center shrink-0 bg-white/90 px-3.5 py-2 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className={`text-xs font-bold ${isMasterEnabled ? "text-emerald-700" : "text-rose-700"}`}>
+                            {isMasterEnabled ? "알림 기능 ON" : "알림 기능 OFF"}
+                        </span>
+                        <Switch
+                            checked={isMasterEnabled}
+                            disabled={toggleMasterSwitchMutation.isPending || masterSwitchQuery.isLoading}
+                            onCheckedChange={(checked) => toggleMasterSwitchMutation.mutate(checked)}
+                            className="data-[state=checked]:bg-emerald-600 cursor-pointer"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* 마스터 스위치 OFF 상태 시 차단 알림 안내 배너 */}
+            {activeTab === "send" && !isMasterEnabled && (
+                <div className="p-4 rounded-xl bg-rose-50/95 border border-rose-200 text-rose-900 flex items-start gap-3 shadow-2xs">
+                    <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="text-xs leading-relaxed">
+                        <strong className="font-bold text-sm block text-rose-900 mb-0.5">
+                            알림 기능이 마스터 스위치에 의해 비활성화(OFF)되어 있습니다
+                        </strong>
+                        서버 측 알림 발신 및 작성 메뉴 사용이 차단되었습니다. 새로운 알림을 작성하거나 발송하려면 상단 마스터 스위치를 <strong>[ON]</strong>으로 전환해 주시기 바랍니다.
+                    </div>
+                </div>
+            )}
+
             {/* 활성 구독자 수 현황 카드: 기기 대수가 아닌 사용자 관리 탭 기준 고유 활성 사용자 수 */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/50 flex items-center justify-between">
@@ -394,7 +506,9 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
 
             {/* TAB 1: 알림 발송 폼 & 사용자 관리 기준 중복 없는 대상 목록 */}
             {activeTab === "send" && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <div className={`grid grid-cols-1 lg:grid-cols-12 gap-5 transition-opacity duration-200 ${
+                    !isMasterEnabled ? "opacity-50 pointer-events-none select-none grayscale-[25%]" : ""
+                }`}>
                     {/* 좌측: 사용자 관리 기준 중복 제거된 활성 대상 목록 */}
                     <div className="lg:col-span-5 flex flex-col gap-3">
                         <div className="flex items-center justify-between">
@@ -881,12 +995,20 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
 
                                 {/* 유일한 알림 발송 버튼 */}
                                 <Button
-                                    className="w-full h-10 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-gray-900 font-bold text-xs shadow-sm cursor-pointer"
+                                    className={`w-full h-10 font-bold text-xs shadow-sm cursor-pointer transition-colors ${
+                                        isMasterEnabled 
+                                            ? "bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-gray-900" 
+                                            : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                    }`}
                                     onClick={() => sendMutation.mutate()}
-                                    disabled={sendMutation.isPending || !title.trim() || !message.trim()}
+                                    disabled={!isMasterEnabled || sendMutation.isPending || !title.trim() || !message.trim()}
                                 >
                                     <Send className="w-3.5 h-3.5 mr-1.5" />
-                                    {sendMutation.isPending ? "알림 발송 중..." : "알림 발송하기"}
+                                    {!isMasterEnabled 
+                                        ? "마스터 스위치 OFF (발송 차단됨)" 
+                                        : sendMutation.isPending 
+                                            ? "알림 발송 중..." 
+                                            : "알림 발송하기"}
                                 </Button>
                             </CardContent>
                         </Card>

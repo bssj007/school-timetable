@@ -14,7 +14,12 @@ import "./index.css";
 initGlobalErrorHandlers();
 
 if ('serviceWorker' in navigator) {
-  if (agent.isMobile) {
+  const hasNotifEnabled = typeof localStorage !== 'undefined' && (
+    localStorage.getItem("sj_notification_enabled") === "1" ||
+    (typeof Notification !== "undefined" && Notification.permission === "granted")
+  );
+
+  if (agent.isMobile || hasNotifEnabled) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js').then(registration => {
         console.log('SW registered: ', registration);
@@ -23,7 +28,7 @@ if ('serviceWorker' in navigator) {
       });
     });
   } else {
-    // 데스크톱: PWA 설치 자격 및 캐시를 비활성화하고, 기존 등록된 서비스 워커가 있다면 정리(해제)
+    // 데스크톱: 알림을 사용하지 않는 경우 불필요한 서비스 워커 정리
     navigator.serviceWorker.getRegistrations().then(registrations => {
       for (const registration of registrations) {
         registration.unregister();

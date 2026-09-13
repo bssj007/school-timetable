@@ -1,4 +1,4 @@
-const CACHE_NAME = 'school-timetable-v9';
+const CACHE_NAME = 'school-timetable-v10';
 const urlsToCache = [
     '/',
     '/index.html',
@@ -62,11 +62,12 @@ self.addEventListener('push', event => {
     const options = {
         body: data.body || data.message || '',
         icon: '/favicon-48x48.png',
+        badge: '/favicon-48x48.png',
         data: {
             url: data.url || data.link || '/'
         },
         vibrate: [100, 50, 100],
-        tag: 'sj-notification-' + Date.now(),
+        tag: 'sj-notification-' + (data.id || Date.now()),
         renotify: true
     };
 

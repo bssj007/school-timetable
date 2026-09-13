@@ -329,12 +329,11 @@ export function clearAppBadge() {
 export async function displayLocalNotification(title: string, body: string, url: string = "/") {
     if (typeof window === "undefined") return false;
 
-    // 1. AndroidBridge / Android 네이티브 호출 확인
-    const win = window as any;
-    if (typeof win.AndroidBridge?.postNotification === "function") {
-        try { win.AndroidBridge.postNotification(title, body); } catch (_) {}
-    } else if (typeof win.Android?.postNotification === "function") {
-        try { win.Android.postNotification(title, body); } catch (_) {}
+    // 1. Android 네이티브 앱 환경:
+    // 실제 시스템 푸시/헤드업 배너 발송은 Android 백그라운드 워커(WorkManager)에 100% 전담시킵니다.
+    // 앱 진입 시 또는 포그라운드 사용 중 시스템 알림 배너를 일절 발송하지 않고 조용히 인앱 알림함에만 반영합니다.
+    if (isNativeApp()) {
+        return false;
     }
 
     // 2. 브라우저/PWA OS 푸시 알림 (Service Worker showNotification 또는 Notification 객체)
@@ -390,6 +389,100 @@ export async function displayLocalNotification(title: string, body: string, url:
     return true;
 }
 
+const DEFAULT_VAPID_PUBLIC_KEY = "BGhRyV8sLTVNkaVOgJDVulv0aMNOpCljPB4Bv2EEqBBvTJWfTeSwB7t_Kj9VA7N2mQTPfnNUczO51ZQGVm3VE3E";
+
+let cachedVapidKey: string | null = null;
+
+/**
+ * 서버에서 VAPID 공개키 조회 (실패 시 기본 공개키 폴백)
+ */
+export async function fetchVapidPublicKey(): Promise<string> {
+    if (cachedVapidKey) return cachedVapidKey;
+    try {
+        const res = await fetch("/api/notifications/vapid-public-key");
+        if (res.ok) {
+            const data = await res.json();
+            if (data?.publicKey) {
+                cachedVapidKey = data.publicKey;
+                return data.publicKey;
+            }
+        }
+    } catch (e) {
+        console.warn("[notificationService] Failed to fetch VAPID public key, using default:", e);
+    }
+    cachedVapidKey = DEFAULT_VAPID_PUBLIC_KEY;
+    return cachedVapidKey;
+}
+
+/**
+ * URL-safe Base64 문자열을 Uint8Array로 변환 (PushManager applicationServerKey 요구 형식)
+ */
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding)
+        .replace(/-/g, "+")
+        .replace(/_/g, "/");
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+/**
+ * ServiceWorkerRegistration 획득 (미등록 시 즉시 /sw.js 등록)
+ */
+export async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return null;
+    try {
+        let reg = await navigator.serviceWorker.getRegistration();
+        if (!reg) {
+            reg = await navigator.serviceWorker.register("/sw.js");
+        }
+        await navigator.serviceWorker.ready;
+        return reg;
+    } catch (err) {
+        console.warn("[notificationService] getServiceWorkerRegistration error:", err);
+        return null;
+    }
+}
+
+/**
+ * 브라우저 표준 W3C PushManager 구독 객체 획득 또는 신규 구독 생성
+ */
+export async function getOrRegisterPushSubscription(): Promise<PushSubscription | null> {
+    if (typeof window === "undefined" || isNativeApp() || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+        return null;
+    }
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") {
+        return null;
+    }
+
+    try {
+        const reg = await getServiceWorkerRegistration();
+        if (!reg || !reg.pushManager) return null;
+
+        let sub = await reg.pushManager.getSubscription();
+        if (sub) {
+            return sub;
+        }
+
+        const vapidPublicKey = await fetchVapidPublicKey();
+        const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
+
+        sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: convertedKey as any
+        });
+
+        return sub;
+    } catch (err) {
+        console.warn("[notificationService] pushManager.subscribe failed:", err);
+        return null;
+    }
+}
+
 export interface UserSubscriptionInfo {
     role: "student" | "teacher";
     grade?: number | string;
@@ -411,9 +504,26 @@ export async function syncNotificationStatusOnConnect(info: UserSubscriptionInfo
     if (isNativeApp()) {
         const localEnabled = localStorage.getItem(NOTIF_ENABLED_KEY) === "1";
         setNotificationCookie(localEnabled);
+        const deviceId = getOrCreateDeviceId();
+        const win = window as any;
+        const subData = {
+            deviceId,
+            role: info.role,
+            grade: Number(info.grade) || 0,
+            classNum: Number(info.classNum) || 0,
+            studentNumber: Number(info.studentNumber) || 0,
+            studentName: (info.studentName || "").trim(),
+            teacherName: (info.teacherName || "").trim(),
+            enabled: localEnabled
+        };
+        if (typeof win.AndroidBridge?.syncUserSubscription === "function") {
+            try { win.AndroidBridge.syncUserSubscription(JSON.stringify(subData)); } catch (_) {}
+        } else if (typeof win.Android?.syncUserSubscription === "function") {
+            try { win.Android.syncUserSubscription(JSON.stringify(subData)); } catch (_) {}
+        }
+
         if (localEnabled) {
             try {
-                const deviceId = getOrCreateDeviceId();
                 await fetch("/api/notifications/subscribe", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -450,9 +560,22 @@ export async function syncNotificationStatusOnConnect(info: UserSubscriptionInfo
     setNotificationCookie(isActive);
 
     if (isActive) {
-        // 백엔드에 최신 접속 기기/IP/구독 정보 ping
+        // 백엔드에 최신 접속 기기/IP/Web Push 구독 정보 ping
         try {
             const deviceId = getOrCreateDeviceId();
+            let pushSubscriptionStr = "";
+
+            if (!isNativeApp() && "serviceWorker" in navigator && "PushManager" in window) {
+                try {
+                    const pushSub = await getOrRegisterPushSubscription();
+                    if (pushSub) {
+                        pushSubscriptionStr = JSON.stringify(pushSub.toJSON());
+                    }
+                } catch (err) {
+                    console.warn("[syncNotificationStatusOnConnect] push subscription check error:", err);
+                }
+            }
+
             await fetch("/api/notifications/subscribe", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -465,6 +588,7 @@ export async function syncNotificationStatusOnConnect(info: UserSubscriptionInfo
                     studentName: (info.studentName || "").trim(),
                     teacherName: (info.teacherName || "").trim(),
                     platform: getCurrentPlatform(),
+                    pushSubscription: pushSubscriptionStr,
                     enabled: 1
                 })
             });
@@ -566,6 +690,36 @@ export async function toggleNotificationSubscription(
         localStorage.setItem(NOTIF_ENABLED_KEY, "0");
         setNotificationCookie(false);
 
+        // PushManager 구독 해제 (백그라운드)
+        if (!isNativeApp() && typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
+            try {
+                getServiceWorkerRegistration().then(reg => {
+                    if (reg?.pushManager) {
+                        reg.pushManager.getSubscription().then(sub => {
+                            if (sub) sub.unsubscribe().catch(() => {});
+                        }).catch(() => {});
+                    }
+                }).catch(() => {});
+            } catch (_) {}
+        }
+
+        const win = window as any;
+        const subData = {
+            deviceId,
+            role: info.role,
+            grade: Number(info.grade) || 0,
+            classNum: Number(info.classNum) || 0,
+            studentNumber: Number(info.studentNumber) || 0,
+            studentName: (info.studentName || "").trim(),
+            teacherName: (info.teacherName || "").trim(),
+            enabled: false
+        };
+        if (typeof win.AndroidBridge?.syncUserSubscription === "function") {
+            try { win.AndroidBridge.syncUserSubscription(JSON.stringify(subData)); } catch (_) {}
+        } else if (typeof win.Android?.syncUserSubscription === "function") {
+            try { win.Android.syncUserSubscription(JSON.stringify(subData)); } catch (_) {}
+        }
+
         try {
             await fetch("/api/notifications/subscribe", {
                 method: "POST",
@@ -621,8 +775,37 @@ export async function toggleNotificationSubscription(
     localStorage.setItem(NOTIF_ENABLED_KEY, "1");
     setNotificationCookie(true);
 
-    // 4. 백그라운드에서 서버 동기화 및 환영 알림 발송 (UI 블로킹 방지)
+    const win = window as any;
+    const subData = {
+        deviceId,
+        role: info.role,
+        grade: Number(info.grade) || 0,
+        classNum: Number(info.classNum) || 0,
+        studentNumber: Number(info.studentNumber) || 0,
+        studentName: (info.studentName || "").trim(),
+        teacherName: (info.teacherName || "").trim(),
+        enabled: true
+    };
+    if (typeof win.AndroidBridge?.syncUserSubscription === "function") {
+        try { win.AndroidBridge.syncUserSubscription(JSON.stringify(subData)); } catch (_) {}
+    } else if (typeof win.Android?.syncUserSubscription === "function") {
+        try { win.Android.syncUserSubscription(JSON.stringify(subData)); } catch (_) {}
+    }
+
+    // 4. 백그라운드에서 Web Push 구독 생성, 서버 동기화 및 환영 알림 발송 (UI 블로킹 방지)
     (async () => {
+        let pushSubscriptionStr = "";
+        if (!isNativeApp() && typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
+            try {
+                const pushSub = await getOrRegisterPushSubscription();
+                if (pushSub) {
+                    pushSubscriptionStr = JSON.stringify(pushSub.toJSON());
+                }
+            } catch (err) {
+                console.warn("[toggleNotificationSubscription] Push subscription creation error:", err);
+            }
+        }
+
         try {
             await fetch("/api/notifications/subscribe", {
                 method: "POST",
@@ -636,6 +819,7 @@ export async function toggleNotificationSubscription(
                     studentName: (info.studentName || "").trim(),
                     teacherName: (info.teacherName || "").trim(),
                     platform: isNativeApp() ? "webview" : getCurrentPlatform(),
+                    pushSubscription: pushSubscriptionStr,
                     enabled: 1
                 })
             });
@@ -777,6 +961,9 @@ export function useGlobalNotificationWatcher(info: GlobalNotificationWatcherProp
     const { items: notificationItems } = useClientNotificationState(serverNotifications);
 
     useEffect(() => {
+        // 네이티브 앱 환경: 포그라운드/진입 시 시스템 배너 발송을 하지 않고 백그라운드 WorkManager에만 전담
+        if (isNativeApp()) return;
+
         if (!notificationItems || notificationItems.length === 0) return;
 
         const notifiedBannerIds = getSessionNotifiedBannerIds();
