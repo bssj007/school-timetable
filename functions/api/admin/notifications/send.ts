@@ -38,7 +38,8 @@ export const onRequest = async (context: any) => {
             title = "",
             message = "",
             link = "/",
-            category = "assessment"
+            category = "assessment",
+            deliveryType = "all" // 'all' | 'push' | 'in_app' | 'app'
         } = body;
 
         if (!title.trim() || !message.trim()) {
@@ -52,9 +53,9 @@ export const onRequest = async (context: any) => {
         const insertRes = await env.DB.prepare(`
             INSERT INTO site_notifications (
                 target_type, target_grade, target_class, target_student_number,
-                target_student_name, target_teacher_name, title, message, link, category, created_at
+                target_student_name, target_teacher_name, title, message, link, category, delivery_type, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         `).bind(
             targetType,
             Number(targetGrade) || 0,
@@ -65,18 +66,26 @@ export const onRequest = async (context: any) => {
             title.trim(),
             message.trim(),
             link.trim() || "/",
-            category
+            category,
+            deliveryType
         ).run();
 
         const notificationId = insertRes.meta?.last_row_id;
 
-        // 2. Count matching active subscribers
+        // 2. Count matching active subscribers based on target and delivery technology
         let subscriberQuery = `
             SELECT id, role, grade, class_num, student_number, student_name, teacher_name, platform
             FROM notification_subscriptions
             WHERE is_active = 1
         `;
         const bindings: any[] = [];
+
+        // Filter by delivery technology if applicable
+        if (deliveryType === "app") {
+            subscriberQuery += ` AND platform IN ('pwa', 'webview')`;
+        } else if (deliveryType === "push") {
+            subscriberQuery += ` AND (push_subscription != '' OR platform IN ('pwa', 'web', 'webview'))`;
+        }
 
         if (targetType === "teacher") {
             subscriberQuery += ` AND role = 'teacher'`;
@@ -109,6 +118,7 @@ export const onRequest = async (context: any) => {
         return new Response(JSON.stringify({
             success: true,
             notificationId,
+            deliveryType,
             matchedCount: matched.length,
             matchedSubscribers: matched
         }), {

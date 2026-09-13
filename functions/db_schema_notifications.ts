@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS site_notifications (
     message TEXT NOT NULL,
     link TEXT DEFAULT '',
     category TEXT DEFAULT 'assessment',     -- 'assessment' | 'notice' | 'test'
+    delivery_type TEXT DEFAULT 'all',       -- 'all' | 'push' | 'in_app' | 'app'
     created_at TEXT DEFAULT (datetime('now'))
 );
 `;
@@ -60,6 +61,7 @@ export async function ensureNotificationTables(db: any): Promise<void> {
         // Safe column alter checks
         try { await db.prepare("ALTER TABLE ip_profiles ADD COLUMN notificationEnabled INTEGER DEFAULT 0").run(); } catch (_) {}
         try { await db.prepare("ALTER TABLE notification_subscriptions ADD COLUMN ip TEXT DEFAULT ''").run(); } catch (_) {}
+        try { await db.prepare("ALTER TABLE site_notifications ADD COLUMN delivery_type TEXT DEFAULT 'all'").run(); } catch (_) {}
 
         notificationsSchemaVerified = true;
     } catch (err) {

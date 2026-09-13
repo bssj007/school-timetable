@@ -23,6 +23,7 @@ import {
   toggleNotificationSubscription,
   getOrCreateDeviceId
 } from "@/lib/notificationService";
+import { buildTeacherOptions, filterTeacherOptions } from "@/lib/teacherSearch";
 
 interface TeacherTimetableResponse {
   success: boolean;
@@ -1008,41 +1009,8 @@ export default function TeacherPage() {
   }, [teacherSubjectsMap, electiveConfigsG2, electiveConfigsG3, teacherMap]);
 
   const teacherOptions = useMemo(() => {
-    if (!timetableData?.teachers) return [];
-    
-    const options = timetableData.teachers.map((name, idx) => {
-      if (idx === 0) return null; // Skip '*'
-      const shouldIgnore = ignoreKeywords.some((kw: string) => name.includes(kw));
-      if (shouldIgnore) return null;
-      
-      const displayName = getTeacherDisplayName(name, idx);
-      const subjects = teacherSubjectsMap.get(idx) || [];
-      
-      return {
-        idx,
-        rawName: name,
-        displayName,
-        subjects,
-      };
-    }).filter(Boolean) as { idx: number; rawName: string; displayName: string; subjects: string[] }[];
-    
-    const displayNameCounts = new Map<string, number>();
-    options.forEach(opt => {
-      displayNameCounts.set(opt.displayName, (displayNameCounts.get(opt.displayName) || 0) + 1);
-    });
-    
-    return options.map(opt => {
-      const count = displayNameCounts.get(opt.displayName) || 0;
-      let label = opt.displayName;
-      if (count > 1 && opt.subjects.length > 0) {
-        label = `${opt.displayName} (${opt.subjects.join(', ')})`;
-      }
-      return {
-        ...opt,
-        label,
-      };
-    });
-  }, [timetableData, ignoreKeywords, teacherSubjectsMap, getTeacherDisplayName]);
+    return buildTeacherOptions(timetableData, settings, electiveConfigsG2, electiveConfigsG3);
+  }, [timetableData, settings, electiveConfigsG2, electiveConfigsG3]);
 
   const [showTeacherSelectModal, setShowTeacherSelectModal] = useState(false);
   const [teacherSearchQuery, setTeacherSearchQuery] = useState("");
@@ -1083,30 +1051,7 @@ export default function TeacherPage() {
   }, [settings, isDevAccountEnabled, selectedTeacherId]);
 
   const filteredTeacherOptions = useMemo(() => {
-    const q = teacherSearchQuery.trim();
-    if (!q) {
-      return teacherOptions.filter(opt => opt.rawName !== "김교사");
-    }
-    const qLower = q.toLowerCase();
-    const normalMatches = teacherOptions.filter(opt => {
-      if (opt.rawName === "김교사") return false;
-      const matchName = opt.displayName.toLowerCase().includes(qLower) || opt.rawName.toLowerCase().includes(qLower) || opt.label.toLowerCase().includes(qLower);
-      const matchSubject = opt.subjects.some(s => s.toLowerCase().includes(qLower));
-      return matchName || matchSubject;
-    });
-
-    if (isDevAccountEnabled && (q === "김교사" || q === "김교사 선생님")) {
-      const devOpt = {
-        idx: 9999,
-        rawName: "김교사",
-        displayName: "김교사",
-        subjects: [],
-        label: "김교사 선생님"
-      };
-      return [devOpt, ...normalMatches];
-    }
-
-    return normalMatches;
+    return filterTeacherOptions(teacherOptions, teacherSearchQuery, isDevAccountEnabled);
   }, [teacherOptions, teacherSearchQuery, isDevAccountEnabled]);
 
   const effectiveTeacherId = isDevTeacher ? devSourceTeacherId : parseInt(selectedTeacherId, 10);

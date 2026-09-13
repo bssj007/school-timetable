@@ -40,6 +40,7 @@ export const onRequest = async (context: any) => {
                 sn.message,
                 sn.link,
                 sn.category,
+                COALESCE(sn.delivery_type, 'all') as delivery_type,
                 sn.created_at,
                 CASE WHEN nr.read_at IS NOT NULL THEN 1 ELSE 0 END as is_read
             FROM site_notifications sn
@@ -87,6 +88,7 @@ export const onRequest = async (context: any) => {
             message: r.message,
             link: r.link || "/",
             category: r.category || "assessment",
+            deliveryType: r.delivery_type || "all",
             createdAt: r.created_at,
             read: r.is_read === 1
         }));

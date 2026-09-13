@@ -13,7 +13,10 @@ import {
   isNotificationSupported,
   isNotificationSubscribed,
   syncNotificationStatusOnConnect,
-  toggleNotificationSubscription
+  toggleNotificationSubscription,
+  displayLocalNotification,
+  isNativeApp,
+  useClientNotificationState
 } from "@/lib/notificationService";
 
 // Helper: Download PC Desktop .url Shortcut
@@ -94,20 +97,55 @@ export default function Navigation() {
     staleTime: 15000
   });
 
-  const notificationItems: Array<{
-    id: number;
-    title: string;
-    message: string;
-    link?: string;
-    category?: string;
-    createdAt?: string;
-    read: boolean;
-  }> = notificationsQuery.data?.notifications || [];
-  const unreadNotificationCount: number = notificationsQuery.data?.unreadCount ?? 0;
+  const serverNotifications = notificationsQuery.data?.notifications || [];
+  const {
+    items: notificationItems,
+    unreadCount: unreadNotificationCount,
+    markAllRead: markAllClientRead,
+    markSingleRead: markSingleClientRead
+  } = useClientNotificationState(serverNotifications);
 
-  // 모두 읽음 처리
+  // 알림 기술(발송 방식)에 따른 신규 미읽음 알림 배너 발송 처리
+  const initialMountRef = useRef(true);
+  const notifiedIdsRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!notificationsQuery.data?.notifications) return;
+    const items: Array<any> = notificationsQuery.data.notifications;
+
+    if (initialMountRef.current) {
+      initialMountRef.current = false;
+      items.forEach(it => notifiedIdsRef.current.add(it.id));
+      return;
+    }
+
+    items.forEach(it => {
+      if (!it.read && !notifiedIdsRef.current.has(it.id)) {
+        notifiedIdsRef.current.add(it.id);
+
+        // 일반 알림(in_app)은 기기 푸시 배너를 띄우지 않고 알림함에만 조용히 보관
+        if (it.deliveryType === 'in_app') {
+          return;
+        }
+
+        // 앱 전용 알림(app)은 PWA 또는 앱 환경에서만 팝업 알림
+        if (it.deliveryType === 'app') {
+          const isApp = isNativeApp() || (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches);
+          if (!isApp) return;
+        }
+
+        // 푸시 알림(push) 또는 통합 발송(all): 알림 ON 상태일 때 로컬 배너 발송
+        if (isNotifSubscribed) {
+          displayLocalNotification(it.title, it.message, it.link || "/").catch(() => {});
+        }
+      }
+    });
+  }, [notificationsQuery.data, isNotifSubscribed]);
+
+  // 모두 읽음 처리 (클라이언트 로컬 즉시 반영 + 서버 동기화)
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
+      markAllClientRead();
       await fetch('/api/notifications/read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -119,8 +157,9 @@ export default function Navigation() {
     }
   });
 
-  // 단일 알림 읽음 처리
+  // 단일 알림 읽음 처리 (클라이언트 로컬 즉시 반영 + 서버 동기화)
   const markSingleRead = async (notificationId: number) => {
+    markSingleClientRead(notificationId);
     try {
       await fetch('/api/notifications/read', {
         method: 'POST',
@@ -446,7 +485,7 @@ export default function Navigation() {
                                 }`}
                               />
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 mb-0.5">
+                                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                                   {notif.category === 'test' ? (
                                     <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 font-semibold">테스트</span>
                                   ) : notif.category === 'notice' ? (
@@ -457,6 +496,12 @@ export default function Navigation() {
                                     <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 font-semibold">긴급</span>
                                   ) : (
                                     <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-700 font-semibold">수행</span>
+                                  )}
+                                  {notif.deliveryType === 'push' && (
+                                    <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 font-medium">푸시</span>
+                                  )}
+                                  {notif.deliveryType === 'app' && (
+                                    <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 font-medium">앱전용</span>
                                   )}
                                   <p className="text-xs font-bold text-gray-800 truncate">{notif.title}</p>
                                 </div>

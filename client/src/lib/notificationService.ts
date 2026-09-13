@@ -1,9 +1,146 @@
 // client/src/lib/notificationService.ts
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { agent, getInstalledAppType } from "./browserDetect";
 import { toast } from "sonner";
 
 const DEVICE_ID_KEY = "sj_device_id";
 const NOTIF_ENABLED_KEY = "sj_notification_enabled";
+const NOTIF_LAST_VIEWED_KEY = "sj_notif_last_viewed_time";
+const NOTIF_READ_IDS_KEY = "sj_notif_read_ids";
+
+/**
+ * 클라이언트 로컬 스토리지 기준 읽은 알림 ID 목록 조회
+ */
+export function getClientReadNotificationIds(): Set<number> {
+    if (typeof window === "undefined") return new Set();
+    try {
+        const raw = localStorage.getItem(NOTIF_READ_IDS_KEY);
+        if (!raw) return new Set();
+        const arr = JSON.parse(raw);
+        return new Set(Array.isArray(arr) ? arr : []);
+    } catch {
+        return new Set();
+    }
+}
+
+/**
+ * 클라이언트 로컬 스토리지 기준 마지막 알림 확인 일시
+ */
+export function getClientLastViewedNotificationTime(): string | null {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(NOTIF_LAST_VIEWED_KEY);
+}
+
+/**
+ * 알림 버튼 클릭 시 클라이언트 측에서 모든 알림을 읽음 처리
+ */
+export function markClientNotificationsAsRead(notifications: Array<{ id: number; createdAt?: string }>) {
+    if (typeof window === "undefined") return;
+    try {
+        const currentIds = getClientReadNotificationIds();
+        notifications.forEach(n => {
+            if (n.id) currentIds.add(n.id);
+        });
+        const idsArray = Array.from(currentIds).slice(-200);
+        localStorage.setItem(NOTIF_READ_IDS_KEY, JSON.stringify(idsArray));
+        localStorage.setItem(NOTIF_LAST_VIEWED_KEY, new Date().toISOString());
+        window.dispatchEvent(new CustomEvent("sj_notification_read_updated"));
+    } catch (e) {
+        console.warn("Failed to mark notifications as read locally", e);
+    }
+}
+
+/**
+ * 단일 알림 읽음 처리
+ */
+export function markClientSingleNotificationAsRead(notificationId: number) {
+    if (typeof window === "undefined") return;
+    try {
+        const currentIds = getClientReadNotificationIds();
+        currentIds.add(notificationId);
+        const idsArray = Array.from(currentIds).slice(-200);
+        localStorage.setItem(NOTIF_READ_IDS_KEY, JSON.stringify(idsArray));
+        window.dispatchEvent(new CustomEvent("sj_notification_read_updated"));
+    } catch (e) {
+        console.warn("Failed to mark single notification as read locally", e);
+    }
+}
+
+/**
+ * 클라이언트 전용 미읽음 계산 로직
+ * - 최초 접속 시(lastViewed가 없고 readIds가 비어있음): 알림이 있으면 무조건 안 읽은 알림으로 취급하여 배지 표출
+ * - 알림 버튼을 클릭하여 markClientNotificationsAsRead가 호출되면 즉시 배지 제거
+ * - 이후 새로운 알림(id가 readIds에 없고 createdAt > lastViewedTime)이 오면 다시 배지 표출
+ */
+export function computeClientNotificationItems<T extends { id: number; createdAt?: string; read?: boolean }>(
+    items: T[]
+): { items: (T & { read: boolean })[]; unreadCount: number } {
+    if (!items || items.length === 0) {
+        return { items: [], unreadCount: 0 };
+    }
+
+    const readIds = getClientReadNotificationIds();
+    const lastViewed = getClientLastViewedNotificationTime();
+
+    // 최초 접속 시점 판단: readIds가 비어 있고 lastViewed가 없는 경우 -> 자체적으로 모두 안 읽은 상태로 취급
+    const isFirstEverVisit = !lastViewed && readIds.size === 0;
+
+    const processed = items.map(item => {
+        if (isFirstEverVisit) {
+            return { ...item, read: false };
+        }
+        if (readIds.has(item.id)) {
+            return { ...item, read: true };
+        }
+        if (lastViewed && item.createdAt) {
+            const itemTime = new Date(item.createdAt.replace(" ", "T") + (item.createdAt.endsWith("Z") ? "" : "Z")).getTime();
+            const viewedTime = new Date(lastViewed).getTime();
+            if (itemTime <= viewedTime) {
+                return { ...item, read: true };
+            }
+        }
+        return { ...item, read: false };
+    });
+
+    const unreadCount = processed.filter(it => !it.read).length;
+    return { items: processed, unreadCount };
+}
+
+/**
+ * 클라이언트 측 알림 상태 관리 훅
+ */
+export function useClientNotificationState(serverNotifications: any[] = []) {
+    const [readVersion, setReadVersion] = useState(0);
+
+    useEffect(() => {
+        const handleUpdate = () => setReadVersion(v => v + 1);
+        window.addEventListener("sj_notification_read_updated", handleUpdate);
+        window.addEventListener("storage", handleUpdate);
+        return () => {
+            window.removeEventListener("sj_notification_read_updated", handleUpdate);
+            window.removeEventListener("storage", handleUpdate);
+        };
+    }, []);
+
+    const { items, unreadCount } = useMemo(() => {
+        return computeClientNotificationItems(serverNotifications);
+    }, [serverNotifications, readVersion]);
+
+    const markAllRead = useCallback(() => {
+        markClientNotificationsAsRead(serverNotifications);
+    }, [serverNotifications]);
+
+    const markSingleRead = useCallback((id: number) => {
+        markClientSingleNotificationAsRead(id);
+    }, []);
+
+    return {
+        items,
+        unreadCount,
+        markAllRead,
+        markSingleRead
+    };
+}
 
 /**
  * 고유 기기 식별자 (UUID) 생성 및 조회

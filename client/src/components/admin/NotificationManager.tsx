@@ -1,17 +1,56 @@
 // client/src/components/admin/NotificationManager.tsx
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, Send, CheckCircle2, AlertCircle, Trash2, Users, Smartphone, RefreshCw, Clock, Check, Sparkles } from "lucide-react";
+import { Bell, Send, CheckCircle2, AlertCircle, Trash2, Users, Smartphone, RefreshCw, Clock, Check, Sparkles, Radio, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { useTeacherOptions, filterTeacherOptions, TeacherOption } from "@/lib/teacherSearch";
 
 interface NotificationManagerProps {
     adminPassword: string;
 }
+
+// 사전 정의된 알림 기술 (전달 방식)
+export const DELIVERY_TYPES = [
+    { 
+        id: "all", 
+        label: "통합 발송", 
+        badgeLabel: "통합",
+        sublabel: "푸시 알림 + 일반 인앱 알림 동시 전달 (전체 채널)", 
+        icon: "🌐", 
+        badgeClass: "bg-sky-100 text-sky-800 border-sky-200" 
+    },
+    { 
+        id: "push", 
+        label: "푸시 알림", 
+        badgeLabel: "푸시",
+        sublabel: "OS 시스템 알림 배너 및 Web Push 팝업 전송", 
+        icon: "🚀", 
+        badgeClass: "bg-indigo-100 text-indigo-800 border-indigo-200" 
+    },
+    { 
+        id: "in_app", 
+        label: "일반 알림", 
+        badgeLabel: "일반(인앱)",
+        sublabel: "기기 팝업 없이 종 아이콘 알림함에만 조용히 등록", 
+        icon: "🔔", 
+        badgeClass: "bg-slate-100 text-slate-800 border-slate-200" 
+    },
+    { 
+        id: "app", 
+        label: "앱 전용 알림", 
+        badgeLabel: "앱전용",
+        sublabel: "홈화면 PWA 및 모바일 앱 설치 기기 대상", 
+        icon: "📱", 
+        badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-200" 
+    },
+];
 
 // 사전 정의된 알림 종류
 export const NOTIFICATION_TYPES = [
@@ -71,6 +110,23 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
     const [targetStudentName, setTargetStudentName] = useState<string>("");
     const [targetTeacherName, setTargetTeacherName] = useState<string>("");
 
+    // Delivery technology state ('all' | 'push' | 'in_app' | 'app')
+    const [deliveryType, setDeliveryType] = useState<string>("all");
+
+    // Teacher search with unified algorithm
+    const { teacherOptions, isLoading: isTeacherListLoading } = useTeacherOptions();
+    const [showTeacherSelectModal, setShowTeacherSelectModal] = useState(false);
+    const [teacherModalSearchQuery, setTeacherModalSearchQuery] = useState("");
+
+    const filteredTeacherOptions = useMemo(() => {
+        return filterTeacherOptions(teacherOptions, teacherModalSearchQuery, false);
+    }, [teacherOptions, teacherModalSearchQuery]);
+
+    const selectedTeacherObj = useMemo(() => {
+        if (!targetTeacherName) return null;
+        return teacherOptions.find(o => o.rawName === targetTeacherName || o.displayName === targetTeacherName) || null;
+    }, [teacherOptions, targetTeacherName]);
+
     // Message state
     const [category, setCategory] = useState<string>("assessment");
     const [title, setTitle] = useState(NOTIFICATION_TYPES[0].defaultTitle);
@@ -122,6 +178,7 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                     title: title.trim(),
                     message: message.trim(),
                     category,
+                    deliveryType,
                     link: link.trim() || "/"
                 })
             });
@@ -133,7 +190,8 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
             return res.json();
         },
         onSuccess: (data) => {
-            toast.success(`알림이 성공적으로 등록되었습니다! (매칭 기기: ${data.matchedCount}대)`);
+            const deliveryObj = DELIVERY_TYPES.find(d => d.id === (data.deliveryType || deliveryType)) || DELIVERY_TYPES[0];
+            toast.success(`[${deliveryObj.label}] 알림이 성공적으로 등록되었습니다! (매칭 기기: ${data.matchedCount}대)`);
             queryClient.invalidateQueries({ queryKey: ["admin", "notification-history"] });
         },
         onError: (err: any) => {
@@ -392,6 +450,8 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                                 const tKey = `teacher|${t.teacherName || ''}`;
                                                 const isSelected = selectedTargetKey === tKey;
                                                 const platforms = (t.platforms || ['web']).map((p: string) => p.toUpperCase()).join(', ');
+                                                const matchedOpt = teacherOptions.find(o => o.rawName === t.teacherName || o.displayName === t.teacherName);
+                                                const teacherTitle = matchedOpt ? `${matchedOpt.label} 선생님` : `${t.teacherName || '선생님'}`;
 
                                                 return (
                                                     <div
@@ -404,19 +464,26 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                                         }`}
                                                     >
                                                         <div className="min-w-0 flex-1">
-                                                            <div className="flex items-center gap-1.5">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
                                                                 <span className="font-bold text-gray-900">
-                                                                    {t.teacherName || '선생님'}
+                                                                    {teacherTitle}
                                                                 </span>
-                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200">
-                                                                    선생님
-                                                                </Badge>
+                                                                {matchedOpt?.rawName && matchedOpt.rawName !== matchedOpt.displayName && (
+                                                                    <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 text-slate-500 border-slate-200">
+                                                                        고유: {matchedOpt.rawName}
+                                                                    </Badge>
+                                                                )}
                                                                 {t.deviceCount > 1 && (
                                                                     <span className="text-[10px] font-semibold text-emerald-600">
                                                                         기기 {t.deviceCount}대
                                                                     </span>
                                                                 )}
                                                             </div>
+                                                            {matchedOpt?.subjects && matchedOpt.subjects.length > 0 && (
+                                                                <p className="text-[10px] text-emerald-700/80 font-medium truncate mt-0.5">
+                                                                    담당: {matchedOpt.subjects.join(', ')}
+                                                                </p>
+                                                            )}
                                                             <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-1">
                                                                 <span className="font-medium text-slate-500">{platforms}</span>
                                                                 <span>·</span>
@@ -550,21 +617,154 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                     </div>
                                 )}
 
-                                {/* 선생님 세부 타깃 입력 */}
+                                {/* 선생님 세부 타깃 입력 (동명이인 과목 구분 및 실시간 검색) */}
                                 {targetType === "teacher" && (
-                                    <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-2.5">
-                                        <p className="text-[11px] font-bold text-emerald-900">선생님 타깃 상세</p>
-                                        <div>
-                                            <label className="text-[10px] text-gray-500 mb-0.5 block">선생님 이름 (비워둘 시 전체 선생님)</label>
-                                            <Input
-                                                placeholder="예: 김선생"
-                                                value={targetTeacherName}
-                                                onChange={(e) => { setTargetTeacherName(e.target.value); setSelectedTargetKey(null); }}
-                                                className="h-8 text-xs bg-white"
-                                            />
+                                    <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-200 space-y-2.5">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-[11px] font-bold text-emerald-900 flex items-center gap-1.5">
+                                                <span>👩‍🏫</span> 선생님 타깃 상세 (동명이인 과목 구분)
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setTeacherModalSearchQuery("");
+                                                    setShowTeacherSelectModal(true);
+                                                }}
+                                                className="text-[11px] text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100/80 hover:bg-emerald-200 transition-colors cursor-pointer"
+                                            >
+                                                <Search className="w-3 h-3" />
+                                                선생님 검색하기
+                                            </button>
                                         </div>
+
+                                        {targetTeacherName ? (
+                                            <div className="p-2.5 bg-white rounded-lg border border-emerald-200 flex items-start justify-between gap-2 shadow-2xs">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="font-bold text-gray-900 text-xs">
+                                                            {selectedTeacherObj ? `${selectedTeacherObj.label} 선생님` : `${targetTeacherName} 선생님`}
+                                                        </span>
+                                                        {selectedTeacherObj?.rawName && selectedTeacherObj.rawName !== selectedTeacherObj.displayName && (
+                                                            <Badge variant="secondary" className="text-[9px] font-mono px-1 py-0 bg-slate-100 text-slate-600">
+                                                                고유: {selectedTeacherObj.rawName}
+                                                            </Badge>
+                                                        )}
+                                                        {teachers.some(t => t.teacherName === targetTeacherName || (selectedTeacherObj && (t.teacherName === selectedTeacherObj.rawName || t.teacherName === selectedTeacherObj.displayName))) ? (
+                                                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold flex items-center gap-1">
+                                                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                                                🔔 알림 ON (수신 활성)
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 font-medium">
+                                                                ⚠️ 현재 알림 미설정(OFF)
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {selectedTeacherObj?.subjects && selectedTeacherObj.subjects.length > 0 && (
+                                                        <p className="text-[10px] text-slate-500 mt-1">
+                                                            담당 과목: {selectedTeacherObj.subjects.join(', ')}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="h-7 text-[10px] px-2 text-emerald-700 border-emerald-300 hover:bg-emerald-50 cursor-pointer"
+                                                        onClick={() => {
+                                                            setTeacherModalSearchQuery("");
+                                                            setShowTeacherSelectModal(true);
+                                                        }}
+                                                    >
+                                                        변경
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-7 text-[10px] px-2 text-gray-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                                                        onClick={() => {
+                                                            setTargetTeacherName("");
+                                                            setSelectedTargetKey(null);
+                                                        }}
+                                                        title="선택 해제 (전체 선생님 발송)"
+                                                    >
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="p-3 bg-white rounded-lg border border-dashed border-emerald-200 flex items-center justify-between gap-3">
+                                                <div>
+                                                    <p className="text-xs font-bold text-gray-800">
+                                                        전체 선생님 대상 발송
+                                                    </p>
+                                                    <p className="text-[11px] text-gray-400 mt-0.5">
+                                                        수행 알림받기를 켠 모든 선생님(총 {teachers.length}명)에게 알림이 전달됩니다.
+                                                    </p>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0 cursor-pointer shadow-xs"
+                                                    onClick={() => {
+                                                        setTeacherModalSearchQuery("");
+                                                        setShowTeacherSelectModal(true);
+                                                    }}
+                                                >
+                                                    <Search className="w-3.5 h-3.5 mr-1" />
+                                                    선생님 지정
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
+
+                                {/* 알림 기술 (발송 방식: 푸시 알림, 일반알림, 앱전용 등) 선택 UI */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <label className="font-semibold text-gray-700 flex items-center gap-1.5">
+                                            <Radio className="w-3.5 h-3.5 text-indigo-600" />
+                                            알림 기술 선택 (발송 방식)
+                                        </label>
+                                        <span className="text-[11px] text-gray-500 font-medium">
+                                            {DELIVERY_TYPES.find(d => d.id === deliveryType)?.sublabel}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                        {DELIVERY_TYPES.map((d) => {
+                                            const isSelected = deliveryType === d.id;
+                                            return (
+                                                <button
+                                                    key={d.id}
+                                                    type="button"
+                                                    onClick={() => setDeliveryType(d.id)}
+                                                    className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer flex flex-col justify-between ${
+                                                        isSelected
+                                                            ? `${d.badgeClass} ring-2 ring-indigo-400 font-bold shadow-xs scale-[1.01]`
+                                                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between w-full mb-1">
+                                                        <span className="text-base">{d.icon}</span>
+                                                        {isSelected && (
+                                                            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white shadow-xs">
+                                                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-bold leading-tight">{d.label}</p>
+                                                        <p className={`text-[10px] line-clamp-1 mt-0.5 ${isSelected ? 'text-indigo-900/80 font-medium' : 'text-gray-400'}`}>
+                                                            {d.badgeLabel}
+                                                        </p>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
 
                                 {/* 알림 종류 지정 UI (칩 선택기) */}
                                 <div className="space-y-1.5">
@@ -667,7 +867,9 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                     if (n.target_type === "student") {
                                         targetText = `학생 (${n.target_grade ? `${n.target_grade}학년 ` : ''}${n.target_class ? `${n.target_class}반 ` : ''}${n.target_student_name ? `${n.target_student_name}` : ''})`;
                                     } else if (n.target_type === "teacher") {
-                                        targetText = `선생님 (${n.target_teacher_name || '전체'})`;
+                                        const matchedOpt = teacherOptions.find(o => o.rawName === n.target_teacher_name || o.displayName === n.target_teacher_name);
+                                        const tLabel = matchedOpt ? matchedOpt.label : n.target_teacher_name;
+                                        targetText = `선생님 (${tLabel || '전체'})`;
                                     }
 
                                     const typeInfo = NOTIFICATION_TYPES.find(t => t.id === n.category) || {
@@ -675,10 +877,15 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                                         badgeClass: n.category === 'notice' ? 'bg-amber-100 text-amber-800 border-amber-200' : n.category === 'test' ? 'bg-purple-100 text-purple-800 border-purple-200' : n.category === 'timetable' ? 'bg-teal-100 text-teal-800 border-teal-200' : n.category === 'urgent' ? 'bg-rose-100 text-rose-800 border-rose-200' : 'bg-blue-100 text-blue-800 border-blue-200'
                                     };
 
+                                    const deliveryInfo = DELIVERY_TYPES.find(d => d.id === n.delivery_type) || DELIVERY_TYPES[0];
+
                                     return (
                                         <div key={n.id} className="p-4 flex items-start justify-between gap-4 hover:bg-gray-50/70 transition-colors">
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 font-semibold ${deliveryInfo.badgeClass}`}>
+                                                        {deliveryInfo.icon} {deliveryInfo.badgeLabel}
+                                                    </Badge>
                                                     <Badge variant="outline" className={`text-[10px] px-1.5 py-0 font-semibold ${typeInfo.badgeClass}`}>
                                                         {typeInfo.label}
                                                     </Badge>
@@ -716,6 +923,141 @@ export function NotificationManager({ adminPassword }: NotificationManagerProps)
                     </CardContent>
                 </Card>
             )}
+
+            {/* 선생님 검색 및 선택 모달 Dialog (선생님 페이지와 100% 동일한 알고리즘 및 UI) */}
+            <Dialog open={showTeacherSelectModal} onOpenChange={setShowTeacherSelectModal}>
+                <DialogContent className="sm:max-w-[440px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+                    {/* Header */}
+                    <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-3 sm:px-5 sm:py-4 text-white">
+                        <DialogHeader>
+                            <DialogTitle className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2">
+                                <span>👩‍🏫</span> 선생님 선택 (동명이인 과목 구분)
+                            </DialogTitle>
+                        </DialogHeader>
+                        <p className="text-emerald-100 text-[11px] sm:text-xs mt-0.5 font-medium">
+                            시간표 및 담당 과목과 연동되어 동명이인 선생님을 정확히 구분하여 알림을 발송합니다.
+                        </p>
+                    </div>
+
+                    {/* Search Input */}
+                    <div className="p-2.5 sm:p-3 bg-slate-50 border-b border-slate-100">
+                        <div className="relative">
+                            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <Input
+                                type="text"
+                                placeholder="선생님 이름 또는 과목 검색 (예: 김영희, 국어, 수학)..."
+                                value={teacherModalSearchQuery}
+                                onChange={(e) => setTeacherModalSearchQuery(e.target.value)}
+                                className="pl-9 pr-8 bg-white border-slate-200 text-sm h-9 sm:h-10 rounded-xl focus-visible:ring-emerald-500"
+                                autoFocus
+                            />
+                            {teacherModalSearchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => setTeacherModalSearchQuery("")}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Action: 전체 선생님에게 발송 바로가기 */}
+                    <div className="px-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setTargetType("teacher");
+                                setTargetTeacherName("");
+                                setSelectedTargetKey(null);
+                                setShowTeacherSelectModal(false);
+                                toast.info("발송 대상이 '전체 선생님'으로 설정되었습니다.");
+                            }}
+                            className="w-full py-2 px-3 rounded-lg border border-dashed border-emerald-300 bg-emerald-50/50 hover:bg-emerald-100/70 text-emerald-800 font-bold text-xs flex items-center justify-between transition-colors cursor-pointer"
+                        >
+                            <span className="flex items-center gap-1.5">
+                                <span>🌐</span> 전체 선생님에게 발송 (특정 대상 지정 해제)
+                            </span>
+                            <span className="text-[10px] text-emerald-600 font-normal">
+                                전체 {teachers.length}명 수신
+                            </span>
+                        </button>
+                    </div>
+
+                    {/* Teacher List */}
+                    <div className="max-h-[300px] sm:max-h-[380px] overflow-y-auto p-2.5 space-y-1">
+                        {filteredTeacherOptions.length === 0 ? (
+                            <div className="py-12 text-center text-slate-400">
+                                <p className="text-sm font-medium">검색 결과가 없습니다.</p>
+                                <p className="text-xs text-slate-400 mt-1">다른 이름이나 과목명을 입력해 보세요.</p>
+                            </div>
+                        ) : (
+                            filteredTeacherOptions.map((opt) => {
+                                const isSelected = targetTeacherName === opt.rawName;
+                                const isSubscribed = teachers.some(t => t.teacherName === opt.rawName || t.teacherName === opt.displayName);
+
+                                return (
+                                    <button
+                                        key={opt.idx}
+                                        type="button"
+                                        onClick={() => {
+                                            setTargetType("teacher");
+                                            setTargetTeacherName(opt.rawName);
+                                            setSelectedTargetKey(null);
+                                            setShowTeacherSelectModal(false);
+                                            toast.success(`"${opt.label} 선생님"이 알림 대상으로 지정되었습니다.`);
+                                        }}
+                                        className={cn(
+                                            "w-full text-left px-3.5 py-2.5 rounded-xl flex items-center justify-between transition-all duration-150 gap-2 border cursor-pointer",
+                                            isSelected
+                                                ? "bg-emerald-50/90 border-emerald-300 text-emerald-950 font-bold shadow-xs ring-1 ring-emerald-300"
+                                                : "bg-white border-gray-100 hover:border-gray-200 hover:bg-slate-50 text-slate-800 font-medium active:bg-slate-100"
+                                        )}
+                                    >
+                                        <div className="flex flex-col min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold truncate">
+                                                    {opt.label} 선생님
+                                                </span>
+                                                {opt.rawName !== opt.displayName && (
+                                                    <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 text-slate-500 border-slate-200">
+                                                        고유: {opt.rawName}
+                                                    </Badge>
+                                                )}
+                                                {isSubscribed ? (
+                                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold">
+                                                        🔔 알림 ON
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-400 font-medium">
+                                                        미설정
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {opt.subjects && opt.subjects.length > 0 && (
+                                                <span className="text-[10px] text-slate-400 font-normal truncate mt-0.5">
+                                                    {opt.subjects.join(", ")}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {isSelected ? (
+                                            <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                                <Check className="w-3 h-3 stroke-[3]" />
+                                            </span>
+                                        ) : (
+                                            <span className="text-xs text-slate-400 font-semibold px-2 py-0.5 rounded-md bg-slate-100 shrink-0">
+                                                선택
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
